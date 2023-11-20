@@ -487,6 +487,10 @@
 <a href="#487" id="487">487</a>
 <a href="#488" id="488">488</a>
 <a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future;
 <span class="kw">use </span>std::io::{Read, Write};
@@ -594,7 +598,11 @@
     }
 
     <span class="kw">pub async fn </span>get_operation(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; <span class="prelude-ty">Option</span>&lt;OperationLogEntry&gt; {
-        <span class="self">Self</span>::get_operation_inner(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>, operation_id).<span class="kw">await
+        <span class="self">Self</span>::get_operation_inner(
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>.into_nc(),
+            operation_id,
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>get_operation_inner(
@@ -614,7 +622,7 @@
         <span class="kw">let </span>outcome_json = serde_json::to_value(outcome).expect(<span class="string">&quot;Outcome is not serializable&quot;</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>operation = <span class="self">Self</span>::get_operation_inner(<span class="kw-2">&amp;mut </span>dbtx, operation_id)
+        <span class="kw">let </span><span class="kw-2">mut </span>operation = <span class="self">Self</span>::get_operation_inner(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), operation_id)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Operation exists&quot;</span>);
         operation.outcome = <span class="prelude-val">Some</span>(outcome_json);
@@ -878,7 +886,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
         op_log
-            .add_operation_log_entry(<span class="kw-2">&amp;mut </span>dbtx, op_id, <span class="string">&quot;foo&quot;</span>, <span class="string">&quot;bar&quot;</span>)
+            .add_operation_log_entry(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), op_id, <span class="string">&quot;foo&quot;</span>, <span class="string">&quot;bar&quot;</span>)
             .<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>;
 
@@ -916,7 +924,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
         op_log
-            .add_operation_log_entry(<span class="kw-2">&amp;mut </span>dbtx, op_id, <span class="string">&quot;foo&quot;</span>, <span class="string">&quot;bar&quot;</span>)
+            .add_operation_log_entry(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), op_id, <span class="string">&quot;foo&quot;</span>, <span class="string">&quot;bar&quot;</span>)
             .<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>;
 
@@ -942,7 +950,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
             op_log
                 .add_operation_log_entry(
-                    <span class="kw-2">&amp;mut </span>dbtx,
+                    <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
                     OperationId([operation_idx; <span class="number">32</span>]),
                     <span class="string">&quot;foo&quot;</span>,
                     operation_idx,

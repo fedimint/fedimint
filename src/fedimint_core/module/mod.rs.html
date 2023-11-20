@@ -970,8 +970,8 @@
     ModuleInstanceId, ModuleKind, Output, OutputError, OutputOutcome,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::{
-    Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
-    DatabaseTransactionRef, DatabaseVersion, MigrationMap,
+    Committable, Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
+    DatabaseVersion, MigrationMap,
 };
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::audit::Audit;
@@ -1098,7 +1098,7 @@
 <span class="doccomment">/// State made available to all API endpoints for handling a request
 </span><span class="kw">pub struct </span>ApiEndpointContext&lt;<span class="lifetime">&#39;dbtx</span>&gt; {
     db: Database,
-    dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;dbtx</span>&gt;,
+    dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;dbtx</span>, Committable&gt;,
     has_auth: bool,
     request_auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
 }
@@ -1107,7 +1107,7 @@
     <span class="doccomment">/// `db` and `dbtx` should be isolated.
     </span><span class="kw">pub fn </span>new(
         db: Database,
-        dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Committable&gt;,
         has_auth: bool,
         request_auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
     ) -&gt; <span class="self">Self </span>{
@@ -1120,13 +1120,13 @@
     }
 
     <span class="doccomment">/// Database tx handle, will be committed
-    </span><span class="kw">pub fn </span>dbtx&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;mtx</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="kw-2">mut </span><span class="self">self</span>) -&gt; DatabaseTransactionRef&lt;<span class="lifetime">&#39;mtx</span>&gt;
+    </span><span class="kw">pub fn </span>dbtx&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;mtx</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="kw-2">mut </span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;mtx</span>, Committable&gt;
     <span class="kw">where
         </span><span class="lifetime">&#39;a</span>: <span class="lifetime">&#39;mtx</span>,
         <span class="lifetime">&#39;s</span>: <span class="lifetime">&#39;mtx</span>,
     {
         <span class="comment">// dbtx is already isolated.
-        </span><span class="self">self</span>.dbtx.dbtx_ref()
+        </span><span class="self">self</span>.dbtx.to_ref()
     }
 
     <span class="doccomment">/// Returns the auth set on the request (regardless of whether it was
@@ -1344,7 +1344,7 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt;;
 }
@@ -1356,7 +1356,7 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt;;
 }
@@ -1380,7 +1380,7 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ModuleInit&gt;::dump_database(<span class="self">self</span>, dbtx, prefix_names).<span class="kw">await
@@ -1719,7 +1719,7 @@
     <span class="doccomment">/// This module&#39;s contribution to the next consensus proposal
     </span><span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; Vec&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::ConsensusItem&gt;;
 
     <span class="doccomment">/// This function is called once for every consensus item. The function
@@ -1727,7 +1727,7 @@
     /// our state and therefore may be safely discarded by the atomic broadcast.
     </span><span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;b</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         consensus_item: &lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::ConsensusItem,
         peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt;;
@@ -1738,7 +1738,7 @@
     /// no effect.
     </span><span class="kw">async fn </span>process_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;c</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, &lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::InputError&gt;;
 
@@ -1752,7 +1752,7 @@
     /// `output_status`.
     </span><span class="kw">async fn </span>process_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;b</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, &lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::OutputError&gt;;
@@ -1763,7 +1763,7 @@
     /// output is unknown, **NOT** if it is just not ready yet.
     </span><span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::OutputOutcome&gt;;
 
@@ -1774,7 +1774,7 @@
     /// occurred in the database and consensus should halt.
     </span><span class="kw">async fn </span>audit(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         audit: <span class="kw-2">&amp;mut </span>Audit,
         module_instance_id: ModuleInstanceId,
     );

@@ -383,7 +383,7 @@
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, OperationId};
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped};
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
@@ -463,7 +463,7 @@
 
     <span class="kw">async fn </span>create_sufficient_input(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         id: OperationId,
         amount: Amount,
     ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input, <span class="self">Self</span>::States&gt;&gt;&gt; {
@@ -492,7 +492,7 @@
 
     <span class="kw">async fn </span>create_exact_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
+        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         id: OperationId,
         amount: Amount,
     ) -&gt; Vec&lt;ClientOutput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output, <span class="self">Self</span>::States&gt;&gt; {
@@ -532,7 +532,7 @@
         stream.next_or_pending().<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtc: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
+    <span class="kw">async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtc: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
         get_funds(dbtc).<span class="kw">await
     </span>}
 
@@ -617,7 +617,7 @@
         // Create input using our own account
         </span><span class="kw">let </span>inputs = fedimint_client::module::ClientModule::create_sufficient_input(
             <span class="self">self</span>,
-            <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref(),
+            <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
             op_id,
             amount,
         )
@@ -680,7 +680,7 @@
     </span>}
 }
 
-<span class="kw">async fn </span>get_funds(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
+<span class="kw">async fn </span>get_funds(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
     <span class="kw">let </span>funds = dbtx.get_value(<span class="kw-2">&amp;</span>DummyClientFundsKeyV0).<span class="kw">await</span>;
     funds.unwrap_or(Amount::ZERO)
 }
@@ -695,7 +695,7 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>items: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; = BTreeMap::new();

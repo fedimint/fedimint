@@ -770,7 +770,7 @@
 <span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransactionRef};
+<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -878,7 +878,7 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
+        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         _prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
         Box::new(<span class="macro">vec!</span>[].into_iter())
@@ -1269,7 +1269,7 @@
         <span class="self">self</span>.client_ctx
             .global_db()
             .autocommit(
-                |dbtx| {
+                |dbtx, <span class="kw">_</span>| {
                     Box::pin(<span class="kw">async </span>{
                         <span class="kw">let </span>operation_id = OperationId(payload.contract_id.into_inner());
 

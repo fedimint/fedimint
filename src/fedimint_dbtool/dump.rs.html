@@ -440,7 +440,7 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>isolated_dbtx = dbtx.dbtx_ref_with_prefix_module_id(<span class="kw-2">*</span>module_id);
+        <span class="kw">let </span><span class="kw-2">mut </span>isolated_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="kw-2">*</span>module_id);
 
         <span class="kw">match </span>inits.get(kind) {
             <span class="prelude-val">None </span>=&gt; {
@@ -474,7 +474,7 @@
             }
             <span class="prelude-val">Some</span>(init) =&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>module_serialized = init
-                    .dump_database(<span class="kw-2">&amp;mut </span>isolated_dbtx, <span class="self">self</span>.prefixes.clone())
+                    .dump_database(<span class="kw-2">&amp;mut </span>isolated_dbtx.to_ref_nc(), <span class="self">self</span>.prefixes.clone())
                     .<span class="kw">await
                     </span>.collect::&lt;BTreeMap&lt;String, <span class="kw">_</span>&gt;&gt;();
 
@@ -495,8 +495,8 @@
     }
 
     <span class="kw">async fn </span>serialize_gateway(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = dbtx.dbtx_ref();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.begin_transaction_nc().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = dbtx.to_ref();
         <span class="kw">let </span>gateway_serialized = Gateway::dump_database(<span class="kw-2">&amp;mut </span>dbtx, <span class="self">self</span>.prefixes.clone())
             .<span class="kw">await
             </span>.collect::&lt;BTreeMap&lt;String, <span class="kw">_</span>&gt;&gt;();

@@ -1227,7 +1227,7 @@
         <span class="self">self</span>.inner
             .db
             .autocommit(
-                |dbtx| Box::pin(<span class="self">self</span>.add_state_machines_dbtx(dbtx, states.clone())),
+                |dbtx, <span class="kw">_</span>| Box::pin(<span class="self">self</span>.add_state_machines_dbtx(dbtx, states.clone())),
                 MAX_DB_ATTEMPTS,
             )
             .<span class="kw">await
@@ -1585,14 +1585,14 @@
             <span class="kw">let </span>active_or_inactive_state = <span class="self">self
                 </span>.db
                 .autocommit(
-                    |dbtx| {
+                    |dbtx, <span class="kw">_</span>| {
                         <span class="kw">let </span>state = state.clone();
                         <span class="kw">let </span>transition_fn = transition_fn.clone();
                         <span class="kw">let </span>transition_outcome = transition_outcome.clone();
                         Box::pin(<span class="kw">async move </span>{
                             <span class="kw">let </span>new_state = transition_fn(
                                 <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction::new(
-                                    dbtx,
+                                    <span class="kw-2">&amp;mut </span>dbtx.to_ref(),
                                     state.module_instance_id(),
                                 ),
                                 transition_outcome,

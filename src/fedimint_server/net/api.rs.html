@@ -553,7 +553,7 @@
 <span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped,
+    Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_BLOCK_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
@@ -653,7 +653,7 @@
         }
 
         <span class="comment">// Create read-only DB tx so that the read state is consistent
-        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>;
 
         <span class="comment">// We ignore any writes, as we only verify if the transaction is valid here
         </span>dbtx.ignore_uncommitted();
@@ -671,7 +671,7 @@
     <span class="kw">pub async fn </span>await_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         txid: TransactionId,
-    ) -&gt; (Vec&lt;ModuleInstanceId&gt;, DatabaseTransaction) {
+    ) -&gt; (Vec&lt;ModuleInstanceId&gt;, DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, Committable&gt;) {
         <span class="self">self</span>.db
             .wait_key_check(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid), std::convert::identity)
             .<span class="kw">await
@@ -692,7 +692,7 @@
             </span>.modules
             .get_expect(module_id)
             .output_status(
-                <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(module_id),
+                <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_id).into_nc(),
                 outpoint,
                 module_id,
             )
@@ -774,14 +774,14 @@
     }
 
     <span class="kw">async fn </span>get_federation_audit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;AuditSummary&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
         <span class="kw">let </span><span class="kw-2">mut </span>module_instance_id_to_kind: HashMap&lt;ModuleInstanceId, String&gt; = HashMap::new();
         <span class="kw">for </span>(module_instance_id, kind, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             module_instance_id_to_kind.insert(module_instance_id, kind.as_str().to_string());
             module
                 .audit(
-                    <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(module_instance_id),
+                    <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_instance_id),
                     <span class="kw-2">&amp;mut </span>audit,
                     module_instance_id,
                 )
@@ -795,7 +795,7 @@
 
     <span class="kw">async fn </span>handle_backup_request&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;dbtx</span>, <span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;dbtx </span><span class="kw-2">mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;dbtx </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         request: SignedBackupRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {
         <span class="kw">let </span>request = request
@@ -825,7 +825,7 @@
 
     <span class="kw">async fn </span>handle_recover_request(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         id: secp256k1_zkp::XOnlyPublicKey,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>ClientBackupKey(id)).<span class="kw">await
@@ -976,7 +976,7 @@
             BACKUP_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, request: SignedBackupRequest| -&gt; () {
                 fedimint
-                    .handle_backup_request(<span class="kw-2">&amp;mut </span>context.dbtx(), request).<span class="kw">await</span><span class="question-mark">?</span>;
+                    .handle_backup_request(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), request).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(())
 
             }
@@ -985,7 +985,7 @@
             RECOVER_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, id: secp256k1_zkp::XOnlyPublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt; {
                 <span class="prelude-val">Ok</span>(fedimint
-                    .handle_recover_request(<span class="kw-2">&amp;mut </span>context.dbtx(), id).<span class="kw">await</span>)
+                    .handle_recover_request(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), id).<span class="kw">await</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{

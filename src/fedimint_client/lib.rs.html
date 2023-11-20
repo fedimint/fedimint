@@ -2187,7 +2187,7 @@
 
         <span class="self">self</span>.client
             .finalize_and_submit_transaction_inner(
-                dbtx.global_tx(),
+                <span class="kw-2">&amp;mut </span>dbtx.global_tx().to_ref_nc(),
                 <span class="self">self</span>.operation,
                 TransactionBuilder::new().with_input(instance_input),
             )
@@ -2207,7 +2207,7 @@
 
         <span class="self">self</span>.client
             .finalize_and_submit_transaction_inner(
-                dbtx.global_tx(),
+                <span class="kw-2">&amp;mut </span>dbtx.global_tx().to_ref_nc(),
                 <span class="self">self</span>.operation,
                 TransactionBuilder::new().with_output(instance_output),
             )
@@ -2223,7 +2223,7 @@
 
         <span class="self">self</span>.client
             .executor
-            .add_state_machines_dbtx(dbtx.global_tx(), <span class="macro">vec!</span>[state])
+            .add_state_machines_dbtx(<span class="kw-2">&amp;mut </span>dbtx.global_tx().to_ref_nc(), <span class="macro">vec!</span>[state])
             .<span class="kw">await
     </span>}
 
@@ -2647,7 +2647,7 @@
         <span class="kw">let </span>autocommit_res = <span class="self">self
             </span>.db
             .autocommit(
-                |dbtx| {
+                |dbtx, <span class="kw">_</span>| {
                     <span class="kw">let </span>operation_type = operation_type.clone();
                     <span class="kw">let </span>tx_builder = tx_builder.clone();
                     <span class="kw">let </span>operation_meta = operation_meta.clone();
@@ -2695,7 +2695,7 @@
         tx_builder: TransactionBuilder,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
         <span class="kw">let </span>(transaction, <span class="kw-2">mut </span>states, change_range) = <span class="self">self
-            </span>.finalize_transaction(dbtx, operation_id, tx_builder)
+            </span>.finalize_transaction(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), operation_id, tx_builder)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>txid = transaction.tx_hash();
         <span class="kw">let </span>change_outpoints = change_range
@@ -2902,7 +2902,7 @@
         <span class="self">self</span>.primary_module()
             .get_balance(
                 <span class="self">self</span>.primary_module_instance,
-                <span class="kw-2">&amp;mut </span><span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>,
+                <span class="kw-2">&amp;mut </span><span class="self">self</span>.db().begin_transaction_nc().<span class="kw">await</span>,
             )
             .<span class="kw">await
     </span>}
@@ -2920,7 +2920,7 @@
             <span class="kw">yield </span>initial_balance;
             <span class="kw">let </span><span class="kw-2">mut </span>prev_balance = initial_balance;
             <span class="kw">while let </span><span class="prelude-val">Some</span>(()) = balance_changes.next().<span class="kw">await </span>{
-                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
                 <span class="kw">let </span>balance = primary_module
                     .get_balance(primary_module_instance, <span class="kw-2">&amp;mut </span>dbtx)
                     .<span class="kw">await</span>;

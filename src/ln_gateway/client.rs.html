@@ -147,6 +147,8 @@
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
@@ -156,7 +158,9 @@
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::{get_config_from_db, ClientBuilder, FederationInfo};
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+<span class="kw">use </span>fedimint_core::db::{
+    Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::thread_rng;
@@ -273,7 +277,7 @@
     <span class="kw">pub async fn </span>save_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: FederationConfig,
-        <span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        <span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, Committable&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>id = config.invite_code.federation_id();
         dbtx.insert_entry(<span class="kw-2">&amp;</span>FederationIdKey { id }, <span class="kw-2">&amp;</span>config).<span class="kw">await</span>;

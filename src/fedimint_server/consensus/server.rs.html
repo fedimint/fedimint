@@ -735,6 +735,8 @@
 <a href="#735" id="735">735</a>
 <a href="#736" id="736">736</a>
 <a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -1309,7 +1311,7 @@
             <span class="macro">bail!</span>(<span class="string">&quot;Item was discarded before we recovered&quot;</span>);
         }
 
-        <span class="self">self</span>.process_consensus_item_with_db_transaction(<span class="kw-2">&amp;mut </span>dbtx, item.clone(), peer)
+        <span class="self">self</span>.process_consensus_item_with_db_transaction(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), item.clone(), peer)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         dbtx.insert_entry(<span class="kw-2">&amp;</span>AcceptedItemKey(item_index), <span class="kw-2">&amp;</span>AcceptedItem { item, peer })
@@ -1322,7 +1324,9 @@
                 TimeReporter::new(<span class="macro">format!</span>(<span class="string">&quot;audit module {module_instance_id}&quot;</span>));
             module
                 .audit(
-                    <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(module_instance_id),
+                    <span class="kw-2">&amp;mut </span>dbtx
+                        .to_ref_with_prefix_module_id(module_instance_id)
+                        .into_nc(),
                     <span class="kw-2">&amp;mut </span>audit,
                     module_instance_id,
                 )
@@ -1353,7 +1357,7 @@
         <span class="kw">match </span>consensus_item {
             ConsensusItem::Module(module_item) =&gt; {
                 <span class="kw">let </span>instance_id = module_item.module_instance_id();
-                <span class="kw">let </span>module_dbtx = <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(instance_id);
+                <span class="kw">let </span>module_dbtx = <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(instance_id);
 
                 <span class="self">self</span>.modules
                     .get_expect(instance_id)
@@ -1453,7 +1457,7 @@
                     <span class="kw">for </span>(instance_id, <span class="kw">_</span>, module) <span class="kw">in </span>modules.iter_modules() {
                         <span class="kw">let </span>module_consensus_items = module
                             .consensus_proposal(
-                                <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(instance_id),
+                                <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(instance_id).into_nc(),
                                 instance_id,
                             )
                             .<span class="kw">await</span>;

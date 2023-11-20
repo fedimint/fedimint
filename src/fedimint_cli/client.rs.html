@@ -1222,9 +1222,9 @@
         .get_wallet_summary(
             <span class="kw-2">&amp;mut </span>client
                 .db()
-                .begin_transaction()
+                .begin_transaction_nc()
                 .<span class="kw">await
-                </span>.dbtx_ref_with_prefix_module_id(<span class="number">1</span>),
+                </span>.to_ref_with_prefix_module_id(<span class="number">1</span>),
         )
         .<span class="kw">await</span>;
     <span class="prelude-val">Ok</span>(serde_json::to_value(InfoResponse {

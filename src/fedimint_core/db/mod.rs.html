@@ -2764,6 +2764,21 @@
 <a href="#2764" id="2764">2764</a>
 <a href="#2765" id="2765">2765</a>
 <a href="#2766" id="2766">2766</a>
+<a href="#2767" id="2767">2767</a>
+<a href="#2768" id="2768">2768</a>
+<a href="#2769" id="2769">2769</a>
+<a href="#2770" id="2770">2770</a>
+<a href="#2771" id="2771">2771</a>
+<a href="#2772" id="2772">2772</a>
+<a href="#2773" id="2773">2773</a>
+<a href="#2774" id="2774">2774</a>
+<a href="#2775" id="2775">2775</a>
+<a href="#2776" id="2776">2776</a>
+<a href="#2777" id="2777">2777</a>
+<a href="#2778" id="2778">2778</a>
+<a href="#2779" id="2779">2779</a>
+<a href="#2780" id="2780">2780</a>
+<a href="#2781" id="2781">2781</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -2803,6 +2818,8 @@
 </span><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug};
+<span class="kw">use </span>std::marker::{<span class="self">self</span>, PhantomData};
+<span class="kw">use </span>std::ops::{<span class="self">self</span>, DerefMut};
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -2883,6 +2900,11 @@
 }
 
 <span class="kw">pub type </span>PrefixStream&lt;<span class="lifetime">&#39;a</span>&gt; = Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Stream&lt;Item = (Vec&lt;u8&gt;, Vec&lt;u8&gt;)&gt; + <span class="lifetime">&#39;a</span>)&gt;&gt;;
+
+<span class="doccomment">/// Just ignore this type, it&#39;s only there to make compiler happy
+///
+/// See &lt;https://users.rust-lang.org/t/argument-requires-that-is-borrowed-for-static/66503/2?u=yandros&gt; for details.
+</span><span class="kw">pub type </span>PhantomBound&lt;<span class="lifetime">&#39;big</span>, <span class="lifetime">&#39;small</span>&gt; = PhantomData&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;small </span><span class="kw-2">&amp;</span><span class="lifetime">&#39;big </span>()&gt;;
 
 <span class="doccomment">/// Error returned when the autocommit function fails
 </span><span class="attr">#[derive(Debug, Error)]
@@ -3113,15 +3135,23 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Begin a database transaction
-    </span><span class="kw">pub async fn </span>begin_transaction&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;tx</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>&gt;
+    <span class="doccomment">/// Begin a new committable database transaction
+    </span><span class="kw">pub async fn </span>begin_transaction&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;tx</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>, Committable&gt;
     <span class="kw">where
         </span><span class="lifetime">&#39;s</span>: <span class="lifetime">&#39;tx</span>,
     {
-        DatabaseTransaction::new(
+        DatabaseTransaction::&lt;Committable&gt;::new(
             <span class="self">self</span>.inner.begin_transaction().<span class="kw">await</span>,
             <span class="self">self</span>.module_decoders.clone(),
         )
+    }
+
+    <span class="doccomment">/// Begin a new non-committable database transaction
+    </span><span class="kw">pub async fn </span>begin_transaction_nc&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;tx</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>, NonCommittable&gt;
+    <span class="kw">where
+        </span><span class="lifetime">&#39;s</span>: <span class="lifetime">&#39;tx</span>,
+    {
+        <span class="self">self</span>.begin_transaction().<span class="kw">await</span>.into_nc()
     }
 
     <span class="doccomment">/// Runs a closure with a reference to a database transaction and tries to
@@ -3151,13 +3181,17 @@
     ///
     /// This function panics when the given number of maximum attempts is zero.
     /// `max_attempts` must be greater or equal to one.
-    </span><span class="kw">pub async fn </span>autocommit&lt;<span class="lifetime">&#39;s</span>: <span class="lifetime">&#39;dt</span>, <span class="lifetime">&#39;dt</span>, F, T, E&gt;(
+    </span><span class="kw">pub async fn </span>autocommit&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;dbtx</span>, F, T, E&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="self">self</span>,
         tx_fn: F,
         max_attempts: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;T, AutocommitError&lt;E&gt;&gt;
     <span class="kw">where
-        for</span>&lt;<span class="lifetime">&#39;a</span>&gt; F: Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;dt</span>&gt;) -&gt; BoxFuture&lt;<span class="lifetime">&#39;a</span>, <span class="prelude-ty">Result</span>&lt;T, E&gt;&gt;,
+        </span><span class="lifetime">&#39;s</span>: <span class="lifetime">&#39;dbtx</span>,
+        <span class="kw">for</span>&lt;<span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;o</span>&gt; F: Fn(
+            <span class="kw-2">&amp;</span><span class="lifetime">&#39;r </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;o</span>&gt;,
+            PhantomBound&lt;<span class="lifetime">&#39;dbtx</span>, <span class="lifetime">&#39;o</span>&gt;,
+        ) -&gt; BoxFuture&lt;<span class="lifetime">&#39;r</span>, <span class="prelude-ty">Result</span>&lt;T, E&gt;&gt;,
     {
         <span class="macro">assert_ne!</span>(max_attempts, <span class="prelude-val">Some</span>(<span class="number">0</span>));
         <span class="kw">let </span><span class="kw-2">mut </span>curr_attempts: usize = <span class="number">0</span>;
@@ -3173,40 +3207,37 @@
 
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.begin_transaction().<span class="kw">await</span>;
 
-            <span class="kw">match </span>tx_fn(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(val) =&gt; {
-                    <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;autocmmit - commit_tx&quot;</span>);
+            <span class="kw">let </span>val = tx_fn(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), PhantomData)
+                .<span class="kw">await
+                </span>.map_err(|err| AutocommitError::ClosureError {
+                    attempts: curr_attempts,
+                    error: err,
+                })<span class="question-mark">?</span>;
 
-                    <span class="kw">match </span>dbtx.commit_tx_result().<span class="kw">await </span>{
-                        <span class="prelude-val">Ok</span>(()) =&gt; {
-                            <span class="kw">return </span><span class="prelude-val">Ok</span>(val);
-                        }
-                        <span class="prelude-val">Err</span>(err) =&gt; {
-                            <span class="macro">warn!</span>(
-                                target: LOG_DB,
-                                curr_attempts, <span class="string">&quot;Database commit failed in an autocommit block&quot;
-                            </span>);
-                            <span class="kw">if </span>max_attempts
-                                .map(|max_att| max_att &lt;= curr_attempts)
-                                .unwrap_or(<span class="bool-val">false</span>)
-                            {
-                                <span class="kw">return </span><span class="prelude-val">Err</span>(AutocommitError::CommitFailed {
-                                    attempts: curr_attempts,
-                                    last_error: err,
-                                });
-                            }
-                        }
-                    }
+            <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;autocmmit - commit_tx&quot;</span>);
+
+            <span class="kw">match </span>dbtx.commit_tx_result().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(()) =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(val);
                 }
                 <span class="prelude-val">Err</span>(err) =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(AutocommitError::ClosureError {
-                        attempts: curr_attempts,
-                        error: err,
-                    });
+                    <span class="macro">warn!</span>(
+                        target: LOG_DB,
+                        curr_attempts, <span class="string">&quot;Database commit failed in an autocommit block&quot;
+                    </span>);
+                    <span class="kw">if </span>max_attempts
+                        .map(|max_att| max_att &lt;= curr_attempts)
+                        .unwrap_or(<span class="bool-val">false</span>)
+                    {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(AutocommitError::CommitFailed {
+                            attempts: curr_attempts,
+                            last_error: err,
+                        });
+                    }
                 }
-            };
-        } <span class="comment">// end of loop
-    </span>}
+            }
+        }
+    }
 
     <span class="doccomment">/// Waits for key to be notified.
     ///
@@ -3216,7 +3247,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         key: <span class="kw-2">&amp;</span>K,
         checker: <span class="kw">impl </span>Fn(<span class="prelude-ty">Option</span>&lt;K::Value&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt;,
-    ) -&gt; (T, DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;)
+    ) -&gt; (T, DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Committable&gt;)
     <span class="kw">where
         </span>K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
     {
@@ -3982,90 +4013,53 @@
     }
 }
 
-<span class="doccomment">/// An open [`DatabaseTransaction`] that can not be committed by the owner.
+<span class="kw">enum </span>MaybeRef&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+    Owned(T),
+    Borrowed(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>T),
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T&gt; ops::Deref <span class="kw">for </span>MaybeRef&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+    <span class="kw">type </span>Target = T;
+
+    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+        <span class="kw">match </span><span class="self">self </span>{
+            MaybeRef::Owned(o) =&gt; o,
+            MaybeRef::Borrowed(r) =&gt; r,
+        }
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T&gt; ops::DerefMut <span class="kw">for </span>MaybeRef&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+    <span class="kw">fn </span>deref_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self</span>::Target {
+        <span class="kw">match </span><span class="self">self </span>{
+            MaybeRef::Owned(o) =&gt; o,
+            MaybeRef::Borrowed(r) =&gt; r,
+        }
+    }
+}
+
+<span class="doccomment">/// Session type for [`DatabaseTransaction`] that is allowed to commit
 ///
-/// This is used in APIs that require logic to be a part of a larger
-/// database transaction, given that `commit_tx` takes `&amp;mut self` (
-/// not `self`, due to trait/Sized and support for `&amp;mut T` issues).
-</span><span class="kw">pub struct </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;tx</span>&gt; {
-    tx: Box&lt;<span class="kw">dyn </span>IDatabaseTransaction + <span class="lifetime">&#39;tx</span>&gt;,
-    decoders: ModuleDecoderRegistry,
-    commit_tracker: <span class="kw-2">&amp;</span><span class="lifetime">&#39;tx </span><span class="kw-2">mut </span>CommitTracker,
-}
+/// Opposite of [`NonCommittable`].
+</span><span class="kw">pub struct </span>Committable;
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;tx</span>&gt; DatabaseTransactionRef&lt;<span class="lifetime">&#39;tx</span>&gt; {
-    <span class="doccomment">/// Is this `Database` a global, unpartitioned `Database`
-    </span><span class="kw">pub fn </span>is_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.tx.prefix_len() == <span class="number">0
-    </span>}
+<span class="doccomment">/// Session type for a [`DatabaseTransaction`] that is not allowed to commit
+///
+/// Opposite of [`Committable`].
 
-    <span class="doccomment">/// `Err` if [`Self::is_global`] is not true
-    </span><span class="kw">pub fn </span>ensure_global(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">if </span>!<span class="self">self</span>.is_global() {
-            <span class="macro">bail!</span>(<span class="string">&quot;Database instance not global&quot;</span>);
-        }
-
-        <span class="prelude-val">Ok</span>(())
-    }
-
-    <span class="doccomment">/// `Err` if [`Self::is_global`] is true
-    </span><span class="kw">pub fn </span>ensure_isolated(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">if </span><span class="self">self</span>.is_global() {
-            <span class="macro">bail!</span>(<span class="string">&quot;Database instance not isolated&quot;</span>);
-        }
-
-        <span class="prelude-val">Ok</span>(())
-    }
-}
-
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; WithDecoders <span class="kw">for </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.decoders
-    }
-}
-
-<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
-        <span class="self">self</span>.tx.raw_insert_bytes(key, value).<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>raw_get_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="self">self</span>.tx.raw_get_bytes(key).<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="self">self</span>.tx.raw_remove_entry(key).<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
-        <span class="self">self</span>.tx.raw_find_by_prefix(key_prefix).<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>raw_find_by_prefix_sorted_descending(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        key_prefix: <span class="kw-2">&amp;</span>[u8],
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
-        <span class="self">self</span>.tx
-            .raw_find_by_prefix_sorted_descending(key_prefix)
-            .<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.tx.raw_remove_by_prefix(key_prefix).<span class="kw">await
-    </span>}
-}
-
+</span><span class="kw">pub struct </span>NonCommittable;
 <span class="doccomment">/// A high level database transaction handle
-</span><span class="kw">pub struct </span>DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>&gt; {
+///
+/// `Cap` is a session type
+</span><span class="kw">pub struct </span>DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>, Cap = NonCommittable&gt; {
     tx: Box&lt;<span class="kw">dyn </span>IDatabaseTransaction + <span class="lifetime">&#39;tx</span>&gt;,
     decoders: ModuleDecoderRegistry,
-    commit_tracker: CommitTracker,
-    on_commit_hooks: Vec&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>FnOnce())&gt;&gt;,
+    commit_tracker: MaybeRef&lt;<span class="lifetime">&#39;tx</span>, CommitTracker&gt;,
+    on_commit_hooks: MaybeRef&lt;<span class="lifetime">&#39;tx</span>, Vec&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>FnOnce())&gt;&gt;&gt;,
+    capability: marker::PhantomData&lt;Cap&gt;,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;tx</span>&gt; WithDecoders <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;tx</span>, Cap&gt; WithDecoders <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>, Cap&gt; {
     <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
         <span class="kw-2">&amp;</span><span class="self">self</span>.decoders
     }
@@ -4083,39 +4077,40 @@
     V::from_bytes(value_bytes, decoders)
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;tx</span>&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>&gt; {
-    <span class="kw">pub fn </span>new(
-        dbtx: Box&lt;<span class="kw">dyn </span>IDatabaseTransaction + <span class="lifetime">&#39;tx</span>&gt;,
-        decoders: ModuleDecoderRegistry,
-    ) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;tx</span>, Cap&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>, Cap&gt; {
+    <span class="doccomment">/// Convert into a non-committeable version
+    </span><span class="kw">pub fn </span>into_nc(<span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>, NonCommittable&gt; {
         DatabaseTransaction {
-            tx: dbtx,
-            decoders,
-            commit_tracker: CommitTracker {
-                is_committed: <span class="bool-val">false</span>,
-                has_writes: <span class="bool-val">false</span>,
-                ignore_uncommitted: <span class="bool-val">false</span>,
-            },
-            on_commit_hooks: <span class="macro">vec!</span>[],
+            tx: <span class="self">self</span>.tx,
+            decoders: <span class="self">self</span>.decoders,
+            commit_tracker: <span class="self">self</span>.commit_tracker,
+            on_commit_hooks: <span class="self">self</span>.on_commit_hooks,
+            capability: PhantomData::&lt;NonCommittable&gt;,
         }
     }
 
+    <span class="doccomment">/// Get a reference to a non-committeable version
+    </span><span class="kw">pub fn </span>to_ref_nc&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="kw-2">mut </span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, NonCommittable&gt;
+    <span class="kw">where
+        </span><span class="lifetime">&#39;s</span>: <span class="lifetime">&#39;a</span>,
+    {
+        <span class="self">self</span>.to_ref().into_nc()
+    }
+
     <span class="doccomment">/// Get [`DatabaseTransaction`] isolated to a `prefix`
-    </span><span class="kw">pub fn </span>with_prefix&lt;<span class="lifetime">&#39;a</span>: <span class="lifetime">&#39;tx</span>&gt;(<span class="self">self</span>, prefix: Vec&lt;u8&gt;) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;
+    </span><span class="kw">pub fn </span>with_prefix&lt;<span class="lifetime">&#39;a</span>: <span class="lifetime">&#39;tx</span>&gt;(<span class="self">self</span>, prefix: Vec&lt;u8&gt;) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Cap&gt;
     <span class="kw">where
         </span><span class="lifetime">&#39;tx</span>: <span class="lifetime">&#39;a</span>,
     {
-        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders.clone();
-        <span class="kw">let </span>commit_tracker = <span class="self">self</span>.commit_tracker.clone();
-
         DatabaseTransaction {
             tx: Box::new(PrefixDatabaseTransaction {
                 inner: <span class="self">self</span>.tx,
                 prefix,
             }),
-            decoders,
-            commit_tracker,
-            on_commit_hooks: <span class="macro">vec!</span>[],
+            decoders: <span class="self">self</span>.decoders,
+            commit_tracker: <span class="self">self</span>.commit_tracker,
+            on_commit_hooks: <span class="self">self</span>.on_commit_hooks,
+            capability: <span class="self">self</span>.capability,
         }
     }
 
@@ -4124,7 +4119,7 @@
     </span><span class="kw">pub fn </span>with_prefix_module_id&lt;<span class="lifetime">&#39;a</span>: <span class="lifetime">&#39;tx</span>&gt;(
         <span class="self">self</span>,
         module_instance_id: ModuleInstanceId,
-    ) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;
+    ) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Cap&gt;
     <span class="kw">where
         </span><span class="lifetime">&#39;tx</span>: <span class="lifetime">&#39;a</span>,
     {
@@ -4132,47 +4127,60 @@
         <span class="self">self</span>.with_prefix(prefix)
     }
 
-    <span class="doccomment">/// Get [`DatabaseTransactionRef`] to `self`
-    </span><span class="kw">pub fn </span>dbtx_ref&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="kw-2">mut </span><span class="self">self</span>) -&gt; DatabaseTransactionRef&lt;<span class="lifetime">&#39;a</span>&gt;
+    <span class="doccomment">/// Get [`DatabaseTransaction`] to `self`
+    </span><span class="kw">pub fn </span>to_ref&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="kw-2">mut </span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Cap&gt;
     <span class="kw">where
-        </span><span class="lifetime">&#39;tx</span>: <span class="lifetime">&#39;a</span>,
-        <span class="lifetime">&#39;s</span>: <span class="lifetime">&#39;a</span>,
+        </span><span class="lifetime">&#39;s</span>: <span class="lifetime">&#39;a</span>,
     {
         <span class="kw">let </span>decoders = <span class="self">self</span>.decoders.clone();
 
-        DatabaseTransactionRef {
+        DatabaseTransaction {
             tx: Box::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.tx),
             decoders,
-            commit_tracker: <span class="kw-2">&amp;mut </span><span class="self">self</span>.commit_tracker,
+            commit_tracker: <span class="kw">match </span><span class="self">self</span>.commit_tracker {
+                MaybeRef::Owned(<span class="kw-2">ref mut </span>o) =&gt; MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(<span class="kw-2">ref mut </span>b) =&gt; MaybeRef::Borrowed(b),
+            },
+            on_commit_hooks: <span class="kw">match </span><span class="self">self</span>.on_commit_hooks {
+                MaybeRef::Owned(<span class="kw-2">ref mut </span>o) =&gt; MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(<span class="kw-2">ref mut </span>b) =&gt; MaybeRef::Borrowed(b),
+            },
+            capability: <span class="self">self</span>.capability,
         }
     }
 
-    <span class="doccomment">/// Get [`DatabaseTransactionRef`] isolated to a `prefix` of `self`
-    </span><span class="kw">pub fn </span>dbtx_ref_with_prefix&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span><span class="self">self</span>, prefix: Vec&lt;u8&gt;) -&gt; DatabaseTransactionRef&lt;<span class="lifetime">&#39;a</span>&gt;
+    <span class="doccomment">/// Get [`DatabaseTransaction`] isolated to a `prefix` of `self`
+    </span><span class="kw">pub fn </span>to_ref_with_prefix&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span><span class="self">self</span>, prefix: Vec&lt;u8&gt;) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Cap&gt;
     <span class="kw">where
         </span><span class="lifetime">&#39;tx</span>: <span class="lifetime">&#39;a</span>,
     {
-        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders.clone();
-
-        DatabaseTransactionRef {
+        DatabaseTransaction {
             tx: Box::new(PrefixDatabaseTransaction {
                 inner: <span class="kw-2">&amp;mut </span><span class="self">self</span>.tx,
                 prefix,
             }),
-            decoders,
-            commit_tracker: <span class="kw-2">&amp;mut </span><span class="self">self</span>.commit_tracker,
+            decoders: <span class="self">self</span>.decoders.clone(),
+            commit_tracker: <span class="kw">match </span><span class="self">self</span>.commit_tracker {
+                MaybeRef::Owned(<span class="kw-2">ref mut </span>o) =&gt; MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(<span class="kw-2">ref mut </span>b) =&gt; MaybeRef::Borrowed(b),
+            },
+            on_commit_hooks: <span class="kw">match </span><span class="self">self</span>.on_commit_hooks {
+                MaybeRef::Owned(<span class="kw-2">ref mut </span>o) =&gt; MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(<span class="kw-2">ref mut </span>b) =&gt; MaybeRef::Borrowed(b),
+            },
+            capability: <span class="self">self</span>.capability,
         }
     }
 
-    <span class="kw">pub fn </span>dbtx_ref_with_prefix_module_id&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">pub fn </span>to_ref_with_prefix_module_id&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span><span class="self">self</span>,
         module_instance_id: ModuleInstanceId,
-    ) -&gt; DatabaseTransactionRef&lt;<span class="lifetime">&#39;a</span>&gt;
+    ) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Cap&gt;
     <span class="kw">where
         </span><span class="lifetime">&#39;tx</span>: <span class="lifetime">&#39;a</span>,
     {
         <span class="kw">let </span>prefix = module_instance_id_to_byte_prefix(module_instance_id);
-        <span class="self">self</span>.dbtx_ref_with_prefix(prefix)
+        <span class="self">self</span>.to_ref_with_prefix(prefix)
     }
 
     <span class="doccomment">/// Is this `Database` a global, unpartitioned `Database`
@@ -4204,13 +4212,38 @@
         <span class="self">self
     </span>}
 
+    <span class="doccomment">/// Register a hook that will be run after commit succeeds.
+    </span><span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, ret)]
+    </span><span class="kw">pub fn </span>on_commit(<span class="kw-2">&amp;mut </span><span class="self">self</span>, f: <span class="macro">maybe_add_send!</span>(<span class="kw">impl </span>FnOnce() + <span class="lifetime">&#39;static</span>)) {
+        <span class="self">self</span>.on_commit_hooks.push(Box::new(f));
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;tx</span>&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>, Committable&gt; {
+    <span class="kw">pub fn </span>new(
+        dbtx: Box&lt;<span class="kw">dyn </span>IDatabaseTransaction + <span class="lifetime">&#39;tx</span>&gt;,
+        decoders: ModuleDecoderRegistry,
+    ) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>, Committable&gt; {
+        DatabaseTransaction {
+            tx: dbtx,
+            decoders,
+            commit_tracker: MaybeRef::Owned(CommitTracker {
+                is_committed: <span class="bool-val">false</span>,
+                has_writes: <span class="bool-val">false</span>,
+                ignore_uncommitted: <span class="bool-val">false</span>,
+            }),
+            on_commit_hooks: MaybeRef::Owned(<span class="macro">vec!</span>[]),
+            capability: PhantomData,
+        }
+    }
+
     <span class="kw">pub async fn </span>commit_tx_result(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.commit_tracker.is_committed = <span class="bool-val">true</span>;
         <span class="kw">let </span>commit_result = <span class="self">self</span>.tx.commit_tx().<span class="kw">await</span>;
 
         <span class="comment">// Run commit hooks in case commit was successful
         </span><span class="kw">if </span>commit_result.is_ok() {
-            <span class="kw">for </span>hook <span class="kw">in </span><span class="self">self</span>.on_commit_hooks {
+            <span class="kw">for </span>hook <span class="kw">in </span><span class="self">self</span>.on_commit_hooks.deref_mut().drain(..) {
                 hook();
             }
         }
@@ -4224,16 +4257,13 @@
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Unrecoverable error occurred while committing to the database.&quot;</span>);
     }
-
-    <span class="doccomment">/// Register a hook that will be run after commit succeeds.
-    </span><span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, ret)]
-    </span><span class="kw">pub fn </span>on_commit(<span class="kw-2">&amp;mut </span><span class="self">self</span>, f: <span class="macro">maybe_add_send!</span>(<span class="kw">impl </span>FnOnce() + <span class="lifetime">&#39;static</span>)) {
-        <span class="self">self</span>.on_commit_hooks.push(Box::new(f));
-    }
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, Cap&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Cap&gt;
+<span class="kw">where
+    </span>Cap: Send,
+{
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
         <span class="self">self</span>.tx.raw_insert_bytes(key, value).<span class="kw">await
@@ -4266,7 +4296,7 @@
     </span>}
 }
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOps <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOps <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Committable&gt; {
     <span class="kw">async fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.tx.set_tx_savepoint().<span class="kw">await
     </span>}
@@ -4542,11 +4572,11 @@
 <span class="doccomment">/// MigrationMap is a BTreeMap that maps DatabaseVersions to async functions.
 /// These functions are expected to &quot;migrate&quot; the database from the keyed
 /// DatabaseVersion to DatabaseVersion + 1.
-</span><span class="kw">pub type </span>MigrationMap&lt;<span class="lifetime">&#39;a</span>&gt; = BTreeMap&lt;
+</span><span class="kw">pub type </span>MigrationMap = BTreeMap&lt;
     DatabaseVersion,
-    <span class="kw">for</span>&lt;<span class="lifetime">&#39;b</span>&gt; <span class="kw">fn</span>(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
-    ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;b</span>&gt;&gt;,
+    <span class="kw">for</span>&lt;<span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;tx</span>&gt; <span class="kw">fn</span>(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;r </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>&gt;,
+    ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;r</span>&gt;&gt;,
 &gt;;
 
 <span class="doccomment">/// `apply_migrations` iterates from the on disk database version for the module
@@ -4557,11 +4587,11 @@
 /// atomically). This function is called before the module is initialized and as
 /// long as the correct migrations are supplied in `MigrationMap`, the module
 /// will be able to read and write from the database successfully.
-</span><span class="kw">pub async fn </span>apply_migrations&lt;<span class="lifetime">&#39;a</span>&gt;(
-    db: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Database,
+</span><span class="kw">pub async fn </span>apply_migrations(
+    db: <span class="kw-2">&amp;</span>Database,
     kind: String,
     target_db_version: DatabaseVersion,
-    migrations: MigrationMap&lt;<span class="lifetime">&#39;a</span>&gt;,
+    migrations: MigrationMap,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
     <span class="kw">let </span>disk_version = dbtx.get_value(<span class="kw-2">&amp;</span>DatabaseVersionKey).<span class="kw">await</span>;
@@ -4576,7 +4606,7 @@
 
         <span class="kw">while </span>current_db_version &lt; target_db_version {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(migration) = migrations.get(<span class="kw-2">&amp;</span>current_db_version) {
-                migration(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
+                migration(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc()).<span class="kw">await</span><span class="question-mark">?</span>;
             } <span class="kw">else </span>{
                 <span class="macro">panic!</span>(<span class="string">&quot;Missing migration for version {current_db_version}&quot;</span>);
             }
@@ -5109,7 +5139,7 @@
     <span class="kw">pub async fn </span>verify_module_prefix(db: Database) {
         <span class="kw">let </span><span class="kw-2">mut </span>test_dbtx = db.begin_transaction().<span class="kw">await</span>;
         {
-            <span class="kw">let </span><span class="kw-2">mut </span>test_module_dbtx = test_dbtx.dbtx_ref_with_prefix_module_id(TEST_MODULE_PREFIX);
+            <span class="kw">let </span><span class="kw-2">mut </span>test_module_dbtx = test_dbtx.to_ref_with_prefix_module_id(TEST_MODULE_PREFIX);
 
             test_module_dbtx
                 .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>))
@@ -5124,7 +5154,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>alt_dbtx = db.begin_transaction().<span class="kw">await</span>;
         {
-            <span class="kw">let </span><span class="kw-2">mut </span>alt_module_dbtx = alt_dbtx.dbtx_ref_with_prefix_module_id(ALT_MODULE_PREFIX);
+            <span class="kw">let </span><span class="kw-2">mut </span>alt_module_dbtx = alt_dbtx.to_ref_with_prefix_module_id(ALT_MODULE_PREFIX);
 
             alt_module_dbtx
                 .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">103</span>))
@@ -5139,7 +5169,7 @@
 
         <span class="comment">// verify test_module_dbtx can only see key/value pairs from its own module
         </span><span class="kw">let </span><span class="kw-2">mut </span>test_dbtx = db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>test_module_dbtx = test_dbtx.dbtx_ref_with_prefix_module_id(TEST_MODULE_PREFIX);
+        <span class="kw">let </span><span class="kw-2">mut </span>test_module_dbtx = test_dbtx.to_ref_with_prefix_module_id(TEST_MODULE_PREFIX);
         <span class="macro">assert_eq!</span>(
             test_module_dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">100</span>)).<span class="kw">await</span>,
             <span class="prelude-val">Some</span>(TestVal(<span class="number">101</span>))
@@ -5332,7 +5362,7 @@
 
         <span class="kw">let </span>db = Database::new(FakeDatabase, ModuleDecoderRegistry::default());
         <span class="kw">let </span>err = db
-            .autocommit::&lt;<span class="kw">_</span>, <span class="kw">_</span>, ()&gt;(|_dbtx| Box::pin(<span class="kw">async </span>{ <span class="prelude-val">Ok</span>(()) }), <span class="prelude-val">Some</span>(<span class="number">5</span>))
+            .autocommit::&lt;<span class="kw">_</span>, <span class="kw">_</span>, ()&gt;(|_dbtx, <span class="kw">_</span>| Box::pin(<span class="kw">async </span>{ <span class="prelude-val">Ok</span>(()) }), <span class="prelude-val">Some</span>(<span class="number">5</span>))
             .<span class="kw">await
             </span>.unwrap_err();
 
@@ -5506,7 +5536,7 @@
         <span class="kw">let </span>key_task = waiter(<span class="kw-2">&amp;</span>db.with_prefix_module_id(module_instance_id), TestKey(<span class="number">1</span>)).<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>tx_mod = tx.dbtx_ref_with_prefix_module_id(module_instance_id);
+        <span class="kw">let </span><span class="kw-2">mut </span>tx_mod = tx.to_ref_with_prefix_module_id(module_instance_id);
         tx_mod.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>val).<span class="kw">await</span>;
         drop(tx_mod);
         tx.commit_tx().<span class="kw">await</span>;

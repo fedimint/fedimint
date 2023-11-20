@@ -509,7 +509,7 @@
             <span class="kw">if </span>module.supports_backup() {
                 <span class="kw">let </span>backup = module
                     .backup(
-                        <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(id),
+                        <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(id).into_nc(),
                         <span class="self">self</span>.executor.clone(),
                         <span class="self">self</span>.api.clone(),
                         id,
@@ -568,7 +568,7 @@
             </span>);
             module
                 .wipe(
-                    <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(id),
+                    <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(id).into_nc(),
                     id,
                     <span class="self">self</span>.executor.clone(),
                 )
@@ -640,7 +640,7 @@
             </span>);
             module
                 .restore(
-                    <span class="kw-2">&amp;mut </span>dbtx,
+                    <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
                     id,
                     <span class="self">self</span>.executor.clone(),
                     <span class="self">self</span>.api.clone(),

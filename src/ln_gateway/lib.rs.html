@@ -1381,7 +1381,7 @@
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped};
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
@@ -1690,7 +1690,7 @@
     }
 
     <span class="kw">pub async fn </span>dump_database&lt;<span class="lifetime">&#39;a</span>&gt;(
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;a</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>gateway_items: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; =
@@ -2371,7 +2371,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">if let </span>GatewayState::Connected = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone() {
             <span class="kw">let </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
-            <span class="kw">let </span>configs = <span class="self">self</span>.client_builder.load_configs(dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>configs = <span class="self">self</span>.client_builder.load_configs(dbtx.into_nc()).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>channel_id_generator = <span class="self">self</span>.channel_id_generator.lock().<span class="kw">await</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>next_channel_id = channel_id_generator.load(Ordering::SeqCst);
 
