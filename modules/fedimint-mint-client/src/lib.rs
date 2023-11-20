@@ -24,13 +24,13 @@ use backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
 use client_db::DbKeyPrefix;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
+use fedimint_client::module::{ClientContext, ClientDbTxContext, ClientModule, IClientModule};
 use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, Executor, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
+use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -509,67 +509,21 @@ impl ClientModule for MintClientModule {
         Ok(backup.consensus_encode_to_vec()?)
     }
 
-    async fn restore(
-        &self,
-        // dbtx: &mut ModuleDatabaseTransaction<'_>,
-        dbtx: &mut DatabaseTransaction<'_>,
-        module_instance_id: ModuleInstanceId,
-        executor: Executor<DynGlobalClientContext>,
-        api: DynGlobalApi,
-        snapshot: Option<&[u8]>,
-    ) -> anyhow::Result<()> {
-        if !Self::get_all_spendable_notes(
-            &mut dbtx.to_ref_with_prefix_module_id(module_instance_id),
-        )
-        .await
-        .is_empty()
-        {
-            warn!(
-                target: LOG_TARGET,
-                "Can not start recovery - existing spendable notes found"
-            );
-            bail!("Found existing spendable notes. Mint module recovery must be started on an empty state.")
-        }
-
-        if !self.client_ctx.get_own_active_states().await.is_empty() {
-            warn!(
-                target: LOG_TARGET,
-                "Can not start recovery - existing state machines found"
-            );
-            bail!("Found existing active state machines. Mint module recovery must be started on an empty state.")
-        }
-
-        let snapshot = snapshot
-            .map(|mut s| EcashBackup::consensus_decode(&mut s, &Default::default()))
-            .transpose()?
-            .unwrap_or(EcashBackup::new_empty());
-
-        let current_session_count = api.session_count().await?;
-        let state = MintRestoreInProgressState::from_backup(
-            current_session_count,
-            snapshot,
-            30,
-            self.cfg.tbs_pks.clone(),
-            self.cfg.peer_tbs_pks.clone(),
-            &self.secret,
-        );
-
-        debug!(target: LOG_TARGET, "Creating MintRestoreStateMachine");
-
-        executor
-            .add_state_machines_dbtx(
-                dbtx,
-                vec![DynState::from_typed(
-                    module_instance_id,
-                    MintClientStateMachines::Restore(MintRestoreStateMachine {
-                        operation_id: MINT_BACKUP_RESTORE_OPERATION_ID,
-                        state: MintRestoreStates::InProgress(state),
-                    }),
-                )],
+    async fn restore(&self, snapshot: Option<&[u8]>) -> anyhow::Result<()> {
+        self.client_ctx
+            .module_autocommit(
+                move |dbtx_ctx, _| {
+                    Box::pin(async move { self.restore_inner(dbtx_ctx, snapshot).await })
+                },
+                None,
             )
-            .await?;
-
-        Ok(())
+            .await
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    anyhow!("Commit to DB failed: {last_error}")
+                }
+            })
     }
 
     async fn wipe(
@@ -1346,6 +1300,59 @@ impl MintClientModule {
         }
 
         Ok(operation)
+    }
+
+    async fn restore_inner(
+        &self,
+        dbtx_ctx: &'_ mut ClientDbTxContext<'_, '_, Self>,
+        snapshot: Option<&[u8]>,
+    ) -> anyhow::Result<()> {
+        if !Self::get_all_spendable_notes(&mut dbtx_ctx.module_dbtx())
+            .await
+            .is_empty()
+        {
+            warn!(
+                target: LOG_TARGET,
+                "Can not start recovery - existing spendable notes found"
+            );
+            bail!("Found existing spendable notes. Mint module recovery must be started on an empty state.")
+        }
+
+        if !self.client_ctx.get_own_active_states().await.is_empty() {
+            warn!(
+                target: LOG_TARGET,
+                "Can not start recovery - existing state machines found"
+            );
+            bail!("Found existing active state machines. Mint module recovery must be started on an empty state.")
+        }
+
+        let snapshot = snapshot
+            .map(|mut s| EcashBackup::consensus_decode(&mut s, &Default::default()))
+            .transpose()?
+            .unwrap_or(EcashBackup::new_empty());
+
+        let current_session_count = self.client_ctx.global_api().session_count().await?;
+        let state = MintRestoreInProgressState::from_backup(
+            current_session_count,
+            snapshot,
+            30,
+            self.cfg.tbs_pks.clone(),
+            self.cfg.peer_tbs_pks.clone(),
+            &self.secret,
+        );
+
+        debug!(target: LOG_TARGET, "Creating MintRestoreStateMachine");
+
+        dbtx_ctx
+            .add_state_machines_dbtx(vec![self.client_ctx.make_dyn_state(
+                MintClientStateMachines::Restore(MintRestoreStateMachine {
+                    operation_id: MINT_BACKUP_RESTORE_OPERATION_ID,
+                    state: MintRestoreStates::InProgress(state),
+                }),
+            )])
+            .await?;
+
+        Ok(())
     }
 }
 
