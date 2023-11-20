@@ -1,8 +1,5 @@
-use fedimint_client::sm::Executor;
-use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
-use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_client::module::ClientDbTxContext;
+use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti};
 use serde::{Deserialize, Serialize};
@@ -40,30 +37,15 @@ impl EcashBackup {
 impl MintClientModule {
     pub async fn prepare_plaintext_ecash_backup(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        executor: Executor<DynGlobalClientContext>,
-        api: DynGlobalApi,
-        module_instance_id: ModuleInstanceId,
+        dbtx_ctx: &'_ mut ClientDbTxContext<'_, '_, Self>,
     ) -> anyhow::Result<EcashBackup> {
         // fetch consensus height first - so we dont miss anything when scanning
-        let session_count = api.session_count().await?;
+        let session_count = self.client_ctx.global_api().session_count().await?;
 
-        let notes = Self::get_all_spendable_notes(dbtx).await;
+        let notes = Self::get_all_spendable_notes(&mut dbtx_ctx.module_dbtx()).await;
 
-        let pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)> = executor
-            .get_active_states()
-            .await
-            .into_iter()
-            .filter_map(|(dyn_state, _active_state)| {
-                if dyn_state.module_instance_id() != module_instance_id {
-                    return None;
-                }
-
-                let state: MintClientStateMachines = dyn_state
-                    .as_any()
-                    .downcast_ref()
-                    .cloned()
-                    .expect("Can't downcast mint client state machine state");
+        let pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)> = self.client_ctx.get_own_active_states().await.into_iter()
+            .filter_map(|(state, _active_state)| {
 
                 match state {
                     MintClientStateMachines::Output(MintOutputStateMachine { common, state }) => {
@@ -80,7 +62,11 @@ impl MintClientModule {
 
         let mut idxes = vec![];
         for &amount in self.cfg.tbs_pks.tiers() {
-            idxes.push((amount, self.get_next_note_index(dbtx, amount).await));
+            idxes.push((
+                amount,
+                self.get_next_note_index(&mut dbtx_ctx.module_dbtx(), amount)
+                    .await,
+            ));
         }
         let next_note_idx = Tiered::from_iter(idxes);
 

@@ -140,18 +140,10 @@ impl Client {
     pub async fn create_backup(&self, metadata: Metadata) -> anyhow::Result<ClientBackup> {
         let session_count = self.api.session_count().await?;
         let mut modules = BTreeMap::new();
-        let mut dbtx = self.db().begin_transaction().await;
         for (id, kind, module) in self.modules.iter_modules() {
             debug!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Preparing module backup");
             if module.supports_backup() {
-                let backup = module
-                    .backup(
-                        &mut dbtx.to_ref_with_prefix_module_id(id).into_nc(),
-                        self.executor.clone(),
-                        self.api.clone(),
-                        id,
-                    )
-                    .await?;
+                let backup = module.backup().await?;
 
                 info!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, size=backup.len(), "Prepared module backup");
                 modules.insert(id, backup);
@@ -159,8 +151,6 @@ impl Client {
                 info!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Module does not support backup");
             }
         }
-
-        dbtx.commit_tx().await;
 
         Ok(ClientBackup {
             metadata,
