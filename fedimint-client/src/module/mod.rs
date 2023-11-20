@@ -153,6 +153,18 @@ where
             .add_operation_log_entry(self.dbtx, operation_id, operation_type, operation_meta)
             .await
     }
+
+    pub async fn add_state_machines_dbtx(
+        &mut self,
+        states: Vec<DynState<DynGlobalClientContext>>,
+    ) -> AddStateMachinesResult {
+        self.client
+            .client
+            .get()
+            .executor
+            .add_state_machines_dbtx(self.dbtx, states)
+            .await
+    }
 }
 
 impl<M> ClientContext<M>
@@ -441,15 +453,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         anyhow::bail!("Backup not supported");
     }
 
-    async fn restore(
-        &self,
-        // _dbtx: &mut ModuleDatabaseTransaction<'_>,
-        _dbtx: &mut DatabaseTransaction<'_>,
-        _module_instance_id: ModuleInstanceId,
-        _executor: Executor<DynGlobalClientContext>,
-        _api: DynGlobalApi,
-        _snapshot: Option<&[u8]>,
-    ) -> anyhow::Result<()> {
+    async fn restore(&self, _snapshot: Option<&[u8]>) -> anyhow::Result<()> {
         anyhow::bail!("Backup not supported");
     }
 
@@ -622,15 +626,7 @@ pub trait IClientModule: Debug {
 
     async fn backup(&self) -> anyhow::Result<Vec<u8>>;
 
-    async fn restore(
-        &self,
-        // dbtx: &mut ModuleDatabaseTransaction<'_>,
-        dbtx: &mut DatabaseTransaction<'_>,
-        module_instance_id: ModuleInstanceId,
-        executor: Executor<DynGlobalClientContext>,
-        api: DynGlobalApi,
-        snapshot: Option<&[u8]>,
-    ) -> anyhow::Result<()>;
+    async fn restore(&self, snapshot: Option<&[u8]>) -> anyhow::Result<()>;
 
     async fn wipe(
         &self,
@@ -724,16 +720,8 @@ where
         <T as ClientModule>::backup(self).await
     }
 
-    async fn restore(
-        &self,
-        // dbtx: &mut ModuleDatabaseTransaction<'_>,
-        dbtx: &mut DatabaseTransaction<'_>,
-        module_instance_id: ModuleInstanceId,
-        executor: Executor<DynGlobalClientContext>,
-        api: DynGlobalApi,
-        snapshot: Option<&[u8]>,
-    ) -> anyhow::Result<()> {
-        <T as ClientModule>::restore(self, dbtx, module_instance_id, executor, api, snapshot).await
+    async fn restore(&self, snapshot: Option<&[u8]>) -> anyhow::Result<()> {
+        <T as ClientModule>::restore(self, snapshot).await
     }
 
     async fn wipe(

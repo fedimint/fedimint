@@ -252,7 +252,6 @@ impl Client {
             .map(|b| b.metadata.clone())
             .unwrap_or_else(Metadata::empty);
 
-        let mut dbtx = self.db().begin_transaction().await;
         for (id, kind, module) in self.modules.iter_modules() {
             if !module.supports_backup() {
                 continue;
@@ -265,18 +264,9 @@ impl Client {
                 module_id = id,
                 "Starting recovery from backup for module"
             );
-            module
-                .restore(
-                    &mut dbtx.to_ref_nc(),
-                    id,
-                    self.executor.clone(),
-                    self.api.clone(),
-                    module_backup.map(Vec::as_slice),
-                )
-                .await?;
+            module.restore(module_backup.map(Vec::as_slice)).await?;
         }
 
-        dbtx.commit_tx().await;
         Ok(metadata)
     }
 
