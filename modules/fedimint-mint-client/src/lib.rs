@@ -525,12 +525,7 @@ impl ClientModule for MintClientModule {
             bail!("Found existing spendable notes. Mint module recovery must be started on an empty state.")
         }
 
-        if executor
-            .get_active_states()
-            .await
-            .into_iter()
-            .any(|s| s.0.module_instance_id() == module_instance_id)
-        {
+        if !self.client_ctx.get_own_active_states().await.is_empty() {
             warn!(
                 target: LOG_TARGET,
                 "Can not start recovery - existing state machines found"
@@ -652,24 +647,13 @@ impl ClientModule for MintClientModule {
         )
     }
 
-    async fn leave(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        module_instance_id: ModuleInstanceId,
-        executor: Executor<DynGlobalClientContext>,
-        _api: DynGlobalApi,
-    ) -> anyhow::Result<()> {
+    async fn leave(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
         let balance = ClientModule::get_balance(self, dbtx).await;
         if Amount::from_sats(0) < balance {
             bail!("Outstanding balance: {balance}");
         }
 
-        if executor
-            .get_active_states()
-            .await
-            .into_iter()
-            .any(|s| s.0.module_instance_id() == module_instance_id)
-        {
+        if !self.client_ctx.get_own_active_states().await.is_empty() {
             bail!("Pending operations")
         }
         Ok(())
@@ -1192,20 +1176,18 @@ impl MintClientModule {
         try_cancel_after: Duration,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
-        let mint_id = self.client_ctx.module_instance_id();
         let federation_id_prefix = self.federation_id.to_prefix();
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientModule::spend_notes extra_meta is serializable");
 
         self.client_ctx
-            .global_db()
-            .autocommit(
+            .module_autocommit(
                 move |dbtx, _| {
                     let extra_meta = extra_meta.clone();
                     Box::pin(async move {
                         let (operation_id, states, notes) = self
                             .spend_notes_oob(
-                                &mut dbtx.to_ref_with_prefix_module_id(mint_id),
+                                &mut dbtx.module_dbtx(),
                                 notes_selector,
                                 requested_amount,
                                 try_cancel_after,
@@ -1213,24 +1195,21 @@ impl MintClientModule {
                             .await?;
                         let oob_notes = OOBNotes::new(federation_id_prefix, notes);
 
-                        let dyn_states = states.into_iter().map(|s| s.into_dyn(mint_id)).collect();
-
-                        self.client_ctx.add_state_machines(dbtx, dyn_states).await?;
-                        self.client_ctx
-                            .add_operation_log_entry(
-                                dbtx,
-                                operation_id,
-                                MintCommonInit::KIND.as_str(),
-                                MintOperationMeta {
-                                    variant: MintOperationMetaVariants::SpendOOB {
-                                        requested_amount,
-                                        oob_notes: oob_notes.clone(),
-                                    },
-                                    amount: oob_notes.total_amount(),
-                                    extra_meta,
+                        dbtx.add_state_machines(self.client_ctx.map_dyn(states).collect())
+                            .await?;
+                        dbtx.add_operation_log_entry(
+                            operation_id,
+                            MintCommonInit::KIND.as_str(),
+                            MintOperationMeta {
+                                variant: MintOperationMetaVariants::SpendOOB {
+                                    requested_amount,
+                                    oob_notes: oob_notes.clone(),
                                 },
-                            )
-                            .await;
+                                amount: oob_notes.total_amount(),
+                                extra_meta,
+                            },
+                        )
+                        .await;
 
                         Ok((operation_id, oob_notes))
                     })

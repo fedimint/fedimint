@@ -11,7 +11,7 @@ use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::GlobalFederationApi;
-use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, OperationId};
+use fedimint_core::core::{Decoder, KeyPair, OperationId};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -203,8 +203,7 @@ impl DummyClientModule {
 
         // Build and send tx to the fed
         // Will output to our primary client module
-        let tx = TransactionBuilder::new()
-            .with_input(input.into_dyn(self.client_ctx.module_instance_id()));
+        let tx = TransactionBuilder::new().with_input(self.client_ctx.make_client_input(input));
         let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
         let (_, change) = self
             .client_ctx
@@ -244,16 +243,18 @@ impl DummyClientModule {
 
         // TODO: Building a tx could be easier
         // Create input using our own account
-        let inputs = fedimint_client::module::ClientModule::create_sufficient_input(
-            self,
-            &mut dbtx.to_ref_nc(),
-            op_id,
-            amount,
-        )
-        .await?
-        .into_iter()
-        .map(|input| input.into_dyn(self.client_ctx.module_instance_id()))
-        .collect();
+        let inputs = self
+            .client_ctx
+            .map_dyn(
+                fedimint_client::module::ClientModule::create_sufficient_input(
+                    self,
+                    &mut dbtx.to_ref_nc(),
+                    op_id,
+                    amount,
+                )
+                .await?,
+            )
+            .collect();
 
         dbtx.commit_tx().await;
 
@@ -266,7 +267,7 @@ impl DummyClientModule {
         // Build and send tx to the fed
         let tx = TransactionBuilder::new()
             .with_inputs(inputs)
-            .with_output(output.into_dyn(self.client_ctx.module_instance_id()));
+            .with_output(self.client_ctx.make_client_output(output));
 
         let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
         let (txid, _) = self

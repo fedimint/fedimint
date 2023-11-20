@@ -1,6 +1,7 @@
 use core::fmt;
 use std::any::Any;
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::{ffi, marker, ops};
 
@@ -10,11 +11,11 @@ use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
 };
-use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, PhantomBound};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::util::BoxStream;
+use fedimint_core::util::{BoxFuture, BoxStream};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
@@ -22,7 +23,7 @@ use fedimint_core::{
 use secp256k1_zkp::PublicKey;
 
 use self::init::ClientModuleInit;
-use crate::sm::{ActiveState, Context, DynContext, DynState, Executor, State};
+use crate::sm::{self, ActiveState, Context, DynContext, DynState, Executor, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use crate::{
     oplog, AddStateMachinesResult, ClientArc, ClientWeak, DynGlobalClientContext,
@@ -111,6 +112,49 @@ impl<M> fmt::Debug for ClientContext<M> {
     }
 }
 
+/// A context of a database transaction started with
+/// `ClientContext::module_autocommit`
+pub struct ClientDbTxContext<'r, 'o, M> {
+    dbtx: &'r mut DatabaseTransaction<'o>,
+    client: &'r ClientContext<M>,
+}
+
+impl<'r, 'o, M> ClientDbTxContext<'r, 'o, M>
+where
+    M: ClientModule,
+{
+    /// Get a reference to [`DatabaseTransaction`] isolated database transaction
+    pub fn module_dbtx(&mut self) -> DatabaseTransaction<'_> {
+        self.dbtx
+            .to_ref_with_prefix_module_id(self.client.module_instance_id)
+    }
+
+    pub async fn add_state_machines(
+        &mut self,
+        dyn_states: Vec<DynState<DynGlobalClientContext>>,
+    ) -> AddStateMachinesResult {
+        self.client
+            .client
+            .get()
+            .add_state_machines(self.dbtx, dyn_states)
+            .await
+    }
+
+    pub async fn add_operation_log_entry(
+        &mut self,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+    ) {
+        self.client
+            .client
+            .get()
+            .operation_log()
+            .add_operation_log_entry(self.dbtx, operation_id, operation_type, operation_meta)
+            .await
+    }
+}
+
 impl<M> ClientContext<M>
 where
     M: ClientModule,
@@ -137,13 +181,6 @@ where
     /// Get a reference to a global Api handle
     pub fn global_api(&self) -> DynGlobalApi {
         self.client.get().api_clone()
-    }
-
-    /// Get own [`ModuleInstanceId`]
-    // TODO: we would like to eventually get rid of that
-    // and make it entirely internal.
-    pub fn module_instance_id(&self) -> ModuleInstanceId {
-        self.module_instance_id
     }
 
     pub fn map_dyn<'s, 'i, 'o, I>(
@@ -173,7 +210,7 @@ where
     where
         I: IntoDynInstance,
     {
-        typed.into_dyn(self.module_instance_id())
+        typed.into_dyn(self.module_instance_id)
     }
 
     /// Turn a typed [`ClientOutput`] into a dyn version
@@ -192,6 +229,40 @@ where
         S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
     {
         self.make_dyn(input)
+    }
+
+    pub fn make_dyn_state<GC, S>(&self, sm: S) -> DynState<GC>
+    where
+        S: sm::IState<GC> + 'static,
+    {
+        DynState::from_typed(self.module_instance_id, sm)
+    }
+
+    /// An [`Database::autocommit`] on module's own database partition
+    pub async fn module_autocommit<'s, 'dbtx, F, T, E>(
+        &'s self,
+        tx_fn: F,
+        max_attempts: Option<usize>,
+    ) -> Result<T, AutocommitError<E>>
+    where
+        's: 'dbtx,
+        for<'r, 'o> F: Fn(
+                &'r mut ClientDbTxContext<'r, 'o, M>,
+                PhantomBound<'dbtx, 'o>,
+            ) -> BoxFuture<'r, Result<T, E>>
+            + MaybeSync,
+    {
+        let tx_fn = &tx_fn;
+        self.global_db()
+            .autocommit(
+                move |dbtx, _| {
+                    Box::pin(async move {
+                        tx_fn(&mut ClientDbTxContext { dbtx, client: self }, PhantomData).await
+                    })
+                },
+                max_attempts,
+            )
+            .await
     }
 
     /// See [`crate::Client::finalize_and_submit_transaction`]
@@ -262,28 +333,6 @@ where
         &self.module_db
     }
 
-    pub async fn add_state_machines(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        dyn_states: Vec<DynState<DynGlobalClientContext>>,
-    ) -> AddStateMachinesResult {
-        self.client.get().add_state_machines(dbtx, dyn_states).await
-    }
-
-    pub async fn add_operation_log_entry(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        operation_id: OperationId,
-        operation_type: &str,
-        operation_meta: impl serde::Serialize,
-    ) {
-        self.client
-            .get()
-            .operation_log()
-            .add_operation_log_entry(dbtx, operation_id, operation_type, operation_meta)
-            .await
-    }
-
     pub async fn has_active_states(&self, op_id: OperationId) -> bool {
         self.client.get().has_active_states(op_id).await
     }
@@ -295,7 +344,7 @@ where
             .get_active_states()
             .await
             .into_iter()
-            .filter(|s| s.0.module_instance_id() == self.module_instance_id())
+            .filter(|s| s.0.module_instance_id() == self.module_instance_id)
             .map(|s| {
                 (
                     s.0.as_any()
@@ -554,13 +603,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// Calling code should allow the user to override and ignore any
     /// outstanding errors, after sufficient amount of warnings. Ideally,
     /// this should be done on per-module basis, to avoid mistakes.
-    async fn leave(
-        &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
-        _module_instance_id: ModuleInstanceId,
-        _executor: Executor<DynGlobalClientContext>,
-        _api: DynGlobalApi,
-    ) -> anyhow::Result<()> {
+    async fn leave(&self, _dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
         bail!("Unable to determine if safe to leave the federation: Not implemented")
     }
 }
