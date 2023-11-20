@@ -1,7 +1,7 @@
 mod db;
 pub mod incoming;
 pub mod pay;
-mod receive;
+pub mod receive;
 
 use std::collections::BTreeMap;
 use std::iter::once;
