@@ -535,6 +535,8 @@ impl FedimintConsensus {
         let mut dbtx = self.db.begin_transaction().await;
         let mut audit = Audit::default();
         for (module_instance_id, _, module) in self.modules.iter_modules() {
+            let _module_audit_timing =
+                timing::TimeReporter::new(format!("audit module {module_instance_id}"));
             module
                 .audit(&mut dbtx.with_module_prefix(module_instance_id), &mut audit)
                 .await
