@@ -28,7 +28,9 @@ use bitcoin::{Address, Network, Txid};
 use bitcoin_hashes::hex::ToHex;
 use clap::{Parser, Subcommand};
 use client::GatewayClientBuilder;
-use db::{DbKeyPrefix, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey};
+use db::{
+    DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey,
+};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::ClientArc;
 use fedimint_core::api::{FederationError, InviteCode};
@@ -59,7 +61,7 @@ use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning_invoice::RoutingFees;
 use lnrpc_client::{ILnRpcClient, LightningBuilder, LightningRpcError, RouteHtlcStream};
 use rand::rngs::OsRng;
-use rpc::{FederationInfo, SetConfigurationPayload};
+use rpc::{FederationInfo, LeaveFedPayload, SetConfigurationPayload};
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
 use state_machine::pay::OutgoingPaymentError;
@@ -91,10 +93,10 @@ const DEFAULT_NUM_ROUTE_HINTS: u32 = 0;
 pub const DEFAULT_NETWORK: Network = Network::Regtest;
 
 pub const DEFAULT_FEES: RoutingFees = RoutingFees {
-    /// Base routing fee. Default is 0 msat
+    // Base routing fee. Default is 0 msat
     base_msat: 0,
-    /// Liquidity-based routing fee in millionths of a routed amount.
-    /// In other words, 10000 is 1%. The default is 10000 (1%).
+    // Liquidity-based routing fee in millionths of a routed amount.
+    // In other words, 10000 is 1%. The default is 10000 (1%).
     proportional_millionths: 10000,
 };
 
@@ -858,6 +860,18 @@ impl Gateway {
         }
 
         Err(GatewayError::Disconnected)
+    }
+
+    async fn handle_leave_federation(&mut self, payload: LeaveFedPayload) -> Result<()> {
+        self.remove_client(payload.federation_id).await?;
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+        dbtx.remove_entry(&FederationIdKey {
+            id: payload.federation_id,
+        })
+        .await;
+        dbtx.commit_tx_result()
+            .await
+            .map_err(GatewayError::DatabaseError)
     }
 
     pub async fn handle_backup_msg(

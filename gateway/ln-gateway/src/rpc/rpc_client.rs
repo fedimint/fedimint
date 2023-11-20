@@ -10,8 +10,8 @@ use serde::Serialize;
 use thiserror::Error;
 
 use super::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
-    SetConfigurationPayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, LeaveFedPayload,
+    RestorePayload, SetConfigurationPayload, WithdrawPayload,
 };
 use crate::rpc::{FederationInfo, GatewayInfo};
 
@@ -68,6 +68,11 @@ impl GatewayRpcClient {
             .base_url
             .join("/connect-fed")
             .expect("invalid base url");
+        self.call(url, payload).await
+    }
+
+    pub async fn leave_federation(&self, payload: LeaveFedPayload) -> GatewayRpcResult<()> {
+        let url = self.base_url.join("/leave-fed").expect("invalid base url");
         self.call(url, payload).await
     }
 
