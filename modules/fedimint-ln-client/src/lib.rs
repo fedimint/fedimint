@@ -67,7 +67,10 @@ use strum::IntoEnumIterator;
 use thiserror::Error;
 use tracing::{debug, error};
 
-use crate::db::{LightningGatewayKeyPrefix, PaymentResultPrefix};
+use crate::db::{
+    LightningGatewayKeyPrefix, MetaOverrides, MetaOverridesKey, MetaOverridesPrefix,
+    PaymentResultPrefix,
+};
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
 };
@@ -83,6 +86,8 @@ use crate::receive::{
 /// Number of blocks until outgoing lightning contracts times out and user
 /// client can get refund
 const OUTGOING_LN_CONTRACT_TIMELOCK: u64 = 500;
+
+const META_OVERRIDE_CACHE_DURATION: Duration = Duration::from_secs(10 * 60);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 #[serde(rename_all = "snake_case")]
@@ -255,6 +260,16 @@ impl ModuleInit for LightningClientInit {
                         PaymentResult,
                         ln_client_items,
                         "Payment Result"
+                    );
+                }
+                DbKeyPrefix::MetaOverrides => {
+                    push_db_pair_items!(
+                        dbtx,
+                        MetaOverridesPrefix,
+                        MetaOverridesKey,
+                        MetaOverrides,
+                        ln_client_items,
+                        "Meta Overrides"
                     );
                 }
             }
@@ -861,6 +876,21 @@ impl LightningClientModule {
             .ok_or(anyhow::anyhow!("No meta override source configured"))?;
         debug!("Fetching meta overrides from {}", override_src);
 
+        if let Some(meta) = self
+            .client_ctx
+            .module_db()
+            .begin_transaction()
+            .await
+            .get_value(&MetaOverridesKey {})
+            .await
+        {
+            if meta.fetched_at.elapsed().unwrap() < META_OVERRIDE_CACHE_DURATION {
+                debug!("Using cached meta overrides");
+                return Ok(meta.value);
+            }
+            debug!("Cached meta overrides are stale");
+        };
+
         let response = reqwest::Client::new()
             .get(override_src.as_str())
             .send()
@@ -893,6 +923,17 @@ impl LightningClientModule {
                 response.status()
             ))?,
         };
+
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        dbtx.insert_entry(
+            &MetaOverridesKey {},
+            &MetaOverrides {
+                value: federation_meta.clone(),
+                fetched_at: fedimint_core::time::now(),
+            },
+        )
+        .await;
+        dbtx.commit_tx().await;
 
         Ok(federation_meta)
     }
