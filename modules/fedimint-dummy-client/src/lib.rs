@@ -246,7 +246,7 @@ impl DummyClientModule {
         // Create input using our own account
         let inputs = fedimint_client::module::ClientModule::create_sufficient_input(
             self,
-            &mut dbtx.to_ref_non_committable(),
+            &mut dbtx.to_ref_nc(),
             op_id,
             amount,
         )

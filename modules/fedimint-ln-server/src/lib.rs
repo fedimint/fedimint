@@ -857,14 +857,14 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 BLOCK_COUNT_ENDPOINT,
                 async |module: &Lightning, context, _v: ()| -> Option<u64> {
-                    Ok(Some(module.consensus_block_count(&mut context.dbtx().into_non_committable()).await))
+                    Ok(Some(module.consensus_block_count(&mut context.dbtx().into_nc()).await))
                 }
             },
             api_endpoint! {
                 ACCOUNT_ENDPOINT,
                 async |module: &Lightning, context, contract_id: ContractId| -> Option<ContractAccount> {
                     Ok(module
-                        .get_contract_account(&mut context.dbtx().into_non_committable(), contract_id)
+                        .get_contract_account(&mut context.dbtx().into_nc(), contract_id)
                         .await)
                 }
             },
@@ -879,7 +879,7 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 AWAIT_BLOCK_HEIGHT_ENDPOINT,
                 async |module: &Lightning, context, block_height: u64| -> () {
-                    module.wait_block_height(block_height, &mut context.dbtx().into_non_committable()).await;
+                    module.wait_block_height(block_height, &mut context.dbtx().into_nc()).await;
                     Ok(())
                 }
             },
@@ -899,7 +899,7 @@ impl ServerModule for Lightning {
                 OFFER_ENDPOINT,
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> Option<IncomingContractOffer> {
                     Ok(module
-                        .get_offer(&mut context.dbtx().into_non_committable(), payment_hash)
+                        .get_offer(&mut context.dbtx().into_nc(), payment_hash)
                         .await)
                }
             },
@@ -914,13 +914,13 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 LIST_GATEWAYS_ENDPOINT,
                 async |module: &Lightning, context, _v: ()| -> Vec<LightningGatewayAnnouncement> {
-                    Ok(module.list_gateways(&mut context.dbtx().into_non_committable()).await)
+                    Ok(module.list_gateways(&mut context.dbtx().into_nc()).await)
                 }
             },
             api_endpoint! {
                 REGISTER_GATEWAY_ENDPOINT,
                 async |module: &Lightning, context, gateway: LightningGatewayAnnouncement| -> () {
-                    module.register_gateway(&mut context.dbtx().into_non_committable(), gateway).await;
+                    module.register_gateway(&mut context.dbtx().into_nc(), gateway).await;
                     Ok(())
                 }
             },
@@ -1232,7 +1232,7 @@ mod tests {
 
         server
             .process_output(
-                &mut dbtx.to_ref_with_prefix_module_id(42).into_non_committable(),
+                &mut dbtx.to_ref_with_prefix_module_id(42).into_nc(),
                 &output,
                 out_point,
             )
@@ -1255,7 +1255,7 @@ mod tests {
         assert_matches!(
             server
                 .process_output(
-                    &mut dbtx.to_ref_with_prefix_module_id(42).into_non_committable(),
+                    &mut dbtx.to_ref_with_prefix_module_id(42).into_nc(),
                     &output2,
                     out_point2
                 )
@@ -1306,7 +1306,7 @@ mod tests {
             .await;
 
         let processed_input_meta = server
-            .process_input(&mut module_dbtx.to_ref_non_committable(), &lightning_input)
+            .process_input(&mut module_dbtx.to_ref_nc(), &lightning_input)
             .await
             .expect("should process valid incoming contract");
         let expected_input_meta = InputMeta {
@@ -1363,7 +1363,7 @@ mod tests {
             .await;
 
         let processed_input_meta = server
-            .process_input(&mut module_dbtx.to_ref_non_committable(), &lightning_input)
+            .process_input(&mut module_dbtx.to_ref_nc(), &lightning_input)
             .await
             .expect("should process valid outgoing contract");
 

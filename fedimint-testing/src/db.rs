@@ -65,7 +65,7 @@ where
             decoders,
         );
         let mut dbtx = db.begin_transaction().await;
-        prepare_fn(dbtx.to_ref_non_committable()).await;
+        prepare_fn(dbtx.to_ref_nc()).await;
         dbtx.commit_tx().await;
         Ok(())
     }

@@ -404,7 +404,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
 
         self.client
             .finalize_and_submit_transaction_inner(
-                &mut dbtx.global_tx().to_ref_non_committable(),
+                &mut dbtx.global_tx().to_ref_nc(),
                 self.operation,
                 TransactionBuilder::new().with_input(instance_input),
             )
@@ -424,7 +424,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
 
         self.client
             .finalize_and_submit_transaction_inner(
-                &mut dbtx.global_tx().to_ref_non_committable(),
+                &mut dbtx.global_tx().to_ref_nc(),
                 self.operation,
                 TransactionBuilder::new().with_output(instance_output),
             )
@@ -440,7 +440,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
 
         self.client
             .executor
-            .add_state_machines_dbtx(&mut dbtx.global_tx().to_ref_non_committable(), vec![state])
+            .add_state_machines_dbtx(&mut dbtx.global_tx().to_ref_nc(), vec![state])
             .await
     }
 
@@ -912,7 +912,7 @@ impl Client {
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
         let (transaction, mut states, change_range) = self
-            .finalize_transaction(&mut dbtx.to_ref_non_committable(), operation_id, tx_builder)
+            .finalize_transaction(&mut dbtx.to_ref_nc(), operation_id, tx_builder)
             .await?;
         let txid = transaction.tx_hash();
         let change_outpoints = change_range
@@ -1119,7 +1119,7 @@ impl Client {
         self.primary_module()
             .get_balance(
                 self.primary_module_instance,
-                &mut self.db().begin_transaction().await.into_non_committable(),
+                &mut self.db().begin_transaction_nc().await,
             )
             .await
     }
@@ -1137,9 +1137,9 @@ impl Client {
             yield initial_balance;
             let mut prev_balance = initial_balance;
             while let Some(()) = balance_changes.next().await {
-                let dbtx = db.begin_transaction().await;
+                let mut dbtx = db.begin_transaction_nc().await;
                 let balance = primary_module
-                    .get_balance(primary_module_instance, &mut dbtx.into_non_committable())
+                    .get_balance(primary_module_instance, &mut dbtx)
                     .await;
 
                 // Deduplicate in case modules cannot always tell if the balance actually changed

@@ -1027,10 +1027,7 @@ impl Gateway {
     ) -> Result<()> {
         if let GatewayState::Connected = self.state.read().await.clone() {
             let dbtx = self.gateway_db.begin_transaction().await;
-            let configs = self
-                .client_builder
-                .load_configs(dbtx.into_non_committable())
-                .await?;
+            let configs = self.client_builder.load_configs(dbtx.into_nc()).await?;
             let channel_id_generator = self.channel_id_generator.lock().await;
             let mut next_channel_id = channel_id_generator.load(Ordering::SeqCst);
 

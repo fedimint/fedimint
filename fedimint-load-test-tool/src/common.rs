@@ -314,10 +314,9 @@ pub async fn get_note_summary(client: &ClientArc) -> anyhow::Result<TieredSummar
         .get_wallet_summary(
             &mut client
                 .db()
-                .begin_transaction()
+                .begin_transaction_nc()
                 .await
-                .to_ref_with_prefix_module_id(1)
-                .into_non_committable(),
+                .to_ref_with_prefix_module_id(1),
         )
         .await;
     Ok(summary)
@@ -336,7 +335,7 @@ pub async fn remint_denomination(
     for _ in 0..quantity {
         let outputs = mint_client
             .create_output(
-                &mut module_transaction.to_ref_non_committable(),
+                &mut module_transaction.to_ref_nc(),
                 operation_id,
                 1,
                 denomination,

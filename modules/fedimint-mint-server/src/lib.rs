@@ -442,7 +442,7 @@ impl ServerModule for Mint {
                 BACKUP_ENDPOINT,
                 async |module: &Mint, context, request: SignedBackupRequest| -> () {
                     module
-                        .handle_backup_request(&mut context.dbtx().into_non_committable(), request).await?;
+                        .handle_backup_request(&mut context.dbtx().into_nc(), request).await?;
                     Ok(())
                 }
             },
@@ -450,7 +450,7 @@ impl ServerModule for Mint {
                 RECOVER_ENDPOINT,
                 async |module: &Mint, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ECashUserBackupSnapshot> {
                     Ok(module
-                        .handle_recover_request(&mut context.dbtx().into_non_committable(), id).await)
+                        .handle_recover_request(&mut context.dbtx().into_nc(), id).await)
                 }
             },
         ]
@@ -682,18 +682,12 @@ mod test {
 
         // Double spend in same epoch is detected
         let mut dbtx = db.begin_transaction().await;
-        mint.process_input(
-            &mut dbtx.to_ref_with_prefix_module_id(42).into_non_committable(),
-            &input,
-        )
-        .await
-        .expect("Spend of valid e-cash works");
+        mint.process_input(&mut dbtx.to_ref_with_prefix_module_id(42).into_nc(), &input)
+            .await
+            .expect("Spend of valid e-cash works");
         assert_matches!(
-            mint.process_input(
-                &mut dbtx.to_ref_with_prefix_module_id(42).into_non_committable(),
-                &input,
-            )
-            .await,
+            mint.process_input(&mut dbtx.to_ref_with_prefix_module_id(42).into_nc(), &input,)
+                .await,
             Err(_)
         );
     }

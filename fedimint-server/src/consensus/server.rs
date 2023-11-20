@@ -572,12 +572,8 @@ impl ConsensusServer {
             bail!("Item was discarded before we recovered");
         }
 
-        self.process_consensus_item_with_db_transaction(
-            &mut dbtx.to_ref_non_committable(),
-            item.clone(),
-            peer,
-        )
-        .await?;
+        self.process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item.clone(), peer)
+            .await?;
 
         dbtx.insert_entry(&AcceptedItemKey(item_index), &AcceptedItem { item, peer })
             .await;
@@ -591,7 +587,7 @@ impl ConsensusServer {
                 .audit(
                     &mut dbtx
                         .to_ref_with_prefix_module_id(module_instance_id)
-                        .into_non_committable(),
+                        .into_nc(),
                     &mut audit,
                     module_instance_id,
                 )
@@ -722,9 +718,7 @@ async fn submit_module_consensus_items(
                     for (instance_id, _, module) in modules.iter_modules() {
                         let module_consensus_items = module
                             .consensus_proposal(
-                                &mut dbtx
-                                    .to_ref_with_prefix_module_id(instance_id)
-                                    .into_non_committable(),
+                                &mut dbtx.to_ref_with_prefix_module_id(instance_id).into_nc(),
                                 instance_id,
                             )
                             .await;

@@ -846,7 +846,7 @@ impl LightningClientModule {
     ) -> anyhow::Result<OutgoingLightningPayment> {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         let prev_payment_result = self
-            .get_prev_payment_result(invoice.payment_hash(), &mut dbtx.to_ref_non_committable())
+            .get_prev_payment_result(invoice.payment_hash(), &mut dbtx.to_ref_nc())
             .await;
 
         if let Some(completed_payment) = prev_payment_result.completed_payment {

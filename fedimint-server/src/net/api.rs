@@ -116,17 +116,12 @@ impl ConsensusApi {
         }
 
         // Create read-only DB tx so that the read state is consistent
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_transaction_nc().await;
 
         // We ignore any writes, as we only verify if the transaction is valid here
         dbtx.ignore_uncommitted();
 
-        process_transaction_with_dbtx(
-            self.modules.clone(),
-            &mut dbtx.into_non_committable(),
-            transaction.clone(),
-        )
-        .await?;
+        process_transaction_with_dbtx(self.modules.clone(), &mut dbtx, transaction.clone()).await?;
 
         self.submission_sender
             .send(ConsensusItem::Transaction(transaction))
@@ -160,9 +155,7 @@ impl ConsensusApi {
             .modules
             .get_expect(module_id)
             .output_status(
-                &mut dbtx
-                    .to_ref_with_prefix_module_id(module_id)
-                    .into_non_committable(),
+                &mut dbtx.to_ref_with_prefix_module_id(module_id).into_nc(),
                 outpoint,
                 module_id,
             )
@@ -244,16 +237,14 @@ impl ConsensusApi {
     }
 
     async fn get_federation_audit(&self) -> ApiResult<AuditSummary> {
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_transaction_nc().await;
         let mut audit = Audit::default();
         let mut module_instance_id_to_kind: HashMap<ModuleInstanceId, String> = HashMap::new();
         for (module_instance_id, kind, module) in self.modules.iter_modules() {
             module_instance_id_to_kind.insert(module_instance_id, kind.as_str().to_string());
             module
                 .audit(
-                    &mut dbtx
-                        .to_ref_with_prefix_module_id(module_instance_id)
-                        .into_non_committable(),
+                    &mut dbtx.to_ref_with_prefix_module_id(module_instance_id),
                     &mut audit,
                     module_instance_id,
                 )
@@ -448,7 +439,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             BACKUP_ENDPOINT,
             async |fedimint: &ConsensusApi, context, request: SignedBackupRequest| -> () {
                 fedimint
-                    .handle_backup_request(&mut context.dbtx().into_non_committable(), request).await?;
+                    .handle_backup_request(&mut context.dbtx().into_nc(), request).await?;
                 Ok(())
 
             }
@@ -457,7 +448,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             RECOVER_ENDPOINT,
             async |fedimint: &ConsensusApi, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ClientBackupSnapshot> {
                 Ok(fedimint
-                    .handle_recover_request(&mut context.dbtx().into_non_committable(), id).await)
+                    .handle_recover_request(&mut context.dbtx().into_nc(), id).await)
             }
         },
         api_endpoint! {

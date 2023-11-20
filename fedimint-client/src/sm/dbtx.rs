@@ -23,7 +23,7 @@ impl<'inner, 'parent> ClientSMDatabaseTransaction<'inner, 'parent> {
     pub fn module_tx(&mut self) -> DatabaseTransaction<'_> {
         self.dbtx
             .to_ref_with_prefix_module_id(self.module_instance)
-            .into_non_committable()
+            .into_nc()
     }
 
     /// Returns the non-isolated database transaction only accessible to the

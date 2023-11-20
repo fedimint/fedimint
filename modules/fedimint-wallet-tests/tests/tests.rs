@@ -462,7 +462,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     sync_wallet_to_block(
         &mut dbtx
             .to_ref_with_prefix_module_id(module_instance_id)
-            .into_non_committable(),
+            .into_nc(),
         &mut wallet,
         block_count.try_into()?,
     )
@@ -495,7 +495,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         .process_input(
             &mut dbtx
                 .to_ref_with_prefix_module_id(module_instance_id)
-                .into_non_committable(),
+                .into_nc(),
             &input,
         )
         .await
@@ -514,7 +514,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     sync_wallet_to_block(
         &mut dbtx
             .to_ref_with_prefix_module_id(module_instance_id)
-            .into_non_committable(),
+            .into_nc(),
         &mut wallet,
         block_count.try_into()?,
     )
@@ -525,7 +525,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
             .process_input(
                 &mut dbtx
                     .to_ref_with_prefix_module_id(module_instance_id)
-                    .into_non_committable(),
+                    .into_nc(),
                 &input,
             )
             .await,

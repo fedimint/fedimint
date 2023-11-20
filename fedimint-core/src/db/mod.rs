@@ -354,7 +354,7 @@ impl Database {
         Ok(())
     }
 
-    /// Begin a database transaction
+    /// Begin a new committable database transaction
     pub async fn begin_transaction<'s, 'tx>(&'s self) -> DatabaseTransaction<'tx, Committable>
     where
         's: 'tx,
@@ -363,6 +363,14 @@ impl Database {
             self.inner.begin_transaction().await,
             self.module_decoders.clone(),
         )
+    }
+
+    /// Begin a new non-committable database transaction
+    pub async fn begin_transaction_nc<'s, 'tx>(&'s self) -> DatabaseTransaction<'tx, NonCommittable>
+    where
+        's: 'tx,
+    {
+        self.begin_transaction().await.into_nc()
     }
 
     /// Runs a closure with a reference to a database transaction and tries to
@@ -418,7 +426,7 @@ impl Database {
 
             let mut dbtx = self.begin_transaction().await;
 
-            let val = tx_fn(&mut dbtx.to_ref_non_committable(), PhantomData)
+            let val = tx_fn(&mut dbtx.to_ref_nc(), PhantomData)
                 .await
                 .map_err(|err| AutocommitError::ClosureError {
                     attempts: curr_attempts,
@@ -1290,7 +1298,7 @@ fn decode_value<V: DatabaseValue>(
 
 impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
     /// Convert into a non-committeable version
-    pub fn into_non_committable(self) -> DatabaseTransaction<'tx, NonCommittable> {
+    pub fn into_nc(self) -> DatabaseTransaction<'tx, NonCommittable> {
         DatabaseTransaction {
             tx: self.tx,
             decoders: self.decoders,
@@ -1301,11 +1309,11 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
     }
 
     /// Get a reference to a non-committeable version
-    pub fn to_ref_non_committable<'s, 'a>(&'s mut self) -> DatabaseTransaction<'a, NonCommittable>
+    pub fn to_ref_nc<'s, 'a>(&'s mut self) -> DatabaseTransaction<'a, NonCommittable>
     where
         's: 'a,
     {
-        self.to_ref().into_non_committable()
+        self.to_ref().into_nc()
     }
 
     /// Get [`DatabaseTransaction`] isolated to a `prefix`
@@ -1817,7 +1825,7 @@ pub async fn apply_migrations(
 
         while current_db_version < target_db_version {
             if let Some(migration) = migrations.get(&current_db_version) {
-                migration(&mut dbtx.to_ref_non_committable()).await?;
+                migration(&mut dbtx.to_ref_nc()).await?;
             } else {
                 panic!("Missing migration for version {current_db_version}");
             }

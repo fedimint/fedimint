@@ -645,7 +645,7 @@ impl ServerModule for Wallet {
                 BLOCK_COUNT_ENDPOINT,
                 async |module: &Wallet, context, _params: ()| -> u32 {
                     // TODO: perhaps change this to an Option
-                    Ok(module.consensus_block_count(&mut context.dbtx().into_non_committable()).await.unwrap_or_default())
+                    Ok(module.consensus_block_count(&mut context.dbtx().into_nc()).await.unwrap_or_default())
                 }
             },
             api_endpoint! {
@@ -658,7 +658,7 @@ impl ServerModule for Wallet {
                 PEG_OUT_FEES_ENDPOINT,
                 async |module: &Wallet, context, params: (Address, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
-                    let feerate = module.consensus_fee_rate(&mut context.dbtx().into_non_committable()).await;
+                    let feerate = module.consensus_fee_rate(&mut context.dbtx().into_nc()).await;
 
                     // Since we are only calculating the tx size we can use an arbitrary dummy nonce.
                     let dummy_tweak = [0; 32];
@@ -667,7 +667,7 @@ impl ServerModule for Wallet {
                         bitcoin::Amount::from_sat(sats),
                         address.script_pubkey(),
                         vec![],
-                        module.available_utxos(&mut context.dbtx().into_non_committable()).await,
+                        module.available_utxos(&mut context.dbtx().into_nc()).await,
                         feerate,
                         &dummy_tweak,
                         None
@@ -1147,7 +1147,7 @@ impl Wallet {
 #[instrument(level = "debug", skip_all)]
 pub async fn run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_handle: &TaskHandle) {
     while !tg_handle.is_shutting_down() {
-        broadcast_pending_tx(db.begin_transaction().await.into_non_committable(), &rpc).await;
+        broadcast_pending_tx(db.begin_transaction().await.into_nc(), &rpc).await;
         sleep(Duration::from_secs(1)).await;
     }
 }
