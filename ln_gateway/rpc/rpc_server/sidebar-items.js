@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["address","backup","balance","connect_fed","get_gateway_id","info","pay_invoice","restore","run_webserver","set_configuration","withdraw"]};
+window.SIDEBAR_ITEMS = {"fn":["address","backup","balance","connect_fed","get_gateway_id","info","leave_fed","pay_invoice","restore","run_webserver","set_configuration","withdraw"]};

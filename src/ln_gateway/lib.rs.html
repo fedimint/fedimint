@@ -1342,6 +1342,20 @@
 <a href="#1342" id="1342">1342</a>
 <a href="#1343" id="1343">1343</a>
 <a href="#1344" id="1344">1344</a>
+<a href="#1345" id="1345">1345</a>
+<a href="#1346" id="1346">1346</a>
+<a href="#1347" id="1347">1347</a>
+<a href="#1348" id="1348">1348</a>
+<a href="#1349" id="1349">1349</a>
+<a href="#1350" id="1350">1350</a>
+<a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
+<a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
+<a href="#1357" id="1357">1357</a>
+<a href="#1358" id="1358">1358</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -1372,7 +1386,9 @@
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>client::GatewayClientBuilder;
-<span class="kw">use </span>db::{DbKeyPrefix, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey};
+<span class="kw">use </span>db::{
+    DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey,
+};
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::ClientArc;
 <span class="kw">use </span>fedimint_core::api::{FederationError, InviteCode};
@@ -1403,7 +1419,7 @@
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>lnrpc_client::{ILnRpcClient, LightningBuilder, LightningRpcError, RouteHtlcStream};
 <span class="kw">use </span>rand::rngs::OsRng;
-<span class="kw">use </span>rpc::{FederationInfo, SetConfigurationPayload};
+<span class="kw">use </span>rpc::{FederationInfo, LeaveFedPayload, SetConfigurationPayload};
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
@@ -1435,10 +1451,10 @@
 <span class="kw">pub const </span>DEFAULT_NETWORK: Network = Network::Regtest;
 
 <span class="kw">pub const </span>DEFAULT_FEES: RoutingFees = RoutingFees {
-    <span class="doccomment">/// Base routing fee. Default is 0 msat
+    <span class="comment">// Base routing fee. Default is 0 msat
     </span>base_msat: <span class="number">0</span>,
-    <span class="doccomment">/// Liquidity-based routing fee in millionths of a routed amount.
-    /// In other words, 10000 is 1%. The default is 10000 (1%).
+    <span class="comment">// Liquidity-based routing fee in millionths of a routed amount.
+    // In other words, 10000 is 1%. The default is 10000 (1%).
     </span>proportional_millionths: <span class="number">10000</span>,
 };
 
@@ -2202,6 +2218,18 @@
         }
 
         <span class="prelude-val">Err</span>(GatewayError::Disconnected)
+    }
+
+    <span class="kw">async fn </span>handle_leave_federation(<span class="kw-2">&amp;mut </span><span class="self">self</span>, payload: LeaveFedPayload) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.remove_client(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
+        dbtx.remove_entry(<span class="kw-2">&amp;</span>FederationIdKey {
+            id: payload.federation_id,
+        })
+        .<span class="kw">await</span>;
+        dbtx.commit_tx_result()
+            .<span class="kw">await
+            </span>.map_err(GatewayError::DatabaseError)
     }
 
     <span class="kw">pub async fn </span>handle_backup_msg(

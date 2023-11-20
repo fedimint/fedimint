@@ -126,6 +126,11 @@
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::result::Result;
 
 <span class="kw">use </span>bitcoin::Address;
@@ -138,8 +143,8 @@
 <span class="kw">use </span>thiserror::Error;
 
 <span class="kw">use super</span>::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
-    SetConfigurationPayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, LeaveFedPayload,
+    RestorePayload, SetConfigurationPayload, WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::rpc::{FederationInfo, GatewayInfo};
 
@@ -196,6 +201,11 @@
             </span>.base_url
             .join(<span class="string">&quot;/connect-fed&quot;</span>)
             .expect(<span class="string">&quot;invalid base url&quot;</span>);
+        <span class="self">self</span>.call(url, payload).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>leave_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: LeaveFedPayload) -&gt; GatewayRpcResult&lt;()&gt; {
+        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/leave-fed&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
         <span class="self">self</span>.call(url, payload).<span class="kw">await
     </span>}
 
