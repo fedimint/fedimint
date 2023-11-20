@@ -371,17 +371,11 @@ impl WalletClientModule {
     ) -> anyhow::Result<(OperationId, Address)> {
         let (operation_id, address) = self
             .client_ctx
-            .global_db()
-            .autocommit(
+            .module_autocommit(
                 |dbtx, _| {
                     Box::pin(async {
                         let (operation_id, sm, address) = self
-                            .get_deposit_address_inner(
-                                valid_until,
-                                &mut dbtx.to_ref_with_prefix_module_id(
-                                    self.client_ctx.module_instance_id(),
-                                ),
-                            )
+                            .get_deposit_address_inner(valid_until, &mut dbtx.module_dbtx())
                             .await;
 
                         // Begin watching the script address
@@ -389,26 +383,20 @@ impl WalletClientModule {
                             .watch_script_history(&address.script_pubkey())
                             .await?;
 
-                        self.client_ctx
-                            .add_state_machines(
-                                dbtx,
-                                vec![DynState::from_typed(
-                                    self.client_ctx.module_instance_id(),
-                                    sm,
-                                )],
-                            )
-                            .await?;
-                        self.client_ctx
-                            .add_operation_log_entry(
-                                dbtx,
-                                operation_id,
-                                WalletCommonInit::KIND.as_str(),
-                                WalletOperationMeta::Deposit {
-                                    address: address.clone(),
-                                    expires_at: valid_until,
-                                },
-                            )
-                            .await;
+                        dbtx.add_state_machines(vec![DynState::from_typed(
+                            self.client_ctx.module_instance_id(),
+                            sm,
+                        )])
+                        .await?;
+                        dbtx.add_operation_log_entry(
+                            operation_id,
+                            WalletCommonInit::KIND.as_str(),
+                            WalletOperationMeta::Deposit {
+                                address: address.clone(),
+                                expires_at: valid_until,
+                            },
+                        )
+                        .await;
 
                         Ok((operation_id, address))
                     })

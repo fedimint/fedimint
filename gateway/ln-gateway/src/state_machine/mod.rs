@@ -514,8 +514,7 @@ impl GatewayClientModule {
         let payload = pay_invoice_payload.clone();
 
         self.client_ctx
-            .global_db()
-            .autocommit(
+            .module_autocommit(
                 |dbtx, _| {
                     Box::pin(async {
                         let operation_id = OperationId(payload.contract_id.into_inner());
@@ -533,11 +532,10 @@ impl GatewayClientModule {
                             .map(|s| self.client_ctx.make_dyn(s))
                             .collect();
 
-                            match self.client_ctx.add_state_machines(dbtx, dyn_states).await {
+                            match dbtx.add_state_machines( dyn_states).await {
                                 Ok(()) => {
-                                    self.client_ctx
+                                    dbtx
                                         .add_operation_log_entry(
-                                            dbtx,
                                             operation_id,
                                             KIND.as_str(),
                                             GatewayMeta::Pay,

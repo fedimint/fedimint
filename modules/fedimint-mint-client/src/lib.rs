@@ -1182,14 +1182,13 @@ impl MintClientModule {
             .expect("MintClientModule::spend_notes extra_meta is serializable");
 
         self.client_ctx
-            .global_db()
-            .autocommit(
+            .module_autocommit(
                 move |dbtx, _| {
                     let extra_meta = extra_meta.clone();
                     Box::pin(async move {
                         let (operation_id, states, notes) = self
                             .spend_notes_oob(
-                                &mut dbtx.to_ref_with_prefix_module_id(mint_id),
+                                &mut dbtx.module_dbtx(),
                                 notes_selector,
                                 requested_amount,
                                 try_cancel_after,
@@ -1199,22 +1198,20 @@ impl MintClientModule {
 
                         let dyn_states = states.into_iter().map(|s| s.into_dyn(mint_id)).collect();
 
-                        self.client_ctx.add_state_machines(dbtx, dyn_states).await?;
-                        self.client_ctx
-                            .add_operation_log_entry(
-                                dbtx,
-                                operation_id,
-                                MintCommonInit::KIND.as_str(),
-                                MintOperationMeta {
-                                    variant: MintOperationMetaVariants::SpendOOB {
-                                        requested_amount,
-                                        oob_notes: oob_notes.clone(),
-                                    },
-                                    amount: oob_notes.total_amount(),
-                                    extra_meta,
+                        dbtx.add_state_machines(dyn_states).await?;
+                        dbtx.add_operation_log_entry(
+                            operation_id,
+                            MintCommonInit::KIND.as_str(),
+                            MintOperationMeta {
+                                variant: MintOperationMetaVariants::SpendOOB {
+                                    requested_amount,
+                                    oob_notes: oob_notes.clone(),
                                 },
-                            )
-                            .await;
+                                amount: oob_notes.total_amount(),
+                                extra_meta,
+                            },
+                        )
+                        .await;
 
                         Ok((operation_id, oob_notes))
                     })
