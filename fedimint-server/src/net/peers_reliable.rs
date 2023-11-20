@@ -399,7 +399,7 @@ where
         mut new_connection: AnyFramedTransport<PeerMessage<M>>,
         disconnect_count: u64,
     ) -> PeerConnectionState<M> {
-        info!(target: LOG_NET_PEER,
+        debug!(target: LOG_NET_PEER,
             our_id = ?self.our_id,
             peer = ?self.peer_id, %disconnect_count,
             resend_queue_len = self.resend_queue.queue.len(),

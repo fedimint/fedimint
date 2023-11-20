@@ -492,7 +492,7 @@ where
         mut new_connection: AnyFramedTransport<PeerMessage<M>>,
         disconnect_count: u64,
     ) -> PeerConnectionState<M> {
-        info!(target: LOG_NET_PEER,
+        debug!(target: LOG_NET_PEER,
             our_id = ?self.our_id,
             peer = ?self.peer_id, %disconnect_count,
             "Initializing new connection");
@@ -681,7 +681,13 @@ where
     }
 
     #[allow(clippy::too_many_arguments)] // TODO: consider refactoring
-    #[instrument(skip_all, fields(peer))]
+    #[instrument(
+        name = "peer_io_thread",
+        target = "net::peer",
+        skip_all,
+        // `id` so it doesn't conflict with argument names otherwise will not be shown
+        fields(id = %peer_id)
+    )]
     async fn run_io_thread(
         incoming: async_channel::Sender<M>,
         outgoing: async_channel::Receiver<M>,
