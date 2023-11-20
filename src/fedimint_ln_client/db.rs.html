@@ -57,7 +57,32 @@
 <a href="#57" id="57">57</a>
 <a href="#58" id="58">58</a>
 <a href="#59" id="59">59</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::sha256;
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::time::SystemTime;
+
+<span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
 <span class="kw">use </span>fedimint_ln_common::LightningGatewayRegistration;
@@ -71,6 +96,7 @@
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     LightningGateway = <span class="number">0x28</span>,
     PaymentResult = <span class="number">0x29</span>,
+    MetaOverrides = <span class="number">0x30</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -116,4 +142,24 @@
 );
 
 <span class="macro">impl_db_lookup!</span>(key = PaymentResultKey, query_prefix = PaymentResultPrefix);
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>MetaOverridesKey;
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>MetaOverridesPrefix;
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>MetaOverrides {
+    <span class="kw">pub </span>value: String,
+    <span class="kw">pub </span>fetched_at: SystemTime,
+}
+
+<span class="macro">impl_db_record!</span>(
+    key = MetaOverridesKey,
+    value = MetaOverrides,
+    db_prefix = DbKeyPrefix::MetaOverrides,
+);
+
+<span class="macro">impl_db_lookup!</span>(key = MetaOverridesKey, query_prefix = MetaOverridesPrefix);
 </code></pre></div></section></main></body></html>

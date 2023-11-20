@@ -573,6 +573,12 @@
 <a href="#573" id="573">573</a>
 <a href="#574" id="574">574</a>
 <a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -813,6 +819,8 @@
 </span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 </span><span class="kw">pub struct </span>LightningGatewayRegistration {
     <span class="kw">pub </span>info: LightningGateway,
+    <span class="doccomment">/// Indicates if this announcement has been vetted by the federation
+    </span><span class="kw">pub </span>vetted: bool,
     <span class="doccomment">/// Limits the validity of the announcement to allow updates, anchored to
     /// local system time
     </span><span class="kw">pub </span>valid_until: SystemTime,
@@ -830,6 +838,7 @@
                 </span>.valid_until
                 .duration_since(fedimint_core::time::now())
                 .unwrap_or_default(),
+            vetted: <span class="self">self</span>.vetted,
         }
     }
 
@@ -838,13 +847,15 @@
     }
 }
 
-<span class="doccomment">/// Information about a gateway that is shared with other federations and
+<span class="doccomment">/// Information about a gateway that is shared with other federation members and
 /// expires based on a TTL to allow for sharing between nodes with
 /// unsynchronized clocks which can each anchor the announcement to their local
 /// system time.
 </span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 </span><span class="kw">pub struct </span>LightningGatewayAnnouncement {
     <span class="kw">pub </span>info: LightningGateway,
+    <span class="doccomment">/// Indicates if this announcement has been vetted by the federation
+    </span><span class="kw">pub </span>vetted: bool,
     <span class="doccomment">/// Limits the validity of the announcement to allow updates, unanchored to
     /// local system time to allow sharing between nodes with unsynchronized
     /// clocks
@@ -857,6 +868,7 @@
     </span><span class="kw">pub fn </span>anchor(<span class="self">self</span>) -&gt; LightningGatewayRegistration {
         LightningGatewayRegistration {
             info: <span class="self">self</span>.info,
+            vetted: <span class="self">self</span>.vetted,
             valid_until: fedimint_core::time::now() + <span class="self">self</span>.ttl,
         }
     }
