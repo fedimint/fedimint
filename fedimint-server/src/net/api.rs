@@ -21,7 +21,7 @@ use fedimint_core::db::{
 use fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_BLOCK_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
     AWAIT_SIGNED_BLOCK_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
+    CLIENT_CONFIG_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
     SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, STATUS_ENDPOINT,
     SUBMIT_TRANSACTION_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
 };
@@ -376,6 +376,12 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                     .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
                 Ok(outcome)
+            }
+        },
+        api_endpoint! {
+            INVITE_CODE_ENDPOINT,
+            async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
+                Ok(fedimint.cfg.get_invite_code().to_string())
             }
         },
         api_endpoint! {

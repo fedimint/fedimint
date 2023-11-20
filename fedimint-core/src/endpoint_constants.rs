@@ -36,3 +36,4 @@ pub const AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT: &str = "await_outgoing_con
 pub const AWAIT_PREIMAGE_DECRYPTION: &str = "await_preimage_decryption";
 pub const AWAIT_OFFER_ENDPOINT: &str = "await_offer";
 pub const AWAIT_TRANSACTION_ENDPOINT: &str = "await_transaction";
+pub const INVITE_CODE_ENDPOINT: &str = "invite_code";
