@@ -817,6 +817,12 @@
 <a href="#817" id="817">817</a>
 <a href="#818" id="818">818</a>
 <a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -1311,7 +1317,7 @@
         <span class="kw-2">mut </span>new_connection: AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;,
         disconnect_count: u64,
     ) -&gt; PeerConnectionState&lt;M&gt; {
-        <span class="macro">info!</span>(target: LOG_NET_PEER,
+        <span class="macro">debug!</span>(target: LOG_NET_PEER,
             our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id,
             peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, %disconnect_count,
             <span class="string">&quot;Initializing new connection&quot;</span>);
@@ -1500,7 +1506,13 @@
     }
 
     <span class="attr">#[allow(clippy::too_many_arguments)] </span><span class="comment">// TODO: consider refactoring
-    </span><span class="attr">#[instrument(skip_all, fields(peer))]
+    </span><span class="attr">#[instrument(
+        name = <span class="string">&quot;peer_io_thread&quot;</span>,
+        target = <span class="string">&quot;net::peer&quot;</span>,
+        skip_all,
+        <span class="comment">// `id` so it doesn&#39;t conflict with argument names otherwise will not be shown
+        </span>fields(id = %peer_id)
+    )]
     </span><span class="kw">async fn </span>run_io_thread(
         incoming: async_channel::Sender&lt;M&gt;,
         outgoing: async_channel::Receiver&lt;M&gt;,

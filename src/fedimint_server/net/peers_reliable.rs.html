@@ -1265,7 +1265,7 @@
         <span class="kw-2">mut </span>new_connection: AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;,
         disconnect_count: u64,
     ) -&gt; PeerConnectionState&lt;M&gt; {
-        <span class="macro">info!</span>(target: LOG_NET_PEER,
+        <span class="macro">debug!</span>(target: LOG_NET_PEER,
             our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id,
             peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, %disconnect_count,
             resend_queue_len = <span class="self">self</span>.resend_queue.queue.len(),
