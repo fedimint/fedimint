@@ -437,13 +437,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         false
     }
 
-    async fn backup(
-        &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
-        _executor: Executor<DynGlobalClientContext>,
-        _api: DynGlobalApi,
-        _module_instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<Vec<u8>> {
+    async fn backup(&self) -> anyhow::Result<Vec<u8>> {
         anyhow::bail!("Backup not supported");
     }
 
@@ -626,13 +620,7 @@ pub trait IClientModule: Debug {
 
     fn supports_backup(&self) -> bool;
 
-    async fn backup(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        executor: Executor<DynGlobalClientContext>,
-        api: DynGlobalApi,
-        module_instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<Vec<u8>>;
+    async fn backup(&self) -> anyhow::Result<Vec<u8>>;
 
     async fn restore(
         &self,
@@ -732,14 +720,8 @@ where
         <T as ClientModule>::supports_backup(self)
     }
 
-    async fn backup(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        executor: Executor<DynGlobalClientContext>,
-        api: DynGlobalApi,
-        module_instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<Vec<u8>> {
-        <T as ClientModule>::backup(self, dbtx, executor, api, module_instance_id).await
+    async fn backup(&self) -> anyhow::Result<Vec<u8>> {
+        <T as ClientModule>::backup(self).await
     }
 
     async fn restore(

@@ -489,16 +489,22 @@ impl ClientModule for MintClientModule {
         true
     }
 
-    async fn backup(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        executor: Executor<DynGlobalClientContext>,
-        api: DynGlobalApi,
-        module_instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<Vec<u8>> {
+    async fn backup(&self) -> anyhow::Result<Vec<u8>> {
         let backup = self
-            .prepare_plaintext_ecash_backup(dbtx, executor, api, module_instance_id)
-            .await?;
+            .client_ctx
+            .module_autocommit(
+                move |dbtx_ctx, _| {
+                    Box::pin(async move { self.prepare_plaintext_ecash_backup(dbtx_ctx).await })
+                },
+                None,
+            )
+            .await
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    anyhow!("Commit to DB failed: {last_error}")
+                }
+            })?;
 
         Ok(backup.consensus_encode_to_vec()?)
     }
