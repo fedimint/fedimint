@@ -1750,6 +1750,7 @@
 <a href="#1750" id="1750">1750</a>
 <a href="#1751" id="1751">1751</a>
 <a href="#1752" id="1752">1752</a>
+<a href="#1753" id="1753">1753</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2012,6 +2013,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>MintOperationMetaVariants {
     Reissuance {
         out_point: OutPoint,
