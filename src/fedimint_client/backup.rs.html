@@ -351,16 +351,6 @@
 <a href="#351" id="351">351</a>
 <a href="#352" id="352">352</a>
 <a href="#353" id="353">353</a>
-<a href="#354" id="354">354</a>
-<a href="#355" id="355">355</a>
-<a href="#356" id="356">356</a>
-<a href="#357" id="357">357</a>
-<a href="#358" id="358">358</a>
-<a href="#359" id="359">359</a>
-<a href="#360" id="360">360</a>
-<a href="#361" id="361">361</a>
-<a href="#362" id="362">362</a>
-<a href="#363" id="363">363</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Reverse;
 <span class="kw">use </span>std::collections::BTreeMap;
 
@@ -503,18 +493,10 @@
     </span><span class="kw">pub async fn </span>create_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, metadata: Metadata) -&gt; anyhow::Result&lt;ClientBackup&gt; {
         <span class="kw">let </span>session_count = <span class="self">self</span>.api.session_count().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>;
         <span class="kw">for </span>(id, kind, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             <span class="macro">debug!</span>(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, <span class="string">&quot;Preparing module backup&quot;</span>);
             <span class="kw">if </span>module.supports_backup() {
-                <span class="kw">let </span>backup = module
-                    .backup(
-                        <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(id).into_nc(),
-                        <span class="self">self</span>.executor.clone(),
-                        <span class="self">self</span>.api.clone(),
-                        id,
-                    )
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>backup = module.backup().<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="macro">info!</span>(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, size=backup.len(), <span class="string">&quot;Prepared module backup&quot;</span>);
                 modules.insert(id, backup);
@@ -522,8 +504,6 @@
                 <span class="macro">info!</span>(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, <span class="string">&quot;Module does not support backup&quot;</span>);
             }
         }
-
-        dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(ClientBackup {
             metadata,

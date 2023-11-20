@@ -78,25 +78,8 @@
 <a href="#78" id="78">78</a>
 <a href="#79" id="79">79</a>
 <a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
-<a href="#88" id="88">88</a>
-<a href="#89" id="89">89</a>
-<a href="#90" id="90">90</a>
-<a href="#91" id="91">91</a>
-<a href="#92" id="92">92</a>
-<a href="#93" id="93">93</a>
-<a href="#94" id="94">94</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::sm::Executor;
-<span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
-<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
-<span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
+</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::ClientDbTxContext;
+<span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, Tiered, TieredMulti};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -134,30 +117,15 @@
 <span class="kw">impl </span>MintClientModule {
     <span class="kw">pub async fn </span>prepare_plaintext_ecash_backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        executor: Executor&lt;DynGlobalClientContext&gt;,
-        api: DynGlobalApi,
-        module_instance_id: ModuleInstanceId,
+        dbtx_ctx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span><span class="kw-2">mut </span>ClientDbTxContext&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>, <span class="self">Self</span>&gt;,
     ) -&gt; anyhow::Result&lt;EcashBackup&gt; {
         <span class="comment">// fetch consensus height first - so we dont miss anything when scanning
-        </span><span class="kw">let </span>session_count = api.session_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="kw">let </span>session_count = <span class="self">self</span>.client_ctx.global_api().session_count().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>notes = <span class="self">Self</span>::get_all_spendable_notes(dbtx).<span class="kw">await</span>;
+        <span class="kw">let </span>notes = <span class="self">Self</span>::get_all_spendable_notes(<span class="kw-2">&amp;mut </span>dbtx_ctx.module_dbtx()).<span class="kw">await</span>;
 
-        <span class="kw">let </span>pending_notes: Vec&lt;(OutPoint, Amount, NoteIssuanceRequest)&gt; = executor
-            .get_active_states()
-            .<span class="kw">await
-            </span>.into_iter()
-            .filter_map(|(dyn_state, _active_state)| {
-                <span class="kw">if </span>dyn_state.module_instance_id() != module_instance_id {
-                    <span class="kw">return </span><span class="prelude-val">None</span>;
-                }
-
-                <span class="kw">let </span>state: MintClientStateMachines = dyn_state
-                    .as_any()
-                    .downcast_ref()
-                    .cloned()
-                    .expect(<span class="string">&quot;Can&#39;t downcast mint client state machine state&quot;</span>);
+        <span class="kw">let </span>pending_notes: Vec&lt;(OutPoint, Amount, NoteIssuanceRequest)&gt; = <span class="self">self</span>.client_ctx.get_own_active_states().<span class="kw">await</span>.into_iter()
+            .filter_map(|(state, _active_state)| {
 
                 <span class="kw">match </span>state {
                     MintClientStateMachines::Output(MintOutputStateMachine { common, state }) =&gt; {
@@ -174,7 +142,11 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>idxes = <span class="macro">vec!</span>[];
         <span class="kw">for </span><span class="kw-2">&amp;</span>amount <span class="kw">in </span><span class="self">self</span>.cfg.tbs_pks.tiers() {
-            idxes.push((amount, <span class="self">self</span>.get_next_note_index(dbtx, amount).<span class="kw">await</span>));
+            idxes.push((
+                amount,
+                <span class="self">self</span>.get_next_note_index(<span class="kw-2">&amp;mut </span>dbtx_ctx.module_dbtx(), amount)
+                    .<span class="kw">await</span>,
+            ));
         }
         <span class="kw">let </span>next_note_idx = Tiered::from_iter(idxes);
 
