@@ -886,6 +886,14 @@ impl SGroup for G1Projective {
 /// of the config
 pub const META_FEDERATION_NAME_KEY: &str = "federation_name";
 
+/// Key under which the vetted gateways can be sent to client in the `meta` part
+/// of the config
+pub const META_VETTED_GATEWAYS_KEY: &str = "vetted_gateways";
+
+/// Key under which the override URL can be sent to client in the `meta` part
+/// of the config
+pub const META_OVERRIDE_URL_KEY: &str = "meta_override_url";
+
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> Result<T, anyhow::Error> {
     let file = std::fs::File::open(path)?;
     Ok(serde_json::from_reader(file)?)

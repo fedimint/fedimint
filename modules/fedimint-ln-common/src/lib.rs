@@ -238,6 +238,8 @@ impl std::fmt::Display for LightningOutputOutcomeV0 {
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 pub struct LightningGatewayRegistration {
     pub info: LightningGateway,
+    /// Indicates if this announcement has been vetted by the federation
+    pub vetted: bool,
     /// Limits the validity of the announcement to allow updates, anchored to
     /// local system time
     pub valid_until: SystemTime,
@@ -255,6 +257,7 @@ impl LightningGatewayRegistration {
                 .valid_until
                 .duration_since(fedimint_core::time::now())
                 .unwrap_or_default(),
+            vetted: self.vetted,
         }
     }
 
@@ -263,13 +266,15 @@ impl LightningGatewayRegistration {
     }
 }
 
-/// Information about a gateway that is shared with other federations and
+/// Information about a gateway that is shared with other federation members and
 /// expires based on a TTL to allow for sharing between nodes with
 /// unsynchronized clocks which can each anchor the announcement to their local
 /// system time.
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 pub struct LightningGatewayAnnouncement {
     pub info: LightningGateway,
+    /// Indicates if this announcement has been vetted by the federation
+    pub vetted: bool,
     /// Limits the validity of the announcement to allow updates, unanchored to
     /// local system time to allow sharing between nodes with unsynchronized
     /// clocks
@@ -282,6 +287,7 @@ impl LightningGatewayAnnouncement {
     pub fn anchor(self) -> LightningGatewayRegistration {
         LightningGatewayRegistration {
             info: self.info,
+            vetted: self.vetted,
             valid_until: fedimint_core::time::now() + self.ttl,
         }
     }

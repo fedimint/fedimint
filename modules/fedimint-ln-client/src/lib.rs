@@ -21,9 +21,11 @@ use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext, FederationInfo};
 use fedimint_core::api::DynModuleApi;
-use fedimint_core::config::FederationId;
+use fedimint_core::config::{
+    ClientConfig, FederationId, META_OVERRIDE_URL_KEY, META_VETTED_GATEWAYS_KEY,
+};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
     DatabaseTransaction, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped,
@@ -65,7 +67,10 @@ use strum::IntoEnumIterator;
 use thiserror::Error;
 use tracing::{debug, error};
 
-use crate::db::{LightningGatewayKeyPrefix, PaymentResultPrefix};
+use crate::db::{
+    LightningGatewayKeyPrefix, MetaOverrides, MetaOverridesKey, MetaOverridesPrefix,
+    PaymentResultPrefix,
+};
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
 };
@@ -81,6 +86,8 @@ use crate::receive::{
 /// Number of blocks until outgoing lightning contracts times out and user
 /// client can get refund
 const OUTGOING_LN_CONTRACT_TIMELOCK: u64 = 500;
+
+const META_OVERRIDE_CACHE_DURATION: Duration = Duration::from_secs(10 * 60);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 #[serde(rename_all = "snake_case")]
@@ -253,6 +260,16 @@ impl ModuleInit for LightningClientInit {
                         PaymentResult,
                         ln_client_items,
                         "Payment Result"
+                    );
+                }
+                DbKeyPrefix::MetaOverrides => {
+                    push_db_pair_items!(
+                        dbtx,
+                        MetaOverridesPrefix,
+                        MetaOverridesKey,
+                        MetaOverrides,
+                        ln_client_items,
+                        "Meta Overrides"
                     );
                 }
             }
@@ -799,13 +816,30 @@ impl LightningClientModule {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         match dbtx.get_value(&LightningGatewayKey).await {
             Some(active_gateway) => Ok(active_gateway.info),
-            None => self
-                .fetch_registered_gateways()
-                .await?
-                .into_iter()
-                .map(|gw| gw.info)
-                .choose(&mut rand::thread_rng())
-                .ok_or(anyhow::anyhow!("Could not find any gateways")),
+            None => {
+                let gateways = self.fetch_registered_gateways().await?;
+
+                let vetted = gateways
+                    .clone()
+                    .into_iter()
+                    .filter(|g| g.vetted)
+                    .collect::<Vec<_>>();
+                if !vetted.is_empty() {
+                    debug!("Choosing a vetted gateway");
+                    vetted
+                        .into_iter()
+                        .map(|gw| gw.info)
+                        .choose(&mut rand::thread_rng())
+                        .ok_or(anyhow::anyhow!("Could not choose a vetted gateway"))
+                } else {
+                    debug!("Choosing a random gateway");
+                    gateways
+                        .into_iter()
+                        .map(|gw| gw.info)
+                        .choose(&mut rand::thread_rng())
+                        .ok_or(anyhow::anyhow!("Could not choose a gateway"))
+                }
+            }
         }
     }
 
@@ -834,11 +868,120 @@ impl LightningClientModule {
         Ok(())
     }
 
+    async fn fetch_meta_overrides(&self, config: ClientConfig) -> anyhow::Result<String> {
+        let federation_id = config.global.federation_id();
+        let override_src = FederationInfo::from_config(config)
+            .await?
+            .meta::<String>(META_OVERRIDE_URL_KEY)?
+            .ok_or(anyhow::anyhow!("No meta override source configured"))?;
+        debug!("Fetching meta overrides from {}", override_src);
+
+        if let Some(meta) = self
+            .client_ctx
+            .module_db()
+            .begin_transaction()
+            .await
+            .get_value(&MetaOverridesKey {})
+            .await
+        {
+            if meta.fetched_at.elapsed().unwrap() < META_OVERRIDE_CACHE_DURATION {
+                debug!("Using cached meta overrides");
+                return Ok(meta.value);
+            }
+            debug!("Cached meta overrides are stale");
+        };
+
+        let response = reqwest::Client::new()
+            .get(override_src.as_str())
+            .send()
+            .await
+            .context("Meta override request failed")?;
+        debug!("Meta override source returned status: {:?}", response);
+
+        let federation_meta = match response.status() {
+            reqwest::StatusCode::OK => {
+                let txt = response.text().await.context(format!(
+                    "Meta override source returned invalid body: {}",
+                    override_src
+                ))?;
+                let m: serde_json::Value = serde_json::from_str(&txt).map_err(|_| {
+                    anyhow::anyhow!("Meta override source returned invalid json: {}", txt)
+                })?;
+                if !m.is_object() {
+                    return Err(anyhow::anyhow!("Meta override is not valid"));
+                }
+
+                m.get(&federation_id.to_string())
+                    .ok_or(anyhow::anyhow!(
+                        "No meta overrides for federation id: {}",
+                        federation_id
+                    ))?
+                    .to_string()
+            }
+            _ => Err(anyhow::anyhow!(
+                "Meta override source returned error code: {}",
+                response.status()
+            ))?,
+        };
+
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        dbtx.insert_entry(
+            &MetaOverridesKey {},
+            &MetaOverrides {
+                value: federation_meta.clone(),
+                fetched_at: fedimint_core::time::now(),
+            },
+        )
+        .await;
+        dbtx.commit_tx().await;
+
+        Ok(federation_meta)
+    }
+
     /// Gateways actively registered with the fed
     pub async fn fetch_registered_gateways(
         &self,
     ) -> anyhow::Result<Vec<LightningGatewayAnnouncement>> {
-        Ok(self.module_api.fetch_gateways().await?)
+        let mut gateways = self.module_api.fetch_gateways().await?;
+
+        if !gateways.is_empty() {
+            debug!("Fetching meta overrides from remote source/cache");
+            let config = self.client_ctx.get_config().clone();
+            let federation_meta = match self.fetch_meta_overrides(config).await {
+                Ok(meta) => meta,
+                Err(e) => {
+                    error!("Error fetching meta overrides: {}", e);
+                    return Ok(gateways);
+                }
+            };
+
+            debug!("Applying vetted meta field to registered gateways");
+            let meta: BTreeMap<String, serde_json::Value> = serde_json::from_str(&federation_meta)
+                .context(format!(
+                    "Meta override source returned invalid json: {}",
+                    federation_meta
+                ))?;
+            let vetted_gids = match meta
+                .get(META_VETTED_GATEWAYS_KEY)
+                .and_then(|vetted| serde_json::from_value::<Vec<String>>(vetted.clone()).ok())
+            {
+                Some(vetted) => {
+                    debug!("Found the following vetted gateways: {:?}", vetted);
+                    vetted
+                        .into_iter()
+                        .map(|pk| PublicKey::from_str(&pk).map_err(anyhow::Error::from))
+                        .collect::<Result<Vec<_>, _>>()?
+                }
+                None => Vec::new(),
+            };
+            debug!("Vetted gateways: {:?}", vetted_gids);
+
+            for gateway in gateways.iter_mut() {
+                gateway.vetted = vetted_gids.contains(&gateway.info.gateway_id);
+            }
+        }
+
+        Ok(gateways)
     }
 
     /// Pays a LN invoice with our available funds
