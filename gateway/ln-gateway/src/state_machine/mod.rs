@@ -460,7 +460,7 @@ impl GatewayClientModule {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<GatewayExtReceiveStates>> {
-        let operation = self.client_ctx.get_operation_2(operation_id).await?;
+        let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
@@ -569,7 +569,7 @@ impl GatewayClientModule {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<GatewayExtPayStates>> {
         let mut stream = self.notifier.subscribe(operation_id).await;
-        let operation = self.client_ctx.get_operation_2(operation_id).await?;
+        let operation = self.client_ctx.get_operation(operation_id).await?;
         let client_ctx = self.client_ctx.clone();
 
         Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {

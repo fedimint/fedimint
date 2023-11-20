@@ -1356,11 +1356,7 @@ impl MintClientModule {
     }
 
     async fn mint_operation(&self, operation_id: OperationId) -> anyhow::Result<OperationLogEntry> {
-        let operation = self
-            .client_ctx
-            .get_operation(operation_id)
-            .await
-            .ok_or(anyhow!("Operation not found"))?;
+        let operation = self.client_ctx.get_operation(operation_id).await?;
 
         if operation.operation_module_kind() != MintCommonInit::KIND.as_str() {
             bail!("Operation is not a mint operation");
