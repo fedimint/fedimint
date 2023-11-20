@@ -1214,7 +1214,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtReceiveStates&gt;&gt; {
-        <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation_2(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
@@ -1323,7 +1323,7 @@
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtPayStates&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
-        <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation_2(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
         <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
