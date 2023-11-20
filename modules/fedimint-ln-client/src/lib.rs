@@ -27,9 +27,7 @@ use fedimint_core::config::{
     ClientConfig, FederationId, META_OVERRIDE_URL_KEY, META_VETTED_GATEWAYS_KEY,
 };
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{
-    DatabaseTransaction, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -231,7 +229,7 @@ impl ModuleInit for LightningClientInit {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut ln_client_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
@@ -991,7 +989,7 @@ impl LightningClientModule {
     ) -> anyhow::Result<OutgoingLightningPayment> {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         let prev_payment_result = self
-            .get_prev_payment_result(invoice.payment_hash(), &mut dbtx)
+            .get_prev_payment_result(invoice.payment_hash(), &mut dbtx.to_ref_nc())
             .await;
 
         if let Some(completed_payment) = prev_payment_result.completed_payment {
@@ -1483,7 +1481,7 @@ pub struct OutgoingLightningPayment {
 }
 
 async fn set_payment_result(
-    dbtx: &mut DatabaseTransactionRef<'_>,
+    dbtx: &mut DatabaseTransaction<'_>,
     payment_hash: sha256::Hash,
     payment_type: PayType,
     contract_id: ContractId,

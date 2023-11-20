@@ -7,7 +7,9 @@ use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{get_config_from_db, ClientBuilder, FederationInfo};
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use futures::StreamExt;
 use rand::thread_rng;
@@ -124,7 +126,7 @@ impl GatewayClientBuilder {
     pub async fn save_config(
         &self,
         config: FederationConfig,
-        mut dbtx: DatabaseTransaction<'_>,
+        mut dbtx: DatabaseTransaction<'_, Committable>,
     ) -> Result<()> {
         let id = config.invite_code.federation_id();
         dbtx.insert_entry(&FederationIdKey { id }, &config).await;

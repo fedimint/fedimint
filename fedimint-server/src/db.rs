@@ -85,7 +85,7 @@ impl_db_record!(
 );
 impl_db_lookup!(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
-pub fn get_global_database_migrations<'a>() -> MigrationMap<'a> {
+pub fn get_global_database_migrations() -> MigrationMap {
     MigrationMap::new()
 }
 
@@ -184,8 +184,6 @@ mod fedimint_migration_tests {
             .await;
 
         let _consensus_items = vec![ConsensusItem::Transaction(transaction)];
-
-        dbtx.commit_tx().await;
     }
 
     #[tokio::test(flavor = "multi_thread")]

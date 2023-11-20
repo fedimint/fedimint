@@ -588,9 +588,9 @@ async fn get_note_summary(client: &ClientArc) -> anyhow::Result<serde_json::Valu
         .get_wallet_summary(
             &mut client
                 .db()
-                .begin_transaction()
+                .begin_transaction_nc()
                 .await
-                .dbtx_ref_with_prefix_module_id(1),
+                .to_ref_with_prefix_module_id(1),
         )
         .await;
     Ok(serde_json::to_value(InfoResponse {

@@ -1,5 +1,5 @@
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseTransactionRef};
+use fedimint_core::db::DatabaseTransaction;
 
 /// A transaction that acts as isolated for module code but can be accessed as a
 /// normal transaction in this crate.
@@ -20,9 +20,10 @@ impl<'inner, 'parent> ClientSMDatabaseTransaction<'inner, 'parent> {
     }
 
     /// Returns the isolated database transaction for the module.
-    pub fn module_tx(&mut self) -> DatabaseTransactionRef<'_> {
+    pub fn module_tx(&mut self) -> DatabaseTransaction<'_> {
         self.dbtx
-            .dbtx_ref_with_prefix_module_id(self.module_instance)
+            .to_ref_with_prefix_module_id(self.module_instance)
+            .into_nc()
     }
 
     /// Returns the non-isolated database transaction only accessible to the

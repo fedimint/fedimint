@@ -2,7 +2,7 @@ use fedimint_client::sm::Executor;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::DatabaseTransactionRef;
+use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti};
 use serde::{Deserialize, Serialize};
@@ -40,7 +40,7 @@ impl EcashBackup {
 impl MintClientModule {
     pub async fn prepare_plaintext_ecash_backup(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,

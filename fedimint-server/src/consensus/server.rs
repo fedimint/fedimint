@@ -572,7 +572,7 @@ impl ConsensusServer {
             bail!("Item was discarded before we recovered");
         }
 
-        self.process_consensus_item_with_db_transaction(&mut dbtx, item.clone(), peer)
+        self.process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item.clone(), peer)
             .await?;
 
         dbtx.insert_entry(&AcceptedItemKey(item_index), &AcceptedItem { item, peer })
@@ -585,7 +585,9 @@ impl ConsensusServer {
                 TimeReporter::new(format!("audit module {module_instance_id}"));
             module
                 .audit(
-                    &mut dbtx.dbtx_ref_with_prefix_module_id(module_instance_id),
+                    &mut dbtx
+                        .to_ref_with_prefix_module_id(module_instance_id)
+                        .into_nc(),
                     &mut audit,
                     module_instance_id,
                 )
@@ -616,7 +618,7 @@ impl ConsensusServer {
         match consensus_item {
             ConsensusItem::Module(module_item) => {
                 let instance_id = module_item.module_instance_id();
-                let module_dbtx = &mut dbtx.dbtx_ref_with_prefix_module_id(instance_id);
+                let module_dbtx = &mut dbtx.to_ref_with_prefix_module_id(instance_id);
 
                 self.modules
                     .get_expect(instance_id)
@@ -716,7 +718,7 @@ async fn submit_module_consensus_items(
                     for (instance_id, _, module) in modules.iter_modules() {
                         let module_consensus_items = module
                             .consensus_proposal(
-                                &mut dbtx.dbtx_ref_with_prefix_module_id(instance_id),
+                                &mut dbtx.to_ref_with_prefix_module_id(instance_id).into_nc(),
                                 instance_id,
                             )
                             .await;
