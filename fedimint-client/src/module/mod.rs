@@ -1,6 +1,7 @@
 use core::fmt;
 use std::any::Any;
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::{ffi, marker, ops};
 
@@ -10,11 +11,11 @@ use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
 };
-use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, PhantomBound};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::util::BoxStream;
+use fedimint_core::util::{BoxFuture, BoxStream};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
@@ -111,6 +112,49 @@ impl<M> fmt::Debug for ClientContext<M> {
     }
 }
 
+/// A context of a database transaction started with
+/// `ClientContext::module_autocommit`
+pub struct ClientDbTxContext<'r, 'o, M> {
+    dbtx: &'r mut DatabaseTransaction<'o>,
+    client: &'r ClientContext<M>,
+}
+
+impl<'r, 'o, M> ClientDbTxContext<'r, 'o, M>
+where
+    M: ClientModule,
+{
+    /// Get a reference to [`DatabaseTransaction`] isolated database transaction
+    pub fn module_dbtx(&mut self) -> DatabaseTransaction<'_> {
+        self.dbtx
+            .to_ref_with_prefix_module_id(self.client.module_instance_id())
+    }
+
+    pub async fn add_state_machines(
+        &mut self,
+        dyn_states: Vec<DynState<DynGlobalClientContext>>,
+    ) -> AddStateMachinesResult {
+        self.client
+            .client
+            .get()
+            .add_state_machines(self.dbtx, dyn_states)
+            .await
+    }
+
+    pub async fn add_operation_log_entry(
+        &mut self,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+    ) {
+        self.client
+            .client
+            .get()
+            .operation_log()
+            .add_operation_log_entry(self.dbtx, operation_id, operation_type, operation_meta)
+            .await
+    }
+}
+
 impl<M> ClientContext<M>
 where
     M: ClientModule,
@@ -194,6 +238,33 @@ where
         self.make_dyn(input)
     }
 
+    /// An [`Database::autocommit`] on module's own database partition
+    pub async fn module_autocommit<'s, 'dbtx, F, T, E>(
+        &'s self,
+        tx_fn: F,
+        max_attempts: Option<usize>,
+    ) -> Result<T, AutocommitError<E>>
+    where
+        's: 'dbtx,
+        for<'r, 'o> F: Fn(
+                &'r mut ClientDbTxContext<'r, 'o, M>,
+                PhantomBound<'dbtx, 'o>,
+            ) -> BoxFuture<'r, Result<T, E>>
+            + MaybeSync,
+    {
+        let tx_fn = &tx_fn;
+        self.global_db()
+            .autocommit(
+                move |dbtx, _| {
+                    Box::pin(async move {
+                        tx_fn(&mut ClientDbTxContext { dbtx, client: self }, PhantomData).await
+                    })
+                },
+                max_attempts,
+            )
+            .await
+    }
+
     /// See [`crate::Client::finalize_and_submit_transaction`]
     pub async fn finalize_and_submit_transaction<F, Meta>(
         &self,
@@ -270,28 +341,6 @@ where
 
     pub fn module_db(&self) -> &Database {
         &self.module_db
-    }
-
-    pub async fn add_state_machines(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        dyn_states: Vec<DynState<DynGlobalClientContext>>,
-    ) -> AddStateMachinesResult {
-        self.client.get().add_state_machines(dbtx, dyn_states).await
-    }
-
-    pub async fn add_operation_log_entry(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        operation_id: OperationId,
-        operation_type: &str,
-        operation_meta: impl serde::Serialize,
-    ) {
-        self.client
-            .get()
-            .operation_log()
-            .add_operation_log_entry(dbtx, operation_id, operation_type, operation_meta)
-            .await
     }
 
     pub async fn has_active_states(&self, op_id: OperationId) -> bool {
