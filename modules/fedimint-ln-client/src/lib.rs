@@ -1121,7 +1121,7 @@ impl LightningClientModule {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<LightningOperationMetaPay> {
-        let operation = self.client_ctx.get_operation_2(operation_id).await?;
+        let operation = self.client_ctx.get_operation(operation_id).await?;
         let LightningOperationMeta::Pay(pay) = operation.meta::<LightningOperationMeta>() else {
             anyhow::bail!("Operation is not a lightning payment")
         };
@@ -1132,7 +1132,7 @@ impl LightningClientModule {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<InternalPayState>> {
-        let operation = self.client_ctx.get_operation_2(operation_id).await?;
+        let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
@@ -1166,7 +1166,7 @@ impl LightningClientModule {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnPayState>> {
-        let operation = self.client_ctx.get_operation_2(operation_id).await?;
+        let operation = self.client_ctx.get_operation(operation_id).await?;
         let (out_point, _, change) = match operation.meta::<LightningOperationMeta>() {
             LightningOperationMeta::Pay(LightningOperationMetaPay {
                 out_point,
@@ -1298,7 +1298,7 @@ impl LightningClientModule {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
-        let operation = self.client_ctx.get_operation_2(operation_id).await?;
+        let operation = self.client_ctx.get_operation(operation_id).await?;
         let (out_point, invoice) = match operation.meta::<LightningOperationMeta>() {
             LightningOperationMeta::Receive {
                 out_point,

@@ -235,7 +235,7 @@ where
     }
 
     // TODO: unify with `Self::get_operation`
-    pub async fn get_operation_2(
+    pub async fn get_operation(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<oplog::OperationLogEntry> {
@@ -252,16 +252,6 @@ where
         }
 
         Ok(operation)
-    }
-    pub async fn get_operation(
-        &self,
-        operation_id: OperationId,
-    ) -> std::option::Option<oplog::OperationLogEntry> {
-        self.client
-            .get()
-            .operation_log()
-            .get_operation(operation_id)
-            .await
     }
 
     pub fn global_db(&self) -> fedimint_core::db::Database {
