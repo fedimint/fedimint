@@ -749,8 +749,6 @@
 <a href="#749" id="749">749</a>
 <a href="#750" id="750">750</a>
 <a href="#751" id="751">751</a>
-<a href="#752" id="752">752</a>
-<a href="#753" id="753">753</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -1267,8 +1265,7 @@
         <span class="kw">let </span>payload = pay_invoice_payload.clone();
 
         <span class="self">self</span>.client_ctx
-            .global_db()
-            .autocommit(
+            .module_autocommit(
                 |dbtx, <span class="kw">_</span>| {
                     Box::pin(<span class="kw">async </span>{
                         <span class="kw">let </span>operation_id = OperationId(payload.contract_id.into_inner());
@@ -1286,11 +1283,10 @@
                             .map(|s| <span class="self">self</span>.client_ctx.make_dyn(s))
                             .collect();
 
-                            <span class="kw">match </span><span class="self">self</span>.client_ctx.add_state_machines(dbtx, dyn_states).<span class="kw">await </span>{
+                            <span class="kw">match </span>dbtx.add_state_machines( dyn_states).<span class="kw">await </span>{
                                 <span class="prelude-val">Ok</span>(()) =&gt; {
-                                    <span class="self">self</span>.client_ctx
+                                    dbtx
                                         .add_operation_log_entry(
-                                            dbtx,
                                             operation_id,
                                             KIND.as_str(),
                                             GatewayMeta::Pay,

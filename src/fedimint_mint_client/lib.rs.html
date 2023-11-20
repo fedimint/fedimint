@@ -1744,27 +1744,6 @@
 <a href="#1744" id="1744">1744</a>
 <a href="#1745" id="1745">1745</a>
 <a href="#1746" id="1746">1746</a>
-<a href="#1747" id="1747">1747</a>
-<a href="#1748" id="1748">1748</a>
-<a href="#1749" id="1749">1749</a>
-<a href="#1750" id="1750">1750</a>
-<a href="#1751" id="1751">1751</a>
-<a href="#1752" id="1752">1752</a>
-<a href="#1753" id="1753">1753</a>
-<a href="#1754" id="1754">1754</a>
-<a href="#1755" id="1755">1755</a>
-<a href="#1756" id="1756">1756</a>
-<a href="#1757" id="1757">1757</a>
-<a href="#1758" id="1758">1758</a>
-<a href="#1759" id="1759">1759</a>
-<a href="#1760" id="1760">1760</a>
-<a href="#1761" id="1761">1761</a>
-<a href="#1762" id="1762">1762</a>
-<a href="#1763" id="1763">1763</a>
-<a href="#1764" id="1764">1764</a>
-<a href="#1765" id="1765">1765</a>
-<a href="#1766" id="1766">1766</a>
-<a href="#1767" id="1767">1767</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2292,12 +2271,7 @@
             <span class="macro">bail!</span>(<span class="string">&quot;Found existing spendable notes. Mint module recovery must be started on an empty state.&quot;</span>)
         }
 
-        <span class="kw">if </span>executor
-            .get_active_states()
-            .<span class="kw">await
-            </span>.into_iter()
-            .any(|s| s.<span class="number">0</span>.module_instance_id() == module_instance_id)
-        {
+        <span class="kw">if </span>!<span class="self">self</span>.client_ctx.get_own_active_states().<span class="kw">await</span>.is_empty() {
             <span class="macro">warn!</span>(
                 target: LOG_TARGET,
                 <span class="string">&quot;Can not start recovery - existing state machines found&quot;
@@ -2419,24 +2393,13 @@
         )
     }
 
-    <span class="kw">async fn </span>leave(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        module_instance_id: ModuleInstanceId,
-        executor: Executor&lt;DynGlobalClientContext&gt;,
-        _api: DynGlobalApi,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>leave(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>balance = ClientModule::get_balance(<span class="self">self</span>, dbtx).<span class="kw">await</span>;
         <span class="kw">if </span>Amount::from_sats(<span class="number">0</span>) &lt; balance {
             <span class="macro">bail!</span>(<span class="string">&quot;Outstanding balance: {balance}&quot;</span>);
         }
 
-        <span class="kw">if </span>executor
-            .get_active_states()
-            .<span class="kw">await
-            </span>.into_iter()
-            .any(|s| s.<span class="number">0</span>.module_instance_id() == module_instance_id)
-        {
+        <span class="kw">if </span>!<span class="self">self</span>.client_ctx.get_own_active_states().<span class="kw">await</span>.is_empty() {
             <span class="macro">bail!</span>(<span class="string">&quot;Pending operations&quot;</span>)
         }
         <span class="prelude-val">Ok</span>(())
@@ -2959,20 +2922,18 @@
         try_cancel_after: Duration,
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;(OperationId, OOBNotes)&gt; {
-        <span class="kw">let </span>mint_id = <span class="self">self</span>.client_ctx.module_instance_id();
         <span class="kw">let </span>federation_id_prefix = <span class="self">self</span>.federation_id.to_prefix();
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
             .expect(<span class="string">&quot;MintClientModule::spend_notes extra_meta is serializable&quot;</span>);
 
         <span class="self">self</span>.client_ctx
-            .global_db()
-            .autocommit(
+            .module_autocommit(
                 <span class="kw">move </span>|dbtx, <span class="kw">_</span>| {
                     <span class="kw">let </span>extra_meta = extra_meta.clone();
                     Box::pin(<span class="kw">async move </span>{
                         <span class="kw">let </span>(operation_id, states, notes) = <span class="self">self
                             </span>.spend_notes_oob(
-                                <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(mint_id),
+                                <span class="kw-2">&amp;mut </span>dbtx.module_dbtx(),
                                 notes_selector,
                                 requested_amount,
                                 try_cancel_after,
@@ -2980,24 +2941,21 @@
                             .<span class="kw">await</span><span class="question-mark">?</span>;
                         <span class="kw">let </span>oob_notes = OOBNotes::new(federation_id_prefix, notes);
 
-                        <span class="kw">let </span>dyn_states = states.into_iter().map(|s| s.into_dyn(mint_id)).collect();
-
-                        <span class="self">self</span>.client_ctx.add_state_machines(dbtx, dyn_states).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="self">self</span>.client_ctx
-                            .add_operation_log_entry(
-                                dbtx,
-                                operation_id,
-                                MintCommonInit::KIND.as_str(),
-                                MintOperationMeta {
-                                    variant: MintOperationMetaVariants::SpendOOB {
-                                        requested_amount,
-                                        oob_notes: oob_notes.clone(),
-                                    },
-                                    amount: oob_notes.total_amount(),
-                                    extra_meta,
+                        dbtx.add_state_machines(<span class="self">self</span>.client_ctx.map_dyn(states).collect())
+                            .<span class="kw">await</span><span class="question-mark">?</span>;
+                        dbtx.add_operation_log_entry(
+                            operation_id,
+                            MintCommonInit::KIND.as_str(),
+                            MintOperationMeta {
+                                variant: MintOperationMetaVariants::SpendOOB {
+                                    requested_amount,
+                                    oob_notes: oob_notes.clone(),
                                 },
-                            )
-                            .<span class="kw">await</span>;
+                                amount: oob_notes.total_amount(),
+                                extra_meta,
+                            },
+                        )
+                        .<span class="kw">await</span>;
 
                         <span class="prelude-val">Ok</span>((operation_id, oob_notes))
                     })

@@ -800,9 +800,53 @@
 <a href="#800" id="800">800</a>
 <a href="#801" id="801">801</a>
 <a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::marker::PhantomData;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::{ffi, marker, ops};
 
@@ -812,11 +856,11 @@
 <span class="kw">use </span>fedimint_core::core::{
     Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
 };
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, PhantomBound};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
-<span class="kw">use </span>fedimint_core::util::BoxStream;
+<span class="kw">use </span>fedimint_core::util::{BoxFuture, BoxStream};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
@@ -824,7 +868,7 @@
 <span class="kw">use </span>secp256k1_zkp::PublicKey;
 
 <span class="kw">use </span><span class="self">self</span>::init::ClientModuleInit;
-<span class="kw">use </span><span class="kw">crate</span>::sm::{ActiveState, Context, DynContext, DynState, Executor, State};
+<span class="kw">use </span><span class="kw">crate</span>::sm::{<span class="self">self</span>, ActiveState, Context, DynContext, DynState, Executor, State};
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use crate</span>::{
     oplog, AddStateMachinesResult, ClientArc, ClientWeak, DynGlobalClientContext,
@@ -913,6 +957,49 @@
     }
 }
 
+<span class="doccomment">/// A context of a database transaction started with
+/// `ClientContext::module_autocommit`
+</span><span class="kw">pub struct </span>ClientDbTxContext&lt;<span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;o</span>, M&gt; {
+    dbtx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;r </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;o</span>&gt;,
+    client: <span class="kw-2">&amp;</span><span class="lifetime">&#39;r </span>ClientContext&lt;M&gt;,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;o</span>, M&gt; ClientDbTxContext&lt;<span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;o</span>, M&gt;
+<span class="kw">where
+    </span>M: ClientModule,
+{
+    <span class="doccomment">/// Get a reference to [`DatabaseTransaction`] isolated database transaction
+    </span><span class="kw">pub fn </span>module_dbtx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
+        <span class="self">self</span>.dbtx
+            .to_ref_with_prefix_module_id(<span class="self">self</span>.client.module_instance_id)
+    }
+
+    <span class="kw">pub async fn </span>add_state_machines(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        dyn_states: Vec&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
+    ) -&gt; AddStateMachinesResult {
+        <span class="self">self</span>.client
+            .client
+            .get()
+            .add_state_machines(<span class="self">self</span>.dbtx, dyn_states)
+            .<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>add_operation_log_entry(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        operation_id: OperationId,
+        operation_type: <span class="kw-2">&amp;</span>str,
+        operation_meta: <span class="kw">impl </span>serde::Serialize,
+    ) {
+        <span class="self">self</span>.client
+            .client
+            .get()
+            .operation_log()
+            .add_operation_log_entry(<span class="self">self</span>.dbtx, operation_id, operation_type, operation_meta)
+            .<span class="kw">await
+    </span>}
+}
+
 <span class="kw">impl</span>&lt;M&gt; ClientContext&lt;M&gt;
 <span class="kw">where
     </span>M: ClientModule,
@@ -939,13 +1026,6 @@
     <span class="doccomment">/// Get a reference to a global Api handle
     </span><span class="kw">pub fn </span>global_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynGlobalApi {
         <span class="self">self</span>.client.get().api_clone()
-    }
-
-    <span class="doccomment">/// Get own [`ModuleInstanceId`]
-    </span><span class="comment">// TODO: we would like to eventually get rid of that
-    // and make it entirely internal.
-    </span><span class="kw">pub fn </span>module_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleInstanceId {
-        <span class="self">self</span>.module_instance_id
     }
 
     <span class="kw">pub fn </span>map_dyn&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;i</span>, <span class="lifetime">&#39;o</span>, I&gt;(
@@ -975,7 +1055,7 @@
     <span class="kw">where
         </span>I: IntoDynInstance,
     {
-        typed.into_dyn(<span class="self">self</span>.module_instance_id())
+        typed.into_dyn(<span class="self">self</span>.module_instance_id)
     }
 
     <span class="doccomment">/// Turn a typed [`ClientOutput`] into a dyn version
@@ -995,6 +1075,40 @@
     {
         <span class="self">self</span>.make_dyn(input)
     }
+
+    <span class="kw">pub fn </span>make_dyn_state&lt;GC, S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, sm: S) -&gt; DynState&lt;GC&gt;
+    <span class="kw">where
+        </span>S: sm::IState&lt;GC&gt; + <span class="lifetime">&#39;static</span>,
+    {
+        DynState::from_typed(<span class="self">self</span>.module_instance_id, sm)
+    }
+
+    <span class="doccomment">/// An [`Database::autocommit`] on module&#39;s own database partition
+    </span><span class="kw">pub async fn </span>module_autocommit&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;dbtx</span>, F, T, E&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="self">self</span>,
+        tx_fn: F,
+        max_attempts: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;T, AutocommitError&lt;E&gt;&gt;
+    <span class="kw">where
+        </span><span class="lifetime">&#39;s</span>: <span class="lifetime">&#39;dbtx</span>,
+        <span class="kw">for</span>&lt;<span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;o</span>&gt; F: Fn(
+                <span class="kw-2">&amp;</span><span class="lifetime">&#39;r </span><span class="kw-2">mut </span>ClientDbTxContext&lt;<span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;o</span>, M&gt;,
+                PhantomBound&lt;<span class="lifetime">&#39;dbtx</span>, <span class="lifetime">&#39;o</span>&gt;,
+            ) -&gt; BoxFuture&lt;<span class="lifetime">&#39;r</span>, <span class="prelude-ty">Result</span>&lt;T, E&gt;&gt;
+            + MaybeSync,
+    {
+        <span class="kw">let </span>tx_fn = <span class="kw-2">&amp;</span>tx_fn;
+        <span class="self">self</span>.global_db()
+            .autocommit(
+                <span class="kw">move </span>|dbtx, <span class="kw">_</span>| {
+                    Box::pin(<span class="kw">async move </span>{
+                        tx_fn(<span class="kw-2">&amp;mut </span>ClientDbTxContext { dbtx, client: <span class="self">self </span>}, PhantomData).<span class="kw">await
+                    </span>})
+                },
+                max_attempts,
+            )
+            .<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// See [`crate::Client::finalize_and_submit_transaction`]
     </span><span class="kw">pub async fn </span>finalize_and_submit_transaction&lt;F, Meta&gt;(
@@ -1064,28 +1178,6 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.module_db
     }
 
-    <span class="kw">pub async fn </span>add_state_machines(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        dyn_states: Vec&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
-    ) -&gt; AddStateMachinesResult {
-        <span class="self">self</span>.client.get().add_state_machines(dbtx, dyn_states).<span class="kw">await
-    </span>}
-
-    <span class="kw">pub async fn </span>add_operation_log_entry(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        operation_id: OperationId,
-        operation_type: <span class="kw-2">&amp;</span>str,
-        operation_meta: <span class="kw">impl </span>serde::Serialize,
-    ) {
-        <span class="self">self</span>.client
-            .get()
-            .operation_log()
-            .add_operation_log_entry(dbtx, operation_id, operation_type, operation_meta)
-            .<span class="kw">await
-    </span>}
-
     <span class="kw">pub async fn </span>has_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>, op_id: OperationId) -&gt; bool {
         <span class="self">self</span>.client.get().has_active_states(op_id).<span class="kw">await
     </span>}
@@ -1097,7 +1189,7 @@
             .get_active_states()
             .<span class="kw">await
             </span>.into_iter()
-            .filter(|s| s.<span class="number">0</span>.module_instance_id() == <span class="self">self</span>.module_instance_id())
+            .filter(|s| s.<span class="number">0</span>.module_instance_id() == <span class="self">self</span>.module_instance_id)
             .map(|s| {
                 (
                     s.<span class="number">0</span>.as_any()
@@ -1356,13 +1448,7 @@
     /// Calling code should allow the user to override and ignore any
     /// outstanding errors, after sufficient amount of warnings. Ideally,
     /// this should be done on per-module basis, to avoid mistakes.
-    </span><span class="kw">async fn </span>leave(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        _module_instance_id: ModuleInstanceId,
-        _executor: Executor&lt;DynGlobalClientContext&gt;,
-        _api: DynGlobalApi,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    </span><span class="kw">async fn </span>leave(<span class="kw-2">&amp;</span><span class="self">self</span>, _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">bail!</span>(<span class="string">&quot;Unable to determine if safe to leave the federation: Not implemented&quot;</span>)
     }
 }

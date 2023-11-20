@@ -369,6 +369,7 @@
 <a href="#369" id="369">369</a>
 <a href="#370" id="370">370</a>
 <a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -382,7 +383,7 @@
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
-<span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, OperationId};
+<span class="kw">use </span>fedimint_core::core::{Decoder, KeyPair, OperationId};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -574,8 +575,7 @@
 
         <span class="comment">// Build and send tx to the fed
         // Will output to our primary client module
-        </span><span class="kw">let </span>tx = TransactionBuilder::new()
-            .with_input(input.into_dyn(<span class="self">self</span>.client_ctx.module_instance_id()));
+        </span><span class="kw">let </span>tx = TransactionBuilder::new().with_input(<span class="self">self</span>.client_ctx.make_client_input(input));
         <span class="kw">let </span>outpoint = |txid, <span class="kw">_</span>| OutPoint { txid, out_idx: <span class="number">0 </span>};
         <span class="kw">let </span>(<span class="kw">_</span>, change) = <span class="self">self
             </span>.client_ctx
@@ -615,16 +615,18 @@
 
         <span class="comment">// TODO: Building a tx could be easier
         // Create input using our own account
-        </span><span class="kw">let </span>inputs = fedimint_client::module::ClientModule::create_sufficient_input(
-            <span class="self">self</span>,
-            <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
-            op_id,
-            amount,
-        )
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.into_iter()
-        .map(|input| input.into_dyn(<span class="self">self</span>.client_ctx.module_instance_id()))
-        .collect();
+        </span><span class="kw">let </span>inputs = <span class="self">self
+            </span>.client_ctx
+            .map_dyn(
+                fedimint_client::module::ClientModule::create_sufficient_input(
+                    <span class="self">self</span>,
+                    <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
+                    op_id,
+                    amount,
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>,
+            )
+            .collect();
 
         dbtx.commit_tx().<span class="kw">await</span>;
 
@@ -637,7 +639,7 @@
         <span class="comment">// Build and send tx to the fed
         </span><span class="kw">let </span>tx = TransactionBuilder::new()
             .with_inputs(inputs)
-            .with_output(output.into_dyn(<span class="self">self</span>.client_ctx.module_instance_id()));
+            .with_output(<span class="self">self</span>.client_ctx.make_client_output(output));
 
         <span class="kw">let </span>outpoint = |txid, <span class="kw">_</span>| OutPoint { txid, out_idx: <span class="number">0 </span>};
         <span class="kw">let </span>(txid, <span class="kw">_</span>) = <span class="self">self
