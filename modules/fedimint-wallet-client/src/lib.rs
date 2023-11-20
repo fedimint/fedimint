@@ -167,6 +167,7 @@ impl ClientModuleInit for WalletClientInit {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum WalletOperationMeta {
     Deposit {
         address: bitcoin::Address,
