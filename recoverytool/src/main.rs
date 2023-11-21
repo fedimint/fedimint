@@ -10,15 +10,18 @@ use bitcoin::hashes::sha256::Hash;
 use bitcoin::network::constants::Network;
 use bitcoin::OutPoint;
 use clap::{ArgGroup, Parser, Subcommand};
+use fedimint_core::block::SignedBlock;
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::encoding::Encodable;
+use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::transaction::Transaction;
-use fedimint_core::ServerModule;
+use fedimint_core::{BitcoinHash, ServerModule};
 use fedimint_ln_common::LightningCommonInit;
 use fedimint_ln_server::Lightning;
 use fedimint_logging::TracingSetup;
@@ -26,6 +29,7 @@ use fedimint_mint_server::common::MintCommonInit;
 use fedimint_mint_server::Mint;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::io::read_server_config;
+use fedimint_server::db::SignedBlockPrefix;
 use fedimint_wallet_server::common::config::WalletConfig;
 use fedimint_wallet_server::common::db::{UTXOKey, UTXOPrefixKey};
 use fedimint_wallet_server::common::keys::CompressedPublicKey;
@@ -38,6 +42,7 @@ use futures::stream::StreamExt;
 use miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
 use secp256k1::SecretKey;
 use serde::Serialize;
+use tracing::info;
 
 /// Tool to recover the on-chain wallet of a Fedimint federation
 #[derive(Debug, Parser)]
@@ -119,7 +124,7 @@ async fn main() -> anyhow::Result<()> {
     } else if let (Some(descriptor), Some(key)) = (opts.descriptor, opts.key) {
         (descriptor, key, opts.network)
     } else {
-        panic!("Either config or descriptor will be provided by clap");
+        panic!("Either config or descriptor need to be provided by clap");
     };
 
     match opts.strategy {
@@ -182,34 +187,29 @@ async fn main() -> anyhow::Result<()> {
             ]);
 
             let db = Database::new(RocksDb::open(db).expect("Error opening DB"), decoders);
-            let _dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_transaction().await;
 
-            let _change_tweak_idx: u64 = 0;
+            let mut change_tweak_idx: u64 = 0;
 
-            unimplemented!();
-
-            /*
-            let tweaks = dbtx.find_by_prefix(&EpochHistoryKeyPrefix).await.flat_map(
-                |(_, SignedEpochOutcome { outcome, .. })| {
-                    let UnzipConsensusItem {
-                        transaction: transaction_cis,
-                        ..
-                    } = outcome
+            let tweaks = dbtx.find_by_prefix(&SignedBlockPrefix).await.flat_map(
+                |(_key, SignedBlock { block, .. })| {
+                    let transaction_cis: Vec<Transaction> = block
                         .items
                         .into_iter()
-                        .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
-                        .unzip_consensus_item();
+                        .filter_map(|item| match item.item {
+                            ConsensusItem::Transaction(tx) => Some(tx),
+                            ConsensusItem::Module(_) => None,
+                        })
+                        .collect();
 
                     // Get all user-submitted tweaks and if we did a peg-out tx also return the
                     // consensus round's tweak used for change
                     let (mut peg_in_tweaks, peg_out_present) =
-                        input_tweaks_output_present(transaction_cis.into_iter().map(|(_, ci)| ci));
+                        input_tweaks_output_present(transaction_cis.into_iter());
 
                     if peg_out_present {
                         info!("Found change output, adding tweak {change_tweak_idx} to list");
-                        let change_tweak = change_tweak_idx
-                            .consensus_hash::<sha256::Hash>()
-                            .into_inner();
+                        let change_tweak = change_tweak_idx.consensus_hash::<Hash>().into_inner();
                         peg_in_tweaks.insert(change_tweak);
                         change_tweak_idx += 1;
                     }
@@ -228,16 +228,12 @@ async fn main() -> anyhow::Result<()> {
 
             serde_json::to_writer(std::io::stdout().lock(), &wallets)
                 .expect("Could not encode to stdout")
-             */
         }
     }
 
     Ok(())
 }
 
-// FIXME: @joschisan: decide if still needed, probably currently unused because
-// of commented out code
-#[allow(dead_code)]
 fn input_tweaks_output_present(
     transactions: impl Iterator<Item = Transaction>,
 ) -> (BTreeSet<[u8; 32]>, bool) {
