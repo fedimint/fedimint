@@ -260,7 +260,7 @@ impl ConsensusServer {
             self.complete_session(session_index, SignedBlock { block, signatures })
                 .await;
 
-            info!(target: LOG_CONSENSUS, "Session completed");
+            info!(target: LOG_CONSENSUS, "Session {session_index} completed");
 
             // if the submission channel is closed we are shutting down
             if self.submission_receiver.is_closed() {
@@ -291,7 +291,7 @@ impl ConsensusServer {
 
             self.run_session(session_index).await?;
 
-            info!(target: LOG_CONSENSUS, "Session completed");
+            info!(target: LOG_CONSENSUS, "Session {session_index} completed");
         }
 
         info!(target: LOG_CONSENSUS, "Consensus task shut down");

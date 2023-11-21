@@ -20,7 +20,9 @@ pub async fn load_session(db: Database) -> (Cursor<Vec<u8>>, UnitSaver) {
 
     std::mem::drop(dbtx);
 
-    tracing::info!(target: LOG_CONSENSUS,"Loaded aleph buffer with {} bytes", buffer.len());
+    if !buffer.is_empty() {
+        tracing::info!(target: LOG_CONSENSUS, buffer_len = %buffer.len(), "Recovering from an in-session-shutdown");
+    }
 
     // the cursor enables aleph bft to read the units via std::io::Read
     let unit_loader = Cursor::new(buffer);
