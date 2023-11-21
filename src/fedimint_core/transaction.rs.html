@@ -118,96 +118,13 @@
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
-<a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a>
-<a href="#125" id="125">125</a>
-<a href="#126" id="126">126</a>
-<a href="#127" id="127">127</a>
-<a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a>
-<a href="#163" id="163">163</a>
-<a href="#164" id="164">164</a>
-<a href="#165" id="165">165</a>
-<a href="#166" id="166">166</a>
-<a href="#167" id="167">167</a>
-<a href="#168" id="168">168</a>
-<a href="#169" id="169">169</a>
-<a href="#170" id="170">170</a>
-<a href="#171" id="171">171</a>
-<a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
-<a href="#174" id="174">174</a>
-<a href="#175" id="175">175</a>
-<a href="#176" id="176">176</a>
-<a href="#177" id="177">177</a>
-<a href="#178" id="178">178</a>
-<a href="#179" id="179">179</a>
-<a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a>
-<a href="#182" id="182">182</a>
-<a href="#183" id="183">183</a>
-<a href="#184" id="184">184</a>
-<a href="#185" id="185">185</a>
-<a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
-<a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a>
-<a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a>
-<a href="#201" id="201">201</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
-<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
-<span class="kw">use </span>rand::Rng;
-<span class="kw">use </span>secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
+<span class="kw">use </span>secp256k1_zkp::schnorr;
 <span class="kw">use </span>thiserror::Error;
 
 <span class="kw">use </span><span class="kw">crate</span>::core::{DynInputError, DynOutputError};
@@ -231,8 +148,8 @@
     /// In the future the nonce can be used for grinding a tx hash that fulfills
     /// certain PoW requirements.
     </span><span class="kw">pub </span>nonce: [u8; <span class="number">8</span>],
-    <span class="doccomment">/// Aggregated MuSig2 signature over all the public keys of the inputs
-    </span><span class="kw">pub </span>signature: <span class="prelude-ty">Option</span>&lt;schnorr::Signature&gt;,
+    <span class="doccomment">/// signatures for all the public keys of the inputs
+    </span><span class="kw">pub </span>signatures: Vec&lt;schnorr::Signature&gt;,
 }
 
 <span class="kw">pub type </span>SerdeTransaction = SerdeModuleEncoding&lt;Transaction&gt;;
@@ -266,116 +183,37 @@
         TransactionId::from_engine(engine)
     }
 
-    <span class="doccomment">/// Validate the aggregated Schnorr Signature signed over the `tx_hash`
-    </span><span class="kw">pub fn </span>validate_signature(
+    <span class="doccomment">/// Validate the schnorr signatures signed over the `tx_hash`
+    </span><span class="kw">pub fn </span>validate_signatures(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        keys: <span class="kw">impl </span>Iterator&lt;Item = XOnlyPublicKey&gt;,
+        pub_keys: Vec&lt;XOnlyPublicKey&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
-        <span class="kw">let </span>keys = keys.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-
-        <span class="comment">// If there are no keys from inputs there are no inputs to protect from
-        // re-binding. This behavior is useful for non-monetary transactions
-        // that just announce something, like LN incoming contract offers.
-        </span><span class="kw">if </span>keys.is_empty() {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        <span class="kw">if </span>pub_keys.len() != <span class="self">self</span>.signatures.len() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(TransactionError::InvalidWitnessLength);
         }
 
-        <span class="comment">// Unless keys were empty we require a signature
-        </span><span class="kw">let </span>signature = <span class="self">self
-            </span>.signature
-            .as_ref()
-            .ok_or(TransactionError::MissingSignature)<span class="question-mark">?</span>;
+        <span class="kw">let </span>txid = <span class="self">self</span>.tx_hash();
+        <span class="kw">let </span>msg = secp256k1_zkp::Message::from_slice(<span class="kw-2">&amp;</span>txid[..]).expect(<span class="string">&quot;txid has right length&quot;</span>);
 
-        <span class="kw">let </span>agg_pub_key = agg_keys(<span class="kw-2">&amp;</span>keys);
-        <span class="kw">let </span>msg =
-            secp256k1_zkp::Message::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.tx_hash()[..]).expect(<span class="string">&quot;hash has right length&quot;</span>);
-
-        <span class="kw">if </span>secp256k1_zkp::global::SECP256K1
-            .verify_schnorr(signature, <span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>agg_pub_key)
-            .is_ok()
-        {
-            <span class="prelude-val">Ok</span>(())
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(TransactionError::InvalidSignature {
-                tx: <span class="self">self</span>.consensus_encode_to_hex().expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
-                hash: <span class="self">self</span>.tx_hash().to_hex(),
-                sig: signature.consensus_encode_to_hex().expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
-                key: agg_pub_key.consensus_encode_to_hex().expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
-            })
+        <span class="kw">for </span>(pk, signature) <span class="kw">in </span>pub_keys.iter().zip(<span class="kw-2">&amp;</span><span class="self">self</span>.signatures) {
+            <span class="kw">if </span>secp256k1_zkp::global::SECP256K1
+                .verify_schnorr(signature, <span class="kw-2">&amp;</span>msg, pk)
+                .is_err()
+            {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(TransactionError::InvalidSignature {
+                    tx: <span class="self">self</span>.consensus_encode_to_hex().expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
+                    hash: <span class="self">self
+                        </span>.tx_hash()
+                        .consensus_encode_to_hex()
+                        .expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
+                    sig: signature.consensus_encode_to_hex().expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
+                    key: pk.consensus_encode_to_hex().expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
+                });
+            }
         }
+
+        <span class="prelude-val">Ok</span>(())
     }
-}
-
-<span class="doccomment">/// Aggregate a stream of public keys.
-///
-/// Be aware that the order of the keys matters for the aggregation result.
-/// # Panics
-/// * If the `keys` iterator does not yield any keys
-</span><span class="kw">pub fn </span>agg_keys(keys: <span class="kw-2">&amp;</span>[XOnlyPublicKey]) -&gt; XOnlyPublicKey {
-    new_pre_session(keys, secp256k1_zkp::SECP256K1).agg_pk()
-}
-
-<span class="doccomment">/// Precompute a combined public key and the hash of the given public keys for
-/// Musig2.
-</span><span class="kw">fn </span>new_pre_session&lt;C&gt;(
-    keys: <span class="kw-2">&amp;</span>[XOnlyPublicKey],
-    ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
-) -&gt; secp256k1_zkp::MusigKeyAggCache
-<span class="kw">where
-    </span>C: Signing + Verification,
-{
-    <span class="macro">assert!</span>(
-        !keys.is_empty(),
-        <span class="string">&quot;Must supply more than 0 keys for aggregation&quot;
-    </span>);
-    secp256k1_zkp::MusigKeyAggCache::new(ctx, keys)
-}
-
-<span class="doccomment">/// Create an aggregated signature over the `msg`
-</span><span class="kw">pub fn </span>agg_sign&lt;R, C, M&gt;(
-    keys: <span class="kw-2">&amp;</span>[bitcoin::KeyPair],
-    msg: M,
-    ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
-    <span class="kw-2">mut </span>rng: R,
-) -&gt; schnorr::Signature
-<span class="kw">where
-    </span>R: rand::RngCore + rand::CryptoRng,
-    C: Signing + Verification,
-    M: Into&lt;secp256k1_zkp::Message&gt;,
-{
-    <span class="kw">let </span>msg = msg.into();
-    <span class="kw">let </span>pub_keys = keys
-        .iter()
-        .map(|key| key.x_only_public_key().<span class="number">0</span>)
-        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-    <span class="kw">let </span>pre_session = new_pre_session(<span class="kw-2">&amp;</span>pub_keys, ctx);
-
-    <span class="kw">let </span>session_id: [u8; <span class="number">32</span>] = rng.gen();
-    <span class="kw">let </span>(sec_nonces, pub_nonces): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = keys
-        .iter()
-        .map(|key| {
-            <span class="comment">// FIXME: upstream
-            </span>pre_session
-                .nonce_gen(ctx, session_id, key.into(), msg, <span class="prelude-val">None</span>)
-                .expect(<span class="string">&quot;should not fail for valid inputs (ensured by type system)&quot;</span>)
-        })
-        .unzip();
-
-    <span class="kw">let </span>agg_nonce = secp256k1_zkp::MusigAggNonce::new(ctx, <span class="kw-2">&amp;</span>pub_nonces);
-
-    <span class="kw">let </span>session = secp256k1_zkp::MusigSession::new(ctx, <span class="kw-2">&amp;</span>pre_session, agg_nonce, msg, <span class="prelude-val">None</span>);
-
-    <span class="kw">let </span>partial_sigs = sec_nonces
-        .into_iter()
-        .zip(keys.iter())
-        .map(|(<span class="kw-2">mut </span>nonce, key)| {
-            session
-                .partial_sign(ctx, <span class="kw-2">&amp;mut </span>nonce, key, <span class="kw-2">&amp;</span>pre_session)
-                .expect(<span class="string">&quot;Should not fail for cooperative protocol runs&quot;</span>)
-        })
-        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-
-    session.partial_sig_agg(<span class="kw-2">&amp;</span>partial_sigs)
 }
 
 <span class="attr">#[derive(Debug, Error, Encodable, Decodable, Clone, Eq, PartialEq)]
@@ -393,8 +231,8 @@
         sig: String,
         key: String,
     },
-    <span class="attr">#[error(<span class="string">&quot;The transaction did not have a signature although there were inputs to be signed&quot;</span>)]
-    </span>MissingSignature,
+    <span class="attr">#[error(<span class="string">&quot;The transaction did not have the correct number of signatures&quot;</span>)]
+    </span>InvalidWitnessLength,
     <span class="attr">#[error(<span class="string">&quot;The transaction had an invalid input&quot;</span>)]
     </span>Input(DynInputError),
     <span class="attr">#[error(<span class="string">&quot;The transaction had an invalid output&quot;</span>)]

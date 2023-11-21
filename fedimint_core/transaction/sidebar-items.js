@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["TransactionError"],"fn":["agg_keys","agg_sign","new_pre_session"],"struct":["Transaction"],"type":["SerdeTransaction"]};
+window.SIDEBAR_ITEMS = {"enum":["TransactionError"],"struct":["Transaction"],"type":["SerdeTransaction"]};
