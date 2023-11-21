@@ -75,6 +75,8 @@
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -97,7 +99,9 @@
 
     std::mem::drop(dbtx);
 
-    <span class="macro">tracing::info!</span>(target: LOG_CONSENSUS,<span class="string">&quot;Loaded aleph buffer with {} bytes&quot;</span>, buffer.len());
+    <span class="kw">if </span>!buffer.is_empty() {
+        <span class="macro">tracing::info!</span>(target: LOG_CONSENSUS, buffer_len = %buffer.len(), <span class="string">&quot;Recovering from an in-session-shutdown&quot;</span>);
+    }
 
     <span class="comment">// the cursor enables aleph bft to read the units via std::io::Read
     </span><span class="kw">let </span>unit_loader = Cursor::new(buffer);

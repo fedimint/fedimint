@@ -140,6 +140,9 @@
 <a href="#140" id="140">140</a>
 <a href="#141" id="141">141</a>
 <a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fs::File;
 <span class="kw">use </span>std::{env, io};
 
@@ -216,8 +219,11 @@
             <span class="comment">// We prefix everything with a default general log level and
             // good per-module specific default. User provided RUST_LOG
             // can override one or both
-            </span><span class="string">&quot;info,{},{},{}&quot;</span>,
-            <span class="string">&quot;jsonrpsee_core::client::async_client=off&quot;</span>, <span class="string">&quot;AlephBFT-=error&quot;</span>, var
+            </span><span class="string">&quot;info,{},{},{},{}&quot;</span>,
+            <span class="string">&quot;jsonrpsee_core::client::async_client=off&quot;</span>,
+            <span class="string">&quot;jsonrpsee_server=warn,jsonrpsee_server::transport=off&quot;</span>,
+            <span class="string">&quot;AlephBFT-=error&quot;</span>,
+            var
         ))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>fmt_writer = <span class="kw">if let </span><span class="prelude-val">Some</span>(file) = <span class="self">self</span>.with_file.take() {

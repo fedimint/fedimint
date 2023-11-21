@@ -999,7 +999,7 @@
             <span class="self">self</span>.complete_session(session_index, SignedBlock { block, signatures })
                 .<span class="kw">await</span>;
 
-            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Session completed&quot;</span>);
+            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Session {session_index} completed&quot;</span>);
 
             <span class="comment">// if the submission channel is closed we are shutting down
             </span><span class="kw">if </span><span class="self">self</span>.submission_receiver.is_closed() {
@@ -1030,7 +1030,7 @@
 
             <span class="self">self</span>.run_session(session_index).<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Session completed&quot;</span>);
+            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Session {session_index} completed&quot;</span>);
         }
 
         <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Consensus task shut down&quot;</span>);
