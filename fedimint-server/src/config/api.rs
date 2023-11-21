@@ -99,6 +99,17 @@ impl ConfigGenApi {
         Ok(state)
     }
 
+    fn require_any_status(
+        &self,
+        statuses: &[ServerStatus],
+    ) -> ApiResult<MutexGuard<ConfigGenState>> {
+        let state = self.state.lock().expect("lock poisoned");
+        if !statuses.contains(&state.status) {
+            return Self::bad_request(&format!("Expected to be in one of {:?} states", statuses));
+        }
+        Ok(state)
+    }
+
     /// Sets our connection info, possibly sending it to a leader
     pub async fn set_config_gen_connections(
         &self,
@@ -301,17 +312,11 @@ impl ConfigGenApi {
     /// Returns the consensus config hash, tweaked by our TLS cert, to be shared
     /// with other peers
     pub fn verify_config_hash(&self) -> ApiResult<BTreeMap<PeerId, sha256::Hash>> {
-        let state = self
-            .require_status(ServerStatus::VerifyingConfigs)
-            .or_else(|_| self.require_status(ServerStatus::VerifiedConfigs))
-            .map_err(|_| {
-                ApiError::bad_request(format!(
-                    "Expected to be in {:?} or {:?} state",
-                    ServerStatus::VerifyingConfigs,
-                    ServerStatus::VerifiedConfigs
-                ))
-            })?;
-
+        let expected_status = [
+            ServerStatus::VerifyingConfigs,
+            ServerStatus::VerifiedConfigs,
+        ];
+        let state = self.require_any_status(&expected_status)?;
         let config = state
             .config
             .clone()
@@ -339,16 +344,11 @@ impl ConfigGenApi {
     /// We have verified all our peer configs
     pub async fn verified_configs(&self) -> ApiResult<()> {
         {
-            let mut state = self
-                .require_status(ServerStatus::VerifyingConfigs)
-                .or_else(|_| self.require_status(ServerStatus::VerifiedConfigs))
-                .map_err(|_| {
-                    ApiError::bad_request(format!(
-                        "Expected to be in {:?} or {:?} state",
-                        ServerStatus::VerifyingConfigs,
-                        ServerStatus::VerifiedConfigs
-                    ))
-                })?;
+            let expected_status = [
+                ServerStatus::VerifyingConfigs,
+                ServerStatus::VerifiedConfigs,
+            ];
+            let mut state = self.require_any_status(&expected_status)?;
             if state.status == ServerStatus::VerifiedConfigs {
                 return Ok(());
             }
