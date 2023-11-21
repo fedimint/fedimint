@@ -870,11 +870,17 @@ impl LightningClientModule {
 
     async fn fetch_meta_overrides(&self, config: ClientConfig) -> anyhow::Result<String> {
         let federation_id = config.global.federation_id();
-        let override_src = FederationInfo::from_config(config)
+        let override_src = match FederationInfo::from_config(config)
             .await?
             .meta::<String>(META_OVERRIDE_URL_KEY)?
-            .ok_or(anyhow::anyhow!("No meta override source configured"))?;
-        debug!("Fetching meta overrides from {}", override_src);
+        {
+            Some(override_src) => override_src,
+            None => {
+                debug!("No meta override source configured");
+                return Ok("".into());
+            }
+        };
+        debug!("Fetching meta overrides from {override_src}");
 
         if let Some(meta) = self
             .client_ctx
@@ -896,27 +902,30 @@ impl LightningClientModule {
             .send()
             .await
             .context("Meta override request failed")?;
-        debug!("Meta override source returned status: {:?}", response);
+        debug!("Meta override source returned status: {response:?}");
 
         let federation_meta = match response.status() {
             reqwest::StatusCode::OK => {
                 let txt = response.text().await.context(format!(
-                    "Meta override source returned invalid body: {}",
-                    override_src
+                    "Meta override source returned invalid body: {override_src}"
                 ))?;
                 let m: serde_json::Value = serde_json::from_str(&txt).map_err(|_| {
-                    anyhow::anyhow!("Meta override source returned invalid json: {}", txt)
+                    anyhow::anyhow!("Meta override source returned invalid json: {txt}")
                 })?;
                 if !m.is_object() {
                     return Err(anyhow::anyhow!("Meta override is not valid"));
                 }
 
-                m.get(&federation_id.to_string())
-                    .ok_or(anyhow::anyhow!(
-                        "No meta overrides for federation id: {}",
-                        federation_id
-                    ))?
-                    .to_string()
+                match m.get(&federation_id.to_string()) {
+                    Some(meta) => {
+                        debug!("Found meta overrides for federation: {federation_id}");
+                        meta.to_string()
+                    }
+                    None => {
+                        debug!("No meta overrides found for federation: {federation_id}");
+                        return Ok("".into());
+                    }
+                }
             }
             _ => Err(anyhow::anyhow!(
                 "Meta override source returned error code: {}",
@@ -948,7 +957,13 @@ impl LightningClientModule {
             debug!("Fetching meta overrides from remote source/cache");
             let config = self.client_ctx.get_config().clone();
             let federation_meta = match self.fetch_meta_overrides(config).await {
-                Ok(meta) => meta,
+                Ok(meta) => {
+                    if meta.is_empty() {
+                        debug!("No meta overrides found");
+                        return Ok(gateways);
+                    }
+                    meta
+                }
                 Err(e) => {
                     error!("Error fetching meta overrides: {}", e);
                     return Ok(gateways);
