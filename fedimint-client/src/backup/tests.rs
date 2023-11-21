@@ -1,4 +1,7 @@
+use std::io::Cursor;
+
 use anyhow::Result;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_derive_secret::DerivableSecret;
 
 use crate::backup::{ClientBackup, Metadata};
@@ -22,9 +25,12 @@ fn sanity_ecash_backup_decode_encode() -> Result<()> {
         modules: Default::default(),
     };
 
-    let encoded = orig.encode()?;
+    let encoded = orig.consensus_encode_to_vec()?;
     assert_eq!(encoded.len(), 16 * 1024);
-    assert_eq!(orig, ClientBackup::decode(&encoded)?);
+    assert_eq!(
+        orig,
+        ClientBackup::consensus_decode(&mut Cursor::new(encoded), &Default::default())?
+    );
 
     Ok(())
 }
@@ -42,7 +48,7 @@ fn sanity_ecash_backup_encrypt_decrypt() -> Result<()> {
 
     let encrypted = orig.encrypt_to(&key)?;
 
-    let decrypted = encrypted.decrypt_with(&key)?;
+    let decrypted = encrypted.decrypt_with(&key, &Default::default())?;
 
     assert_eq!(orig, decrypted);
 

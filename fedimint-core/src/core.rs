@@ -181,7 +181,7 @@ impl From<&'static str> for ModuleKind {
 /// This allows parsing and handling of dyn-types of modules which
 /// are not available.
 #[derive(Encodable, Decodable, Debug, Hash, PartialEq, Clone)]
-pub struct DynUnknown(Vec<u8>);
+pub struct DynUnknown(pub Vec<u8>);
 
 impl fmt::Display for DynUnknown {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

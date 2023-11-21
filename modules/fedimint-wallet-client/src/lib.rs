@@ -15,6 +15,7 @@ use client_db::DbKeyPrefix;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
+use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
@@ -201,6 +202,7 @@ pub struct WalletClientModule {
 impl ClientModule for WalletClientModule {
     type Init = WalletClientInit;
     type Common = WalletModuleTypes;
+    type Backup = NoModuleBackup;
     type ModuleStateMachineContext = WalletClientContext;
     type States = WalletClientStates;
 

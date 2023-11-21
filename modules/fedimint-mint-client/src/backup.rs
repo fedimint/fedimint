@@ -1,5 +1,7 @@
+use fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
 use fedimint_client::module::ClientDbTxContext;
 use fedimint_core::api::GlobalFederationApi;
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti};
 use serde::{Deserialize, Serialize};
@@ -14,7 +16,7 @@ pub mod recovery;
 ///
 /// Used to speed up and improve privacy of ecash recovery,
 /// by avoiding scanning the whole history.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub struct EcashBackup {
     spendable_notes: TieredMulti<SpendableNote>,
     pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)>,
@@ -31,6 +33,16 @@ impl EcashBackup {
             session_count: 0,
             next_note_idx: Tiered::default(),
         }
+    }
+}
+
+impl ModuleBackup for EcashBackup {}
+
+impl IntoDynInstance for EcashBackup {
+    type DynType = DynModuleBackup;
+
+    fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+        DynModuleBackup::from_typed(instance_id, self)
     }
 }
 

@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::{ffi, marker, ops};
 
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use fedimint_core::api::DynGlobalApi;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{
@@ -23,6 +23,7 @@ use fedimint_core::{
 use secp256k1_zkp::PublicKey;
 
 use self::init::ClientModuleInit;
+use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::sm::{self, ActiveState, Context, DynContext, DynState, Executor, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use crate::{
@@ -31,6 +32,7 @@ use crate::{
 };
 
 pub mod init;
+pub mod recovery;
 
 pub type ClientModuleRegistry = ModuleRegistry<DynClientModule>;
 
@@ -386,6 +388,10 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// Common module types shared between client and server
     type Common: ModuleCommon;
 
+    /// Data stored in regular backups so that restoring doesn't have to start
+    /// from epoch 0
+    type Backup: ModuleBackup;
+
     /// Data and API clients available to state machine transitions of this
     /// module
     type ModuleStateMachineContext: Context;
@@ -399,6 +405,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     fn decoder() -> Decoder {
         let mut decoder_builder = Self::Common::decoder_builder();
         decoder_builder.with_decodable_type::<Self::States>();
+        decoder_builder.with_decodable_type::<Self::Backup>();
         decoder_builder.build()
     }
 
@@ -449,11 +456,11 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         false
     }
 
-    async fn backup(&self) -> anyhow::Result<Vec<u8>> {
+    async fn backup(&self) -> anyhow::Result<Self::Backup> {
         anyhow::bail!("Backup not supported");
     }
 
-    async fn restore(&self, _snapshot: Option<&[u8]>) -> anyhow::Result<()> {
+    async fn restore(&self, _snapshot: Option<Self::Backup>) -> anyhow::Result<()> {
         anyhow::bail!("Backup not supported");
     }
 
@@ -624,9 +631,14 @@ pub trait IClientModule: Debug {
 
     fn supports_backup(&self) -> bool;
 
-    async fn backup(&self) -> anyhow::Result<Vec<u8>>;
+    async fn backup(&self, module_instance_id: ModuleInstanceId)
+        -> anyhow::Result<DynModuleBackup>;
 
-    async fn restore(&self, snapshot: Option<&[u8]>) -> anyhow::Result<()>;
+    async fn restore(
+        &self,
+        module_instance_id: ModuleInstanceId,
+        snapshot: Option<DynModuleBackup>,
+    ) -> anyhow::Result<()>;
 
     async fn wipe(
         &self,
@@ -716,12 +728,35 @@ where
         <T as ClientModule>::supports_backup(self)
     }
 
-    async fn backup(&self) -> anyhow::Result<Vec<u8>> {
-        <T as ClientModule>::backup(self).await
+    async fn backup(
+        &self,
+        module_instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<DynModuleBackup> {
+        Ok(DynModuleBackup::from_typed(
+            module_instance_id,
+            <T as ClientModule>::backup(self).await?,
+        ))
     }
 
-    async fn restore(&self, snapshot: Option<&[u8]>) -> anyhow::Result<()> {
-        <T as ClientModule>::restore(self, snapshot).await
+    async fn restore(
+        &self,
+        module_instance_id: ModuleInstanceId,
+        snapshot: Option<DynModuleBackup>,
+    ) -> anyhow::Result<()> {
+        let typed_snapshot = snapshot
+            .map(|snapshot| {
+                snapshot.as_any().downcast_ref().cloned().ok_or_else(|| {
+                    // TODO: should the error be caught earlier?
+                    anyhow!(
+                        "Snapshot is not for this module: expected instance {}, got instance {}",
+                        module_instance_id,
+                        snapshot.module_instance_id()
+                    )
+                })
+            })
+            .transpose()?;
+
+        <T as ClientModule>::restore(self, typed_snapshot).await
     }
 
     async fn wipe(

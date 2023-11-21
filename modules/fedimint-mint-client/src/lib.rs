@@ -399,6 +399,7 @@ impl Context for MintClientContext {}
 impl ClientModule for MintClientModule {
     type Init = MintClientInit;
     type Common = MintModuleTypes;
+    type Backup = EcashBackup;
     type ModuleStateMachineContext = MintClientContext;
     type States = MintClientStateMachines;
 
@@ -490,9 +491,8 @@ impl ClientModule for MintClientModule {
         true
     }
 
-    async fn backup(&self) -> anyhow::Result<Vec<u8>> {
-        let backup = self
-            .client_ctx
+    async fn backup(&self) -> anyhow::Result<EcashBackup> {
+        self.client_ctx
             .module_autocommit(
                 move |dbtx_ctx, _| {
                     Box::pin(async move { self.prepare_plaintext_ecash_backup(dbtx_ctx).await })
@@ -505,16 +505,15 @@ impl ClientModule for MintClientModule {
                 AutocommitError::CommitFailed { last_error, .. } => {
                     anyhow!("Commit to DB failed: {last_error}")
                 }
-            })?;
-
-        Ok(backup.consensus_encode_to_vec()?)
+            })
     }
 
-    async fn restore(&self, snapshot: Option<&[u8]>) -> anyhow::Result<()> {
+    async fn restore(&self, snapshot: Option<EcashBackup>) -> anyhow::Result<()> {
         self.client_ctx
             .module_autocommit(
                 move |dbtx_ctx, _| {
-                    Box::pin(async move { self.restore_inner(dbtx_ctx, snapshot).await })
+                    let snapshot_inner = snapshot.clone();
+                    Box::pin(async move { self.restore_inner(dbtx_ctx, snapshot_inner).await })
                 },
                 None,
             )
@@ -1306,7 +1305,7 @@ impl MintClientModule {
     async fn restore_inner(
         &self,
         dbtx_ctx: &'_ mut ClientDbTxContext<'_, '_, Self>,
-        snapshot: Option<&[u8]>,
+        maybe_snapshot: Option<EcashBackup>,
     ) -> anyhow::Result<()> {
         if !Self::get_all_spendable_notes(&mut dbtx_ctx.module_dbtx())
             .await
@@ -1327,10 +1326,7 @@ impl MintClientModule {
             bail!("Found existing active state machines. Mint module recovery must be started on an empty state.")
         }
 
-        let snapshot = snapshot
-            .map(|mut s| EcashBackup::consensus_decode(&mut s, &Default::default()))
-            .transpose()?
-            .unwrap_or(EcashBackup::new_empty());
+        let snapshot = maybe_snapshot.unwrap_or(EcashBackup::new_empty());
 
         let current_session_count = self.client_ctx.global_api().session_count().await?;
         let state = MintRestoreInProgressState::from_backup(

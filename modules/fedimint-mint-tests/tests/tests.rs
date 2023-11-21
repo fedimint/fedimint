@@ -1,3 +1,6 @@
+use std::io::Cursor;
+
+use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -41,6 +44,31 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
 
     assert_eq!(client1.get_balance().await, sats(250));
     assert_eq!(client2.get_balance().await, sats(750));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn backup_encode_decode_roundtrip() -> anyhow::Result<()> {
+    // Print notes for client1
+    let fed = fixtures().new_fed().await;
+    let (client1, _client2) = fed.two_clients().await;
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
+    let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
+    client1.await_primary_module_output(op, outpoint).await?;
+
+    let backup = client1.create_backup(Metadata::empty()).await?;
+
+    let backup_bin =
+        fedimint_core::encoding::Encodable::consensus_encode_to_vec(&backup).expect("encode");
+
+    let backup_decoded: ClientBackup = fedimint_core::encoding::Decodable::consensus_decode(
+        &mut Cursor::new(&backup_bin),
+        client1.decoders(),
+    )
+    .expect("decode");
+
+    assert_eq!(backup, backup_decoded);
+
     Ok(())
 }
 
