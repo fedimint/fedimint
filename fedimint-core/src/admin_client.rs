@@ -17,7 +17,7 @@ use crate::endpoint_constants::{
     CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
     RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
     SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
-    STATUS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
+    STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
 };
 use crate::module::{ApiAuth, ApiRequestErased};
 use crate::PeerId;
@@ -146,6 +146,19 @@ impl WsAdminClient {
     ) -> FederationResult<BTreeMap<PeerId, sha256::Hash>> {
         self.request(
             VERIFY_CONFIG_HASH_ENDPOINT,
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .await
+    }
+
+    /// Updates local state and notify leader that we have verified configs.
+    /// This allows for a synchronization point, before we start consensus.
+    pub async fn verified_configs(
+        &self,
+        auth: ApiAuth,
+    ) -> FederationResult<BTreeMap<PeerId, sha256::Hash>> {
+        self.request(
+            VERIFIED_CONFIGS_ENDPOINT,
             ApiRequestErased::default().with_auth(auth),
         )
         .await

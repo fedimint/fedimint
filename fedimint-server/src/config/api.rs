@@ -892,6 +892,7 @@ mod tests {
     };
     use fedimint_dummy_server::DummyInit;
     use fedimint_logging::TracingSetup;
+    use fedimint_portalloc::port_alloc;
     use fedimint_testing::fixtures::test_dir;
     use futures::future::join_all;
     use itertools::Itertools;
@@ -1092,9 +1093,7 @@ mod tests {
     async fn test_config_api() {
         let _ = TracingSetup::default().init();
         let (data_dir, _maybe_tmp_dir_guard) = test_dir("test-config-api");
-
-        // TODO: Choose port in common way with `fedimint_env`
-        let base_port = 18103;
+        let base_port = port_alloc(1).unwrap();
 
         // let mut join_handles = vec![];
         let mut apis = vec![];
@@ -1326,6 +1325,11 @@ mod tests {
             assert_eq!(dummy.consensus.tx_fee, leader_amount);
             assert_eq!(dummy.local.example, peer.name);
             assert_eq!(cfg.consensus.meta["\"test\""], leader_name);
+        }
+
+        // set verified configs
+        for peer in all_peers.iter() {
+            peer.client.verified_configs(peer.auth.clone()).await.ok();
         }
 
         // start consensus

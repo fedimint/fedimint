@@ -58,6 +58,7 @@ tempfile = "3.4.0"
 fedimint-dummy-common = { path = "../modules/fedimint-dummy-common" }
 fedimint-dummy-server = { path = "../modules/fedimint-dummy-server" }
 fedimint-testing = { path = "../fedimint-testing" }
+fedimint-portalloc = { path = "../utils/portalloc" }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
 
 [build-dependencies]
