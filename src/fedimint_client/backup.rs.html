@@ -341,16 +341,6 @@
 <a href="#341" id="341">341</a>
 <a href="#342" id="342">342</a>
 <a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
-<a href="#345" id="345">345</a>
-<a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a>
-<a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
-<a href="#352" id="352">352</a>
-<a href="#353" id="353">353</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Reverse;
 <span class="kw">use </span>std::collections::BTreeMap;
 
@@ -605,7 +595,6 @@
             .map(|b| b.metadata.clone())
             .unwrap_or_else(Metadata::empty);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>;
         <span class="kw">for </span>(id, kind, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             <span class="kw">if </span>!module.supports_backup() {
                 <span class="kw">continue</span>;
@@ -618,18 +607,9 @@
                 module_id = id,
                 <span class="string">&quot;Starting recovery from backup for module&quot;
             </span>);
-            module
-                .restore(
-                    <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
-                    id,
-                    <span class="self">self</span>.executor.clone(),
-                    <span class="self">self</span>.api.clone(),
-                    module_backup.map(Vec::as_slice),
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+            module.restore(module_backup.map(Vec::as_slice)).<span class="kw">await</span><span class="question-mark">?</span>;
         }
 
-        dbtx.commit_tx().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(metadata)
     }
 

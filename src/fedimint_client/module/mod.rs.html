@@ -813,18 +813,6 @@
 <a href="#813" id="813">813</a>
 <a href="#814" id="814">814</a>
 <a href="#815" id="815">815</a>
-<a href="#816" id="816">816</a>
-<a href="#817" id="817">817</a>
-<a href="#818" id="818">818</a>
-<a href="#819" id="819">819</a>
-<a href="#820" id="820">820</a>
-<a href="#821" id="821">821</a>
-<a href="#822" id="822">822</a>
-<a href="#823" id="823">823</a>
-<a href="#824" id="824">824</a>
-<a href="#825" id="825">825</a>
-<a href="#826" id="826">826</a>
-<a href="#827" id="827">827</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
@@ -978,6 +966,18 @@
             .get()
             .operation_log()
             .add_operation_log_entry(<span class="self">self</span>.dbtx, operation_id, operation_type, operation_meta)
+            .<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>add_state_machines_dbtx(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        states: Vec&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
+    ) -&gt; AddStateMachinesResult {
+        <span class="self">self</span>.client
+            .client
+            .get()
+            .executor
+            .add_state_machines_dbtx(<span class="self">self</span>.dbtx, states)
             .<span class="kw">await
     </span>}
 }
@@ -1268,15 +1268,7 @@
         <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Backup not supported&quot;</span>);
     }
 
-    <span class="kw">async fn </span>restore(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="comment">// _dbtx: &amp;mut ModuleDatabaseTransaction&lt;&#39;_&gt;,
-        </span>_dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        _module_instance_id: ModuleInstanceId,
-        _executor: Executor&lt;DynGlobalClientContext&gt;,
-        _api: DynGlobalApi,
-        _snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>restore(<span class="kw-2">&amp;</span><span class="self">self</span>, _snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt;) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Backup not supported&quot;</span>);
     }
 
@@ -1449,15 +1441,7 @@
 
     <span class="kw">async fn </span>backup(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Vec&lt;u8&gt;&gt;;
 
-    <span class="kw">async fn </span>restore(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="comment">// dbtx: &amp;mut ModuleDatabaseTransaction&lt;&#39;_&gt;,
-        </span>dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        module_instance_id: ModuleInstanceId,
-        executor: Executor&lt;DynGlobalClientContext&gt;,
-        api: DynGlobalApi,
-        snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt;;
+    <span class="kw">async fn </span>restore(<span class="kw-2">&amp;</span><span class="self">self</span>, snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt;) -&gt; anyhow::Result&lt;()&gt;;
 
     <span class="kw">async fn </span>wipe(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1551,16 +1535,8 @@
         &lt;T <span class="kw">as </span>ClientModule&gt;::backup(<span class="self">self</span>).<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>restore(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="comment">// dbtx: &amp;mut ModuleDatabaseTransaction&lt;&#39;_&gt;,
-        </span>dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        module_instance_id: ModuleInstanceId,
-        executor: Executor&lt;DynGlobalClientContext&gt;,
-        api: DynGlobalApi,
-        snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt; {
-        &lt;T <span class="kw">as </span>ClientModule&gt;::restore(<span class="self">self</span>, dbtx, module_instance_id, executor, api, snapshot).<span class="kw">await
+    <span class="kw">async fn </span>restore(<span class="kw-2">&amp;</span><span class="self">self</span>, snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt;) -&gt; anyhow::Result&lt;()&gt; {
+        &lt;T <span class="kw">as </span>ClientModule&gt;::restore(<span class="self">self</span>, snapshot).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>wipe(
