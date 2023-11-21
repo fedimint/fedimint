@@ -1385,6 +1385,7 @@ dependencies = [
  "strum_macros",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-test",
 ]
@@ -5045,6 +5046,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

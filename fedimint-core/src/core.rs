@@ -12,6 +12,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::io::Read;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::{cmp, marker};
 
 use anyhow::anyhow;
 pub use bitcoin::KeyPair;
@@ -190,12 +191,71 @@ impl fmt::Display for DynUnknown {
 }
 
 /// A type that has a `Dyn*`, type erased version of itself
+///
+/// Use [`IntoDynNever`] in places where a given type will never
+/// actually be created, but something is needed to appease the
+/// type system.
 pub trait IntoDynInstance {
     /// The type erased version of the type implementing this trait
     type DynType: 'static;
 
     /// Convert `self` into its type-erased equivalent
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType;
+}
+
+enum Never {}
+
+/// Type that can be used as type-system placeholder for [`IntoDynInstance`]
+pub struct IntoDynNever<T> {
+    _phantom: marker::PhantomData<T>,
+    // you can't make that
+    _never: Never,
+}
+
+impl<T> cmp::PartialEq for IntoDynNever<T> {
+    fn eq(&self, _: &Self) -> bool {
+        unreachable!()
+    }
+}
+
+impl<T> cmp::Eq for IntoDynNever<T> {}
+
+impl<T> fmt::Debug for IntoDynNever<T> {
+    fn fmt(&self, _: &mut Formatter<'_>) -> fmt::Result {
+        unreachable!()
+    }
+}
+
+impl<T> Clone for IntoDynNever<T> {
+    fn clone(&self) -> Self {
+        unreachable!()
+    }
+}
+
+impl<T> Encodable for IntoDynNever<T> {
+    fn consensus_encode<W: std::io::Write>(&self, _: &mut W) -> Result<usize, std::io::Error> {
+        unreachable!()
+    }
+}
+
+impl<T> Decodable for IntoDynNever<T> {
+    fn consensus_decode<R: std::io::Read>(
+        _: &mut R,
+        _: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        unreachable!()
+    }
+}
+
+impl<T> IntoDynInstance for IntoDynNever<T>
+where
+    T: 'static,
+{
+    type DynType = T;
+
+    fn into_dyn(self, _instance_id: ModuleInstanceId) -> Self::DynType {
+        unreachable!()
+    }
 }
 
 type DecodeFn = for<'a> fn(
