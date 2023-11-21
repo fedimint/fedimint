@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -19,10 +20,10 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
-    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, RUN_DKG_ENDPOINT,
-    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
-    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
-    VERIFY_CONFIG_HASH_ENDPOINT,
+    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
+    RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
+    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
+    STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
 };
 use fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
@@ -35,7 +36,9 @@ use tokio::sync::mpsc::Sender;
 use tokio_rustls::rustls;
 use tracing::{error, info};
 
-use crate::config::io::{read_server_config, write_server_config, PLAINTEXT_PASSWORD, SALT_FILE};
+use crate::config::io::{
+    read_server_config, write_server_config, CONFIG_STAGING_DIR, PLAINTEXT_PASSWORD, SALT_FILE,
+};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use crate::net::peers::DelayCalculator;
 use crate::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
@@ -281,7 +284,7 @@ impl ConfigGenApi {
                     let mut state = self_clone.state.lock().expect("lock poisoned");
                     match config {
                         Ok(config) => {
-                            self_clone.write_configs(&config, &state)?;
+                            self_clone.stage_configs(&config, &state)?;
                             state.status = ServerStatus::VerifyingConfigs;
                             state.config = Some(config);
                             info!(
@@ -325,20 +328,61 @@ impl ConfigGenApi {
         Ok(get_verification_hashes(&config))
     }
 
-    /// Writes the configs to disk after they are generated
-    fn write_configs(&self, config: &ServerConfig, state: &ConfigGenState) -> ApiResult<()> {
+    /// Writes the configs to a staging directory disk after they are generated
+    fn stage_configs(&self, config: &ServerConfig, state: &ConfigGenState) -> ApiResult<()> {
+        let cfg_staging_dir = self.data_dir.join(CONFIG_STAGING_DIR);
+        fs::create_dir_all(&cfg_staging_dir)
+            .map_err(|e| ApiError::server_error(format!("Unable to modify data dir {e:?}")))?;
+
         let auth = config.private.api_auth.0.clone();
         let io_error = |e| ApiError::server_error(format!("Unable to write to data dir {e:?}"));
+
         // TODO: Make writing password optional
-        write_new(self.data_dir.join(PLAINTEXT_PASSWORD), &auth).map_err(io_error)?;
-        write_new(self.data_dir.join(SALT_FILE), random_salt()).map_err(io_error)?;
-        write_server_config(
-            config,
-            self.data_dir.clone(),
-            &auth,
-            &state.settings.registry,
-        )
-        .map_err(|e| ApiError::server_error(format!("Unable to encrypt configs {e:?}")))
+        write_new(cfg_staging_dir.join(PLAINTEXT_PASSWORD), &auth).map_err(io_error)?;
+        write_new(cfg_staging_dir.join(SALT_FILE), random_salt()).map_err(io_error)?;
+        write_server_config(config, cfg_staging_dir, &auth, &state.settings.registry)
+            .map_err(|e| ApiError::server_error(format!("Unable to encrypt configs {e:?}")))
+    }
+
+    /// Moves configuration artifacts from a staging directory to a permanent
+    /// data directory.
+    fn persist_staged_configs(&self, cfg_staging_dir: &PathBuf) -> ApiResult<()> {
+        let files = fs::read_dir(cfg_staging_dir).map_err(|e| {
+            ApiError::server_error(format!("Unable to read config staging dir {e:?}"))
+        })?;
+
+        for file_result in files {
+            let file = file_result.map_err(|e| {
+                ApiError::server_error(format!("Unable to read file in config staging dir {e:?}"))
+            })?;
+            let path = file.path();
+            let filename = path
+                .file_name()
+                .ok_or(ApiError::server_error(
+                    "Failed to get file name".to_string(),
+                ))?
+                .to_str()
+                .ok_or(ApiError::server_error(
+                    "Failed to convert file name to string".to_string(),
+                ))?;
+
+            // TODO: https://github.com/fedimint/fedimint/issues/3692
+
+            let dest = self.data_dir.join(filename);
+            fs::rename(&path, &dest)
+                .map_err(|e| ApiError::server_error(format!("Unable to modify data dir {e:?}")))?;
+        }
+
+        Ok(())
+    }
+
+    fn remove_staged_configs(&self, cfg_staging_dir: &PathBuf) -> ApiResult<()> {
+        if cfg_staging_dir.exists() {
+            fs::remove_dir_all(cfg_staging_dir)
+                .map_err(|e| ApiError::server_error(format!("Unable to modify data dir {e:?}")))
+        } else {
+            Ok(())
+        }
     }
 
     /// We have verified all our peer configs
@@ -368,6 +412,12 @@ impl ConfigGenApi {
     /// Will force shut down the config gen API so the consensus API can start.
     /// Removes the upgrade flag when called.
     pub async fn start_consensus(&self, auth: ApiAuth) -> ApiResult<()> {
+        let cfg_staging_dir = self.data_dir.join(CONFIG_STAGING_DIR);
+        if cfg_staging_dir.exists() {
+            self.persist_staged_configs(&cfg_staging_dir)?;
+            self.remove_staged_configs(&cfg_staging_dir)?;
+        }
+
         let cfg = read_server_config(&auth.0, self.data_dir.clone())
             .map_err(|e| ApiError::bad_request(format!("Unable to decrypt configs {e:?}")))?;
 
@@ -383,6 +433,99 @@ impl ConfigGenApi {
 
     fn bad_request<T>(msg: &str) -> ApiResult<T> {
         Err(ApiError::bad_request(msg.to_string()))
+    }
+
+    pub async fn restart_federation_setup(&self) -> ApiResult<()> {
+        let leader = {
+            let expected_status = [
+                ServerStatus::SharingConfigGenParams,
+                ServerStatus::ReadyForConfigGen,
+                ServerStatus::ConfigGenFailed,
+                ServerStatus::VerifyingConfigs,
+                ServerStatus::VerifiedConfigs,
+            ];
+            let mut state = self.require_any_status(&expected_status)?;
+
+            let cfg_staging_dir = self.data_dir.join(CONFIG_STAGING_DIR);
+            self.remove_staged_configs(&cfg_staging_dir)?;
+
+            state.status = ServerStatus::SetupRestarted;
+            info!(
+                target: fedimint_logging::LOG_NET_PEER_DKG,
+                "Update config gen status to 'Setup restarted'"
+            );
+            // Create a WSClient for the leader
+            state
+                .local
+                .clone()
+                .and_then(|local| local.leader_api_url.map(WsAdminClient::new))
+        };
+
+        self.update_leader().await?;
+
+        // Followers wait for leader to signal that all peers have restarted setup
+        // The leader will signal this by setting it's status to AwaitingPassword
+        let self_clone = self.clone();
+        let mut sub_group = self.task_group.make_subgroup().await;
+        sub_group
+            .spawn("restart", move |_handle| async move {
+                if let Some(client) = leader {
+                    self_clone.await_leader_restart(client).await?;
+                } else {
+                    self_clone.await_peer_restart().await;
+                }
+                // Progress status to AwaitingPassword
+                {
+                    let mut state = self_clone.state.lock().expect("lock poisoned");
+                    state.reset();
+                }
+                self_clone.update_leader().await
+            })
+            .await;
+
+        Ok(())
+    }
+
+    // Followers wait for leader to signal that all peers have restarted setup
+    async fn await_leader_restart(&self, client: WsAdminClient) -> ApiResult<()> {
+        let mut retries = 0;
+        loop {
+            match client.status().await {
+                Ok(status) => {
+                    if status.server == ServerStatus::AwaitingPassword
+                        || status.server == ServerStatus::SharingConfigGenParams
+                    {
+                        break Ok(());
+                    }
+                }
+                Err(_) => {
+                    if retries > 3 {
+                        return Err(ApiError::not_found(
+                            "Unable to connect to the leader".to_string(),
+                        ));
+                    }
+                    retries += 1;
+                }
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+    }
+
+    // Leader waits for all peers to restart setup,
+    async fn await_peer_restart(&self) {
+        loop {
+            {
+                let state = self.state.lock().expect("lock poisoned");
+                let peers = state.peers.clone();
+                if peers
+                    .values()
+                    .all(|peer| peer.status == Some(ServerStatus::SetupRestarted))
+                {
+                    break;
+                }
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
     }
 }
 
@@ -571,6 +714,20 @@ impl ConfigGenState {
 
         Ok(ConfigGenParams { local, consensus })
     }
+
+    fn reset(&mut self) {
+        self.config = None;
+        self.peers = Default::default();
+        self.auth = None;
+        self.requested_params = None;
+        self.status = ServerStatus::AwaitingPassword;
+        self.local = None;
+
+        info!(
+            target: fedimint_logging::LOG_NET_PEER_DKG,
+            "Reset config gen state"
+        );
+    }
 }
 
 #[async_trait]
@@ -700,6 +857,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             async |_config: &ConfigGenApi, context, _v: ()| -> () {
                 check_auth(context)?;
                 Ok(())
+            }
+        },
+        api_endpoint! {
+            RESTART_FEDERATION_SETUP_ENDPOINT,
+            async |config: &ConfigGenApi, context, _v: ()| -> () {
+                check_auth(context)?;
+                config.restart_federation_setup().await
             }
         },
     ]

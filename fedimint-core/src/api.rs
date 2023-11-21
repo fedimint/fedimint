@@ -993,6 +993,9 @@ pub enum ServerStatus {
     VerifiedConfigs,
     /// Consensus is running
     ConsensusRunning,
+    /// Restarted setup. All peers need to sync on this state before continuing
+    /// to `SharingConfigGenParams`
+    SetupRestarted,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
