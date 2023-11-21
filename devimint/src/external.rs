@@ -50,15 +50,31 @@ impl Bitcoind {
         debug!("Parsed FM_BITCOIN_RPC_URL: {:?}", &url);
         let (host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(&url)?;
         debug!("bitcoind host: {:?}, auth: {:?}", &host, auth);
-        let client = Arc::new(
-            bitcoincore_rpc::Client::new(&host, auth).context("Failed to connect to bitcoind")?,
-        );
+        let client =
+            Arc::new(Self::new_bitcoin_rpc(&host, auth).context("Failed to connect to bitcoind")?);
 
         Self::init(&client).await?;
         Ok(Self {
             _process: process,
             client,
         })
+    }
+
+    fn new_bitcoin_rpc(
+        url: &str,
+        auth: bitcoincore_rpc::Auth,
+    ) -> anyhow::Result<bitcoincore_rpc::Client> {
+        // The default (15s) is too low for some test environments
+        const RPC_TIMEOUT: Duration = Duration::from_secs(45);
+        let mut builder = bitcoincore_rpc::jsonrpc::simple_http::Builder::new()
+            .url(url)?
+            .timeout(RPC_TIMEOUT);
+        let (user, pass) = auth.get_user_pass()?;
+        if let Some(user) = user {
+            builder = builder.auth(user, pass);
+        }
+        let client = bitcoincore_rpc::jsonrpc::Client::with_transport(builder.build());
+        Ok(bitcoincore_rpc::Client::from_jsonrpc(client))
     }
 
     pub(crate) async fn init(client: &bitcoincore_rpc::Client) -> Result<()> {
