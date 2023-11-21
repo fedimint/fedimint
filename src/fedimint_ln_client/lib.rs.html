@@ -1497,6 +1497,8 @@
 <a href="#1497" id="1497">1497</a>
 <a href="#1498" id="1498">1498</a>
 <a href="#1499" id="1499">1499</a>
+<a href="#1500" id="1500">1500</a>
+<a href="#1501" id="1501">1501</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -1515,6 +1517,7 @@
 <span class="kw">use </span>db::{DbKeyPrefix, LightningGatewayKey, PaymentResult, PaymentResultKey};
 <span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
+<span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
@@ -1830,6 +1833,7 @@
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>LightningClientModule {
     <span class="kw">type </span>Init = LightningClientInit;
     <span class="kw">type </span>Common = LightningModuleTypes;
+    <span class="kw">type </span>Backup = NoModuleBackup;
     <span class="kw">type </span>ModuleStateMachineContext = LightningClientContext;
     <span class="kw">type </span>States = LightningClientStateMachines;
 

@@ -686,6 +686,8 @@
 <a href="#686" id="686">686</a>
 <a href="#687" id="687">687</a>
 <a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">mod </span>client_db;
@@ -703,6 +705,7 @@
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
+<span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
@@ -889,6 +892,7 @@
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>WalletClientModule {
     <span class="kw">type </span>Init = WalletClientInit;
     <span class="kw">type </span>Common = WalletModuleTypes;
+    <span class="kw">type </span>Backup = NoModuleBackup;
     <span class="kw">type </span>ModuleStateMachineContext = WalletClientContext;
     <span class="kw">type </span>States = WalletClientStates;
 

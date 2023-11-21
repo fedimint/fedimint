@@ -1082,7 +1082,7 @@
                 <span class="kw">let </span>val = <span class="kw">match </span>modules.get(module_instance_id) {
                     <span class="prelude-val">Some</span>(decoder) =&gt; {
                         <span class="kw">let </span>total_len_u64 = u64::consensus_decode(reader, modules)<span class="question-mark">?</span>;
-                        <span class="kw">let </span><span class="kw-2">mut </span>reader = reader.take(total_len_u64);
+                        <span class="kw">let </span><span class="kw-2">mut </span>reader = std::io::Read::take(reader, total_len_u64);
                         <span class="kw">let </span>v = decoder.decode(<span class="kw-2">&amp;mut </span>reader, module_instance_id, modules)<span class="question-mark">?</span>;
 
                         <span class="kw">if </span>reader.limit() != <span class="number">0 </span>{

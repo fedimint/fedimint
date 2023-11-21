@@ -370,6 +370,8 @@
 <a href="#370" id="370">370</a>
 <a href="#371" id="371">371</a>
 <a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -378,6 +380,7 @@
 <span class="kw">use </span>common::broken_fed_key_pair;
 <span class="kw">use </span>db::DbKeyPrefix;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
+<span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::sm::{Context, ModuleNotifier};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
@@ -429,6 +432,7 @@
 </span><span class="kw">impl </span>ClientModule <span class="kw">for </span>DummyClientModule {
     <span class="kw">type </span>Init = DummyClientInit;
     <span class="kw">type </span>Common = DummyModuleTypes;
+    <span class="kw">type </span>Backup = NoModuleBackup;
     <span class="kw">type </span>ModuleStateMachineContext = DummyClientContext;
     <span class="kw">type </span>States = DummyStateMachine;
 

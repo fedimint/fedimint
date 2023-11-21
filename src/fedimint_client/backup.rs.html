@@ -341,15 +341,46 @@
 <a href="#341" id="341">341</a>
 <a href="#342" id="342">342</a>
 <a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Reverse;
 <span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::io::{Cursor, Error, Read, Write};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::core::backup::{BackupRequest, SignedBackupRequest};
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
-<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
 <span class="kw">use </span>fedimint_logging::{LOG_CLIENT, LOG_CLIENT_BACKUP, LOG_CLIENT_RECOVERY};
@@ -359,6 +390,7 @@
 
 <span class="kw">use </span><span class="kw">super</span>::Client;
 <span class="kw">use </span><span class="kw">crate</span>::get_decoded_client_secret;
+<span class="kw">use </span><span class="kw">crate</span>::module::recovery::DynModuleBackup;
 <span class="kw">use </span><span class="kw">crate</span>::secret::DeriveableSecretClientExt;
 
 <span class="doccomment">/// Backup metadata
@@ -404,14 +436,15 @@
 }
 
 <span class="doccomment">/// Client state backup
-</span><span class="attr">#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
+</span><span class="attr">#[derive(PartialEq, Eq, Debug)]
 </span><span class="kw">pub struct </span>ClientBackup {
     <span class="doccomment">/// Session count taken right before taking the backup
     </span>session_count: u64,
     <span class="doccomment">/// Application metadata
     </span>metadata: Metadata,
-    <span class="doccomment">/// Module specific-backup (if supported)
-    </span>modules: BTreeMap&lt;ModuleInstanceId, Vec&lt;u8&gt;&gt;,
+    <span class="comment">// TODO: remove redundant ModuleInstanceId
+    </span><span class="doccomment">/// Module specific-backup (if supported)
+    </span>modules: BTreeMap&lt;ModuleInstanceId, DynModuleBackup&gt;,
 }
 
 <span class="kw">impl </span>ClientBackup {
@@ -421,31 +454,51 @@
         ((len.saturating_sub(<span class="number">1</span>) / padding_alignment) + <span class="number">1</span>) * padding_alignment
     }
 
-    <span class="doccomment">/// Encode `self` to a padded (but still plaintext) message
-    </span><span class="kw">fn </span>encode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="self">self</span>.consensus_encode_to_vec()<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>padding_size = <span class="self">Self</span>::get_alignment_size(bytes.len()) - bytes.len();
-
-        bytes.extend(std::iter::repeat(<span class="number">0u8</span>).take(padding_size));
-
-        <span class="prelude-val">Ok</span>(bytes)
-    }
-
-    <span class="doccomment">/// Decode from a plaintexet (possibly aligned) message
-    </span><span class="kw">fn </span>decode(msg: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="prelude-val">Ok</span>(Decodable::consensus_decode(
-            <span class="kw-2">&amp;mut &amp;</span>msg[..],
-            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-        )<span class="question-mark">?</span>)
-    }
-
     <span class="doccomment">/// Encrypt with a key and turn into [`EncryptedClientBackup`]
     </span><span class="kw">pub fn </span>encrypt_to(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>fedimint_aead::LessSafeKey) -&gt; <span class="prelude-ty">Result</span>&lt;EncryptedClientBackup&gt; {
-        <span class="kw">let </span>encoded = <span class="self">self</span>.encode()<span class="question-mark">?</span>;
+        <span class="kw">let </span>encoded = Encodable::consensus_encode_to_vec(<span class="self">self</span>)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>encrypted = fedimint_aead::encrypt(encoded, key)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(EncryptedClientBackup(encrypted))
+    }
+}
+
+<span class="kw">impl </span>Encodable <span class="kw">for </span>ClientBackup {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
+        len += <span class="self">self</span>.session_count.consensus_encode(writer)<span class="question-mark">?</span>;
+        len += <span class="self">self</span>.metadata.consensus_encode(writer)<span class="question-mark">?</span>;
+        len += <span class="self">self</span>.modules.consensus_encode(writer)<span class="question-mark">?</span>;
+
+        <span class="comment">// FIXME: this still leaks some information about the backup size if the padding
+        // is so short that its length is encoded as 1 byte instead of 3.
+        </span><span class="kw">let </span>estimated_len = len + <span class="number">3</span>;
+
+        <span class="comment">// Hide small changes in backup size for privacy
+        </span><span class="kw">let </span>alignment_size = <span class="self">Self</span>::get_alignment_size(estimated_len); <span class="comment">// +3 for most likely padding len len
+        </span><span class="kw">let </span>padding = <span class="macro">vec!</span>[<span class="number">0u8</span>; alignment_size - estimated_len];
+        len += padding.consensus_encode(writer)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(len)
+    }
+}
+
+<span class="kw">impl </span>Decodable <span class="kw">for </span>ClientBackup {
+    <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
+        r: <span class="kw-2">&amp;mut </span>R,
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; std::result::Result&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span>session_count = u64::consensus_decode(r, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>metadata = Metadata::consensus_decode(r, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>module_backups =
+            BTreeMap::&lt;ModuleInstanceId, DynModuleBackup&gt;::consensus_decode(r, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>_padding = Vec::&lt;u8&gt;::consensus_decode(r, modules)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            session_count,
+            metadata,
+            modules: module_backups,
+        })
     }
 }
 
@@ -453,9 +506,16 @@
 </span><span class="kw">pub struct </span>EncryptedClientBackup(Vec&lt;u8&gt;);
 
 <span class="kw">impl </span>EncryptedClientBackup {
-    <span class="kw">pub fn </span>decrypt_with(<span class="kw-2">mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>fedimint_aead::LessSafeKey) -&gt; <span class="prelude-ty">Result</span>&lt;ClientBackup&gt; {
+    <span class="kw">pub fn </span>decrypt_with(
+        <span class="kw-2">mut </span><span class="self">self</span>,
+        key: <span class="kw-2">&amp;</span>fedimint_aead::LessSafeKey,
+        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientBackup&gt; {
         <span class="kw">let </span>decrypted = fedimint_aead::decrypt(<span class="kw-2">&amp;mut </span><span class="self">self</span>.<span class="number">0</span>, key)<span class="question-mark">?</span>;
-        ClientBackup::decode(decrypted)
+        <span class="prelude-val">Ok</span>(ClientBackup::consensus_decode(
+            <span class="kw-2">&amp;mut </span>Cursor::new(decrypted),
+            decoders,
+        )<span class="question-mark">?</span>)
     }
 
     <span class="kw">pub fn </span>into_backup_request(<span class="self">self</span>, keypair: <span class="kw-2">&amp;</span>KeyPair) -&gt; <span class="prelude-ty">Result</span>&lt;SignedBackupRequest&gt; {
@@ -486,9 +546,9 @@
         <span class="kw">for </span>(id, kind, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             <span class="macro">debug!</span>(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, <span class="string">&quot;Preparing module backup&quot;</span>);
             <span class="kw">if </span>module.supports_backup() {
-                <span class="kw">let </span>backup = module.backup().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>backup = module.backup(id).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="macro">info!</span>(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, size=backup.len(), <span class="string">&quot;Prepared module backup&quot;</span>);
+                <span class="macro">info!</span>(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, <span class="string">&quot;Prepared module backup&quot;</span>);
                 modules.insert(id, backup);
             } <span class="kw">else </span>{
                 <span class="macro">info!</span>(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, <span class="string">&quot;Module does not support backup&quot;</span>);
@@ -599,7 +659,7 @@
             <span class="kw">if </span>!module.supports_backup() {
                 <span class="kw">continue</span>;
             }
-            <span class="kw">let </span>module_backup = backup.as_ref().and_then(|b| b.modules.get(<span class="kw-2">&amp;</span>id));
+            <span class="kw">let </span>module_backup = backup.as_ref().and_then(|b| b.modules.get(<span class="kw-2">&amp;</span>id)).cloned();
 
             <span class="macro">info!</span>(
                 target: LOG_CLIENT_RECOVERY,
@@ -607,7 +667,7 @@
                 module_id = id,
                 <span class="string">&quot;Starting recovery from backup for module&quot;
             </span>);
-            module.restore(module_backup.map(Vec::as_slice)).<span class="kw">await</span><span class="question-mark">?</span>;
+            module.restore(id, module_backup).<span class="kw">await</span><span class="question-mark">?</span>;
         }
 
         <span class="prelude-val">Ok</span>(metadata)
@@ -622,7 +682,7 @@
             </span>.into_iter()
             .filter_map(|backup| {
                 <span class="kw">match </span>EncryptedClientBackup(backup.data)
-                    .decrypt_with(<span class="kw-2">&amp;</span><span class="self">self</span>.get_derived_backup_encryption_key())
+                    .decrypt_with(<span class="kw-2">&amp;</span><span class="self">self</span>.get_derived_backup_encryption_key(), <span class="self">self</span>.decoders())
                 {
                     <span class="prelude-val">Ok</span>(valid) =&gt; <span class="prelude-val">Some</span>(valid),
                     <span class="prelude-val">Err</span>(e) =&gt; {

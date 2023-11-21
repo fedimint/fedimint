@@ -749,6 +749,8 @@
 <a href="#749" id="749">749</a>
 <a href="#750" id="750">750</a>
 <a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -759,6 +761,7 @@
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
+<span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
@@ -964,6 +967,7 @@
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>GatewayClientModule {
     <span class="kw">type </span>Init = LightningClientInit;
     <span class="kw">type </span>Common = LightningModuleTypes;
+    <span class="kw">type </span>Backup = NoModuleBackup;
     <span class="kw">type </span>ModuleStateMachineContext = GatewayClientContext;
     <span class="kw">type </span>States = GatewayClientStateMachines;
 
