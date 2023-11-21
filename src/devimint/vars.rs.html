@@ -301,7 +301,7 @@
         <span class="comment">// clients
         </span>FM_LIGHTNING_CLI: String = <span class="macro">f!</span>(<span class="string">&quot;lightning-cli --network regtest --lightning-dir={}&quot;</span>, utf8(<span class="kw-2">&amp;</span>FM_CLN_DIR));
         FM_LNCLI: String = <span class="macro">f!</span>(<span class="string">&quot;lncli -n regtest --lnddir={} --rpcserver=localhost:{FM_PORT_LND_RPC}&quot;</span>, utf8(<span class="kw-2">&amp;</span>FM_LND_DIR));
-        FM_BTC_CLIENT: String = <span class="string">&quot;bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin&quot;</span>;
+        FM_BTC_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -datadir={}&quot;</span>, utf8(<span class="kw-2">&amp;</span>FM_BTC_DIR));
         FM_MINT_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;fedimint-cli --data-dir {}&quot;</span>, utf8(<span class="kw-2">&amp;</span>FM_DATA_DIR));
         FM_MINT_RPC_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;mint-rpc-client&quot;</span>);
         FM_GWCLI_CLN: String = <span class="macro">f!</span>(<span class="string">&quot;gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_CLN}/&quot;</span>);
