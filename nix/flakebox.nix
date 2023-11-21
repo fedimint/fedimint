@@ -360,6 +360,7 @@ rec {
   ciTestAll = craneLibTests.mkCargoDerivation {
     pname = "${commonCliTestArgs.pname}-all";
     cargoArtifacts = workspaceBuild;
+
     # One normal run, then if succeeded, modify the "always success test" to fail,
     # and make sure we detect it (happened too many times that we didn't).
     # Thanks to early termination, this should be all very quick, as we actually

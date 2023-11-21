@@ -76,10 +76,16 @@ impl<M, State> ModuleRegistry<M, State> {
         }
     }
 
+    /// Is registry empty?
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
     /// Return an iterator over all module data
     pub fn iter_modules(&self) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind, &M)> {
         self.inner.iter().map(|(id, (kind, m))| (*id, kind, m))
     }
+
     /// Return an iterator over all module data
     pub fn iter_modules_mut(
         &mut self,
@@ -87,6 +93,11 @@ impl<M, State> ModuleRegistry<M, State> {
         self.inner
             .iter_mut()
             .map(|(id, (kind, m))| (*id, &*kind, m))
+    }
+
+    /// Return an iterator over all module data
+    pub fn into_iter_modules(self) -> impl Iterator<Item = (ModuleInstanceId, ModuleKind, M)> {
+        self.inner.into_iter().map(|(id, (kind, m))| (id, kind, m))
     }
 
     /// Get module data by instance id

@@ -4,7 +4,7 @@ use std::io::{Cursor, Error, Read, Write};
 
 use anyhow::Result;
 use bitcoin::secp256k1;
-use fedimint_core::api::GlobalFederationApi;
+use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 use fedimint_core::core::backup::{BackupRequest, SignedBackupRequest};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -63,15 +63,15 @@ impl Metadata {
 }
 
 /// Client state backup
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct ClientBackup {
     /// Session count taken right before taking the backup
-    session_count: u64,
+    pub session_count: u64,
     /// Application metadata
-    metadata: Metadata,
+    pub metadata: Metadata,
     // TODO: remove redundant ModuleInstanceId
     /// Module specific-backup (if supported)
-    modules: BTreeMap<ModuleInstanceId, DynModuleBackup>,
+    pub modules: BTreeMap<ModuleInstanceId, DynModuleBackup>,
 }
 
 impl ClientBackup {
@@ -224,55 +224,27 @@ impl Client {
         Ok(())
     }
 
-    /// Restore client state from backup if provided or from scratch.
-    ///
-    /// This will restore (or initialize restoration process) in all sub-modules
-    /// that support it.
-    pub async fn restore_from_backup(&self, backup: Option<ClientBackup>) -> Result<Metadata> {
-        info!(target: LOG_CLIENT_RECOVERY, "Restoring from backup");
-        if backup.is_none() {
-            warn!(
-                target: LOG_CLIENT_RECOVERY,
-                id=%self.get_backup_id(),
-                "Existing backup not provided. Will attempt to restore from scratch. This might take a long time."
-            );
-        };
-
-        let metadata = backup
-            .as_ref()
-            .map(|b| b.metadata.clone())
-            .unwrap_or_else(Metadata::empty);
-
-        for (id, kind, module) in self.modules.iter_modules() {
-            if !module.supports_backup() {
-                continue;
-            }
-            let module_backup = backup.as_ref().and_then(|b| b.modules.get(&id)).cloned();
-
-            info!(
-                target: LOG_CLIENT_RECOVERY,
-                module_kind = %kind,
-                module_id = id,
-                "Starting recovery from backup for module"
-            );
-            module.restore(id, module_backup).await?;
-        }
-
-        Ok(metadata)
+    pub async fn download_backup_from_federation(&self) -> Result<Option<ClientBackup>> {
+        Self::download_backup_from_federation_static(&self.api, &self.root_secret(), &self.decoders)
+            .await
     }
 
     /// Download most recent valid backup found from the Federation
-    pub async fn download_backup_from_federation(&self) -> Result<Option<ClientBackup>> {
+    pub async fn download_backup_from_federation_static(
+        api: &DynGlobalApi,
+        root_secret: &DerivableSecret,
+        decoders: &ModuleDecoderRegistry,
+    ) -> Result<Option<ClientBackup>> {
         debug!(target: LOG_CLIENT, "Downloading backup from the federation");
-        let mut responses: Vec<_> = self
-            .api
-            .download_backup(&self.get_backup_id())
+        let mut responses: Vec<_> = api
+            .download_backup(&Client::get_backup_id_static(root_secret))
             .await?
             .into_iter()
             .filter_map(|backup| {
-                match EncryptedClientBackup(backup.data)
-                    .decrypt_with(&self.get_derived_backup_encryption_key(), self.decoders())
-                {
+                match EncryptedClientBackup(backup.data).decrypt_with(
+                    &Self::get_derived_backup_encryption_key_static(root_secret),
+                    decoders,
+                ) {
                     Ok(valid) => Some(valid),
                     Err(e) => {
                         warn!(
@@ -302,6 +274,9 @@ impl Client {
         self.get_derived_backup_signing_key().public_key()
     }
 
+    pub fn get_backup_id_static(root_secret: &DerivableSecret) -> secp256k1::PublicKey {
+        Self::get_derived_backup_signing_key_static(root_secret).public_key()
+    }
     /// Static version of [`Self::get_derived_backup_encryption_key`] for
     /// testing without creating whole `MintClient`
     fn get_derived_backup_encryption_key_static(

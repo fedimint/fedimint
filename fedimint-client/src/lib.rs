@@ -70,15 +70,18 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::ops::{self, Range};
+use std::pin::Pin;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure, Context};
 use async_stream::stream;
+use backup::ClientBackup;
 use db::{
     CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix,
-    ClientInviteCodeKey, ClientInviteCodeKeyPrefix, EncodedClientSecretKey,
+    ClientInitStateKey, ClientInviteCodeKey, ClientInviteCodeKeyPrefix, ClientModuleRecovery,
+    EncodedClientSecretKey, InitMode,
 };
 use fedimint_core::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,
@@ -104,13 +107,14 @@ use fedimint_core::task::{sleep, MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
-    TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
+    OutPoint, TransactionId,
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::LOG_CLIENT;
-use futures::StreamExt;
+use futures::{Future, StreamExt};
+use module::recovery::RecoveryProgress;
 use module::{DynClientModule, FinalClient};
 use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
@@ -118,10 +122,11 @@ use secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrat
 use thiserror::Error;
 #[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
+use tokio::sync::watch;
 use tracing::{debug, error, info, warn};
 
 use crate::backup::Metadata;
-use crate::db::OperationLogKey;
+use crate::db::{ClientMetadataKey, ClientModuleRecoveryState, InitState, OperationLogKey};
 use crate::module::init::{
     ClientModuleInit, ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
@@ -620,6 +625,8 @@ pub struct Client {
     root_secret: DerivableSecret,
     operation_log: OperationLog,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
+
+    task_group: TaskGroup,
     /// Number of [`ClientArc`] instances using this `Client`.
     ///
     /// The `Client` struct is both used for the client itself as well as
@@ -627,6 +634,10 @@ pub struct Client {
     /// cannot rely on the reference count of the `Arc<Client>` to
     /// determine if the client should shut down.
     client_count: AtomicUsize,
+
+    /// Updates about client recovery progress
+    client_recovery_progress_receiver:
+        watch::Receiver<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
 }
 
 impl Client {
@@ -1120,12 +1131,11 @@ impl Client {
     /// primary module will always be returned before any other modules (which
     /// themselves are ordered by their instance ID).
     pub fn get_first_instance(&self, module_kind: &ModuleKind) -> Option<ModuleInstanceId> {
-        if &self
+        if self
             .modules
             .get_with_kind(self.primary_module_instance)
-            .expect("must have primary module")
-            .0
-            == module_kind
+            .map(|(kind, _)| kind == module_kind)
+            .unwrap_or(false)
         {
             return Some(self.primary_module_instance);
         }
@@ -1356,6 +1366,191 @@ impl Client {
 
         Ok(common_api_versions)
     }
+
+    /// Get the client [`Metadata`]
+    pub async fn get_metadata(&self) -> Metadata {
+        self.db
+            .begin_transaction_nc()
+            .await
+            .get_value(&ClientMetadataKey)
+            .await
+            .unwrap_or_else(|| {
+                warn!("Missing existing metadata. This key should have been set on Client init");
+                Metadata::empty()
+            })
+    }
+
+    /// Set the client [`Metadata`]
+    pub async fn set_metadata(&self, metadata: &Metadata) {
+        self.db
+            .autocommit::<_, _, anyhow::Error>(
+                move |dbtx, _| {
+                    Box::pin(async move {
+                        Self::set_metadata_dbtx(dbtx, metadata).await;
+                        Ok(())
+                    })
+                },
+                None,
+            )
+            .await
+            .expect("Failed to autocommit metadata")
+    }
+
+    pub async fn has_pending_recoveries(&self) -> bool {
+        !self
+            .client_recovery_progress_receiver
+            .borrow()
+            .iter()
+            .any(|(_id, progress)| !progress.is_done())
+    }
+
+    /// Wait for all module recoveries to finish
+    ///
+    /// This will block until the recovery task is done with recoveries.
+    /// Returns success if all recovery tasks are complete (success case),
+    /// or an error if some modules could not complete the recovery at the time.
+    ///
+    /// A bit of a heavy approach.
+    pub async fn wait_for_all_recoveries(&self) -> anyhow::Result<()> {
+        let mut recovery_receiver = self.client_recovery_progress_receiver.clone();
+        recovery_receiver
+            .wait_for(|in_progress| {
+                !in_progress
+                    .iter()
+                    .any(|(_id, progress)| !progress.is_done())
+            })
+            .await
+            .context("Recovery task completed and update receiver disconnected, but some modules failed to recover")?;
+
+        Ok(())
+    }
+
+    pub async fn wait_for_module_kind_recovery(
+        &self,
+        module_kind: ModuleKind,
+    ) -> anyhow::Result<()> {
+        let mut recovery_receiver = self.client_recovery_progress_receiver.clone();
+        recovery_receiver
+            .wait_for(|in_progress| {
+                !in_progress
+                    .iter()
+                    .filter(|(module_instance_id, _progress)| {
+                        self.config.modules[module_instance_id].kind == module_kind
+                    })
+                    .any(|(_id, progress)| !progress.is_done())
+            })
+            .await
+            .context("Recovery task completed and update receiver disconnected, but the desired modules are still unavailable or failed to recover")?;
+
+        Ok(())
+    }
+
+    /// Set the client [`Metadata`]
+    pub async fn set_metadata_dbtx(dbtx: &mut DatabaseTransaction<'_>, metadata: &Metadata) {
+        dbtx.insert_new_entry(&ClientMetadataKey, metadata).await;
+    }
+
+    async fn spawn_module_recoveries_task(
+        &self,
+        recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
+        module_recoveries: BTreeMap<
+            ModuleInstanceId,
+            Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
+        >,
+        module_recovery_progress_receivers: BTreeMap<
+            ModuleInstanceId,
+            watch::Receiver<RecoveryProgress>,
+        >,
+    ) {
+        let db = self.db.clone();
+        self.task_group
+            .spawn("module recoveries", move |_task_handle| async move {
+                Self::run_module_recoveries_task(
+                    db,
+                    recovery_sender,
+                    module_recoveries,
+                    module_recovery_progress_receivers,
+                )
+                .await
+            })
+            .await;
+    }
+
+    async fn run_module_recoveries_task(
+        db: Database,
+        recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
+        module_recoveries: BTreeMap<
+            ModuleInstanceId,
+            Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
+        >,
+        module_recovery_progress_receivers: BTreeMap<
+            ModuleInstanceId,
+            watch::Receiver<RecoveryProgress>,
+        >,
+    ) {
+        let mut completed_stream = Vec::new();
+        let progress_stream = futures::stream::FuturesUnordered::new();
+
+        for (module_instance_id, f) in module_recoveries.into_iter() {
+            completed_stream.push(futures::stream::once(Box::pin(async move {
+                match f.await {
+                    Ok(_) => (module_instance_id, None),
+                    Err(err) => {
+                        warn!(%err, module_instance_id, "Module recovery failed");
+                        // a module recovery that failed reports and error and
+                        // just never finishes, so we don't need a separate state
+                        // for it
+                        futures::future::pending::<Option<RecoveryProgress>>().await;
+                        unreachable!()
+                    }
+                }
+            })));
+        }
+
+        for (module_instance_id, rx) in module_recovery_progress_receivers.into_iter() {
+            progress_stream.push(
+                tokio_stream::wrappers::WatchStream::new(rx)
+                    .fuse()
+                    .map(move |progress| (module_instance_id, Some(progress))),
+            );
+        }
+
+        let mut futures = futures::stream::select(
+            futures::stream::select_all(progress_stream),
+            futures::stream::select_all(completed_stream),
+        );
+
+        while let Some((module_instance_id, progress)) = futures.next().await {
+            let mut dbtx = db.begin_transaction().await;
+
+            let progress = if let Some(progress) = progress {
+                progress
+            } else {
+                recovery_sender
+                    .borrow()
+                    .get(&module_instance_id)
+                    .expect("existing progress must be present")
+                    .to_complete()
+            };
+
+            info!(
+                module_instance_id,
+                progress = format!("{}/{}", progress.complete, progress.total),
+                "Recovery progress"
+            );
+
+            dbtx.insert_entry(
+                &ClientModuleRecovery { module_instance_id },
+                &ClientModuleRecoveryState { progress },
+            )
+            .await;
+            dbtx.commit_tx().await;
+
+            recovery_sender.send_modify(|v| {
+                v.insert(module_instance_id, progress);
+            });
+        }
+    }
 }
 
 /// See [`Client::transaction_updates`]
@@ -1499,16 +1694,19 @@ impl ClientBuilder {
         Ok(config)
     }
 
-    pub async fn join(
+    async fn init(
         self,
         root_secret: DerivableSecret,
         config: ClientConfig,
         invite_code: InviteCode,
+        init_mode: InitMode,
     ) -> anyhow::Result<ClientArc> {
         if Client::is_initialized(&self.db).await {
             bail!("Client database already initialized")
         }
 
+        // Note: It's important all client initialization is performed as one big
+        // transaction to avoid half-initialized client state.
         {
             debug!(target: LOG_CLIENT, "Initializing client database");
             let mut dbtx = self.db.begin_transaction().await;
@@ -1523,6 +1721,17 @@ impl ClientBuilder {
             dbtx.insert_new_entry(&ClientInviteCodeKey {}, &invite_code)
                 .await;
 
+            let init_state = InitState::Pending(init_mode);
+            dbtx.insert_entry(&ClientInitStateKey, &init_state).await;
+
+            let metadata = init_state
+                .does_require_recovery()
+                .flatten()
+                .map(|s| s.metadata)
+                .unwrap_or(Metadata::empty());
+
+            dbtx.insert_new_entry(&ClientMetadataKey, &metadata).await;
+
             dbtx.commit_tx_result().await?;
         }
         let stopped = self.stopped;
@@ -1534,18 +1743,42 @@ impl ClientBuilder {
         Ok(client)
     }
 
+    pub async fn join(
+        self,
+        root_secret: DerivableSecret,
+        config: ClientConfig,
+        invite_code: InviteCode,
+    ) -> anyhow::Result<ClientArc> {
+        self.init(root_secret, config, invite_code, InitMode::Fresh)
+            .await
+    }
+
     pub async fn recover(
         self,
         root_secret: DerivableSecret,
         config: ClientConfig,
         invite_code: InviteCode,
-    ) -> anyhow::Result<(ClientArc, Metadata)> {
-        let client = Self::join(self, root_secret, config, invite_code).await?;
+    ) -> anyhow::Result<ClientArc> {
+        let api = DynGlobalApi::from(WsFederationApi::from_config(&config));
+        let snapshot = Client::download_backup_from_federation_static(
+            &api,
+            &Self::federation_root_secret(&root_secret, &config),
+            &self.decoders(&config),
+        )
+        .await?;
 
-        let backup = client.download_backup_from_federation().await?;
-        let metadata = client.restore_from_backup(backup).await?;
+        let client = self
+            .init(
+                root_secret,
+                config,
+                invite_code,
+                InitMode::Recover {
+                    snapshot: snapshot.clone(),
+                },
+            )
+            .await?;
 
-        Ok((client, metadata))
+        Ok(client)
     }
 
     pub async fn open(self, root_secret: DerivableSecret) -> anyhow::Result<ClientArc> {
@@ -1562,33 +1795,23 @@ impl ClientBuilder {
     }
 
     /// Build a [`Client`] but do not start the executor
-    pub async fn build_stopped(
+    async fn build_stopped(
         self,
         root_secret: DerivableSecret,
         config: ClientConfig,
     ) -> anyhow::Result<ClientArc> {
-        let mut decoders = client_decoders(
-            &self.module_inits,
-            config
-                .modules
-                .iter()
-                .map(|(module_instance, module_config)| (*module_instance, module_config.kind())),
-        )?;
-        decoders.register_module(
-            TRANSACTION_SUBMISSION_MODULE_INSTANCE,
-            ModuleKind::from_static_str("tx_submission"),
-            tx_submission_sm_decoder(),
-        );
+        let decoders = self.decoders(&config);
+        let config = Self::config_decoded(config, &decoders)?;
         let db = self.db.with_decoders(decoders.clone());
+        let api = DynGlobalApi::from(WsFederationApi::from_config(&config));
 
-        let config = config.clone().redecode_raw(&decoders)?;
+        let init_state = Self::load_init_state(&db).await;
 
         let primary_module_instance = self
             .primary_module_instance
             .ok_or(anyhow!("No primary module instance id was provided"))?;
 
         let notifier = Notifier::new(db.clone());
-        let api = DynGlobalApi::from(WsFederationApi::from_config(&config));
 
         let common_api_versions = Client::load_and_refresh_common_api_version_static(
             &config,
@@ -1598,53 +1821,153 @@ impl ClientBuilder {
         )
         .await?;
 
+        let mut module_recoveries: BTreeMap<
+            ModuleInstanceId,
+            Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
+        > = Default::default();
+        let mut module_recovery_progress_receivers: BTreeMap<
+            ModuleInstanceId,
+            watch::Receiver<RecoveryProgress>,
+        > = Default::default();
+
         let final_client = FinalClient::default();
 
-        // Re-derive client's root_secret using the federation ID. This eliminates the
-        // possibility of having the same client root_secret across multiple
-        // federations.
-        let root_secret = root_secret.federation_key(&config.global.federation_id());
+        let root_secret = Self::federation_root_secret(&root_secret, &config);
 
         let modules = {
             let mut modules = ClientModuleRegistry::default();
-            for (module_instance, module_config) in config.modules.clone() {
+            for (module_instance_id, module_config) in config.modules.clone() {
                 let kind = module_config.kind().clone();
-                let Some(module_init) = self.module_inits.get(&kind) else {
-                    warn!("Module kind {kind} of instance {module_instance} not found in module gens, skipping");
+                let Some(module_init) = self.module_inits.get(&kind).cloned() else {
+                    warn!("Module kind {kind} of instance {module_instance_id} not found in module gens, skipping");
                     continue;
                 };
 
-                let Some(&api_version) = common_api_versions.modules.get(&module_instance) else {
-                    warn!("Module kind {kind} of instance {module_instance} has not compatible api version, skipping");
+                let Some(&api_version) = common_api_versions.modules.get(&module_instance_id)
+                else {
+                    warn!("Module kind {kind} of instance {module_instance_id} has not compatible api version, skipping");
                     continue;
                 };
 
-                let module = module_init
-                    .init(
-                        final_client.clone(),
-                        config.global.federation_id(),
-                        module_config,
-                        db.clone(),
-                        module_instance,
-                        api_version,
-                        // This is a divergence from the legacy client, where the child secret
-                        // keys were derived using *module kind*-specific derivation paths.
-                        // Since the new client has to support multiple, segregated modules of
-                        // the same kind we have to use the instance id instead.
-                        root_secret.derive_module_secret(module_instance),
-                        notifier.clone(),
-                        api.clone(),
-                    )
-                    .await?;
+                // since the exact logic of when to start recovery is a bit gnarly,
+                // the recovery call is extracted here.
+                let start_module_recover_fn =
+                    |snapshot: Option<ClientBackup>, progress: RecoveryProgress| {
+                        let config = config.clone();
+                        let module_config = module_config.clone();
+                        let db = db.clone();
+                        let kind = kind.clone();
+                        let notifier = notifier.clone();
+                        let api = api.clone();
+                        let root_secret = root_secret.clone();
+                        let final_client = final_client.clone();
+                        let (progress_tx, progress_rx) = tokio::sync::watch::channel(progress);
+                        let module_init = module_init.clone();
+                        (
+                            Box::pin(async move {
+                                module_init
+                                        .recover(
+                                            final_client.clone(),
+                                            config.global.federation_id(),
+                                            module_config.clone(),
+                                            db.clone(),
+                                            module_instance_id,
+                                            api_version,
+                                            root_secret.derive_module_secret(module_instance_id),
+                                            notifier.clone(),
+                                            api.clone(),
+                                            snapshot.as_ref().and_then(|s| s.modules.get(&module_instance_id).to_owned()),
+                                            progress_tx,
+                                        )
+                                        .await
+                                        .map_err(|err| {
+                                            warn!(
+                                                module_id = module_instance_id, %kind, %err, "Module failed to recover"
+                                            );
+                                            err
+                                        })
+                            }),
+                            progress_rx,
+                        )
+                    };
 
-                if primary_module_instance == module_instance && !module.supports_being_primary() {
-                    bail!("Module instance {primary_module_instance} of kind {kind} does not support being a primary module");
+                let recovery = if let Some(snapshot) = init_state.does_require_recovery() {
+                    if let Some(module_recovery_state) = db
+                        .begin_transaction_nc()
+                        .await
+                        .get_value(&ClientModuleRecovery { module_instance_id })
+                        .await
+                    {
+                        if module_recovery_state.is_done() {
+                            debug!(
+                                id = %module_instance_id,
+                                %kind, "Module recovery already complete"
+                            );
+                            None
+                        } else {
+                            debug!(
+                                id = %module_instance_id,
+                                %kind,
+                                progress = %module_recovery_state.progress,
+                                "Starting module recovery with an existing progress"
+                            );
+                            Some(start_module_recover_fn(
+                                snapshot,
+                                module_recovery_state.progress,
+                            ))
+                        }
+                    } else {
+                        debug!(
+                            id = %module_instance_id,
+                            %kind, "Starting new module recovery"
+                        );
+                        Some(start_module_recover_fn(snapshot, RecoveryProgress::none()))
+                    }
+                } else {
+                    None
+                };
+
+                if let Some((recovery, recovery_progress_rx)) = recovery {
+                    module_recoveries.insert(module_instance_id, recovery);
+                    module_recovery_progress_receivers
+                        .insert(module_instance_id, recovery_progress_rx);
+                } else {
+                    let module = module_init
+                        .init(
+                            final_client.clone(),
+                            config.global.federation_id(),
+                            module_config,
+                            db.clone(),
+                            module_instance_id,
+                            api_version,
+                            // This is a divergence from the legacy client, where the child secret
+                            // keys were derived using *module kind*-specific derivation paths.
+                            // Since the new client has to support multiple, segregated modules of
+                            // the same kind we have to use the instance id instead.
+                            root_secret.derive_module_secret(module_instance_id),
+                            notifier.clone(),
+                            api.clone(),
+                        )
+                        .await?;
+
+                    if primary_module_instance == module_instance_id
+                        && !module.supports_being_primary()
+                    {
+                        bail!("Module instance {primary_module_instance} of kind {kind} does not support being a primary module");
+                    }
+
+                    modules.register_module(module_instance_id, kind, module);
                 }
-
-                modules.register_module(module_instance, kind, module);
             }
             modules
         };
+
+        if init_state.is_pending() && module_recoveries.is_empty() {
+            let mut dbtx = db.begin_transaction().await;
+            dbtx.insert_entry(&ClientInitStateKey, &init_state.into_complete())
+                .await;
+            dbtx.commit_tx().await;
+        }
 
         let executor = {
             let mut executor_builder = Executor::<DynGlobalClientContext>::builder();
@@ -1657,6 +1980,14 @@ impl ClientBuilder {
 
             executor_builder.build(db.clone(), notifier).await
         };
+
+        let recovery_receiver_init_val = BTreeMap::from_iter(
+            module_recovery_progress_receivers
+                .iter()
+                .map(|(module_instance_id, rx)| (*module_instance_id, *rx.borrow())),
+        );
+        let (client_recovery_progress_sender, client_recovery_progress_receiver) =
+            watch::channel(recovery_receiver_init_val);
 
         let client_inner = Arc::new(Client {
             config: config.clone(),
@@ -1671,15 +2002,74 @@ impl ClientBuilder {
             api,
             secp_ctx: Secp256k1::new(),
             root_secret,
+            task_group: TaskGroup::new(),
             operation_log: OperationLog::new(db),
             client_count: Default::default(),
+            client_recovery_progress_receiver,
         });
 
         let client_arc = ClientArc::new(client_inner);
 
         final_client.set(client_arc.downgrade());
 
+        if !module_recoveries.is_empty() {
+            client_arc
+                .spawn_module_recoveries_task(
+                    client_recovery_progress_sender,
+                    module_recoveries,
+                    module_recovery_progress_receivers,
+                )
+                .await;
+        }
+
         Ok(client_arc)
+    }
+
+    async fn load_init_state(db: &Database) -> InitState {
+        let mut dbtx = db.begin_transaction_nc().await;
+        dbtx.get_value(&ClientInitStateKey)
+            .await
+            .unwrap_or_else(|| {
+                // could be turned in a hard error in the future, but for now
+                // no need to break backward compat.
+                warn!("Client missing ClientRequiresRecovery: assuming complete");
+                db::InitState::Complete(db::InitModeComplete::Fresh)
+            })
+    }
+
+    fn decoders(&self, config: &ClientConfig) -> ModuleDecoderRegistry {
+        let mut decoders = client_decoders(
+            &self.module_inits,
+            config
+                .modules
+                .iter()
+                .map(|(module_instance, module_config)| (*module_instance, module_config.kind())),
+        );
+
+        decoders.register_module(
+            TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+            ModuleKind::from_static_str("tx_submission"),
+            tx_submission_sm_decoder(),
+        );
+
+        decoders
+    }
+
+    fn config_decoded(
+        config: ClientConfig,
+        decoders: &ModuleDecoderRegistry,
+    ) -> Result<ClientConfig, fedimint_core::encoding::DecodeError> {
+        config.clone().redecode_raw(decoders)
+    }
+
+    /// Re-derive client's root_secret using the federation ID. This eliminates
+    /// the possibility of having the same client root_secret across
+    /// multiple federations.
+    fn federation_root_secret(
+        root_secret: &DerivableSecret,
+        config: &ClientConfig,
+    ) -> DerivableSecret {
+        root_secret.federation_key(&config.global.federation_id())
     }
 }
 
@@ -1743,7 +2133,7 @@ pub async fn get_decoded_client_secret<T: Decodable>(db: &Database) -> anyhow::R
 pub fn client_decoders<'a>(
     registry: &ModuleInitRegistry<DynClientModuleInit>,
     module_kinds: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
-) -> anyhow::Result<ModuleDecoderRegistry> {
+) -> ModuleDecoderRegistry {
     let mut modules = BTreeMap::new();
     for (id, kind) in module_kinds {
         let Some(init) = registry.get(kind) else {
@@ -1759,5 +2149,5 @@ pub fn client_decoders<'a>(
             ),
         );
     }
-    Ok(ModuleDecoderRegistry::from(modules))
+    ModuleDecoderRegistry::from(modules)
 }

@@ -5,14 +5,14 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::{ffi, marker, ops};
 
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use fedimint_core::api::DynGlobalApi;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
 };
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, PhantomBound};
-use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::{BoxFuture, BoxStream};
@@ -131,6 +131,10 @@ where
             .to_ref_with_prefix_module_id(self.client.module_instance_id)
     }
 
+    pub fn client_ctx(&self) -> &ClientContext<M> {
+        self.client
+    }
+
     pub async fn add_state_machines(
         &mut self,
         dyn_states: Vec<DynState<DynGlobalClientContext>>,
@@ -140,6 +144,10 @@ where
             .get()
             .add_state_machines(self.dbtx, dyn_states)
             .await
+    }
+
+    pub fn decoders(&self) -> ModuleDecoderRegistry {
+        self.client.client.get().decoders().clone()
     }
 
     pub async fn add_operation_log_entry(
@@ -195,6 +203,9 @@ where
     /// Get a reference to a global Api handle
     pub fn global_api(&self) -> DynGlobalApi {
         self.client.get().api_clone()
+    }
+    pub fn decoders(&self) -> ModuleDecoderRegistry {
+        self.client.get().decoders().clone()
     }
 
     pub fn map_dyn<'s, 'i, 'o, I>(
@@ -277,6 +288,30 @@ where
                 max_attempts,
             )
             .await
+    }
+
+    // TODO: rename `module_autocommit` to something else and make this a default
+    pub async fn module_autocommit_2<'s, 'dbtx, F, T>(
+        &'s self,
+        tx_fn: F,
+        max_attempts: Option<usize>,
+    ) -> anyhow::Result<T>
+    where
+        's: 'dbtx,
+        for<'r, 'o> F: Fn(
+                &'r mut ClientDbTxContext<'r, 'o, M>,
+                PhantomBound<'dbtx, 'o>,
+            ) -> BoxFuture<'r, anyhow::Result<T>>
+            + MaybeSync,
+    {
+        self.module_autocommit(tx_fn, max_attempts)
+            .await
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    panic!("Commit to DB failed: {last_error}")
+                }
+            })
     }
 
     /// See [`crate::Client::finalize_and_submit_transaction`]
@@ -460,10 +495,6 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         anyhow::bail!("Backup not supported");
     }
 
-    async fn restore(&self, _snapshot: Option<Self::Backup>) -> anyhow::Result<()> {
-        anyhow::bail!("Backup not supported");
-    }
-
     /// Does this module support being a primary module
     ///
     /// If it does it must implement:
@@ -625,12 +656,6 @@ pub trait IClientModule: Debug {
     async fn backup(&self, module_instance_id: ModuleInstanceId)
         -> anyhow::Result<DynModuleBackup>;
 
-    async fn restore(
-        &self,
-        module_instance_id: ModuleInstanceId,
-        snapshot: Option<DynModuleBackup>,
-    ) -> anyhow::Result<()>;
-
     fn supports_being_primary(&self) -> bool;
 
     async fn create_sufficient_input(
@@ -720,27 +745,6 @@ where
             module_instance_id,
             <T as ClientModule>::backup(self).await?,
         ))
-    }
-
-    async fn restore(
-        &self,
-        module_instance_id: ModuleInstanceId,
-        snapshot: Option<DynModuleBackup>,
-    ) -> anyhow::Result<()> {
-        let typed_snapshot = snapshot
-            .map(|snapshot| {
-                snapshot.as_any().downcast_ref().cloned().ok_or_else(|| {
-                    // TODO: should the error be caught earlier?
-                    anyhow!(
-                        "Snapshot is not for this module: expected instance {}, got instance {}",
-                        module_instance_id,
-                        snapshot.module_instance_id()
-                    )
-                })
-            })
-            .transpose()?;
-
-        <T as ClientModule>::restore(self, typed_snapshot).await
     }
 
     fn supports_being_primary(&self) -> bool {

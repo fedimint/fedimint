@@ -5,6 +5,7 @@ use fedimint_mint_common::Nonce;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
+use crate::backup::recovery::MintRecoveryState;
 use crate::SpendableNote;
 
 #[repr(u8)]
@@ -13,6 +14,7 @@ pub enum DbKeyPrefix {
     Note = 0x20,
     NextECashNoteIndex = 0x2a,
     CancelledOOBSpend = 0x2b,
+    RestoreState = 0x2c,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -53,6 +55,17 @@ impl_db_lookup!(
     query_prefix = NextECashNoteIndexKeyPrefix
 );
 
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+pub struct RestoreStateKey;
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct RestoreStateKeyPrefix;
+
+impl_db_record!(
+    key = RestoreStateKey,
+    value = MintRecoveryState,
+    db_prefix = DbKeyPrefix::RestoreState,
+);
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct CancelledOOBSpendKey(pub OperationId);
 
