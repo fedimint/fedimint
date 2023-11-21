@@ -145,6 +145,8 @@ declare_vars! {
         FM_TEST_BITCOIND_RPC: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}");
         FM_BITCOIN_RPC_URL: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}");
         FM_BITCOIN_RPC_KIND: String = "bitcoind";
+
+        FM_ROCKSDB_WRITE_BUFFER_SIZE : String = (1 << 20).to_string();
     }
 }
 
