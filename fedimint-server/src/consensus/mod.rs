@@ -33,7 +33,7 @@ pub async fn process_transaction_with_dbtx(
         public_keys.push(meta.pub_key);
     }
 
-    transaction.validate_signature(public_keys.into_iter())?;
+    transaction.validate_signatures(public_keys)?;
 
     for (output, out_idx) in transaction.outputs.iter().zip(0u64..) {
         let amount = modules
