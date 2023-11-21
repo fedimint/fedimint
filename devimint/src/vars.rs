@@ -134,7 +134,7 @@ declare_vars! {
         // clients
         FM_LIGHTNING_CLI: String = f!("lightning-cli --network regtest --lightning-dir={}", utf8(&FM_CLN_DIR));
         FM_LNCLI: String = f!("lncli -n regtest --lnddir={} --rpcserver=localhost:{FM_PORT_LND_RPC}", utf8(&FM_LND_DIR));
-        FM_BTC_CLIENT: String = "bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin";
+        FM_BTC_CLIENT: String = f!("bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -datadir={}", utf8(&FM_BTC_DIR));
         FM_MINT_CLIENT: String = f!("fedimint-cli --data-dir {}", utf8(&FM_DATA_DIR));
         FM_MINT_RPC_CLIENT: String = f!("mint-rpc-client");
         FM_GWCLI_CLN: String = f!("gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_CLN}/");
