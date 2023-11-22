@@ -120,6 +120,7 @@ use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
 use tracing::{debug, error, info, warn};
 
 use crate::backup::Metadata;
+use crate::db::OperationLogKey;
 use crate::module::init::{
     ClientModuleInit, ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
@@ -765,7 +766,20 @@ impl Client {
 
     // TODO: implement as part of [`OperationLog`]
     pub async fn get_active_operations(&self) -> HashSet<OperationId> {
-        self.executor.get_active_operations().await
+        let active_states = self.executor.get_active_states().await;
+        let mut active_operations = HashSet::with_capacity(active_states.len());
+        let mut dbtx = self.db().begin_transaction_nc().await;
+        for (state, _) in active_states {
+            let operation_id = state.operation_id();
+            if dbtx
+                .get_value(&OperationLogKey { operation_id })
+                .await
+                .is_some()
+            {
+                active_operations.insert(operation_id);
+            }
+        }
+        active_operations
     }
 
     pub fn operation_log(&self) -> &OperationLog {
