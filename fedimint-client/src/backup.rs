@@ -254,27 +254,18 @@ impl Client {
         Ok(())
     }
 
-    /// Restore client state from backup download from federation (if found) or
-    /// from scratch
+    /// Restore client state from backup if provided or from scratch.
     ///
     /// This will restore (or initialize restoration process) in all sub-modules
     /// that support it.
-    pub(crate) async fn restore_from_backup(&self) -> Result<Metadata> {
+    pub async fn restore_from_backup(&self, backup: Option<ClientBackup>) -> Result<Metadata> {
         info!(target: LOG_CLIENT_RECOVERY, "Restoring from backup");
-        let backup = if let Some(backup) = self.download_backup_from_federation().await? {
-            info!(
-                target: LOG_CLIENT_RECOVERY,
-                epoch = backup.session_count,
-                "Found backup"
-            );
-            Some(backup)
-        } else {
+        if backup.is_none() {
             warn!(
                 target: LOG_CLIENT_RECOVERY,
                 id=%self.get_backup_id(),
-                "Could not find any valid existing backup. Will attempt to restore from scratch. This might take a long time."
+                "Existing backup not provided. Will attempt to restore from scratch. This might take a long time."
             );
-            None
         };
 
         let metadata = backup
