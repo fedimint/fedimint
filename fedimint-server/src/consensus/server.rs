@@ -328,12 +328,12 @@ impl ConsensusServer {
     pub async fn run_session(&self, session_index: u64) -> anyhow::Result<()> {
         // if all nodes are correct the session will take 45 to 60 seconds. The
         // more nodes go offline the longer the session will take to complete.
-        const EXPECTED_ROUNDS_PER_SESSION: usize = 45 * 4;
+        const EXPECTED_ROUNDS_PER_SESSION: usize = 45 * 20;
         // this constant needs to be 3000 or less to guarantee that the session
         // can never reach MAX_ROUNDs.
         const EXPONENTIAL_SLOWDOWN_OFFSET: usize = 3 * EXPECTED_ROUNDS_PER_SESSION;
-        const MAX_ROUND: u16 = 5000;
-        const ROUND_DELAY: f64 = 250.0;
+        const MAX_ROUND: u16 = 5_000;
+        const ROUND_DELAY: f64 = 50.0;
         const BASE: f64 = 1.01;
 
         // this is the minimum number of unit data that will be ordered before we reach
