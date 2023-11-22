@@ -1515,7 +1515,8 @@ impl ClientBuilder {
         // );
 
         let client = self.build(root_secret).await?;
-        let metadata = client.restore_from_backup().await?;
+        let backup = client.download_backup_from_federation().await?;
+        let metadata = client.restore_from_backup(backup).await?;
 
         Ok((client, metadata))
     }
