@@ -1119,17 +1119,7 @@
 <a href="#1119" id="1119">1119</a>
 <a href="#1120" id="1120">1120</a>
 <a href="#1121" id="1121">1121</a>
-<a href="#1122" id="1122">1122</a>
-<a href="#1123" id="1123">1123</a>
-<a href="#1124" id="1124">1124</a>
-<a href="#1125" id="1125">1125</a>
-<a href="#1126" id="1126">1126</a>
-<a href="#1127" id="1127">1127</a>
-<a href="#1128" id="1128">1128</a>
-<a href="#1129" id="1129">1129</a>
-<a href="#1130" id="1130">1130</a>
-<a href="#1131" id="1131">1131</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
 <span class="kw">use </span>std::marker::PhantomData;
@@ -1361,16 +1351,6 @@
             .wait_key_exists(<span class="kw-2">&amp;</span>ActiveStateKey::from_state(state))
             .<span class="kw">await
     </span>}
-
-    <span class="doccomment">/// Returns all IDs of operations that have active state machines
-    </span><span class="kw">pub async fn </span>get_active_operations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; HashSet&lt;OperationId&gt; {
-        <span class="self">self</span>.inner
-            .get_active_states()
-            .<span class="kw">await
-            </span>.into_iter()
-            .map(|(state, <span class="kw">_</span>)| state.operation_id())
-            .collect()
-    }
 
     <span class="doccomment">/// Starts the background thread that runs the state machines. This cannot
     /// be done when building the executor since some global contexts in turn
