@@ -155,9 +155,16 @@ impl ClientModuleInit for WalletClientInit {
             .0
             .clone()
             .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
+
+        // FIXME: reactivate key derivation once we implement recovery
+        let random_root_secret = {
+            let (key, salt): ([u8; 32], [u8; 32]) = thread_rng().gen();
+            DerivableSecret::new_root(&key, &salt)
+        };
+
         Ok(WalletClientModule {
             cfg: args.cfg().clone(),
-            module_root_secret: args.module_root_secret().clone(),
+            module_root_secret: random_root_secret,
             module_api: args.module_api().clone(),
             notifier: args.notifier().clone(),
             rpc: create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?,
