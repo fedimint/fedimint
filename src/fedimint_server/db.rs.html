@@ -395,7 +395,7 @@
     <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
-    <span class="kw">use </span>fedimint_core::transaction::Transaction;
+    <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSignature};
     <span class="kw">use </span>fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
     <span class="kw">use </span>fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
     <span class="kw">use </span>fedimint_dummy_server::Dummy;
@@ -441,7 +441,7 @@
                 },
             )],
             nonce: [<span class="number">0x42</span>; <span class="number">8</span>],
-            signatures: <span class="macro">vec!</span>[schnorr],
+            signatures: TransactionSignature::NaiveMultisig(<span class="macro">vec!</span>[schnorr]),
         };
 
         <span class="kw">let </span>module_ids = transaction

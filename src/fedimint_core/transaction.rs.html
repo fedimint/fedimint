@@ -118,6 +118,25 @@
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
@@ -149,7 +168,7 @@
     /// certain PoW requirements.
     </span><span class="kw">pub </span>nonce: [u8; <span class="number">8</span>],
     <span class="doccomment">/// signatures for all the public keys of the inputs
-    </span><span class="kw">pub </span>signatures: Vec&lt;schnorr::Signature&gt;,
+    </span><span class="kw">pub </span>signatures: TransactionSignature,
 }
 
 <span class="kw">pub type </span>SerdeTransaction = SerdeModuleEncoding&lt;Transaction&gt;;
@@ -188,14 +207,21 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         pub_keys: Vec&lt;XOnlyPublicKey&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
-        <span class="kw">if </span>pub_keys.len() != <span class="self">self</span>.signatures.len() {
+        <span class="kw">let </span>signatures = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.signatures {
+            TransactionSignature::NaiveMultisig(sigs) =&gt; sigs,
+            TransactionSignature::Default { variant, .. } =&gt; {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(TransactionError::UnsupportedSignatureScheme { variant: <span class="kw-2">*</span>variant })
+            }
+        };
+
+        <span class="kw">if </span>pub_keys.len() != signatures.len() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(TransactionError::InvalidWitnessLength);
         }
 
         <span class="kw">let </span>txid = <span class="self">self</span>.tx_hash();
         <span class="kw">let </span>msg = secp256k1_zkp::Message::from_slice(<span class="kw-2">&amp;</span>txid[..]).expect(<span class="string">&quot;txid has right length&quot;</span>);
 
-        <span class="kw">for </span>(pk, signature) <span class="kw">in </span>pub_keys.iter().zip(<span class="kw-2">&amp;</span><span class="self">self</span>.signatures) {
+        <span class="kw">for </span>(pk, signature) <span class="kw">in </span>pub_keys.iter().zip(signatures) {
             <span class="kw">if </span>secp256k1_zkp::global::SECP256K1
                 .verify_schnorr(signature, <span class="kw-2">&amp;</span>msg, pk)
                 .is_err()
@@ -216,6 +242,16 @@
     }
 }
 
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+</span><span class="kw">pub enum </span>TransactionSignature {
+    NaiveMultisig(Vec&lt;schnorr::Signature&gt;),
+    <span class="attr">#[encodable_default]
+    </span>Default {
+        variant: u64,
+        bytes: Vec&lt;u8&gt;,
+    },
+}
+
 <span class="attr">#[derive(Debug, Error, Encodable, Decodable, Clone, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>TransactionError {
     <span class="attr">#[error(<span class="string">&quot;The transaction is unbalanced (in={inputs}, out={outputs}, fee={fee})&quot;</span>)]
@@ -231,6 +267,8 @@
         sig: String,
         key: String,
     },
+    <span class="attr">#[error(<span class="string">&quot;The transaction&#39;s signature scheme is not supported: variant={variant}&quot;</span>)]
+    </span>UnsupportedSignatureScheme { variant: u64 },
     <span class="attr">#[error(<span class="string">&quot;The transaction did not have the correct number of signatures&quot;</span>)]
     </span>InvalidWitnessLength,
     <span class="attr">#[error(<span class="string">&quot;The transaction had an invalid input&quot;</span>)]

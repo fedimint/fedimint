@@ -165,7 +165,7 @@
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, KeyPair, ModuleInstanceId};
-<span class="kw">use </span>fedimint_core::transaction::Transaction;
+<span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSignature};
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>itertools::multiunzip;
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
@@ -290,7 +290,7 @@
             inputs,
             outputs,
             nonce,
-            signatures,
+            signatures: TransactionSignature::NaiveMultisig(signatures),
         };
 
         <span class="kw">let </span>states = input_states
