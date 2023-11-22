@@ -12,19 +12,45 @@ use crate::{MintClientStateMachines, NoteIndex, SpendableNote};
 
 pub mod recovery;
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
+pub enum EcashBackup {
+    V0(EcashBackupV0),
+    #[encodable_default]
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
+}
+
+impl EcashBackup {
+    pub(crate) fn new_v0(
+        spendable_notes: TieredMulti<SpendableNote>,
+        pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)>,
+        session_count: u64,
+        next_note_idx: Tiered<NoteIndex>,
+    ) -> EcashBackup {
+        EcashBackup::V0(EcashBackupV0 {
+            spendable_notes,
+            pending_notes,
+            session_count,
+            next_note_idx,
+        })
+    }
+}
+
 /// Snapshot of a ecash state (notes)
 ///
 /// Used to speed up and improve privacy of ecash recovery,
 /// by avoiding scanning the whole history.
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
-pub struct EcashBackup {
+pub struct EcashBackupV0 {
     spendable_notes: TieredMulti<SpendableNote>,
     pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)>,
     session_count: u64,
     next_note_idx: Tiered<NoteIndex>,
 }
 
-impl EcashBackup {
+impl EcashBackupV0 {
     /// An empty backup with, like a one created by a newly created client.
     pub fn new_empty() -> Self {
         Self {
@@ -82,11 +108,11 @@ impl MintClientModule {
         }
         let next_note_idx = Tiered::from_iter(idxes);
 
-        Ok(EcashBackup {
-            spendable_notes: notes,
+        Ok(EcashBackup::new_v0(
+            notes,
             pending_notes,
-            next_note_idx,
             session_count,
-        })
+            next_note_idx,
+        ))
     }
 }

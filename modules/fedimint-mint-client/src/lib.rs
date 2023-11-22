@@ -57,7 +57,7 @@ use thiserror::Error;
 use tracing::{debug, info, warn};
 
 use crate::backup::recovery::MintRestoreInProgressState;
-use crate::backup::EcashBackup;
+use crate::backup::{EcashBackup, EcashBackupV0};
 use crate::client_db::{
     NextECashNoteIndexKey, NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix,
 };
@@ -509,10 +509,18 @@ impl ClientModule for MintClientModule {
     }
 
     async fn restore(&self, snapshot: Option<EcashBackup>) -> anyhow::Result<()> {
+        let snapshot_v0 = match snapshot {
+            Some(EcashBackup::V0(snapshot_v0)) => Some(snapshot_v0),
+            Some(EcashBackup::Default { variant, .. }) => {
+                return Err(anyhow!("Unsupported backup variant: {variant}"))
+            }
+            None => None,
+        };
+
         self.client_ctx
             .module_autocommit(
                 move |dbtx_ctx, _| {
-                    let snapshot_inner = snapshot.clone();
+                    let snapshot_inner = snapshot_v0.clone();
                     Box::pin(async move { self.restore_inner(dbtx_ctx, snapshot_inner).await })
                 },
                 None,
@@ -1305,7 +1313,7 @@ impl MintClientModule {
     async fn restore_inner(
         &self,
         dbtx_ctx: &'_ mut ClientDbTxContext<'_, '_, Self>,
-        maybe_snapshot: Option<EcashBackup>,
+        maybe_snapshot: Option<EcashBackupV0>,
     ) -> anyhow::Result<()> {
         if !Self::get_all_spendable_notes(&mut dbtx_ctx.module_dbtx())
             .await
@@ -1326,7 +1334,7 @@ impl MintClientModule {
             bail!("Found existing active state machines. Mint module recovery must be started on an empty state.")
         }
 
-        let snapshot = maybe_snapshot.unwrap_or(EcashBackup::new_empty());
+        let snapshot = maybe_snapshot.unwrap_or(EcashBackupV0::new_empty());
 
         let current_session_count = self.client_ctx.global_api().session_count().await?;
         let state = MintRestoreInProgressState::from_backup(

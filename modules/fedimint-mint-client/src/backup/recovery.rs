@@ -21,7 +21,7 @@ use tbs::{AggregatePublicKey, BlindedMessage, PublicKeyShare};
 use threshold_crypto::G1Affine;
 use tracing::{debug, info, trace, warn};
 
-use super::EcashBackup;
+use crate::backup::EcashBackupV0;
 use crate::client_db::{NextECashNoteIndexKey, NoteKey};
 use crate::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStatesCreated, NoteIssuanceRequest,
@@ -291,7 +291,7 @@ impl MintRestoreInProgressState {
 impl MintRestoreInProgressState {
     pub fn from_backup(
         current_epoch_count: u64,
-        backup: EcashBackup,
+        backup: EcashBackupV0,
         gap_limit: u64,
         tbs_pks: Tiered<AggregatePublicKey>,
         pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,

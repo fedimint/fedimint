@@ -80,8 +80,18 @@ module_plugin_dyn_newtype_clone_passthrough!(DynModuleBackup);
 
 module_plugin_dyn_newtype_eq_passthrough!(DynModuleBackup);
 
+/// A backup type for modules without a backup implementation. The default
+/// variant allows implementing a backup strategy for the module later on by
+/// copying this enum into the module and adding a second variant to it.
 #[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
-pub struct NoModuleBackup;
+pub enum NoModuleBackup {
+    NoModuleBackup,
+    #[encodable_default]
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
+}
 
 impl ModuleBackup for NoModuleBackup {}
 
