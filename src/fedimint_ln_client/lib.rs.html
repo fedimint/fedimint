@@ -1499,6 +1499,21 @@
 <a href="#1499" id="1499">1499</a>
 <a href="#1500" id="1500">1500</a>
 <a href="#1501" id="1501">1501</a>
+<a href="#1502" id="1502">1502</a>
+<a href="#1503" id="1503">1503</a>
+<a href="#1504" id="1504">1504</a>
+<a href="#1505" id="1505">1505</a>
+<a href="#1506" id="1506">1506</a>
+<a href="#1507" id="1507">1507</a>
+<a href="#1508" id="1508">1508</a>
+<a href="#1509" id="1509">1509</a>
+<a href="#1510" id="1510">1510</a>
+<a href="#1511" id="1511">1511</a>
+<a href="#1512" id="1512">1512</a>
+<a href="#1513" id="1513">1513</a>
+<a href="#1514" id="1514">1514</a>
+<a href="#1515" id="1515">1515</a>
+<a href="#1516" id="1516">1516</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -2371,11 +2386,17 @@
 
     <span class="kw">async fn </span>fetch_meta_overrides(<span class="kw-2">&amp;</span><span class="self">self</span>, config: ClientConfig) -&gt; anyhow::Result&lt;String&gt; {
         <span class="kw">let </span>federation_id = config.global.federation_id();
-        <span class="kw">let </span>override_src = FederationInfo::from_config(config)
+        <span class="kw">let </span>override_src = <span class="kw">match </span>FederationInfo::from_config(config)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.meta::&lt;String&gt;(META_OVERRIDE_URL_KEY)<span class="question-mark">?
-            </span>.ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;No meta override source configured&quot;</span>))<span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(<span class="string">&quot;Fetching meta overrides from {}&quot;</span>, override_src);
+        </span>{
+            <span class="prelude-val">Some</span>(override_src) =&gt; override_src,
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="macro">debug!</span>(<span class="string">&quot;No meta override source configured&quot;</span>);
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="string">&quot;&quot;</span>.into());
+            }
+        };
+        <span class="macro">debug!</span>(<span class="string">&quot;Fetching meta overrides from {override_src}&quot;</span>);
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(meta) = <span class="self">self
             </span>.client_ctx
@@ -2397,27 +2418,30 @@
             .send()
             .<span class="kw">await
             </span>.context(<span class="string">&quot;Meta override request failed&quot;</span>)<span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(<span class="string">&quot;Meta override source returned status: {:?}&quot;</span>, response);
+        <span class="macro">debug!</span>(<span class="string">&quot;Meta override source returned status: {response:?}&quot;</span>);
 
         <span class="kw">let </span>federation_meta = <span class="kw">match </span>response.status() {
             reqwest::StatusCode::OK =&gt; {
                 <span class="kw">let </span>txt = response.text().<span class="kw">await</span>.context(<span class="macro">format!</span>(
-                    <span class="string">&quot;Meta override source returned invalid body: {}&quot;</span>,
-                    override_src
-                ))<span class="question-mark">?</span>;
+                    <span class="string">&quot;Meta override source returned invalid body: {override_src}&quot;
+                </span>))<span class="question-mark">?</span>;
                 <span class="kw">let </span>m: serde_json::Value = serde_json::from_str(<span class="kw-2">&amp;</span>txt).map_err(|<span class="kw">_</span>| {
-                    <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Meta override source returned invalid json: {}&quot;</span>, txt)
+                    <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Meta override source returned invalid json: {txt}&quot;</span>)
                 })<span class="question-mark">?</span>;
                 <span class="kw">if </span>!m.is_object() {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Meta override is not valid&quot;</span>));
                 }
 
-                m.get(<span class="kw-2">&amp;</span>federation_id.to_string())
-                    .ok_or(<span class="macro">anyhow::anyhow!</span>(
-                        <span class="string">&quot;No meta overrides for federation id: {}&quot;</span>,
-                        federation_id
-                    ))<span class="question-mark">?
-                    </span>.to_string()
+                <span class="kw">match </span>m.get(<span class="kw-2">&amp;</span>federation_id.to_string()) {
+                    <span class="prelude-val">Some</span>(meta) =&gt; {
+                        <span class="macro">debug!</span>(<span class="string">&quot;Found meta overrides for federation: {federation_id}&quot;</span>);
+                        meta.to_string()
+                    }
+                    <span class="prelude-val">None </span>=&gt; {
+                        <span class="macro">debug!</span>(<span class="string">&quot;No meta overrides found for federation: {federation_id}&quot;</span>);
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="string">&quot;&quot;</span>.into());
+                    }
+                }
             }
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
                 <span class="string">&quot;Meta override source returned error code: {}&quot;</span>,
@@ -2449,7 +2473,13 @@
             <span class="macro">debug!</span>(<span class="string">&quot;Fetching meta overrides from remote source/cache&quot;</span>);
             <span class="kw">let </span>config = <span class="self">self</span>.client_ctx.get_config().clone();
             <span class="kw">let </span>federation_meta = <span class="kw">match </span><span class="self">self</span>.fetch_meta_overrides(config).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(meta) =&gt; meta,
+                <span class="prelude-val">Ok</span>(meta) =&gt; {
+                    <span class="kw">if </span>meta.is_empty() {
+                        <span class="macro">debug!</span>(<span class="string">&quot;No meta overrides found&quot;</span>);
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(gateways);
+                    }
+                    meta
+                }
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">error!</span>(<span class="string">&quot;Error fetching meta overrides: {}&quot;</span>, e);
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(gateways);
