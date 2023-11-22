@@ -824,9 +824,11 @@ async fn run_two_gateways_strategy(
     match *invoice_generation {
         LnInvoiceGeneration::ClnLightningCli => {
             let (invoice, label) = cln_create_invoice(*invoice_amount).await?;
+            let elapsed = create_invoice_time.elapsed()?;
+            info!("Created invoice using CLN in {elapsed:?}");
             event_sender.send(MetricEvent {
                 name: GATEWAY_CREATE_INVOICE.into(),
-                duration: create_invoice_time.elapsed()?,
+                duration: elapsed,
             })?;
             gateway_pay_invoice(prefix, client, invoice, event_sender).await?;
             cln_wait_invoice_payment(&label).await?;
@@ -834,15 +836,24 @@ async fn run_two_gateways_strategy(
                 client_create_invoice(client, *invoice_amount, event_sender).await?;
             let pay_invoice_time = fedimint_core::time::now();
             cln_pay_invoice(invoice).await?;
-            wait_invoice_payment(prefix, client, operation_id, event_sender, pay_invoice_time)
-                .await?;
+            wait_invoice_payment(
+                prefix,
+                "CLN",
+                client,
+                operation_id,
+                event_sender,
+                pay_invoice_time,
+            )
+            .await?;
             *invoice_generation = LnInvoiceGeneration::LnCli;
         }
         LnInvoiceGeneration::LnCli => {
             let (invoice, r_hash) = lnd_create_invoice(*invoice_amount).await?;
+            let elapsed = create_invoice_time.elapsed()?;
+            info!("Created invoice using LND in {elapsed:?}");
             event_sender.send(MetricEvent {
                 name: GATEWAY_CREATE_INVOICE.into(),
-                duration: create_invoice_time.elapsed()?,
+                duration: elapsed,
             })?;
             gateway_pay_invoice(prefix, client, invoice, event_sender).await?;
             lnd_wait_invoice_payment(r_hash).await?;
@@ -850,8 +861,15 @@ async fn run_two_gateways_strategy(
                 client_create_invoice(client, *invoice_amount, event_sender).await?;
             let pay_invoice_time = fedimint_core::time::now();
             lnd_pay_invoice(invoice).await?;
-            wait_invoice_payment(prefix, client, operation_id, event_sender, pay_invoice_time)
-                .await?;
+            wait_invoice_payment(
+                prefix,
+                "LND",
+                client,
+                operation_id,
+                event_sender,
+                pay_invoice_time,
+            )
+            .await?;
             *invoice_generation = LnInvoiceGeneration::ClnLightningCli;
         }
     };
@@ -869,7 +887,15 @@ async fn do_self_payment(
     let pay_invoice_time = fedimint_core::time::now();
     let lightning_module = client.get_first_module::<LightningClientModule>();
     lightning_module.pay_bolt11_invoice(invoice).await?;
-    wait_invoice_payment(prefix, client, operation_id, event_sender, pay_invoice_time).await?;
+    wait_invoice_payment(
+        prefix,
+        "gateway",
+        client,
+        operation_id,
+        event_sender,
+        pay_invoice_time,
+    )
+    .await?;
     Ok(())
 }
 
@@ -888,6 +914,7 @@ async fn do_partner_ping_pong(
     lightning_module.pay_bolt11_invoice(invoice).await?;
     wait_invoice_payment(
         prefix,
+        "gateway",
         partner,
         operation_id,
         event_sender,
@@ -900,39 +927,61 @@ async fn do_partner_ping_pong(
     let pay_invoice_time = fedimint_core::time::now();
     let partner_lightning_module = partner.get_first_module::<LightningClientModule>();
     partner_lightning_module.pay_bolt11_invoice(invoice).await?;
-    wait_invoice_payment(prefix, client, operation_id, event_sender, pay_invoice_time).await?;
+    wait_invoice_payment(
+        prefix,
+        "gateway",
+        client,
+        operation_id,
+        event_sender,
+        pay_invoice_time,
+    )
+    .await?;
     Ok(())
 }
 
 async fn wait_invoice_payment(
     prefix: &str,
+    method: &str,
     client: &ClientArc,
     operation_id: fedimint_core::core::OperationId,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
     pay_invoice_time: std::time::SystemTime,
 ) -> anyhow::Result<()> {
+    let elapsed = pay_invoice_time.elapsed()?;
+    info!("{prefix} Invoice payment received started using {method} in {elapsed:?}");
+    event_sender.send(MetricEvent {
+        name: "gateway_payment_received_started".into(),
+        duration: elapsed,
+    })?;
     let lightning_module = client.get_first_module::<LightningClientModule>();
     let mut updates = lightning_module
         .subscribe_ln_receive(operation_id)
         .await?
         .into_stream();
     while let Some(update) = updates.next().await {
-        info!("{prefix} Update: {:?}", update);
+        info!("{prefix} Update: {update:?}");
         match update {
             LnReceiveState::Claimed => {
+                let elapsed: Duration = pay_invoice_time.elapsed()?;
+                info!("{prefix} Invoice payment using {method} received in {elapsed:?}");
+                event_sender.send(MetricEvent {
+                    name: "gateway_pay_invoice_success".into(),
+                    duration: elapsed,
+                })?;
                 break;
             }
             LnReceiveState::Canceled { reason } => {
-                warn!("Invoice was cancelled: {reason}");
+                let elapsed: Duration = pay_invoice_time.elapsed()?;
+                warn!("{prefix} Invoice using {method} was canceled: {reason} in {elapsed:?}");
+                event_sender.send(MetricEvent {
+                    name: "gateway_pay_invoice_canceled".into(),
+                    duration: elapsed,
+                })?;
                 break;
             }
             _ => {}
         }
     }
-    event_sender.send(MetricEvent {
-        name: "gateway_pay_invoice".into(),
-        duration: pay_invoice_time.elapsed()?,
-    })?;
     Ok(())
 }
 
@@ -946,9 +995,11 @@ async fn client_create_invoice(
     let (operation_id, invoice) = lightning_module
         .create_bolt11_invoice(invoice_amount, "".into(), None, ())
         .await?;
+    let elapsed = create_invoice_time.elapsed()?;
+    info!("Created invoice using gateway in {elapsed:?}");
     event_sender.send(MetricEvent {
         name: GATEWAY_CREATE_INVOICE.into(),
-        duration: create_invoice_time.elapsed()?,
+        duration: elapsed,
     })?;
     Ok((operation_id, invoice))
 }
