@@ -49,7 +49,7 @@ async fn client_ignores_unknown_module() {
     let extra_mod = ClientModuleConfig::from_typed(
         module_id,
         ModuleKind::from_static_str("unknown_module"),
-        ModuleConsensusVersion(0),
+        ModuleConsensusVersion::new(0, 0),
         DummyClientConfig {
             tx_fee: Amount::from_sats(1),
         },

@@ -68,31 +68,34 @@ use crate::encoding::{Decodable, Encodable};
 /// See [`ModuleConsensusVersion`] for more details on how it interacts with
 /// module's consensus.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq)]
-pub struct CoreConsensusVersion(pub u32);
+pub struct CoreConsensusVersion {
+    pub major: u32,
+    pub minor: u32,
+}
 
-impl From<u32> for CoreConsensusVersion {
-    fn from(value: u32) -> Self {
-        Self(value)
+impl CoreConsensusVersion {
+    pub const fn new(major: u32, minor: u32) -> Self {
+        Self { major, minor }
     }
 }
 
 /// Consensus version of a specific module instance
 ///
-/// Any breaking change to the module's consensus rules require incrementing it.
+/// Any breaking change to the module's consensus rules require incrementing the
+/// major part of it.
+///
+/// Any backwards-compatible changes with regards to clients require
+/// incrementing the minor part of it. Backwards compatible changes will
+/// typically be introducing new input/output/consensus item variants that old
+/// clients won't understand but can safely ignore while new clients can use new
+/// functionality. It's akin to soft forks in Bitcoin.
 ///
 /// A module instance can run only in one consensus version, which must be the
-/// same across all corresponding instances on other nodes of the federation.
+/// same (both major and minor) across all corresponding instances on other
+/// nodes of the federation.
 ///
 /// When [`CoreConsensusVersion`] changes, this can but is not requires to be
 /// a breaking change for each module's [`ModuleConsensusVersion`].
-///
-/// Incrementing the module's consensus version can be considered an in-place
-/// upgrade path, similar to a blockchain hard-fork consensus upgrade.
-///
-/// As of time of writing this comment there are no plans to support any kind
-/// of "soft-forks" which mean a consensus minor version. As the set of
-/// federation member's is closed and limited, it is always preferable to
-/// synchronize upgrade and avoid cross-version incompatibilities.
 ///
 /// For many modules it might be preferable to implement a new
 /// [`fedimint_core::core::ModuleKind`] "versions" (to be implemented at the
@@ -101,11 +104,14 @@ impl From<u32> for CoreConsensusVersion {
 /// slowly migrate to a new one. This avoids complex and error-prone server-side
 /// consensus-migration logic.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
-pub struct ModuleConsensusVersion(pub u32);
+pub struct ModuleConsensusVersion {
+    pub major: u32,
+    pub minor: u32,
+}
 
-impl From<u32> for ModuleConsensusVersion {
-    fn from(value: u32) -> Self {
-        Self(value)
+impl ModuleConsensusVersion {
+    pub const fn new(major: u32, minor: u32) -> Self {
+        Self { major, minor }
     }
 }
 
@@ -349,10 +355,10 @@ impl SupportedModuleApiVersions {
     ///
     /// Panics if `api_version` parts conflict as per
     /// [`SupportedModuleApiVersions`] invariants.
-    pub fn from_raw(core: u32, module: u32, api_versions: &[(u32, u32)]) -> Self {
+    pub fn from_raw(core: (u32, u32), module: (u32, u32), api_versions: &[(u32, u32)]) -> Self {
         Self {
-            core_consensus: CoreConsensusVersion(core),
-            module_consensus: ModuleConsensusVersion(module),
+            core_consensus: CoreConsensusVersion::new(core.0, core.1),
+            module_consensus: ModuleConsensusVersion::new(module.0, module.1),
             api: result::Result::<MultiApiVersion, ApiVersion>::from_iter(
                 api_versions
                     .iter()
