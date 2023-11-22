@@ -24,6 +24,7 @@ use lightning_invoice::Bolt11Invoice;
 use rand::thread_rng;
 use tokio::sync::mpsc;
 use tracing::info;
+use tracing::log::warn;
 
 use crate::MetricEvent;
 
@@ -244,16 +245,44 @@ pub async fn gateway_pay_invoice(
         info!("{prefix} LnPayState update: {update:?}");
         match update {
             LnPayState::Success { preimage: _ } => {
+                let elapsed: Duration = m.elapsed()?;
+                info!("{prefix} Invoice paid in {elapsed:?}");
+                event_sender.send(MetricEvent {
+                    name: "gateway_pay_invoice_success".into(),
+                    duration: elapsed,
+                })?;
                 break;
             }
             LnPayState::Created | LnPayState::Funded | LnPayState::AwaitingChange => {}
-            other => bail!("Failed to pay invoice: {other:?}"),
+            LnPayState::Canceled => {
+                let elapsed: Duration = m.elapsed()?;
+                warn!("{prefix} Invoice canceled in {elapsed:?}");
+                event_sender.send(MetricEvent {
+                    name: "gateway_pay_invoice_canceled".into(),
+                    duration: elapsed,
+                })?;
+                break;
+            }
+            LnPayState::Refunded { gateway_error } => {
+                let elapsed: Duration = m.elapsed()?;
+                warn!("{prefix} Invoice refunded due to {gateway_error} in {elapsed:?}");
+                event_sender.send(MetricEvent {
+                    name: "gateway_pay_invoice_refunded".into(),
+                    duration: elapsed,
+                })?;
+                break;
+            }
+            LnPayState::WaitingForRefund {
+                block_height: _,
+                gateway_error,
+            } => {
+                warn!("{prefix} Waiting for refund: {gateway_error:?}")
+            }
+            LnPayState::UnexpectedError { error_message } => {
+                bail!("Failed to pay invoice: {error_message:?}")
+            }
         }
     }
-    event_sender.send(MetricEvent {
-        name: "gateway_pay_invoice".into(),
-        duration: m.elapsed()?,
-    })?;
     Ok(())
 }
 

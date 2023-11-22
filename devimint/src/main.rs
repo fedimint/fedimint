@@ -868,7 +868,7 @@ async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> 
         "missing invoice creation"
     );
     anyhow::ensure!(
-        output.contains("gateway_pay_invoice"),
+        output.contains("gateway_pay_invoice_success"),
         "missing invoice payment"
     );
 
@@ -894,7 +894,7 @@ async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> 
         "missing invoice creation"
     );
     anyhow::ensure!(
-        output.contains("gateway_pay_invoice"),
+        output.contains("gateway_pay_invoice_success"),
         "missing invoice payment"
     );
 
@@ -920,7 +920,7 @@ async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> 
         "missing invoice creation"
     );
     anyhow::ensure!(
-        output.contains("gateway_pay_invoice"),
+        output.contains("gateway_pay_invoice_success"),
         "missing invoice payment"
     );
     Ok(())
