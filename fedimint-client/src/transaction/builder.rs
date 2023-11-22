@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, KeyPair, ModuleInstanceId};
-use fedimint_core::transaction::Transaction;
+use fedimint_core::transaction::{Transaction, TransactionSignature};
 use fedimint_core::Amount;
 use itertools::multiunzip;
 use rand::{CryptoRng, Rng, RngCore};
@@ -126,7 +126,7 @@ impl TransactionBuilder {
             inputs,
             outputs,
             nonce,
-            signatures,
+            signatures: TransactionSignature::NaiveMultisig(signatures),
         };
 
         let states = input_states

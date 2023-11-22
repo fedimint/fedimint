@@ -29,7 +29,7 @@ pub struct Transaction {
     /// certain PoW requirements.
     pub nonce: [u8; 8],
     /// signatures for all the public keys of the inputs
-    pub signatures: Vec<schnorr::Signature>,
+    pub signatures: TransactionSignature,
 }
 
 pub type SerdeTransaction = SerdeModuleEncoding<Transaction>;
@@ -68,14 +68,21 @@ impl Transaction {
         &self,
         pub_keys: Vec<XOnlyPublicKey>,
     ) -> Result<(), TransactionError> {
-        if pub_keys.len() != self.signatures.len() {
+        let signatures = match &self.signatures {
+            TransactionSignature::NaiveMultisig(sigs) => sigs,
+            TransactionSignature::Default { variant, .. } => {
+                return Err(TransactionError::UnsupportedSignatureScheme { variant: *variant })
+            }
+        };
+
+        if pub_keys.len() != signatures.len() {
             return Err(TransactionError::InvalidWitnessLength);
         }
 
         let txid = self.tx_hash();
         let msg = secp256k1_zkp::Message::from_slice(&txid[..]).expect("txid has right length");
 
-        for (pk, signature) in pub_keys.iter().zip(&self.signatures) {
+        for (pk, signature) in pub_keys.iter().zip(signatures) {
             if secp256k1_zkp::global::SECP256K1
                 .verify_schnorr(signature, &msg, pk)
                 .is_err()
@@ -96,6 +103,16 @@ impl Transaction {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+pub enum TransactionSignature {
+    NaiveMultisig(Vec<schnorr::Signature>),
+    #[encodable_default]
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
+}
+
 #[derive(Debug, Error, Encodable, Decodable, Clone, Eq, PartialEq)]
 pub enum TransactionError {
     #[error("The transaction is unbalanced (in={inputs}, out={outputs}, fee={fee})")]
@@ -111,6 +128,8 @@ pub enum TransactionError {
         sig: String,
         key: String,
     },
+    #[error("The transaction's signature scheme is not supported: variant={variant}")]
+    UnsupportedSignatureScheme { variant: u64 },
     #[error("The transaction did not have the correct number of signatures")]
     InvalidWitnessLength,
     #[error("The transaction had an invalid input")]
