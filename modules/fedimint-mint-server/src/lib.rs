@@ -111,11 +111,12 @@ impl ServerModuleInit for MintInit {
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
-        &[ModuleConsensusVersion(0)]
+        const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);
+        &[MODULE_CONSENSUS_VERSION]
     }
 
     fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(u32::MAX, 0, &[(0, 0)])
+        SupportedModuleApiVersions::from_raw(u32::MAX, (0, 0), &[(0, 0)])
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
@@ -595,7 +596,7 @@ mod test {
         let client_cfg = ClientModuleConfig::from_typed(
             0,
             MintInit::kind(),
-            ModuleConsensusVersion(0),
+            ModuleConsensusVersion::new(0, 0),
             MintInit
                 .get_client_config(&mint_cfg[&PeerId::from(0)].consensus)
                 .unwrap(),

@@ -18,7 +18,7 @@ pub mod config;
 pub const KIND: ModuleKind = ModuleKind::from_static_str("dummy");
 
 /// Modules are non-compatible with older versions
-pub const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
+pub const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);
 
 /// Non-transaction items that will be submitted to consensus
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]

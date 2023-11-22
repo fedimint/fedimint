@@ -602,7 +602,8 @@ fn discover_common_module_api_version(
             .values()
             .filter(|supported_versions| {
                 (supported_versions.core_consensus == client_versions.core_consensus
-                    && supported_versions.module_consensus == client_versions.module_consensus)
+                    && supported_versions.module_consensus.major
+                        == client_versions.module_consensus.major)
                     .then(|| {
                         supported_versions
                             .api
