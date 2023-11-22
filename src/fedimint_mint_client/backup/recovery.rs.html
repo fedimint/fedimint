@@ -630,7 +630,7 @@
 <span class="kw">use </span>threshold_crypto::G1Affine;
 <span class="kw">use </span>tracing::{debug, info, trace, warn};
 
-<span class="kw">use </span><span class="kw">super</span>::EcashBackup;
+<span class="kw">use </span><span class="kw">crate</span>::backup::EcashBackupV0;
 <span class="kw">use </span><span class="kw">crate</span>::client_db::{NextECashNoteIndexKey, NoteKey};
 <span class="kw">use </span><span class="kw">crate</span>::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStatesCreated, NoteIssuanceRequest,
@@ -900,7 +900,7 @@
 <span class="kw">impl </span>MintRestoreInProgressState {
     <span class="kw">pub fn </span>from_backup(
         current_epoch_count: u64,
-        backup: EcashBackup,
+        backup: EcashBackupV0,
         gap_limit: u64,
         tbs_pks: Tiered&lt;AggregatePublicKey&gt;,
         pub_key_shares: BTreeMap&lt;PeerId, Tiered&lt;PublicKeyShare&gt;&gt;,

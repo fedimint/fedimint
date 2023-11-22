@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["recovery"],"struct":["EcashBackup"]};
+window.SIDEBAR_ITEMS = {"enum":["EcashBackup"],"mod":["recovery"],"struct":["EcashBackupV0"]};

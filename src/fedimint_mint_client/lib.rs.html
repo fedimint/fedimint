@@ -1754,6 +1754,14 @@
 <a href="#1754" id="1754">1754</a>
 <a href="#1755" id="1755">1755</a>
 <a href="#1756" id="1756">1756</a>
+<a href="#1757" id="1757">1757</a>
+<a href="#1758" id="1758">1758</a>
+<a href="#1759" id="1759">1759</a>
+<a href="#1760" id="1760">1760</a>
+<a href="#1761" id="1761">1761</a>
+<a href="#1762" id="1762">1762</a>
+<a href="#1763" id="1763">1763</a>
+<a href="#1764" id="1764">1764</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1813,7 +1821,7 @@
 <span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::recovery::MintRestoreInProgressState;
-<span class="kw">use </span><span class="kw">crate</span>::backup::EcashBackup;
+<span class="kw">use </span><span class="kw">crate</span>::backup::{EcashBackup, EcashBackupV0};
 <span class="kw">use </span><span class="kw">crate</span>::client_db::{
     NextECashNoteIndexKey, NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix,
 };
@@ -2265,10 +2273,18 @@
     }
 
     <span class="kw">async fn </span>restore(<span class="kw-2">&amp;</span><span class="self">self</span>, snapshot: <span class="prelude-ty">Option</span>&lt;EcashBackup&gt;) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>snapshot_v0 = <span class="kw">match </span>snapshot {
+            <span class="prelude-val">Some</span>(EcashBackup::V0(snapshot_v0)) =&gt; <span class="prelude-val">Some</span>(snapshot_v0),
+            <span class="prelude-val">Some</span>(EcashBackup::Default { variant, .. }) =&gt; {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Unsupported backup variant: {variant}&quot;</span>))
+            }
+            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
+        };
+
         <span class="self">self</span>.client_ctx
             .module_autocommit(
                 <span class="kw">move </span>|dbtx_ctx, <span class="kw">_</span>| {
-                    <span class="kw">let </span>snapshot_inner = snapshot.clone();
+                    <span class="kw">let </span>snapshot_inner = snapshot_v0.clone();
                     Box::pin(<span class="kw">async move </span>{ <span class="self">self</span>.restore_inner(dbtx_ctx, snapshot_inner).<span class="kw">await </span>})
                 },
                 <span class="prelude-val">None</span>,
@@ -3061,7 +3077,7 @@
     <span class="kw">async fn </span>restore_inner(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx_ctx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span><span class="kw-2">mut </span>ClientDbTxContext&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>, <span class="self">Self</span>&gt;,
-        maybe_snapshot: <span class="prelude-ty">Option</span>&lt;EcashBackup&gt;,
+        maybe_snapshot: <span class="prelude-ty">Option</span>&lt;EcashBackupV0&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">if </span>!<span class="self">Self</span>::get_all_spendable_notes(<span class="kw-2">&amp;mut </span>dbtx_ctx.module_dbtx())
             .<span class="kw">await
@@ -3082,7 +3098,7 @@
             <span class="macro">bail!</span>(<span class="string">&quot;Found existing active state machines. Mint module recovery must be started on an empty state.&quot;</span>)
         }
 
-        <span class="kw">let </span>snapshot = maybe_snapshot.unwrap_or(EcashBackup::new_empty());
+        <span class="kw">let </span>snapshot = maybe_snapshot.unwrap_or(EcashBackupV0::new_empty());
 
         <span class="kw">let </span>current_session_count = <span class="self">self</span>.client_ctx.global_api().session_count().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>state = MintRestoreInProgressState::from_backup(

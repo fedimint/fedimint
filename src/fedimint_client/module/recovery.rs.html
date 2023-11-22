@@ -92,6 +92,16 @@
 <a href="#92" id="92">92</a>
 <a href="#93" id="93">93</a>
 <a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -174,8 +184,18 @@
 
 <span class="macro">module_plugin_dyn_newtype_eq_passthrough!</span>(DynModuleBackup);
 
-<span class="attr">#[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>NoModuleBackup;
+<span class="doccomment">/// A backup type for modules without a backup implementation. The default
+/// variant allows implementing a backup strategy for the module later on by
+/// copying this enum into the module and adding a second variant to it.
+</span><span class="attr">#[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
+</span><span class="kw">pub enum </span>NoModuleBackup {
+    NoModuleBackup,
+    <span class="attr">#[encodable_default]
+    </span>Default {
+        variant: u64,
+        bytes: Vec&lt;u8&gt;,
+    },
+}
 
 <span class="kw">impl </span>ModuleBackup <span class="kw">for </span>NoModuleBackup {}
 
