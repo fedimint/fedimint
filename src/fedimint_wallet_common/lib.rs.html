@@ -416,7 +416,7 @@
 <span class="kw">pub mod </span>txoproof;
 
 <span class="kw">pub const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">&quot;wallet&quot;</span>);
-<span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(<span class="number">0</span>);
+<span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">0</span>, <span class="number">0</span>);
 
 <span class="kw">pub const </span>CONFIRMATION_TARGET: u16 = <span class="number">10</span>;
 

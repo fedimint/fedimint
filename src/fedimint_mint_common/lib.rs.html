@@ -256,7 +256,7 @@
 <span class="kw">pub mod </span>db;
 
 <span class="kw">pub const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">&quot;mint&quot;</span>);
-<span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(<span class="number">0</span>);
+<span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">0</span>, <span class="number">0</span>);
 
 <span class="doccomment">/// By default, the maximum notes per denomination when change-making for users
 </span><span class="kw">pub const </span>DEFAULT_MAX_NOTES_PER_DENOMINATION: u16 = <span class="number">3</span>;

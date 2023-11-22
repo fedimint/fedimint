@@ -155,7 +155,7 @@
 </span><span class="kw">pub const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">&quot;dummy&quot;</span>);
 
 <span class="doccomment">/// Modules are non-compatible with older versions
-</span><span class="kw">pub const </span>CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(<span class="number">0</span>);
+</span><span class="kw">pub const </span>CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">0</span>, <span class="number">0</span>);
 
 <span class="doccomment">/// Non-transaction items that will be submitted to consensus
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]

@@ -661,6 +661,21 @@
 <a href="#661" id="661">661</a>
 <a href="#662" id="662">662</a>
 <a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::mem;
@@ -1155,7 +1170,7 @@
         <span class="kw">let </span>peers_compatible_num = peer_versions
             .values()
             .filter(|supported_versions| {
-                (supported_versions.core_consensus == client_versions.core_consensus)
+                (supported_versions.core_consensus.major == client_versions.core_consensus.major)
                     .then(|| {
                         supported_versions
                             .api
@@ -1180,7 +1195,7 @@
 </span><span class="kw">fn </span>discover_common_core_api_version_sanity() {
     <span class="kw">use </span>fedimint_core::module::MultiApiVersion;
 
-    <span class="kw">let </span>core_consensus = <span class="number">0</span>.into();
+    <span class="kw">let </span>core_consensus = <span class="kw">crate</span>::module::CoreConsensusVersion::new(<span class="number">0</span>, <span class="number">0</span>);
     <span class="kw">let </span>client_versions = SupportedCoreApiVersions {
         core_consensus,
         api: MultiApiVersion::try_from_iter([
@@ -1197,7 +1212,7 @@
             BTreeMap::from([(
                 PeerId(<span class="number">0</span>),
                 SupportedCoreApiVersions {
-                    core_consensus: <span class="number">0</span>.into(),
+                    core_consensus: <span class="kw">crate</span>::module::CoreConsensusVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                     api: MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">2</span>, minor: <span class="number">4 </span>}])
                         .unwrap(),
                 }
@@ -1211,7 +1226,21 @@
             BTreeMap::from([(
                 PeerId(<span class="number">0</span>),
                 SupportedCoreApiVersions {
-                    core_consensus: <span class="number">1</span>.into(), <span class="comment">// wrong consensus version
+                    core_consensus: <span class="kw">crate</span>::module::CoreConsensusVersion::new(<span class="number">0</span>, <span class="number">1</span>), <span class="comment">/* different minor consensus version, we don&#39;t care */
+                    </span>api: MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">2</span>, minor: <span class="number">4 </span>}])
+                        .unwrap(),
+                }
+            )])
+        ),
+        <span class="prelude-val">Some</span>(ApiVersion { major: <span class="number">2</span>, minor: <span class="number">3 </span>})
+    );
+    <span class="macro">assert_eq!</span>(
+        discover_common_core_api_version(
+            <span class="kw-2">&amp;</span>client_versions,
+            BTreeMap::from([(
+                PeerId(<span class="number">0</span>),
+                SupportedCoreApiVersions {
+                    core_consensus: <span class="kw">crate</span>::module::CoreConsensusVersion::new(<span class="number">1</span>, <span class="number">0</span>), <span class="comment">/* wrong consensus version */
                     </span>api: MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">2</span>, minor: <span class="number">4 </span>}])
                         .unwrap(),
                 }
@@ -1264,8 +1293,9 @@
         <span class="kw">let </span>peers_compatible_num = peer_versions
             .values()
             .filter(|supported_versions| {
-                (supported_versions.core_consensus == client_versions.core_consensus
-                    &amp;&amp; supported_versions.module_consensus == client_versions.module_consensus)
+                (supported_versions.core_consensus.major == client_versions.core_consensus.major
+                    &amp;&amp; supported_versions.module_consensus.major
+                        == client_versions.module_consensus.major)
                     .then(|| {
                         supported_versions
                             .api

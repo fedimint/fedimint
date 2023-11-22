@@ -957,7 +957,7 @@
     }
 }
 
-<span class="kw">pub const </span>CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion(u32::MAX);
+<span class="kw">pub const </span>CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion::new(u32::MAX, <span class="number">0</span>);
 
 <span class="kw">impl </span>ServerConfig {
     <span class="doccomment">/// Api versions supported by this server

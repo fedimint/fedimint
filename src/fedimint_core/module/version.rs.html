@@ -371,6 +371,12 @@
 <a href="#371" id="371">371</a>
 <a href="#372" id="372">372</a>
 <a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint consensus and API versioning.
 //!
 //! ## Introduction
@@ -441,31 +447,34 @@
 /// See [`ModuleConsensusVersion`] for more details on how it interacts with
 /// module&#39;s consensus.
 </span><span class="attr">#[derive(Debug, Copy, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq)]
-</span><span class="kw">pub struct </span>CoreConsensusVersion(<span class="kw">pub </span>u32);
+</span><span class="kw">pub struct </span>CoreConsensusVersion {
+    <span class="kw">pub </span>major: u32,
+    <span class="kw">pub </span>minor: u32,
+}
 
-<span class="kw">impl </span>From&lt;u32&gt; <span class="kw">for </span>CoreConsensusVersion {
-    <span class="kw">fn </span>from(value: u32) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(value)
+<span class="kw">impl </span>CoreConsensusVersion {
+    <span class="kw">pub const fn </span>new(major: u32, minor: u32) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ major, minor }
     }
 }
 
 <span class="doccomment">/// Consensus version of a specific module instance
 ///
-/// Any breaking change to the module&#39;s consensus rules require incrementing it.
+/// Any breaking change to the module&#39;s consensus rules require incrementing the
+/// major part of it.
+///
+/// Any backwards-compatible changes with regards to clients require
+/// incrementing the minor part of it. Backwards compatible changes will
+/// typically be introducing new input/output/consensus item variants that old
+/// clients won&#39;t understand but can safely ignore while new clients can use new
+/// functionality. It&#39;s akin to soft forks in Bitcoin.
 ///
 /// A module instance can run only in one consensus version, which must be the
-/// same across all corresponding instances on other nodes of the federation.
+/// same (both major and minor) across all corresponding instances on other
+/// nodes of the federation.
 ///
 /// When [`CoreConsensusVersion`] changes, this can but is not requires to be
 /// a breaking change for each module&#39;s [`ModuleConsensusVersion`].
-///
-/// Incrementing the module&#39;s consensus version can be considered an in-place
-/// upgrade path, similar to a blockchain hard-fork consensus upgrade.
-///
-/// As of time of writing this comment there are no plans to support any kind
-/// of &quot;soft-forks&quot; which mean a consensus minor version. As the set of
-/// federation member&#39;s is closed and limited, it is always preferable to
-/// synchronize upgrade and avoid cross-version incompatibilities.
 ///
 /// For many modules it might be preferable to implement a new
 /// [`fedimint_core::core::ModuleKind`] &quot;versions&quot; (to be implemented at the
@@ -474,11 +483,14 @@
 /// slowly migrate to a new one. This avoids complex and error-prone server-side
 /// consensus-migration logic.
 </span><span class="attr">#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>ModuleConsensusVersion(<span class="kw">pub </span>u32);
+</span><span class="kw">pub struct </span>ModuleConsensusVersion {
+    <span class="kw">pub </span>major: u32,
+    <span class="kw">pub </span>minor: u32,
+}
 
-<span class="kw">impl </span>From&lt;u32&gt; <span class="kw">for </span>ModuleConsensusVersion {
-    <span class="kw">fn </span>from(value: u32) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(value)
+<span class="kw">impl </span>ModuleConsensusVersion {
+    <span class="kw">pub const fn </span>new(major: u32, minor: u32) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ major, minor }
     }
 }
 
@@ -722,10 +734,10 @@
     ///
     /// Panics if `api_version` parts conflict as per
     /// [`SupportedModuleApiVersions`] invariants.
-    </span><span class="kw">pub fn </span>from_raw(core: u32, module: u32, api_versions: <span class="kw-2">&amp;</span>[(u32, u32)]) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>from_raw(core: (u32, u32), module: (u32, u32), api_versions: <span class="kw-2">&amp;</span>[(u32, u32)]) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            core_consensus: CoreConsensusVersion(core),
-            module_consensus: ModuleConsensusVersion(module),
+            core_consensus: CoreConsensusVersion::new(core.<span class="number">0</span>, core.<span class="number">1</span>),
+            module_consensus: ModuleConsensusVersion::new(module.<span class="number">0</span>, module.<span class="number">1</span>),
             api: result::Result::&lt;MultiApiVersion, ApiVersion&gt;::from_iter(
                 api_versions
                     .iter()
