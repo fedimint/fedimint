@@ -1781,6 +1781,7 @@
 <a href="#1781" id="1781">1781</a>
 <a href="#1782" id="1782">1782</a>
 <a href="#1783" id="1783">1783</a>
+<a href="#1784" id="1784">1784</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3298,7 +3299,8 @@
         // );
 
         </span><span class="kw">let </span>client = <span class="self">self</span>.build(root_secret).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>metadata = client.restore_from_backup().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>backup = client.download_backup_from_federation().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>metadata = client.restore_from_backup(backup).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>((client, metadata))
     }
