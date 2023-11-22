@@ -105,7 +105,7 @@ mod fedimint_migration_tests {
     use fedimint_core::epoch::ConsensusItem;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::CommonModuleInit;
-    use fedimint_core::transaction::Transaction;
+    use fedimint_core::transaction::{Transaction, TransactionSignature};
     use fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
     use fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
     use fedimint_dummy_server::Dummy;
@@ -151,7 +151,7 @@ mod fedimint_migration_tests {
                 },
             )],
             nonce: [0x42; 8],
-            signatures: vec![schnorr],
+            signatures: TransactionSignature::NaiveMultisig(vec![schnorr]),
         };
 
         let module_ids = transaction
