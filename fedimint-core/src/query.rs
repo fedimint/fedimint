@@ -492,7 +492,7 @@ fn discover_common_core_api_version(
         let peers_compatible_num = peer_versions
             .values()
             .filter(|supported_versions| {
-                (supported_versions.core_consensus == client_versions.core_consensus)
+                (supported_versions.core_consensus.major == client_versions.core_consensus.major)
                     .then(|| {
                         supported_versions
                             .api
@@ -517,7 +517,7 @@ fn discover_common_core_api_version(
 fn discover_common_core_api_version_sanity() {
     use fedimint_core::module::MultiApiVersion;
 
-    let core_consensus = 0.into();
+    let core_consensus = crate::module::CoreConsensusVersion::new(0, 0);
     let client_versions = SupportedCoreApiVersions {
         core_consensus,
         api: MultiApiVersion::try_from_iter([
@@ -534,7 +534,7 @@ fn discover_common_core_api_version_sanity() {
             BTreeMap::from([(
                 PeerId(0),
                 SupportedCoreApiVersions {
-                    core_consensus: 0.into(),
+                    core_consensus: crate::module::CoreConsensusVersion::new(0, 0),
                     api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 4 }])
                         .unwrap(),
                 }
@@ -548,7 +548,21 @@ fn discover_common_core_api_version_sanity() {
             BTreeMap::from([(
                 PeerId(0),
                 SupportedCoreApiVersions {
-                    core_consensus: 1.into(), // wrong consensus version
+                    core_consensus: crate::module::CoreConsensusVersion::new(0, 1), /* different minor consensus version, we don't care */
+                    api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 4 }])
+                        .unwrap(),
+                }
+            )])
+        ),
+        Some(ApiVersion { major: 2, minor: 3 })
+    );
+    assert_eq!(
+        discover_common_core_api_version(
+            &client_versions,
+            BTreeMap::from([(
+                PeerId(0),
+                SupportedCoreApiVersions {
+                    core_consensus: crate::module::CoreConsensusVersion::new(1, 0), /* wrong consensus version */
                     api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 4 }])
                         .unwrap(),
                 }
@@ -601,7 +615,7 @@ fn discover_common_module_api_version(
         let peers_compatible_num = peer_versions
             .values()
             .filter(|supported_versions| {
-                (supported_versions.core_consensus == client_versions.core_consensus
+                (supported_versions.core_consensus.major == client_versions.core_consensus.major
                     && supported_versions.module_consensus.major
                         == client_versions.module_consensus.major)
                     .then(|| {

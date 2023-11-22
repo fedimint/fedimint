@@ -68,11 +68,14 @@ use crate::encoding::{Decodable, Encodable};
 /// See [`ModuleConsensusVersion`] for more details on how it interacts with
 /// module's consensus.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq)]
-pub struct CoreConsensusVersion(pub u32);
+pub struct CoreConsensusVersion {
+    pub major: u32,
+    pub minor: u32,
+}
 
-impl From<u32> for CoreConsensusVersion {
-    fn from(value: u32) -> Self {
-        Self(value)
+impl CoreConsensusVersion {
+    pub const fn new(major: u32, minor: u32) -> Self {
+        Self { major, minor }
     }
 }
 
@@ -352,9 +355,9 @@ impl SupportedModuleApiVersions {
     ///
     /// Panics if `api_version` parts conflict as per
     /// [`SupportedModuleApiVersions`] invariants.
-    pub fn from_raw(core: u32, module: (u32, u32), api_versions: &[(u32, u32)]) -> Self {
+    pub fn from_raw(core: (u32, u32), module: (u32, u32), api_versions: &[(u32, u32)]) -> Self {
         Self {
-            core_consensus: CoreConsensusVersion(core),
+            core_consensus: CoreConsensusVersion::new(core.0, core.1),
             module_consensus: ModuleConsensusVersion::new(module.0, module.1),
             api: result::Result::<MultiApiVersion, ApiVersion>::from_iter(
                 api_versions
