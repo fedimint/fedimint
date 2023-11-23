@@ -355,7 +355,7 @@ impl NoteIssuanceRequest {
         C: Signing,
     {
         let spend_key = secret.child_key(SPEND_KEY_CHILD_ID).to_secp_key(ctx);
-        let nonce = Nonce(spend_key.x_only_public_key().0);
+        let nonce = Nonce(spend_key.public_key());
         let blinding_key = BlindingKey(secret.child_key(BLINDING_KEY_CHILD_ID).to_bls12_381_key());
         let blinded_nonce = blind_message(nonce.to_message(), blinding_key);
 
@@ -369,11 +369,11 @@ impl NoteIssuanceRequest {
 
     /// Return nonce of the e-cash note being requested
     pub fn nonce(&self) -> Nonce {
-        Nonce(self.spend_key.x_only_public_key().0)
+        Nonce(self.spend_key.public_key())
     }
 
     pub fn recover_blind_nonce(&self) -> BlindNonce {
-        let message = Nonce(self.spend_key.x_only_public_key().0).to_message();
+        let message = Nonce(self.spend_key.public_key()).to_message();
         BlindNonce(tbs::blind_message(message, self.blinding_key))
     }
 
