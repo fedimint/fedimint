@@ -166,46 +166,6 @@
 <a href="#166" id="166">166</a>
 <a href="#167" id="167">167</a>
 <a href="#168" id="168">168</a>
-<a href="#169" id="169">169</a>
-<a href="#170" id="170">170</a>
-<a href="#171" id="171">171</a>
-<a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
-<a href="#174" id="174">174</a>
-<a href="#175" id="175">175</a>
-<a href="#176" id="176">176</a>
-<a href="#177" id="177">177</a>
-<a href="#178" id="178">178</a>
-<a href="#179" id="179">179</a>
-<a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a>
-<a href="#182" id="182">182</a>
-<a href="#183" id="183">183</a>
-<a href="#184" id="184">184</a>
-<a href="#185" id="185">185</a>
-<a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
-<a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a>
-<a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a>
-<a href="#201" id="201">201</a>
-<a href="#202" id="202">202</a>
-<a href="#203" id="203">203</a>
-<a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a>
-<a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a>
-<a href="#208" id="208">208</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>outgoing;
 
@@ -362,56 +322,16 @@
     }
 }
 <span class="doccomment">/// Threshold-encrypted [`Preimage`]
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Deserialize, Serialize)]
 </span><span class="kw">pub struct </span>EncryptedPreimage(<span class="kw">pub </span>threshold_crypto::Ciphertext);
 
 <span class="doccomment">/// Share to decrypt an [`EncryptedPreimage`]
-</span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+</span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>PreimageDecryptionShare(<span class="kw">pub </span>threshold_crypto::DecryptionShare);
 
 <span class="kw">impl </span>EncryptedPreimage {
     <span class="kw">pub fn </span>new(preimage: Preimage, key: <span class="kw-2">&amp;</span>threshold_crypto::PublicKey) -&gt; EncryptedPreimage {
         EncryptedPreimage(key.encrypt(preimage.<span class="number">0</span>))
-    }
-}
-
-<span class="kw">impl </span>Encodable <span class="kw">for </span>EncryptedPreimage {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="comment">// TODO: get rid of bincode
-        </span><span class="kw">let </span>bytes = bincode::serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).expect(<span class="string">&quot;Serialization shouldn&#39;t fail&quot;</span>);
-        bytes.consensus_encode(writer)
-    }
-}
-
-<span class="kw">impl </span>Decodable <span class="kw">for </span>EncryptedPreimage {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
-        d: <span class="kw-2">&amp;mut </span>D,
-        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(EncryptedPreimage(
-            bincode::deserialize(<span class="kw-2">&amp;</span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>,
-        ))
-    }
-}
-
-<span class="kw">impl </span>Encodable <span class="kw">for </span>PreimageDecryptionShare {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="comment">// TODO: get rid of bincode
-        </span><span class="kw">let </span>bytes = bincode::serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).expect(<span class="string">&quot;Serialization shouldn&#39;t fail&quot;</span>);
-        bytes.consensus_encode(writer)
-    }
-}
-
-<span class="kw">impl </span>Decodable <span class="kw">for </span>PreimageDecryptionShare {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
-        d: <span class="kw-2">&amp;mut </span>D,
-        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(PreimageDecryptionShare(
-            bincode::deserialize(<span class="kw-2">&amp;</span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>,
-        ))
     }
 }
 </code></pre></div></section></main></body></html>
