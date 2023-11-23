@@ -2,7 +2,7 @@ use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint};
 use futures::StreamExt;
-use secp256k1::XOnlyPublicKey;
+use secp256k1::PublicKey;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -26,7 +26,7 @@ impl std::fmt::Display for DbKeyPrefix {
 /// Example old version 0 of DB entries
 // TODO: can we simplify this by just using macros?
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
-pub struct DummyFundsKeyV0(pub XOnlyPublicKey);
+pub struct DummyFundsKeyV0(pub PublicKey);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct DummyFundsKeyPrefixV0;
@@ -40,7 +40,7 @@ impl_db_lookup!(key = DummyFundsKeyV0, query_prefix = DummyFundsKeyPrefixV0);
 
 /// Lookup funds for a user by key or prefix
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
-pub struct DummyFundsKeyV1(pub XOnlyPublicKey);
+pub struct DummyFundsKeyV1(pub PublicKey);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct DummyFundsPrefixV1;

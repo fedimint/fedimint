@@ -26,7 +26,7 @@ use fedimint_dummy_common::{
     KIND,
 };
 use futures::{pin_mut, StreamExt};
-use secp256k1::{Secp256k1, XOnlyPublicKey};
+use secp256k1::{PublicKey, Secp256k1};
 use states::DummyStateMachine;
 use strum::IntoEnumIterator;
 
@@ -112,7 +112,7 @@ impl ClientModule for DummyClientModule {
         Ok(vec![ClientInput {
             input: DummyInput {
                 amount,
-                account: self.key.x_only_public_key().0,
+                account: self.key.public_key(),
             },
             keys: vec![self.key],
             state_machines: Arc::new(move |txid, _| {
@@ -131,7 +131,7 @@ impl ClientModule for DummyClientModule {
         vec![ClientOutput {
             output: DummyOutput {
                 amount,
-                account: self.key.x_only_public_key().0,
+                account: self.key.public_key(),
             },
             state_machines: Arc::new(move |txid, _| {
                 vec![DummyStateMachine::Output(amount, txid, id)]
@@ -197,7 +197,7 @@ impl DummyClientModule {
         let input = ClientInput {
             input: DummyInput {
                 amount,
-                account: account_kp.x_only_public_key().0,
+                account: account_kp.public_key(),
             },
             keys: vec![account_kp],
             state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
@@ -234,11 +234,7 @@ impl DummyClientModule {
     }
 
     /// Send money to another user
-    pub async fn send_money(
-        &self,
-        account: XOnlyPublicKey,
-        amount: Amount,
-    ) -> anyhow::Result<OutPoint> {
+    pub async fn send_money(&self, account: PublicKey, amount: Amount) -> anyhow::Result<OutPoint> {
         self.db.ensure_isolated().expect("must be isolated");
         let mut dbtx = self.db.begin_transaction().await;
         let op_id = OperationId(rand::random());
@@ -296,7 +292,7 @@ impl DummyClientModule {
             .await_output_outcome(outpoint, Duration::from_secs(10), &self.decoder())
             .await?;
 
-        if account != self.key.x_only_public_key().0 {
+        if account != self.key.public_key() {
             return Err(format_err!("Wrong account id"));
         }
 
@@ -307,8 +303,8 @@ impl DummyClientModule {
     }
 
     /// Return our account
-    pub fn account(&self) -> XOnlyPublicKey {
-        self.key.x_only_public_key().0
+    pub fn account(&self) -> PublicKey {
+        self.key.public_key()
     }
 }
 
