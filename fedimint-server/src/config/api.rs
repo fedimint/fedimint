@@ -867,7 +867,7 @@ mod tests {
                 },
             );
             let request = ConfigGenParamsRequest {
-                meta: BTreeMap::from([("test".to_string(), self.name.clone())]),
+                meta: BTreeMap::from([("\"test\"".to_string(), self.name.clone())]),
                 modules,
             };
 
@@ -1014,7 +1014,7 @@ mod tests {
             let dummy: DummyConfig = cfg.get_module_config_typed(0).unwrap();
             assert_eq!(dummy.consensus.tx_fee, leader_amount);
             assert_eq!(dummy.local.example, peer.name);
-            assert_eq!(cfg.consensus.meta["test"], leader_name);
+            assert_eq!(cfg.consensus.meta["\"test\""], leader_name);
         }
 
         // start consensus
