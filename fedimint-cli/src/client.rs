@@ -251,7 +251,7 @@ pub async fn handle_command(
                 payment_type,
                 contract_id,
                 fee,
-            } = lightning_module.pay_bolt11_invoice(bolt11).await?;
+            } = lightning_module.pay_bolt11_invoice(bolt11, ()).await?;
             let operation_id = payment_type.operation_id();
             info!("Gateway fee: {fee}, payment operation id: {operation_id}");
             if finish_in_background {
@@ -323,7 +323,7 @@ pub async fn handle_command(
         ClientCmd::DepositAddress => {
             let (operation_id, address) = client
                 .get_first_module::<WalletClientModule>()
-                .get_deposit_address(now() + Duration::from_secs(600))
+                .get_deposit_address(now() + Duration::from_secs(600), ())
                 .await?;
             Ok(serde_json::json! {
                 {
@@ -441,7 +441,7 @@ pub async fn handle_command(
 
             info!("Attempting withdraw with fees: {fees:?}");
 
-            let operation_id = wallet_module.withdraw(address, amount, fees).await?;
+            let operation_id = wallet_module.withdraw(address, amount, fees, ()).await?;
 
             let mut updates = wallet_module
                 .subscribe_withdraw_updates(operation_id)

@@ -56,7 +56,7 @@ async fn peg_in<'a>(
     assert_eq!(balance_sub.ok().await?, sats(0));
 
     let wallet_module = &client.get_first_module::<WalletClientModule>();
-    let (op, address) = wallet_module.get_deposit_address(valid_until).await?;
+    let (op, address) = wallet_module.get_deposit_address(valid_until, ()).await?;
     info!(?address, "Peg-in address generated");
     let (_proof, tx) = bitcoin
         .send_and_mine_block(&address, bsats(PEG_IN_AMOUNT_SATS))
@@ -171,7 +171,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
         "stateless wallet should have constructed a tx with a total weight=871"
     );
     let op = wallet_module
-        .withdraw(address.clone(), peg_out, fees)
+        .withdraw(address.clone(), peg_out, fees, ())
         .await?;
 
     let balance_after_peg_out =
@@ -231,7 +231,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
 
     let wallet_module = client.get_first_module::<WalletClientModule>();
     let op = wallet_module
-        .withdraw(address.clone(), peg_out, fees)
+        .withdraw(address.clone(), peg_out, fees, ())
         .await?;
     assert_eq!(
         balance_sub.next().await.unwrap(),
@@ -276,7 +276,7 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
         .get_withdraw_fees(address.clone(), peg_out)
         .await?;
     let op = wallet_module
-        .withdraw(address.clone(), peg_out, fees)
+        .withdraw(address.clone(), peg_out, fees, ())
         .await?;
 
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
@@ -301,7 +301,7 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
         txid,
     };
     let wallet_module = client.get_first_module::<WalletClientModule>();
-    let op = wallet_module.rbf_withdraw(rbf.clone()).await?;
+    let op = wallet_module.rbf_withdraw(rbf.clone(), ()).await?;
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
     assert_eq!(sub.ok().await?, WithdrawState::Created);
@@ -358,7 +358,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
         .get_withdraw_fees(address.clone(), bsats(peg_out1))
         .await?;
     let op = wallet_module
-        .withdraw(address.clone(), bsats(peg_out1), fees1)
+        .withdraw(address.clone(), bsats(peg_out1), fees1, ())
         .await?;
     let balance_after_peg_out =
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees1.amount().to_sat());
@@ -394,7 +394,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
         .get_withdraw_fees(address.clone(), bsats(peg_out2))
         .await?;
     let op = wallet_module
-        .withdraw(address.clone(), bsats(peg_out2), fees2)
+        .withdraw(address.clone(), bsats(peg_out2), fees2, ())
         .await?;
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();

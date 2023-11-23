@@ -33,7 +33,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-use fedimint_core::task::timeout;
+use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
 };
@@ -211,13 +211,18 @@ pub struct LightningOperationMetaPay {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LightningOperationMeta {
+    pub variant: LightningOperationMetaVariant,
+    pub extra_meta: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum LightningOperationMeta {
+pub enum LightningOperationMetaVariant {
     Pay(LightningOperationMetaPay),
     Receive {
         out_point: OutPoint,
         invoice: Bolt11Invoice,
-        extra_meta: serde_json::Value,
     },
 }
 
@@ -1000,9 +1005,10 @@ impl LightningClientModule {
     }
 
     /// Pays a LN invoice with our available funds
-    pub async fn pay_bolt11_invoice(
+    pub async fn pay_bolt11_invoice<M: Serialize + MaybeSend + MaybeSync>(
         &self,
         invoice: Bolt11Invoice,
+        extra_meta: M,
     ) -> anyhow::Result<OutgoingLightningPayment> {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         let prev_payment_result = self
@@ -1103,15 +1109,18 @@ impl LightningClientModule {
         });
 
         let tx = TransactionBuilder::new().with_output(output);
-        let operation_meta_gen = |txid, change| {
-            LightningOperationMeta::Pay(LightningOperationMetaPay {
+        let extra_meta =
+            serde_json::to_value(extra_meta).context("Failed to serialize extra meta")?;
+        let operation_meta_gen = |txid, change| LightningOperationMeta {
+            variant: LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
                 out_point: OutPoint { txid, out_idx: 0 },
                 invoice: invoice.clone(),
                 fee,
                 change,
                 is_internal_payment,
                 contract_id,
-            })
+            }),
+            extra_meta: extra_meta.clone(),
         };
 
         // Write the new payment index into the database, fail the payment if the commit
@@ -1139,7 +1148,9 @@ impl LightningClientModule {
         operation_id: OperationId,
     ) -> anyhow::Result<LightningOperationMetaPay> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
-        let LightningOperationMeta::Pay(pay) = operation.meta::<LightningOperationMeta>() else {
+        let LightningOperationMetaVariant::Pay(pay) =
+            operation.meta::<LightningOperationMeta>().variant
+        else {
             anyhow::bail!("Operation is not a lightning payment")
         };
         Ok(pay)
@@ -1184,8 +1195,8 @@ impl LightningClientModule {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnPayState>> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
-        let (out_point, _, change) = match operation.meta::<LightningOperationMeta>() {
-            LightningOperationMeta::Pay(LightningOperationMetaPay {
+        let (out_point, _, change) = match operation.meta::<LightningOperationMeta>().variant {
+            LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
                 out_point,
                 invoice,
                 change,
@@ -1284,9 +1295,11 @@ impl LightningClientModule {
             .await?;
         let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(output));
         let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
-        let operation_meta_gen = |txid, _| LightningOperationMeta::Receive {
-            out_point: OutPoint { txid, out_idx: 0 },
-            invoice: invoice.clone(),
+        let operation_meta_gen = |txid, _| LightningOperationMeta {
+            variant: LightningOperationMetaVariant::Receive {
+                out_point: OutPoint { txid, out_idx: 0 },
+                invoice: invoice.clone(),
+            },
             extra_meta: extra_meta.clone(),
         };
         let (txid, _) = self
@@ -1316,12 +1329,8 @@ impl LightningClientModule {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
-        let (out_point, invoice) = match operation.meta::<LightningOperationMeta>() {
-            LightningOperationMeta::Receive {
-                out_point,
-                invoice,
-                extra_meta: _,
-            } => (out_point, invoice),
+        let (out_point, invoice) = match operation.meta::<LightningOperationMeta>().variant {
+            LightningOperationMetaVariant::Receive { out_point, invoice } => (out_point, invoice),
             _ => bail!("Operation is not a lightning payment"),
         };
 
