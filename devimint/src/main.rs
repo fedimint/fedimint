@@ -24,6 +24,47 @@ use tokio::fs;
 use tokio::net::TcpStream;
 use tracing::{debug, error, info, warn};
 
+struct Stats {
+    min: Duration,
+    avg: Duration,
+    median: Duration,
+    p90: Duration,
+    max: Duration,
+    sum: Duration,
+}
+
+impl std::fmt::Display for Stats {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "min: {:.1}s", self.min.as_secs_f32())?;
+        write!(f, ", avg: {:.1}s", self.avg.as_secs_f32())?;
+        write!(f, ", median: {:.1}s", self.median.as_secs_f32())?;
+        write!(f, ", p90: {:.1}s", self.p90.as_secs_f32())?;
+        write!(f, ", max: {:.1}s", self.max.as_secs_f32())?;
+        write!(f, ", sum: {:.1}s", self.sum.as_secs_f32())?;
+        Ok(())
+    }
+}
+
+fn stats_for(mut v: Vec<Duration>) -> Stats {
+    assert!(!v.is_empty());
+    v.sort();
+    let n = v.len();
+    let max = v.iter().last().unwrap().to_owned();
+    let min = v.first().unwrap().to_owned();
+    let median = v[n / 2];
+    let sum: Duration = v.iter().sum();
+    let avg = sum / n as u32;
+    let p90 = v[(n as f32 * 0.9) as usize];
+    Stats {
+        max,
+        min,
+        sum,
+        median,
+        avg,
+        p90,
+    }
+}
+
 pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
     #[allow(unused_variables)]
     let DevFed {
@@ -38,19 +79,26 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
     } = dev_fed;
 
     fed.pegin(10_000_000).await?;
-    let iterations = 10;
-    let start_time = Instant::now();
+    info!("Testing latency of reissue");
+    // On AlephBFT session times may lead to high latencies, so we need to run it
+    // for enough time to catch up a session end
+    let iterations = 30;
+    let mut reissues = Vec::with_capacity(iterations);
     for _ in 0..iterations {
         let notes = cmd!(fed, "spend", "50000").out_json().await?["notes"]
             .as_str()
             .context("note must be a string")?
             .to_owned();
 
+        let start_time = Instant::now();
         cmd!(fed, "reissue", notes).run().await?;
+        reissues.push(start_time.elapsed());
     }
-    let reissue_time = start_time.elapsed().as_secs_f64() / (iterations as f64);
 
-    let start_time = Instant::now();
+    // LN operations take longer, we need less iterations
+    let iterations = 20;
+    info!("Testing latency of ln send");
+    let mut ln_sends = Vec::with_capacity(iterations);
     for _ in 0..iterations {
         let add_invoice = lnd
             .lightning_client_lock()
@@ -64,7 +112,7 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
 
         let invoice = add_invoice.payment_request;
         let payment_hash = add_invoice.r_hash;
-
+        let start_time = Instant::now();
         cmd!(fed, "ln-pay", invoice).run().await?;
         let invoice_status = lnd
             .lightning_client_lock()
@@ -76,12 +124,12 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
             .await?
             .into_inner()
             .state();
-
         anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
+        ln_sends.push(start_time.elapsed());
     }
-    let ln_send_time = start_time.elapsed().as_secs_f64() / (iterations as f64);
 
-    let start_time = Instant::now();
+    info!("Testing latency of ln receive");
+    let mut ln_receives = Vec::with_capacity(iterations);
     for _ in 0..iterations {
         let invoice = cmd!(
             fed,
@@ -95,6 +143,7 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
             .context("invoice must be string")?
             .to_owned();
 
+        let start_time = Instant::now();
         let payment = lnd
             .lightning_client_lock()
             .await?
@@ -119,14 +168,29 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
             .context("payment not in list")?
             .status();
         anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
+        ln_receives.push(start_time.elapsed());
     }
-    let ln_recv_time = start_time.elapsed().as_secs_f64() / (iterations as f64);
+    let reissue_stats = stats_for(reissues);
+    let ln_sends_stats = stats_for(ln_sends);
+    let ln_receives_stats = stats_for(ln_receives);
     println!(
         "================= RESULTS ==================\n\
-              AVG REISSUE TIME: {reissue_time:.3}\n\
-              AVG LN SEND TIME: {ln_send_time:.3}\n\
-              AVG LN RECV TIME: {ln_recv_time:.3}"
+              REISSUE: {reissue_stats}\n\
+              LN SEND: {ln_sends_stats}\n\
+              LN RECV: {ln_receives_stats}"
     );
+    // FIXME: should be smaller
+    assert!(reissue_stats.median < Duration::from_secs(4));
+    assert!(ln_sends_stats.median < Duration::from_secs(6));
+    assert!(ln_receives_stats.median < Duration::from_secs(6));
+    let factor = 3; // FIXME: should be much smaller
+    assert!(reissue_stats.p90 < reissue_stats.median * factor);
+    assert!(ln_sends_stats.p90 < ln_sends_stats.median * factor);
+    assert!(ln_receives_stats.p90 < ln_receives_stats.median * factor);
+    let factor = 3.1f64; // FIXME: should be much smaller
+    assert!(reissue_stats.max.as_secs_f64() < reissue_stats.p90.as_secs_f64() * factor);
+    assert!(ln_sends_stats.max.as_secs_f64() < ln_sends_stats.p90.as_secs_f64() * factor);
+    assert!(ln_receives_stats.max.as_secs_f64() < ln_receives_stats.p90.as_secs_f64() * factor);
     Ok(())
 }
 
