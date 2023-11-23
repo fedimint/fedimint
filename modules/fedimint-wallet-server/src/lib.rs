@@ -518,7 +518,7 @@ impl ServerModule for Wallet {
                 amount: fedimint_core::Amount::from_sats(input.tx_output().value),
                 fee: self.cfg.consensus.fee_consensus.peg_in_abs,
             },
-            pub_key: *input.tweak_contract_key(),
+            pub_key: input.tweak_contract_key().x_only_public_key().0,
         })
     }
 
@@ -662,7 +662,7 @@ impl ServerModule for Wallet {
                     let feerate = module.consensus_fee_rate(&mut context.dbtx().into_nc()).await;
 
                     // Since we are only calculating the tx size we can use an arbitrary dummy nonce.
-                    let dummy_tweak = [0; 32];
+                    let dummy_tweak = [0; 33];
 
                     let tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
@@ -837,7 +837,7 @@ impl Wallet {
         // later on. The tweak is extracted here because the psbt is moved next
         // and not available anymore when the tweak is actually needed in the
         // end to be put into the batch on success.
-        let change_tweak: [u8; 32] = unsigned
+        let change_tweak: [u8; 33] = unsigned
             .psbt
             .outputs
             .iter()
@@ -927,11 +927,17 @@ impl Wallet {
         rates[peer_count / 2]
     }
 
-    pub async fn consensus_nonce(&self, dbtx: &mut DatabaseTransaction<'_>) -> [u8; 32] {
-        let nonce = dbtx.get_value(&PegOutNonceKey).await.unwrap_or(0);
-        dbtx.insert_entry(&PegOutNonceKey, &(nonce + 1)).await;
+    pub async fn consensus_nonce(&self, dbtx: &mut DatabaseTransaction<'_>) -> [u8; 33] {
+        let random_nonce = dbtx.get_value(&PegOutNonceKey).await.unwrap_or(0);
+        dbtx.insert_entry(&PegOutNonceKey, &(random_nonce + 1))
+            .await;
 
-        nonce.consensus_hash::<sha256::Hash>().into_inner()
+        let mut nonce: [u8; 33] = [0; 33];
+        // Make it look like a compressed pubkey, has to be either 0x02 or 0x03
+        nonce[0] = 0x02;
+        nonce[1..].copy_from_slice(&random_nonce.consensus_hash::<sha256::Hash>()[..]);
+
+        nonce
     }
 
     async fn sync_up_to_consensus_height<'a>(
@@ -1085,7 +1091,7 @@ impl Wallet {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         output: &WalletOutputV0,
-        change_tweak: &[u8; 32],
+        change_tweak: &[u8; 33],
     ) -> Result<UnsignedTransaction, WalletOutputError> {
         match output {
             WalletOutputV0::PegOut(peg_out) => self.offline_wallet().create_tx(
@@ -1164,6 +1170,11 @@ pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBi
         .iter()
         .filter_map(|tx| tx.rbf.clone().map(|rbf| rbf.txid))
         .collect();
+    debug!(
+        "Broadcasting pending transactions (total={}, rbf={})",
+        pending_tx.len(),
+        rbf_txids.len()
+    );
 
     for PendingTransaction { tx, .. } in pending_tx {
         if !rbf_txids.contains(&tx.txid()) {
@@ -1255,7 +1266,7 @@ impl<'a> StatelessWallet<'a> {
         mut included_utxos: Vec<(UTXOKey, SpendableUTXO)>,
         mut remaining_utxos: Vec<(UTXOKey, SpendableUTXO)>,
         mut fee_rate: Feerate,
-        change_tweak: &[u8],
+        change_tweak: &[u8; 33],
         rbf: Option<Rbf>,
     ) -> Result<UnsignedTransaction, WalletOutputError> {
         // Add the rbf fees to the existing tx fees
@@ -1554,7 +1565,7 @@ mod tests {
         };
 
         let spendable = SpendableUTXO {
-            tweak: [0; 32],
+            tweak: [0; 33],
             amount: Amount::from_sat(3000),
         };
 
@@ -1573,7 +1584,7 @@ mod tests {
             vec![],
             vec![(UTXOKey(OutPoint::null()), spendable.clone())],
             fee,
-            &[],
+            &[0; 33],
             None,
         );
         assert_eq!(tx, Err(WalletOutputError::NotEnoughSpendableUTXO));
@@ -1586,7 +1597,7 @@ mod tests {
                 vec![],
                 vec![(UTXOKey(OutPoint::null()), spendable)],
                 fee,
-                &[],
+                &[0; 33],
                 None,
             )
             .expect("is ok");
@@ -1653,7 +1664,7 @@ mod fedimint_migration_tests {
     use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
     use fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, ServerModule, TransactionId};
     use fedimint_testing::db::{
-        prepare_db_migration_snapshot, validate_migrations, BYTE_20, BYTE_32,
+        prepare_db_migration_snapshot, validate_migrations, BYTE_20, BYTE_32, BYTE_33,
     };
     use fedimint_wallet_common::db::{
         BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
@@ -1688,7 +1699,7 @@ mod fedimint_migration_tests {
             vout: 0,
         });
         let spendable_utxo = SpendableUTXO {
-            tweak: BYTE_32,
+            tweak: BYTE_33,
             amount: Amount::from_sat(10000),
         };
 
@@ -1785,7 +1796,7 @@ mod fedimint_migration_tests {
 
         let pending_tx = PendingTransaction {
             tx: transaction,
-            tweak: BYTE_32,
+            tweak: BYTE_33,
             change: Amount::from_sat(0),
             destination,
             fees: PegOutFees {

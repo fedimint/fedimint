@@ -26,7 +26,7 @@ pub struct PegInProof {
     transaction: Transaction,
     // Check that the idx is in range
     output_idx: u32,
-    tweak_contract_key: secp256k1::XOnlyPublicKey,
+    tweak_contract_key: secp256k1::PublicKey,
 }
 
 impl PegInProof {
@@ -34,7 +34,7 @@ impl PegInProof {
         txout_proof: TxOutProof,
         transaction: Transaction,
         output_idx: u32,
-        tweak_contract_key: secp256k1::XOnlyPublicKey,
+        tweak_contract_key: secp256k1::PublicKey,
     ) -> Result<PegInProof, PegInProofError> {
         // TODO: remove redundancy with serde validation
         if !txout_proof.contains_tx(transaction.txid()) {
@@ -86,11 +86,11 @@ impl PegInProof {
         self.txout_proof.block()
     }
 
-    pub fn tweak_contract_key(&self) -> &secp256k1::XOnlyPublicKey {
+    pub fn tweak_contract_key(&self) -> &secp256k1::PublicKey {
         &self.tweak_contract_key
     }
 
-    pub fn identity(&self) -> (secp256k1::XOnlyPublicKey, bitcoin::Txid) {
+    pub fn identity(&self) -> (secp256k1::PublicKey, bitcoin::Txid) {
         (self.tweak_contract_key, self.transaction.txid())
     }
 
@@ -173,7 +173,7 @@ impl Decodable for PegInProof {
             txout_proof: TxOutProof::consensus_decode(d, modules)?,
             transaction: Transaction::consensus_decode(d, modules)?,
             output_idx: u32::consensus_decode(d, modules)?,
-            tweak_contract_key: secp256k1::XOnlyPublicKey::consensus_decode(d, modules)?,
+            tweak_contract_key: secp256k1::PublicKey::consensus_decode(d, modules)?,
         };
 
         validate_peg_in_proof(&slf).map_err(DecodeError::from_err)?;
