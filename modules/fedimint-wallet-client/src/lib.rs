@@ -281,26 +281,26 @@ impl WalletClientModule {
         valid_until: SystemTime,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> (OperationId, WalletClientStates, Address) {
-        let tweak_key = self
+        let secret_tweak_key = self
             .module_root_secret
             .child_key(WALLET_TWEAK_CHILD_ID)
             .child_key(get_next_peg_in_tweak_child_id(dbtx).await)
             .to_secp_key(&self.secp);
 
-        let x_only_pk = tweak_key.public_key().to_x_only_pubkey();
-        let operation_id = OperationId(x_only_pk.serialize());
+        let public_tweak_key = secret_tweak_key.public_key();
+        let operation_id = OperationId(public_tweak_key.to_x_only_pubkey().serialize()); // TODO: make hash?
 
         let address = self
             .cfg
             .peg_in_descriptor
-            .tweak(&x_only_pk, secp256k1::SECP256K1)
+            .tweak(&public_tweak_key, secp256k1::SECP256K1)
             .address(self.cfg.network)
             .unwrap();
 
         let deposit_sm = WalletClientStates::Deposit(DepositStateMachine {
             operation_id,
             state: DepositStates::Created(CreatedDepositState {
-                tweak_key,
+                tweak_key: secret_tweak_key,
                 timeout_at: valid_until,
             }),
         });

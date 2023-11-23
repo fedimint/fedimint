@@ -12,7 +12,6 @@ use fedimint_core::{OutPoint, TransactionId};
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::WalletInput;
-use miniscript::ToPublicKey;
 use secp256k1::KeyPair;
 use tracing::{debug, instrument, trace, warn};
 
@@ -104,7 +103,7 @@ async fn await_created_btc_transaction_submitted(
 ) -> (bitcoin::Transaction, u32) {
     let script = context
         .wallet_descriptor
-        .tweak(&tweak.public_key().to_x_only_pubkey(), &context.secp)
+        .tweak(&tweak.public_key(), &context.secp)
         .script_pubkey();
     loop {
         match context.rpc.watch_script_history(&script).await {
