@@ -350,7 +350,7 @@ impl ServerModule for Mint {
                 amount: input.amount,
                 fee: self.cfg.consensus.fee_consensus.note_spend_abs,
             },
-            pub_key: *input.note.spend_key(),
+            pub_key: input.note.spend_key().x_only_public_key().0,
         })
     }
 
@@ -638,7 +638,7 @@ mod test {
         denomination: Amount,
     ) -> (secp256k1::KeyPair, Note) {
         let note_key = secp256k1::KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
-        let nonce = Nonce(note_key.public_key().x_only_public_key().0);
+        let nonce = Nonce(note_key.public_key());
         let message = nonce.to_message();
         let blinding_key = tbs::BlindingKey::random();
         let blind_msg = blind_message(message, blinding_key);
@@ -732,7 +732,7 @@ mod fedimint_migration_tests {
     /// that creates a new database backup that can be tested.
     async fn create_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
         let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
-        let nonce_key = NonceKey(Nonce(pk.x_only_public_key().0));
+        let nonce_key = NonceKey(Nonce(pk));
         dbtx.insert_new_entry(&nonce_key, &()).await;
 
         let out_point = OutPoint {

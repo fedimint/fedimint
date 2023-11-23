@@ -1218,7 +1218,7 @@ impl MintClientModule {
                 bail!("Note {idx} has an invalid federation signature");
             }
 
-            let expected_nonce = Nonce(snote.spend_key.x_only_public_key().0);
+            let expected_nonce = Nonce(snote.spend_key.public_key());
             if note.nonce != expected_nonce {
                 bail!("Note {idx} cannot be spent using the supplied spend key");
             }
@@ -1565,7 +1565,7 @@ pub struct SpendableNote {
 
 impl SpendableNote {
     fn nonce(&self) -> Nonce {
-        Nonce(self.spend_key.x_only_public_key().0)
+        Nonce(self.spend_key.public_key())
     }
 
     fn note(&self) -> Note {
