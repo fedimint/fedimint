@@ -30,7 +30,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 use fedimint_wallet_common::config::WalletClientConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -175,8 +175,14 @@ impl ClientModuleInit for WalletClientInit {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletOperationMeta {
+    pub variant: WalletOperationMetaVariant,
+    pub extra_meta: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WalletOperationMeta {
+pub enum WalletOperationMetaVariant {
     Deposit {
         address: bitcoin::Address,
         expires_at: SystemTime,
@@ -375,15 +381,19 @@ impl WalletClientModule {
         })
     }
 
-    pub async fn get_deposit_address(
+    pub async fn get_deposit_address<M: Serialize + MaybeSend + MaybeSync>(
         &self,
         valid_until: SystemTime,
+        extra_meta: M,
     ) -> anyhow::Result<(OperationId, Address)> {
+        let extra_meta = serde_json::to_value(extra_meta).expect("extra meta is serializable");
+
         let (operation_id, address) = self
             .client_ctx
             .module_autocommit(
                 |dbtx, _| {
-                    Box::pin(async {
+                    let extra_meta_inner = extra_meta.clone();
+                    Box::pin(async move {
                         let (operation_id, sm, address) = self
                             .get_deposit_address_inner(valid_until, &mut dbtx.module_dbtx())
                             .await;
@@ -399,9 +409,12 @@ impl WalletClientModule {
                         dbtx.add_operation_log_entry(
                             operation_id,
                             WalletCommonInit::KIND.as_str(),
-                            WalletOperationMeta::Deposit {
-                                address: address.clone(),
-                                expires_at: valid_until,
+                            WalletOperationMeta {
+                                variant: WalletOperationMetaVariant::Deposit {
+                                    address: address.clone(),
+                                    expires_at: valid_until,
+                                },
+                                extra_meta: extra_meta_inner,
                             },
                         )
                         .await;
@@ -439,7 +452,10 @@ impl WalletClientModule {
 
         let operation_meta = operation_log_entry.meta::<WalletOperationMeta>();
 
-        if !matches!(operation_meta, WalletOperationMeta::Deposit { .. }) {
+        if !matches!(
+            operation_meta.variant,
+            WalletOperationMetaVariant::Deposit { .. }
+        ) {
             bail!("Operation is not a deposit operation");
         }
 
@@ -506,11 +522,12 @@ impl WalletClientModule {
     /// `address`. The caller has to supply the fee rate to be used which can be
     /// fetched using [`Self::get_withdraw_fees`] and should be
     /// acknowledged by the user since it can be unexpectedly high.
-    pub async fn withdraw(
+    pub async fn withdraw<M: Serialize + MaybeSend + MaybeSync>(
         &self,
         address: bitcoin::Address,
         amount: bitcoin::Amount,
         fee: PegOutFees,
+        extra_meta: M,
     ) -> anyhow::Result<OperationId> {
         {
             let operation_id = OperationId(thread_rng().gen());
@@ -521,15 +538,20 @@ impl WalletClientModule {
             let tx_builder = TransactionBuilder::new()
                 .with_output(self.client_ctx.make_client_output(withdraw_output));
 
+            let extra_meta =
+                serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
             self.client_ctx
                 .finalize_and_submit_transaction(
                     operation_id,
                     WalletCommonInit::KIND.as_str(),
-                    move |_, change| WalletOperationMeta::Withdraw {
-                        address: address.clone(),
-                        amount,
-                        fee,
-                        change,
+                    move |_, change| WalletOperationMeta {
+                        variant: WalletOperationMetaVariant::Withdraw {
+                            address: address.clone(),
+                            amount,
+                            fee,
+                            change,
+                        },
+                        extra_meta: extra_meta.clone(),
                     },
                     tx_builder,
                 )
@@ -543,7 +565,11 @@ impl WalletClientModule {
     /// replace by fee (RBF).
     /// This can prevent transactions from getting stuck
     /// in the mempool
-    pub async fn rbf_withdraw(&self, rbf: Rbf) -> anyhow::Result<OperationId> {
+    pub async fn rbf_withdraw<M: Serialize + MaybeSync + MaybeSend>(
+        &self,
+        rbf: Rbf,
+        extra_meta: M,
+    ) -> anyhow::Result<OperationId> {
         let operation_id = OperationId(thread_rng().gen());
 
         let withdraw_output = self
@@ -552,13 +578,17 @@ impl WalletClientModule {
         let tx_builder = TransactionBuilder::new()
             .with_output(self.client_ctx.make_client_output(withdraw_output));
 
+        let extra_meta = serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
         self.client_ctx
             .finalize_and_submit_transaction(
                 operation_id,
                 WalletCommonInit::KIND.as_str(),
-                move |_, change| WalletOperationMeta::RbfWithdraw {
-                    rbf: rbf.clone(),
-                    change,
+                move |_, change| WalletOperationMeta {
+                    variant: WalletOperationMetaVariant::RbfWithdraw {
+                        rbf: rbf.clone(),
+                        change,
+                    },
+                    extra_meta: extra_meta.clone(),
                 },
                 tx_builder,
             )
@@ -583,8 +613,8 @@ impl WalletClientModule {
 
         let operation_meta = operation.meta::<WalletOperationMeta>();
 
-        let (WalletOperationMeta::Withdraw { change, .. }
-        | WalletOperationMeta::RbfWithdraw { change, .. }) = operation_meta
+        let (WalletOperationMetaVariant::Withdraw { change, .. }
+        | WalletOperationMetaVariant::RbfWithdraw { change, .. }) = operation_meta.variant
         else {
             bail!("Operation is not a withdraw operation");
         };

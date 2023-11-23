@@ -669,7 +669,7 @@ impl Gateway {
             .select_client(payload.federation_id)
             .await?
             .get_first_module::<WalletClientModule>()
-            .get_deposit_address(now() + Duration::from_secs(86400 * 365))
+            .get_deposit_address(now() + Duration::from_secs(86400 * 365), ())
             .await?;
         Ok(address)
     }
@@ -702,7 +702,7 @@ impl Gateway {
             ),
         };
 
-        let operation_id = wallet_module.withdraw(address, amount, fees).await?;
+        let operation_id = wallet_module.withdraw(address, amount, fees, ()).await?;
         let mut updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
             .await?
