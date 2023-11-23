@@ -1548,7 +1548,6 @@ dependencies = [
  "anyhow",
  "aquamarine",
  "async-trait",
- "bincode",
  "bitcoin 0.29.2",
  "bitcoin_hashes 0.11.0",
  "erased-serde",

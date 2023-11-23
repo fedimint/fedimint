@@ -154,55 +154,15 @@ impl DecryptedPreimage {
     }
 }
 /// Threshold-encrypted [`Preimage`]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Deserialize, Serialize)]
 pub struct EncryptedPreimage(pub threshold_crypto::Ciphertext);
 
 /// Share to decrypt an [`EncryptedPreimage`]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct PreimageDecryptionShare(pub threshold_crypto::DecryptionShare);
 
 impl EncryptedPreimage {
     pub fn new(preimage: Preimage, key: &threshold_crypto::PublicKey) -> EncryptedPreimage {
         EncryptedPreimage(key.encrypt(preimage.0))
-    }
-}
-
-impl Encodable for EncryptedPreimage {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        // TODO: get rid of bincode
-        let bytes = bincode::serialize(&self.0).expect("Serialization shouldn't fail");
-        bytes.consensus_encode(writer)
-    }
-}
-
-impl Decodable for EncryptedPreimage {
-    fn consensus_decode<D: std::io::Read>(
-        d: &mut D,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let bytes = Vec::<u8>::consensus_decode(d, modules)?;
-        Ok(EncryptedPreimage(
-            bincode::deserialize(&bytes).map_err(DecodeError::from_err)?,
-        ))
-    }
-}
-
-impl Encodable for PreimageDecryptionShare {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        // TODO: get rid of bincode
-        let bytes = bincode::serialize(&self.0).expect("Serialization shouldn't fail");
-        bytes.consensus_encode(writer)
-    }
-}
-
-impl Decodable for PreimageDecryptionShare {
-    fn consensus_decode<D: std::io::Read>(
-        d: &mut D,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let bytes = Vec::<u8>::consensus_decode(d, modules)?;
-        Ok(PreimageDecryptionShare(
-            bincode::deserialize(&bytes).map_err(DecodeError::from_err)?,
-        ))
     }
 }
