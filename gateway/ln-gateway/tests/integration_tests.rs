@@ -1200,7 +1200,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
                 "Gateway balance after swap".to_string(),
                 || async {
                     let post_balances = get_balances(&rpc, &[id1, id2]).await;
-                    if post_balances[0] == pre_balances[0] && post_balances[1] == pre_balances[1] {
+                    if post_balances[0] == pre_balances[0] || post_balances[1] == pre_balances[1] {
                         return Err(anyhow::anyhow!("Gateway balance not updated"));
                     };
                     Ok(post_balances)
