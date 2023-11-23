@@ -22,7 +22,8 @@ use fedimint_dummy_server::DummyInit;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LightningClientStateMachines,
-    LightningOperationMeta, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
+    LightningOperationMeta, LightningOperationMetaVariant, LnPayState, LnReceiveState,
+    OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::{GatewayFee, LightningGenParams};
@@ -145,7 +146,7 @@ async fn pay_valid_invoice(
         contract_id,
         fee: _,
     } = user_lightning_module
-        .pay_bolt11_invoice(invoice.clone())
+        .pay_bolt11_invoice(invoice.clone(), ())
         .await?;
     match payment_type {
         PayType::Lightning(pay_op) => {
@@ -272,7 +273,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                 fee: _,
             } = user_client
                 .get_first_module::<LightningClientModule>()
-                .pay_bolt11_invoice(invoice.clone())
+                .pay_bolt11_invoice(invoice.clone(), ())
                 .await?;
 
             // Try to directly claim the outgoing contract with an invalid preimage
@@ -344,7 +345,9 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
                 payment_type,
                 contract_id,
                 fee: _,
-            } = lightning_module.pay_bolt11_invoice(invoice.clone()).await?;
+            } = lightning_module
+                .pay_bolt11_invoice(invoice.clone(), ())
+                .await?;
             match payment_type {
                 PayType::Lightning(pay_op) => {
                     let mut pay_sub = lightning_module
@@ -566,12 +569,15 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             };
             let tx = TransactionBuilder::new()
                 .with_output(client_output.into_dyn(user_lightning_module.id));
-            let operation_meta_gen = |txid, _| LightningOperationMeta::Receive {
-                out_point: OutPoint { txid, out_idx: 0 },
-                invoice: invoice.clone(),
+            let operation_meta_gen = |txid, _| LightningOperationMeta {
+                variant: LightningOperationMetaVariant::Receive {
+                    out_point: OutPoint { txid, out_idx: 0 },
+                    invoice: invoice.clone(),
+                },
                 extra_meta: serde_json::to_value("test intercept HTLC with invalid offer")
                     .expect("Failed to serialize string into json"),
             };
+
             let operation_id = OperationId(invoice.payment_hash().into_inner());
             let (txid, _) = user_client
                 .finalize_and_submit_transaction(
@@ -709,7 +715,9 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                 payment_type,
                 contract_id,
                 fee: _,
-            } = lightning_module.pay_bolt11_invoice(invoice.clone()).await?;
+            } = lightning_module
+                .pay_bolt11_invoice(invoice.clone(), ())
+                .await?;
             match payment_type {
                 PayType::Lightning(pay_op) => {
                     let mut pay_sub = lightning_module
@@ -1155,7 +1163,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
                 fee,
             } = client1
                 .get_first_module::<LightningClientModule>()
-                .pay_bolt11_invoice(invoice.clone())
+                .pay_bolt11_invoice(invoice.clone(), ())
                 .await?;
             match payment_type {
                 PayType::Lightning(pay_op) => {

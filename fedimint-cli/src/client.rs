@@ -251,7 +251,7 @@ pub async fn handle_command(
                 payment_type,
                 contract_id,
                 fee,
-            } = lightning_module.pay_bolt11_invoice(bolt11).await?;
+            } = lightning_module.pay_bolt11_invoice(bolt11, ()).await?;
             let operation_id = payment_type.operation_id();
             info!("Gateway fee: {fee}, payment operation id: {operation_id}");
             if finish_in_background {

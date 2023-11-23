@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use anyhow::bail;
 use assert_matches::assert_matches;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
@@ -127,7 +126,7 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
         fee: _,
     } = client2
         .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice)
+        .pay_bolt11_invoice(invoice, ())
         .await?;
     match payment_type {
         PayType::Internal(op_id) => {
@@ -145,14 +144,10 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
 
     // Verify that we can retrieve the extra metadata that was attached
     let operation = ln_operation(&client1, op).await?;
-    let op_meta = match operation.meta::<LightningOperationMeta>() {
-        LightningOperationMeta::Receive {
-            out_point: _,
-            invoice: _,
-            extra_meta,
-        } => extra_meta.to_string(),
-        _ => bail!("Operation is not a lightning payment"),
-    };
+    let op_meta = operation
+        .meta::<LightningOperationMeta>()
+        .extra_meta
+        .to_string();
     assert_eq!(serde_json::to_string(&extra_meta)?, op_meta);
 
     Ok(())
@@ -188,7 +183,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
         fee: _,
     } = client2
         .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice.clone())
+        .pay_bolt11_invoice(invoice.clone(), ())
         .await?;
     match payment_type {
         PayType::Internal(op_id) => {
@@ -215,7 +210,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
         fee: _,
     } = client2
         .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice)
+        .pay_bolt11_invoice(invoice, ())
         .await?;
     match payment_type {
         PayType::Internal(op_id) => {
@@ -263,7 +258,7 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
         fee: _,
     } = client1
         .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice.clone())
+        .pay_bolt11_invoice(invoice.clone(), ())
         .await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
@@ -288,7 +283,7 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
         fee: _,
     } = client2
         .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice.clone())
+        .pay_bolt11_invoice(invoice.clone(), ())
         .await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
@@ -332,7 +327,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         fee: _,
     } = client
         .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice.clone())
+        .pay_bolt11_invoice(invoice.clone(), ())
         .await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
@@ -359,7 +354,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         fee: _,
     } = client
         .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice)
+        .pay_bolt11_invoice(invoice, ())
         .await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
@@ -414,7 +409,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
         fee: _,
     } = client2
         .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice)
+        .pay_bolt11_invoice(invoice, ())
         .await?;
     match payment_type {
         PayType::Internal(op_id) => {
@@ -453,7 +448,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
         fee: _,
     } = client2
         .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice)
+        .pay_bolt11_invoice(invoice, ())
         .await?;
     match payment_type {
         PayType::Internal(op_id) => {
@@ -493,7 +488,7 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
 
     let error = client1
         .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(signet_invoice)
+        .pay_bolt11_invoice(signet_invoice, ())
         .await
         .unwrap_err();
     assert_eq!(
