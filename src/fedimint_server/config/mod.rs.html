@@ -770,6 +770,28 @@
 <a href="#770" id="770">770</a>
 <a href="#771" id="771">771</a>
 <a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -818,6 +840,11 @@
 
 <span class="doccomment">/// The default maximum open connections the API can handle
 </span><span class="kw">const </span>DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = <span class="number">1000</span>;
+<span class="comment">// if all nodes are correct the session will take 45 to 60 seconds. The
+// more nodes go offline the longer the session will take to complete.
+</span><span class="kw">const </span>DEFAULT_BROADCAST_EXPECTED_ROUNDS_PER_SESSION: u16 = <span class="number">45 </span>* <span class="number">20</span>;
+<span class="kw">const </span>DEFAULT_BROADCAST_ROUND_DELAY_MS: u16 = <span class="number">50</span>;
+<span class="kw">const </span>DEFAULT_BROADCAST_MAX_ROUNDS_PER_SESSION: u16 = <span class="number">5000</span>;
 
 <span class="doccomment">/// The env var for maximum open connections the API can handle
 </span><span class="kw">const </span>ENV_MAX_CLIENT_CONNECTIONS: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_MAX_CLIENT_CONNECTIONS&quot;</span>;
@@ -884,6 +911,11 @@
     </span><span class="kw">pub </span>version: CoreConsensusVersion,
     <span class="doccomment">/// Public keys for the atomic broadcast to authenticate messages
     </span><span class="kw">pub </span>broadcast_public_keys: BTreeMap&lt;PeerId, PublicKey&gt;,
+    <span class="doccomment">/// Determines how long a session is expected to run. Has to be less than
+    /// 1000.
+    </span><span class="kw">pub </span>broadcast_expected_rounds_per_session: u16,
+    <span class="doccomment">/// Maximum number of rounds permitted per session.
+    </span><span class="kw">pub </span>broadcast_max_rounds_per_session: u16,
     <span class="doccomment">/// Network addresses and names for all peer APIs
     </span><span class="kw">pub </span>api_endpoints: BTreeMap&lt;PeerId, PeerUrl&gt;,
     <span class="doccomment">/// Certs for TLS communication, required for peer authentication
@@ -911,6 +943,15 @@
     </span><span class="kw">pub </span>api_bind: SocketAddr,
     <span class="doccomment">/// How many API connections we will accept
     </span><span class="kw">pub </span>max_connections: u32,
+    <span class="doccomment">/// Influences the atomic broadcast latency, should be higher than the
+    /// expected latency between peers so everyone can get proposed consensus
+    /// items confirmed. This is only relevant for byzantine faults.
+    ///
+    /// If you are changing this value you likely also want to change
+    /// [`ServerConfigConsensus::broadcast_expected_rounds_per_session`]. To
+    /// keep the session time constant these two have to behave inversely
+    /// proportional.
+    </span><span class="kw">pub </span>broadcast_round_delay_ms: u16,
     <span class="doccomment">/// Non-consensus, non-private configuration from modules
     </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt;,
 }
@@ -990,12 +1031,15 @@
             fed_bind: params.local.p2p_bind,
             api_bind: params.local.api_bind,
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
+            broadcast_round_delay_ms: DEFAULT_BROADCAST_ROUND_DELAY_MS,
             modules: Default::default(),
         };
         <span class="kw">let </span>consensus = ServerConfigConsensus {
             code_version: CODE_VERSION.to_string(),
             version: CORE_CONSENSUS_VERSION,
             broadcast_public_keys,
+            broadcast_expected_rounds_per_session: DEFAULT_BROADCAST_EXPECTED_ROUNDS_PER_SESSION,
+            broadcast_max_rounds_per_session: DEFAULT_BROADCAST_MAX_ROUNDS_PER_SESSION,
             api_endpoints: params.api_urls(),
             tls_certs: params.tls_certs(),
             modules: Default::default(),
