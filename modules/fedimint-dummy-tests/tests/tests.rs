@@ -87,7 +87,7 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
     let input = ClientInput {
         input: DummyInput {
             amount: sats(1000),
-            account: account_kp.x_only_public_key().0,
+            account: account_kp.public_key(),
         },
         keys: vec![account_kp],
         state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),

@@ -5,7 +5,7 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{plugin_types_trait_impl_common, Amount};
-use secp256k1::{KeyPair, Secp256k1, XOnlyPublicKey};
+use secp256k1::{KeyPair, PublicKey, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -29,7 +29,7 @@ pub struct DummyConsensusItem;
 pub struct DummyInput {
     pub amount: Amount,
     /// Associate the input with a user's pubkey
-    pub account: XOnlyPublicKey,
+    pub account: PublicKey,
 }
 
 /// Output for a fedimint transaction
@@ -37,12 +37,12 @@ pub struct DummyInput {
 pub struct DummyOutput {
     pub amount: Amount,
     /// Associate the output with a user's pubkey
-    pub account: XOnlyPublicKey,
+    pub account: PublicKey,
 }
 
 /// Information needed by a client to update output funds
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct DummyOutputOutcome(pub Amount, pub XOnlyPublicKey);
+pub struct DummyOutputOutcome(pub Amount, pub PublicKey);
 
 /// Errors that might be returned by the server
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
@@ -118,16 +118,16 @@ const FED_SECRET_PHRASE: &str = "Money printer go brrr...........";
 
 const BROKEN_FED_SECRET_PHRASE: &str = "Money printer go <boom>........!";
 
-pub fn fed_public_key() -> XOnlyPublicKey {
-    fed_key_pair().x_only_public_key().0
+pub fn fed_public_key() -> PublicKey {
+    fed_key_pair().public_key()
 }
 
 pub fn fed_key_pair() -> KeyPair {
     KeyPair::from_seckey_slice(&Secp256k1::new(), FED_SECRET_PHRASE.as_bytes()).expect("32 bytes")
 }
 
-pub fn broken_fed_public_key() -> XOnlyPublicKey {
-    broken_fed_key_pair().x_only_public_key().0
+pub fn broken_fed_public_key() -> PublicKey {
+    broken_fed_key_pair().public_key()
 }
 
 // Like fed, but with a broken accounting

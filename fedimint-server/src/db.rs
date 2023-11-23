@@ -140,14 +140,14 @@ mod fedimint_migration_tests {
                 0,
                 DummyInput {
                     amount: Amount::ZERO,
-                    account: key_pair.x_only_public_key().0,
+                    account: key_pair.public_key(),
                 },
             )],
             outputs: vec![DynOutput::from_typed(
                 0,
                 DummyOutput {
                     amount: Amount::ZERO,
-                    account: key_pair.x_only_public_key().0,
+                    account: key_pair.public_key(),
                 },
             )],
             nonce: [0x42; 8],
