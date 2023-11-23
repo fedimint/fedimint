@@ -2027,7 +2027,7 @@
             </span>.select_client(payload.federation_id)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.get_first_module::&lt;WalletClientModule&gt;()
-            .get_deposit_address(now() + Duration::from_secs(<span class="number">86400 </span>* <span class="number">365</span>))
+            .get_deposit_address(now() + Duration::from_secs(<span class="number">86400 </span>* <span class="number">365</span>), ())
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(address)
     }
@@ -2060,7 +2060,7 @@
             ),
         };
 
-        <span class="kw">let </span>operation_id = wallet_module.withdraw(address, amount, fees).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>operation_id = wallet_module.withdraw(address, amount, fees, ()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
             .<span class="kw">await</span><span class="question-mark">?

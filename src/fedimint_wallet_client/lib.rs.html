@@ -695,6 +695,36 @@
 <a href="#695" id="695">695</a>
 <a href="#696" id="696">696</a>
 <a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">mod </span>client_db;
@@ -727,7 +757,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 <span class="kw">use </span>fedimint_wallet_common::config::WalletClientConfig;
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
@@ -872,8 +902,14 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>WalletOperationMeta {
+    <span class="kw">pub </span>variant: WalletOperationMetaVariant,
+    <span class="kw">pub </span>extra_meta: serde_json::Value,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
-</span><span class="kw">pub enum </span>WalletOperationMeta {
+</span><span class="kw">pub enum </span>WalletOperationMetaVariant {
     Deposit {
         address: bitcoin::Address,
         expires_at: SystemTime,
@@ -1072,15 +1108,19 @@
         })
     }
 
-    <span class="kw">pub async fn </span>get_deposit_address(
+    <span class="kw">pub async fn </span>get_deposit_address&lt;M: Serialize + MaybeSend + MaybeSync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         valid_until: SystemTime,
+        extra_meta: M,
     ) -&gt; anyhow::Result&lt;(OperationId, Address)&gt; {
+        <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">&quot;extra meta is serializable&quot;</span>);
+
         <span class="kw">let </span>(operation_id, address) = <span class="self">self
             </span>.client_ctx
             .module_autocommit(
                 |dbtx, <span class="kw">_</span>| {
-                    Box::pin(<span class="kw">async </span>{
+                    <span class="kw">let </span>extra_meta_inner = extra_meta.clone();
+                    Box::pin(<span class="kw">async move </span>{
                         <span class="kw">let </span>(operation_id, sm, address) = <span class="self">self
                             </span>.get_deposit_address_inner(valid_until, <span class="kw-2">&amp;mut </span>dbtx.module_dbtx())
                             .<span class="kw">await</span>;
@@ -1096,9 +1136,12 @@
                         dbtx.add_operation_log_entry(
                             operation_id,
                             WalletCommonInit::KIND.as_str(),
-                            WalletOperationMeta::Deposit {
-                                address: address.clone(),
-                                expires_at: valid_until,
+                            WalletOperationMeta {
+                                variant: WalletOperationMetaVariant::Deposit {
+                                    address: address.clone(),
+                                    expires_at: valid_until,
+                                },
+                                extra_meta: extra_meta_inner,
                             },
                         )
                         .<span class="kw">await</span>;
@@ -1136,7 +1179,10 @@
 
         <span class="kw">let </span>operation_meta = operation_log_entry.meta::&lt;WalletOperationMeta&gt;();
 
-        <span class="kw">if </span>!<span class="macro">matches!</span>(operation_meta, WalletOperationMeta::Deposit { .. }) {
+        <span class="kw">if </span>!<span class="macro">matches!</span>(
+            operation_meta.variant,
+            WalletOperationMetaVariant::Deposit { .. }
+        ) {
             <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a deposit operation&quot;</span>);
         }
 
@@ -1203,11 +1249,12 @@
     /// `address`. The caller has to supply the fee rate to be used which can be
     /// fetched using [`Self::get_withdraw_fees`] and should be
     /// acknowledged by the user since it can be unexpectedly high.
-    </span><span class="kw">pub async fn </span>withdraw(
+    </span><span class="kw">pub async fn </span>withdraw&lt;M: Serialize + MaybeSend + MaybeSync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         address: bitcoin::Address,
         amount: bitcoin::Amount,
         fee: PegOutFees,
+        extra_meta: M,
     ) -&gt; anyhow::Result&lt;OperationId&gt; {
         {
             <span class="kw">let </span>operation_id = OperationId(thread_rng().gen());
@@ -1218,15 +1265,20 @@
             <span class="kw">let </span>tx_builder = TransactionBuilder::new()
                 .with_output(<span class="self">self</span>.client_ctx.make_client_output(withdraw_output));
 
+            <span class="kw">let </span>extra_meta =
+                serde_json::to_value(extra_meta).expect(<span class="string">&quot;Failed to serialize extra meta&quot;</span>);
             <span class="self">self</span>.client_ctx
                 .finalize_and_submit_transaction(
                     operation_id,
                     WalletCommonInit::KIND.as_str(),
-                    <span class="kw">move </span>|<span class="kw">_</span>, change| WalletOperationMeta::Withdraw {
-                        address: address.clone(),
-                        amount,
-                        fee,
-                        change,
+                    <span class="kw">move </span>|<span class="kw">_</span>, change| WalletOperationMeta {
+                        variant: WalletOperationMetaVariant::Withdraw {
+                            address: address.clone(),
+                            amount,
+                            fee,
+                            change,
+                        },
+                        extra_meta: extra_meta.clone(),
                     },
                     tx_builder,
                 )
@@ -1240,7 +1292,11 @@
     /// replace by fee (RBF).
     /// This can prevent transactions from getting stuck
     /// in the mempool
-    </span><span class="kw">pub async fn </span>rbf_withdraw(<span class="kw-2">&amp;</span><span class="self">self</span>, rbf: Rbf) -&gt; anyhow::Result&lt;OperationId&gt; {
+    </span><span class="kw">pub async fn </span>rbf_withdraw&lt;M: Serialize + MaybeSync + MaybeSend&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        rbf: Rbf,
+        extra_meta: M,
+    ) -&gt; anyhow::Result&lt;OperationId&gt; {
         <span class="kw">let </span>operation_id = OperationId(thread_rng().gen());
 
         <span class="kw">let </span>withdraw_output = <span class="self">self
@@ -1249,13 +1305,17 @@
         <span class="kw">let </span>tx_builder = TransactionBuilder::new()
             .with_output(<span class="self">self</span>.client_ctx.make_client_output(withdraw_output));
 
+        <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">&quot;Failed to serialize extra meta&quot;</span>);
         <span class="self">self</span>.client_ctx
             .finalize_and_submit_transaction(
                 operation_id,
                 WalletCommonInit::KIND.as_str(),
-                <span class="kw">move </span>|<span class="kw">_</span>, change| WalletOperationMeta::RbfWithdraw {
-                    rbf: rbf.clone(),
-                    change,
+                <span class="kw">move </span>|<span class="kw">_</span>, change| WalletOperationMeta {
+                    variant: WalletOperationMetaVariant::RbfWithdraw {
+                        rbf: rbf.clone(),
+                        change,
+                    },
+                    extra_meta: extra_meta.clone(),
                 },
                 tx_builder,
             )
@@ -1280,8 +1340,8 @@
 
         <span class="kw">let </span>operation_meta = operation.meta::&lt;WalletOperationMeta&gt;();
 
-        <span class="kw">let </span>(WalletOperationMeta::Withdraw { change, .. }
-        | WalletOperationMeta::RbfWithdraw { change, .. }) = operation_meta
+        <span class="kw">let </span>(WalletOperationMetaVariant::Withdraw { change, .. }
+        | WalletOperationMetaVariant::RbfWithdraw { change, .. }) = operation_meta.variant
         <span class="kw">else </span>{
             <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a withdraw operation&quot;</span>);
         };

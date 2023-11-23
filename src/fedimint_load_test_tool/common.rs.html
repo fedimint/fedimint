@@ -637,7 +637,7 @@
         payment_type,
         contract_id: <span class="kw">_</span>,
         fee: <span class="kw">_</span>,
-    } = lightning_module.pay_bolt11_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
+    } = lightning_module.pay_bolt11_invoice(invoice, ()).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>operation_id = <span class="kw">match </span>payment_type {
         fedimint_ln_client::PayType::Internal(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Internal payment not expected&quot;</span>),
         fedimint_ln_client::PayType::Lightning(operation_id) =&gt; operation_id,
