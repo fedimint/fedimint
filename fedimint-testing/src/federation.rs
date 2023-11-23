@@ -206,7 +206,7 @@ pub fn local_config_gen_params(
                     peers: connections.clone(),
                     meta: BTreeMap::from([(
                         META_FEDERATION_NAME_KEY.to_owned(),
-                        "federation_name".to_string(),
+                        "\"federation_name\"".to_string(),
                     )]),
                     modules: server_config_gen.clone(),
                 },

@@ -1339,14 +1339,9 @@ impl FederationInfo {
         self.invite_code.clone()
     }
 
-    /// Get the string representation of a given meta field
-    pub fn meta_raw(&self, key: &str) -> Option<&str> {
-        self.config.global.meta.get(key).map(AsRef::as_ref)
-    }
-
     /// Get the value of a given meta field
     pub fn meta<V: serde::de::DeserializeOwned>(&self, key: &str) -> anyhow::Result<Option<V>> {
-        let Some(str_value) = self.meta_raw(key) else {
+        let Some(str_value) = self.config.global.meta.get(key) else {
             return Ok(None);
         };
         serde_json::from_str(str_value).context(format!("Decoding meta field '{key}' failed"))
