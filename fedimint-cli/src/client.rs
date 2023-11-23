@@ -12,6 +12,7 @@ use fedimint_client::backup::Metadata;
 use fedimint_client::ClientArc;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::encoding::Encodable;
 use fedimint_core::time::now;
 use fedimint_core::{Amount, BitcoinAmountOrAll, ParseAmountError, TieredSummary};
 use fedimint_ln_client::{
@@ -514,7 +515,7 @@ async fn wait_for_ln_payment(
                             serde_json::to_value(PayInvoiceResponse {
                                 operation_id,
                                 contract_id,
-                                preimage: preimage.to_public_key()?.to_string(),
+                                preimage: preimage.consensus_encode_to_hex().expect("Cannot fail"),
                             })
                             .unwrap(),
                         ));

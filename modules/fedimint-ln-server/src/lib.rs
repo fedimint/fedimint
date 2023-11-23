@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use anyhow::{bail, Context};
-use bitcoin_hashes::Hash as BitcoinHash;
+use bitcoin_hashes::{sha256, Hash as BitcoinHash};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -35,7 +35,7 @@ use fedimint_ln_common::config::{
 use fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 use fedimint_ln_common::contracts::{
     Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
-    IdentifiableContract, Preimage, PreimageDecryptionShare,
+    IdentifiableContract, Preimage, PreimageDecryptionShare, PreimageKey,
 };
 use fedimint_ln_common::db::{
     AgreedDecryptionShareContractIdPrefix, AgreedDecryptionShareKey,
@@ -468,10 +468,10 @@ impl ServerModule for Lightning {
                 dbtx.remove_by_prefix(&AgreedDecryptionShareContractIdPrefix(contract_id))
                     .await;
 
-                let decrypted_preimage = if preimage_vec.len() == 32
-                    && contract.hash == bitcoin_hashes::sha256::Hash::hash(&preimage_vec)
+                let decrypted_preimage = if preimage_vec.len() == 33
+                    && contract.hash == sha256::Hash::hash(&sha256::Hash::hash(&preimage_vec))
                 {
-                    let preimage = Preimage(
+                    let preimage = PreimageKey(
                         preimage_vec
                             .as_slice()
                             .try_into()
@@ -625,7 +625,7 @@ impl ServerModule for Lightning {
                 amount: input.amount,
                 fee: self.cfg.consensus.fee_consensus.contract_input,
             },
-            pub_key,
+            pub_key: pub_key.x_only_public_key().0,
         })
     }
 
@@ -787,7 +787,7 @@ impl ServerModule for Lightning {
                     .verify_schnorr(
                         gateway_signature,
                         &outgoing_contract.cancellation_message().into(),
-                        &outgoing_contract.gateway_key,
+                        &outgoing_contract.gateway_key.x_only_public_key().0,
                     )
                     .map_err(|_| LightningOutputError::InvalidCancellationSignature)?;
 
@@ -1057,7 +1057,10 @@ impl Lightning {
             .contract
             .decrypted_preimage
         {
-            DecryptedPreimage::Some(preimage) => (incoming_contract_account, Some(preimage)),
+            DecryptedPreimage::Some(key) => (
+                incoming_contract_account,
+                Some(Preimage(sha256::Hash::hash(&key.0).into_inner())),
+            ),
             _ => (incoming_contract_account, None),
         }
     }
@@ -1135,7 +1138,7 @@ impl Lightning {
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use bitcoin_hashes::Hash as BitcoinHash;
+    use bitcoin_hashes::{sha256, Hash as BitcoinHash};
     use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
     use fedimint_core::config::ConfigGenModuleParams;
     use fedimint_core::db::mem_impl::MemDatabase;
@@ -1154,12 +1157,13 @@ mod tests {
     use fedimint_ln_common::contracts::outgoing::OutgoingContract;
     use fedimint_ln_common::contracts::{
         DecryptedPreimage, EncryptedPreimage, FundedContract, IdentifiableContract, Preimage,
+        PreimageKey,
     };
     use fedimint_ln_common::db::{ContractKey, LightningAuditItemKey};
     use fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
     use lightning_invoice::Bolt11Invoice;
     use rand::rngs::OsRng;
-    use secp256k1::{generate_keypair, XOnlyPublicKey};
+    use secp256k1::{generate_keypair, PublicKey};
 
     use crate::{Lightning, LightningInit};
 
@@ -1202,8 +1206,8 @@ mod tests {
         (server_cfg, client_cfg)
     }
 
-    fn random_x_only_pub_key() -> XOnlyPublicKey {
-        generate_keypair(&mut OsRng).1.x_only_public_key().0
+    fn random_pub_key() -> PublicKey {
+        generate_keypair(&mut OsRng).1
     }
 
     #[test_log::test(tokio::test)]
@@ -1274,15 +1278,15 @@ mod tests {
         let mut tg = TaskGroup::new();
         let server = Lightning::new(server_cfg[0].clone(), &mut tg).unwrap();
 
-        let preimage = Preimage([42u8; 32]);
+        let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
         let funded_incoming_contract = FundedContract::Incoming(FundedIncomingContract {
             contract: IncomingContract {
-                hash: preimage.consensus_hash(),
+                hash: sha256::Hash::hash(&sha256::Hash::hash(&preimage.0)),
                 encrypted_preimage: EncryptedPreimage(
                     client_cfg.threshold_pub_key.encrypt(preimage.0),
                 ),
                 decrypted_preimage: DecryptedPreimage::Some(preimage.clone()),
-                gateway_key: random_x_only_pub_key(),
+                gateway_key: random_pub_key(),
             },
             out_point: OutPoint {
                 txid: TransactionId::all_zeros(),
@@ -1317,7 +1321,9 @@ mod tests {
             },
             pub_key: preimage
                 .to_public_key()
-                .expect("should create Schnorr pubkey from preimage"),
+                .expect("should create Schnorr pubkey from preimage")
+                .x_only_public_key()
+                .0,
         };
 
         assert_eq!(processed_input_meta, expected_input_meta);
@@ -1338,12 +1344,12 @@ mod tests {
         let preimage = Preimage([42u8; 32]);
         let invoice = str::parse::<Bolt11Invoice>("lnbc10u1pjq37rgsp5cry9r0qqdzp0tl0m27jedvxtrazq0v8xh5rfvzuhm7yxydg50m9qpp5r0cjzjzt7pjwae8trp6dtteh6hstdakzv68atpqx0zshaexghpwsdqqcqpjrzjqfzekav6v27ra0lf3geqmg3hj3xvfu652cuyhk8aa7naqdqvwh6x7zagh5qqy3qqqyqqqqqpqqqqqqgq9q9qyysgq6vf5z83a2q2ua9nwanmc7pql26pwt8smt2xzwp7kjd0mgplmy925s5yz6nlfxt99p2dlffw82gw8kte7lv87pcf4nahslg2vyhhkzwqqxuqmgp")
             .expect("should parse a valid invoice string");
-        let gateway_key = random_x_only_pub_key();
+        let gateway_key = random_pub_key();
         let outgoing_contract = FundedContract::Outgoing(OutgoingContract {
             hash: preimage.consensus_hash(),
             gateway_key,
             timelock: 1000000,
-            user_key: random_x_only_pub_key(),
+            user_key: random_pub_key(),
             invoice,
             cancelled: false,
         });
@@ -1373,7 +1379,7 @@ mod tests {
                 amount,
                 fee: Amount { msats: 0 },
             },
-            pub_key: gateway_key,
+            pub_key: gateway_key.x_only_public_key().0,
         };
 
         assert_eq!(processed_input_meta, expected_input_meta);
@@ -1402,8 +1408,8 @@ mod fedimint_migration_tests {
         FundedIncomingContract, IncomingContract, IncomingContractOffer, OfferId,
     };
     use fedimint_ln_common::contracts::{
-        outgoing, ContractId, DecryptedPreimage, EncryptedPreimage, FundedContract, Preimage,
-        PreimageDecryptionShare,
+        outgoing, ContractId, DecryptedPreimage, EncryptedPreimage, FundedContract,
+        PreimageDecryptionShare, PreimageKey,
     };
     use fedimint_ln_common::db::{
         AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, BlockCountVoteKey,
@@ -1415,7 +1421,7 @@ mod fedimint_migration_tests {
     };
     use fedimint_ln_common::{LightningCommonInit, LightningGateway, LightningOutputOutcomeV0};
     use fedimint_testing::db::{
-        prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64,
+        prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_33, BYTE_8, STRING_64,
     };
     use futures::StreamExt;
     use lightning_invoice::{Bolt11Invoice, RoutingFees};
@@ -1440,9 +1446,9 @@ mod fedimint_migration_tests {
         let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
         let incoming_contract = IncomingContract {
             hash: secp256k1::hashes::sha256::Hash::hash(&BYTE_8),
-            encrypted_preimage: EncryptedPreimage::new(Preimage(BYTE_32), &threshold_key),
-            decrypted_preimage: DecryptedPreimage::Some(Preimage(BYTE_32)),
-            gateway_key: pk.x_only_public_key().0,
+            encrypted_preimage: EncryptedPreimage::new(PreimageKey(BYTE_33), &threshold_key),
+            decrypted_preimage: DecryptedPreimage::Some(PreimageKey(BYTE_33)),
+            gateway_key: pk,
         };
         let out_point = OutPoint {
             txid: TransactionId::all_zeros(),
@@ -1463,9 +1469,9 @@ mod fedimint_migration_tests {
         let invoice = str::parse::<Bolt11Invoice>("lnbc10u1pjq37rgsp5cry9r0qqdzp0tl0m27jedvxtrazq0v8xh5rfvzuhm7yxydg50m9qpp5r0cjzjzt7pjwae8trp6dtteh6hstdakzv68atpqx0zshaexghpwsdqqcqpjrzjqfzekav6v27ra0lf3geqmg3hj3xvfu652cuyhk8aa7naqdqvwh6x7zagh5qqy3qqqyqqqqqpqqqqqqgq9q9qyysgq6vf5z83a2q2ua9nwanmc7pql26pwt8smt2xzwp7kjd0mgplmy925s5yz6nlfxt99p2dlffw82gw8kte7lv87pcf4nahslg2vyhhkzwqqxuqmgp");
         let outgoing_contract = FundedContract::Outgoing(outgoing::OutgoingContract {
             hash: secp256k1::hashes::sha256::Hash::hash(&[0, 2, 3, 4, 5, 6, 7, 8]),
-            gateway_key: pk.x_only_public_key().0,
+            gateway_key: pk,
             timelock: 1000000,
-            user_key: pk.x_only_public_key().0,
+            user_key: pk,
             invoice: invoice.unwrap(),
             cancelled: false,
         });
@@ -1481,7 +1487,7 @@ mod fedimint_migration_tests {
         let incoming_offer = IncomingContractOffer {
             amount: fedimint_core::Amount { msats: 1000 },
             hash: secp256k1::hashes::sha256::Hash::hash(&BYTE_8),
-            encrypted_preimage: EncryptedPreimage::new(Preimage(BYTE_32), &threshold_key),
+            encrypted_preimage: EncryptedPreimage::new(PreimageKey(BYTE_33), &threshold_key),
             expiry_time: None,
         };
         dbtx.insert_new_entry(&OfferKey(incoming_offer.hash), &incoming_offer)
@@ -1513,7 +1519,7 @@ mod fedimint_migration_tests {
         let gateway = LightningGatewayRegistration {
             info: LightningGateway {
                 mint_channel_id: 100,
-                gateway_redeem_key: pk.x_only_public_key().0,
+                gateway_redeem_key: pk,
                 node_pub_key: pk,
                 lightning_alias: "FakeLightningAlias".to_string(),
                 api: SafeUrl::parse("http://example.com")

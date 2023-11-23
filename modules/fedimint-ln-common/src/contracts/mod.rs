@@ -121,15 +121,18 @@ impl Decodable for ContractId {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct Preimage(pub [u8; 32]);
 
-impl Preimage {
-    /// Create a Schnorr public key from this preimage
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct PreimageKey(#[serde(with = "serde_big_array::BigArray")] pub [u8; 33]);
+
+impl PreimageKey {
+    /// Create a Schnorr public key
     ///
     /// # Errors
     ///
     /// Returns [`secp256k1::Error::InvalidPublicKey`] if the Preimage does not
     /// represent a valid Secp256k1 point x coordinate.
-    pub fn to_public_key(&self) -> Result<secp256k1::XOnlyPublicKey, secp256k1::Error> {
-        secp256k1::XOnlyPublicKey::from_slice(&self.0)
+    pub fn to_public_key(&self) -> Result<secp256k1::PublicKey, secp256k1::Error> {
+        secp256k1::PublicKey::from_slice(&self.0)
     }
 }
 
@@ -139,7 +142,7 @@ pub enum DecryptedPreimage {
     /// There aren't enough decryption shares yet
     Pending,
     /// The decrypted preimage was valid
-    Some(Preimage),
+    Some(PreimageKey),
     /// The decrypted preimage was invalid
     Invalid,
 }
@@ -162,8 +165,8 @@ pub struct EncryptedPreimage(pub threshold_crypto::Ciphertext);
 pub struct PreimageDecryptionShare(pub threshold_crypto::DecryptionShare);
 
 impl EncryptedPreimage {
-    pub fn new(preimage: Preimage, key: &threshold_crypto::PublicKey) -> EncryptedPreimage {
-        EncryptedPreimage(key.encrypt(preimage.0))
+    pub fn new(preimage_key: PreimageKey, key: &threshold_crypto::PublicKey) -> EncryptedPreimage {
+        EncryptedPreimage(key.encrypt(preimage_key.0))
     }
 }
 

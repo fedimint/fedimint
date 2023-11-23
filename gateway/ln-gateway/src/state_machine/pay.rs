@@ -519,7 +519,7 @@ impl GatewayPayInvoice {
         timelock_delta: u64,
         consensus_block_count: u64,
     ) -> Result<PaymentParameters, OutgoingContractError> {
-        let our_pub_key = secp256k1::XOnlyPublicKey::from_keypair(&redeem_key).0;
+        let our_pub_key = secp256k1::PublicKey::from_keypair(&redeem_key);
 
         if account.contract.cancelled {
             return Err(OutgoingContractError::CancelledContract);
