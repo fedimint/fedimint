@@ -1791,11 +1791,6 @@
 <a href="#1791" id="1791">1791</a>
 <a href="#1792" id="1792">1792</a>
 <a href="#1793" id="1793">1793</a>
-<a href="#1794" id="1794">1794</a>
-<a href="#1795" id="1795">1795</a>
-<a href="#1796" id="1796">1796</a>
-<a href="#1797" id="1797">1797</a>
-<a href="#1798" id="1798">1798</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3151,14 +3146,9 @@
         <span class="self">self</span>.invite_code.clone()
     }
 
-    <span class="doccomment">/// Get the string representation of a given meta field
-    </span><span class="kw">pub fn </span>meta_raw(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
-        <span class="self">self</span>.config.global.meta.get(key).map(AsRef::as_ref)
-    }
-
     <span class="doccomment">/// Get the value of a given meta field
     </span><span class="kw">pub fn </span>meta&lt;V: serde::de::DeserializeOwned&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;V&gt;&gt; {
-        <span class="kw">let </span><span class="prelude-val">Some</span>(str_value) = <span class="self">self</span>.meta_raw(key) <span class="kw">else </span>{
+        <span class="kw">let </span><span class="prelude-val">Some</span>(str_value) = <span class="self">self</span>.config.global.meta.get(key) <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
         };
         serde_json::from_str(str_value).context(<span class="macro">format!</span>(<span class="string">&quot;Decoding meta field &#39;{key}&#39; failed&quot;</span>))

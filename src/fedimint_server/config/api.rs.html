@@ -1898,7 +1898,7 @@
                 },
             );
             <span class="kw">let </span>request = ConfigGenParamsRequest {
-                meta: BTreeMap::from([(<span class="string">&quot;test&quot;</span>.to_string(), <span class="self">self</span>.name.clone())]),
+                meta: BTreeMap::from([(<span class="string">&quot;\&quot;test\&quot;&quot;</span>.to_string(), <span class="self">self</span>.name.clone())]),
                 modules,
             };
 
@@ -2045,7 +2045,7 @@
             <span class="kw">let </span>dummy: DummyConfig = cfg.get_module_config_typed(<span class="number">0</span>).unwrap();
             <span class="macro">assert_eq!</span>(dummy.consensus.tx_fee, leader_amount);
             <span class="macro">assert_eq!</span>(dummy.local.example, peer.name);
-            <span class="macro">assert_eq!</span>(cfg.consensus.meta[<span class="string">&quot;test&quot;</span>], leader_name);
+            <span class="macro">assert_eq!</span>(cfg.consensus.meta[<span class="string">&quot;\&quot;test\&quot;&quot;</span>], leader_name);
         }
 
         <span class="comment">// start consensus
