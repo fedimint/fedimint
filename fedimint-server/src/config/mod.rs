@@ -46,6 +46,11 @@ pub mod io;
 
 /// The default maximum open connections the API can handle
 const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
+// if all nodes are correct the session will take 45 to 60 seconds. The
+// more nodes go offline the longer the session will take to complete.
+const DEFAULT_BROADCAST_EXPECTED_ROUNDS_PER_SESSION: u16 = 45 * 20;
+const DEFAULT_BROADCAST_ROUND_DELAY_MS: u16 = 50;
+const DEFAULT_BROADCAST_MAX_ROUNDS_PER_SESSION: u16 = 5000;
 
 /// The env var for maximum open connections the API can handle
 const ENV_MAX_CLIENT_CONNECTIONS: &str = "FM_MAX_CLIENT_CONNECTIONS";
@@ -112,6 +117,11 @@ pub struct ServerConfigConsensus {
     pub version: CoreConsensusVersion,
     /// Public keys for the atomic broadcast to authenticate messages
     pub broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
+    /// Determines how long a session is expected to run. Has to be less than
+    /// 1000.
+    pub broadcast_expected_rounds_per_session: u16,
+    /// Maximum number of rounds permitted per session.
+    pub broadcast_max_rounds_per_session: u16,
     /// Network addresses and names for all peer APIs
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Certs for TLS communication, required for peer authentication
@@ -139,6 +149,15 @@ pub struct ServerConfigLocal {
     pub api_bind: SocketAddr,
     /// How many API connections we will accept
     pub max_connections: u32,
+    /// Influences the atomic broadcast latency, should be higher than the
+    /// expected latency between peers so everyone can get proposed consensus
+    /// items confirmed. This is only relevant for byzantine faults.
+    ///
+    /// If you are changing this value you likely also want to change
+    /// [`ServerConfigConsensus::broadcast_expected_rounds_per_session`]. To
+    /// keep the session time constant these two have to behave inversely
+    /// proportional.
+    pub broadcast_round_delay_ms: u16,
     /// Non-consensus, non-private configuration from modules
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
 }
@@ -218,12 +237,15 @@ impl ServerConfig {
             fed_bind: params.local.p2p_bind,
             api_bind: params.local.api_bind,
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
+            broadcast_round_delay_ms: DEFAULT_BROADCAST_ROUND_DELAY_MS,
             modules: Default::default(),
         };
         let consensus = ServerConfigConsensus {
             code_version: CODE_VERSION.to_string(),
             version: CORE_CONSENSUS_VERSION,
             broadcast_public_keys,
+            broadcast_expected_rounds_per_session: DEFAULT_BROADCAST_EXPECTED_ROUNDS_PER_SESSION,
+            broadcast_max_rounds_per_session: DEFAULT_BROADCAST_MAX_ROUNDS_PER_SESSION,
             api_endpoints: params.api_urls(),
             tls_certs: params.tls_certs(),
             modules: Default::default(),

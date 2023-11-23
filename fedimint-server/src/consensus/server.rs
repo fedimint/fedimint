@@ -326,19 +326,17 @@ impl ConsensusServer {
     }
 
     pub async fn run_session(&self, session_index: u64) -> anyhow::Result<()> {
-        // if all nodes are correct the session will take 45 to 60 seconds. The
-        // more nodes go offline the longer the session will take to complete.
-        const EXPECTED_ROUNDS_PER_SESSION: usize = 45 * 20;
         // this constant needs to be 3000 or less to guarantee that the session
         // can never reach MAX_ROUNDs.
-        const EXPONENTIAL_SLOWDOWN_OFFSET: usize = 3 * EXPECTED_ROUNDS_PER_SESSION;
-        const MAX_ROUND: u16 = 5_000;
-        const ROUND_DELAY: f64 = 50.0;
+        let exponential_slowdown_offset: usize =
+            3 * self.cfg.consensus.broadcast_expected_rounds_per_session as usize;
+        let max_round = self.cfg.consensus.broadcast_max_rounds_per_session;
+        let round_delay = self.cfg.local.broadcast_round_delay_ms as f64;
         const BASE: f64 = 1.01;
 
         // this is the minimum number of unit data that will be ordered before we reach
         // the EXPONENTIAL_SLOWDOWN_OFFSET even if f peers do not attach unit data
-        let batches_per_session = EXPECTED_ROUNDS_PER_SESSION * self.keychain.peer_count();
+        let batches_per_session = exponential_slowdown_offset * self.keychain.peer_count();
 
         // In order to bound a sessions RAM consumption we need to bound its number of
         // units and therefore its number of rounds. Since we use a session to
@@ -350,12 +348,12 @@ impl ConsensusServer {
         // In case of such an attack the broadcast stops ordering any items until the
         // attack subsides as not items are ordered while the signatures are collected.
         let mut delay_config = aleph_bft::default_delay_config();
-        delay_config.unit_creation_delay = std::sync::Arc::new(|round_index| {
+        delay_config.unit_creation_delay = std::sync::Arc::new(move |round_index| {
             let delay = if round_index == 0 {
                 0.0
             } else {
-                ROUND_DELAY
-                    * BASE.powf(round_index.saturating_sub(EXPONENTIAL_SLOWDOWN_OFFSET) as f64)
+                round_delay
+                    * BASE.powf(round_index.saturating_sub(exponential_slowdown_offset) as f64)
             };
 
             Duration::from_millis(delay.round() as u64)
@@ -365,7 +363,7 @@ impl ConsensusServer {
             self.keychain.peer_count().into(),
             self.keychain.peer_id().to_usize().into(),
             session_index,
-            MAX_ROUND,
+            max_round,
             delay_config,
             Duration::from_secs(100 * 365 * 24 * 60 * 60),
         )
