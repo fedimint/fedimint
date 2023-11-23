@@ -66,7 +66,7 @@ pub struct IncomingContract {
     /// creator to redeem their money.
     pub decrypted_preimage: DecryptedPreimage,
     /// Key that can unlock contract in case the decrypted preimage was invalid
-    pub gateway_key: secp256k1::XOnlyPublicKey,
+    pub gateway_key: secp256k1::PublicKey,
 }
 
 /// The funded version of an [`IncomingContract`] contains the [`OutPoint`] of

@@ -302,7 +302,7 @@ pub struct LightningGateway {
     /// gateway.
     pub mint_channel_id: u64,
     /// Key used to pay the gateway
-    pub gateway_redeem_key: secp256k1::XOnlyPublicKey,
+    pub gateway_redeem_key: secp256k1::PublicKey,
     pub node_pub_key: secp256k1::PublicKey,
     pub lightning_alias: String,
     pub api: SafeUrl,

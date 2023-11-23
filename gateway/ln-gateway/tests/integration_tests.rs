@@ -29,11 +29,12 @@ use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::{GatewayFee, LightningGenParams};
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
-use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage};
+use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage, PreimageKey};
 use fedimint_ln_common::{LightningInput, LightningOutput};
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::LOG_TEST;
 use fedimint_testing::btc::BitcoinTest;
+use fedimint_testing::db::BYTE_33;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::{GatewayTest, LightningNodeType, DEFAULT_GATEWAY_PASSWORD};
@@ -548,12 +549,12 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             let user_lightning_module = user_client.get_first_module::<LightningClientModule>();
 
             let amount = sats(100);
-            let preimage = sha256(&[0]);
+            let preimage = BYTE_33;
             let ln_output = LightningOutput::new_v0_offer(IncomingContractOffer {
                 amount,
                 hash: *invoice.payment_hash(),
                 encrypted_preimage: EncryptedPreimage::new(
-                    Preimage(preimage.into_inner()),
+                    PreimageKey(preimage),
                     &user_lightning_module.cfg.threshold_pub_key,
                 ),
                 expiry_time: None,
