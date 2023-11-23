@@ -99,7 +99,7 @@ nix develop .#cross
 Inside the shell cross-compilation commands like:
 
 ```
-cargo build --target wasm32-unknown-unknown
+cargo build --target wasm32-unknown-unknown --package fedimint-client
 ```
 
 should work as expected.
