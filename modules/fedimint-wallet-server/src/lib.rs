@@ -518,7 +518,7 @@ impl ServerModule for Wallet {
                 amount: fedimint_core::Amount::from_sats(input.tx_output().value),
                 fee: self.cfg.consensus.fee_consensus.peg_in_abs,
             },
-            pub_key: *input.tweak_contract_key(),
+            pub_key: input.tweak_contract_key().x_only_public_key().0,
         })
     }
 
@@ -837,7 +837,7 @@ impl Wallet {
         // later on. The tweak is extracted here because the psbt is moved next
         // and not available anymore when the tweak is actually needed in the
         // end to be put into the batch on success.
-        let change_tweak: [u8; 32] = unsigned
+        let change_tweak: [u8; 33] = unsigned
             .psbt
             .outputs
             .iter()
@@ -1554,7 +1554,7 @@ mod tests {
         };
 
         let spendable = SpendableUTXO {
-            tweak: [0; 32],
+            tweak: [0; 33],
             amount: Amount::from_sat(3000),
         };
 
@@ -1653,7 +1653,7 @@ mod fedimint_migration_tests {
     use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
     use fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, ServerModule, TransactionId};
     use fedimint_testing::db::{
-        prepare_db_migration_snapshot, validate_migrations, BYTE_20, BYTE_32,
+        prepare_db_migration_snapshot, validate_migrations, BYTE_20, BYTE_32, BYTE_33,
     };
     use fedimint_wallet_common::db::{
         BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
@@ -1688,7 +1688,7 @@ mod fedimint_migration_tests {
             vout: 0,
         });
         let spendable_utxo = SpendableUTXO {
-            tweak: BYTE_32,
+            tweak: BYTE_33,
             amount: Amount::from_sat(10000),
         };
 
@@ -1785,7 +1785,7 @@ mod fedimint_migration_tests {
 
         let pending_tx = PendingTransaction {
             tx: transaction,
-            tweak: BYTE_32,
+            tweak: BYTE_33,
             change: Amount::from_sat(0),
             destination,
             fees: PegOutFees {

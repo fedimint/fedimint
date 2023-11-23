@@ -270,10 +270,7 @@ async fn transition_btc_tx_confirmed(
             txout_proof,
             awaiting_confirmation_state.btc_transaction,
             awaiting_confirmation_state.out_idx,
-            awaiting_confirmation_state
-                .tweak_key
-                .public_key()
-                .to_x_only_pubkey(),
+            awaiting_confirmation_state.tweak_key.public_key(),
         )
         .expect("TODO: handle API returning faulty proofs"),
     );

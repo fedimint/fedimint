@@ -16,12 +16,11 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
-use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::transaction::Transaction;
-use fedimint_core::{BitcoinHash, ServerModule};
+use fedimint_core::ServerModule;
 use fedimint_ln_common::LightningCommonInit;
 use fedimint_ln_server::Lightning;
 use fedimint_logging::TracingSetup;
@@ -77,7 +76,7 @@ enum TweakSource {
     /// Derive the wallet descriptor using a single tweak
     Direct {
         #[arg(long, value_parser = tweak_parser)]
-        tweak: [u8; 32],
+        tweak: [u8; 33],
     },
     /// Derive all wallet descriptors of confirmed UTXOs in the on-chain wallet.
     /// Note that unconfirmed change UTXOs will not appear here.
@@ -189,7 +188,7 @@ async fn main() -> anyhow::Result<()> {
             let db = Database::new(RocksDb::open(db).expect("Error opening DB"), decoders);
             let mut dbtx = db.begin_transaction().await;
 
-            let mut change_tweak_idx: u64 = 0;
+            let change_tweak_idx: u64 = 0;
 
             let tweaks = dbtx.find_by_prefix(&SignedBlockPrefix).await.flat_map(
                 |(_key, SignedBlock { block, .. })| {
@@ -204,14 +203,17 @@ async fn main() -> anyhow::Result<()> {
 
                     // Get all user-submitted tweaks and if we did a peg-out tx also return the
                     // consensus round's tweak used for change
-                    let (mut peg_in_tweaks, peg_out_present) =
+                    let (peg_in_tweaks, peg_out_present) =
                         input_tweaks_output_present(transaction_cis.into_iter());
 
                     if peg_out_present {
                         info!("Found change output, adding tweak {change_tweak_idx} to list");
-                        let change_tweak = change_tweak_idx.consensus_hash::<Hash>().into_inner();
-                        peg_in_tweaks.insert(change_tweak);
-                        change_tweak_idx += 1;
+                        unimplemented!();
+                        // let change_tweak =
+                        // change_tweak_idx.consensus_hash::<Hash>().
+                        // into_inner(); peg_in_tweaks.
+                        // insert(change_tweak);
+                        // change_tweak_idx += 1;
                     }
 
                     futures::stream::iter(peg_in_tweaks.into_iter())
@@ -236,7 +238,7 @@ async fn main() -> anyhow::Result<()> {
 
 fn input_tweaks_output_present(
     transactions: impl Iterator<Item = Transaction>,
-) -> (BTreeSet<[u8; 32]>, bool) {
+) -> (BTreeSet<[u8; 33]>, bool) {
     let mut contains_peg_out = false;
     let tweaks =
         transactions
@@ -273,7 +275,7 @@ fn input_tweaks_output_present(
 fn tweak_descriptor(
     base_descriptor: &PegInDescriptor,
     base_sk: &SecretKey,
-    tweak: &[u8; 32],
+    tweak: &[u8; 33],
     network: Network,
 ) -> Descriptor<Key> {
     let secret_key = base_sk.tweak(tweak, secp256k1::SECP256K1);

@@ -66,7 +66,7 @@ impl Contract for Vec<u8> {
     }
 }
 
-impl Contract for [u8; 32] {
+impl Contract for [u8; 33] {
     fn encode<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         writer.write_all(self)
     }
