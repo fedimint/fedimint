@@ -778,7 +778,13 @@ async fn do_ln_circular_test_user_task(
     };
     match strategy {
         LnCircularStrategy::TwoGateways => {
-            let mut invoice_generation = LnInvoiceGeneration::LnCli;
+            // pick the first payment method randomly to avoid overloading one of the
+            // gateways
+            let mut invoice_generation = if rand::random::<bool>() {
+                LnInvoiceGeneration::LnCli
+            } else {
+                LnInvoiceGeneration::ClnLightningCli
+            };
             while still_ontime().await {
                 let gateway_id = get_gateway_id(invoice_generation).await?;
                 switch_default_gateway(&client, &gateway_id).await?;
@@ -952,7 +958,7 @@ async fn wait_invoice_payment(
     let elapsed = pay_invoice_time.elapsed()?;
     info!("{prefix} Invoice payment received started using {method} in {elapsed:?}");
     event_sender.send(MetricEvent {
-        name: "gateway_payment_received_started".into(),
+        name: format!("gateway_payment_received_started_{method}"),
         duration: elapsed,
     })?;
     let lightning_module = client.get_first_module::<LightningClientModule>();
