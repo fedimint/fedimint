@@ -442,6 +442,7 @@
 <a href="#442" id="442">442</a>
 <a href="#443" id="443">443</a>
 <a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
@@ -643,6 +644,7 @@
                         .filter_map(|item| <span class="kw">match </span>item.item {
                             ConsensusItem::Transaction(tx) =&gt; <span class="prelude-val">Some</span>(tx),
                             ConsensusItem::Module(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+                            ConsensusItem::Default { .. } =&gt; <span class="prelude-val">None</span>,
                         })
                         .collect();
 
