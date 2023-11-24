@@ -11,7 +11,6 @@ use fedimint_core::api::{
     FederationStatus, PeerConnectionStatus, PeerStatus, ServerStatus, StatusResponse,
 };
 use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
-use fedimint_core::block::{Block, SignedBlock};
 use fedimint_core::config::{ClientConfig, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
@@ -33,6 +32,7 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary,
 };
 use fedimint_core::server::DynServerModule;
+use fedimint_core::session_outcome::{SessionOutcome, SignedSessionOutcome};
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
 use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
@@ -46,7 +46,7 @@ use super::peers::PeerStatusChannels;
 use crate::config::ServerConfig;
 use crate::consensus::process_transaction_with_dbtx;
 use crate::consensus::server::LatestContributionByPeer;
-use crate::db::{AcceptedTransactionKey, SignedBlockKey, SignedBlockPrefix};
+use crate::db::{AcceptedTransactionKey, SignedSessionOutcomeKey, SignedSessionOutcomePrefix};
 use crate::fedimint_core::encoding::Encodable;
 use crate::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
 
@@ -169,15 +169,15 @@ impl ConsensusApi {
         self.db
             .begin_transaction()
             .await
-            .find_by_prefix(&SignedBlockPrefix)
+            .find_by_prefix(&SignedSessionOutcomePrefix)
             .await
             .count()
             .await as u64
     }
 
-    pub async fn await_signed_block(&self, index: u64) -> SignedBlock {
+    pub async fn await_signed_session_outcome(&self, index: u64) -> SignedSessionOutcome {
         self.db
-            .wait_key_check(&SignedBlockKey(index), std::convert::identity)
+            .wait_key_check(&SignedSessionOutcomeKey(index), std::convert::identity)
             .await
             .0
     }
@@ -417,14 +417,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             AWAIT_SESSION_OUTCOME_ENDPOINT,
-            async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<Block> {
-                Ok((&fedimint.await_signed_block(index).await.block).into())
+            async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SessionOutcome> {
+                Ok((&fedimint.await_signed_session_outcome(index).await.session_outcome).into())
             }
         },
         api_endpoint! {
             AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
-            async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SignedBlock> {
-                Ok((&fedimint.await_signed_block(index).await).into())
+            async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SignedSessionOutcome> {
+                Ok((&fedimint.await_signed_session_outcome(index).await).into())
             }
         },
         api_endpoint! {

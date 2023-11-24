@@ -43,7 +43,6 @@ use thiserror::Error;
 use tracing::{debug, error, instrument, trace};
 
 use crate::backup::ClientBackupSnapshot;
-use crate::block::Block;
 use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::encoding::DecodeError;
@@ -57,6 +56,7 @@ use crate::query::{
     DiscoverApiVersionSet, FilterMap, QueryStep, QueryStrategy, ThresholdConsensus,
     UnionResponsesSingle,
 };
+use crate::session_outcome::SessionOutcome;
 use crate::task;
 use crate::transaction::{SerdeTransaction, Transaction, TransactionError};
 use crate::util::SafeUrl;
@@ -355,7 +355,7 @@ pub trait GlobalFederationApi {
         &self,
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<Block>;
+    ) -> anyhow::Result<SessionOutcome>;
 
     async fn session_count(&self) -> FederationResult<u64>;
 
@@ -432,8 +432,8 @@ where
         &self,
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<Block> {
-        self.request_current_consensus::<SerdeModuleEncoding<Block>>(
+    ) -> anyhow::Result<SessionOutcome> {
+        self.request_current_consensus::<SerdeModuleEncoding<SessionOutcome>>(
             AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
         )

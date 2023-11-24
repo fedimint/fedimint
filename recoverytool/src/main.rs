@@ -10,7 +10,6 @@ use bitcoin::hashes::sha256::Hash;
 use bitcoin::network::constants::Network;
 use bitcoin::OutPoint;
 use clap::{ArgGroup, Parser, Subcommand};
-use fedimint_core::block::SignedBlock;
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -19,6 +18,7 @@ use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::CommonModuleInit;
+use fedimint_core::session_outcome::SignedSessionOutcome;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::ServerModule;
 use fedimint_ln_common::LightningCommonInit;
@@ -28,7 +28,7 @@ use fedimint_mint_server::common::MintCommonInit;
 use fedimint_mint_server::Mint;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::io::read_server_config;
-use fedimint_server::db::SignedBlockPrefix;
+use fedimint_server::db::SignedSessionOutcomePrefix;
 use fedimint_wallet_server::common::config::WalletConfig;
 use fedimint_wallet_server::common::db::{UTXOKey, UTXOPrefixKey};
 use fedimint_wallet_server::common::keys::CompressedPublicKey;
@@ -190,36 +190,45 @@ async fn main() -> anyhow::Result<()> {
 
             let change_tweak_idx: u64 = 0;
 
-            let tweaks = dbtx.find_by_prefix(&SignedBlockPrefix).await.flat_map(
-                |(_key, SignedBlock { block, .. })| {
-                    let transaction_cis: Vec<Transaction> = block
-                        .items
-                        .into_iter()
-                        .filter_map(|item| match item.item {
-                            ConsensusItem::Transaction(tx) => Some(tx),
-                            ConsensusItem::Module(_) => None,
-                            ConsensusItem::Default { .. } => None,
-                        })
-                        .collect();
+            let tweaks = dbtx
+                .find_by_prefix(&SignedSessionOutcomePrefix)
+                .await
+                .flat_map(
+                    |(
+                        _key,
+                        SignedSessionOutcome {
+                            session_outcome: block,
+                            ..
+                        },
+                    )| {
+                        let transaction_cis: Vec<Transaction> = block
+                            .items
+                            .into_iter()
+                            .filter_map(|item| match item.item {
+                                ConsensusItem::Transaction(tx) => Some(tx),
+                                ConsensusItem::Module(_) => None,
+                                ConsensusItem::Default { .. } => None,
+                            })
+                            .collect();
 
-                    // Get all user-submitted tweaks and if we did a peg-out tx also return the
-                    // consensus round's tweak used for change
-                    let (peg_in_tweaks, peg_out_present) =
-                        input_tweaks_output_present(transaction_cis.into_iter());
+                        // Get all user-submitted tweaks and if we did a peg-out tx also return the
+                        // consensus round's tweak used for change
+                        let (peg_in_tweaks, peg_out_present) =
+                            input_tweaks_output_present(transaction_cis.into_iter());
 
-                    if peg_out_present {
-                        info!("Found change output, adding tweak {change_tweak_idx} to list");
-                        unimplemented!();
-                        // let change_tweak =
-                        // change_tweak_idx.consensus_hash::<Hash>().
-                        // into_inner(); peg_in_tweaks.
-                        // insert(change_tweak);
-                        // change_tweak_idx += 1;
-                    }
+                        if peg_out_present {
+                            info!("Found change output, adding tweak {change_tweak_idx} to list");
+                            unimplemented!();
+                            //let change_tweak =
+                            // change_tweak_idx.consensus_hash::<Hash>().
+                            //into_inner();
+                            //peg_in_tweaks.insert(change_tweak);
+                            //change_tweak_idx += 1;
+                        }
 
-                    futures::stream::iter(peg_in_tweaks.into_iter())
-                },
-            );
+                        futures::stream::iter(peg_in_tweaks.into_iter())
+                    },
+                );
 
             let wallets = tweaks
                 .map(|tweak| {

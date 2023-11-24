@@ -3,8 +3,8 @@
 //! vectors. The Broadcast is able to recover from a crash at any time via a
 //! backup that it maintains in the servers [fedimint_core::db::Database]. In
 //! Addition, it stores the history of accepted items in the form of
-//! signed blocks in the database as well in order to catch up fellow guardians
-//! which have been offline for a prolonged period of time.
+//! signed session outcomes in the database as well in order to catch up fellow
+//! guardians which have been offline for a prolonged period of time.
 //!
 //! Though the broadcast depends on [fedimint_core] for [fedimint_core::PeerId],
 //! [fedimint_core::encoding::Encodable] and [fedimint_core::db::Database]
@@ -15,7 +15,7 @@
 //! # The journey of a ConsensusItem
 //!
 //! Let us sketch the journey of an [fedimint_core::epoch::ConsensusItem] into a
-//! signed block.
+//! signed session outcome.
 //!
 //! * The node which wants to order the item calls consensus_encode to serialize
 //!   it and sends the resulting serialization to its running atomic broadcast
@@ -41,22 +41,23 @@
 //!   Consensus transmits its decision to its broadcast instance via the
 //!   decision_sender and processes the next item.
 //! * Assuming our item has been accepted the broadcast instance appends its
-//!   deserialization is added to the block corresponding to the current
-//!   session.
+//!   deserialization is added to the session outcome corresponding to the
+//!   current session.
 //! * Roughly every five minutes the session completes. Then the broadcast
-//!   creates a threshold signature for the blocks header and saves both in the
-//!   form of a signed block in the local database.
+//!   creates a threshold signature for the session outcome's header and saves
+//!   both in the form of a signed session outcome in the local database.
 //!
 //! # Interplay with Fedimint Consensus
 //!
-//! As an item is only recorded in a block if it has been accepted the decision
-//! has to be consisted for all correct nodes in order for them to create
-//! identical blocks for every session. We introduce this complexity in order to
-//! prevent a critical DOS vector were a client submits conflicting items, like
-//! double spending an ecash note for example, to different peers. If Fedimint
-//! Consensus would not be able to discard the conflicting items in such a way
-//! that they do not become part of the broadcasts history all of those items
-//! would need to be maintained on disk indefinitely.
+//! As an item is only recorded in a session outcome if it has been accepted the
+//! decision has to be consisted for all correct nodes in order for them to
+//! create identical session outcomes for every session. We introduce this
+//! complexity in order to prevent a critical DOS vector were a client submits
+//! conflicting items, like double spending an ecash note for example, to
+//! different peers. If Fedimint Consensus would not be able to discard the
+//! conflicting items in such a way that they do not become part of the
+//! broadcasts history all of those items would need to be maintained on disk
+//! indefinitely.
 //!
 //! Therefore it cannot be guaranteed that all broadcast instances return the
 //! exact stream of ordered items. However, if two correct peers obtain two
@@ -72,11 +73,12 @@
 //! the item A. Then, item B is ordered and all correct nodes notice the double
 //! spend and make no changes to their state. Now they can safely discard the
 //! item B as it did not cause a state transition. When the session completes
-//! only item A is part of the corresponding block. When the offline peer comes
-//! back online it downloads the block. Therefore the recovering peer will only
-//! see Item A but arrives at the same state as its peers at the end of the
-//! session regardless. However, it did so by processing one less ordered item
-//! and without realizing that a double spend had occurred.
+//! only item A is part of the corresponding session outcome. When the offline
+//! peer comes back online it downloads the session outcome. Therefore the
+//! recovering peer will only see Item A but arrives at the same state as its
+//! peers at the end of the session regardless. However, it did so by processing
+//! one less ordered item and without realizing that a double spend had
+//! occurred.
 
 pub mod backup;
 pub mod data_provider;
@@ -90,7 +92,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::PeerId;
 /// This keychain implements naive threshold schnorr signatures over secp256k1.
 /// The broadcasts uses this keychain to sign messages for peers and create
-/// the threshold signatures for the signed blocks.
+/// the threshold signatures for the signed session outcome.
 pub use keychain::Keychain;
 use serde::{Deserialize, Serialize};
 

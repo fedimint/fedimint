@@ -274,10 +274,10 @@ impl DatabaseDump {
                         "Accepted Transactions"
                     );
                 }
-                ConsensusRange::DbKeyPrefix::SignedBlock => {
+                ConsensusRange::DbKeyPrefix::SignedSessionOutcome => {
                     push_db_pair_items_no_serde!(
                         dbtx,
-                        ConsensusRange::SignedBlockPrefix,
+                        ConsensusRange::SignedSessionOutcomePrefix,
                         ConsensusRange::SignedBlockKey,
                         fedimint_server::consensus::SignedBlock,
                         consensus,

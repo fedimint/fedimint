@@ -5,12 +5,12 @@ use std::fmt;
 use fedimint_client::sm::{State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
-use fedimint_core::block::Block;
 use fedimint_core::core::{OperationId, LEGACY_HARDCODED_INSTANCE_ID_MINT};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::session_outcome::SessionOutcome;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::{Amount, NumPeers, OutPoint, PeerId, Tiered, TieredMulti};
 use fedimint_derive_secret::DerivableSecret;
@@ -275,7 +275,7 @@ impl MintRestoreInProgressState {
         api: DynGlobalApi,
         decoders: ModuleDecoderRegistry,
         index: u64,
-    ) -> Block {
+    ) -> SessionOutcome {
         loop {
             info!(target: LOG_CLIENT_RECOVERY_MINT, index, "Awaiting block {index}");
             match api.await_block(index, &decoders).await {
