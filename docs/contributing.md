@@ -9,7 +9,7 @@ Please note that all contributions happen under the MIT license as described at 
 Here are the recommended steps for new developers:
 1. Start by reading our [non-technical primer](https://fedimint.org/docs/intro) and viewing the [videos and articles on the blog](https://fedimint.org/blog)
 2. Before writing code you will need to [set up the dev environment](dev-env.md)
-3. [Run the dev environment](dev-running.md) to ensure that everything works on your computer
+3. [Run the dev environment](tutorial.md) to ensure that everything works on your computer
 4. Now take a look at our [GitHub Issues](https://github.com/fedimint/fedimint/issues) you may want to search for [good first issues](https://github.com/fedimint/fedimint/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
 5. Introduce yourself on our [Developer discord](https://chat.fedimint.org) and ask any questions there
 6. Join our [Developer calls](https://calendar.google.com/calendar/u/0/embed?src=fedimintcalendar@gmail.com) especially the ones for new contributors
