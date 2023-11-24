@@ -10,4 +10,8 @@ pub enum ConsensusItem {
     Transaction(Transaction),
     /// Any data that modules require consensus on
     Module(ModuleConsensusItem),
+    /// Allows us to add new items in the future without crashing old clients
+    /// that try to interpret the session log.
+    #[encodable_default]
+    Default { variant: u64, bytes: Vec<u8> },
 }

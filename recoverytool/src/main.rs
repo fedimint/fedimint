@@ -199,6 +199,7 @@ async fn main() -> anyhow::Result<()> {
                         .filter_map(|item| match item.item {
                             ConsensusItem::Transaction(tx) => Some(tx),
                             ConsensusItem::Module(_) => None,
+                            ConsensusItem::Default { .. } => None,
                         })
                         .collect();
 
