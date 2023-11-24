@@ -554,7 +554,6 @@
     FederationStatus, PeerConnectionStatus, PeerStatus, ServerStatus, StatusResponse,
 };
 <span class="kw">use </span>fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
-<span class="kw">use </span>fedimint_core::block::{Block, SignedBlock};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, JsonWithKind};
 <span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
@@ -562,8 +561,8 @@
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
-    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_BLOCK_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
-    AWAIT_SIGNED_BLOCK_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
+    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
+    AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
     CLIENT_CONFIG_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
     SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, STATUS_ENDPOINT,
     SUBMIT_TRANSACTION_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
@@ -576,6 +575,7 @@
     SupportedApiVersionsSummary,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
+<span class="kw">use </span>fedimint_core::session_outcome::{SessionOutcome, SignedSessionOutcome};
 <span class="kw">use </span>fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
 <span class="kw">use </span>fedimint_core::{OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
@@ -589,7 +589,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::process_transaction_with_dbtx;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::server::LatestContributionByPeer;
-<span class="kw">use </span><span class="kw">crate</span>::db::{AcceptedTransactionKey, SignedBlockKey, SignedBlockPrefix};
+<span class="kw">use </span><span class="kw">crate</span>::db::{AcceptedTransactionKey, SignedSessionOutcomeKey, SignedSessionOutcomePrefix};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use crate</span>::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
 
@@ -712,15 +712,15 @@
         <span class="self">self</span>.db
             .begin_transaction()
             .<span class="kw">await
-            </span>.find_by_prefix(<span class="kw-2">&amp;</span>SignedBlockPrefix)
+            </span>.find_by_prefix(<span class="kw-2">&amp;</span>SignedSessionOutcomePrefix)
             .<span class="kw">await
             </span>.count()
             .<span class="kw">await as </span>u64
     }
 
-    <span class="kw">pub async fn </span>await_signed_block(<span class="kw-2">&amp;</span><span class="self">self</span>, index: u64) -&gt; SignedBlock {
+    <span class="kw">pub async fn </span>await_signed_session_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, index: u64) -&gt; SignedSessionOutcome {
         <span class="self">self</span>.db
-            .wait_key_check(<span class="kw-2">&amp;</span>SignedBlockKey(index), std::convert::identity)
+            .wait_key_check(<span class="kw-2">&amp;</span>SignedSessionOutcomeKey(index), std::convert::identity)
             .<span class="kw">await
             </span>.<span class="number">0
     </span>}
@@ -959,15 +959,15 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            AWAIT_BLOCK_ENDPOINT,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, index: u64| -&gt; SerdeModuleEncoding&lt;Block&gt; {
-                <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>fedimint.await_signed_block(index).<span class="kw">await</span>.block).into())
+            AWAIT_SESSION_OUTCOME_ENDPOINT,
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, index: u64| -&gt; SerdeModuleEncoding&lt;SessionOutcome&gt; {
+                <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>fedimint.await_signed_session_outcome(index).<span class="kw">await</span>.session_outcome).into())
             }
         },
         <span class="macro">api_endpoint! </span>{
-            AWAIT_SIGNED_BLOCK_ENDPOINT,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, index: u64| -&gt; SerdeModuleEncoding&lt;SignedBlock&gt; {
-                <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>fedimint.await_signed_block(index).<span class="kw">await</span>).into())
+            AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, index: u64| -&gt; SerdeModuleEncoding&lt;SignedSessionOutcome&gt; {
+                <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>fedimint.await_signed_session_outcome(index).<span class="kw">await</span>).into())
             }
         },
         <span class="macro">api_endpoint! </span>{

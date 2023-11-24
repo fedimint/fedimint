@@ -742,6 +742,31 @@
 <a href="#742" id="742">742</a>
 <a href="#743" id="743">743</a>
 <a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -750,13 +775,12 @@
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>async_channel::{Receiver, Sender};
 <span class="kw">use </span>fedimint_core::api::{FederationApiExt, GlobalFederationApi, WsFederationApi};
-<span class="kw">use </span>fedimint_core::block::{AcceptedItem, Block, SchnorrSignature, SignedBlock};
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::db::{
     apply_migrations, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
-<span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_SIGNED_BLOCK_ENDPOINT;
+<span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
@@ -765,6 +789,9 @@
 };
 <span class="kw">use </span>fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
 <span class="kw">use </span>fedimint_core::query::FilterMap;
+<span class="kw">use </span>fedimint_core::session_outcome::{
+    AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
+};
 <span class="kw">use </span>fedimint_core::task::{sleep, spawn, RwLock, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::timing::TimeReporter;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -782,7 +809,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::consensus::process_transaction_with_dbtx;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     get_global_database_migrations, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey,
-    AlephUnitsPrefix, SignedBlockKey, SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
+    AlephUnitsPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
 };
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache};
@@ -967,12 +994,12 @@
                 </span>.db
                 .begin_transaction()
                 .<span class="kw">await
-                </span>.find_by_prefix(<span class="kw-2">&amp;</span>SignedBlockPrefix)
+                </span>.find_by_prefix(<span class="kw-2">&amp;</span>SignedSessionOutcomePrefix)
                 .<span class="kw">await
                 </span>.count()
                 .<span class="kw">await as </span>u64;
 
-            <span class="kw">let </span><span class="kw-2">mut </span>item_index = <span class="self">self</span>.build_block().<span class="kw">await</span>.items.len() <span class="kw">as </span>u64;
+            <span class="kw">let </span><span class="kw-2">mut </span>item_index = <span class="self">self</span>.build_session_outcome().<span class="kw">await</span>.items.len() <span class="kw">as </span>u64;
 
             <span class="kw">let </span>session_start_time = std::time::Instant::now();
 
@@ -996,13 +1023,19 @@
                 }
             }
 
-            <span class="kw">let </span>block = <span class="self">self</span>.build_block().<span class="kw">await</span>;
-            <span class="kw">let </span>header = block.header(session_index);
+            <span class="kw">let </span>session_outcome = <span class="self">self</span>.build_session_outcome().<span class="kw">await</span>;
+            <span class="kw">let </span>header = session_outcome.header(session_index);
             <span class="kw">let </span>signature = <span class="self">self</span>.keychain.sign(<span class="kw-2">&amp;</span>header);
             <span class="kw">let </span>signatures = BTreeMap::from_iter([(<span class="self">self</span>.cfg.local.identity, signature)]);
 
-            <span class="self">self</span>.complete_session(session_index, SignedBlock { block, signatures })
-                .<span class="kw">await</span>;
+            <span class="self">self</span>.complete_session(
+                session_index,
+                SignedSessionOutcome {
+                    session_outcome,
+                    signatures,
+                },
+            )
+            .<span class="kw">await</span>;
 
             <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Session {session_index} completed&quot;</span>);
 
@@ -1028,7 +1061,7 @@
                 </span>.db
                 .begin_transaction()
                 .<span class="kw">await
-                </span>.find_by_prefix(<span class="kw-2">&amp;</span>SignedBlockPrefix)
+                </span>.find_by_prefix(<span class="kw-2">&amp;</span>SignedSessionOutcomePrefix)
                 .<span class="kw">await
                 </span>.count()
                 .<span class="kw">await as </span>u64;
@@ -1084,7 +1117,7 @@
 
         <span class="comment">// In order to bound a sessions RAM consumption we need to bound its number of
         // units and therefore its number of rounds. Since we use a session to
-        // create a threshold signature for the corresponding block we have to
+        // create a threshold signature for the corresponding session outcome we have to
         // guarantee that an attacker cannot exhaust our memory by preventing the
         // creation of a threshold signature, thereby keeping the session open
         // indefinitely. Hence we increase the delay between rounds exponentially
@@ -1138,8 +1171,8 @@
         )
         .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
 
-        <span class="kw">let </span>signed_block = <span class="self">self
-            </span>.complete_signed_block(
+        <span class="kw">let </span>signed_session_outcome = <span class="self">self
+            </span>.complete_signed_session_outcome(
                 session_index,
                 batches_per_session,
                 unit_data_receiver,
@@ -1152,24 +1185,26 @@
 
         <span class="comment">// Only call this after aleph bft has shutdown to avoid write-write conflicts
         // for the aleph bft units
-        </span><span class="self">self</span>.complete_session(session_index, signed_block).<span class="kw">await</span>;
+        </span><span class="self">self</span>.complete_session(session_index, signed_session_outcome)
+            .<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>complete_signed_block(
+    <span class="kw">pub async fn </span>complete_signed_session_outcome(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         session_index: u64,
-        batches_per_block: usize,
+        batches_per_session_outcome: usize,
         unit_data_receiver: Receiver&lt;(UnitData, PeerId)&gt;,
         signature_sender: watch::Sender&lt;<span class="prelude-ty">Option</span>&lt;SchnorrSignature&gt;&gt;,
-    ) -&gt; anyhow::Result&lt;SignedBlock&gt; {
+    ) -&gt; anyhow::Result&lt;SignedSessionOutcome&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>num_batches = <span class="number">0</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>item_index = <span class="number">0</span>;
 
-        <span class="comment">// we build a block out of the ordered batches until either we have processed
-        // n_batches_per_block blocks or a signed block arrives from our peers
-        </span><span class="kw">while </span>num_batches &lt; batches_per_block {
+        <span class="comment">// we build a session outcome out of the ordered batches until either we have
+        // processed batches_per_session_outcome session outcomes or a signed session
+        // outcome arrives from our peers
+        </span><span class="kw">while </span>num_batches &lt; batches_per_session_outcome {
             <span class="macro">tokio::select! </span>{
                 unit_data = unit_data_receiver.recv() =&gt; {
                     <span class="kw">if let </span>(UnitData::Batch(bytes), peer) = unit_data<span class="question-mark">? </span>{
@@ -1189,12 +1224,12 @@
                         num_batches += <span class="number">1</span>;
                     }
                 },
-                signed_block = <span class="self">self</span>.request_signed_block(session_index) =&gt; {
-                    <span class="kw">let </span>partial_block = <span class="self">self</span>.build_block().<span class="kw">await</span>.items;
+                signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(session_index) =&gt; {
+                    <span class="kw">let </span>partial_session_outcome = <span class="self">self</span>.build_session_outcome().<span class="kw">await</span>.items;
 
-                    <span class="kw">let </span>(processed, unprocessed) = signed_block.block.items.split_at(partial_block.len());
+                    <span class="kw">let </span>(processed, unprocessed) = signed_session_outcome.session_outcome.items.split_at(partial_session_outcome.len());
 
-                    <span class="macro">assert!</span>(processed.iter().eq(partial_block.iter()));
+                    <span class="macro">assert!</span>(processed.iter().eq(partial_session_outcome.iter()));
 
                     <span class="kw">for </span>accepted_item <span class="kw">in </span>unprocessed {
                         <span class="kw">let </span>result = <span class="self">self</span>.process_consensus_item(
@@ -1209,13 +1244,13 @@
                         item_index += <span class="number">1</span>;
                     }
 
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(signed_block);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(signed_session_outcome);
                 }
             }
         }
 
-        <span class="kw">let </span>block = <span class="self">self</span>.build_block().<span class="kw">await</span>;
-        <span class="kw">let </span>header = block.header(session_index);
+        <span class="kw">let </span>session_outcome = <span class="self">self</span>.build_session_outcome().<span class="kw">await</span>;
+        <span class="kw">let </span>header = session_outcome.header(session_index);
 
         <span class="comment">// we send our own signature to the data provider to be broadcasted
         </span>signature_sender.send(<span class="prelude-val">Some</span>(<span class="self">self</span>.keychain.sign(<span class="kw-2">&amp;</span>header)))<span class="question-mark">?</span>;
@@ -1223,7 +1258,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>signatures = BTreeMap::new();
 
         <span class="comment">// we collect the ordered signatures until we either obtain a threshold
-        // signature or a signed block arrives from our peers
+        // signature or a signed session outcome arrives from our peers
         </span><span class="kw">while </span>signatures.len() &lt; <span class="self">self</span>.keychain.threshold() {
             <span class="macro">tokio::select! </span>{
                 unit_data = unit_data_receiver.recv() =&gt; {
@@ -1234,23 +1269,26 @@
                         }
                     }
                 }
-                signed_block = <span class="self">self</span>.request_signed_block(session_index) =&gt; {
-                    <span class="comment">// We check that the block we have created agrees with the federations consensus
-                    </span><span class="macro">assert!</span>(header == signed_block.block.header(session_index));
+                signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(session_index) =&gt; {
+                    <span class="comment">// We check that the session outcome we have created agrees with the federations consensus
+                    </span><span class="macro">assert!</span>(header == signed_session_outcome.session_outcome.header(session_index));
 
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(signed_block);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(signed_session_outcome);
                 }
             }
         }
 
-        <span class="prelude-val">Ok</span>(SignedBlock { block, signatures })
+        <span class="prelude-val">Ok</span>(SignedSessionOutcome {
+            session_outcome,
+            signatures,
+        })
     }
 
     <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
         <span class="self">self</span>.modules.decoder_registry()
     }
 
-    <span class="kw">pub async fn </span>build_block(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Block {
+    <span class="kw">pub async fn </span>build_session_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SessionOutcome {
         <span class="kw">let </span>items = <span class="self">self
             </span>.db
             .begin_transaction()
@@ -1261,10 +1299,14 @@
             .collect()
             .<span class="kw">await</span>;
 
-        Block { items }
+        SessionOutcome { items }
     }
 
-    <span class="kw">pub async fn </span>complete_session(<span class="kw-2">&amp;</span><span class="self">self</span>, session_index: u64, signed_block: SignedBlock) {
+    <span class="kw">pub async fn </span>complete_session(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        session_index: u64,
+        signed_session_outcome: SignedSessionOutcome,
+    ) {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
 
         dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>AlephUnitsPrefix).<span class="kw">await</span>;
@@ -1272,11 +1314,14 @@
         dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>AcceptedItemPrefix).<span class="kw">await</span>;
 
         <span class="kw">if </span>dbtx
-            .insert_entry(<span class="kw-2">&amp;</span>SignedBlockKey(session_index), <span class="kw-2">&amp;</span>signed_block)
+            .insert_entry(
+                <span class="kw-2">&amp;</span>SignedSessionOutcomeKey(session_index),
+                <span class="kw-2">&amp;</span>signed_session_outcome,
+            )
             .<span class="kw">await
             </span>.is_some()
         {
-            <span class="macro">panic!</span>(<span class="string">&quot;We tried to overwrite a signed block&quot;</span>);
+            <span class="macro">panic!</span>(<span class="string">&quot;We tried to overwrite a signed session outcome&quot;</span>);
         }
 
         dbtx.commit_tx_result()
@@ -1402,24 +1447,27 @@
         }
     }
 
-    <span class="kw">async fn </span>request_signed_block(<span class="kw-2">&amp;</span><span class="self">self</span>, index: u64) -&gt; SignedBlock {
+    <span class="kw">async fn </span>request_signed_session_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, index: u64) -&gt; SignedSessionOutcome {
         <span class="kw">let </span>keychain = <span class="self">self</span>.keychain.clone();
         <span class="kw">let </span>total_peers = <span class="self">self</span>.keychain.peer_count();
         <span class="kw">let </span>decoders = <span class="self">self</span>.decoders();
 
-        <span class="kw">let </span>filter_map = <span class="kw">move </span>|response: SerdeModuleEncoding&lt;SignedBlock&gt;| <span class="kw">match </span>response
+        <span class="kw">let </span>filter_map = <span class="kw">move </span>|response: SerdeModuleEncoding&lt;SignedSessionOutcome&gt;| <span class="kw">match </span>response
             .try_into_inner(<span class="kw-2">&amp;</span>decoders)
         {
-            <span class="prelude-val">Ok</span>(signed_block) =&gt; {
-                <span class="kw">match </span>signed_block.signatures.len() == keychain.threshold()
-                    &amp;&amp; signed_block.signatures.iter().all(|(peer_id, sig)| {
-                        keychain.verify(
-                            <span class="kw-2">&amp;</span>signed_block.block.header(index),
-                            sig,
-                            to_node_index(<span class="kw-2">*</span>peer_id),
-                        )
-                    }) {
-                    <span class="bool-val">true </span>=&gt; <span class="prelude-val">Ok</span>(signed_block),
+            <span class="prelude-val">Ok</span>(signed_session_outcome) =&gt; {
+                <span class="kw">match </span>signed_session_outcome.signatures.len() == keychain.threshold()
+                    &amp;&amp; signed_session_outcome
+                        .signatures
+                        .iter()
+                        .all(|(peer_id, sig)| {
+                            keychain.verify(
+                                <span class="kw-2">&amp;</span>signed_session_outcome.session_outcome.header(index),
+                                sig,
+                                to_node_index(<span class="kw-2">*</span>peer_id),
+                            )
+                        }) {
+                    <span class="bool-val">true </span>=&gt; <span class="prelude-val">Ok</span>(signed_session_outcome),
                     <span class="bool-val">false </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Invalid signatures&quot;</span>)),
                 }
             }
@@ -1435,14 +1483,16 @@
             <span class="kw">let </span>result = federation_api
                 .request_with_strategy(
                     FilterMap::new(filter_map.clone(), total_peers),
-                    AWAIT_SIGNED_BLOCK_ENDPOINT.to_string(),
+                    AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
                     ApiRequestErased::new(index),
                 )
                 .<span class="kw">await</span>;
 
             <span class="kw">match </span>result {
-                <span class="prelude-val">Ok</span>(signed_block) =&gt; <span class="kw">return </span>signed_block,
-                <span class="prelude-val">Err</span>(error) =&gt; <span class="macro">tracing::error!</span>(<span class="string">&quot;Error while requesting signed block: {}&quot;</span>, error),
+                <span class="prelude-val">Ok</span>(signed_session_outcome) =&gt; <span class="kw">return </span>signed_session_outcome,
+                <span class="prelude-val">Err</span>(error) =&gt; {
+                    <span class="macro">tracing::error!</span>(<span class="string">&quot;Error while requesting signed session outcome: {}&quot;</span>, error)
+                }
             }
         }
     }

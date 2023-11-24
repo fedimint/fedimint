@@ -579,10 +579,10 @@
                         <span class="string">&quot;Accepted Transactions&quot;
                     </span>);
                 }
-                ConsensusRange::DbKeyPrefix::SignedBlock =&gt; {
+                ConsensusRange::DbKeyPrefix::SignedSessionOutcome =&gt; {
                     <span class="macro">push_db_pair_items_no_serde!</span>(
                         dbtx,
-                        ConsensusRange::SignedBlockPrefix,
+                        ConsensusRange::SignedSessionOutcomePrefix,
                         ConsensusRange::SignedBlockKey,
                         fedimint_server::consensus::SignedBlock,
                         consensus,

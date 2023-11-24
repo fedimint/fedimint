@@ -110,9 +110,9 @@
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 
 <span class="kw">use </span>bitcoin_hashes_12::sha256;
-<span class="kw">use </span>fedimint_core::block::{consensus_hash_sha256, SchnorrSignature};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
+<span class="kw">use </span>fedimint_core::session_outcome::{consensus_hash_sha256, SchnorrSignature};
 <span class="kw">use </span>tokio::sync::watch;
 
 <span class="kw">use </span><span class="kw">crate</span>::LOG_CONSENSUS;

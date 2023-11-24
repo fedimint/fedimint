@@ -1265,7 +1265,7 @@
 <span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
-    AWAIT_BLOCK_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    AWAIT_SESSION_OUTCOME_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
@@ -1290,7 +1290,6 @@
 <span class="kw">use </span>tracing::{debug, error, instrument, trace};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::ClientBackupSnapshot;
-<span class="kw">use </span><span class="kw">crate</span>::block::Block;
 <span class="kw">use </span><span class="kw">crate</span>::core::backup::SignedBackupRequest;
 <span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, OutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::encoding::DecodeError;
@@ -1304,6 +1303,7 @@
     DiscoverApiVersionSet, FilterMap, QueryStep, QueryStrategy, ThresholdConsensus,
     UnionResponsesSingle,
 };
+<span class="kw">use </span><span class="kw">crate</span>::session_outcome::SessionOutcome;
 <span class="kw">use </span><span class="kw">crate</span>::task;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction, TransactionError};
 <span class="kw">use </span><span class="kw">crate</span>::util::SafeUrl;
@@ -1602,7 +1602,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         block_index: u64,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; anyhow::Result&lt;Block&gt;;
+    ) -&gt; anyhow::Result&lt;SessionOutcome&gt;;
 
     <span class="kw">async fn </span>session_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;
 
@@ -1679,9 +1679,9 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         block_index: u64,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; anyhow::Result&lt;Block&gt; {
-        <span class="self">self</span>.request_current_consensus::&lt;SerdeModuleEncoding&lt;Block&gt;&gt;(
-            AWAIT_BLOCK_ENDPOINT.to_string(),
+    ) -&gt; anyhow::Result&lt;SessionOutcome&gt; {
+        <span class="self">self</span>.request_current_consensus::&lt;SerdeModuleEncoding&lt;SessionOutcome&gt;&gt;(
+            AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
         )
         .<span class="kw">await</span><span class="question-mark">?

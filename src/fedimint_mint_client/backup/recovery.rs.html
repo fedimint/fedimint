@@ -614,12 +614,12 @@
 <span class="kw">use </span>fedimint_client::sm::{State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
-<span class="kw">use </span>fedimint_core::block::Block;
 <span class="kw">use </span>fedimint_core::core::{OperationId, LEGACY_HARDCODED_INSTANCE_ID_MINT};
 <span class="kw">use </span>fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::session_outcome::SessionOutcome;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::{Amount, NumPeers, OutPoint, PeerId, Tiered, TieredMulti};
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
@@ -884,7 +884,7 @@
         api: DynGlobalApi,
         decoders: ModuleDecoderRegistry,
         index: u64,
-    ) -&gt; Block {
+    ) -&gt; SessionOutcome {
         <span class="kw">loop </span>{
             <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY_MINT, index, <span class="string">&quot;Awaiting block {index}&quot;</span>);
             <span class="kw">match </span>api.await_block(index, <span class="kw-2">&amp;</span>decoders).<span class="kw">await </span>{
