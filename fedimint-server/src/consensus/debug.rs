@@ -23,5 +23,8 @@ pub fn item_message(item: &ConsensusItem) -> String {
             }
             tx_debug
         }
+        ConsensusItem::Default { variant, .. } => {
+            format!("Unknown CI variant: {variant}")
+        }
     }
 }
