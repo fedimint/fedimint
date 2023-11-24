@@ -147,7 +147,7 @@ impl EncryptedClientBackup {
 
     pub fn into_backup_request(self, keypair: &KeyPair) -> Result<SignedBackupRequest> {
         let request = BackupRequest {
-            id: keypair.x_only_public_key().0,
+            id: keypair.public_key(),
             timestamp: fedimint_core::time::now(),
             payload: self.0,
         };
@@ -327,8 +327,8 @@ impl Client {
 
     /// Backup id derived from the root secret key (public key used to self-sign
     /// backup requests)
-    pub fn get_backup_id(&self) -> bitcoin::XOnlyPublicKey {
-        self.get_derived_backup_signing_key().x_only_public_key().0
+    pub fn get_backup_id(&self) -> secp256k1::PublicKey {
+        self.get_derived_backup_signing_key().public_key()
     }
 
     /// Static version of [`Self::get_derived_backup_encryption_key`] for

@@ -8,7 +8,7 @@ use crate::db::DbKeyPrefix;
 
 /// Key used to store user's ecash backups
 #[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
-pub struct ClientBackupKey(pub secp256k1_zkp::XOnlyPublicKey);
+pub struct ClientBackupKey(pub secp256k1_zkp::PublicKey);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct ClientBackupKeyPrefix;

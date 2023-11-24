@@ -289,7 +289,7 @@ impl ConsensusApi {
     async fn handle_recover_request(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        id: secp256k1_zkp::XOnlyPublicKey,
+        id: secp256k1_zkp::PublicKey,
     ) -> Option<ClientBackupSnapshot> {
         dbtx.get_value(&ClientBackupKey(id)).await
     }
@@ -452,7 +452,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             RECOVER_ENDPOINT,
-            async |fedimint: &ConsensusApi, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ClientBackupSnapshot> {
+            async |fedimint: &ConsensusApi, context, id: secp256k1_zkp::PublicKey| -> Option<ClientBackupSnapshot> {
                 Ok(fedimint
                     .handle_recover_request(&mut context.dbtx().into_nc(), id).await)
             }

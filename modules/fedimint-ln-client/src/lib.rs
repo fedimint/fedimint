@@ -45,6 +45,7 @@ use fedimint_ln_common::contracts::outgoing::{
 };
 use fedimint_ln_common::contracts::{
     Contract, ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract, Preimage,
+    PreimageKey,
 };
 use fedimint_ln_common::{
     ContractOutput, LightningClientContext, LightningCommonInit, LightningGateway,
@@ -524,7 +525,7 @@ impl LightningClientModule {
             hash: payment_hash,
             gateway_key: gateway.gateway_redeem_key,
             timelock: absolute_timelock as u32,
-            user_key: user_sk.x_only_public_key().0,
+            user_key: user_sk.public_key(),
             invoice,
             cancelled: false,
         };
@@ -721,8 +722,8 @@ impl LightningClientModule {
         ClientOutput<LightningOutput, LightningClientStateMachines>,
     )> {
         let payment_keypair = KeyPair::new(&self.secp, &mut rng);
-        let preimage: [u8; 32] = payment_keypair.x_only_public_key().0.serialize();
-        let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&preimage);
+        let preimage_key: [u8; 33] = payment_keypair.public_key().serialize();
+        let payment_hash = sha256::Hash::hash(&sha256::Hash::hash(&preimage_key));
 
         // Temporary lightning node pubkey
         let (node_secret_key, node_public_key) = self.secp.generate_keypair(&mut rng);
@@ -800,7 +801,7 @@ impl LightningClientModule {
             amount,
             hash: payment_hash,
             encrypted_preimage: EncryptedPreimage::new(
-                Preimage(preimage),
+                PreimageKey(preimage_key),
                 &self.cfg.threshold_pub_key,
             ),
             expiry_time,
@@ -1483,7 +1484,7 @@ pub async fn create_incoming_contract_output(
     redeem_key: secp256k1::KeyPair,
 ) -> Result<(LightningOutputV0, ContractId), IncomingSmError> {
     let offer = fetch_and_validate_offer(module_api, payment_hash, amount_msat).await?;
-    let our_pub_key = secp256k1::XOnlyPublicKey::from_keypair(&redeem_key).0;
+    let our_pub_key = secp256k1::PublicKey::from_keypair(&redeem_key);
     let contract = IncomingContract {
         hash: offer.hash,
         encrypted_preimage: offer.encrypted_preimage.clone(),

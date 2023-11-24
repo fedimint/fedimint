@@ -26,7 +26,6 @@ use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::{PegOutFees, Rbf};
 use fedimint_wallet_server::WalletInit;
 use futures::stream::StreamExt;
-use miniscript::ToPublicKey;
 use tracing::info;
 
 fn fixtures() -> Fixtures {
@@ -434,12 +433,12 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         PlainRootSecretStrategy::to_root_secret(&PlainRootSecretStrategy::random(&mut OsRng));
     let secp = Secp256k1::new();
     let tweak_key = root_secret.to_secp_key(&secp);
-    let x_only_pk = tweak_key.public_key().to_x_only_pubkey();
+    let pk = tweak_key.public_key();
     let wallet_config: WalletConfig = wallet_server_cfg[0].to_typed()?;
     let peg_in_descriptor = wallet_config.consensus.peg_in_descriptor;
 
     let peg_in_address = peg_in_descriptor
-        .tweak(&x_only_pk, secp256k1::SECP256K1)
+        .tweak(&pk, secp256k1::SECP256K1)
         .address(wallet_config.consensus.network)?;
 
     let mut wallet = fedimint_wallet_server::Wallet::new_with_bitcoind(
@@ -488,7 +487,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         proof,
         transaction,
         output_index.try_into()?,
-        x_only_pk,
+        pk,
     )?);
 
     match wallet

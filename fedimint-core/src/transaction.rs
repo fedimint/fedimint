@@ -1,5 +1,4 @@
 use bitcoin::hashes::Hash as BitcoinHash;
-use bitcoin::XOnlyPublicKey;
 use fedimint_core::core::{DynInput, DynOutput};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::SerdeModuleEncoding;
@@ -66,7 +65,7 @@ impl Transaction {
     /// Validate the schnorr signatures signed over the `tx_hash`
     pub fn validate_signatures(
         &self,
-        pub_keys: Vec<XOnlyPublicKey>,
+        pub_keys: Vec<secp256k1_zkp::PublicKey>,
     ) -> Result<(), TransactionError> {
         let signatures = match &self.signatures {
             TransactionSignature::NaiveMultisig(sigs) => sigs,
@@ -84,7 +83,7 @@ impl Transaction {
 
         for (pk, signature) in pub_keys.iter().zip(signatures) {
             if secp256k1_zkp::global::SECP256K1
-                .verify_schnorr(signature, &msg, pk)
+                .verify_schnorr(signature, &msg, &pk.x_only_public_key().0)
                 .is_err()
             {
                 return Err(TransactionError::InvalidSignature {

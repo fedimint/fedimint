@@ -11,7 +11,6 @@ use std::sync::Arc;
 use fedimint_logging::LOG_NET_API;
 use futures::Future;
 use jsonrpsee_core::JsonValue;
-use secp256k1_zkp::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
@@ -43,7 +42,7 @@ use crate::{
 #[derive(Debug, PartialEq)]
 pub struct InputMeta {
     pub amount: TransactionItemAmount,
-    pub pub_key: XOnlyPublicKey,
+    pub pub_key: secp256k1_zkp::PublicKey,
 }
 
 /// Information about the amount represented by an input or output.

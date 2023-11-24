@@ -449,7 +449,7 @@ impl ServerModule for Mint {
             },
             api_endpoint! {
                 RECOVER_ENDPOINT,
-                async |module: &Mint, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ECashUserBackupSnapshot> {
+                async |module: &Mint, context, id: secp256k1_zkp::PublicKey| -> Option<ECashUserBackupSnapshot> {
                     Ok(module
                         .handle_recover_request(&mut context.dbtx().into_nc(), id).await)
                 }
@@ -492,7 +492,7 @@ impl Mint {
     async fn handle_recover_request(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        id: secp256k1_zkp::XOnlyPublicKey,
+        id: secp256k1_zkp::PublicKey,
     ) -> Option<ECashUserBackupSnapshot> {
         dbtx.get_value(&EcashBackupKey(id)).await
     }
@@ -638,7 +638,7 @@ mod test {
         denomination: Amount,
     ) -> (secp256k1::KeyPair, Note) {
         let note_key = secp256k1::KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
-        let nonce = Nonce(note_key.public_key().x_only_public_key().0);
+        let nonce = Nonce(note_key.public_key());
         let message = nonce.to_message();
         let blinding_key = tbs::BlindingKey::random();
         let blind_msg = blind_message(message, blinding_key);
@@ -732,7 +732,7 @@ mod fedimint_migration_tests {
     /// that creates a new database backup that can be tested.
     async fn create_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
         let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
-        let nonce_key = NonceKey(Nonce(pk.x_only_public_key().0));
+        let nonce_key = NonceKey(Nonce(pk));
         dbtx.insert_new_entry(&nonce_key, &()).await;
 
         let out_point = OutPoint {
@@ -765,7 +765,7 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&mint_audit_redemption_total, &Amount::from_sats(15000))
             .await;
 
-        let backup_key = EcashBackupKey(pk.x_only_public_key().0);
+        let backup_key = EcashBackupKey(pk);
         let ecash_backup = ECashUserBackupSnapshot {
             timestamp: now(),
             data: BYTE_32.to_vec(),

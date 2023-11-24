@@ -277,7 +277,7 @@ impl GatewayClientModule {
         LightningGatewayAnnouncement {
             info: LightningGateway {
                 mint_channel_id: self.mint_channel_id,
-                gateway_redeem_key: self.redeem_key.x_only_public_key().0,
+                gateway_redeem_key: self.redeem_key.public_key(),
                 node_pub_key: self.node_pub_key,
                 lightning_alias: self.lightning_alias.clone(),
                 api,
