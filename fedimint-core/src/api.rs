@@ -380,7 +380,7 @@ pub trait GlobalFederationApi {
 
     async fn download_backup(
         &self,
-        id: &secp256k1::XOnlyPublicKey,
+        id: &secp256k1::PublicKey,
     ) -> FederationResult<Vec<ClientBackupSnapshot>>;
 
     /// Query peers and calculate optimal common api versions to use.
@@ -539,7 +539,7 @@ where
 
     async fn download_backup(
         &self,
-        id: &secp256k1::XOnlyPublicKey,
+        id: &secp256k1::PublicKey,
     ) -> FederationResult<Vec<ClientBackupSnapshot>> {
         Ok(self
             .request_with_strategy(

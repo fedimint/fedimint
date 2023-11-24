@@ -23,24 +23,6 @@ impl Decodable for secp256k1_zkp::ecdsa::Signature {
     }
 }
 
-impl Encodable for secp256k1_zkp::XOnlyPublicKey {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let bytes = self.serialize();
-        writer.write_all(&bytes[..])?;
-        Ok(bytes.len())
-    }
-}
-
-impl Decodable for secp256k1_zkp::XOnlyPublicKey {
-    fn consensus_decode<D: std::io::Read>(
-        d: &mut D,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        secp256k1_zkp::XOnlyPublicKey::from_slice(&<[u8; 32]>::consensus_decode(d, modules)?)
-            .map_err(DecodeError::from_err)
-    }
-}
-
 impl Encodable for secp256k1_zkp::PublicKey {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         self.serialize().consensus_encode(writer)

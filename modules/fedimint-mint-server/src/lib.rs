@@ -449,7 +449,7 @@ impl ServerModule for Mint {
             },
             api_endpoint! {
                 RECOVER_ENDPOINT,
-                async |module: &Mint, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ECashUserBackupSnapshot> {
+                async |module: &Mint, context, id: secp256k1_zkp::PublicKey| -> Option<ECashUserBackupSnapshot> {
                     Ok(module
                         .handle_recover_request(&mut context.dbtx().into_nc(), id).await)
                 }
@@ -492,7 +492,7 @@ impl Mint {
     async fn handle_recover_request(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        id: secp256k1_zkp::XOnlyPublicKey,
+        id: secp256k1_zkp::PublicKey,
     ) -> Option<ECashUserBackupSnapshot> {
         dbtx.get_value(&EcashBackupKey(id)).await
     }
@@ -765,7 +765,7 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&mint_audit_redemption_total, &Amount::from_sats(15000))
             .await;
 
-        let backup_key = EcashBackupKey(pk.x_only_public_key().0);
+        let backup_key = EcashBackupKey(pk);
         let ecash_backup = ECashUserBackupSnapshot {
             timestamp: now(),
             data: BYTE_32.to_vec(),

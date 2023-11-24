@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct BackupRequest {
-    pub id: secp256k1::XOnlyPublicKey,
+    pub id: secp256k1::PublicKey,
     #[serde(with = "fedimint_core::hex::serde")]
     pub payload: Vec<u8>,
     pub timestamp: std::time::SystemTime,
@@ -44,7 +44,7 @@ impl SignedBackupRequest {
         ctx.verify_schnorr(
             &self.signature,
             &Message::from_slice(&self.request.hash()).expect("Can't fail"),
-            &self.request.id,
+            &self.request.id.x_only_public_key().0,
         )?;
 
         Ok(&self.request)
