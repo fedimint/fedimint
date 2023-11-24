@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["broadcast_pending_tx","run_broadcast_pending_tx"],"struct":["StatelessWallet","Wallet","WalletInit"]};
+window.SIDEBAR_ITEMS = {"fn":["broadcast_pending_tx","nonce_from_idx","run_broadcast_pending_tx"],"struct":["StatelessWallet","Wallet","WalletInit"]};

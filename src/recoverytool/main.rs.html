@@ -450,10 +450,6 @@
 <a href="#450" id="450">450</a>
 <a href="#451" id="451">451</a>
 <a href="#452" id="452">452</a>
-<a href="#453" id="453">453</a>
-<a href="#454" id="454">454</a>
-<a href="#455" id="455">455</a>
-<a href="#456" id="456">456</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
@@ -492,7 +488,7 @@
 <span class="kw">use </span>fedimint_wallet_server::common::{
     PegInDescriptor, SpendableUTXO, WalletCommonInit, WalletInput,
 };
-<span class="kw">use </span>fedimint_wallet_server::Wallet;
+<span class="kw">use </span>fedimint_wallet_server::{nonce_from_idx, Wallet};
 <span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
 <span class="kw">use </span>secp256k1::SecretKey;
@@ -644,7 +640,7 @@
             <span class="kw">let </span>db = Database::new(RocksDb::open(db).expect(<span class="string">&quot;Error opening DB&quot;</span>), decoders);
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
-            <span class="kw">let </span>change_tweak_idx: u64 = <span class="number">0</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>change_tweak_idx: u64 = <span class="number">0</span>;
 
             <span class="kw">let </span>tweaks = dbtx
                 .find_by_prefix(<span class="kw-2">&amp;</span>SignedSessionOutcomePrefix)
@@ -669,18 +665,14 @@
 
                         <span class="comment">// Get all user-submitted tweaks and if we did a peg-out tx also return the
                         // consensus round&#39;s tweak used for change
-                        </span><span class="kw">let </span>(peg_in_tweaks, peg_out_present) =
+                        </span><span class="kw">let </span>(<span class="kw-2">mut </span>peg_in_tweaks, peg_out_present) =
                             input_tweaks_output_present(transaction_cis.into_iter());
 
                         <span class="kw">if </span>peg_out_present {
                             <span class="macro">info!</span>(<span class="string">&quot;Found change output, adding tweak {change_tweak_idx} to list&quot;</span>);
-                            <span class="macro">unimplemented!</span>();
-                            <span class="comment">//let change_tweak =
-                            // change_tweak_idx.consensus_hash::&lt;Hash&gt;().
-                            //into_inner();
-                            //peg_in_tweaks.insert(change_tweak);
-                            //change_tweak_idx += 1;
-                        </span>}
+                            peg_in_tweaks.insert(nonce_from_idx(change_tweak_idx));
+                            change_tweak_idx += <span class="number">1</span>;
+                        }
 
                         futures::stream::iter(peg_in_tweaks.into_iter())
                     },

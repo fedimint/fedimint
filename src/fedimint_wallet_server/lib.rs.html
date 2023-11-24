@@ -1992,6 +1992,9 @@
 <a href="#1992" id="1992">1992</a>
 <a href="#1993" id="1993">1993</a>
 <a href="#1994" id="1994">1994</a>
+<a href="#1995" id="1995">1995</a>
+<a href="#1996" id="1996">1996</a>
+<a href="#1997" id="1997">1997</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2922,16 +2925,10 @@
     }
 
     <span class="kw">pub async fn </span>consensus_nonce(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; [u8; <span class="number">33</span>] {
-        <span class="kw">let </span>random_nonce = dbtx.get_value(<span class="kw-2">&amp;</span>PegOutNonceKey).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>PegOutNonceKey, <span class="kw-2">&amp;</span>(random_nonce + <span class="number">1</span>))
-            .<span class="kw">await</span>;
+        <span class="kw">let </span>nonce_idx = dbtx.get_value(<span class="kw-2">&amp;</span>PegOutNonceKey).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>PegOutNonceKey, <span class="kw-2">&amp;</span>(nonce_idx + <span class="number">1</span>)).<span class="kw">await</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>nonce: [u8; <span class="number">33</span>] = [<span class="number">0</span>; <span class="number">33</span>];
-        <span class="comment">// Make it look like a compressed pubkey, has to be either 0x02 or 0x03
-        </span>nonce[<span class="number">0</span>] = <span class="number">0x02</span>;
-        nonce[<span class="number">1</span>..].copy_from_slice(<span class="kw-2">&amp;</span>random_nonce.consensus_hash::&lt;sha256::Hash&gt;()[..]);
-
-        nonce
+        nonce_from_idx(nonce_idx)
     }
 
     <span class="kw">async fn </span>sync_up_to_consensus_height&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -3517,6 +3514,15 @@
 
         descriptor.script_pubkey()
     }
+}
+
+<span class="kw">pub fn </span>nonce_from_idx(nonce_idx: u64) -&gt; [u8; <span class="number">33</span>] {
+    <span class="kw">let </span><span class="kw-2">mut </span>nonce: [u8; <span class="number">33</span>] = [<span class="number">0</span>; <span class="number">33</span>];
+    <span class="comment">// Make it look like a compressed pubkey, has to be either 0x02 or 0x03
+    </span>nonce[<span class="number">0</span>] = <span class="number">0x02</span>;
+    nonce[<span class="number">1</span>..].copy_from_slice(<span class="kw-2">&amp;</span>nonce_idx.consensus_hash::&lt;sha256::Hash&gt;()[..]);
+
+    nonce
 }
 
 <span class="attr">#[cfg(test)]
