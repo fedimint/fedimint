@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -646,12 +646,12 @@ async fn do_load_test_user_task(
             match generate_invoice_with {
                 Some(LnInvoiceGeneration::ClnLightningCli) => {
                     let (invoice, label) = cln_create_invoice(invoice_amount).await?;
-                    gateway_pay_invoice(&prefix, &client, invoice, &event_sender).await?;
+                    gateway_pay_invoice(&prefix, "LND", &client, invoice, &event_sender).await?;
                     cln_wait_invoice_payment(&label).await?;
                 }
                 Some(LnInvoiceGeneration::LnCli) => {
                     let (invoice, r_hash) = lnd_create_invoice(invoice_amount).await?;
-                    gateway_pay_invoice(&prefix, &client, invoice, &event_sender).await?;
+                    gateway_pay_invoice(&prefix, "CLN", &client, invoice, &event_sender).await?;
                     lnd_wait_invoice_payment(r_hash).await?;
                 }
                 None if additional_invoices.is_empty() => {
@@ -678,7 +678,7 @@ async fn do_load_test_user_task(
         } else if invoice_amount == Amount::ZERO {
             warn!("Can't pay invoice {invoice}, amount is zero");
         } else {
-            gateway_pay_invoice(&prefix, &client, invoice, &event_sender).await?;
+            gateway_pay_invoice(&prefix, "unknown", &client, invoice, &event_sender).await?;
             if additional_invoices.peek().is_some() {
                 // Only sleep while there are more invoices to pay
                 fedimint_core::task::sleep(ln_payment_sleep).await;
@@ -836,7 +836,7 @@ async fn run_two_gateways_strategy(
                 name: GATEWAY_CREATE_INVOICE.into(),
                 duration: elapsed,
             })?;
-            gateway_pay_invoice(prefix, client, invoice, event_sender).await?;
+            gateway_pay_invoice(prefix, "LND", client, invoice, event_sender).await?;
             cln_wait_invoice_payment(&label).await?;
             let (operation_id, invoice) =
                 client_create_invoice(client, *invoice_amount, event_sender).await?;
@@ -844,7 +844,7 @@ async fn run_two_gateways_strategy(
             cln_pay_invoice(invoice).await?;
             wait_invoice_payment(
                 prefix,
-                "CLN",
+                "LND",
                 client,
                 operation_id,
                 event_sender,
@@ -861,7 +861,7 @@ async fn run_two_gateways_strategy(
                 name: GATEWAY_CREATE_INVOICE.into(),
                 duration: elapsed,
             })?;
-            gateway_pay_invoice(prefix, client, invoice, event_sender).await?;
+            gateway_pay_invoice(prefix, "CLN", client, invoice, event_sender).await?;
             lnd_wait_invoice_payment(r_hash).await?;
             let (operation_id, invoice) =
                 client_create_invoice(client, *invoice_amount, event_sender).await?;
@@ -869,7 +869,7 @@ async fn run_two_gateways_strategy(
             lnd_pay_invoice(invoice).await?;
             wait_invoice_payment(
                 prefix,
-                "LND",
+                "CLN",
                 client,
                 operation_id,
                 event_sender,
@@ -949,16 +949,16 @@ async fn do_partner_ping_pong(
 
 async fn wait_invoice_payment(
     prefix: &str,
-    method: &str,
+    gateway_name: &str,
     client: &ClientArc,
     operation_id: fedimint_core::core::OperationId,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
     pay_invoice_time: std::time::SystemTime,
 ) -> anyhow::Result<()> {
     let elapsed = pay_invoice_time.elapsed()?;
-    info!("{prefix} Invoice payment received started using {method} in {elapsed:?}");
+    info!("{prefix} Invoice payment receive started using {gateway_name} in {elapsed:?}");
     event_sender.send(MetricEvent {
-        name: format!("gateway_payment_received_started_{method}"),
+        name: format!("gateway_{gateway_name}_payment_received_started"),
         duration: elapsed,
     })?;
     let lightning_module = client.get_first_module::<LightningClientModule>();
@@ -971,18 +971,22 @@ async fn wait_invoice_payment(
         match update {
             LnReceiveState::Claimed => {
                 let elapsed: Duration = pay_invoice_time.elapsed()?;
-                info!("{prefix} Invoice payment using {method} received in {elapsed:?}");
+                info!("{prefix} Invoice payment received on {gateway_name} in {elapsed:?}");
                 event_sender.send(MetricEvent {
-                    name: "gateway_pay_invoice_success".into(),
+                    name: "gateway_payment_received_success".into(),
+                    duration: elapsed,
+                })?;
+                event_sender.send(MetricEvent {
+                    name: format!("gateway_{gateway_name}_payment_received_success"),
                     duration: elapsed,
                 })?;
                 break;
             }
             LnReceiveState::Canceled { reason } => {
                 let elapsed: Duration = pay_invoice_time.elapsed()?;
-                warn!("{prefix} Invoice using {method} was canceled: {reason} in {elapsed:?}");
+                info!("{prefix} Invoice payment receive was canceled on {gateway_name}: {reason} in {elapsed:?}");
                 event_sender.send(MetricEvent {
-                    name: "gateway_pay_invoice_canceled".into(),
+                    name: "gateway_payment_received_canceled".into(),
                     duration: elapsed,
                 })?;
                 break;
@@ -1191,18 +1195,15 @@ async fn handle_metrics_summary(
                 .await?,
         ))
     }
-
-    let mut results = HashMap::new();
+    let mut results = BTreeMap::new();
     while let Some(event) = event_receiver.recv().await {
         let entry = results.entry(event.name).or_insert_with(Vec::new);
         entry.push(event.duration);
     }
-
     let mut previous_metrics = previous_metrics
         .into_iter()
         .map(|metric| (metric.name.clone(), metric))
         .collect::<HashMap<_, _>>();
-
     for (k, mut v) in results {
         v.sort();
         let n = v.len();

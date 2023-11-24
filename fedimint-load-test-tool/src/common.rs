@@ -222,6 +222,7 @@ pub async fn lnd_wait_invoice_payment(r_hash: String) -> anyhow::Result<()> {
 
 pub async fn gateway_pay_invoice(
     prefix: &str,
+    gateway_name: &str,
     client: &ClientArc,
     invoice: Bolt11Invoice,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
@@ -249,6 +250,10 @@ pub async fn gateway_pay_invoice(
                 info!("{prefix} Invoice paid in {elapsed:?}");
                 event_sender.send(MetricEvent {
                     name: "gateway_pay_invoice_success".into(),
+                    duration: elapsed,
+                })?;
+                event_sender.send(MetricEvent {
+                    name: format!("gateway_{gateway_name}_pay_invoice_success"),
                     duration: elapsed,
                 })?;
                 break;

@@ -935,6 +935,10 @@ async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> 
         output.contains("gateway_pay_invoice_success"),
         "missing invoice payment"
     );
+    anyhow::ensure!(
+        output.contains("gateway_payment_received_success"),
+        "missing received payment"
+    );
 
     info!("Testing ln-circular-load-test with 'partner-ping-pong' strategy");
     // Note invite code isn't required because we already have an archive dir
@@ -958,8 +962,8 @@ async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> 
         "missing invoice creation"
     );
     anyhow::ensure!(
-        output.contains("gateway_pay_invoice_success"),
-        "missing invoice payment"
+        output.contains("gateway_payment_received_success"),
+        "missing received payment"
     );
 
     info!("Testing ln-circular-load-test with 'self-payment' strategy");
@@ -984,8 +988,8 @@ async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> 
         "missing invoice creation"
     );
     anyhow::ensure!(
-        output.contains("gateway_pay_invoice_success"),
-        "missing invoice payment"
+        output.contains("gateway_payment_received_success"),
+        "missing received payment"
     );
     Ok(())
 }
