@@ -577,7 +577,7 @@ fn build_wallet_server_configs(
     let client_cfg = fedimint_core::config::ClientModuleConfig::from_typed(
         0,
         <WalletInit as fedimint_core::module::ServerModuleInit>::kind(),
-        fedimint_core::module::ModuleConsensusVersion::new(0, 0),
+        fedimint_core::module::ModuleConsensusVersion::new(1, 0),
         fedimint_core::module::ServerModuleInit::get_client_config(
             &WalletInit,
             &wallet_cfg[&PeerId::from(0)].consensus,
