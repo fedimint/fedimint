@@ -52,7 +52,7 @@ pub mod txoproof;
 pub mod util;
 
 /// Atomic BFT unit containing consensus items
-pub mod block;
+pub mod session_outcome;
 
 hash_newtype!(
     TransactionId,

@@ -1,9 +1,9 @@
 use std::collections::BTreeSet;
 
 use bitcoin_hashes_12::sha256;
-use fedimint_core::block::{consensus_hash_sha256, SchnorrSignature};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::session_outcome::{consensus_hash_sha256, SchnorrSignature};
 use tokio::sync::watch;
 
 use crate::LOG_CONSENSUS;

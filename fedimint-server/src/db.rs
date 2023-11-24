@@ -1,9 +1,9 @@
 use std::fmt::Debug;
 
-use fedimint_core::block::{AcceptedItem, SignedBlock};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
 use serde::Serialize;
 use strum_macros::EnumIter;
@@ -15,7 +15,7 @@ pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 pub enum DbKeyPrefix {
     AcceptedItem = 0x01,
     AcceptedTransaction = 0x02,
-    SignedBlock = 0x04,
+    SignedSessionOutcome = 0x04,
     AlephUnits = 0x05,
     Module = MODULE_GLOBAL_PREFIX,
 }
@@ -58,18 +58,21 @@ impl_db_lookup!(
 );
 
 #[derive(Debug, Encodable, Decodable)]
-pub struct SignedBlockKey(pub u64);
+pub struct SignedSessionOutcomeKey(pub u64);
 
 #[derive(Debug, Encodable, Decodable)]
-pub struct SignedBlockPrefix;
+pub struct SignedSessionOutcomePrefix;
 
 impl_db_record!(
-    key = SignedBlockKey,
-    value = SignedBlock,
-    db_prefix = DbKeyPrefix::SignedBlock,
+    key = SignedSessionOutcomeKey,
+    value = SignedSessionOutcome,
+    db_prefix = DbKeyPrefix::SignedSessionOutcome,
     notify_on_modify = true,
 );
-impl_db_lookup!(key = SignedBlockKey, query_prefix = SignedBlockPrefix);
+impl_db_lookup!(
+    key = SignedSessionOutcomeKey,
+    query_prefix = SignedSessionOutcomePrefix
+);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct AlephUnitsKey(pub u64);
@@ -97,7 +100,6 @@ mod fedimint_migration_tests {
     use anyhow::{ensure, Context};
     use bitcoin::{secp256k1, KeyPair};
     use bitcoin_hashes::Hash;
-    use fedimint_core::block::{Block, SignedBlock};
     use fedimint_core::core::{DynInput, DynOutput};
     use fedimint_core::db::{
         apply_migrations, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -105,6 +107,7 @@ mod fedimint_migration_tests {
     use fedimint_core::epoch::ConsensusItem;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::CommonModuleInit;
+    use fedimint_core::session_outcome::{SessionOutcome, SignedSessionOutcome};
     use fedimint_core::transaction::{Transaction, TransactionSignature};
     use fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
     use fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
@@ -118,8 +121,8 @@ mod fedimint_migration_tests {
     use super::AcceptedTransactionKey;
     use crate::db::{
         get_global_database_migrations, AcceptedItem, AcceptedItemKey, AcceptedItemPrefix,
-        AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix, SignedBlockKey,
-        SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
+        AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix,
+        SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
     };
 
     /// Create a database with version 0 data. The database produced is not
@@ -172,9 +175,9 @@ mod fedimint_migration_tests {
         .await;
 
         dbtx.insert_new_entry(
-            &SignedBlockKey(0),
-            &SignedBlock {
-                block: Block { items: Vec::new() },
+            &SignedSessionOutcomeKey(0),
+            &SignedSessionOutcome {
+                session_outcome: SessionOutcome { items: Vec::new() },
                 signatures: BTreeMap::new(),
             },
         )
@@ -249,16 +252,16 @@ mod fedimint_migration_tests {
                                 "validate_migrations was not able to read any AcceptedTransactions"
                             );
                         }
-                        DbKeyPrefix::SignedBlock => {
-                            let signed_blocks = dbtx
-                                .find_by_prefix(&SignedBlockPrefix)
+                        DbKeyPrefix::SignedSessionOutcome => {
+                            let signed_session_outcomes = dbtx
+                                .find_by_prefix(&SignedSessionOutcomePrefix)
                                 .await
                                 .collect::<Vec<_>>()
                                 .await;
-                            let num_signed_blocks = signed_blocks.len();
+                            let num_signed_session_outcomes = signed_session_outcomes.len();
                             ensure!(
-                                num_signed_blocks > 0,
-                                "validate_migrations was not able to read any SignedBlocks"
+                                num_signed_session_outcomes > 0,
+                                "validate_migrations was not able to read any SignedSessionOutcomes"
                             );
                         }
                         DbKeyPrefix::AlephUnits => {

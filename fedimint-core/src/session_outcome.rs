@@ -17,15 +17,15 @@ pub struct AcceptedItem {
 
 /// All items ordered in a session that have been accepted by Fedimint Consensus
 /// are recorded in the corresponding block. A running Federation produces a
-/// [Block] roughly every five minutes.  Therefore, just like in Bitcoin, a
-/// [Block] might be empty if no items are ordered in that time or all ordered
-/// items are discarded by Fedimint Consensus.
+/// [SessionOutcome] roughly every five minutes.  Therefore, just like in
+/// Bitcoin, a [SessionOutcome] might be empty if no items are ordered in that
+/// time or all ordered items are discarded by Fedimint Consensus.
 #[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
-pub struct Block {
+pub struct SessionOutcome {
     pub items: Vec<AcceptedItem>,
 }
 
-impl Block {
+impl SessionOutcome {
     /// A blocks header consists of 40 bytes formed by its index in big endian
     /// bytes concatenated with the merkle root build from the consensus
     /// hashes of its [AcceptedItem]s or 32 zero bytes if the block is
@@ -55,8 +55,8 @@ pub struct SchnorrSignature(pub [u8; 64]);
 /// clients and recovering guardians to verify the federations consensus
 /// history. After a signed block has been created it is stored in the database.
 #[derive(Clone, Debug, Encodable, Decodable, Eq, PartialEq)]
-pub struct SignedBlock {
-    pub block: Block,
+pub struct SignedSessionOutcome {
+    pub session_outcome: SessionOutcome,
     pub signatures: std::collections::BTreeMap<PeerId, SchnorrSignature>,
 }
 

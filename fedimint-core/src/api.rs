@@ -18,7 +18,7 @@ use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{
-    AWAIT_BLOCK_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    AWAIT_SESSION_OUTCOME_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
 };
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::SerdeModuleEncoding;
@@ -43,7 +43,6 @@ use thiserror::Error;
 use tracing::{debug, error, instrument, trace};
 
 use crate::backup::ClientBackupSnapshot;
-use crate::block::Block;
 use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::encoding::DecodeError;
@@ -57,6 +56,7 @@ use crate::query::{
     DiscoverApiVersionSet, FilterMap, QueryStep, QueryStrategy, ThresholdConsensus,
     UnionResponsesSingle,
 };
+use crate::session_outcome::SessionOutcome;
 use crate::task;
 use crate::transaction::{SerdeTransaction, Transaction, TransactionError};
 use crate::util::SafeUrl;
@@ -355,7 +355,7 @@ pub trait GlobalFederationApi {
         &self,
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<Block>;
+    ) -> anyhow::Result<SessionOutcome>;
 
     async fn session_count(&self) -> FederationResult<u64>;
 
@@ -432,9 +432,9 @@ where
         &self,
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<Block> {
-        self.request_current_consensus::<SerdeModuleEncoding<Block>>(
-            AWAIT_BLOCK_ENDPOINT.to_string(),
+    ) -> anyhow::Result<SessionOutcome> {
+        self.request_current_consensus::<SerdeModuleEncoding<SessionOutcome>>(
+            AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
         )
         .await?
