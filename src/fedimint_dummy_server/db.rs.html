@@ -89,7 +89,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint};
 <span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>secp256k1::XOnlyPublicKey;
+<span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 
@@ -113,7 +113,7 @@
 <span class="doccomment">/// Example old version 0 of DB entries
 </span><span class="comment">// TODO: can we simplify this by just using macros?
 </span><span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
-</span><span class="kw">pub struct </span>DummyFundsKeyV0(<span class="kw">pub </span>XOnlyPublicKey);
+</span><span class="kw">pub struct </span>DummyFundsKeyV0(<span class="kw">pub </span>PublicKey);
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>DummyFundsKeyPrefixV0;
@@ -127,7 +127,7 @@
 
 <span class="doccomment">/// Lookup funds for a user by key or prefix
 </span><span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
-</span><span class="kw">pub struct </span>DummyFundsKeyV1(<span class="kw">pub </span>XOnlyPublicKey);
+</span><span class="kw">pub struct </span>DummyFundsKeyV1(<span class="kw">pub </span>PublicKey);
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>DummyFundsPrefixV1;

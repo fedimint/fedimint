@@ -142,7 +142,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_common, Amount};
-<span class="kw">use </span>secp256k1::{KeyPair, Secp256k1, XOnlyPublicKey};
+<span class="kw">use </span>secp256k1::{KeyPair, PublicKey, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 
@@ -166,7 +166,7 @@
 </span><span class="kw">pub struct </span>DummyInput {
     <span class="kw">pub </span>amount: Amount,
     <span class="doccomment">/// Associate the input with a user&#39;s pubkey
-    </span><span class="kw">pub </span>account: XOnlyPublicKey,
+    </span><span class="kw">pub </span>account: PublicKey,
 }
 
 <span class="doccomment">/// Output for a fedimint transaction
@@ -174,12 +174,12 @@
 </span><span class="kw">pub struct </span>DummyOutput {
     <span class="kw">pub </span>amount: Amount,
     <span class="doccomment">/// Associate the output with a user&#39;s pubkey
-    </span><span class="kw">pub </span>account: XOnlyPublicKey,
+    </span><span class="kw">pub </span>account: PublicKey,
 }
 
 <span class="doccomment">/// Information needed by a client to update output funds
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>DummyOutputOutcome(<span class="kw">pub </span>Amount, <span class="kw">pub </span>XOnlyPublicKey);
+</span><span class="kw">pub struct </span>DummyOutputOutcome(<span class="kw">pub </span>Amount, <span class="kw">pub </span>PublicKey);
 
 <span class="doccomment">/// Errors that might be returned by the server
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
@@ -255,17 +255,17 @@
 
 <span class="kw">const </span>BROKEN_FED_SECRET_PHRASE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;Money printer go &lt;boom&gt;........!&quot;</span>;
 
-<span class="kw">pub fn </span>fed_public_key() -&gt; XOnlyPublicKey {
-    fed_key_pair().x_only_public_key().<span class="number">0
-</span>}
+<span class="kw">pub fn </span>fed_public_key() -&gt; PublicKey {
+    fed_key_pair().public_key()
+}
 
 <span class="kw">pub fn </span>fed_key_pair() -&gt; KeyPair {
     KeyPair::from_seckey_slice(<span class="kw-2">&amp;</span>Secp256k1::new(), FED_SECRET_PHRASE.as_bytes()).expect(<span class="string">&quot;32 bytes&quot;</span>)
 }
 
-<span class="kw">pub fn </span>broken_fed_public_key() -&gt; XOnlyPublicKey {
-    broken_fed_key_pair().x_only_public_key().<span class="number">0
-</span>}
+<span class="kw">pub fn </span>broken_fed_public_key() -&gt; PublicKey {
+    broken_fed_key_pair().public_key()
+}
 
 <span class="comment">// Like fed, but with a broken accounting
 </span><span class="kw">pub fn </span>broken_fed_key_pair() -&gt; KeyPair {

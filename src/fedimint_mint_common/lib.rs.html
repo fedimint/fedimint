@@ -324,7 +324,7 @@
     Encodable,
     Decodable,
 )]
-</span><span class="kw">pub struct </span>Nonce(<span class="kw">pub </span>secp256k1_zkp::XOnlyPublicKey);
+</span><span class="kw">pub struct </span>Nonce(<span class="kw">pub </span>secp256k1_zkp::PublicKey);
 
 <span class="doccomment">/// [`Nonce`] but blinded by the user key
 ///
@@ -424,7 +424,7 @@
     }
 
     <span class="doccomment">/// Access the nonce as the public key to the spend key
-    </span><span class="kw">pub fn </span>spend_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>secp256k1_zkp::XOnlyPublicKey {
+    </span><span class="kw">pub fn </span>spend_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>secp256k1_zkp::PublicKey {
         <span class="kw-2">&amp;</span><span class="self">self</span>.nonce.<span class="number">0
     </span>}
 }

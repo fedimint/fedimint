@@ -71,12 +71,6 @@
 <a href="#71" id="71">71</a>
 <a href="#72" id="72">72</a>
 <a href="#73" id="73">73</a>
-<a href="#74" id="74">74</a>
-<a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, Hmac, HmacEngine};
@@ -145,15 +139,9 @@
     }
 }
 
-<span class="kw">impl </span>Contract <span class="kw">for </span>[u8; <span class="number">32</span>] {
+<span class="kw">impl </span>Contract <span class="kw">for </span>[u8; <span class="number">33</span>] {
     <span class="kw">fn </span>encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::io::Result&lt;()&gt; {
         writer.write_all(<span class="self">self</span>)
-    }
-}
-
-<span class="kw">impl </span>Contract <span class="kw">for </span>secp256k1::XOnlyPublicKey {
-    <span class="kw">fn </span>encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::io::Result&lt;()&gt; {
-        writer.write_all(<span class="kw-2">&amp;</span><span class="self">self</span>.serialize()[..])
     }
 }
 </code></pre></div></section></main></body></html>

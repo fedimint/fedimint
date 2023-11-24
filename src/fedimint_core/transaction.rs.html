@@ -136,9 +136,7 @@
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
-<span class="kw">use </span>bitcoin::XOnlyPublicKey;
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
@@ -205,7 +203,7 @@
     <span class="doccomment">/// Validate the schnorr signatures signed over the `tx_hash`
     </span><span class="kw">pub fn </span>validate_signatures(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pub_keys: Vec&lt;XOnlyPublicKey&gt;,
+        pub_keys: Vec&lt;secp256k1_zkp::PublicKey&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
         <span class="kw">let </span>signatures = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.signatures {
             TransactionSignature::NaiveMultisig(sigs) =&gt; sigs,
@@ -223,7 +221,7 @@
 
         <span class="kw">for </span>(pk, signature) <span class="kw">in </span>pub_keys.iter().zip(signatures) {
             <span class="kw">if </span>secp256k1_zkp::global::SECP256K1
-                .verify_schnorr(signature, <span class="kw-2">&amp;</span>msg, pk)
+                .verify_schnorr(signature, <span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>pk.x_only_public_key().<span class="number">0</span>)
                 .is_err()
             {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(TransactionError::InvalidSignature {

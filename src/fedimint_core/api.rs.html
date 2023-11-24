@@ -1627,7 +1627,7 @@
 
     <span class="kw">async fn </span>download_backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
+        id: <span class="kw-2">&amp;</span>secp256k1::PublicKey,
     ) -&gt; FederationResult&lt;Vec&lt;ClientBackupSnapshot&gt;&gt;;
 
     <span class="doccomment">/// Query peers and calculate optimal common api versions to use.
@@ -1786,7 +1786,7 @@
 
     <span class="kw">async fn </span>download_backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
+        id: <span class="kw-2">&amp;</span>secp256k1::PublicKey,
     ) -&gt; FederationResult&lt;Vec&lt;ClientBackupSnapshot&gt;&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.request_with_strategy(

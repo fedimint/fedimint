@@ -1523,6 +1523,7 @@
 <a href="#1523" id="1523">1523</a>
 <a href="#1524" id="1524">1524</a>
 <a href="#1525" id="1525">1525</a>
+<a href="#1526" id="1526">1526</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -1570,6 +1571,7 @@
 };
 <span class="kw">use </span>fedimint_ln_common::contracts::{
     Contract, ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract, Preimage,
+    PreimageKey,
 };
 <span class="kw">use </span>fedimint_ln_common::{
     ContractOutput, LightningClientContext, LightningCommonInit, LightningGateway,
@@ -2049,7 +2051,7 @@
             hash: payment_hash,
             gateway_key: gateway.gateway_redeem_key,
             timelock: absolute_timelock <span class="kw">as </span>u32,
-            user_key: user_sk.x_only_public_key().<span class="number">0</span>,
+            user_key: user_sk.public_key(),
             invoice,
             cancelled: <span class="bool-val">false</span>,
         };
@@ -2246,8 +2248,8 @@
         ClientOutput&lt;LightningOutput, LightningClientStateMachines&gt;,
     )&gt; {
         <span class="kw">let </span>payment_keypair = KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;mut </span>rng);
-        <span class="kw">let </span>preimage: [u8; <span class="number">32</span>] = payment_keypair.x_only_public_key().<span class="number">0</span>.serialize();
-        <span class="kw">let </span>payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>preimage);
+        <span class="kw">let </span>preimage_key: [u8; <span class="number">33</span>] = payment_keypair.public_key().serialize();
+        <span class="kw">let </span>payment_hash = sha256::Hash::hash(<span class="kw-2">&amp;</span>sha256::Hash::hash(<span class="kw-2">&amp;</span>preimage_key));
 
         <span class="comment">// Temporary lightning node pubkey
         </span><span class="kw">let </span>(node_secret_key, node_public_key) = <span class="self">self</span>.secp.generate_keypair(<span class="kw-2">&amp;mut </span>rng);
@@ -2325,7 +2327,7 @@
             amount,
             hash: payment_hash,
             encrypted_preimage: EncryptedPreimage::new(
-                Preimage(preimage),
+                PreimageKey(preimage_key),
                 <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.threshold_pub_key,
             ),
             expiry_time,
@@ -3008,7 +3010,7 @@
     redeem_key: secp256k1::KeyPair,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(LightningOutputV0, ContractId), IncomingSmError&gt; {
     <span class="kw">let </span>offer = fetch_and_validate_offer(module_api, payment_hash, amount_msat).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>our_pub_key = secp256k1::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span>redeem_key).<span class="number">0</span>;
+    <span class="kw">let </span>our_pub_key = secp256k1::PublicKey::from_keypair(<span class="kw-2">&amp;</span>redeem_key);
     <span class="kw">let </span>contract = IncomingContract {
         hash: offer.hash,
         encrypted_preimage: offer.encrypted_preimage.clone(),

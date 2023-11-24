@@ -1327,7 +1327,7 @@
             },
             <span class="macro">api_endpoint! </span>{
                 RECOVER_ENDPOINT,
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, context, id: secp256k1_zkp::XOnlyPublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, context, id: secp256k1_zkp::PublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
                     <span class="prelude-val">Ok</span>(module
                         .handle_recover_request(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), id).<span class="kw">await</span>)
                 }
@@ -1370,7 +1370,7 @@
     <span class="kw">async fn </span>handle_recover_request(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        id: secp256k1_zkp::XOnlyPublicKey,
+        id: secp256k1_zkp::PublicKey,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>EcashBackupKey(id)).<span class="kw">await
     </span>}
@@ -1516,7 +1516,7 @@
         denomination: Amount,
     ) -&gt; (secp256k1::KeyPair, Note) {
         <span class="kw">let </span>note_key = secp256k1::KeyPair::new(secp256k1::SECP256K1, <span class="kw-2">&amp;mut </span>rand::thread_rng());
-        <span class="kw">let </span>nonce = Nonce(note_key.public_key().x_only_public_key().<span class="number">0</span>);
+        <span class="kw">let </span>nonce = Nonce(note_key.public_key());
         <span class="kw">let </span>message = nonce.to_message();
         <span class="kw">let </span>blinding_key = tbs::BlindingKey::random();
         <span class="kw">let </span>blind_msg = blind_message(message, blinding_key);
@@ -1610,7 +1610,7 @@
     /// that creates a new database backup that can be tested.
     </span><span class="kw">async fn </span>create_db_with_v0_data(<span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
         <span class="kw">let </span>(<span class="kw">_</span>, pk) = secp256k1::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
-        <span class="kw">let </span>nonce_key = NonceKey(Nonce(pk.x_only_public_key().<span class="number">0</span>));
+        <span class="kw">let </span>nonce_key = NonceKey(Nonce(pk));
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>nonce_key, <span class="kw-2">&amp;</span>()).<span class="kw">await</span>;
 
         <span class="kw">let </span>out_point = OutPoint {
@@ -1643,7 +1643,7 @@
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>mint_audit_redemption_total, <span class="kw-2">&amp;</span>Amount::from_sats(<span class="number">15000</span>))
             .<span class="kw">await</span>;
 
-        <span class="kw">let </span>backup_key = EcashBackupKey(pk.x_only_public_key().<span class="number">0</span>);
+        <span class="kw">let </span>backup_key = EcashBackupKey(pk);
         <span class="kw">let </span>ecash_backup = ECashUserBackupSnapshot {
             timestamp: now(),
             data: BYTE_32.to_vec(),

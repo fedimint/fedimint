@@ -130,24 +130,6 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Read, Write};
 
 <span class="kw">use </span>secp256k1_zkp::ecdsa::Signature;
@@ -169,24 +151,6 @@
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         Signature::from_compact(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">64</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>)
-            .map_err(DecodeError::from_err)
-    }
-}
-
-<span class="kw">impl </span>Encodable <span class="kw">for </span>secp256k1_zkp::XOnlyPublicKey {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        <span class="kw">let </span>bytes = <span class="self">self</span>.serialize();
-        writer.write_all(<span class="kw-2">&amp;</span>bytes[..])<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(bytes.len())
-    }
-}
-
-<span class="kw">impl </span>Decodable <span class="kw">for </span>secp256k1_zkp::XOnlyPublicKey {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
-        d: <span class="kw-2">&amp;mut </span>D,
-        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        secp256k1_zkp::XOnlyPublicKey::from_slice(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">32</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>)
             .map_err(DecodeError::from_err)
     }
 }

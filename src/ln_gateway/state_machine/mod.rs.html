@@ -1030,7 +1030,7 @@
         LightningGatewayAnnouncement {
             info: LightningGateway {
                 mint_channel_id: <span class="self">self</span>.mint_channel_id,
-                gateway_redeem_key: <span class="self">self</span>.redeem_key.x_only_public_key().<span class="number">0</span>,
+                gateway_redeem_key: <span class="self">self</span>.redeem_key.public_key(),
                 node_pub_key: <span class="self">self</span>.node_pub_key,
                 lightning_alias: <span class="self">self</span>.lightning_alias.clone(),
                 api,

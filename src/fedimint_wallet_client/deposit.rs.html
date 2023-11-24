@@ -326,10 +326,6 @@
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
 <a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
@@ -344,7 +340,6 @@
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
 <span class="kw">use </span>fedimint_wallet_common::txoproof::PegInProof;
 <span class="kw">use </span>fedimint_wallet_common::WalletInput;
-<span class="kw">use </span>miniscript::ToPublicKey;
 <span class="kw">use </span>secp256k1::KeyPair;
 <span class="kw">use </span>tracing::{debug, instrument, trace, warn};
 
@@ -436,7 +431,7 @@
 ) -&gt; (bitcoin::Transaction, u32) {
     <span class="kw">let </span>script = context
         .wallet_descriptor
-        .tweak(<span class="kw-2">&amp;</span>tweak.public_key().to_x_only_pubkey(), <span class="kw-2">&amp;</span>context.secp)
+        .tweak(<span class="kw-2">&amp;</span>tweak.public_key(), <span class="kw-2">&amp;</span>context.secp)
         .script_pubkey();
     <span class="kw">loop </span>{
         <span class="kw">match </span>context.rpc.watch_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await </span>{
@@ -602,10 +597,7 @@
             txout_proof,
             awaiting_confirmation_state.btc_transaction,
             awaiting_confirmation_state.out_idx,
-            awaiting_confirmation_state
-                .tweak_key
-                .public_key()
-                .to_x_only_pubkey(),
+            awaiting_confirmation_state.tweak_key.public_key(),
         )
         .expect(<span class="string">&quot;TODO: handle API returning faulty proofs&quot;</span>),
     );

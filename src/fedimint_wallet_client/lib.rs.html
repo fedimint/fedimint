@@ -1014,26 +1014,26 @@
         valid_until: SystemTime,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; (OperationId, WalletClientStates, Address) {
-        <span class="kw">let </span>tweak_key = <span class="self">self
+        <span class="kw">let </span>secret_tweak_key = <span class="self">self
             </span>.module_root_secret
             .child_key(WALLET_TWEAK_CHILD_ID)
             .child_key(get_next_peg_in_tweak_child_id(dbtx).<span class="kw">await</span>)
             .to_secp_key(<span class="kw-2">&amp;</span><span class="self">self</span>.secp);
 
-        <span class="kw">let </span>x_only_pk = tweak_key.public_key().to_x_only_pubkey();
-        <span class="kw">let </span>operation_id = OperationId(x_only_pk.serialize());
+        <span class="kw">let </span>public_tweak_key = secret_tweak_key.public_key();
+        <span class="kw">let </span>operation_id = OperationId(public_tweak_key.to_x_only_pubkey().serialize()); <span class="comment">// TODO: make hash?
 
-        <span class="kw">let </span>address = <span class="self">self
+        </span><span class="kw">let </span>address = <span class="self">self
             </span>.cfg
             .peg_in_descriptor
-            .tweak(<span class="kw-2">&amp;</span>x_only_pk, secp256k1::SECP256K1)
+            .tweak(<span class="kw-2">&amp;</span>public_tweak_key, secp256k1::SECP256K1)
             .address(<span class="self">self</span>.cfg.network)
             .unwrap();
 
         <span class="kw">let </span>deposit_sm = WalletClientStates::Deposit(DepositStateMachine {
             operation_id,
             state: DepositStates::Created(CreatedDepositState {
-                tweak_key,
+                tweak_key: secret_tweak_key,
                 timeout_at: valid_until,
             }),
         });

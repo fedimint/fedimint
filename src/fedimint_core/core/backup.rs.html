@@ -60,7 +60,7 @@
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>BackupRequest {
-    <span class="kw">pub </span>id: secp256k1::XOnlyPublicKey,
+    <span class="kw">pub </span>id: secp256k1::PublicKey,
     <span class="attr">#[serde(with = <span class="string">&quot;fedimint_core::hex::serde&quot;</span>)]
     </span><span class="kw">pub </span>payload: Vec&lt;u8&gt;,
     <span class="kw">pub </span>timestamp: std::time::SystemTime,
@@ -96,7 +96,7 @@
         ctx.verify_schnorr(
             <span class="kw-2">&amp;</span><span class="self">self</span>.signature,
             <span class="kw-2">&amp;</span>Message::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.request.hash()).expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
-            <span class="kw-2">&amp;</span><span class="self">self</span>.request.id,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.request.id.x_only_public_key().<span class="number">0</span>,
         )<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.request)

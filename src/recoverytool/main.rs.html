@@ -443,6 +443,8 @@
 <a href="#443" id="443">443</a>
 <a href="#444" id="444">444</a>
 <a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
@@ -461,12 +463,11 @@
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
-<span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
-<span class="kw">use </span>fedimint_core::{BitcoinHash, ServerModule};
+<span class="kw">use </span>fedimint_core::ServerModule;
 <span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
 <span class="kw">use </span>fedimint_ln_server::Lightning;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
@@ -522,7 +523,7 @@
     <span class="doccomment">/// Derive the wallet descriptor using a single tweak
     </span>Direct {
         <span class="attr">#[arg(long, value_parser = tweak_parser)]
-        </span>tweak: [u8; <span class="number">32</span>],
+        </span>tweak: [u8; <span class="number">33</span>],
     },
     <span class="doccomment">/// Derive all wallet descriptors of confirmed UTXOs in the on-chain wallet.
     /// Note that unconfirmed change UTXOs will not appear here.
@@ -634,7 +635,7 @@
             <span class="kw">let </span>db = Database::new(RocksDb::open(db).expect(<span class="string">&quot;Error opening DB&quot;</span>), decoders);
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
-            <span class="kw">let </span><span class="kw-2">mut </span>change_tweak_idx: u64 = <span class="number">0</span>;
+            <span class="kw">let </span>change_tweak_idx: u64 = <span class="number">0</span>;
 
             <span class="kw">let </span>tweaks = dbtx.find_by_prefix(<span class="kw-2">&amp;</span>SignedBlockPrefix).<span class="kw">await</span>.flat_map(
                 |(_key, SignedBlock { block, .. })| {
@@ -650,15 +651,18 @@
 
                     <span class="comment">// Get all user-submitted tweaks and if we did a peg-out tx also return the
                     // consensus round&#39;s tweak used for change
-                    </span><span class="kw">let </span>(<span class="kw-2">mut </span>peg_in_tweaks, peg_out_present) =
+                    </span><span class="kw">let </span>(peg_in_tweaks, peg_out_present) =
                         input_tweaks_output_present(transaction_cis.into_iter());
 
                     <span class="kw">if </span>peg_out_present {
                         <span class="macro">info!</span>(<span class="string">&quot;Found change output, adding tweak {change_tweak_idx} to list&quot;</span>);
-                        <span class="kw">let </span>change_tweak = change_tweak_idx.consensus_hash::&lt;Hash&gt;().into_inner();
-                        peg_in_tweaks.insert(change_tweak);
-                        change_tweak_idx += <span class="number">1</span>;
-                    }
+                        <span class="macro">unimplemented!</span>();
+                        <span class="comment">// let change_tweak =
+                        // change_tweak_idx.consensus_hash::&lt;Hash&gt;().
+                        // into_inner(); peg_in_tweaks.
+                        // insert(change_tweak);
+                        // change_tweak_idx += 1;
+                    </span>}
 
                     futures::stream::iter(peg_in_tweaks.into_iter())
                 },
@@ -682,7 +686,7 @@
 
 <span class="kw">fn </span>input_tweaks_output_present(
     transactions: <span class="kw">impl </span>Iterator&lt;Item = Transaction&gt;,
-) -&gt; (BTreeSet&lt;[u8; <span class="number">32</span>]&gt;, bool) {
+) -&gt; (BTreeSet&lt;[u8; <span class="number">33</span>]&gt;, bool) {
     <span class="kw">let </span><span class="kw-2">mut </span>contains_peg_out = <span class="bool-val">false</span>;
     <span class="kw">let </span>tweaks =
         transactions
@@ -719,7 +723,7 @@
 <span class="kw">fn </span>tweak_descriptor(
     base_descriptor: <span class="kw-2">&amp;</span>PegInDescriptor,
     base_sk: <span class="kw-2">&amp;</span>SecretKey,
-    tweak: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>],
+    tweak: <span class="kw-2">&amp;</span>[u8; <span class="number">33</span>],
     network: Network,
 ) -&gt; Descriptor&lt;Key&gt; {
     <span class="kw">let </span>secret_key = base_sk.tweak(tweak, secp256k1::SECP256K1);

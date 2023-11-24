@@ -469,7 +469,7 @@
 <span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SpendableUTXO {
     <span class="attr">#[serde(with = <span class="string">&quot;::fedimint_core::encoding::as_hex&quot;</span>)]
-    </span><span class="kw">pub </span>tweak: [u8; <span class="number">32</span>],
+    </span><span class="kw">pub </span>tweak: [u8; <span class="number">33</span>],
     <span class="attr">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]
     </span><span class="kw">pub </span>amount: bitcoin::Amount,
 }
@@ -478,7 +478,7 @@
 </span><span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PendingTransaction {
     <span class="kw">pub </span>tx: Transaction,
-    <span class="kw">pub </span>tweak: [u8; <span class="number">32</span>],
+    <span class="kw">pub </span>tweak: [u8; <span class="number">33</span>],
     <span class="kw">pub </span>change: bitcoin::Amount,
     <span class="kw">pub </span>destination: Script,
     <span class="kw">pub </span>fees: PegOutFees,

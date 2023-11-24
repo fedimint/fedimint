@@ -1379,7 +1379,7 @@
         timelock_delta: u64,
         consensus_block_count: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentParameters, OutgoingContractError&gt; {
-        <span class="kw">let </span>our_pub_key = secp256k1::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span>redeem_key).<span class="number">0</span>;
+        <span class="kw">let </span>our_pub_key = secp256k1::PublicKey::from_keypair(<span class="kw-2">&amp;</span>redeem_key);
 
         <span class="kw">if </span>account.contract.cancelled {
             <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingContractError::CancelledContract);

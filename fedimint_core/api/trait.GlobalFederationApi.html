@@ -56,7 +56,7 @@
              'life1: 'async_trait</span>;
 <span class="item-spacer"></span>    fn <a href="#tymethod.download_backup" class="fn">download_backup</a>&lt;'life0, 'life1, 'async_trait&gt;(
         &amp;'life0 self,
-        id: &amp;'life1 XOnlyPublicKey
+        id: &amp;'life1 PublicKey
     ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.73.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.73.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.73.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="type.FederationResult.html" title="type fedimint_core::api::FederationResult">FederationResult</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.73.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../backup/struct.ClientBackupSnapshot.html" title="struct fedimint_core::backup::ClientBackupSnapshot">ClientBackupSnapshot</a>&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.73.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
        <span class="where">where Self: 'async_trait,
              'life0: 'async_trait,
@@ -119,7 +119,7 @@
     'life0: 'async_trait,
     'life1: 'async_trait,</span></h4></section><section id="tymethod.download_backup" class="method"><a class="src rightside" href="../../src/fedimint_core/api.rs.html#381-384">source</a><h4 class="code-header">fn <a href="#tymethod.download_backup" class="fn">download_backup</a>&lt;'life0, 'life1, 'async_trait&gt;(
     &amp;'life0 self,
-    id: &amp;'life1 XOnlyPublicKey
+    id: &amp;'life1 PublicKey
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.73.0/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.73.0/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/1.73.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="type.FederationResult.html" title="type fedimint_core::api::FederationResult">FederationResult</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.73.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../backup/struct.ClientBackupSnapshot.html" title="struct fedimint_core::backup::ClientBackupSnapshot">ClientBackupSnapshot</a>&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/1.73.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
     Self: 'async_trait,
     'life0: 'async_trait,

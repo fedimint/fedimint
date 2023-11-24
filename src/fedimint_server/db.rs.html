@@ -430,14 +430,14 @@
                 <span class="number">0</span>,
                 DummyInput {
                     amount: Amount::ZERO,
-                    account: key_pair.x_only_public_key().<span class="number">0</span>,
+                    account: key_pair.public_key(),
                 },
             )],
             outputs: <span class="macro">vec!</span>[DynOutput::from_typed(
                 <span class="number">0</span>,
                 DummyOutput {
                     amount: Amount::ZERO,
-                    account: key_pair.x_only_public_key().<span class="number">0</span>,
+                    account: key_pair.public_key(),
                 },
             )],
             nonce: [<span class="number">0x42</span>; <span class="number">8</span>],

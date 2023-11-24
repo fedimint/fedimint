@@ -511,7 +511,7 @@
 
     <span class="kw">pub fn </span>into_backup_request(<span class="self">self</span>, keypair: <span class="kw-2">&amp;</span>KeyPair) -&gt; <span class="prelude-ty">Result</span>&lt;SignedBackupRequest&gt; {
         <span class="kw">let </span>request = BackupRequest {
-            id: keypair.x_only_public_key().<span class="number">0</span>,
+            id: keypair.public_key(),
             timestamp: fedimint_core::time::now(),
             payload: <span class="self">self</span>.<span class="number">0</span>,
         };
@@ -691,9 +691,9 @@
 
     <span class="doccomment">/// Backup id derived from the root secret key (public key used to self-sign
     /// backup requests)
-    </span><span class="kw">pub fn </span>get_backup_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bitcoin::XOnlyPublicKey {
-        <span class="self">self</span>.get_derived_backup_signing_key().x_only_public_key().<span class="number">0
-    </span>}
+    </span><span class="kw">pub fn </span>get_backup_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; secp256k1::PublicKey {
+        <span class="self">self</span>.get_derived_backup_signing_key().public_key()
+    }
 
     <span class="doccomment">/// Static version of [`Self::get_derived_backup_encryption_key`] for
     /// testing without creating whole `MintClient`

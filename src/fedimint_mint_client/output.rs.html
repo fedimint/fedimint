@@ -776,7 +776,7 @@
         </span>C: Signing,
     {
         <span class="kw">let </span>spend_key = secret.child_key(SPEND_KEY_CHILD_ID).to_secp_key(ctx);
-        <span class="kw">let </span>nonce = Nonce(spend_key.x_only_public_key().<span class="number">0</span>);
+        <span class="kw">let </span>nonce = Nonce(spend_key.public_key());
         <span class="kw">let </span>blinding_key = BlindingKey(secret.child_key(BLINDING_KEY_CHILD_ID).to_bls12_381_key());
         <span class="kw">let </span>blinded_nonce = blind_message(nonce.to_message(), blinding_key);
 
@@ -790,11 +790,11 @@
 
     <span class="doccomment">/// Return nonce of the e-cash note being requested
     </span><span class="kw">pub fn </span>nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Nonce {
-        Nonce(<span class="self">self</span>.spend_key.x_only_public_key().<span class="number">0</span>)
+        Nonce(<span class="self">self</span>.spend_key.public_key())
     }
 
     <span class="kw">pub fn </span>recover_blind_nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BlindNonce {
-        <span class="kw">let </span>message = Nonce(<span class="self">self</span>.spend_key.x_only_public_key().<span class="number">0</span>).to_message();
+        <span class="kw">let </span>message = Nonce(<span class="self">self</span>.spend_key.public_key()).to_message();
         BlindNonce(tbs::blind_message(message, <span class="self">self</span>.blinding_key))
     }
 

@@ -1981,6 +1981,17 @@
 <a href="#1981" id="1981">1981</a>
 <a href="#1982" id="1982">1982</a>
 <a href="#1983" id="1983">1983</a>
+<a href="#1984" id="1984">1984</a>
+<a href="#1985" id="1985">1985</a>
+<a href="#1986" id="1986">1986</a>
+<a href="#1987" id="1987">1987</a>
+<a href="#1988" id="1988">1988</a>
+<a href="#1989" id="1989">1989</a>
+<a href="#1990" id="1990">1990</a>
+<a href="#1991" id="1991">1991</a>
+<a href="#1992" id="1992">1992</a>
+<a href="#1993" id="1993">1993</a>
+<a href="#1994" id="1994">1994</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2645,7 +2656,7 @@
                     <span class="kw">let </span>feerate = module.consensus_fee_rate(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>;
 
                     <span class="comment">// Since we are only calculating the tx size we can use an arbitrary dummy nonce.
-                    </span><span class="kw">let </span>dummy_tweak = [<span class="number">0</span>; <span class="number">32</span>];
+                    </span><span class="kw">let </span>dummy_tweak = [<span class="number">0</span>; <span class="number">33</span>];
 
                     <span class="kw">let </span>tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
@@ -2820,7 +2831,7 @@
         // later on. The tweak is extracted here because the psbt is moved next
         // and not available anymore when the tweak is actually needed in the
         // end to be put into the batch on success.
-        </span><span class="kw">let </span>change_tweak: [u8; <span class="number">32</span>] = unsigned
+        </span><span class="kw">let </span>change_tweak: [u8; <span class="number">33</span>] = unsigned
             .psbt
             .outputs
             .iter()
@@ -2910,11 +2921,17 @@
         rates[peer_count / <span class="number">2</span>]
     }
 
-    <span class="kw">pub async fn </span>consensus_nonce(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; [u8; <span class="number">32</span>] {
-        <span class="kw">let </span>nonce = dbtx.get_value(<span class="kw-2">&amp;</span>PegOutNonceKey).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>PegOutNonceKey, <span class="kw-2">&amp;</span>(nonce + <span class="number">1</span>)).<span class="kw">await</span>;
+    <span class="kw">pub async fn </span>consensus_nonce(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; [u8; <span class="number">33</span>] {
+        <span class="kw">let </span>random_nonce = dbtx.get_value(<span class="kw-2">&amp;</span>PegOutNonceKey).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>PegOutNonceKey, <span class="kw-2">&amp;</span>(random_nonce + <span class="number">1</span>))
+            .<span class="kw">await</span>;
 
-        nonce.consensus_hash::&lt;sha256::Hash&gt;().into_inner()
+        <span class="kw">let </span><span class="kw-2">mut </span>nonce: [u8; <span class="number">33</span>] = [<span class="number">0</span>; <span class="number">33</span>];
+        <span class="comment">// Make it look like a compressed pubkey, has to be either 0x02 or 0x03
+        </span>nonce[<span class="number">0</span>] = <span class="number">0x02</span>;
+        nonce[<span class="number">1</span>..].copy_from_slice(<span class="kw-2">&amp;</span>random_nonce.consensus_hash::&lt;sha256::Hash&gt;()[..]);
+
+        nonce
     }
 
     <span class="kw">async fn </span>sync_up_to_consensus_height&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -3068,7 +3085,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         output: <span class="kw-2">&amp;</span>WalletOutputV0,
-        change_tweak: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>],
+        change_tweak: <span class="kw-2">&amp;</span>[u8; <span class="number">33</span>],
     ) -&gt; <span class="prelude-ty">Result</span>&lt;UnsignedTransaction, WalletOutputError&gt; {
         <span class="kw">match </span>output {
             WalletOutputV0::PegOut(peg_out) =&gt; <span class="self">self</span>.offline_wallet().create_tx(
@@ -3147,6 +3164,11 @@
         .iter()
         .filter_map(|tx| tx.rbf.clone().map(|rbf| rbf.txid))
         .collect();
+    <span class="macro">debug!</span>(
+        <span class="string">&quot;Broadcasting pending transactions (total={}, rbf={})&quot;</span>,
+        pending_tx.len(),
+        rbf_txids.len()
+    );
 
     <span class="kw">for </span>PendingTransaction { tx, .. } <span class="kw">in </span>pending_tx {
         <span class="kw">if </span>!rbf_txids.contains(<span class="kw-2">&amp;</span>tx.txid()) {
@@ -3238,7 +3260,7 @@
         <span class="kw-2">mut </span>included_utxos: Vec&lt;(UTXOKey, SpendableUTXO)&gt;,
         <span class="kw-2">mut </span>remaining_utxos: Vec&lt;(UTXOKey, SpendableUTXO)&gt;,
         <span class="kw-2">mut </span>fee_rate: Feerate,
-        change_tweak: <span class="kw-2">&amp;</span>[u8],
+        change_tweak: <span class="kw-2">&amp;</span>[u8; <span class="number">33</span>],
         rbf: <span class="prelude-ty">Option</span>&lt;Rbf&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;UnsignedTransaction, WalletOutputError&gt; {
         <span class="comment">// Add the rbf fees to the existing tx fees
@@ -3537,7 +3559,7 @@
         };
 
         <span class="kw">let </span>spendable = SpendableUTXO {
-            tweak: [<span class="number">0</span>; <span class="number">32</span>],
+            tweak: [<span class="number">0</span>; <span class="number">33</span>],
             amount: Amount::from_sat(<span class="number">3000</span>),
         };
 
@@ -3556,7 +3578,7 @@
             <span class="macro">vec!</span>[],
             <span class="macro">vec!</span>[(UTXOKey(OutPoint::null()), spendable.clone())],
             fee,
-            <span class="kw-2">&amp;</span>[],
+            <span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">33</span>],
             <span class="prelude-val">None</span>,
         );
         <span class="macro">assert_eq!</span>(tx, <span class="prelude-val">Err</span>(WalletOutputError::NotEnoughSpendableUTXO));
@@ -3569,7 +3591,7 @@
                 <span class="macro">vec!</span>[],
                 <span class="macro">vec!</span>[(UTXOKey(OutPoint::null()), spendable)],
                 fee,
-                <span class="kw-2">&amp;</span>[],
+                <span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">33</span>],
                 <span class="prelude-val">None</span>,
             )
             .expect(<span class="string">&quot;is ok&quot;</span>);
@@ -3636,7 +3658,7 @@
     <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
     <span class="kw">use </span>fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, ServerModule, TransactionId};
     <span class="kw">use </span>fedimint_testing::db::{
-        prepare_db_migration_snapshot, validate_migrations, BYTE_20, BYTE_32,
+        prepare_db_migration_snapshot, validate_migrations, BYTE_20, BYTE_32, BYTE_33,
     };
     <span class="kw">use </span>fedimint_wallet_common::db::{
         BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
@@ -3671,7 +3693,7 @@
             vout: <span class="number">0</span>,
         });
         <span class="kw">let </span>spendable_utxo = SpendableUTXO {
-            tweak: BYTE_32,
+            tweak: BYTE_33,
             amount: Amount::from_sat(<span class="number">10000</span>),
         };
 
@@ -3768,7 +3790,7 @@
 
         <span class="kw">let </span>pending_tx = PendingTransaction {
             tx: transaction,
-            tweak: BYTE_32,
+            tweak: BYTE_33,
             change: Amount::from_sat(<span class="number">0</span>),
             destination,
             fees: PegOutFees {

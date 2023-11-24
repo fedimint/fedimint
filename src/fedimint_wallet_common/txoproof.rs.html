@@ -266,7 +266,7 @@
     </span>transaction: Transaction,
     <span class="comment">// Check that the idx is in range
     </span>output_idx: u32,
-    tweak_contract_key: secp256k1::XOnlyPublicKey,
+    tweak_contract_key: secp256k1::PublicKey,
 }
 
 <span class="kw">impl </span>PegInProof {
@@ -274,7 +274,7 @@
         txout_proof: TxOutProof,
         transaction: Transaction,
         output_idx: u32,
-        tweak_contract_key: secp256k1::XOnlyPublicKey,
+        tweak_contract_key: secp256k1::PublicKey,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PegInProof, PegInProofError&gt; {
         <span class="comment">// TODO: remove redundancy with serde validation
         </span><span class="kw">if </span>!txout_proof.contains_tx(transaction.txid()) {
@@ -326,11 +326,11 @@
         <span class="self">self</span>.txout_proof.block()
     }
 
-    <span class="kw">pub fn </span>tweak_contract_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey {
+    <span class="kw">pub fn </span>tweak_contract_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>secp256k1::PublicKey {
         <span class="kw-2">&amp;</span><span class="self">self</span>.tweak_contract_key
     }
 
-    <span class="kw">pub fn </span>identity(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (secp256k1::XOnlyPublicKey, bitcoin::Txid) {
+    <span class="kw">pub fn </span>identity(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (secp256k1::PublicKey, bitcoin::Txid) {
         (<span class="self">self</span>.tweak_contract_key, <span class="self">self</span>.transaction.txid())
     }
 
@@ -413,7 +413,7 @@
             txout_proof: TxOutProof::consensus_decode(d, modules)<span class="question-mark">?</span>,
             transaction: Transaction::consensus_decode(d, modules)<span class="question-mark">?</span>,
             output_idx: u32::consensus_decode(d, modules)<span class="question-mark">?</span>,
-            tweak_contract_key: secp256k1::XOnlyPublicKey::consensus_decode(d, modules)<span class="question-mark">?</span>,
+            tweak_contract_key: secp256k1::PublicKey::consensus_decode(d, modules)<span class="question-mark">?</span>,
         };
 
         validate_peg_in_proof(<span class="kw-2">&amp;</span>slf).map_err(DecodeError::from_err)<span class="question-mark">?</span>;

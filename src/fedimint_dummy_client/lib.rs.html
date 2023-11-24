@@ -368,10 +368,6 @@
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
 <a href="#370" id="370">370</a>
-<a href="#371" id="371">371</a>
-<a href="#372" id="372">372</a>
-<a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -400,7 +396,7 @@
     KIND,
 };
 <span class="kw">use </span>futures::{pin_mut, StreamExt};
-<span class="kw">use </span>secp256k1::{Secp256k1, XOnlyPublicKey};
+<span class="kw">use </span>secp256k1::{PublicKey, Secp256k1};
 <span class="kw">use </span>states::DummyStateMachine;
 <span class="kw">use </span>strum::IntoEnumIterator;
 
@@ -486,7 +482,7 @@
         </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[ClientInput {
             input: DummyInput {
                 amount,
-                account: <span class="self">self</span>.key.x_only_public_key().<span class="number">0</span>,
+                account: <span class="self">self</span>.key.public_key(),
             },
             keys: <span class="macro">vec!</span>[<span class="self">self</span>.key],
             state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
@@ -505,7 +501,7 @@
         </span><span class="macro">vec!</span>[ClientOutput {
             output: DummyOutput {
                 amount,
-                account: <span class="self">self</span>.key.x_only_public_key().<span class="number">0</span>,
+                account: <span class="self">self</span>.key.public_key(),
             },
             state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
                 <span class="macro">vec!</span>[DummyStateMachine::Output(amount, txid, id)]
@@ -571,7 +567,7 @@
         </span><span class="kw">let </span>input = ClientInput {
             input: DummyInput {
                 amount,
-                account: account_kp.x_only_public_key().<span class="number">0</span>,
+                account: account_kp.public_key(),
             },
             keys: <span class="macro">vec!</span>[account_kp],
             state_machines: Arc::new(<span class="kw">move </span>|<span class="kw">_</span>, <span class="kw">_</span>| Vec::&lt;DummyStateMachine&gt;::new()),
@@ -608,11 +604,7 @@
     </span>}
 
     <span class="doccomment">/// Send money to another user
-    </span><span class="kw">pub async fn </span>send_money(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        account: XOnlyPublicKey,
-        amount: Amount,
-    ) -&gt; anyhow::Result&lt;OutPoint&gt; {
+    </span><span class="kw">pub async fn </span>send_money(<span class="kw-2">&amp;</span><span class="self">self</span>, account: PublicKey, amount: Amount) -&gt; anyhow::Result&lt;OutPoint&gt; {
         <span class="self">self</span>.db.ensure_isolated().expect(<span class="string">&quot;must be isolated&quot;</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span>op_id = OperationId(rand::random());
@@ -670,7 +662,7 @@
             .await_output_outcome(outpoint, Duration::from_secs(<span class="number">10</span>), <span class="kw-2">&amp;</span><span class="self">self</span>.decoder())
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">if </span>account != <span class="self">self</span>.key.x_only_public_key().<span class="number">0 </span>{
+        <span class="kw">if </span>account != <span class="self">self</span>.key.public_key() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">&quot;Wrong account id&quot;</span>));
         }
 
@@ -681,9 +673,9 @@
     }
 
     <span class="doccomment">/// Return our account
-    </span><span class="kw">pub fn </span>account(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; XOnlyPublicKey {
-        <span class="self">self</span>.key.x_only_public_key().<span class="number">0
-    </span>}
+    </span><span class="kw">pub fn </span>account(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PublicKey {
+        <span class="self">self</span>.key.public_key()
+    }
 }
 
 <span class="kw">async fn </span>get_funds(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {

@@ -101,12 +101,12 @@
     </span><span class="kw">pub </span>hash: bitcoin_hashes::sha256::Hash,
     <span class="doccomment">/// Public key of the LN gateway allowed to claim the HTLC before the
     /// timelock expires
-    </span><span class="kw">pub </span>gateway_key: secp256k1::XOnlyPublicKey,
+    </span><span class="kw">pub </span>gateway_key: secp256k1::PublicKey,
     <span class="doccomment">/// Block height at which the money will be spendable by the pubkey
     </span><span class="kw">pub </span>timelock: u32,
     <span class="doccomment">/// Public key of the user that can claim the money back after the timelock
     /// expires
-    </span><span class="kw">pub </span>user_key: secp256k1::XOnlyPublicKey,
+    </span><span class="kw">pub </span>user_key: secp256k1::PublicKey,
     <span class="comment">// FIXME: use pruned, privacy friendly version without description etc.
     </span><span class="doccomment">/// Invoice containing metadata on how to obtain the preimage
     </span><span class="kw">pub </span>invoice: lightning_invoice::Bolt11Invoice,

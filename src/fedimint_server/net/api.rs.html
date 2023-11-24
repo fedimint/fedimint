@@ -832,7 +832,7 @@
     <span class="kw">async fn </span>handle_recover_request(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        id: secp256k1_zkp::XOnlyPublicKey,
+        id: secp256k1_zkp::PublicKey,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>ClientBackupKey(id)).<span class="kw">await
     </span>}
@@ -995,7 +995,7 @@
         },
         <span class="macro">api_endpoint! </span>{
             RECOVER_ENDPOINT,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, id: secp256k1_zkp::XOnlyPublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt; {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, id: secp256k1_zkp::PublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt; {
                 <span class="prelude-val">Ok</span>(fedimint
                     .handle_recover_request(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), id).<span class="kw">await</span>)
             }

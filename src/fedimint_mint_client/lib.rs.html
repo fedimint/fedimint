@@ -2982,7 +2982,7 @@
                 <span class="macro">bail!</span>(<span class="string">&quot;Note {idx} has an invalid federation signature&quot;</span>);
             }
 
-            <span class="kw">let </span>expected_nonce = Nonce(snote.spend_key.x_only_public_key().<span class="number">0</span>);
+            <span class="kw">let </span>expected_nonce = Nonce(snote.spend_key.public_key());
             <span class="kw">if </span>note.nonce != expected_nonce {
                 <span class="macro">bail!</span>(<span class="string">&quot;Note {idx} cannot be spent using the supplied spend key&quot;</span>);
             }
@@ -3329,7 +3329,7 @@
 
 <span class="kw">impl </span>SpendableNote {
     <span class="kw">fn </span>nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Nonce {
-        Nonce(<span class="self">self</span>.spend_key.x_only_public_key().<span class="number">0</span>)
+        Nonce(<span class="self">self</span>.spend_key.public_key())
     }
 
     <span class="kw">fn </span>note(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Note {

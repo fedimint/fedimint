@@ -166,6 +166,9 @@
 <a href="#166" id="166">166</a>
 <a href="#167" id="167">167</a>
 <a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>outgoing;
 
@@ -289,15 +292,18 @@
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>Preimage(<span class="kw">pub </span>[u8; <span class="number">32</span>]);
 
-<span class="kw">impl </span>Preimage {
-    <span class="doccomment">/// Create a Schnorr public key from this preimage
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>PreimageKey(<span class="attr">#[serde(with = <span class="string">&quot;serde_big_array::BigArray&quot;</span>)] </span><span class="kw">pub </span>[u8; <span class="number">33</span>]);
+
+<span class="kw">impl </span>PreimageKey {
+    <span class="doccomment">/// Create a Schnorr public key
     ///
     /// # Errors
     ///
     /// Returns [`secp256k1::Error::InvalidPublicKey`] if the Preimage does not
     /// represent a valid Secp256k1 point x coordinate.
-    </span><span class="kw">pub fn </span>to_public_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::XOnlyPublicKey, secp256k1::Error&gt; {
-        secp256k1::XOnlyPublicKey::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)
+    </span><span class="kw">pub fn </span>to_public_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::PublicKey, secp256k1::Error&gt; {
+        secp256k1::PublicKey::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)
     }
 }
 
@@ -307,7 +313,7 @@
     <span class="doccomment">/// There aren&#39;t enough decryption shares yet
     </span>Pending,
     <span class="doccomment">/// The decrypted preimage was valid
-    </span><span class="prelude-val">Some</span>(Preimage),
+    </span><span class="prelude-val">Some</span>(PreimageKey),
     <span class="doccomment">/// The decrypted preimage was invalid
     </span>Invalid,
 }
@@ -330,8 +336,8 @@
 </span><span class="kw">pub struct </span>PreimageDecryptionShare(<span class="kw">pub </span>threshold_crypto::DecryptionShare);
 
 <span class="kw">impl </span>EncryptedPreimage {
-    <span class="kw">pub fn </span>new(preimage: Preimage, key: <span class="kw-2">&amp;</span>threshold_crypto::PublicKey) -&gt; EncryptedPreimage {
-        EncryptedPreimage(key.encrypt(preimage.<span class="number">0</span>))
+    <span class="kw">pub fn </span>new(preimage_key: PreimageKey, key: <span class="kw-2">&amp;</span>threshold_crypto::PublicKey) -&gt; EncryptedPreimage {
+        EncryptedPreimage(key.encrypt(preimage_key.<span class="number">0</span>))
     }
 }
 </code></pre></div></section></main></body></html>

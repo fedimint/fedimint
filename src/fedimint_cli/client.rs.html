@@ -632,6 +632,7 @@
 <a href="#632" id="632">632</a>
 <a href="#633" id="633">633</a>
 <a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -646,6 +647,7 @@
 <span class="kw">use </span>fedimint_client::ClientArc;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
+<span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll, ParseAmountError, TieredSummary};
 <span class="kw">use </span>fedimint_ln_client::{
@@ -1148,7 +1150,7 @@
                             serde_json::to_value(PayInvoiceResponse {
                                 operation_id,
                                 contract_id,
-                                preimage: preimage.to_public_key()<span class="question-mark">?</span>.to_string(),
+                                preimage: preimage.consensus_encode_to_hex().expect(<span class="string">&quot;Cannot fail&quot;</span>),
                             })
                             .unwrap(),
                         ));
