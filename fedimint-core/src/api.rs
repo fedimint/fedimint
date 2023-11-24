@@ -18,7 +18,7 @@ use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{
-    AWAIT_BLOCK_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    AWAIT_SESSION_OUTCOME_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
 };
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::SerdeModuleEncoding;
@@ -434,7 +434,7 @@ where
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<Block> {
         self.request_current_consensus::<SerdeModuleEncoding<Block>>(
-            AWAIT_BLOCK_ENDPOINT.to_string(),
+            AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
         )
         .await?

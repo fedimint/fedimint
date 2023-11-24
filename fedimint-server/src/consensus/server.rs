@@ -12,7 +12,7 @@ use fedimint_core::db::{
     apply_migrations, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::Decodable;
-use fedimint_core::endpoint_constants::AWAIT_SIGNED_BLOCK_ENDPOINT;
+use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::audit::Audit;
@@ -691,7 +691,7 @@ impl ConsensusServer {
             let result = federation_api
                 .request_with_strategy(
                     FilterMap::new(filter_map.clone(), total_peers),
-                    AWAIT_SIGNED_BLOCK_ENDPOINT.to_string(),
+                    AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
                     ApiRequestErased::new(index),
                 )
                 .await;

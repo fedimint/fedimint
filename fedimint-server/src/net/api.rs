@@ -19,8 +19,8 @@ use fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::endpoint_constants::{
-    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_BLOCK_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
-    AWAIT_SIGNED_BLOCK_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
+    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
+    AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
     CLIENT_CONFIG_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
     SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, STATUS_ENDPOINT,
     SUBMIT_TRANSACTION_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
@@ -416,13 +416,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            AWAIT_BLOCK_ENDPOINT,
+            AWAIT_SESSION_OUTCOME_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<Block> {
                 Ok((&fedimint.await_signed_block(index).await.block).into())
             }
         },
         api_endpoint! {
-            AWAIT_SIGNED_BLOCK_ENDPOINT,
+            AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SignedBlock> {
                 Ok((&fedimint.await_signed_block(index).await).into())
             }
