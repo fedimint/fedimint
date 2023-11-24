@@ -928,16 +928,10 @@ impl Wallet {
     }
 
     pub async fn consensus_nonce(&self, dbtx: &mut DatabaseTransaction<'_>) -> [u8; 33] {
-        let random_nonce = dbtx.get_value(&PegOutNonceKey).await.unwrap_or(0);
-        dbtx.insert_entry(&PegOutNonceKey, &(random_nonce + 1))
-            .await;
+        let nonce_idx = dbtx.get_value(&PegOutNonceKey).await.unwrap_or(0);
+        dbtx.insert_entry(&PegOutNonceKey, &(nonce_idx + 1)).await;
 
-        let mut nonce: [u8; 33] = [0; 33];
-        // Make it look like a compressed pubkey, has to be either 0x02 or 0x03
-        nonce[0] = 0x02;
-        nonce[1..].copy_from_slice(&random_nonce.consensus_hash::<sha256::Hash>()[..]);
-
-        nonce
+        nonce_from_idx(nonce_idx)
     }
 
     async fn sync_up_to_consensus_height<'a>(
@@ -1523,6 +1517,15 @@ impl<'a> StatelessWallet<'a> {
 
         descriptor.script_pubkey()
     }
+}
+
+pub fn nonce_from_idx(nonce_idx: u64) -> [u8; 33] {
+    let mut nonce: [u8; 33] = [0; 33];
+    // Make it look like a compressed pubkey, has to be either 0x02 or 0x03
+    nonce[0] = 0x02;
+    nonce[1..].copy_from_slice(&nonce_idx.consensus_hash::<sha256::Hash>()[..]);
+
+    nonce
 }
 
 #[cfg(test)]

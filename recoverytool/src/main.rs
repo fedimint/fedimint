@@ -36,7 +36,7 @@ use fedimint_wallet_server::common::tweakable::Tweakable;
 use fedimint_wallet_server::common::{
     PegInDescriptor, SpendableUTXO, WalletCommonInit, WalletInput,
 };
-use fedimint_wallet_server::Wallet;
+use fedimint_wallet_server::{nonce_from_idx, Wallet};
 use futures::stream::StreamExt;
 use miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
 use secp256k1::SecretKey;
@@ -188,7 +188,7 @@ async fn main() -> anyhow::Result<()> {
             let db = Database::new(RocksDb::open(db).expect("Error opening DB"), decoders);
             let mut dbtx = db.begin_transaction().await;
 
-            let change_tweak_idx: u64 = 0;
+            let mut change_tweak_idx: u64 = 0;
 
             let tweaks = dbtx
                 .find_by_prefix(&SignedSessionOutcomePrefix)
@@ -213,17 +213,13 @@ async fn main() -> anyhow::Result<()> {
 
                         // Get all user-submitted tweaks and if we did a peg-out tx also return the
                         // consensus round's tweak used for change
-                        let (peg_in_tweaks, peg_out_present) =
+                        let (mut peg_in_tweaks, peg_out_present) =
                             input_tweaks_output_present(transaction_cis.into_iter());
 
                         if peg_out_present {
                             info!("Found change output, adding tweak {change_tweak_idx} to list");
-                            unimplemented!();
-                            //let change_tweak =
-                            // change_tweak_idx.consensus_hash::<Hash>().
-                            //into_inner();
-                            //peg_in_tweaks.insert(change_tweak);
-                            //change_tweak_idx += 1;
+                            peg_in_tweaks.insert(nonce_from_idx(change_tweak_idx));
+                            change_tweak_idx += 1;
                         }
 
                         futures::stream::iter(peg_in_tweaks.into_iter())
