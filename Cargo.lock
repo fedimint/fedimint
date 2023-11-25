@@ -1508,6 +1508,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-ldk-node"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d38e0d2f0981cd917809d627416de48232499319863c8d032ac0a56cf204edfb"
+dependencies = [
+ "bdk",
+ "bip39",
+ "bitcoin 0.29.2",
+ "chrono",
+ "esplora-client 0.4.0",
+ "futures",
+ "libc",
+ "lightning 0.0.115",
+ "lightning-background-processor",
+ "lightning-invoice 0.23.0",
+ "lightning-net-tokio",
+ "lightning-persister",
+ "lightning-rapid-gossip-sync",
+ "lightning-transaction-sync",
+ "rand",
+ "reqwest",
+ "rusqlite",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "fedimint-ln-client"
 version = "0.2.0-alpha"
 dependencies = [
@@ -1892,6 +1919,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-cln-rpc",
  "fedimint-core",
+ "fedimint-ldk-node",
  "fedimint-logging",
  "fedimint-portalloc",
  "fedimint-rocksdb",
@@ -1900,7 +1928,6 @@ dependencies = [
  "fs-lock",
  "futures",
  "lazy_static",
- "ldk-node",
  "lightning-invoice 0.26.0",
  "ln-gateway",
  "rand",
@@ -3059,32 +3086,6 @@ name = "lazycell"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
-
-[[package]]
-name = "ldk-node"
-version = "0.1.0"
-source = "git+https://github.com/lightningdevkit/ldk-node?rev=5029b2f88642864ed32835a31c1fa8b1405129dd#5029b2f88642864ed32835a31c1fa8b1405129dd"
-dependencies = [
- "bdk",
- "bip39",
- "bitcoin 0.29.2",
- "chrono",
- "esplora-client 0.4.0",
- "futures",
- "libc",
- "lightning 0.0.115",
- "lightning-background-processor",
- "lightning-invoice 0.23.0",
- "lightning-net-tokio",
- "lightning-persister",
- "lightning-rapid-gossip-sync",
- "lightning-transaction-sync",
- "rand",
- "reqwest",
- "rusqlite",
- "serde_json",
- "tokio",
-]
 
 [[package]]
 name = "libc"
