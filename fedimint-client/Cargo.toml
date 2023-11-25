@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-client"
-version = "0.2.0-alpha"
+version = "0.2.0-rc2"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-client provides a library for sending transactions to the federation."

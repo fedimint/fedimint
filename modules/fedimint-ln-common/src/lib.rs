@@ -35,7 +35,7 @@ use crate::contracts::incoming::OfferId;
 use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, PreimageDecryptionShare};
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("ln");
-const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);
+const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 0);
 
 extensible_associated_module_type!(
     LightningInput,

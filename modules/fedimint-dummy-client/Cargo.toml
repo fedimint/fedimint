@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-dummy-client"
-version = "0.2.0-alpha"
+version = "0.2.0-rc2"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-dummy is a dummy example fedimint module."
