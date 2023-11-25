@@ -975,6 +975,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-cln-rpc",
  "fedimint-core",
+ "fedimint-ln-gateway",
  "fedimint-logging",
  "fedimint-portalloc",
  "fedimint-server",
@@ -983,7 +984,6 @@ dependencies = [
  "fedimint-wallet-client",
  "fedimintd",
  "futures",
- "ln-gateway",
  "nix",
  "rand",
  "serde",
@@ -1314,6 +1314,7 @@ dependencies = [
  "erased-serde",
  "fedimint-derive",
  "fedimint-logging",
+ "fedimint-tbs",
  "fedimint-threshold-crypto",
  "futures",
  "getrandom",
@@ -1338,7 +1339,6 @@ dependencies = [
  "sha3",
  "strum",
  "strum_macros",
- "tbs",
  "test-log",
  "thiserror",
  "tokio",
@@ -1362,6 +1362,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-ln-client",
+ "fedimint-ln-gateway",
  "fedimint-ln-server",
  "fedimint-logging",
  "fedimint-mint-client",
@@ -1372,7 +1373,6 @@ dependencies = [
  "fedimint-wallet-server",
  "futures",
  "hex",
- "ln-gateway",
  "serde",
  "serde_json",
  "strum",
@@ -1397,10 +1397,10 @@ version = "0.2.0-alpha"
 dependencies = [
  "anyhow",
  "fedimint-core",
- "hkdf",
+ "fedimint-hkdf",
+ "fedimint-tbs",
  "ring 0.17.5",
  "secp256k1-zkp",
- "tbs",
 ]
 
 [[package]]
@@ -1486,6 +1486,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-gateway-cli"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "axum-macros",
+ "bitcoin 0.29.2",
+ "clap",
+ "clap_complete",
+ "fedimint-build",
+ "fedimint-core",
+ "fedimint-ln-gateway",
+ "fedimint-logging",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "fedimint-hbbft"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1505,6 +1528,13 @@ dependencies = [
  "serde",
  "thiserror",
  "tiny-keccak",
+]
+
+[[package]]
+name = "fedimint-hkdf"
+version = "0.2.0-alpha"
+dependencies = [
+ "bitcoin_hashes 0.11.0",
 ]
 
 [[package]]
@@ -1595,6 +1625,60 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "fedimint-ln-gateway"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "aquamarine",
+ "assert_matches",
+ "async-stream",
+ "async-trait",
+ "axum",
+ "axum-macros",
+ "bitcoin 0.29.2",
+ "bitcoin_hashes 0.11.0",
+ "clap",
+ "cln-plugin",
+ "erased-serde",
+ "fedimint-build",
+ "fedimint-client",
+ "fedimint-cln-rpc",
+ "fedimint-core",
+ "fedimint-dummy-client",
+ "fedimint-dummy-common",
+ "fedimint-dummy-server",
+ "fedimint-ln-client",
+ "fedimint-ln-common",
+ "fedimint-ln-server",
+ "fedimint-logging",
+ "fedimint-mint-client",
+ "fedimint-rocksdb",
+ "fedimint-testing",
+ "fedimint-threshold-crypto",
+ "fedimint-tonic-lnd",
+ "fedimint-wallet-client",
+ "futures",
+ "lightning-invoice 0.26.0",
+ "prost 0.12.1",
+ "rand",
+ "reqwest",
+ "secp256k1 0.24.3",
+ "secp256k1-zkp",
+ "serde",
+ "serde_json",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.10.2",
+ "tonic-build",
+ "tower-http",
+ "tracing",
  "url",
 ]
 
@@ -1732,6 +1816,7 @@ dependencies = [
  "fedimint-derive-secret",
  "fedimint-logging",
  "fedimint-mint-common",
+ "fedimint-tbs",
  "fedimint-threshold-crypto",
  "futures",
  "itertools 0.10.5",
@@ -1743,7 +1828,6 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
- "tbs",
  "test-log",
  "thiserror",
  "tokio",
@@ -1760,6 +1844,7 @@ dependencies = [
  "bincode",
  "bitcoin_hashes 0.11.0",
  "fedimint-core",
+ "fedimint-tbs",
  "fedimint-threshold-crypto",
  "futures",
  "itertools 0.10.5",
@@ -1769,7 +1854,6 @@ dependencies = [
  "serde",
  "strum",
  "strum_macros",
- "tbs",
  "thiserror",
  "tracing",
  "tracing-subscriber",
@@ -1788,6 +1872,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-mint-common",
  "fedimint-server",
+ "fedimint-tbs",
  "fedimint-testing",
  "fedimint-threshold-crypto",
  "futures",
@@ -1799,7 +1884,6 @@ dependencies = [
  "serde",
  "strum",
  "strum_macros",
- "tbs",
  "test-log",
  "thiserror",
  "tokio",
@@ -1842,6 +1926,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-recoverytool"
+version = "0.2.0-alpha"
+dependencies = [
+ "anyhow",
+ "bitcoin 0.29.2",
+ "clap",
+ "fedimint-aead",
+ "fedimint-core",
+ "fedimint-ln-common",
+ "fedimint-ln-server",
+ "fedimint-logging",
+ "fedimint-mint-server",
+ "fedimint-rocksdb",
+ "fedimint-server",
+ "fedimint-wallet-server",
+ "futures",
+ "miniscript",
+ "secp256k1 0.24.3",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "fedimint-rocksdb"
 version = "0.2.0-alpha"
 dependencies = [
@@ -1878,6 +1988,7 @@ dependencies = [
  "fedimint-dummy-server",
  "fedimint-hbbft",
  "fedimint-logging",
+ "fedimint-tbs",
  "fedimint-testing",
  "fedimint-threshold-crypto",
  "futures",
@@ -1892,7 +2003,6 @@ dependencies = [
  "sha3",
  "strum",
  "strum_macros",
- "tbs",
  "tempfile",
  "test-log",
  "thiserror",
@@ -1903,6 +2013,22 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+]
+
+[[package]]
+name = "fedimint-tbs"
+version = "0.2.0-alpha"
+dependencies = [
+ "bincode",
+ "bitcoin_hashes 0.11.0",
+ "bls12_381",
+ "clap",
+ "ff",
+ "group",
+ "rand",
+ "rand_chacha",
+ "serde",
+ "sha3",
 ]
 
 [[package]]
@@ -1920,6 +2046,7 @@ dependencies = [
  "fedimint-cln-rpc",
  "fedimint-core",
  "fedimint-ldk-node",
+ "fedimint-ln-gateway",
  "fedimint-logging",
  "fedimint-portalloc",
  "fedimint-rocksdb",
@@ -1929,7 +2056,6 @@ dependencies = [
  "futures",
  "lazy_static",
  "lightning-invoice 0.26.0",
- "ln-gateway",
  "rand",
  "secp256k1 0.24.3",
  "secp256k1-zkp",
@@ -2142,6 +2268,7 @@ dependencies = [
  "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-server",
+ "fedimint-tbs",
  "fedimint-threshold-crypto",
  "fedimint-wallet-server",
  "futures",
@@ -2157,7 +2284,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3",
- "tbs",
  "thiserror",
  "tokio",
  "tokio-rustls 0.23.4",
@@ -2341,29 +2467,6 @@ dependencies = [
  "pin-project-lite",
  "pin-utils",
  "slab",
-]
-
-[[package]]
-name = "gateway-cli"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum",
- "axum-macros",
- "bitcoin 0.29.2",
- "clap",
- "clap_complete",
- "fedimint-build",
- "fedimint-core",
- "fedimint-logging",
- "ln-gateway",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "url",
 ]
 
 [[package]]
@@ -2593,13 +2696,6 @@ name = "hex_lit"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3011d1213f159867b13cfd6ac92d2cd5f1345762c63be3554e84092d85a50bbd"
-
-[[package]]
-name = "hkdf"
-version = "0.2.0-alpha"
-dependencies = [
- "bitcoin_hashes 0.11.0",
-]
 
 [[package]]
 name = "home"
@@ -3257,60 +3353,6 @@ name = "linux-raw-sys"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57bcfdad1b858c2db7c38303a6d2ad4dfaf5eb53dfeb0910128b2c26d6158503"
-
-[[package]]
-name = "ln-gateway"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "aquamarine",
- "assert_matches",
- "async-stream",
- "async-trait",
- "axum",
- "axum-macros",
- "bitcoin 0.29.2",
- "bitcoin_hashes 0.11.0",
- "clap",
- "cln-plugin",
- "erased-serde",
- "fedimint-build",
- "fedimint-client",
- "fedimint-cln-rpc",
- "fedimint-core",
- "fedimint-dummy-client",
- "fedimint-dummy-common",
- "fedimint-dummy-server",
- "fedimint-ln-client",
- "fedimint-ln-common",
- "fedimint-ln-server",
- "fedimint-logging",
- "fedimint-mint-client",
- "fedimint-rocksdb",
- "fedimint-testing",
- "fedimint-threshold-crypto",
- "fedimint-tonic-lnd",
- "fedimint-wallet-client",
- "futures",
- "lightning-invoice 0.26.0",
- "prost 0.12.1",
- "rand",
- "reqwest",
- "secp256k1 0.24.3",
- "secp256k1-zkp",
- "serde",
- "serde_json",
- "strum",
- "strum_macros",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tonic 0.10.2",
- "tonic-build",
- "tower-http",
- "tracing",
- "url",
-]
 
 [[package]]
 name = "lock_api"
@@ -4013,32 +4055,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "recoverytool"
-version = "0.2.0-alpha"
-dependencies = [
- "anyhow",
- "bitcoin 0.29.2",
- "clap",
- "fedimint-aead",
- "fedimint-core",
- "fedimint-ln-common",
- "fedimint-ln-server",
- "fedimint-logging",
- "fedimint-mint-server",
- "fedimint-rocksdb",
- "fedimint-server",
- "fedimint-wallet-server",
- "futures",
- "miniscript",
- "secp256k1 0.24.3",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4658,22 +4674,6 @@ name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
-
-[[package]]
-name = "tbs"
-version = "0.2.0-alpha"
-dependencies = [
- "bincode",
- "bitcoin_hashes 0.11.0",
- "bls12_381",
- "clap",
- "ff",
- "group",
- "rand",
- "rand_chacha",
- "serde",
- "sha3",
-]
 
 [[package]]
 name = "tempfile"

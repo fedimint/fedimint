@@ -6,7 +6,7 @@ if grep -E "(fedimint-mint|fedimint-wallet|fedimint-ln)" fedimint-server/Cargo.t
   >&2 echo "fedimint-server/Cargo.toml must not depend on modules"
   return 1
 fi
-if grep -E "(fedimint-mint|fedimint-wallet|fedimint-ln)" fedimint-testing/Cargo.toml >&2 ; then
+if grep -E "(fedimint-mint|fedimint-wallet|fedimint-ln-(server|common|client))" fedimint-testing/Cargo.toml >&2 ; then
   >&2 echo "fedimint-testing/Cargo.toml must not depend on modules"
   return 1
 fi

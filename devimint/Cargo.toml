@@ -3,6 +3,7 @@ name = "devimint"
 version = "0.2.0-alpha"
 edition = "2021"
 license = "MIT"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -27,7 +28,7 @@ fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 fedimint-server = { path = "../fedimint-server" }
 fedimint-testing = { path = "../fedimint-testing" }
 futures = "0.3.24"
-ln-gateway = { path = "../gateway/ln-gateway" }
+ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
 nix = { version = "0.26.2", features = ["signal"] }
 rand = "0.8.5"
 serde_json = "1.0.94"
