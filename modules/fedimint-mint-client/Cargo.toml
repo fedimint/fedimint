@@ -35,7 +35,7 @@ serde-big-array = "0.5.1"
 serde_json = "1.0.96"
 strum = "0.24"
 strum_macros = "0.24"
-tbs = { path = "../../crypto/tbs" }
+tbs = { package = "fedimint-tbs", path = "../../crypto/tbs" }
 thiserror = "1.0.39"
 threshold_crypto = { workspace = true }
 tokio = { version = "1.27.0", features = [ "sync" ] }
