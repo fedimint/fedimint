@@ -398,8 +398,8 @@ rec {
     pname = "gateway-pkgs";
 
     packages = [
-      "ln-gateway"
-      "gateway-cli"
+      "fedimint-ln-gateway"
+      "fedimint-gateway-cli"
     ];
   };
 

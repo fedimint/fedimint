@@ -30,7 +30,7 @@ fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 futures = "0.3.24"
 erased-serde = "0.3"
 hex = { version = "0.4.3", features = ["serde"] }
-ln-gateway = { path = "../gateway/ln-gateway" }
+ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
 serde = { version = "1.0.149", features = ["derive"] }
 serde_json = "1.0.91"
 strum = "0.24"
