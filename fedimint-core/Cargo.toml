@@ -29,7 +29,7 @@ strum = "0.24"
 strum_macros = "0.24"
 hex = { version = "0.4.3", features = [ "serde"] }
 sha3 = "0.10.5"
-tbs = { path = "../crypto/tbs" }
+tbs = { package = "fedimint-tbs", path = "../crypto/tbs" }
 tokio = { version = "1.26.0", features = ["sync", "io-util"] }
 thiserror = "1.0.39"
 tracing ="0.1.37"

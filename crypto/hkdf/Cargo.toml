@@ -1,5 +1,5 @@
 [package]
-name = "hkdf"
+name = "fedimint-hkdf"
 version = "0.2.0-alpha"
 authors = ["The Fedimint Developers"]
 edition = "2021"
