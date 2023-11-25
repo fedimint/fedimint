@@ -25,17 +25,17 @@ time = { version = "0.3.25", features = [ "formatting" ] }
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env" ], default-features = false }
 futures = "0.3.28"
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
-fedimint-aead = { path = "../crypto/aead" }
-fedimint-client = { path = "../fedimint-client" }
-fedimint-core ={ path = "../fedimint-core" }
-fedimint-rocksdb = { path = "../fedimint-rocksdb" }
-fedimint-mint-client = { path = "../modules/fedimint-mint-client" }
-fedimint-mint-common = { path = "../modules/fedimint-mint-common" }
-fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
-fedimint-ln-common = { path = "../modules/fedimint-ln-common" }
-fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
-fedimint-logging = { path = "../fedimint-logging" }
-fedimint-server = { path = "../fedimint-server" }
+fedimint-aead = { version = "0.2.0-rc2", path = "../crypto/aead" }
+fedimint-client = { version = "0.2.0-rc2", path = "../fedimint-client" }
+fedimint-core = { version = "0.2.0-rc2", path = "../fedimint-core" }
+fedimint-rocksdb = { version = "0.2.0-rc2", path = "../fedimint-rocksdb" }
+fedimint-mint-client = { version = "0.2.0-rc2", path = "../modules/fedimint-mint-client" }
+fedimint-mint-common = { version = "0.2.0-rc2", path = "../modules/fedimint-mint-common" }
+fedimint-ln-client = { version = "0.2.0-rc2", path = "../modules/fedimint-ln-client" }
+fedimint-ln-common = { version = "0.2.0-rc2", path = "../modules/fedimint-ln-common" }
+fedimint-wallet-client = { version = "0.2.0-rc2", path = "../modules/fedimint-wallet-client" }
+fedimint-logging = { version = "0.2.0-rc2", path = "../fedimint-logging" }
+fedimint-server = { version = "0.2.0-rc2", path = "../fedimint-server" }
 fs-lock = "0.1.0"
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
@@ -48,4 +48,4 @@ url = { version = "2.3.1", features = ["serde"] }
 clap_complete = "4.3.1"
 
 [build-dependencies]
-fedimint-build = { path = "../fedimint-build" }
+fedimint-build = { version = "0.2.0-rc2", path = "../fedimint-build" }
