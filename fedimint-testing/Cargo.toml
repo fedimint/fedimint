@@ -29,7 +29,7 @@ fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fs-lock = "0.1.0"
 lazy_static = "1.4.0"
 ln-gateway = { path = "../gateway/ln-gateway" }
-ldk-node = { git = "https://github.com/lightningdevkit/ldk-node", rev = "5029b2f88642864ed32835a31c1fa8b1405129dd" }
+ldk-node = { package = "fedimint-ldk-node", version = "0.1.0" }
 futures = "0.3"
 lightning-invoice = "0.26.0"
 tempfile = "3.4.0"
