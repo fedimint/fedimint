@@ -16,7 +16,7 @@ async-trait = "0.1.73"
 bitcoin_hashes = "0.11.0"
 erased-serde = "0.3"
 futures = "0.3"
-fedimint-core ={ path = "../../fedimint-core" }
+fedimint-core = { version = "0.2.0-rc2", path = "../../fedimint-core" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
 secp256k1 = "0.24.2"
