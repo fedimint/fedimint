@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-rocksdb"
-version = "0.2.0-alpha"
+version = "0.2.0-rc2"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-rocksdb provides a rocksdb-backed database implementation for Fedimint."

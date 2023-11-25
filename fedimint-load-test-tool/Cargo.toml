@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-load-test-tool"
-version = "0.2.0-alpha"
+version = "0.2.0-rc2"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-load-test-tool is a tool to load test the fedimint server and gateway."
