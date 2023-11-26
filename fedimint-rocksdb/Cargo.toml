@@ -15,7 +15,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1.0.66"
 async-trait = "0.1.73"
-fedimint-core = { version = "0.2.0-rc2", path = "../fedimint-core" }
+fedimint-core = { version = "0.3.0-alpha", path = "../fedimint-core" }
 futures = "0.3.24"
 rocksdb = { version = "0.21.0" }
 tracing = "0.1.37"

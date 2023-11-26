@@ -26,8 +26,8 @@ erased-serde = "0.3"
 futures = "0.3.24"
 itertools = "0.10.5"
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
-fedimint-client = { version = "0.2.0-rc2", path = "../../fedimint-client" }
-fedimint-core = { version = "0.2.0-rc2", path = "../../fedimint-core" }
+fedimint-client = { version = "0.3.0-alpha", path = "../../fedimint-client" }
+fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
 secp256k1 = { version="0.24.2", default-features=false }
 serde = {version = "1.0.149", features = [ "derive" ] }
 serde_json = "1.0.91"
