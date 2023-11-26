@@ -13,7 +13,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.69"
 bitcoin = "0.29.2"
-clap = "4.4.7"
+clap = { version = "4.4.7", features = [ "derive", "env" ] }
 fedimint-aead = { version = "0.3.0-alpha", path = "../crypto/aead" }
 fedimint-core = { version = "0.3.0-alpha", path = "../fedimint-core" }
 fedimint-rocksdb = { version = "0.3.0-alpha", path = "../fedimint-rocksdb" }
