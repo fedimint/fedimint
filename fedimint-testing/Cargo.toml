@@ -20,15 +20,15 @@ bitcoin = "0.29.2"
 bitcoincore-rpc = "0.16.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions" ], default-features = false }
 cln-rpc = { workspace = true }
-fedimint-core  = { path = "../fedimint-core" }
-fedimint-client  = { path = "../fedimint-client" }
-fedimint-server  = { path = "../fedimint-server" }
-fedimint-bitcoind = { path = "../fedimint-bitcoind" }
-fedimint-logging = { path = "../fedimint-logging" }
-fedimint-rocksdb = { path = "../fedimint-rocksdb" }
+fedimint-core  = { version = "0.2.0-rc2", path = "../fedimint-core" }
+fedimint-client  = { version = "0.2.0-rc2", path = "../fedimint-client" }
+fedimint-server  = { version = "0.2.0-rc2", path = "../fedimint-server" }
+fedimint-bitcoind = { version = "0.2.0-rc2", path = "../fedimint-bitcoind" }
+fedimint-logging = { version = "0.2.0-rc2", path = "../fedimint-logging" }
+fedimint-rocksdb = { version = "0.2.0-rc2", path = "../fedimint-rocksdb" }
 fs-lock = "0.1.0"
 lazy_static = "1.4.0"
-ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
+ln-gateway = { version = "0.2.0-rc2", package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
 ldk-node = { package = "fedimint-ldk-node", version = "0.1.0" }
 futures = "0.3"
 lightning-invoice = "0.26.0"
@@ -43,4 +43,4 @@ tokio = { version = "1.26.0", features = ["full", "tracing"] }
 tokio-stream = "0.1.11"
 tonic_lnd = { workspace = true }
 url = "2.3.1"
-fedimint-portalloc = { path = "../utils/portalloc" }
+fedimint-portalloc = { version = "0.2.0-rc2", path = "../utils/portalloc" }
