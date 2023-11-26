@@ -403,6 +403,11 @@
 <a href="#403" id="403">403</a>
 <a href="#404" id="404">404</a>
 <a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -627,6 +632,7 @@
 
 <span class="kw">pub async fn </span>gateway_pay_invoice(
     prefix: <span class="kw-2">&amp;</span>str,
+    gateway_name: <span class="kw-2">&amp;</span>str,
     client: <span class="kw-2">&amp;</span>ClientArc,
     invoice: Bolt11Invoice,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
@@ -654,6 +660,10 @@
                 <span class="macro">info!</span>(<span class="string">&quot;{prefix} Invoice paid in {elapsed:?}&quot;</span>);
                 event_sender.send(MetricEvent {
                     name: <span class="string">&quot;gateway_pay_invoice_success&quot;</span>.into(),
+                    duration: elapsed,
+                })<span class="question-mark">?</span>;
+                event_sender.send(MetricEvent {
+                    name: <span class="macro">format!</span>(<span class="string">&quot;gateway_{gateway_name}_pay_invoice_success&quot;</span>),
                     duration: elapsed,
                 })<span class="question-mark">?</span>;
                 <span class="kw">break</span>;
