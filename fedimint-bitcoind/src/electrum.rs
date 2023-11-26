@@ -4,10 +4,12 @@ use anyhow::anyhow as format_err;
 use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 use bitcoin_hashes::hex::ToHex;
 use electrum_client::ElectrumApi;
+use electrum_client::Error::Protocol;
 use fedimint_core::task::{block_in_place, TaskHandle};
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
+use serde_json::{Map, Value};
 use tracing::{info, warn};
 
 use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
@@ -82,9 +84,11 @@ impl IBitcoindRpc for ElectrumClient {
         let mut bytes = vec![];
         bitcoin::consensus::Encodable::consensus_encode(&transaction, &mut bytes)
             .expect("can't fail");
-        let _ = block_in_place(|| self.0.transaction_broadcast_raw(&bytes)).map_err(|error| {
-            info!(?error, "Error broadcasting transaction");
-        });
+        match block_in_place(|| self.0.transaction_broadcast_raw(&bytes)) {
+            Err(Protocol(Value::Object(e))) if is_already_submitted_error(&e) => (),
+            Err(e) => info!(?e, "Error broadcasting transaction"),
+            Ok(_) => (),
+        }
     }
 
     async fn get_tx_block_height(&self, txid: &Txid) -> anyhow::Result<Option<u64>> {
@@ -119,5 +123,53 @@ impl IBitcoindRpc for ElectrumClient {
         // FIXME: Not sure how to implement for electrum yet, but the client cannot use
         // electrum regardless right now
         unimplemented!()
+    }
+}
+
+/// Parses errors from electrum-client to determine if the transaction is
+/// already submitted and can be ignored.
+///
+/// Electrs [maps] daemon errors to a generic error code (2) instead of using
+/// the error codes returned from bitcoin core's RPC (-27). There's an open [PR]
+/// to use the correct error codes, but until that's available we match the
+/// error based on the message text.
+///
+/// [maps]: https://github.com/romanz/electrs/blob/v0.9.13/src/electrum.rs#L110
+/// [PR]: https://github.com/romanz/electrs/pull/942
+fn is_already_submitted_error(error: &Map<String, Value>) -> bool {
+    // TODO: Filter `electrs` errors using codes instead of string when available in
+    // `electrum-client`
+    // https://github.com/fedimint/fedimint/issues/3731
+    match error.get("message").and_then(|value| value.as_str()) {
+        Some(message) => message == "Transaction already in block chain",
+        None => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::{json, Map, Value};
+
+    use crate::electrum::is_already_submitted_error;
+
+    fn message_to_json(message: &str) -> Map<String, Value> {
+        let as_value = json!({"code": 2, "message": message});
+        as_value
+            .as_object()
+            .expect("should parse as object")
+            .to_owned()
+    }
+
+    #[test]
+    fn should_parse_transaction_already_submitted_errors() {
+        let already_submitted_error = message_to_json("Transaction already in block chain");
+        assert!(is_already_submitted_error(&already_submitted_error));
+
+        let different_error_message =
+            message_to_json("Fee exceeds maximum configured by user (e.g. -maxtxfee, maxfeerate");
+        assert!(!is_already_submitted_error(&different_error_message));
+
+        let unknown_error_object = message_to_json("");
+        assert!(!is_already_submitted_error(&unknown_error_object));
     }
 }

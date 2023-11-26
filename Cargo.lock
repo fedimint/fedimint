@@ -1203,6 +1203,7 @@ dependencies = [
  "lazy_static",
  "rand",
  "serde",
+ "serde_json",
  "tracing",
  "url",
 ]
