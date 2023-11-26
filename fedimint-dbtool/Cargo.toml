@@ -3,6 +3,7 @@ name = "fedimint-dbtool"
 version = "0.3.0-alpha"
 edition = "2021"
 license = "MIT"
+description = "Tool to inspect Fedimint client and server databases"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
