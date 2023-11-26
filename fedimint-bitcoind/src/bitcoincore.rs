@@ -75,8 +75,17 @@ impl IBitcoindRpc for BitcoinClient {
     }
 
     async fn submit_transaction(&self, transaction: Transaction) {
-        let send = block_in_place(|| self.0.send_raw_transaction(&transaction));
-        let _ = send.map_err(|error| info!(?error, "Error broadcasting transaction"));
+        use bitcoincore_rpc::jsonrpc::Error::Rpc;
+        use bitcoincore_rpc::Error::JsonRpc;
+        match block_in_place(|| self.0.send_raw_transaction(&transaction)) {
+            // Bitcoin core's RPC will return error code -27 if a transaction is already in a block.
+            // This is considered a success case, so we don't surface the error log.
+            //
+            // https://github.com/bitcoin/bitcoin/blob/daa56f7f665183bcce3df146f143be37f33c123e/src/rpc/protocol.h#L48
+            Err(JsonRpc(Rpc(e))) if e.code == -27 => (),
+            Err(e) => info!(?e, "Error broadcasting transaction"),
+            Ok(_) => (),
+        }
     }
 
     async fn get_tx_block_height(&self, txid: &Txid) -> anyhow::Result<Option<u64>> {

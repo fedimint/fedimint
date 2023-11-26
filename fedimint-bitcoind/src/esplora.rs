@@ -83,6 +83,11 @@ impl IBitcoindRpc for EsploraClient {
 
     async fn submit_transaction(&self, transaction: Transaction) {
         let _ = self.0.broadcast(&transaction).await.map_err(|error| {
+            // `esplora-client` v0.5.0 only surfaces HTTP error codes, which prevents us
+            // from detecting errors for transactions already submitted.
+            // TODO: Suppress `esplora-client` already submitted errors when client is
+            // updated
+            // https://github.com/fedimint/fedimint/issues/3732
             info!(?error, "Error broadcasting transaction");
         });
     }
