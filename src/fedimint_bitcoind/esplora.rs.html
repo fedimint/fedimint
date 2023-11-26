@@ -124,6 +124,11 @@
 <a href="#124" id="124">124</a>
 <a href="#125" id="125">125</a>
 <a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -209,7 +214,12 @@
 
     <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
         <span class="kw">let _ </span>= <span class="self">self</span>.<span class="number">0</span>.broadcast(<span class="kw-2">&amp;</span>transaction).<span class="kw">await</span>.map_err(|error| {
-            <span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">&quot;Error broadcasting transaction&quot;</span>);
+            <span class="comment">// `esplora-client` v0.5.0 only surfaces HTTP error codes, which prevents us
+            // from detecting errors for transactions already submitted.
+            // TODO: Suppress `esplora-client` already submitted errors when client is
+            // updated
+            // https://github.com/fedimint/fedimint/issues/3732
+            </span><span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">&quot;Error broadcasting transaction&quot;</span>);
         });
     }
 

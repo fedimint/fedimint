@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["ElectrumClient","ElectrumFactory"]};
+window.SIDEBAR_ITEMS = {"fn":["is_already_submitted_error"],"struct":["ElectrumClient","ElectrumFactory"]};
