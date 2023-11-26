@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-dummy-common"
-version = "0.2.0-alpha"
+version = "0.3.0-alpha"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-dummy is a dummy example fedimint module."
@@ -16,7 +16,7 @@ async-trait = "0.1.73"
 bitcoin_hashes = "0.11.0"
 erased-serde = "0.3"
 futures = "0.3"
-fedimint-core ={ path = "../../fedimint-core" }
+fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
 secp256k1 = "0.24.2"

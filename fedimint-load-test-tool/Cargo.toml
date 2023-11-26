@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-load-test-tool"
-version = "0.2.0-alpha"
+version = "0.3.0-alpha"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-load-test-tool is a tool to load test the fedimint server and gateway."
@@ -16,14 +16,14 @@ anyhow = "1"
 base64 = "0.20.0"
 bitcoin = "0.29.2"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env" ], default-features = false }
-devimint = { path = "../devimint" }
-fedimint-client = { path = "../fedimint-client" }
-fedimint-core ={ path = "../fedimint-core" }
-fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
-fedimint-logging = { path = "../fedimint-logging" }
-fedimint-mint-client = { path = "../modules/fedimint-mint-client" }
-fedimint-rocksdb = { path = "../fedimint-rocksdb" }
-fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
+devimint = { version = "0.3.0-alpha", path = "../devimint" }
+fedimint-client = { version = "0.3.0-alpha", path = "../fedimint-client" }
+fedimint-core = { version = "0.3.0-alpha", path = "../fedimint-core" }
+fedimint-ln-client = { version = "0.3.0-alpha", path = "../modules/fedimint-ln-client" }
+fedimint-logging = { version = "0.3.0-alpha", path = "../fedimint-logging" }
+fedimint-mint-client = { version = "0.3.0-alpha", path = "../modules/fedimint-mint-client" }
+fedimint-rocksdb = { version = "0.3.0-alpha", path = "../fedimint-rocksdb" }
+fedimint-wallet-client = { version = "0.3.0-alpha", path = "../modules/fedimint-wallet-client" }
 futures = "0.3"
 jsonrpsee-core = { version = "0.20.0", features = [ "client" ] }
 jsonrpsee-types = { version = "0.20.0" }
@@ -39,4 +39,4 @@ url = { version = "2.3.1", features = ["serde"] }
 jsonrpsee-ws-client = { version = "0.20.0", features = ["webpki-tls"], default-features = false }
 
 [build-dependencies]
-fedimint-build = { path = "../fedimint-build" }
+fedimint-build = { version = "0.3.0-alpha", path = "../fedimint-build" }

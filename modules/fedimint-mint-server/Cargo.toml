@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-mint-server"
-version = "0.2.0-alpha"
+version = "0.3.0-alpha"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-mint is a chaumian ecash mint module."
@@ -20,20 +20,20 @@ bitcoin_hashes = "0.11.0"
 erased-serde = "0.3"
 futures = "0.3"
 itertools = "0.10.5"
-fedimint-core ={ path = "../../fedimint-core" }
-fedimint-mint-common ={ path = "../fedimint-mint-common" }
+fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
+fedimint-mint-common = { version = "0.3.0-alpha", path = "../fedimint-mint-common" }
 rand = "0.8"
 secp256k1 = "0.24.2"
 secp256k1-zkp = "0.7.0"
 serde = { version = "1.0.149", features = [ "derive" ] }
 strum = "0.24"
 strum_macros = "0.24"
-tbs = { package = "fedimint-tbs", path = "../../crypto/tbs" }
+tbs = { package = "fedimint-tbs", version = "0.3.0-alpha", path = "../../crypto/tbs" }
 thiserror = "1.0.39"
 threshold_crypto = { workspace = true }
 tracing ="0.1.37"
 impl-tools = "0.8.0"
-fedimint-server = { path = "../../fedimint-server" }
+fedimint-server = { version = "0.3.0-alpha", path = "../../fedimint-server" }
 
 [dev-dependencies]
 fedimint-testing = { path = "../../fedimint-testing" }
