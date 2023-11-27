@@ -1494,6 +1494,24 @@ impl ClientBuilder {
         }
     }
 
+    pub async fn get_federation_id(&self) -> anyhow::Result<FederationId> {
+        if let Some(db) = self.db.as_ref() {
+            let db = match db {
+                DatabaseSource::Fresh(db) => db,
+                DatabaseSource::Reuse(client) => &client.inner.db,
+            };
+            if let Some(config) = get_config_from_db(db).await {
+                return Ok(config.global.federation_id());
+            }
+        }
+
+        if let Some(federation_info) = &self.config {
+            return Ok(federation_info.federation_id());
+        }
+
+        bail!("No config source present");
+    }
+
     pub async fn build_restoring_from_backup(
         self,
         root_secret: DerivableSecret,
