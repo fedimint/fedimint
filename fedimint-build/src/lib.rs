@@ -17,7 +17,22 @@ fn set_code_version_inner() -> Result<(), String> {
         println!("cargo:rustc-env={GIT_HASH_ENV}={hash}");
         return Ok(());
     }
-    // TODO: We're going to need some extra handling here for published crates being
+
+    // In case we are compiling a released crate we don't have a git directory, but
+    // can read the version hash from .cargo_vcs_info.json
+    if let Ok(file) = std::fs::File::open("./.cargo_vcs_info.json") {
+        let info: serde_json::Value = serde_json::from_reader(file)
+            .map_err(|e| format!("Failed to parse .cargo_vcs_info.json: {}", e))?;
+        let hash = info["git"]["sha1"].as_str().ok_or_else(|| {
+            format!(
+                "Failed to parse .cargo_vcs_info.json: no `.git.sha` field: {:?}",
+                info
+            )
+        })?;
+        println!("cargo:rustc-env={GIT_HASH_ENV}={hash}");
+        return Ok(());
+    }
+
     // built somewhere in the `$HOME/.cargo/...`, probably detecting it and
     // using a release version instead.
 
