@@ -1579,13 +1579,10 @@ impl ClientBuilder {
 
         let final_client = FinalClient::default();
 
-        // Re-derive client's root_secret using raw bytes from the provided root_secret
-        // and salt from the federation ID. This eliminates the possibility of having
-        // the same client root_secret across multiple federations.
-        let root_secret = DerivableSecret::new_root(
-            &root_secret.to_random_bytes::<32>(),
-            &config.global.federation_id().0,
-        );
+        // Re-derive client's root_secret using the federation ID. This eliminates the
+        // possibility of having the same client root_secret across multiple
+        // federations.
+        let root_secret = root_secret.federation_key(&config.global.federation_id());
 
         let modules = {
             let mut modules = ClientModuleRegistry::default();
