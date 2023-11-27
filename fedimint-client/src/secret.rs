@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use std::io::{Read, Write};
 
+use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -90,4 +91,22 @@ impl RootSecretStrategy for PlainRootSecretStrategy {
         rng.fill(&mut secret);
         secret
     }
+}
+
+/// Convenience function to derive fedimint-client root secret
+/// using the default (0) wallet number, given a global root secret
+/// that's managed externally by a consumer of fedimint-client.
+///
+/// See docs/secret_derivation.md
+///
+/// `global_root_secret/<key-type=per-federation=0>/<federation-id>/
+/// <wallet-number=0>/<key-type=fedimint-client=0>`
+pub fn get_default_client_secret(
+    global_root_secret: &DerivableSecret,
+    federation_id: &FederationId,
+) -> DerivableSecret {
+    let multi_federation_root_secret = global_root_secret.child_key(ChildId(0));
+    let federation_root_secret = multi_federation_root_secret.federation_key(federation_id);
+    let federation_wallet_root_secret = federation_root_secret.child_key(ChildId(0)); // wallet-number=0
+    federation_wallet_root_secret.child_key(ChildId(0)) // key-type=fedimint-client=0
 }

@@ -19,7 +19,7 @@ use db_locked::{Locked, LockedBuilder};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
-use fedimint_client::secret::RootSecretStrategy;
+use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 use fedimint_client::{get_invite_code_from_db, ClientBuilder, FederationInfo};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
@@ -309,8 +309,15 @@ impl Opts {
                 mnemonic
             }
         };
+        let federation_id = client_builder
+            .get_federation_id()
+            .await
+            .map_err_cli_general()?;
         client_builder
-            .build(Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic))
+            .build(get_default_client_secret(
+                &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
+                &federation_id,
+            ))
             .await
             .map_err_cli_general()
     }
@@ -568,9 +575,14 @@ impl FedimintCli {
                         mnemonic
                     }
                 };
+                let federation_id = client_builder
+                    .get_federation_id()
+                    .await
+                    .map_err_cli_general()?;
                 let client = client_builder
-                    .build_restoring_from_backup(Bip39RootSecretStrategy::<12>::to_root_secret(
-                        &mnemonic,
+                    .build_restoring_from_backup(get_default_client_secret(
+                        &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
+                        &federation_id,
                     ))
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
