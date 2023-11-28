@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["TYPE_BACKUP","TYPE_MODULE"],"struct":["PlainRootSecretStrategy"],"trait":["DeriveableSecretClientExt","RootSecretStrategy"]};
+window.SIDEBAR_ITEMS = {"constant":["TYPE_BACKUP","TYPE_MODULE"],"fn":["get_default_client_secret"],"struct":["PlainRootSecretStrategy"],"trait":["DeriveableSecretClientExt","RootSecretStrategy"]};

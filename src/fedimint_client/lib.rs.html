@@ -1789,6 +1789,21 @@
 <a href="#1789" id="1789">1789</a>
 <a href="#1790" id="1790">1790</a>
 <a href="#1791" id="1791">1791</a>
+<a href="#1792" id="1792">1792</a>
+<a href="#1793" id="1793">1793</a>
+<a href="#1794" id="1794">1794</a>
+<a href="#1795" id="1795">1795</a>
+<a href="#1796" id="1796">1796</a>
+<a href="#1797" id="1797">1797</a>
+<a href="#1798" id="1798">1798</a>
+<a href="#1799" id="1799">1799</a>
+<a href="#1800" id="1800">1800</a>
+<a href="#1801" id="1801">1801</a>
+<a href="#1802" id="1802">1802</a>
+<a href="#1803" id="1803">1803</a>
+<a href="#1804" id="1804">1804</a>
+<a href="#1805" id="1805">1805</a>
+<a href="#1806" id="1806">1806</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3285,6 +3300,24 @@
         }
     }
 
+    <span class="kw">pub async fn </span>get_federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;FederationId&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(db) = <span class="self">self</span>.db.as_ref() {
+            <span class="kw">let </span>db = <span class="kw">match </span>db {
+                DatabaseSource::Fresh(db) =&gt; db,
+                DatabaseSource::Reuse(client) =&gt; <span class="kw-2">&amp;</span>client.inner.db,
+            };
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = get_config_from_db(db).<span class="kw">await </span>{
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(config.global.federation_id());
+            }
+        }
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(federation_info) = <span class="kw-2">&amp;</span><span class="self">self</span>.config {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(federation_info.federation_id());
+        }
+
+        <span class="macro">bail!</span>(<span class="string">&quot;No config source present&quot;</span>);
+    }
+
     <span class="kw">pub async fn </span>build_restoring_from_backup(
         <span class="self">self</span>,
         root_secret: DerivableSecret,
@@ -3370,13 +3403,10 @@
 
         <span class="kw">let </span>final_client = FinalClient::default();
 
-        <span class="comment">// Re-derive client&#39;s root_secret using raw bytes from the provided root_secret
-        // and salt from the federation ID. This eliminates the possibility of having
-        // the same client root_secret across multiple federations.
-        </span><span class="kw">let </span>root_secret = DerivableSecret::new_root(
-            <span class="kw-2">&amp;</span>root_secret.to_random_bytes::&lt;<span class="number">32</span>&gt;(),
-            <span class="kw-2">&amp;</span>config.global.federation_id().<span class="number">0</span>,
-        );
+        <span class="comment">// Re-derive client&#39;s root_secret using the federation ID. This eliminates the
+        // possibility of having the same client root_secret across multiple
+        // federations.
+        </span><span class="kw">let </span>root_secret = root_secret.federation_key(<span class="kw-2">&amp;</span>config.global.federation_id());
 
         <span class="kw">let </span>modules = {
             <span class="kw">let </span><span class="kw-2">mut </span>modules = ClientModuleRegistry::default();

@@ -821,6 +821,21 @@
 <a href="#821" id="821">821</a>
 <a href="#822" id="822">822</a>
 <a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
@@ -836,11 +851,13 @@
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{fs, result};
 
+<span class="kw">use </span>bip39::Mnemonic;
 <span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>db_locked::{Locked, LockedBuilder};
 <span class="kw">use </span>fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
+<span class="kw">use </span>fedimint_bip39::Bip39RootSecretStrategy;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
-<span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
+<span class="kw">use </span>fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::{get_invite_code_from_db, ClientBuilder, FederationInfo};
 <span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
 <span class="kw">use </span>fedimint_core::api::{
@@ -1115,23 +1132,30 @@
         invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
     ) -&gt; CliResult&lt;fedimint_client::ClientArc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = <span class="self">self</span>.build_client_builder(module_inits, invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>client_secret = <span class="kw">match </span>client_builder
-            .load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;()
+        <span class="kw">let </span>mnemonic = <span class="kw">match </span>client_builder
+            .load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;()
             .<span class="kw">await
         </span>{
-            <span class="prelude-val">Ok</span>(secret) =&gt; secret,
+            <span class="prelude-val">Ok</span>(entropy) =&gt; Mnemonic::from_entropy(<span class="kw-2">&amp;</span>entropy).map_err_cli_general()<span class="question-mark">?</span>,
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                <span class="macro">info!</span>(<span class="string">&quot;Generating secret and writing to client storage&quot;</span>);
-                <span class="kw">let </span>secret = PlainRootSecretStrategy::random(<span class="kw-2">&amp;mut </span>thread_rng());
+                <span class="macro">info!</span>(<span class="string">&quot;Generating mnemonic and writing entropy to client storage&quot;</span>);
+                <span class="kw">let </span>mnemonic = Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::random(<span class="kw-2">&amp;mut </span>thread_rng());
                 client_builder
-                    .store_encodable_client_secret(secret)
+                    .store_encodable_client_secret(mnemonic.to_entropy())
                     .<span class="kw">await
                     </span>.map_err_cli_general()<span class="question-mark">?</span>;
-                secret
+                mnemonic
             }
         };
+        <span class="kw">let </span>federation_id = client_builder
+            .get_federation_id()
+            .<span class="kw">await
+            </span>.map_err_cli_general()<span class="question-mark">?</span>;
         client_builder
-            .build(PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret))
+            .build(get_default_client_secret(
+                <span class="kw-2">&amp;</span>Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::to_root_secret(<span class="kw-2">&amp;</span>mnemonic),
+                <span class="kw-2">&amp;</span>federation_id,
+            ))
             .<span class="kw">await
             </span>.map_err_cli_general()
     }
@@ -1362,35 +1386,41 @@ Examples:
             Command::VersionHash =&gt; <span class="prelude-val">Ok</span>(CliOutput::VersionHash {
                 hash: <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>).to_string(),
             }),
-            Command::Client(ClientCmd::Restore { secret }) =&gt; {
+            Command::Client(ClientCmd::Restore { mnemonic }) =&gt; {
+                <span class="kw">let </span>mnemonic = Mnemonic::from_str(<span class="kw-2">&amp;</span>mnemonic).map_err_cli_general()<span class="question-mark">?</span>;
                 <span class="kw">let </span><span class="kw-2">mut </span>client_builder = cli
                     .build_client_builder(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits, <span class="prelude-val">None</span>)
                     .<span class="kw">await
                     </span>.map_err_cli_general()<span class="question-mark">?</span>;
-                <span class="kw">let </span>client_secret = <span class="kw">match </span>client_builder
-                    .load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;()
+                <span class="kw">let </span>mnemonic = <span class="kw">match </span>client_builder
+                    .load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;()
                     .<span class="kw">await
                 </span>{
-                    <span class="prelude-val">Ok</span>(existing_secret) <span class="kw">if </span>existing_secret == secret =&gt; secret,
+                    <span class="prelude-val">Ok</span>(entropy) <span class="kw">if </span>entropy == mnemonic.to_entropy() =&gt; mnemonic,
                     <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
-                            <span class="string">&quot;Provided secret does not match existing secret&quot;
+                            <span class="string">&quot;Provided mnemonic&#39;s entropy does not match existing entropy&quot;
                         </span>))
                         .map_err_cli_general()
                     }
                     <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;Generating secret and writing to client storage&quot;</span>);
-                        <span class="kw">let </span>new_secret = PlainRootSecretStrategy::random(<span class="kw-2">&amp;mut </span>thread_rng());
+                        <span class="macro">info!</span>(<span class="string">&quot;Generating mnemonic and writing entropy to client storage&quot;</span>);
+                        <span class="kw">let </span>mnemonic = Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::random(<span class="kw-2">&amp;mut </span>thread_rng());
                         client_builder
-                            .store_encodable_client_secret(new_secret)
+                            .store_encodable_client_secret(mnemonic.to_entropy())
                             .<span class="kw">await
                             </span>.map_err_cli_general()<span class="question-mark">?</span>;
-                        new_secret
+                        mnemonic
                     }
                 };
+                <span class="kw">let </span>federation_id = client_builder
+                    .get_federation_id()
+                    .<span class="kw">await
+                    </span>.map_err_cli_general()<span class="question-mark">?</span>;
                 <span class="kw">let </span>client = client_builder
-                    .build_restoring_from_backup(PlainRootSecretStrategy::to_root_secret(
-                        <span class="kw-2">&amp;</span>client_secret,
+                    .build_restoring_from_backup(get_default_client_secret(
+                        <span class="kw-2">&amp;</span>Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::to_root_secret(<span class="kw-2">&amp;</span>mnemonic),
+                        <span class="kw-2">&amp;</span>federation_id,
                     ))
                     .<span class="kw">await
                     </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?
