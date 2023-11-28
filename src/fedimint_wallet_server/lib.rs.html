@@ -1988,13 +1988,6 @@
 <a href="#1988" id="1988">1988</a>
 <a href="#1989" id="1989">1989</a>
 <a href="#1990" id="1990">1990</a>
-<a href="#1991" id="1991">1991</a>
-<a href="#1992" id="1992">1992</a>
-<a href="#1993" id="1993">1993</a>
-<a href="#1994" id="1994">1994</a>
-<a href="#1995" id="1995">1995</a>
-<a href="#1996" id="1996">1996</a>
-<a href="#1997" id="1997">1997</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2326,8 +2319,7 @@
         // acceptable risk since subsequent rounds of consensus will reattempt to fetch
         // the latest block count.
         </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(block_count) = <span class="self">self</span>.get_block_count().<span class="kw">await </span>{
-            <span class="kw">let </span>block_count_proposal =
-                block_count.saturating_sub(<span class="self">self</span>.cfg.consensus.finality_delay);
+            <span class="kw">let </span>block_count_vote = block_count.saturating_sub(<span class="self">self</span>.cfg.consensus.finality_delay);
 
             <span class="kw">let </span>current_vote = dbtx
                 .get_value(<span class="kw-2">&amp;</span>BlockCountVoteKey(<span class="self">self</span>.our_peer_id))
@@ -2336,20 +2328,13 @@
 
             <span class="macro">debug!</span>(
                 <span class="question-mark">?</span>current_vote,
-                <span class="question-mark">?</span>block_count_proposal,
+                <span class="question-mark">?</span>block_count_vote,
                 <span class="question-mark">?</span>block_count,
-                <span class="string">&quot;Considering proposing block count&quot;
+                <span class="string">&quot;Proposing block count&quot;
             </span>);
 
-            <span class="kw">if </span>current_vote &lt; block_count_proposal {
-                items.push(WalletConsensusItem::BlockCount(block_count_proposal));
-            }
+            items.push(WalletConsensusItem::BlockCount(block_count_vote));
         }
-
-        <span class="kw">let </span>current_fee_rate_vote = dbtx
-            .get_value(<span class="kw-2">&amp;</span>FeeRateVoteKey(<span class="self">self</span>.our_peer_id))
-            .<span class="kw">await
-            </span>.unwrap_or(<span class="self">self</span>.cfg.consensus.default_fee);
 
         <span class="comment">// If there&#39;s an error getting the fee rate from the node we default to the most
         // recent fee rate vote. Using an alternative fee rate may cause unwanted
@@ -2361,13 +2346,14 @@
                     <span class="string">&quot;Error while calling get_free_rate_opt, using most recent fee rate vote: {:?}&quot;</span>,
                     err
                 );
-                current_fee_rate_vote
+
+                dbtx.get_value(<span class="kw-2">&amp;</span>FeeRateVoteKey(<span class="self">self</span>.our_peer_id))
+                    .<span class="kw">await
+                    </span>.unwrap_or(<span class="self">self</span>.cfg.consensus.default_fee)
             }
         };
 
-        <span class="kw">if </span>fee_rate_proposal != current_fee_rate_vote {
-            items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
-        }
+        items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
 
         items
     }
