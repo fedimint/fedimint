@@ -4,8 +4,8 @@ use std::str::FromStr;
 use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::{bail, Context};
+use bip39::Mnemonic;
 use bitcoin::{secp256k1, Network};
-use bitcoin_hashes::hex;
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use fedimint_client::backup::Metadata;
@@ -121,10 +121,7 @@ pub enum ClientCmd {
     DiscoverVersion,
     /// Restore the previously created backup of mint notes (with `backup`
     /// command)
-    Restore {
-        #[clap(value_parser = parse_secret)]
-        secret: [u8; 64],
-    },
+    Restore { mnemonic: String },
     /// Print the secret key of the client
     PrintSecret,
     ListOperations {
@@ -144,10 +141,6 @@ pub enum ClientCmd {
 
 pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
     secp256k1::PublicKey::from_str(s)
-}
-
-fn parse_secret(s: &str) -> Result<[u8; 64], hex::Error> {
-    hex::FromHex::from_hex(s)
 }
 
 pub async fn handle_command(
@@ -366,11 +359,11 @@ pub async fn handle_command(
             Ok(serde_json::to_value(()).unwrap())
         }
         ClientCmd::PrintSecret => {
-            let secret = client.get_decoded_client_secret::<[u8; 64]>().await?;
-            let hex_secret = hex::ToHex::to_hex(&secret[..]);
+            let entropy = client.get_decoded_client_secret::<Vec<u8>>().await?;
+            let mnemonic = Mnemonic::from_entropy(&entropy)?;
 
             Ok(json!({
-                "secret": hex_secret,
+                "secret": mnemonic,
             }))
         }
         ClientCmd::ListOperations { limit } => {

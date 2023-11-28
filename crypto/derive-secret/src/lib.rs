@@ -15,7 +15,9 @@
 //! * chacha20-poly1305 for symmetric encryption used for backups.
 use std::fmt::Formatter;
 
+use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::BitcoinHash;
 use hkdf::hashes::Sha512;
 use hkdf::{bitcoin_hashes, Hkdf};
 use ring::aead;
@@ -70,6 +72,27 @@ impl DerivableSecret {
         DerivableSecret {
             level: self.level + 1,
             kdf: Hkdf::from_prk(self.kdf.derive_hmac(&tagged_derive(CHILD_TAG, cid))),
+        }
+    }
+
+    /// Derive a federation-ID-based child key from self.
+    ///
+    /// This is useful to ensure that the same root secret is not reused
+    /// across multiple `fedimint-client` instances for different federations.
+    ///
+    /// We reset the level to 0 here since `fedimint-client` expects its root
+    /// secret to be at that level.
+    pub fn federation_key(&self, federation_id: &FederationId) -> DerivableSecret {
+        DerivableSecret {
+            level: 0,
+            kdf: Hkdf::from_prk(
+                self.kdf.derive_hmac(&tagged_derive(
+                    &federation_id.0.into_inner()[..8]
+                        .try_into()
+                        .expect("Slice with length 8"),
+                    ChildId(0),
+                )),
+            ),
         }
     }
 
