@@ -381,9 +381,7 @@ impl ServerModule for Lightning {
             .await;
 
         if let Ok(block_count_vote) = self.block_count().await {
-            if block_count_vote != self.consensus_block_count(dbtx).await {
-                items.push(LightningConsensusItem::BlockCount(block_count_vote));
-            }
+            items.push(LightningConsensusItem::BlockCount(block_count_vote));
         }
 
         items
