@@ -967,6 +967,7 @@ pub struct PeerStatus {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PeerConnectionStatus {
     #[default]
     Disconnected,
@@ -975,6 +976,7 @@ pub enum PeerConnectionStatus {
 
 /// The state of the server returned via APIs
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum ServerStatus {
     /// Server needs a password to read configs
     #[default]
