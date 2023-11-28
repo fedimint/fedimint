@@ -551,6 +551,10 @@ impl Gateway {
         loop {
             match stream.next().await {
                 Some(Ok(htlc_request)) => {
+                    info!(
+                        "Intercepting HTLC {}",
+                        PrettyInterceptHtlcRequest(&htlc_request)
+                    );
                     if handle.is_shutting_down() {
                         break;
                     }
@@ -1121,10 +1125,7 @@ impl Gateway {
                                     }
                                 }
                             } else {
-                                warn!(
-                                    "GatewayState must be Running to register with federation. Current state: {:?}",
-                                    &gateway_state
-                                );
+                                warn!("GatewayState must be Running to register with federation. Current state: {gateway_state:?}");
                             }
                         } else {
                             warn!("Cannot register clients because gateway configuration is not set.");
@@ -1354,5 +1355,23 @@ impl IntoResponse for GatewayError {
         let mut err = Cow::<'static, str>::Owned(error_message).into_response();
         *err.status_mut() = status_code;
         err
+    }
+}
+
+pub struct PrettyInterceptHtlcRequest<'a>(&'a crate::gateway_lnrpc::InterceptHtlcRequest);
+impl Display for PrettyInterceptHtlcRequest<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let PrettyInterceptHtlcRequest(htlc_request) = self;
+        write!(
+            f,
+            "InterceptHtlcRequest {{ payment_hash: {}, incoming_amount_msat: {:?}, outgoing_amount_msat: {:?}, incoming_expiry: {:?}, short_channel_id: {:?}, incoming_chan_id: {:?}, htlc_id: {:?} }}",
+            htlc_request.payment_hash.to_hex(),
+            htlc_request.incoming_amount_msat,
+            htlc_request.outgoing_amount_msat,
+            htlc_request.incoming_expiry,
+            htlc_request.short_channel_id,
+            htlc_request.incoming_chan_id,
+            htlc_request.htlc_id,
+        )
     }
 }

@@ -12,7 +12,7 @@ use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
 use cln_rpc::primitives::ShortChannelId;
-use fedimint_core::task::{spawn, TaskGroup};
+use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use ln_gateway::gateway_lnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
@@ -32,6 +32,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Server;
 use tonic::Status;
 use tracing::{debug, error, info, warn};
+
+const MAX_HTLC_PROCESSING_DURATION: Duration = Duration::MAX;
 
 #[derive(Parser)]
 pub struct ClnExtensionOpts {
@@ -130,14 +132,8 @@ impl ClnRpcService {
             .hook(
                 "htlc_accepted",
                 |plugin: Plugin<Arc<ClnHtlcInterceptor>>, value: serde_json::Value| async move {
-                    // This callback needs to be `Sync`, so we use task::spawn
-                    let handle = spawn("cln intercept htlc", async move {
-                        // Handle core-lightning "htlc_accepted" events
-                        // by passing the HTLC to the interceptor in the plugin state
-                        let payload: HtlcAccepted = serde_json::from_value(value)?;
-                        Ok(plugin.state().intercept_htlc(payload).await)
-                    }).expect("some handle on non-wasm");
-                    handle.await?
+                    let payload: HtlcAccepted = serde_json::from_value(value)?;
+                    Ok(plugin.state().intercept_htlc(payload).await)
                 },
             )
             // Shutdown the plugin when lightningd is shutting down or when the plugin is stopped
@@ -586,7 +582,9 @@ impl ClnHtlcInterceptor {
 
         info!(?short_channel_id, "Intercepted htlc with SCID");
 
-        if let Some(sender) = &*self.sender.lock().await {
+        // Clone the sender to avoid holding the lock while sending the HTLC
+        let sender = self.sender.lock().await.clone();
+        if let Some(sender) = sender {
             let payment_hash = payload.htlc.payment_hash.to_vec();
 
             let incoming_chan_id =
@@ -618,20 +616,20 @@ impl ClnHtlcInterceptor {
 
                     // If the gateway does not respond within the HTLC expiry,
                     // Automatically respond with a failure message.
-                    tokio::time::timeout(Duration::from_secs(30), async {
+                    tokio::time::timeout(MAX_HTLC_PROCESSING_DURATION, async {
                         receiver.await.unwrap_or_else(|e| {
-                            error!("Failed to receive outcome of intercepted htlc: {:?}", e);
+                            error!("Failed to receive outcome of intercepted htlc: {e:?}");
                             htlc_processing_failure()
                         })
                     })
                     .await
                     .unwrap_or_else(|e| {
-                        error!("await_htlc_processing error {:?}", e);
+                        error!("await_htlc_processing error {e:?}");
                         htlc_processing_failure()
                     })
                 }
                 Err(e) => {
-                    error!("Failed to send htlc to subscription: {:?}", e);
+                    error!("Failed to send htlc to subscription: {e:?}");
                     htlc_processing_failure()
                 }
             };
