@@ -1211,6 +1211,9 @@ dependencies = [
 [[package]]
 name = "fedimint-build"
 version = "0.3.0-alpha"
+dependencies = [
+ "serde_json",
+]
 
 [[package]]
 name = "fedimint-cli"
