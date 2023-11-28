@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
 use std::hash::Hasher;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
 use bitcoin::hashes::hex::FromHex;
@@ -26,7 +26,7 @@ use fedimint_ln_server::Lightning;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::common::MintCommonInit;
 use fedimint_mint_server::Mint;
-use fedimint_rocksdb::RocksDb;
+use fedimint_rocksdb::{RocksDb, RocksDbReadOnly};
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::db::SignedSessionOutcomePrefix;
 use fedimint_wallet_server::common::config::WalletConfig;
@@ -67,6 +67,10 @@ struct RecoveryTool {
     /// Network to operate on, has to be specified if --cfg isn't present
     #[arg(long, default_value = "bitcoin", requires = "descriptor")]
     network: Network,
+    /// Open the database in read-only mode, useful for debugging, should not be
+    /// used in production
+    #[arg(long)]
+    readonly: bool,
     #[command(subcommand)]
     strategy: TweakSource,
 }
@@ -104,6 +108,20 @@ fn tweak_parser(hex: &str) -> anyhow::Result<[u8; 33]> {
         .map_err(|_| anyhow!("tweaks have to be 33 bytes long"))
 }
 
+fn get_db(readonly: bool, path: &Path, module_decoders: ModuleDecoderRegistry) -> Database {
+    if readonly {
+        Database::new(
+            RocksDbReadOnly::open_read_only(path).expect("Error opening readonly DB"),
+            module_decoders,
+        )
+    } else {
+        Database::new(
+            RocksDb::open(path).expect("Error opening DB"),
+            module_decoders,
+        )
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     TracingSetup::default().init()?;
@@ -135,10 +153,7 @@ async fn main() -> anyhow::Result<()> {
                 .expect("Could not encode to stdout")
         }
         TweakSource::Utxos { legacy, db } => {
-            let db = Database::new(
-                RocksDb::open(db).expect("Error opening DB"),
-                Default::default(),
-            );
+            let db = get_db(opts.readonly, &db, Default::default());
 
             let db = if legacy {
                 db
@@ -185,7 +200,7 @@ async fn main() -> anyhow::Result<()> {
                 ),
             ]);
 
-            let db = Database::new(RocksDb::open(db).expect("Error opening DB"), decoders);
+            let db = get_db(opts.readonly, &db, decoders);
             let mut dbtx = db.begin_transaction().await;
 
             let mut change_tweak_idx: u64 = 0;

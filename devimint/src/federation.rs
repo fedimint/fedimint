@@ -166,14 +166,14 @@ impl Federation {
         cmd!("fedimint-cli", "--data-dir={cfg_dir}")
     }
 
-    pub async fn pegin(&self, amount: u64) -> Result<()> {
-        info!(amount, "Peg-in");
+    pub async fn pegin(&self, amount_sats: u64) -> Result<()> {
+        info!(amount_sats, "Peg-in");
         let deposit = cmd!(self, "deposit-address").out_json().await?;
         let deposit_address = deposit["address"].as_str().unwrap();
         let deposit_operation_id = deposit["operation_id"].as_str().unwrap();
 
         self.bitcoind
-            .send_to(deposit_address.to_owned(), amount)
+            .send_to(deposit_address.to_owned(), amount_sats)
             .await?;
         self.bitcoind.mine_blocks(21).await?;
 
