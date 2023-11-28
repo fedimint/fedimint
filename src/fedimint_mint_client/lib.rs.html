@@ -2018,14 +2018,14 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MintOperationMeta {
-    <span class="kw">pub </span>variant: MintOperationMetaVariants,
+    <span class="kw">pub </span>variant: MintOperationMetaVariant,
     <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>extra_meta: serde_json::Value,
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
-</span><span class="kw">pub enum </span>MintOperationMetaVariants {
+</span><span class="kw">pub enum </span>MintOperationMetaVariant {
     Reissuance {
         out_point: OutPoint,
     },
@@ -2804,7 +2804,7 @@
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
             .expect(<span class="string">&quot;MintClientModule::reissue_external_notes extra_meta is serializable&quot;</span>);
         <span class="kw">let </span>operation_meta_gen = <span class="kw">move </span>|txid, <span class="kw">_</span>| MintOperationMeta {
-            variant: MintOperationMetaVariants::Reissuance {
+            variant: MintOperationMetaVariant::Reissuance {
                 out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
             },
             amount,
@@ -2838,7 +2838,7 @@
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;ReissueExternalNotesState&gt;&gt; {
         <span class="kw">let </span>operation = <span class="self">self</span>.mint_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>out_point = <span class="kw">match </span>operation.meta::&lt;MintOperationMeta&gt;().variant {
-            MintOperationMetaVariants::Reissuance { out_point } =&gt; out_point,
+            MintOperationMetaVariant::Reissuance { out_point } =&gt; out_point,
             <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a reissuance&quot;</span>),
         };
 
@@ -2933,7 +2933,7 @@
                             operation_id,
                             MintCommonInit::KIND.as_str(),
                             MintOperationMeta {
-                                variant: MintOperationMetaVariants::SpendOOB {
+                                variant: MintOperationMetaVariant::SpendOOB {
                                     requested_amount,
                                     oob_notes: oob_notes.clone(),
                                 },
@@ -3009,7 +3009,7 @@
         <span class="kw">let </span>operation = <span class="self">self</span>.mint_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!<span class="macro">matches!</span>(
             operation.meta::&lt;MintOperationMeta&gt;().variant,
-            MintOperationMetaVariants::SpendOOB { .. }
+            MintOperationMetaVariant::SpendOOB { .. }
         ) {
             <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a out-of-band spend&quot;</span>);
         };
