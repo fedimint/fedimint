@@ -541,6 +541,11 @@
 <a href="#541" id="541">541</a>
 <a href="#542" id="542">542</a>
 <a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -781,6 +786,11 @@
 
     <span class="kw">async fn </span>get_federation_audit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;AuditSummary&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>;
+        <span class="comment">// Writes are related to compacting audit keys, which we can safely ignore
+        // within an API request since the compaction will happen when constructing an
+        // audit in the consensus server
+        </span>dbtx.ignore_uncommitted();
+
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
         <span class="kw">let </span><span class="kw-2">mut </span>module_instance_id_to_kind: HashMap&lt;ModuleInstanceId, String&gt; = HashMap::new();
         <span class="kw">for </span>(module_instance_id, kind, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
