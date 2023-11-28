@@ -404,6 +404,8 @@ Examples:
         /// Which server to send request to
         #[clap(long = "peer-id")]
         peer_id: Option<u16>,
+        #[clap(long = "auth")]
+        auth: Option<String>,
     },
 
     /// Wait for the fed to reach a consensus block count
@@ -644,10 +646,14 @@ impl FedimintCli {
                 method,
                 params,
                 peer_id,
+                auth,
             }) => {
                 let params: Value = serde_json::from_str(&params)
                     .map_err_cli_msg(CliErrorKind::InvalidValue, "Invalid JSON-RPC parameters")?;
-                let params = ApiRequestErased::new(params);
+                let mut params = ApiRequestErased::new(params);
+                if let Some(auth) = auth {
+                    params = params.with_auth(ApiAuth(auth))
+                }
                 let ws_api: Arc<_> = WsFederationApi::from_config(
                     cli.build_client_ng(&self.module_inits, None)
                         .await?
