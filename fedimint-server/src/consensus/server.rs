@@ -29,7 +29,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{timing, PeerId};
 use futures::StreamExt;
 use tokio::sync::watch;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, info, warn};
 
 use crate::atomic_broadcast::data_provider::{DataProvider, UnitData};
 use crate::atomic_broadcast::finalization_handler::FinalizationHandler;
@@ -578,6 +578,10 @@ impl ConsensusServer {
 
         let mut dbtx = self.db.begin_transaction().await;
 
+        // we disable the warning for uncommitted writes in the database transaction
+        // since we may return early because of a mid session crash or a rejected item
+        dbtx.ignore_uncommitted();
+
         if let Some(accepted_item) = dbtx
             .get_value(&AcceptedItemKey(item_index.to_owned()))
             .await
@@ -590,20 +594,11 @@ impl ConsensusServer {
             bail!("Item was discarded before we recovered");
         }
 
-        match {
-            // dbtx_nc has to be dropped before deactivating uncommitted warnings to avoid
-            // lifetime issues
-            let mut dbtx_nc = dbtx.to_ref_nc();
-            self.process_consensus_item_with_db_transaction(&mut dbtx_nc, item.clone(), peer)
-                .await
-        } {
-            Ok(()) => {}
-            Err(error) => {
-                dbtx.ignore_uncommitted();
-                trace!(target: LOG_CONSENSUS, ?item, ?error, "Ignoring rejected consensus item");
-                return Err(error);
-            }
-        }
+        self.process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item.clone(), peer)
+            .await?;
+
+        // after this point the we have to commit the database transaction
+        dbtx.warn_uncommitted();
 
         dbtx.insert_entry(&AcceptedItemKey(item_index), &AcceptedItem { item, peer })
             .await;
