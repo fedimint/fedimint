@@ -29,7 +29,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{timing, PeerId};
 use futures::StreamExt;
 use tokio::sync::watch;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::atomic_broadcast::data_provider::{DataProvider, UnitData};
 use crate::atomic_broadcast::finalization_handler::FinalizationHandler;
@@ -590,8 +590,20 @@ impl ConsensusServer {
             bail!("Item was discarded before we recovered");
         }
 
-        self.process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item.clone(), peer)
-            .await?;
+        match {
+            // dbtx_nc has to be dropped before deactivating uncommitted warnings to avoid
+            // lifetime issues
+            let mut dbtx_nc = dbtx.to_ref_nc();
+            self.process_consensus_item_with_db_transaction(&mut dbtx_nc, item.clone(), peer)
+                .await
+        } {
+            Ok(()) => {}
+            Err(error) => {
+                dbtx.ignore_uncommitted();
+                trace!(target: LOG_CONSENSUS, ?item, ?error, "Ignoring rejected consensus item");
+                return Err(error);
+            }
+        }
 
         dbtx.insert_entry(&AcceptedItemKey(item_index), &AcceptedItem { item, peer })
             .await;
