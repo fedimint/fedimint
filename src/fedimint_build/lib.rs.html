@@ -96,6 +96,21 @@
 <a href="#96" id="96">96</a>
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::process::Command;
@@ -115,8 +130,23 @@
         <span class="macro">println!</span>(<span class="string">&quot;cargo:rustc-env={GIT_HASH_ENV}={hash}&quot;</span>);
         <span class="kw">return </span><span class="prelude-val">Ok</span>(());
     }
-    <span class="comment">// TODO: We&#39;re going to need some extra handling here for published crates being
-    // built somewhere in the `$HOME/.cargo/...`, probably detecting it and
+
+    <span class="comment">// In case we are compiling a released crate we don&#39;t have a git directory, but
+    // can read the version hash from .cargo_vcs_info.json
+    </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(file) = std::fs::File::open(<span class="string">&quot;./.cargo_vcs_info.json&quot;</span>) {
+        <span class="kw">let </span>info: serde_json::Value = serde_json::from_reader(file)
+            .map_err(|e| <span class="macro">format!</span>(<span class="string">&quot;Failed to parse .cargo_vcs_info.json: {}&quot;</span>, e))<span class="question-mark">?</span>;
+        <span class="kw">let </span>hash = info[<span class="string">&quot;git&quot;</span>][<span class="string">&quot;sha1&quot;</span>].as_str().ok_or_else(|| {
+            <span class="macro">format!</span>(
+                <span class="string">&quot;Failed to parse .cargo_vcs_info.json: no `.git.sha` field: {:?}&quot;</span>,
+                info
+            )
+        })<span class="question-mark">?</span>;
+        <span class="macro">println!</span>(<span class="string">&quot;cargo:rustc-env={GIT_HASH_ENV}={hash}&quot;</span>);
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+    }
+
+    <span class="comment">// built somewhere in the `$HOME/.cargo/...`, probably detecting it and
     // using a release version instead.
 
     // Note: best effort approach to force a re-run when the git hash in
