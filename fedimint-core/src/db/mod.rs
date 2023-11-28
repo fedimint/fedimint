@@ -1431,6 +1431,12 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
         self
     }
 
+    /// Create warnings about uncommitted writes
+    pub fn warn_uncommitted(&mut self) -> &mut Self {
+        self.commit_tracker.ignore_uncommitted = false;
+        self
+    }
+
     /// Register a hook that will be run after commit succeeds.
     #[instrument(level = "debug", skip_all, ret)]
     pub fn on_commit(&mut self, f: maybe_add_send!(impl FnOnce() + 'static)) {
