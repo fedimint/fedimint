@@ -5,6 +5,7 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "Bitcoin Core connectivity used by Fedimint"
 license = "MIT"
+repository = "https://github.com/fedimint/fedimint"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
