@@ -329,8 +329,7 @@ impl ServerModule for Wallet {
         // acceptable risk since subsequent rounds of consensus will reattempt to fetch
         // the latest block count.
         if let Ok(block_count) = self.get_block_count().await {
-            let block_count_proposal =
-                block_count.saturating_sub(self.cfg.consensus.finality_delay);
+            let block_count_vote = block_count.saturating_sub(self.cfg.consensus.finality_delay);
 
             let current_vote = dbtx
                 .get_value(&BlockCountVoteKey(self.our_peer_id))
@@ -339,14 +338,12 @@ impl ServerModule for Wallet {
 
             debug!(
                 ?current_vote,
-                ?block_count_proposal,
+                ?block_count_vote,
                 ?block_count,
                 "Considering proposing block count"
             );
 
-            if current_vote < block_count_proposal {
-                items.push(WalletConsensusItem::BlockCount(block_count_proposal));
-            }
+            items.push(WalletConsensusItem::BlockCount(block_count_vote));
         }
 
         let current_fee_rate_vote = dbtx
@@ -368,9 +365,7 @@ impl ServerModule for Wallet {
             }
         };
 
-        if fee_rate_proposal != current_fee_rate_vote {
-            items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
-        }
+        items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
 
         items
     }
