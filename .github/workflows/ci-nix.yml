@@ -163,7 +163,7 @@ jobs:
 
       - name: Run cargo audit
         run: |
-          nix flake lock --update-input advisory-db
+          nix flake update advisory-db
           nix build -L .#ci.cargoAudit
 
       - name: Run cargo deny
