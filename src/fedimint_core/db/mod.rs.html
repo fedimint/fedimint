@@ -2779,6 +2779,12 @@
 <a href="#2779" id="2779">2779</a>
 <a href="#2780" id="2780">2780</a>
 <a href="#2781" id="2781">2781</a>
+<a href="#2782" id="2782">2782</a>
+<a href="#2783" id="2783">2783</a>
+<a href="#2784" id="2784">2784</a>
+<a href="#2785" id="2785">2785</a>
+<a href="#2786" id="2786">2786</a>
+<a href="#2787" id="2787">2787</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -4209,6 +4215,12 @@
     <span class="doccomment">/// Cancel the tx to avoid debugging warnings about uncommitted writes
     </span><span class="kw">pub fn </span>ignore_uncommitted(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
         <span class="self">self</span>.commit_tracker.ignore_uncommitted = <span class="bool-val">true</span>;
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Create warnings about uncommitted writes
+    </span><span class="kw">pub fn </span>warn_uncommitted(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="self">self</span>.commit_tracker.ignore_uncommitted = <span class="bool-val">false</span>;
         <span class="self">self
     </span>}
 
