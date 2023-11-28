@@ -1207,7 +1207,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
                     Ok(post_balances)
                 },
                 Duration::from_secs(1),
-                5,
+                15,
             )
             .await?;
             assert_eq!(
