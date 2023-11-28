@@ -5,6 +5,7 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "RFC5869 HKDF implementation on top of bitcoin_hashes"
 license = "MIT"
+repository = "https://github.com/fedimint/fedimint"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]

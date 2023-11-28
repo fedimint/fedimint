@@ -4,6 +4,7 @@ version = "0.2.0-rc2"
 edition = "2021"
 license = "MIT"
 description = "fedimint-metrics allows exporting prometheus metrics from Fedimint."
+repository = "https://github.com/fedimint/fedimint"
 
 [lib]
 name = "fedimint_metrics"
