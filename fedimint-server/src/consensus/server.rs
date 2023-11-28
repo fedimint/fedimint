@@ -1,6 +1,6 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant, SystemTime};
 
 use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
@@ -24,6 +24,7 @@ use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
 };
 use fedimint_core::task::{sleep, spawn, RwLock, TaskGroup, TaskHandle};
+use fedimint_core::time::now;
 use fedimint_core::timing::TimeReporter;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{timing, PeerId};
@@ -50,8 +51,11 @@ use crate::{atomic_broadcast, LOG_CONSENSUS, LOG_CORE};
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
 
-pub(crate) type LatestContributionByPeer = HashMap<PeerId, u64>;
+/// Contains the latest session during which a heartbeat was received from each
+/// peer, the time of receiving it and the consensus latency of that heartbeat
+pub(crate) type LatestContributionByPeer = BTreeMap<PeerId, (u64, SystemTime, Duration)>;
 
 /// Runs the main server consensus loop
 pub struct ConsensusServer {
@@ -62,7 +66,7 @@ pub struct ConsensusServer {
     api_endpoints: Vec<(PeerId, SafeUrl)>,
     cfg: ServerConfig,
     submission_receiver: Receiver<ConsensusItem>,
-    latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
+    latest_heartbeat_by_peer: Arc<RwLock<LatestContributionByPeer>>,
 }
 
 impl ConsensusServer {
@@ -174,7 +178,7 @@ impl ConsensusServer {
                 &cfg.consensus.modules,
                 &module_inits,
             ),
-            latest_contribution_by_peer: Arc::clone(&latest_contribution_by_peer),
+            latest_heartbeat_by_peer: Arc::clone(&latest_contribution_by_peer),
             peer_status_channels,
             consensus_status_cache: ExpiringCache::new(Duration::from_millis(500)),
         };
@@ -202,7 +206,7 @@ impl ConsensusServer {
             api_endpoints,
             cfg: cfg.clone(),
             submission_receiver,
-            latest_contribution_by_peer,
+            latest_heartbeat_by_peer: latest_contribution_by_peer,
             modules,
         };
 
@@ -571,11 +575,6 @@ impl ConsensusServer {
 
         debug!("Peer {peer}: {}", super::debug::item_message(&item));
 
-        self.latest_contribution_by_peer
-            .write()
-            .await
-            .insert(peer, session_index);
-
         let mut dbtx = self.db.begin_transaction().await;
 
         if let Some(accepted_item) = dbtx
@@ -590,8 +589,13 @@ impl ConsensusServer {
             bail!("Item was discarded before we recovered");
         }
 
-        self.process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item.clone(), peer)
-            .await?;
+        self.process_consensus_item_with_db_transaction(
+            session_index,
+            &mut dbtx.to_ref_nc(),
+            item.clone(),
+            peer,
+        )
+        .await?;
 
         dbtx.insert_entry(&AcceptedItemKey(item_index), &AcceptedItem { item, peer })
             .await;
@@ -625,6 +629,7 @@ impl ConsensusServer {
 
     async fn process_consensus_item_with_db_transaction(
         &self,
+        session_index: u64,
         dbtx: &mut DatabaseTransaction<'_>,
         consensus_item: ConsensusItem,
         peer_id: PeerId,
@@ -665,6 +670,18 @@ impl ConsensusServer {
 
                 dbtx.insert_entry(&AcceptedTransactionKey(txid), &modules_ids)
                     .await;
+
+                Ok(())
+            }
+            ConsensusItem::Heartbeat(send_time) => {
+                let now = now();
+                let latency = now.duration_since(send_time).unwrap_or_default();
+
+                debug!(target: LOG_CONSENSUS, "Received heratbeat from {} with latency {} ms sent at {:?}", peer_id, latency.as_millis(), send_time);
+                self.latest_heartbeat_by_peer
+                    .write()
+                    .await
+                    .insert(peer_id, (session_index, now, latency));
 
                 Ok(())
             }
@@ -722,7 +739,7 @@ impl ConsensusServer {
             match result {
                 Ok(signed_session_outcome) => return signed_session_outcome,
                 Err(error) => {
-                    tracing::error!("Error while requesting signed session outcome: {}", error)
+                    tracing::error!(target: LOG_CONSENSUS, "Error while requesting signed session outcome: {}", error)
                 }
             }
         }
@@ -739,6 +756,8 @@ async fn submit_module_consensus_items(
         .spawn(
             "submit_module_consensus_items",
             move |task_handle| async move {
+                let mut next_heartbeat = Instant::now();
+
                 while !task_handle.is_shutting_down() {
                     let mut dbtx = db.begin_transaction().await;
 
@@ -759,6 +778,15 @@ async fn submit_module_consensus_items(
                                 .await
                                 .ok();
                         }
+                    }
+
+                    if next_heartbeat <= Instant::now() {
+                        next_heartbeat = Instant::now() + HEARTBEAT_INTERVAL;
+                        debug!(target: LOG_CONSENSUS, "Sending Heartbeat");
+                        submission_sender
+                            .send(ConsensusItem::Heartbeat(now()))
+                            .await
+                            .ok();
                     }
 
                     sleep(Duration::from_secs(1)).await;

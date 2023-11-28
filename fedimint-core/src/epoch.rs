@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use fedimint_core::core::DynModuleConsensusItem as ModuleConsensusItem;
 use fedimint_core::encoding::{Decodable, Encodable};
 
@@ -10,6 +12,9 @@ pub enum ConsensusItem {
     Transaction(Transaction),
     /// Any data that modules require consensus on
     Module(ModuleConsensusItem),
+    /// Each peer sends heartbeats on a regular basis to indicate that they are
+    /// contributing
+    Heartbeat(SystemTime),
     /// Allows us to add new items in the future without crashing old clients
     /// that try to interpret the session log.
     #[encodable_default]

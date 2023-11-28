@@ -2,13 +2,13 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
 use fedimint_core::api::{
-    FederationStatus, PeerConnectionStatus, PeerStatus, ServerStatus, StatusResponse,
+    FederationStatus, Heartbeat, PeerConnectionStatus, PeerStatus, ServerStatus, StatusResponse,
 };
 use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
 use fedimint_core::config::{ClientConfig, JsonWithKind};
@@ -83,7 +83,7 @@ pub struct ConsensusApi {
     /// For sending API events to consensus such as transactions
     pub submission_sender: async_channel::Sender<ConsensusItem>,
     pub peer_status_channels: PeerStatusChannels,
-    pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
+    pub latest_heartbeat_by_peer: Arc<RwLock<LatestContributionByPeer>>,
     pub consensus_status_cache: ExpiringCache<ApiResult<FederationStatus>>,
     pub supported_api_versions: SupportedApiVersionsSummary,
 }
@@ -184,14 +184,19 @@ impl ConsensusApi {
 
     pub async fn get_federation_status(&self) -> ApiResult<FederationStatus> {
         let peers_connection_status = self.peer_status_channels.get_all_status().await;
-        let latest_contribution_by_peer = self.latest_contribution_by_peer.read().await.clone();
+        let latest_heartbeat_by_peer = self.latest_heartbeat_by_peer.read().await.clone();
         let session_count = self.session_count().await;
 
         let status_by_peer = peers_connection_status
             .into_iter()
             .map(|(peer, connection_status)| {
-                let last_contribution = latest_contribution_by_peer.get(&peer).cloned();
-                let flagged = last_contribution.unwrap_or(0) + 1 < session_count;
+                let last_heartbeat = latest_heartbeat_by_peer.get(&peer).cloned().map(|hb| Heartbeat {
+                    session: hb.0,
+                    timestamp: hb.1.duration_since(UNIX_EPOCH).expect("Someone set their clock horribly wrong").as_secs(),
+                    latency_ms: hb.2.as_millis().try_into().unwrap_or(u64::MAX),
+                });
+
+                let flagged = last_heartbeat.as_ref().map(|hb| hb.session).unwrap_or(0) + 1 < session_count;
                 let connection_status = match connection_status {
                     Ok(status) => status,
                     Err(e) => {
@@ -201,7 +206,7 @@ impl ConsensusApi {
                 };
 
                 let consensus_status = PeerStatus {
-                    last_contribution,
+                    last_heartbeat,
                     flagged,
                     connection_status,
                 };

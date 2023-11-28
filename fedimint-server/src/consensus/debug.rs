@@ -23,6 +23,7 @@ pub fn item_message(item: &ConsensusItem) -> String {
             }
             tx_debug
         }
+        ConsensusItem::Heartbeat(_) => "Heartbeat".to_string(),
         ConsensusItem::Default { variant, .. } => {
             format!("Unknown CI variant: {variant}")
         }

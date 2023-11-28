@@ -959,11 +959,21 @@ pub struct FederationStatus {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PeerStatus {
-    pub last_contribution: Option<u64>,
+    pub last_heartbeat: Option<Heartbeat>,
     pub connection_status: PeerConnectionStatus,
     /// Indicates that this peer needs attention from the operator since
     /// it has not contributed to the consensus in a long time
     pub flagged: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Heartbeat {
+    /// Session in which the last heartbeat was received
+    pub session: u64,
+    /// UNIX timestamp of the last heartbeat
+    pub timestamp: u64,
+    /// The latency of the heartbeat
+    pub latency_ms: u64,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
