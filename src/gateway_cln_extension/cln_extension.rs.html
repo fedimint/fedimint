@@ -644,8 +644,6 @@
 <a href="#644" id="644">644</a>
 <a href="#645" id="645">645</a>
 <a href="#646" id="646">646</a>
-<a href="#647" id="647">647</a>
-<a href="#648" id="648">648</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -660,7 +658,7 @@
 <span class="kw">use </span>cln_plugin::{options, Builder, Plugin};
 <span class="kw">use </span>cln_rpc::model;
 <span class="kw">use </span>cln_rpc::primitives::ShortChannelId;
-<span class="kw">use </span>fedimint_core::task::{spawn, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
@@ -680,6 +678,8 @@
 <span class="kw">use </span>tonic::transport::Server;
 <span class="kw">use </span>tonic::Status;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
+
+<span class="kw">const </span>MAX_HTLC_PROCESSING_DURATION: Duration = Duration::MAX;
 
 <span class="attr">#[derive(Parser)]
 </span><span class="kw">pub struct </span>ClnExtensionOpts {
@@ -778,15 +778,9 @@
             .hook(
                 <span class="string">&quot;htlc_accepted&quot;</span>,
                 |plugin: Plugin&lt;Arc&lt;ClnHtlcInterceptor&gt;&gt;, value: serde_json::Value| <span class="kw">async move </span>{
-                    <span class="comment">// This callback needs to be `Sync`, so we use task::spawn
-                    </span><span class="kw">let </span>handle = spawn(<span class="string">&quot;cln intercept htlc&quot;</span>, <span class="kw">async move </span>{
-                        <span class="comment">// Handle core-lightning &quot;htlc_accepted&quot; events
-                        // by passing the HTLC to the interceptor in the plugin state
-                        </span><span class="kw">let </span>payload: HtlcAccepted = serde_json::from_value(value)<span class="question-mark">?</span>;
-                        <span class="prelude-val">Ok</span>(plugin.state().intercept_htlc(payload).<span class="kw">await</span>)
-                    }).expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
-                    handle.<span class="kw">await</span><span class="question-mark">?
-                </span>},
+                    <span class="kw">let </span>payload: HtlcAccepted = serde_json::from_value(value)<span class="question-mark">?</span>;
+                    <span class="prelude-val">Ok</span>(plugin.state().intercept_htlc(payload).<span class="kw">await</span>)
+                },
             )
             <span class="comment">// Shutdown the plugin when lightningd is shutting down or when the plugin is stopped
             // via `plugin stop` command. There&#39;s a chance that the subscription is never called in
@@ -1234,7 +1228,9 @@
 
         <span class="macro">info!</span>(<span class="question-mark">?</span>short_channel_id, <span class="string">&quot;Intercepted htlc with SCID&quot;</span>);
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(sender) = <span class="kw-2">&amp;*</span><span class="self">self</span>.sender.lock().<span class="kw">await </span>{
+        <span class="comment">// Clone the sender to avoid holding the lock while sending the HTLC
+        </span><span class="kw">let </span>sender = <span class="self">self</span>.sender.lock().<span class="kw">await</span>.clone();
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(sender) = sender {
             <span class="kw">let </span>payment_hash = payload.htlc.payment_hash.to_vec();
 
             <span class="kw">let </span>incoming_chan_id =
@@ -1266,20 +1262,20 @@
 
                     <span class="comment">// If the gateway does not respond within the HTLC expiry,
                     // Automatically respond with a failure message.
-                    </span>tokio::time::timeout(Duration::from_secs(<span class="number">30</span>), <span class="kw">async </span>{
+                    </span>tokio::time::timeout(MAX_HTLC_PROCESSING_DURATION, <span class="kw">async </span>{
                         receiver.<span class="kw">await</span>.unwrap_or_else(|e| {
-                            <span class="macro">error!</span>(<span class="string">&quot;Failed to receive outcome of intercepted htlc: {:?}&quot;</span>, e);
+                            <span class="macro">error!</span>(<span class="string">&quot;Failed to receive outcome of intercepted htlc: {e:?}&quot;</span>);
                             htlc_processing_failure()
                         })
                     })
                     .<span class="kw">await
                     </span>.unwrap_or_else(|e| {
-                        <span class="macro">error!</span>(<span class="string">&quot;await_htlc_processing error {:?}&quot;</span>, e);
+                        <span class="macro">error!</span>(<span class="string">&quot;await_htlc_processing error {e:?}&quot;</span>);
                         htlc_processing_failure()
                     })
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">error!</span>(<span class="string">&quot;Failed to send htlc to subscription: {:?}&quot;</span>, e);
+                    <span class="macro">error!</span>(<span class="string">&quot;Failed to send htlc to subscription: {e:?}&quot;</span>);
                     htlc_processing_failure()
                 }
             };
