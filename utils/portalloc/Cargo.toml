@@ -5,6 +5,7 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "Port allocation utility for Fedimint"
 license = "MIT"
+repository = "https://github.com/fedimint/fedimint"
 
 [lib]
 name = "fedimint_portalloc"

@@ -4,6 +4,7 @@ version = "0.2.0-rc2"
 edition = "2021"
 license = "MIT"
 description = "Allows using bip39 mnemonic phrases to generate fedimint client keys"
+repository = "https://github.com/fedimint/fedimint"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
