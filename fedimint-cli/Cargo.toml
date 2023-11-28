@@ -19,6 +19,7 @@ path = "src/lib.rs"
 anyhow = "1.0.66"
 async-trait = "0.1.73"
 base64 = "0.20.0"
+bip39 = { version = "2.0.0", features = ["rand"] }
 bitcoin = "0.29.2"
 bitcoin_hashes = "0.11.0"
 time = { version = "0.3.25", features = [ "formatting" ] }
@@ -26,6 +27,7 @@ clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error
 futures = "0.3.28"
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
 fedimint-aead = { version = "0.3.0-alpha", path = "../crypto/aead" }
+fedimint-bip39 = { version = "0.3.0-alpha", path = "../fedimint-bip39" }
 fedimint-client = { version = "0.3.0-alpha", path = "../fedimint-client" }
 fedimint-core = { version = "0.3.0-alpha", path = "../fedimint-core" }
 fedimint-rocksdb = { version = "0.3.0-alpha", path = "../fedimint-rocksdb" }

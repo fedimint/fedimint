@@ -13,11 +13,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, result};
 
+use bip39::Mnemonic;
 use clap::{CommandFactory, Parser, Subcommand};
 use db_locked::{Locked, LockedBuilder};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
+use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
-use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
+use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 use fedimint_client::{get_invite_code_from_db, ClientBuilder, FederationInfo};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
@@ -292,23 +294,30 @@ impl Opts {
         invite_code: Option<InviteCode>,
     ) -> CliResult<fedimint_client::ClientArc> {
         let mut client_builder = self.build_client_builder(module_inits, invite_code).await?;
-        let client_secret = match client_builder
-            .load_decodable_client_secret::<[u8; 64]>()
+        let mnemonic = match client_builder
+            .load_decodable_client_secret::<Vec<u8>>()
             .await
         {
-            Ok(secret) => secret,
+            Ok(entropy) => Mnemonic::from_entropy(&entropy).map_err_cli_general()?,
             Err(_) => {
-                info!("Generating secret and writing to client storage");
-                let secret = PlainRootSecretStrategy::random(&mut thread_rng());
+                info!("Generating mnemonic and writing entropy to client storage");
+                let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut thread_rng());
                 client_builder
-                    .store_encodable_client_secret(secret)
+                    .store_encodable_client_secret(mnemonic.to_entropy())
                     .await
                     .map_err_cli_general()?;
-                secret
+                mnemonic
             }
         };
+        let federation_id = client_builder
+            .get_federation_id()
+            .await
+            .map_err_cli_general()?;
         client_builder
-            .build(PlainRootSecretStrategy::to_root_secret(&client_secret))
+            .build(get_default_client_secret(
+                &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
+                &federation_id,
+            ))
             .await
             .map_err_cli_general()
     }
@@ -539,35 +548,41 @@ impl FedimintCli {
             Command::VersionHash => Ok(CliOutput::VersionHash {
                 hash: env!("FEDIMINT_BUILD_CODE_VERSION").to_string(),
             }),
-            Command::Client(ClientCmd::Restore { secret }) => {
+            Command::Client(ClientCmd::Restore { mnemonic }) => {
+                let mnemonic = Mnemonic::from_str(&mnemonic).map_err_cli_general()?;
                 let mut client_builder = cli
                     .build_client_builder(&self.module_inits, None)
                     .await
                     .map_err_cli_general()?;
-                let client_secret = match client_builder
-                    .load_decodable_client_secret::<[u8; 64]>()
+                let mnemonic = match client_builder
+                    .load_decodable_client_secret::<Vec<u8>>()
                     .await
                 {
-                    Ok(existing_secret) if existing_secret == secret => secret,
+                    Ok(entropy) if entropy == mnemonic.to_entropy() => mnemonic,
                     Ok(_) => {
                         return Err(anyhow::anyhow!(
-                            "Provided secret does not match existing secret"
+                            "Provided mnemonic's entropy does not match existing entropy"
                         ))
                         .map_err_cli_general()
                     }
                     Err(_) => {
-                        info!("Generating secret and writing to client storage");
-                        let new_secret = PlainRootSecretStrategy::random(&mut thread_rng());
+                        info!("Generating mnemonic and writing entropy to client storage");
+                        let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut thread_rng());
                         client_builder
-                            .store_encodable_client_secret(new_secret)
+                            .store_encodable_client_secret(mnemonic.to_entropy())
                             .await
                             .map_err_cli_general()?;
-                        new_secret
+                        mnemonic
                     }
                 };
+                let federation_id = client_builder
+                    .get_federation_id()
+                    .await
+                    .map_err_cli_general()?;
                 let client = client_builder
-                    .build_restoring_from_backup(PlainRootSecretStrategy::to_root_secret(
-                        &client_secret,
+                    .build_restoring_from_backup(get_default_client_secret(
+                        &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
+                        &federation_id,
                     ))
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
