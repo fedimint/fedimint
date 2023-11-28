@@ -98,10 +98,10 @@ enum TweakSource {
     },
 }
 
-fn tweak_parser(hex: &str) -> anyhow::Result<[u8; 32]> {
+fn tweak_parser(hex: &str) -> anyhow::Result<[u8; 33]> {
     <Vec<u8> as FromHex>::from_hex(hex)?
         .try_into()
-        .map_err(|_| anyhow!("tasks have to be 32 bytes long"))
+        .map_err(|_| anyhow!("tweaks have to be 33 bytes long"))
 }
 
 #[tokio::main]
@@ -449,4 +449,19 @@ impl Translator<CompressedPublicKey, Key, ()> for SecretKeyInjector {
     ) -> Result<<Key as MiniscriptKey>::Hash160, ()> {
         unimplemented!()
     }
+}
+
+#[test]
+fn parses_valid_length_tweaks() {
+    use bitcoin::hashes::hex::ToHex;
+
+    let bad_length_tweak_hex = rand::random::<[u8; 32]>().to_hex();
+    // rand::random only supports random byte arrays up to 32 bytes
+    let good_length_tweak: [u8; 33] = core::array::from_fn(|_| rand::random::<u8>());
+    let good_length_tweak_hex = good_length_tweak.to_hex();
+    assert_eq!(
+        tweak_parser(good_length_tweak_hex.as_str()).expect("should parse valid length hex"),
+        good_length_tweak
+    );
+    assert!(tweak_parser(bad_length_tweak_hex.as_str()).is_err());
 }
