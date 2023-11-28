@@ -1943,6 +1943,7 @@ dependencies = [
  "fedimint-wallet-server",
  "futures",
  "miniscript",
+ "rand",
  "secp256k1 0.24.3",
  "serde",
  "serde_json",
