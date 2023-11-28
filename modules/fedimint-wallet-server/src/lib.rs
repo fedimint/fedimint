@@ -340,16 +340,11 @@ impl ServerModule for Wallet {
                 ?current_vote,
                 ?block_count_vote,
                 ?block_count,
-                "Considering proposing block count"
+                "Proposing block count"
             );
 
             items.push(WalletConsensusItem::BlockCount(block_count_vote));
         }
-
-        let current_fee_rate_vote = dbtx
-            .get_value(&FeeRateVoteKey(self.our_peer_id))
-            .await
-            .unwrap_or(self.cfg.consensus.default_fee);
 
         // If there's an error getting the fee rate from the node we default to the most
         // recent fee rate vote. Using an alternative fee rate may cause unwanted
@@ -361,7 +356,10 @@ impl ServerModule for Wallet {
                     "Error while calling get_free_rate_opt, using most recent fee rate vote: {:?}",
                     err
                 );
-                current_fee_rate_vote
+
+                dbtx.get_value(&FeeRateVoteKey(self.our_peer_id))
+                    .await
+                    .unwrap_or(self.cfg.consensus.default_fee)
             }
         };
 
