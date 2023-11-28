@@ -688,11 +688,15 @@ impl Gateway {
             // If the amount is "all", then we need to subtract the fees from
             // the amount we are withdrawing
             BitcoinAmountOrAll::All => {
-                let balance = bitcoin::Amount::from_sat(client.get_balance().await.msats * 1000);
+                let balance = bitcoin::Amount::from_sat(client.get_balance().await.msats / 1000);
                 let fees = wallet_module
                     .get_withdraw_fees(address.clone(), balance)
                     .await?;
-                (balance - fees.amount(), fees)
+                let withdraw_amount = balance.checked_sub(fees.amount());
+                if withdraw_amount.is_none() {
+                    return Err(GatewayError::InsufficientFunds);
+                }
+                (withdraw_amount.unwrap(), fees)
             }
             BitcoinAmountOrAll::Amount(amount) => (
                 amount,
@@ -1329,6 +1333,8 @@ pub enum GatewayError {
     GatewayConfigurationError(String),
     #[error("Unsupported Network: {0}")]
     UnsupportedNetwork(Network),
+    #[error("Insufficient funds")]
+    InsufficientFunds,
 }
 
 impl IntoResponse for GatewayError {
