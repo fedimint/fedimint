@@ -836,6 +836,14 @@
 <a href="#836" id="836">836</a>
 <a href="#837" id="837">837</a>
 <a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
@@ -1242,6 +1250,10 @@ Examples:
         <span class="doccomment">/// Which server to send request to
         </span><span class="attr">#[clap(long = <span class="string">&quot;peer-id&quot;</span>)]
         </span>peer_id: <span class="prelude-ty">Option</span>&lt;u16&gt;,
+        <span class="doccomment">/// Guardian password in case authenticated API endpoints are being
+        /// called. Only use together with --peer-id.
+        </span><span class="attr">#[clap(long = <span class="string">&quot;auth&quot;</span>)]
+        </span>auth: <span class="prelude-ty">Option</span>&lt;String&gt;,
     },
 
     <span class="doccomment">/// Wait for the fed to reach a consensus block count
@@ -1482,10 +1494,14 @@ Examples:
                 method,
                 params,
                 peer_id,
+                auth,
             }) =&gt; {
                 <span class="kw">let </span>params: Value = serde_json::from_str(<span class="kw-2">&amp;</span>params)
                     .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">&quot;Invalid JSON-RPC parameters&quot;</span>)<span class="question-mark">?</span>;
-                <span class="kw">let </span>params = ApiRequestErased::new(params);
+                <span class="kw">let </span><span class="kw-2">mut </span>params = ApiRequestErased::new(params);
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(auth) = auth {
+                    params = params.with_auth(ApiAuth(auth))
+                }
                 <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; = WsFederationApi::from_config(
                     cli.build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits, <span class="prelude-val">None</span>)
                         .<span class="kw">await</span><span class="question-mark">?
