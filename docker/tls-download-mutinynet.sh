@@ -82,7 +82,7 @@ count_dots() {
   tr -dc '.' <<<"$s" | wc -c
 }
 
-EXTERNAL_IP=$(curl -sSL ifconfig.me)
+EXTERNAL_IP=$(curl -4 -sSL ifconfig.me)
 
 SERVICES="fedimintd guardian-ui gatewayd gateway-ui rtl xmpp"
 
