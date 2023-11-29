@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Key","TweakSource"],"fn":["input_tweaks_output_present","main","tweak_descriptor","tweak_parser"],"struct":["ImportableWallet","ImportableWalletMin","RecoveryTool","SecretKeyInjector"]};
+window.SIDEBAR_ITEMS = {"enum":["Key","TweakSource"],"fn":["get_db","input_tweaks_output_present","main","tweak_descriptor","tweak_parser"],"struct":["ImportableWallet","ImportableWalletMin","RecoveryTool","SecretKeyInjector"]};

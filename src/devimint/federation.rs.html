@@ -697,14 +697,14 @@
         <span class="macro">cmd!</span>(<span class="string">&quot;fedimint-cli&quot;</span>, <span class="string">&quot;--data-dir={cfg_dir}&quot;</span>)
     }
 
-    <span class="kw">pub async fn </span>pegin(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">info!</span>(amount, <span class="string">&quot;Peg-in&quot;</span>);
+    <span class="kw">pub async fn </span>pegin(<span class="kw-2">&amp;</span><span class="self">self</span>, amount_sats: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="macro">info!</span>(amount_sats, <span class="string">&quot;Peg-in&quot;</span>);
         <span class="kw">let </span>deposit = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;deposit-address&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>deposit_address = deposit[<span class="string">&quot;address&quot;</span>].as_str().unwrap();
         <span class="kw">let </span>deposit_operation_id = deposit[<span class="string">&quot;operation_id&quot;</span>].as_str().unwrap();
 
         <span class="self">self</span>.bitcoind
-            .send_to(deposit_address.to_owned(), amount)
+            .send_to(deposit_address.to_owned(), amount_sats)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 

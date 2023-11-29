@@ -465,11 +465,26 @@
 <a href="#465" id="465">465</a>
 <a href="#466" id="466">466</a>
 <a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::hash::Hasher;
-<span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::path::{Path, PathBuf};
 
 <span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>bitcoin::hashes::hex::FromHex;
@@ -493,7 +508,7 @@
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_mint_server::common::MintCommonInit;
 <span class="kw">use </span>fedimint_mint_server::Mint;
-<span class="kw">use </span>fedimint_rocksdb::RocksDb;
+<span class="kw">use </span>fedimint_rocksdb::{RocksDb, RocksDbReadOnly};
 <span class="kw">use </span>fedimint_server::config::io::read_server_config;
 <span class="kw">use </span>fedimint_server::db::SignedSessionOutcomePrefix;
 <span class="kw">use </span>fedimint_wallet_server::common::config::WalletConfig;
@@ -534,6 +549,10 @@
     <span class="doccomment">/// Network to operate on, has to be specified if --cfg isn&#39;t present
     </span><span class="attr">#[arg(long, default_value = <span class="string">&quot;bitcoin&quot;</span>, requires = <span class="string">&quot;descriptor&quot;</span>)]
     </span>network: Network,
+    <span class="doccomment">/// Open the database in read-only mode, useful for debugging, should not be
+    /// used in production
+    </span><span class="attr">#[arg(long)]
+    </span>readonly: bool,
     <span class="attr">#[command(subcommand)]
     </span>strategy: TweakSource,
 }
@@ -571,6 +590,20 @@
         .map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">&quot;tweaks have to be 33 bytes long&quot;</span>))
 }
 
+<span class="kw">fn </span>get_db(readonly: bool, path: <span class="kw-2">&amp;</span>Path, module_decoders: ModuleDecoderRegistry) -&gt; Database {
+    <span class="kw">if </span>readonly {
+        Database::new(
+            RocksDbReadOnly::open_read_only(path).expect(<span class="string">&quot;Error opening readonly DB&quot;</span>),
+            module_decoders,
+        )
+    } <span class="kw">else </span>{
+        Database::new(
+            RocksDb::open(path).expect(<span class="string">&quot;Error opening DB&quot;</span>),
+            module_decoders,
+        )
+    }
+}
+
 <span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() -&gt; anyhow::Result&lt;()&gt; {
     TracingSetup::default().init()<span class="question-mark">?</span>;
@@ -602,10 +635,7 @@
                 .expect(<span class="string">&quot;Could not encode to stdout&quot;</span>)
         }
         TweakSource::Utxos { legacy, db } =&gt; {
-            <span class="kw">let </span>db = Database::new(
-                RocksDb::open(db).expect(<span class="string">&quot;Error opening DB&quot;</span>),
-                Default::default(),
-            );
+            <span class="kw">let </span>db = get_db(opts.readonly, <span class="kw-2">&amp;</span>db, Default::default());
 
             <span class="kw">let </span>db = <span class="kw">if </span>legacy {
                 db
@@ -652,7 +682,7 @@
                 ),
             ]);
 
-            <span class="kw">let </span>db = Database::new(RocksDb::open(db).expect(<span class="string">&quot;Error opening DB&quot;</span>), decoders);
+            <span class="kw">let </span>db = get_db(opts.readonly, <span class="kw-2">&amp;</span>db, decoders);
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
             <span class="kw">let </span><span class="kw-2">mut </span>change_tweak_idx: u64 = <span class="number">0</span>;
