@@ -406,7 +406,7 @@ Examples:
         peer_id: Option<u16>,
         /// Guardian password in case authenticated API endpoints are being
         /// called. Only use together with --peer-id.
-        #[clap(long = "auth")]
+        #[clap(long = "auth", requires = "peer_id")]
         auth: Option<String>,
     },
 
