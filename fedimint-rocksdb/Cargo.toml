@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-rocksdb"
-version = "0.2.0-rc2"
+version = "0.2.0-rc3"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-rocksdb provides a rocksdb-backed database implementation for Fedimint."
@@ -16,7 +16,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1.0.66"
 async-trait = "0.1.73"
-fedimint-core = { version = "0.2.0-rc2", path = "../fedimint-core" }
+fedimint-core = { version = "0.2.0-rc3", path = "../fedimint-core" }
 futures = "0.3.24"
 rocksdb = { version = "0.21.0" }
 tracing = "0.1.37"
