@@ -51,7 +51,6 @@ impl GatewayClientBuilder {
         lnrpc: Arc<dyn ILnRpcClient>,
         all_clients: FederationToClientMap,
         all_scids: ScidToFederationMap,
-        old_client: Option<fedimint_client::ClientArc>,
         gateway_db: Database,
     ) -> Result<fedimint_client::ClientArc> {
         let FederationConfig {
@@ -78,9 +77,7 @@ impl GatewayClientBuilder {
         let mut client_builder = ClientBuilder::default();
         client_builder.with_module_inits(registry);
         client_builder.with_primary_module(self.primary_module);
-        if let Some(old_client) = old_client {
-            client_builder.with_old_client_database(old_client);
-        } else {
+        {
             let db_path = self.work_dir.join(format!("{federation_id}.db"));
             {
                 let rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {

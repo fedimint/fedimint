@@ -1366,12 +1366,7 @@ pub struct ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
     config: Option<FederationInfo>,
-    db: Option<DatabaseSource>,
-}
-
-pub enum DatabaseSource {
-    Fresh(Database),
-    Reuse(ClientArc),
+    db: Option<Database>,
 }
 
 impl ClientBuilder {
@@ -1432,22 +1427,7 @@ impl ClientBuilder {
     // /// Uses this database to store the client state, allowing for flexibility
     // /// on the caller side by accepting a type-erased trait object.
     pub fn with_database(&mut self, db: Database) {
-        let was_replaced = self.db.replace(DatabaseSource::Fresh(db)).is_some();
-        assert!(
-            !was_replaced,
-            "Only one database can be given to the builder."
-        );
-    }
-
-    /// Re-uses the database of an old client. Useful for restarting the client
-    /// on recovery without fully shutting down the DB and not being able to
-    /// re-open it.
-    ///
-    /// ## Panics
-    /// If the old and new client use different config since that might make the
-    /// DB incompatible.
-    pub fn with_old_client_database(&mut self, client: ClientArc) {
-        let was_replaced = self.db.replace(DatabaseSource::Reuse(client)).is_some();
+        let was_replaced = self.db.replace(db).is_some();
         assert!(
             !was_replaced,
             "Only one database can be given to the builder."
@@ -1458,10 +1438,12 @@ impl ClientBuilder {
         &mut self,
         secret: T,
     ) -> anyhow::Result<()> {
-        let mut dbtx = match self.db.as_ref().ok_or(anyhow!("No database provided"))? {
-            DatabaseSource::Fresh(db) => db.begin_transaction().await,
-            DatabaseSource::Reuse(client) => client.db().begin_transaction().await,
-        };
+        let mut dbtx = self
+            .db
+            .as_ref()
+            .ok_or(anyhow!("No database provided"))?
+            .begin_transaction()
+            .await;
 
         // Don't overwrite an existing secret
         match dbtx.get_value(&EncodedClientSecretKey).await {
@@ -1477,10 +1459,12 @@ impl ClientBuilder {
     }
 
     pub async fn load_decodable_client_secret<T: Decodable>(&mut self) -> anyhow::Result<T> {
-        let mut dbtx = match self.db.as_ref().ok_or(anyhow!("No database provided"))? {
-            DatabaseSource::Fresh(db) => db.begin_transaction().await,
-            DatabaseSource::Reuse(client) => client.db().begin_transaction().await,
-        };
+        let mut dbtx = self
+            .db
+            .as_ref()
+            .ok_or(anyhow!("No database provided"))?
+            .begin_transaction()
+            .await;
 
         let client_secret = dbtx.get_value(&EncodedClientSecretKey).await;
         dbtx.commit_tx().await;
@@ -1496,10 +1480,6 @@ impl ClientBuilder {
 
     pub async fn get_federation_id(&self) -> anyhow::Result<FederationId> {
         if let Some(db) = self.db.as_ref() {
-            let db = match db {
-                DatabaseSource::Fresh(db) => db,
-                DatabaseSource::Reuse(client) => &client.inner.db,
-            };
             if let Some(config) = get_config_from_db(db).await {
                 return Ok(config.global.federation_id());
             }
@@ -1547,35 +1527,27 @@ impl ClientBuilder {
 
     /// Build a [`Client`] but do not start the executor
     pub async fn build_stopped(self, root_secret: DerivableSecret) -> anyhow::Result<ClientArc> {
-        let (config, decoders, db) = match self.db.ok_or(anyhow!("No database was provided"))? {
-            DatabaseSource::Fresh(db) => {
-                let config = get_config(&db, self.config.clone()).await?;
+        let (config, decoders, db) = {
+            let db = self.db.ok_or(anyhow!("No database was provided"))?;
+            let config = get_config(&db, self.config.clone()).await?;
 
-                let mut decoders = client_decoders(
-                    &self.module_inits,
-                    config
-                        .modules
-                        .iter()
-                        .map(|(module_instance, module_config)| {
-                            (*module_instance, module_config.kind())
-                        }),
-                )?;
-                decoders.register_module(
-                    TRANSACTION_SUBMISSION_MODULE_INSTANCE,
-                    ModuleKind::from_static_str("tx_submission"),
-                    tx_submission_sm_decoder(),
-                );
-                let db = db.with_decoders(decoders.clone());
+            let mut decoders = client_decoders(
+                &self.module_inits,
+                config
+                    .modules
+                    .iter()
+                    .map(|(module_instance, module_config)| {
+                        (*module_instance, module_config.kind())
+                    }),
+            )?;
+            decoders.register_module(
+                TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+                ModuleKind::from_static_str("tx_submission"),
+                tx_submission_sm_decoder(),
+            );
+            let db = db.with_decoders(decoders.clone());
 
-                (config, decoders, db)
-            }
-            DatabaseSource::Reuse(client) => {
-                let db = client.inner.db.clone();
-                let decoders = client.inner.decoders.clone();
-                let config = get_config(&db, self.config.clone()).await?;
-
-                (config, decoders, db)
-            }
+            (config, decoders, db)
         };
 
         let config = config.redecode_raw(&decoders)?;

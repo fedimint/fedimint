@@ -817,23 +817,26 @@ impl Gateway {
             let route_hints =
                 Self::fetch_lightning_route_hints(lnrpc.clone(), gateway_config.num_route_hints)
                     .await?;
-            let old_client = self.clients.read().await.get(&federation_id).cloned();
-            let all_clients = self.clients.clone();
-            let all_scids = self.scid_to_federation.clone();
 
-            let client = self
-                .client_builder
-                .build(
-                    gw_client_cfg.clone(),
-                    lightning_public_key,
-                    lightning_alias,
-                    lnrpc.clone(),
-                    all_clients,
-                    all_scids,
-                    old_client,
-                    self.gateway_db.clone(),
-                )
-                .await?;
+            let client =
+                if let Some(client) = self.clients.read().await.get(&federation_id).cloned() {
+                    client
+                } else {
+                    let all_clients = self.clients.clone();
+                    let all_scids = self.scid_to_federation.clone();
+
+                    self.client_builder
+                        .build(
+                            gw_client_cfg.clone(),
+                            lightning_public_key,
+                            lightning_alias,
+                            lnrpc.clone(),
+                            all_clients,
+                            all_scids,
+                            self.gateway_db.clone(),
+                        )
+                        .await?
+                };
 
             let federation_info = self.make_federation_info(&client, federation_id).await;
 
@@ -1051,24 +1054,28 @@ impl Gateway {
 
             for config in configs {
                 let federation_id = config.invite_code.federation_id();
-                let old_client = self.clients.read().await.get(&federation_id).cloned();
                 let all_clients = self.clients.clone();
                 let all_scids = self.scid_to_federation.clone();
 
-                if let Ok(client) = self
-                    .client_builder
-                    .build(
-                        config.clone(),
-                        lightning_public_key,
-                        lightning_alias.clone(),
-                        lnrpc.clone(),
-                        all_clients,
-                        all_scids,
-                        old_client,
-                        self.gateway_db.clone(),
-                    )
-                    .await
+                let client = if let Some(old_client) =
+                    self.clients.read().await.get(&federation_id).cloned()
                 {
+                    Ok(old_client)
+                } else {
+                    self.client_builder
+                        .build(
+                            config.clone(),
+                            lightning_public_key,
+                            lightning_alias.clone(),
+                            lnrpc.clone(),
+                            all_clients,
+                            all_scids,
+                            self.gateway_db.clone(),
+                        )
+                        .await
+                };
+
+                if let Ok(client) = client {
                     // Registering each client happens in the background, since we're loading
                     // the clients for the first time, just add them to
                     // the in-memory maps
