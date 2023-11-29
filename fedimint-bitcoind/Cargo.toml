@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-bitcoind"
-version = "0.2.0-rc2"
+version = "0.2.0-rc3"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "Bitcoin Core connectivity used by Fedimint"
@@ -21,8 +21,8 @@ bitcoincore-rpc = { version = "0.16.0", optional = true }
 electrum-client = {version = "0.12.0", optional = true }
 esplora-client = { version = "0.5.0", default-features = false, features = ["async", "async-https-rustls"], optional = true }
 lazy_static = "1.4.0"
-fedimint-core  = { version = "0.2.0-rc2", path = "../fedimint-core" }
-fedimint-logging = { version = "0.2.0-rc2", path = "../fedimint-logging" }
+fedimint-core  = { version = "0.2.0-rc3", path = "../fedimint-core" }
+fedimint-logging = { version = "0.2.0-rc3", path = "../fedimint-logging" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
 tracing = "0.1.37"
