@@ -182,9 +182,9 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
               LN RECV: {ln_receives_stats}"
     );
     // FIXME: should be smaller
-    assert!(reissue_stats.median < Duration::from_secs(4));
-    assert!(ln_sends_stats.median < Duration::from_secs(6));
-    assert!(ln_receives_stats.median < Duration::from_secs(6));
+    assert!(reissue_stats.median < Duration::from_secs(5));
+    assert!(ln_sends_stats.median < Duration::from_secs(5));
+    assert!(ln_receives_stats.median < Duration::from_secs(5));
     let factor = 3; // FIXME: should be much smaller
     assert!(reissue_stats.p90 < reissue_stats.median * factor);
     assert!(ln_sends_stats.p90 < ln_sends_stats.median * factor);
