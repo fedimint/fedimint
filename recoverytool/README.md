@@ -14,7 +14,7 @@ e-cash notes or other operational difficulties there are funds left in the feder
 ```
 Tool to recover the on-chain wallet of a Fedimint federation
 
-Usage: recoverytool [OPTIONS] <--cfg <CONFIG>|--descriptor <DESCRIPTOR>> <COMMAND>
+Usage: recoverytool [OPTIONS] --password <PASSWORD> <--cfg <CONFIG>|--descriptor <DESCRIPTOR>> <COMMAND>
 
 Commands:
   direct  Derive the wallet descriptor using a single tweak
@@ -24,10 +24,11 @@ Commands:
 
 Options:
       --cfg <CONFIG>             Directory containing server config files
-      --password <PASSWORD>      The password that encrypts the configs, will prompt if not passed in [env: FM_PASSWORD=]
+      --password <PASSWORD>      The password that encrypts the configs [env: FM_PASSWORD=]
       --descriptor <DESCRIPTOR>  Wallet descriptor, can be used instead of --cfg
       --key <KEY>                Wallet secret key, can be used instead of config together with --descriptor
       --network <NETWORK>        Network to operate on, has to be specified if --cfg isn't present [default: bitcoin]
+      --readonly                 Open the database in read-only mode, useful for debugging, should not be used in production
   -h, --help                     Print help
 ```
 

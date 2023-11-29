@@ -1,12 +1,13 @@
+use std::collections::HashSet;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use std::{env, ffi};
 
 use anyhow::{anyhow, bail, Context, Result};
-use bitcoincore_rpc::bitcoin;
 use bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
 use bitcoincore_rpc::bitcoin::Txid;
+use bitcoincore_rpc::{bitcoin, RpcApi};
 use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use devimint::federation::{Federation, Fedimintd};
@@ -20,6 +21,7 @@ use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::util::write_overwrite_async;
 use fedimint_logging::LOG_DEVIMINT;
 use ln_gateway::rpc::GatewayInfo;
+use serde_json::json;
 use tokio::fs;
 use tokio::net::TcpStream;
 use tracing::{debug, error, info, warn};
@@ -1380,6 +1382,120 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     Ok(())
 }
 
+// TODO: test the direct method using tweaks
+pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
+    #[allow(unused_variables)]
+    let DevFed {
+        bitcoind,
+        cln,
+        lnd,
+        fed,
+        gw_cln,
+        gw_lnd,
+        electrs,
+        esplora,
+    } = dev_fed;
+    let data_dir = env::var("FM_DATA_DIR")?;
+
+    let peg_in_values = HashSet::from([12_345_000, 23_456_000, 34_567_000]);
+    for peg_in_value in &peg_in_values {
+        fed.pegin(*peg_in_value).await?;
+    }
+    let total_pegged_in = peg_in_values.iter().sum::<u64>();
+
+    let now = fedimint_core::time::now();
+    info!("Recovering using utxos method");
+    let output = cmd!(
+        "recoverytool",
+        "--readonly",
+        "--cfg",
+        "{data_dir}/server-0",
+        "utxos",
+        "--db",
+        "{data_dir}/server-0/database"
+    )
+    .env("FM_PASSWORD", "pass")
+    .out_json()
+    .await?;
+    let outputs = output.as_array().context("expected an array")?;
+    assert_eq!(outputs.len(), peg_in_values.len());
+
+    assert_eq!(
+        outputs
+            .iter()
+            .map(|o| o["amount_sat"].as_u64().unwrap())
+            .collect::<HashSet<_>>(),
+        peg_in_values
+    );
+    let utxos_descriptors = outputs
+        .iter()
+        .map(|o| o["descriptor"].as_str().unwrap())
+        .collect::<HashSet<_>>();
+
+    let descriptors_json = [serde_json::value::to_raw_value(&serde_json::Value::Array(
+        utxos_descriptors
+            .iter()
+            .map(|d| {
+                let object = json!({
+                    "desc": d,
+                    "timestamp": 0,
+                });
+                object
+            })
+            .collect::<Vec<_>>(),
+    ))?];
+    info!("Getting wallet balances before import");
+    let balances_before = bitcoind.client().get_balances()?;
+    info!("Importing descriptors into bitcoin wallet");
+    let request = bitcoind
+        .client()
+        .get_jsonrpc_client()
+        .build_request("importdescriptors", &descriptors_json);
+    let response = bitcoind
+        .client()
+        .get_jsonrpc_client()
+        .send_request(request)?;
+    response.check_error()?;
+    info!("Getting wallet balances after import");
+    let balances_after = bitcoind.client().get_balances()?;
+    let diff = balances_after.mine.immature + balances_after.mine.trusted
+        - balances_before.mine.immature
+        - balances_before.mine.trusted;
+    // Funds from descriptors should match the total pegged in
+    assert_eq!(diff.to_sat(), total_pegged_in);
+    info!("Recovering using epochs method");
+    let outputs = loop {
+        let output = cmd!(
+            "recoverytool",
+            "--readonly",
+            "--cfg",
+            "{data_dir}/server-0",
+            "epochs",
+            "--db",
+            "{data_dir}/server-0/database"
+        )
+        .env("FM_PASSWORD", "pass")
+        .out_json()
+        .await?;
+        let outputs = output.as_array().context("expected an array")?;
+        if outputs.len() == peg_in_values.len() {
+            break outputs.clone();
+        } else if now.elapsed()? > Duration::from_secs(180) {
+            // 3 minutes should be enough to finish one or two sessions
+            bail!("recoverytool epochs method timed out");
+        } else {
+            fedimint_core::task::sleep(Duration::from_secs(1)).await
+        }
+    };
+    let epochs_descriptors = outputs
+        .iter()
+        .map(|o| o["descriptor"].as_str().unwrap())
+        .collect::<HashSet<_>>();
+    // Both methods should yield the same descriptors
+    assert_eq!(utxos_descriptors, epochs_descriptors);
+    Ok(())
+}
+
 #[derive(Subcommand)]
 enum Cmd {
     /// Spins up bitcoind, cln, lnd, electrs, esplora, and opens a channel
@@ -1420,6 +1536,8 @@ enum Cmd {
     /// `devfed` then reboot gateway daemon for both CLN and LND. Test
     /// afterward.
     GatewayRebootTest,
+    /// `devfed` then tests if the recovery tool is able to do a basic recovery
+    RecoverytoolTests,
     /// Rpc commands to the long running devimint instance. Could be entry point
     /// for devimint as a cli
     #[clap(flatten)]
@@ -1715,6 +1833,11 @@ async fn handle_command() -> Result<()> {
             let (process_mgr, _) = setup(args.common).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             gw_reboot_test(dev_fed, &process_mgr).await?;
+        }
+        Cmd::RecoverytoolTests => {
+            let (process_mgr, _) = setup(args.common).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
+            recoverytool_test(dev_fed).await?;
         }
         Cmd::Rpc(rpc) => rpc_command(rpc, args.common).await?,
     }

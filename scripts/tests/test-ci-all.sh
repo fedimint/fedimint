@@ -33,6 +33,11 @@ cargo nextest run --no-run ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${
 # If you really need to break this rule, ping dpc
 export FM_CARGO_DENY_COMPILATION=1
 
+function recoverytool_tests() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/recoverytool-tests.sh
+}
+export -f recoverytool_tests
+
 function reconnect_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/reconnect-test.sh
 }
@@ -121,7 +126,8 @@ if parallel \
   lightning_reconnect_test \
   gateway_reboot_test \
   devimint_cli_test \
-  load_test_tool_test ; then
+  load_test_tool_test \
+  recoverytool_tests ; then
   >&2 echo "All tests successful"
 else
   >&2 echo "Some tests failed. Full job log:"
