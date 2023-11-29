@@ -395,6 +395,8 @@ Examples:
         /// Which server to send request to
         #[clap(long = "peer-id")]
         peer_id: Option<u16>,
+        /// Guardian password in case authenticated API endpoints are being
+        /// called. Only use together with --peer-id.
         #[clap(long = "auth")]
         auth: Option<String>,
     },
