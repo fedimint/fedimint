@@ -418,11 +418,15 @@ pub async fn handle_command(
                 // the amount we are withdrawing
                 BitcoinAmountOrAll::All => {
                     let balance =
-                        bitcoin::Amount::from_sat(client.get_balance().await.msats * 1000);
+                        bitcoin::Amount::from_sat(client.get_balance().await.msats / 1000);
                     let fees = wallet_module
                         .get_withdraw_fees(address.clone(), balance)
                         .await?;
-                    (balance - fees.amount(), fees)
+                    let amount = balance.checked_sub(fees.amount());
+                    if amount.is_none() {
+                        bail!("Not enough funds to pay fees");
+                    }
+                    (amount.unwrap(), fees)
                 }
                 BitcoinAmountOrAll::Amount(amount) => (
                     amount,
