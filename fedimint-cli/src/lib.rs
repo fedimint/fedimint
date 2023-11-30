@@ -21,12 +21,14 @@ use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 use fedimint_client::{get_invite_code_from_db, ClientBuilder, FederationInfo};
-use fedimint_core::admin_client::WsAdminClient;
+use fedimint_core::admin_client::{
+    ConfigGenConnectionsRequest, ConfigGenParamsRequest, WsAdminClient,
+};
 use fedimint_core::api::{
     FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, InviteCode,
     WsFederationApi,
 };
-use fedimint_core::config::{ClientConfig, FederationId};
+use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::DatabaseValue;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
@@ -242,6 +244,9 @@ struct Opts {
     #[arg(long, env = "FM_PASSWORD")]
     password: Option<String>,
 
+    #[arg(long, env = "FM_WS_URL")]
+    ws: Option<SafeUrl>,
+
     #[clap(subcommand)]
     command: Command,
 }
@@ -253,19 +258,30 @@ impl Opts {
             .ok_or_cli_msg(CliErrorKind::IOError, "`--data-dir=` argument not set.")
     }
 
-    fn admin_client(&self, cfg: &ClientConfig) -> CliResult<WsAdminClient> {
-        let our_id = &self
-            .our_id
-            .ok_or_cli_msg(CliErrorKind::MissingAuth, "Admin client needs our-id set")?;
+    async fn admin_client(&self) -> CliResult<WsAdminClient> {
+        let ws_url = if let Some(ws) = &self.ws {
+            ws.clone()
+        } else {
+            let cfg = self
+                .build_client_ng(&ClientModuleInitRegistry::new(), None)
+                .await
+                .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
+                .get_config()
+                .clone();
 
-        let url = cfg
-            .global
-            .api_endpoints
-            .get(our_id)
-            .expect("Endpoint exists")
-            .url
-            .clone();
-        Ok(WsAdminClient::new(url))
+            let our_id = &self
+                .our_id
+                .ok_or_cli_msg(CliErrorKind::MissingAuth, "Admin client needs our-id set")?;
+
+            cfg.global
+                .api_endpoints
+                .get(our_id)
+                .expect("Endpoint exists")
+                .url
+                .clone()
+        };
+
+        Ok(WsAdminClient::new(ws_url))
     }
 
     fn auth(&self) -> CliResult<ApiAuth> {
@@ -380,6 +396,19 @@ enum AdminCmd {
 
     /// Show an audit across all modules
     Audit,
+
+    SetPassword,
+
+    SetConfigGenConnections {
+        our_name: String,
+        leader_api_url: Option<SafeUrl>,
+    },
+    GetDefaultConfigGenParams,
+    SetConfigGenParams {
+        params_json: String,
+    },
+    RunDkg,
+    StartConsensus,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -618,31 +647,67 @@ impl FedimintCli {
                 ))
             }
             Command::Admin(AdminCmd::Audit) => {
-                let user = cli
-                    .build_client_ng(&self.module_inits, None)
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
-
-                let audit = cli
-                    .admin_client(user.get_config())?
-                    .audit(cli.auth()?)
-                    .await?;
+                let audit = cli.admin_client().await?.audit(cli.auth()?).await?;
                 Ok(CliOutput::Raw(
                     serde_json::to_value(audit)
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
                 ))
             }
             Command::Admin(AdminCmd::Status) => {
-                let user = cli
-                    .build_client_ng(&self.module_inits, None)
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
-
-                let status = cli.admin_client(user.get_config())?.status().await?;
+                let status = cli.admin_client().await?.status().await?;
                 Ok(CliOutput::Raw(
                     serde_json::to_value(status)
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
                 ))
+            }
+            Command::Admin(AdminCmd::SetPassword) => {
+                cli.admin_client().await?.set_password(cli.auth()?).await?;
+                Ok(CliOutput::Raw(Value::Null))
+            }
+            Command::Admin(AdminCmd::SetConfigGenConnections {
+                our_name,
+                leader_api_url,
+            }) => {
+                let req = ConfigGenConnectionsRequest {
+                    our_name,
+                    leader_api_url,
+                };
+                cli.admin_client()
+                    .await?
+                    .set_config_gen_connections(req, cli.auth()?)
+                    .await?;
+                Ok(CliOutput::Raw(Value::Null))
+            }
+            Command::Admin(AdminCmd::GetDefaultConfigGenParams) => {
+                let default_params = cli
+                    .admin_client()
+                    .await?
+                    .get_default_config_gen_params(cli.auth()?)
+                    .await?;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(default_params)
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
+                ))
+            }
+            Command::Admin(AdminCmd::SetConfigGenParams { params_json }) => {
+                let params: ConfigGenParamsRequest = serde_json::from_str(&params_json)
+                    .map_err_cli_msg(CliErrorKind::InvalidValue, "Invalid JSON")?;
+                cli.admin_client()
+                    .await?
+                    .set_config_gen_params(params, cli.auth()?)
+                    .await?;
+                Ok(CliOutput::Raw(Value::Null))
+            }
+            Command::Admin(AdminCmd::RunDkg) => {
+                cli.admin_client().await?.run_dkg(cli.auth()?).await?;
+                Ok(CliOutput::Raw(Value::Null))
+            }
+            Command::Admin(AdminCmd::StartConsensus) => {
+                cli.admin_client()
+                    .await?
+                    .start_consensus(cli.auth()?)
+                    .await?;
+                Ok(CliOutput::Raw(Value::Null))
             }
             Command::Dev(DevCmd::Api {
                 method,
