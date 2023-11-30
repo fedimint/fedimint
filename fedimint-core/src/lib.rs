@@ -147,11 +147,12 @@ pub fn sats(amount: u64) -> Amount {
 }
 
 /// Amount of bitcoin to send, or "all" to send all available funds
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(untagged)]
+#[derive(Debug, Eq, PartialEq, Copy, Hash, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum BitcoinAmountOrAll {
-    Amount(#[serde(with = "bitcoin::util::amount::serde::as_sat")] bitcoin::Amount),
     All,
+    #[serde(untagged)]
+    Amount(#[serde(with = "bitcoin::util::amount::serde::as_sat")] bitcoin::Amount),
 }
 
 impl FromStr for BitcoinAmountOrAll {
@@ -479,5 +480,17 @@ mod tests {
         let feerate = Feerate { sats_per_kvb: 1000 };
         assert_eq!(bitcoin::Amount::from_sat(25), feerate.calculate_fee(100));
         assert_eq!(bitcoin::Amount::from_sat(26), feerate.calculate_fee(101));
+    }
+
+    #[test]
+    fn test_deserialize_amount_or_all() {
+        let all: BitcoinAmountOrAll = serde_json::from_str("\"all\"").unwrap();
+        assert_eq!(all, BitcoinAmountOrAll::All);
+
+        let all: BitcoinAmountOrAll = serde_json::from_str("12345").unwrap();
+        assert_eq!(
+            all,
+            BitcoinAmountOrAll::Amount(bitcoin::Amount::from_sat(12345))
+        );
     }
 }
