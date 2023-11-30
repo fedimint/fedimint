@@ -481,6 +481,19 @@
 <a href="#481" id="481">481</a>
 <a href="#482" id="482">482</a>
 <a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span><span class="self">self </span><span class="kw">as </span>fedimint_core;
 
@@ -630,11 +643,12 @@
 }
 
 <span class="doccomment">/// Amount of bitcoin to send, or &quot;all&quot; to send all available funds
-</span><span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(untagged)]
+</span><span class="attr">#[derive(Debug, Eq, PartialEq, Copy, Hash, Clone, Serialize, Deserialize)]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>BitcoinAmountOrAll {
-    Amount(<span class="attr">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)] </span>bitcoin::Amount),
     All,
+    <span class="attr">#[serde(untagged)]
+    </span>Amount(<span class="attr">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)] </span>bitcoin::Amount),
 }
 
 <span class="kw">impl </span>FromStr <span class="kw">for </span>BitcoinAmountOrAll {
@@ -962,6 +976,18 @@
         <span class="kw">let </span>feerate = Feerate { sats_per_kvb: <span class="number">1000 </span>};
         <span class="macro">assert_eq!</span>(bitcoin::Amount::from_sat(<span class="number">25</span>), feerate.calculate_fee(<span class="number">100</span>));
         <span class="macro">assert_eq!</span>(bitcoin::Amount::from_sat(<span class="number">26</span>), feerate.calculate_fee(<span class="number">101</span>));
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_deserialize_amount_or_all() {
+        <span class="kw">let </span>all: BitcoinAmountOrAll = serde_json::from_str(<span class="string">&quot;\&quot;all\&quot;&quot;</span>).unwrap();
+        <span class="macro">assert_eq!</span>(all, BitcoinAmountOrAll::All);
+
+        <span class="kw">let </span>all: BitcoinAmountOrAll = serde_json::from_str(<span class="string">&quot;12345&quot;</span>).unwrap();
+        <span class="macro">assert_eq!</span>(
+            all,
+            BitcoinAmountOrAll::Amount(bitcoin::Amount::from_sat(<span class="number">12345</span>))
+        );
     }
 }
 </code></pre></div></section></main></body></html>

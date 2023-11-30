@@ -1375,6 +1375,12 @@
 <a href="#1375" id="1375">1375</a>
 <a href="#1376" id="1376">1376</a>
 <a href="#1377" id="1377">1377</a>
+<a href="#1378" id="1378">1378</a>
+<a href="#1379" id="1379">1379</a>
+<a href="#1380" id="1380">1380</a>
+<a href="#1381" id="1381">1381</a>
+<a href="#1382" id="1382">1382</a>
+<a href="#1383" id="1383">1383</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -2069,11 +2075,15 @@
             <span class="comment">// If the amount is &quot;all&quot;, then we need to subtract the fees from
             // the amount we are withdrawing
             </span>BitcoinAmountOrAll::All =&gt; {
-                <span class="kw">let </span>balance = bitcoin::Amount::from_sat(client.get_balance().<span class="kw">await</span>.msats * <span class="number">1000</span>);
+                <span class="kw">let </span>balance = bitcoin::Amount::from_sat(client.get_balance().<span class="kw">await</span>.msats / <span class="number">1000</span>);
                 <span class="kw">let </span>fees = wallet_module
                     .get_withdraw_fees(address.clone(), balance)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
-                (balance - fees.amount(), fees)
+                <span class="kw">let </span>withdraw_amount = balance.checked_sub(fees.amount());
+                <span class="kw">if </span>withdraw_amount.is_none() {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::InsufficientFunds);
+                }
+                (withdraw_amount.unwrap(), fees)
             }
             BitcoinAmountOrAll::Amount(amount) =&gt; (
                 amount,
@@ -2707,6 +2717,8 @@
     </span>GatewayConfigurationError(String),
     <span class="attr">#[error(<span class="string">&quot;Unsupported Network: {0}&quot;</span>)]
     </span>UnsupportedNetwork(Network),
+    <span class="attr">#[error(<span class="string">&quot;Insufficient funds&quot;</span>)]
+    </span>InsufficientFunds,
 }
 
 <span class="kw">impl </span>IntoResponse <span class="kw">for </span>GatewayError {
