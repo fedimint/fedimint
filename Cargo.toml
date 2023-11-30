@@ -75,6 +75,9 @@ opt-level = 1
 
 [profile.dev]
 
+[profile.dev.package."*"] # external dependencies
+opt-level = 1
+
 # in dev mode optimize crates that are perf-critical (usually just crypto crates)
 [profile.dev.package]
 secp256k1 = { opt-level = 3 }
@@ -92,7 +95,9 @@ bls12_381 = { opt-level = 3 }
 subtle = { opt-level = 3 }
 ring = { opt-level = 3 }
 fedimint-threshold-crypto = { opt-level = 3 }
-
+aleph-bft-crypto = { opt-level = 3 }
+aleph-bft-rmc = { opt-level = 3 }
+aleph-bft-types = { opt-level = 3 }
 
 [profile.ci]
 inherits = "dev"
