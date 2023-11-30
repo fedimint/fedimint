@@ -403,7 +403,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.xmpp.loadbalancer.server.port=5280"
-      - "traefik.http.routers.xmpp.rule=Host(`xmpp.fedimint.my-super-host.com`) || Host(`muc.xmpp.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.xmpp.rule=Host(`xmpp.fedimint.my-super-host.com`)"
       - "traefik.http.routers.xmpp.entrypoints=websecure"
       - "traefik.http.routers.xmpp.tls.certresolver=myresolver"
 
