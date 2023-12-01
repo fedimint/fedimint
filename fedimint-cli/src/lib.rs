@@ -231,7 +231,7 @@ impl fmt::Display for CliError {
 #[command(version)]
 struct Opts {
     /// The working directory of the client containing the config and db
-    #[arg(long = "data-dir", alias = "workdir", env = "FM_DATA_DIR")]
+    #[arg(long = "data-dir", alias = "workdir", env = "FM_CLIENT_DIR")]
     workdir: Option<PathBuf>,
 
     /// Peer id of the guardian

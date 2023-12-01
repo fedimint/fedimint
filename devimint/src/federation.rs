@@ -51,7 +51,7 @@ impl Client {
     /// TODO: Get rid of built-in client, make it a normal `Client` and let them
     /// fork each other as they please.
     async fn new_forked(name: &str) -> Result<Client> {
-        let workdir: PathBuf = env::var("FM_DATA_DIR")?.parse()?;
+        let workdir: PathBuf = env::var("FM_CLIENT_DIR")?.parse()?;
         let client_dir = workdir.join("clients").join(name);
 
         std::fs::create_dir_all(&client_dir)?;
@@ -107,7 +107,7 @@ impl Federation {
         run_dkg(admin_clients, params).await?;
 
         let out_dir = &vars[&0].FM_DATA_DIR;
-        let cfg_dir = &process_mgr.globals.FM_DATA_DIR;
+        let cfg_dir = &process_mgr.globals.FM_CLIENT_DIR;
         let out_dir = utf8(out_dir);
         let cfg_dir = utf8(cfg_dir);
         // move configs to config directory
@@ -132,7 +132,7 @@ impl Federation {
     }
 
     pub fn invite_code(&self) -> Result<String> {
-        let workdir: PathBuf = env::var("FM_DATA_DIR")?.parse()?;
+        let workdir: PathBuf = env::var("FM_CLIENT_DIR")?.parse()?;
         let invite_code = fs::read_to_string(workdir.join("invite-code"))?;
         Ok(invite_code)
     }
@@ -162,7 +162,7 @@ impl Federation {
     }
 
     pub async fn cmd(&self) -> Command {
-        let cfg_dir = env::var("FM_DATA_DIR").unwrap();
+        let cfg_dir = env::var("FM_CLIENT_DIR").unwrap();
         cmd!("fedimint-cli", "--data-dir={cfg_dir}")
     }
 

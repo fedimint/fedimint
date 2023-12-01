@@ -113,7 +113,8 @@ declare_vars! {
         FM_CLN_DIR: PathBuf = mkdir(FM_TEST_DIR.join("cln")).await?;
         FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join("lnd")).await?;
         FM_BTC_DIR: PathBuf = mkdir(FM_TEST_DIR.join("bitcoin")).await?;
-        FM_DATA_DIR: PathBuf = mkdir(FM_TEST_DIR.join("cfg")).await?;
+        FM_DATA_DIR: PathBuf = FM_TEST_DIR.clone();
+        FM_CLIENT_DIR: PathBuf = mkdir(FM_TEST_DIR.join("client")).await?;
         FM_ELECTRS_DIR: PathBuf = mkdir(FM_TEST_DIR.join("electrs")).await?;
         FM_ESPLORA_DIR: PathBuf = mkdir(FM_TEST_DIR.join("esplora")).await?;
         FM_READY_FILE: PathBuf = FM_TEST_DIR.join("ready");
@@ -135,7 +136,7 @@ declare_vars! {
         FM_LIGHTNING_CLI: String = f!("lightning-cli --network regtest --lightning-dir={}", utf8(&FM_CLN_DIR));
         FM_LNCLI: String = f!("lncli -n regtest --lnddir={} --rpcserver=localhost:{FM_PORT_LND_RPC}", utf8(&FM_LND_DIR));
         FM_BTC_CLIENT: String = f!("bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -datadir={}", utf8(&FM_BTC_DIR));
-        FM_MINT_CLIENT: String = f!("fedimint-cli --data-dir {}", utf8(&FM_DATA_DIR));
+        FM_MINT_CLIENT: String = f!("fedimint-cli --data-dir {}", utf8(&FM_CLIENT_DIR));
         FM_MINT_RPC_CLIENT: String = f!("mint-rpc-client");
         FM_GWCLI_CLN: String = f!("gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_CLN}/");
         FM_GWCLI_LND: String = f!("gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/");
@@ -162,6 +163,6 @@ declare_vars! {
         FM_P2P_URL: String = params.consensus.peers[&params.local.our_id].p2p_url.to_string();
         FM_API_URL: String = params.consensus.peers[&params.local.our_id].api_url.to_string();
         FM_BIND_METRICS_API: String = format!("127.0.0.1:{}", globals.FM_PORT_FEDIMINTD_BASE as usize + 2 * globals.FM_FED_SIZE + params.local.our_id.to_usize());
-        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("server-{}", params.local.our_id.to_usize()))).await?;
+        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("fedimintd-{}", params.local.our_id.to_usize()))).await?;
     }
 }
