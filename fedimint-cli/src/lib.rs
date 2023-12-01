@@ -406,8 +406,8 @@ Examples:
         peer_id: Option<u16>,
         /// Guardian password in case authenticated API endpoints are being
         /// called. Only use together with --peer-id.
-        #[clap(long = "auth", requires = "peer_id")]
-        auth: Option<String>,
+        #[clap(long, requires = "peer_id")]
+        password: Option<String>,
     },
 
     /// Wait for the fed to reach a consensus block count
@@ -648,7 +648,7 @@ impl FedimintCli {
                 method,
                 params,
                 peer_id,
-                auth,
+                password: auth,
             }) => {
                 let params: Value = serde_json::from_str(&params)
                     .map_err_cli_msg(CliErrorKind::InvalidValue, "Invalid JSON-RPC parameters")?;
