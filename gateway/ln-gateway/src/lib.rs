@@ -89,7 +89,7 @@ pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 
 const ROUTE_HINT_RETRIES: usize = 30;
 const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
-const DEFAULT_NUM_ROUTE_HINTS: u32 = 0;
+const DEFAULT_NUM_ROUTE_HINTS: u32 = 1;
 pub const DEFAULT_NETWORK: Network = Network::Regtest;
 
 pub const DEFAULT_FEES: RoutingFees = RoutingFees {
@@ -140,8 +140,12 @@ pub struct GatewayOpts {
     pub fees: Option<GatewayFee>,
 
     /// Number of route hints to return in invoices
-    #[arg(long = "num-route-hints", env = "FM_NUMBER_OF_ROUTE_HINTS")]
-    pub num_route_hints: Option<u32>,
+    #[arg(
+        long = "num-route-hints",
+        env = "FM_NUMBER_OF_ROUTE_HINTS",
+        default_value_t = DEFAULT_NUM_ROUTE_HINTS
+    )]
+    pub num_route_hints: u32,
 }
 
 impl GatewayOpts {
@@ -169,7 +173,7 @@ struct GatewayParameters {
     api_addr: SafeUrl,
     password: Option<String>,
     network: Option<Network>,
-    num_route_hints: Option<u32>,
+    num_route_hints: u32,
     fees: Option<GatewayFee>,
 }
 
@@ -268,7 +272,7 @@ impl Gateway {
                 listen,
                 api_addr,
                 password: cli_password,
-                num_route_hints: Some(num_route_hints),
+                num_route_hints,
                 fees: Some(GatewayFee(fees)),
                 network,
             },
@@ -997,10 +1001,7 @@ impl Gateway {
         self.gateway_parameters.password.as_ref()?;
 
         // Use gateway parameters provided by the environment or CLI
-        let num_route_hints = self
-            .gateway_parameters
-            .num_route_hints
-            .unwrap_or(DEFAULT_NUM_ROUTE_HINTS);
+        let num_route_hints = self.gateway_parameters.num_route_hints;
         let routing_fees = self
             .gateway_parameters
             .fees
