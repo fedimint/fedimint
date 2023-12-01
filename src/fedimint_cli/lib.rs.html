@@ -1252,8 +1252,8 @@ Examples:
         </span>peer_id: <span class="prelude-ty">Option</span>&lt;u16&gt;,
         <span class="doccomment">/// Guardian password in case authenticated API endpoints are being
         /// called. Only use together with --peer-id.
-        </span><span class="attr">#[clap(long = <span class="string">&quot;auth&quot;</span>)]
-        </span>auth: <span class="prelude-ty">Option</span>&lt;String&gt;,
+        </span><span class="attr">#[clap(long, requires = <span class="string">&quot;peer_id&quot;</span>)]
+        </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     },
 
     <span class="doccomment">/// Wait for the fed to reach a consensus block count
@@ -1494,7 +1494,7 @@ Examples:
                 method,
                 params,
                 peer_id,
-                auth,
+                password: auth,
             }) =&gt; {
                 <span class="kw">let </span>params: Value = serde_json::from_str(<span class="kw-2">&amp;</span>params)
                     .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">&quot;Invalid JSON-RPC parameters&quot;</span>)<span class="question-mark">?</span>;
