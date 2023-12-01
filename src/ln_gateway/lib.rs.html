@@ -1386,6 +1386,7 @@
 <a href="#1386" id="1386">1386</a>
 <a href="#1387" id="1387">1387</a>
 <a href="#1388" id="1388">1388</a>
+<a href="#1389" id="1389">1389</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -1477,7 +1478,7 @@
 
 <span class="kw">const </span>ROUTE_HINT_RETRIES: usize = <span class="number">30</span>;
 <span class="kw">const </span>ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(<span class="number">2</span>);
-<span class="kw">const </span>DEFAULT_NUM_ROUTE_HINTS: u32 = <span class="number">0</span>;
+<span class="kw">const </span>DEFAULT_NUM_ROUTE_HINTS: u32 = <span class="number">1</span>;
 <span class="kw">pub const </span>DEFAULT_NETWORK: Network = Network::Regtest;
 
 <span class="kw">pub const </span>DEFAULT_FEES: RoutingFees = RoutingFees {
@@ -1528,8 +1529,12 @@
     </span><span class="kw">pub </span>fees: <span class="prelude-ty">Option</span>&lt;GatewayFee&gt;,
 
     <span class="doccomment">/// Number of route hints to return in invoices
-    </span><span class="attr">#[arg(long = <span class="string">&quot;num-route-hints&quot;</span>, env = <span class="string">&quot;FM_NUMBER_OF_ROUTE_HINTS&quot;</span>)]
-    </span><span class="kw">pub </span>num_route_hints: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+    </span><span class="attr">#[arg(
+        long = <span class="string">&quot;num-route-hints&quot;</span>,
+        env = <span class="string">&quot;FM_NUMBER_OF_ROUTE_HINTS&quot;</span>,
+        default_value_t = DEFAULT_NUM_ROUTE_HINTS
+    )]
+    </span><span class="kw">pub </span>num_route_hints: u32,
 }
 
 <span class="kw">impl </span>GatewayOpts {
@@ -1557,7 +1562,7 @@
     api_addr: SafeUrl,
     password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     network: <span class="prelude-ty">Option</span>&lt;Network&gt;,
-    num_route_hints: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+    num_route_hints: u32,
     fees: <span class="prelude-ty">Option</span>&lt;GatewayFee&gt;,
 }
 
@@ -1656,7 +1661,7 @@
                 listen,
                 api_addr,
                 password: cli_password,
-                num_route_hints: <span class="prelude-val">Some</span>(num_route_hints),
+                num_route_hints,
                 fees: <span class="prelude-val">Some</span>(GatewayFee(fees)),
                 network,
             },
@@ -2385,10 +2390,7 @@
         </span><span class="self">self</span>.gateway_parameters.password.as_ref()<span class="question-mark">?</span>;
 
         <span class="comment">// Use gateway parameters provided by the environment or CLI
-        </span><span class="kw">let </span>num_route_hints = <span class="self">self
-            </span>.gateway_parameters
-            .num_route_hints
-            .unwrap_or(DEFAULT_NUM_ROUTE_HINTS);
+        </span><span class="kw">let </span>num_route_hints = <span class="self">self</span>.gateway_parameters.num_route_hints;
         <span class="kw">let </span>routing_fees = <span class="self">self
             </span>.gateway_parameters
             .fees
