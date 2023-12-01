@@ -1381,6 +1381,11 @@
 <a href="#1381" id="1381">1381</a>
 <a href="#1382" id="1382">1382</a>
 <a href="#1383" id="1383">1383</a>
+<a href="#1384" id="1384">1384</a>
+<a href="#1385" id="1385">1385</a>
+<a href="#1386" id="1386">1386</a>
+<a href="#1387" id="1387">1387</a>
+<a href="#1388" id="1388">1388</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -2650,7 +2655,12 @@
     } = lnrpc.info().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>node_pub_key = PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key)
         .map_err(|e| GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">&quot;Invalid node pubkey {e}&quot;</span>)))<span class="question-mark">?</span>;
-    <span class="kw">let </span>network = Network::from_str(<span class="kw-2">&amp;</span>network)
+    <span class="comment">// TODO: create a fedimint Network that understands &quot;mainnet&quot;
+    </span><span class="kw">let </span>network = <span class="kw">match </span>network.as_str() {
+        <span class="string">&quot;mainnet&quot; </span>=&gt; <span class="string">&quot;bitcoin&quot;</span>, <span class="comment">// it seems LND will use &quot;mainnet&quot;, but rust-bitcoin uses &quot;bitcoin&quot;
+        </span>other =&gt; other,
+    };
+    <span class="kw">let </span>network = Network::from_str(network)
         .map_err(|e| GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">&quot;Invalid network {network}: {e}&quot;</span>)))<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>((node_pub_key, alias, network))
 }
