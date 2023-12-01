@@ -1267,7 +1267,12 @@ pub(crate) async fn fetch_lightning_node_info(
     } = lnrpc.info().await?;
     let node_pub_key = PublicKey::from_slice(&pub_key)
         .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
-    let network = Network::from_str(&network)
+    // TODO: create a fedimint Network that understands "mainnet"
+    let network = match network.as_str() {
+        "mainnet" => "bitcoin", // it seems LND will use "mainnet", but rust-bitcoin uses "bitcoin"
+        other => other,
+    };
+    let network = Network::from_str(network)
         .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid network {network}: {e}")))?;
     Ok((node_pub_key, alias, network))
 }
