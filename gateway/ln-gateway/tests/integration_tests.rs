@@ -162,7 +162,7 @@ async fn pay_valid_invoice(
             let payload = PayInvoicePayload {
                 federation_id: user_client.federation_id(),
                 contract_id,
-                payment_hash: *invoice.payment_hash(),
+                invoice,
                 preimage_auth: Hash::hash(&[0; 32]),
             };
 
@@ -362,7 +362,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
                     let payload = PayInvoicePayload {
                         federation_id: user_client.federation_id(),
                         contract_id,
-                        payment_hash: *invoice.payment_hash(),
+                        invoice,
                         preimage_auth: Hash::hash(&[0; 32]),
                     };
 
@@ -732,7 +732,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                     let payload = PayInvoicePayload {
                         federation_id: user_client.federation_id(),
                         contract_id,
-                        payment_hash: *invoice.payment_hash(),
+                        invoice,
                         preimage_auth: Hash::hash(&[0; 32]),
                     };
 
