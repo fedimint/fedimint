@@ -4,7 +4,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use bitcoin_hashes::hex::ToHex;
 use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::Amount;
+use fedimint_ln_common::PrunedInvoice;
 use secp256k1::PublicKey;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -510,6 +513,148 @@ impl ILnRpcClient for GatewayLndClient {
         Ok(PayInvoiceResponse { preimage })
     }
 
+    // FIXME: deduplicate implementation with pay
+    async fn pay_private(
+        &self,
+        invoice: PrunedInvoice,
+        max_delay: u64,
+        max_fee: Amount,
+    ) -> Result<PayInvoiceResponse, LightningRpcError> {
+        info!("LND Paying invoice {invoice:?}");
+        let mut client = Self::connect(
+            self.address.clone(),
+            self.tls_cert.clone(),
+            self.macaroon.clone(),
+        )
+        .await?;
+
+        debug!("LND got client to pay invoice {invoice:?}, will check if payment already exists");
+
+        // If the payment exists, that means we've already tried to pay the invoice
+        let preimage: Vec<u8> = if let Some(preimage) = self
+            .lookup_payment(invoice.payment_hash.to_vec(), &mut client)
+            .await?
+        {
+            info!("LND payment already exists for invoice {invoice:?}");
+            bitcoin_hashes::hex::FromHex::from_hex(preimage.as_str()).map_err(|error| {
+                LightningRpcError::FailedPayment {
+                    failure_reason: format!("Failed to convert preimage {error:?}"),
+                }
+            })?
+        } else {
+            // LND API allows fee limits in the `i64` range, but we use `u64` for
+            // max_fee_msat. This means we can only set an enforceable fee limit
+            // between 0 and i64::MAX
+            let fee_limit_msat: i64 =
+                max_fee
+                    .msats
+                    .try_into()
+                    .map_err(|error| LightningRpcError::FailedPayment {
+                        failure_reason: format!(
+                            "max_fee_msat exceeds valid LND fee limit ranges {error:?}"
+                        ),
+                    })?;
+
+            let amt_msat = invoice.amount.msats.try_into().map_err(|error| {
+                LightningRpcError::FailedPayment {
+                    failure_reason: format!("amount exceeds valid LND amount ranges {error:?}"),
+                }
+            })?;
+            let final_cltv_delta = invoice.min_final_cltv_delta.try_into().map_err(|error| {
+                LightningRpcError::FailedPayment {
+                    failure_reason: format!("final cltv delta exceeds valid LND range {error:?}"),
+                }
+            })?;
+            let cltv_limit =
+                max_delay
+                    .try_into()
+                    .map_err(|error| LightningRpcError::FailedPayment {
+                        failure_reason: format!("max delay exceeds valid LND range {error:?}"),
+                    })?;
+
+            debug!("LND payment does not exist for invoice {invoice:?}, will attempt to pay");
+            let payments = client
+                .router()
+                .send_payment_v2(SendPaymentRequest {
+                    amt_msat,
+                    dest: invoice.destination.serialize().to_vec(),
+                    payment_hash: invoice.payment_hash.to_vec(),
+                    payment_addr: invoice.payment_secret.to_vec(),
+                    route_hints: route_hints_to_lnd(&invoice.route_hints),
+                    final_cltv_delta,
+                    cltv_limit,
+                    allow_self_payment: true,
+                    no_inflight_updates: false,
+                    timeout_seconds: LND_PAYMENT_TIMEOUT_SECONDS,
+                    fee_limit_msat,
+                    ..Default::default()
+                })
+                .await
+                .map_err(|status| {
+                    info!("LND payment request failed for invoice {invoice:?} with {status:?}");
+                    LightningRpcError::FailedPayment {
+                        failure_reason: format!("Failed to make outgoing payment {status:?}"),
+                    }
+                })?;
+
+            debug!(
+                "LND payment request sent for invoice {invoice:?}, waiting for payment status..."
+            );
+            let mut messages = payments.into_inner();
+            loop {
+                match messages
+                    .message()
+                    .await
+                    .map_err(|error| LightningRpcError::FailedPayment {
+                        failure_reason: format!("Failed to get payment status {error:?}"),
+                    }) {
+                    Ok(Some(payment)) if payment.status() == PaymentStatus::Succeeded => {
+                        info!("LND payment succeeded for invoice {invoice:?}");
+                        break bitcoin_hashes::hex::FromHex::from_hex(
+                            payment.payment_preimage.as_str(),
+                        )
+                        .map_err(|error| {
+                            LightningRpcError::FailedPayment {
+                                failure_reason: format!("Failed to convert preimage {error:?}"),
+                            }
+                        })?;
+                    }
+                    Ok(Some(payment)) if payment.status() == PaymentStatus::InFlight => {
+                        debug!("LND payment is inflight");
+                        continue;
+                    }
+                    Ok(Some(payment)) => {
+                        info!("LND payment failed for invoice {invoice:?} with {payment:?}");
+                        let failure_reason = payment.failure_reason();
+                        return Err(LightningRpcError::FailedPayment {
+                            failure_reason: format!("{failure_reason:?}"),
+                        });
+                    }
+                    Ok(None) => {
+                        info!("LND payment failed for invoice {invoice:?} with no payment status");
+                        return Err(LightningRpcError::FailedPayment {
+                            failure_reason: format!(
+                                "Failed to get payment status for payment hash {:?}",
+                                invoice.payment_hash
+                            ),
+                        });
+                    }
+                    Err(e) => {
+                        info!("LND payment failed for invoice {invoice:?} with {e:?}");
+                        return Err(e);
+                    }
+                }
+            }
+        };
+        Ok(PayInvoiceResponse { preimage })
+    }
+
+    /// Returns true if the lightning backend supports payments without full
+    /// invoices
+    fn supports_private_payments(&self) -> bool {
+        true
+    }
+
     async fn route_htlcs<'a>(
         self: Box<Self>,
         task_group: &mut TaskGroup,
@@ -584,4 +729,25 @@ impl ILnRpcClient for GatewayLndClient {
             failure_reason: "Gatewayd has not started to route HTLCs".to_string(),
         })
     }
+}
+
+fn route_hints_to_lnd(
+    route_hints: &[fedimint_ln_common::route_hints::RouteHint],
+) -> Vec<tonic_lnd::lnrpc::RouteHint> {
+    route_hints
+        .iter()
+        .map(|hint| tonic_lnd::lnrpc::RouteHint {
+            hop_hints: hint
+                .0
+                .iter()
+                .map(|hop| tonic_lnd::lnrpc::HopHint {
+                    node_id: hop.src_node_id.serialize().to_hex(),
+                    chan_id: hop.short_channel_id,
+                    fee_base_msat: hop.base_msat,
+                    fee_proportional_millionths: hop.proportional_millionths,
+                    cltv_expiry_delta: hop.cltv_expiry_delta as u32,
+                })
+                .collect(),
+        })
+        .collect()
 }
