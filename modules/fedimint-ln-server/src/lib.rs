@@ -1520,6 +1520,7 @@ mod fedimint_migration_tests {
                     proportional_millionths: 0,
                 },
                 gateway_id: pk,
+                supports_private_payments: false,
             },
             valid_until: fedimint_core::time::now(),
             vetted: false,

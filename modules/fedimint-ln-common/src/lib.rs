@@ -17,6 +17,7 @@ pub mod db;
 use std::time::{Duration, SystemTime};
 
 use anyhow::bail;
+use bitcoin_hashes::sha256;
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::sm::Context;
@@ -33,6 +34,7 @@ use tracing::error;
 
 use crate::contracts::incoming::OfferId;
 use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, PreimageDecryptionShare};
+use crate::route_hints::RouteHint;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("ln");
 const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);
@@ -315,6 +317,8 @@ pub struct LightningGateway {
     #[serde(with = "serde_routing_fees")]
     pub fees: RoutingFees,
     pub gateway_id: secp256k1::PublicKey,
+    /// Indicates if the gateway supports private payments
+    pub supports_private_payments: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
@@ -427,6 +431,26 @@ pub mod route_hints {
                     })
                     .collect(),
             )
+        }
+    }
+
+    impl From<lightning_invoice::RouteHint> for RouteHint {
+        fn from(rh: lightning_invoice::RouteHint) -> Self {
+            RouteHint(rh.0.into_iter().map(Into::into).collect())
+        }
+    }
+
+    impl From<lightning_invoice::RouteHintHop> for RouteHintHop {
+        fn from(rhh: lightning_invoice::RouteHintHop) -> Self {
+            RouteHintHop {
+                src_node_id: rhh.src_node_id,
+                short_channel_id: rhh.short_channel_id,
+                base_msat: rhh.fees.base_msat,
+                proportional_millionths: rhh.fees.proportional_millionths,
+                cltv_expiry_delta: rhh.cltv_expiry_delta,
+                htlc_minimum_msat: rhh.htlc_minimum_msat,
+                htlc_maximum_msat: rhh.htlc_maximum_msat,
+            }
         }
     }
 }
@@ -578,4 +602,20 @@ pub async fn ln_operation(
     }
 
     Ok(operation)
+}
+
+/// Data needed to pay an invoice
+///
+/// This is a subset of the data from a [`lightning_invoice::Bolt11Invoice`]
+/// that does not contain the description, which increases privacy for the user.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+pub struct PrunedInvoice {
+    pub amount: Amount,
+    pub destination: secp256k1::PublicKey,
+    pub payment_hash: sha256::Hash,
+    pub payment_secret: [u8; 32],
+    pub route_hints: Vec<RouteHint>,
+    pub min_final_cltv_delta: u64,
+    pub timestamp: SystemTime,
+    pub expiry: Duration,
 }
