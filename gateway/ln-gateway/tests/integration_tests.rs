@@ -19,7 +19,7 @@ use fedimint_core::{msats, sats, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
-use fedimint_ln_client::pay::PayInvoicePayload;
+use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LightningClientStateMachines,
     LightningOperationMeta, LightningOperationMetaVariant, LnPayState, LnReceiveState,
@@ -162,7 +162,7 @@ async fn pay_valid_invoice(
             let payload = PayInvoicePayload {
                 federation_id: user_client.federation_id(),
                 contract_id,
-                invoice,
+                payment_data: PaymentData::Invoice(invoice),
                 preimage_auth: Hash::hash(&[0; 32]),
             };
 
@@ -362,7 +362,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
                     let payload = PayInvoicePayload {
                         federation_id: user_client.federation_id(),
                         contract_id,
-                        invoice,
+                        payment_data: PaymentData::Invoice(invoice),
                         preimage_auth: Hash::hash(&[0; 32]),
                     };
 
@@ -732,7 +732,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                     let payload = PayInvoicePayload {
                         federation_id: user_client.federation_id(),
                         contract_id,
-                        invoice,
+                        payment_data: PaymentData::Invoice(invoice),
                         preimage_auth: Hash::hash(&[0; 32]),
                     };
 

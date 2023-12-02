@@ -10,13 +10,16 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
+use fedimint_core::time::now;
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 use fedimint_ln_common::contracts::{ContractId, IdentifiableContract};
+use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
-    LightningClientContext, LightningGateway, LightningInput, LightningOutputOutcome,
+    LightningClientContext, LightningGateway, LightningInput, LightningOutputOutcome, PrunedInvoice,
 };
+use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, warn};
@@ -560,13 +563,11 @@ impl LightningPayRefund {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
-#[serde(rename_all = "snake_case")]
 pub struct PayInvoicePayload {
     pub federation_id: FederationId,
     pub contract_id: ContractId,
-    // FIXME: use pruned, privacy friendly version without description etc.
-    /// Invoice containing metadata on how to obtain the preimage
-    pub invoice: lightning_invoice::Bolt11Invoice,
+    /// Metadata on how to obtain the preimage
+    pub payment_data: PaymentData,
     pub preimage_auth: sha256::Hash,
 }
 
@@ -576,7 +577,104 @@ impl PayInvoicePayload {
             contract_id: common.contract.contract_account.contract.contract_id(),
             federation_id: common.federation_id,
             preimage_auth: common.preimage_auth,
-            invoice: common.invoice,
+            payment_data: PaymentData::Invoice(common.invoice),
+        }
+    }
+
+    pub fn new_pruned(common: LightningPayCommon) -> Self {
+        Self {
+            contract_id: common.contract.contract_account.contract.contract_id(),
+            federation_id: common.federation_id,
+            preimage_auth: common.preimage_auth,
+            payment_data: PaymentData::PrunedInvoice(PrunedInvoice {
+                amount: Amount::from_msats(
+                    common
+                        .invoice
+                        .amount_milli_satoshis()
+                        .expect("Invoice must have amount"),
+                ),
+                destination: common
+                    .invoice
+                    .payee_pub_key()
+                    .cloned()
+                    .unwrap_or_else(|| common.invoice.recover_payee_pub_key()),
+                payment_hash: *common.invoice.payment_hash(),
+                payment_secret: common.invoice.payment_secret().0,
+                route_hints: common
+                    .invoice
+                    .route_hints()
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+                min_final_cltv_delta: common.invoice.min_final_cltv_expiry_delta(),
+                timestamp: common.invoice.timestamp(),
+                expiry: common.invoice.expiry_time(),
+            }),
+        }
+    }
+}
+
+/// Data needed to pay an invoice, may be the whole invoice or only the required
+/// parts of it.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+#[serde(rename_all = "snake_case")]
+pub enum PaymentData {
+    Invoice(Bolt11Invoice),
+    PrunedInvoice(PrunedInvoice),
+}
+
+impl PaymentData {
+    pub fn amount(&self) -> Option<Amount> {
+        match self {
+            PaymentData::Invoice(invoice) => {
+                invoice.amount_milli_satoshis().map(Amount::from_msats)
+            }
+            PaymentData::PrunedInvoice(PrunedInvoice { amount, .. }) => Some(*amount),
+        }
+    }
+
+    pub fn destination(&self) -> secp256k1_zkp::PublicKey {
+        match self {
+            PaymentData::Invoice(invoice) => invoice
+                .payee_pub_key()
+                .cloned()
+                .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            PaymentData::PrunedInvoice(PrunedInvoice { destination, .. }) => *destination,
+        }
+    }
+
+    pub fn payment_hash(&self) -> sha256::Hash {
+        match self {
+            PaymentData::Invoice(invoice) => *invoice.payment_hash(),
+            PaymentData::PrunedInvoice(PrunedInvoice { payment_hash, .. }) => *payment_hash,
+        }
+    }
+
+    pub fn route_hints(&self) -> Vec<RouteHint> {
+        match self {
+            PaymentData::Invoice(invoice) => {
+                invoice.route_hints().into_iter().map(Into::into).collect()
+            }
+            PaymentData::PrunedInvoice(PrunedInvoice { route_hints, .. }) => route_hints.clone(),
+        }
+    }
+
+    pub fn is_expired(&self) -> bool {
+        match self {
+            PaymentData::Invoice(invoice) => invoice.is_expired(),
+            PaymentData::PrunedInvoice(PrunedInvoice {
+                timestamp, expiry, ..
+            }) => timestamp
+                .checked_add(*expiry)
+                .map(|expiry_time| expiry_time < now())
+                .unwrap_or(false),
+        }
+    }
+
+    pub fn expiry_duration(&self) -> Duration {
+        match self {
+            PaymentData::Invoice(invoice) => invoice.expiry_time(),
+            PaymentData::PrunedInvoice(PrunedInvoice { expiry, .. }) => *expiry,
         }
     }
 }

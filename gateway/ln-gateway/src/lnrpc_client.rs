@@ -6,6 +6,8 @@ use async_trait::async_trait;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
+use fedimint_core::Amount;
+use fedimint_ln_common::PrunedInvoice;
 use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -61,6 +63,27 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         &self,
         invoice: PayInvoiceRequest,
     ) -> Result<PayInvoiceResponse, LightningRpcError>;
+
+    /// Attempt to pay an invoice using the lightning node using a
+    /// [`PrunedInvoice`], increasing the user's privacy by not sending the
+    /// invoice description to the gateway.
+    async fn pay_private(
+        &self,
+        _invoice: PrunedInvoice,
+        _max_delay: u64,
+        _max_fee: Amount,
+    ) -> Result<PayInvoiceResponse, LightningRpcError> {
+        Err(LightningRpcError::FailedPayment {
+            failure_reason: "Private payments not supported".to_string(),
+        })
+    }
+
+    /// Returns true if the lightning backend supports payments without full
+    /// invoices. If this returns true, then [`ILnRpcClient::pay_private`] has
+    /// to be implemented.
+    fn supports_private_payments(&self) -> bool {
+        false
+    }
 
     // Consumes the current lightning client because `route_htlcs` should only be
     // called once per client. A stream of intercepted HTLCs and a `Arc<dyn
