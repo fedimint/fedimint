@@ -217,7 +217,11 @@ impl LightningPayCreatedOutgoingLnContract {
             Ok(timelock) => {
                 // Success case: funding transaction is accepted
                 let common = old_state.common.clone();
-                let payload = PayInvoicePayload::new(common.clone());
+                let payload = if gateway.supports_private_payments {
+                    PayInvoicePayload::new_pruned(common.clone())
+                } else {
+                    PayInvoicePayload::new(common.clone())
+                };
                 LightningPayStateMachine {
                     common: old_state.common,
                     state: LightningPayStates::Funded(LightningPayFunded {
