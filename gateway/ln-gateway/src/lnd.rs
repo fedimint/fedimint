@@ -448,7 +448,6 @@ impl ILnRpcClient for GatewayLndClient {
                 .router()
                 .send_payment_v2(SendPaymentRequest {
                     payment_request: invoice.clone(),
-                    allow_self_payment: true,
                     no_inflight_updates: false,
                     timeout_seconds: LND_PAYMENT_TIMEOUT_SECONDS,
                     fee_limit_msat,
@@ -583,7 +582,6 @@ impl ILnRpcClient for GatewayLndClient {
                     route_hints: route_hints_to_lnd(&invoice.route_hints),
                     final_cltv_delta,
                     cltv_limit,
-                    allow_self_payment: true,
                     no_inflight_updates: false,
                     timeout_seconds: LND_PAYMENT_TIMEOUT_SECONDS,
                     fee_limit_msat,
