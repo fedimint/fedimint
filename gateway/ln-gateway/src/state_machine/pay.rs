@@ -200,8 +200,9 @@ impl GatewayPayInvoice {
     ) -> GatewayPayStateMachine {
         match Self::await_get_payment_parameters(
             global_context,
-            pay_invoice_payload.contract_id,
             context.clone(),
+            pay_invoice_payload.contract_id,
+            pay_invoice_payload.invoice.clone(),
         )
         .await
         {
@@ -244,7 +245,7 @@ impl GatewayPayInvoice {
         // Verify that this client is authorized to receive the preimage.
         if let Err(err) = Self::verify_preimage_authentication(
             &context,
-            payload.payment_hash,
+            *payload.invoice.payment_hash(),
             payload.preimage_auth,
             contract.clone(),
         )
@@ -284,8 +285,9 @@ impl GatewayPayInvoice {
 
     async fn await_get_payment_parameters(
         global_context: DynGlobalClientContext,
-        contract_id: ContractId,
         context: GatewayClientContext,
+        contract_id: ContractId,
+        invoice: Bolt11Invoice,
     ) -> Result<(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError> {
         debug!("Await payment parameters for outgoing contract {contract_id:?}");
         let account = global_context
@@ -332,6 +334,7 @@ impl GatewayPayInvoice {
                 context.redeem_key,
                 context.timelock_delta,
                 consensus_block_count.unwrap(),
+                &invoice,
             )
             .await
             .map_err(|e| {
@@ -518,6 +521,7 @@ impl GatewayPayInvoice {
         redeem_key: bitcoin::KeyPair,
         timelock_delta: u64,
         consensus_block_count: u64,
+        invoice: &Bolt11Invoice,
     ) -> Result<PaymentParameters, OutgoingContractError> {
         let our_pub_key = secp256k1::PublicKey::from_keypair(&redeem_key);
 
@@ -529,7 +533,7 @@ impl GatewayPayInvoice {
             return Err(OutgoingContractError::NotOurKey);
         }
 
-        let invoice = account.contract.invoice.clone();
+        let invoice = invoice.clone();
         let invoice_amount = Amount::from_msats(
             invoice
                 .amount_milli_satoshis()

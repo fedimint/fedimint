@@ -27,9 +27,6 @@ pub struct OutgoingContract {
     /// Public key of the user that can claim the money back after the timelock
     /// expires
     pub user_key: secp256k1::PublicKey,
-    // FIXME: use pruned, privacy friendly version without description etc.
-    /// Invoice containing metadata on how to obtain the preimage
-    pub invoice: lightning_invoice::Bolt11Invoice,
     /// Flag that can be set by the gateway and allows the client to claim an
     /// early refund
     pub cancelled: bool,
@@ -42,7 +39,6 @@ impl IdentifiableContract for OutgoingContract {
         Encodable::consensus_encode(&self.gateway_key, &mut engine).expect("Hashing never fails");
         Encodable::consensus_encode(&self.timelock, &mut engine).expect("Hashing never fails");
         Encodable::consensus_encode(&self.user_key, &mut engine).expect("Hashing never fails");
-        Encodable::consensus_encode(&self.invoice, &mut engine).expect("Hashing never fails");
         ContractId::from_engine(engine)
     }
 }

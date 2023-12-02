@@ -43,6 +43,7 @@ const RETRY_DELAY: Duration = Duration::from_secs(1);
 ///  Refund -- await transaction acceptance --> Refunded
 ///  Refund -- await transaction rejected --> Failure
 /// ```
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub enum LightningPayStates {
     CreatedOutgoingLnContract(LightningPayCreatedOutgoingLnContract),
@@ -62,7 +63,7 @@ pub struct LightningPayCommon {
     pub contract: OutgoingContractData,
     pub gateway_fee: Amount,
     pub preimage_auth: sha256::Hash,
-    pub payment_hash: sha256::Hash,
+    pub invoice: lightning_invoice::Bolt11Invoice,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -262,7 +263,7 @@ impl LightningPayFunded {
         let payload = self.payload.clone();
         let contract_id = self.payload.contract_id;
         let timelock = self.timelock;
-        let payment_hash = common.payment_hash;
+        let payment_hash = *common.invoice.payment_hash();
         vec![StateTransition::new(
             Self::gateway_pay_invoice(gateway, payload),
             move |dbtx, result, old_state| {
@@ -563,8 +564,10 @@ impl LightningPayRefund {
 pub struct PayInvoicePayload {
     pub federation_id: FederationId,
     pub contract_id: ContractId,
+    // FIXME: use pruned, privacy friendly version without description etc.
+    /// Invoice containing metadata on how to obtain the preimage
+    pub invoice: lightning_invoice::Bolt11Invoice,
     pub preimage_auth: sha256::Hash,
-    pub payment_hash: sha256::Hash,
 }
 
 impl PayInvoicePayload {
@@ -573,7 +576,7 @@ impl PayInvoicePayload {
             contract_id: common.contract.contract_account.contract.contract_id(),
             federation_id: common.federation_id,
             preimage_auth: common.preimage_auth,
-            payment_hash: common.payment_hash,
+            invoice: common.invoice,
         }
     }
 }
