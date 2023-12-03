@@ -7,7 +7,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
-use miniscript::descriptor::Wsh;
+use miniscript::descriptor::{Wpkh, Wsh};
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 
@@ -150,9 +150,21 @@ impl WalletConfig {
         bitcoin_rpc: BitcoinRpcConfig,
         client_default_bitcoin_rpc: BitcoinRpcConfig,
     ) -> Self {
-        let peg_in_descriptor = PegInDescriptor::Wsh(
-            Wsh::new_sortedmulti(threshold, pubkeys.values().copied().collect()).unwrap(),
-        );
+        let peg_in_descriptor = if pubkeys.len() == 1 {
+            PegInDescriptor::Wpkh(
+                Wpkh::new(
+                    *pubkeys
+                        .values()
+                        .next()
+                        .expect("there is exactly one pub key"),
+                )
+                .expect("Our key type is always compressed"),
+            )
+        } else {
+            PegInDescriptor::Wsh(
+                Wsh::new_sortedmulti(threshold, pubkeys.values().copied().collect()).unwrap(),
+            )
+        };
 
         Self {
             local: WalletConfigLocal { bitcoin_rpc },
