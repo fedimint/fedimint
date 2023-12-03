@@ -1387,6 +1387,9 @@
 <a href="#1387" id="1387">1387</a>
 <a href="#1388" id="1388">1388</a>
 <a href="#1389" id="1389">1389</a>
+<a href="#1390" id="1390">1390</a>
+<a href="#1391" id="1391">1391</a>
+<a href="#1392" id="1392">1392</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -2103,7 +2106,9 @@
             ),
         };
 
-        <span class="kw">let </span>operation_id = wallet_module.withdraw(address, amount, fees, ()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>operation_id = wallet_module
+            .withdraw(address.clone(), amount, fees, ())
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
             .<span class="kw">await</span><span class="question-mark">?
@@ -2112,6 +2117,7 @@
         <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
             <span class="kw">match </span>update {
                 WithdrawState::Succeeded(txid) =&gt; {
+                    <span class="macro">info!</span>(<span class="string">&quot;Sent {amount} funds to address {address}&quot;</span>);
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(txid);
                 }
                 WithdrawState::Failed(e) =&gt; {
