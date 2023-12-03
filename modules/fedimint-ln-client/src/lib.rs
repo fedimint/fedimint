@@ -480,7 +480,7 @@ impl LightningClientModule {
         ClientOutput<LightningOutputV0, LightningClientStateMachines>,
         ContractId,
     )> {
-        let federation_currency = network_to_currency(self.cfg.network);
+        let federation_currency: Currency = self.cfg.network.into();
         let invoice_currency = invoice.currency();
         ensure!(
             federation_currency == invoice_currency,
@@ -762,7 +762,7 @@ impl LightningClientModule {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap();
 
-        let mut invoice_builder = InvoiceBuilder::new(network_to_currency(network))
+        let mut invoice_builder = InvoiceBuilder::new(network.into())
             .amount_milli_satoshis(amount.msats)
             .description(description)
             .payment_hash(payment_hash)
@@ -1437,15 +1437,6 @@ impl State for LightningClientStateMachines {
             }
             LightningClientStateMachines::Receive(receive_state) => receive_state.operation_id(),
         }
-    }
-}
-
-fn network_to_currency(network: Network) -> Currency {
-    match network {
-        Network::Bitcoin => Currency::Bitcoin,
-        Network::Regtest => Currency::Regtest,
-        Network::Testnet => Currency::BitcoinTestnet,
-        Network::Signet => Currency::Signet,
     }
 }
 
