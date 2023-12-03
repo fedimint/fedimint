@@ -714,7 +714,9 @@ impl Gateway {
             ),
         };
 
-        let operation_id = wallet_module.withdraw(address, amount, fees, ()).await?;
+        let operation_id = wallet_module
+            .withdraw(address.clone(), amount, fees, ())
+            .await?;
         let mut updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
             .await?
@@ -723,6 +725,7 @@ impl Gateway {
         while let Some(update) = updates.next().await {
             match update {
                 WithdrawState::Succeeded(txid) => {
+                    info!("Sent {amount} funds to address {address}");
                     return Ok(txid);
                 }
                 WithdrawState::Failed(e) => {
