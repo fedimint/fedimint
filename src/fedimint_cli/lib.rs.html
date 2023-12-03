@@ -1077,7 +1077,7 @@
 #[command(version)]
 </span><span class="kw">struct </span>Opts {
     <span class="doccomment">/// The working directory of the client containing the config and db
-    </span><span class="attr">#[arg(long = <span class="string">&quot;data-dir&quot;</span>, alias = <span class="string">&quot;workdir&quot;</span>, env = <span class="string">&quot;FM_DATA_DIR&quot;</span>)]
+    </span><span class="attr">#[arg(long = <span class="string">&quot;data-dir&quot;</span>, alias = <span class="string">&quot;workdir&quot;</span>, env = <span class="string">&quot;FM_CLIENT_DIR&quot;</span>)]
     </span>workdir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
 
     <span class="doccomment">/// Peer id of the guardian

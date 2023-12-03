@@ -262,7 +262,7 @@
     <span class="kw">match </span>invite_code {
         <span class="prelude-val">Some</span>(s) =&gt; <span class="prelude-val">Ok</span>(s),
         <span class="prelude-val">None </span>=&gt; {
-            <span class="kw">let </span>data_dir = std::env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
+            <span class="kw">let </span>data_dir = std::env::var(<span class="string">&quot;FM_CLIENT_DIR&quot;</span>)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(std::fs::read_to_string(
                 PathBuf::from(data_dir).join(<span class="string">&quot;invite-code&quot;</span>),
             )<span class="question-mark">?</span>)

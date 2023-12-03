@@ -165,6 +165,7 @@
 <a href="#165" id="165">165</a>
 <a href="#166" id="166">166</a>
 <a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
@@ -280,7 +281,8 @@
         FM_CLN_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;cln&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
         FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;lnd&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
         FM_BTC_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;bitcoin&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_DATA_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;cfg&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_DATA_DIR: PathBuf = FM_TEST_DIR.clone();
+        FM_CLIENT_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;client&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
         FM_ELECTRS_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;electrs&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
         FM_ESPLORA_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;esplora&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
         FM_READY_FILE: PathBuf = FM_TEST_DIR.join(<span class="string">&quot;ready&quot;</span>);
@@ -302,7 +304,7 @@
         </span>FM_LIGHTNING_CLI: String = <span class="macro">f!</span>(<span class="string">&quot;lightning-cli --network regtest --lightning-dir={}&quot;</span>, utf8(<span class="kw-2">&amp;</span>FM_CLN_DIR));
         FM_LNCLI: String = <span class="macro">f!</span>(<span class="string">&quot;lncli -n regtest --lnddir={} --rpcserver=localhost:{FM_PORT_LND_RPC}&quot;</span>, utf8(<span class="kw-2">&amp;</span>FM_LND_DIR));
         FM_BTC_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -datadir={}&quot;</span>, utf8(<span class="kw-2">&amp;</span>FM_BTC_DIR));
-        FM_MINT_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;fedimint-cli --data-dir {}&quot;</span>, utf8(<span class="kw-2">&amp;</span>FM_DATA_DIR));
+        FM_MINT_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;fedimint-cli --data-dir {}&quot;</span>, utf8(<span class="kw-2">&amp;</span>FM_CLIENT_DIR));
         FM_MINT_RPC_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;mint-rpc-client&quot;</span>);
         FM_GWCLI_CLN: String = <span class="macro">f!</span>(<span class="string">&quot;gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_CLN}/&quot;</span>);
         FM_GWCLI_LND: String = <span class="macro">f!</span>(<span class="string">&quot;gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/&quot;</span>);
@@ -329,7 +331,7 @@
         FM_P2P_URL: String = params.consensus.peers[<span class="kw-2">&amp;</span>params.local.our_id].p2p_url.to_string();
         FM_API_URL: String = params.consensus.peers[<span class="kw-2">&amp;</span>params.local.our_id].api_url.to_string();
         FM_BIND_METRICS_API: String = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, globals.FM_PORT_FEDIMINTD_BASE <span class="kw">as </span>usize + <span class="number">2 </span>* globals.FM_FED_SIZE + params.local.our_id.to_usize());
-        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(<span class="macro">format!</span>(<span class="string">&quot;server-{}&quot;</span>, params.local.our_id.to_usize()))).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(<span class="macro">format!</span>(<span class="string">&quot;fedimintd-{}&quot;</span>, params.local.our_id.to_usize()))).<span class="kw">await</span><span class="question-mark">?</span>;
     }
 }
 </code></pre></div></section></main></body></html>
