@@ -69,27 +69,27 @@ First, run a local federation in mprocs:
 just mprocs
 ```
 
-Dump the entire database of server-0
+Dump the entire database of fedimintd-0
 ```shell
-fedimint-dbtool $FM_DATA_DIR/server-0/database dump -- $FM_DATA_DIR/server-0 pass
+fedimint-dbtool $FM_DATA_DIR/fedimintd-0/database dump -- $FM_DATA_DIR/fedimintd-0 pass
 ```
 
-Dump the consensus db entries of server-0
+Dump the consensus db entries of fedimintd-0
 ```shell
-fedimint-dbtool $FM_DATA_DIR/server-0/database dump -- $FM_DATA_DIR/server-0 pass consensus
+fedimint-dbtool $FM_DATA_DIR/fedimintd-0/database dump -- $FM_DATA_DIR/fedimintd-0 pass consensus
 ```
 
-Dump the blocks from the wallet module of server-1
+Dump the blocks from the wallet module of fedimintd-1
 ```shell
-fedimint-dbtool $FM_DATA_DIR/server-1/database dump -- $FM_DATA_DIR/server-1 pass consensus blockhash
+fedimint-dbtool $FM_DATA_DIR/fedimintd-1/database dump -- $FM_DATA_DIR/fedimintd-1 pass consensus blockhash
 ```
 
 Dump the used notes from the mint module and the accepted transactions from consensus
 ```shell
-fedimint-dbtool $FM_DATA_DIR/server-1/database dump -- $FM_DATA_DIR/server-1 pass consensus,mint notenonce,acceptedtransaction
+fedimint-dbtool $FM_DATA_DIR/fedimintd-1/database dump -- $FM_DATA_DIR/fedimintd-1 pass consensus,mint notenonce,acceptedtransaction
 ```
 
 Dump the entire client database (client password can be anything since it doesn't require decryption)
 ```shell
-fedimint-dbtool $FM_DATA_DIR/client.db dump $FM_DATA_DIR clientpass client
+fedimint-dbtool $FM_CLIENT_DIR/client.db dump $FM_CLIENT_DIR clientpass client
 ```

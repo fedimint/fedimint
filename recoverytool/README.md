@@ -61,7 +61,7 @@ The output of `recoverytool` consists of an array of wallet descriptors with opt
 include n-1 public keys and 1 private key (belonging to the guardian running the script):
 
 ```
-$ recoverytool --cfg server-1 --password pass1 utxos --db server-1/database/ | jq
+$ recoverytool --cfg fedimintd-1 --password pass1 utxos --db fedimintd-1/database/ | jq
 [
   {
     "outpoint": "c76d51c9c6dc6b8e462c37b3fa376e7c2055f04f16a8fffc2ab66c5bf0deff55:1",
@@ -80,7 +80,7 @@ To import it into bitcoin core use the following `jq` command to transform the t
 for [`bitcoin-cli importdescriptors`](https://bitcoincore.org/en/doc/24.0.0/rpc/wallet/importdescriptors/):
 
 ```bash
-$ WALLETS="$(recoverytool --cfg server-1 --password pass1 utxos --db server-1/database/ | jq '. | map({"desc": .descriptor, "timestamp":0})')"
+$ WALLETS="$(recoverytool --cfg fedimintd-1 --password pass1 utxos --db fedimintd-1/database/ | jq '. | map({"desc": .descriptor, "timestamp":0})')"
 [
   {
     "desc": "wsh(sortedmulti(3,0280bf3115766b7e1cb23f2f57caf4de5a9171d3985934f2895cc568b384b52319,cSRM825vXJwf8iXcngedon8nQsPC9VMB18wSiG1Fgw6Y1Kzi16ta,021123625d9b21822e1178fc0d2b3f737d0397584cfac821df3250e49c3127cab5,03865705be62a71a3776cca1169908099ad6d138a0c0ed4aeeaf2c8e64616f4085))#h2zg3uhw",

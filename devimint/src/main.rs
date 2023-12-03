@@ -215,8 +215,8 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         fed,
         "dev",
         "config-decrypt",
-        "--in-file={data_dir}/server-0/private.encrypt",
-        "--out-file={data_dir}/server-0/config-plaintext.json"
+        "--in-file={data_dir}/fedimintd-0/private.encrypt",
+        "--out-file={data_dir}/fedimintd-0/config-plaintext.json"
     )
     .env("FM_PASSWORD", "pass")
     .run()
@@ -226,8 +226,8 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         fed,
         "dev",
         "config-encrypt",
-        "--in-file={data_dir}/server-0/config-plaintext.json",
-        "--out-file={data_dir}/server-0/config-2"
+        "--in-file={data_dir}/fedimintd-0/config-plaintext.json",
+        "--out-file={data_dir}/fedimintd-0/config-2"
     )
     .env("FM_PASSWORD", "pass-foo")
     .run()
@@ -237,17 +237,17 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         fed,
         "dev",
         "config-decrypt",
-        "--in-file={data_dir}/server-0/config-2",
-        "--out-file={data_dir}/server-0/config-plaintext-2.json"
+        "--in-file={data_dir}/fedimintd-0/config-2",
+        "--out-file={data_dir}/fedimintd-0/config-plaintext-2.json"
     )
     .env("FM_PASSWORD", "pass-foo")
     .run()
     .await?;
 
     let plaintext_one =
-        fs::read_to_string(format!("{data_dir}/server-0/config-plaintext.json")).await?;
+        fs::read_to_string(format!("{data_dir}/fedimintd-0/config-plaintext.json")).await?;
     let plaintext_two =
-        fs::read_to_string(format!("{data_dir}/server-0/config-plaintext-2.json")).await?;
+        fs::read_to_string(format!("{data_dir}/fedimintd-0/config-plaintext-2.json")).await?;
     anyhow::ensure!(
         plaintext_one == plaintext_two,
         "config-decrypt/encrypt failed"
@@ -1409,10 +1409,10 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         "recoverytool",
         "--readonly",
         "--cfg",
-        "{data_dir}/server-0",
+        "{data_dir}/fedimintd-0",
         "utxos",
         "--db",
-        "{data_dir}/server-0/database"
+        "{data_dir}/fedimintd-0/database"
     )
     .env("FM_PASSWORD", "pass")
     .out_json()
@@ -1469,10 +1469,10 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
             "recoverytool",
             "--readonly",
             "--cfg",
-            "{data_dir}/server-0",
+            "{data_dir}/fedimintd-0",
             "epochs",
             "--db",
-            "{data_dir}/server-0/database"
+            "{data_dir}/fedimintd-0/database"
         )
         .env("FM_PASSWORD", "pass")
         .out_json()
@@ -1615,7 +1615,7 @@ async fn run_ui(process_mgr: &ProcessManager) -> Result<(Vec<Fedimintd>, Externa
                 FM_DATA_DIR: process_mgr
                     .globals
                     .FM_DATA_DIR
-                    .join(format!("server-{peer}")),
+                    .join(format!("fedimintd-{peer}")),
                 FM_BIND_METRICS_API: format!("127.0.0.1:{metrics_port}"),
             };
             let fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer, &vars).await?;
