@@ -858,6 +858,25 @@
 <a href="#858" id="858">858</a>
 <a href="#859" id="859">859</a>
 <a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -871,13 +890,12 @@
 <span class="kw">use </span>fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
+<span class="kw">use </span>fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract, Preimage};
 <span class="kw">use </span>fedimint_ln_common::{LightningInput, LightningOutput};
 <span class="kw">use </span>futures::future;
-<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio_stream::StreamExt;
@@ -1060,8 +1078,9 @@
     ) -&gt; GatewayPayStateMachine {
         <span class="kw">match </span><span class="self">Self</span>::await_get_payment_parameters(
             global_context,
-            pay_invoice_payload.contract_id,
             context.clone(),
+            pay_invoice_payload.contract_id,
+            pay_invoice_payload.payment_data.clone(),
         )
         .<span class="kw">await
         </span>{
@@ -1104,7 +1123,7 @@
         <span class="comment">// Verify that this client is authorized to receive the preimage.
         </span><span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">Self</span>::verify_preimage_authentication(
             <span class="kw-2">&amp;</span>context,
-            payload.payment_hash,
+            payload.payment_data.payment_hash(),
             payload.preimage_auth,
             contract.clone(),
         )
@@ -1121,12 +1140,12 @@
         }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(client) =
-            <span class="self">Self</span>::check_swap_to_federation(context.clone(), payment_parameters.invoice.clone())
+            <span class="self">Self</span>::check_swap_to_federation(context.clone(), payment_parameters.payment_data.clone())
                 .<span class="kw">await
         </span>{
             <span class="self">Self</span>::buy_preimage_via_direct_swap(
                 client,
-                payment_parameters.invoice.clone(),
+                payment_parameters.payment_data.clone(),
                 contract.clone(),
                 common.clone(),
             )
@@ -1144,8 +1163,9 @@
 
     <span class="kw">async fn </span>await_get_payment_parameters(
         global_context: DynGlobalClientContext,
-        contract_id: ContractId,
         context: GatewayClientContext,
+        contract_id: ContractId,
+        payment_data: PaymentData,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError&gt; {
         <span class="macro">debug!</span>(<span class="string">&quot;Await payment parameters for outgoing contract {contract_id:?}&quot;</span>);
         <span class="kw">let </span>account = global_context
@@ -1192,6 +1212,7 @@
                 context.redeem_key,
                 context.timelock_delta,
                 consensus_block_count.unwrap(),
+                <span class="kw-2">&amp;</span>payment_data,
             )
             .<span class="kw">await
             </span>.map_err(|e| {
@@ -1221,19 +1242,36 @@
         common: GatewayPayCommon,
     ) -&gt; GatewayPayStateMachine {
         <span class="macro">debug!</span>(<span class="string">&quot;Buying preimage over lightning for contract {contract:?}&quot;</span>);
-        <span class="kw">let </span>invoice = buy_preimage.invoice.clone();
+        <span class="kw">let </span>payment_data = buy_preimage.payment_data.clone();
+
         <span class="kw">let </span>max_delay = buy_preimage.max_delay;
-        <span class="kw">let </span>max_fee_msat = buy_preimage.max_send_amount.msats;
-        <span class="kw">match </span>context
-            .lnrpc
-            .pay(PayInvoiceRequest {
-                invoice: invoice.to_string(),
-                max_delay,
-                max_fee_msat,
-                payment_hash: invoice.payment_hash().to_vec(),
-            })
-            .<span class="kw">await
-        </span>{
+        <span class="kw">let </span>max_fee = buy_preimage.max_send_amount
+            - buy_preimage
+                .payment_data
+                .amount()
+                .expect(<span class="string">&quot;We already checked that an amount was supplied&quot;</span>);
+
+        <span class="kw">let </span>payment_result = <span class="kw">match </span>buy_preimage.payment_data {
+            PaymentData::Invoice(invoice) =&gt; {
+                context
+                    .lnrpc
+                    .pay(PayInvoiceRequest {
+                        invoice: invoice.to_string(),
+                        max_delay,
+                        max_fee_msat: max_fee.msats,
+                        payment_hash: payment_data.payment_hash().to_vec(),
+                    })
+                    .<span class="kw">await
+            </span>}
+            PaymentData::PrunedInvoice(invoice) =&gt; {
+                context
+                    .lnrpc
+                    .pay_private(invoice, buy_preimage.max_delay, max_fee)
+                    .<span class="kw">await
+            </span>}
+        };
+
+        <span class="kw">match </span>payment_result {
             <span class="prelude-val">Ok</span>(PayInvoiceResponse { preimage, .. }) =&gt; {
                 <span class="macro">debug!</span>(<span class="string">&quot;Preimage received for contract {contract:?}&quot;</span>);
                 <span class="kw">let </span>slice: [u8; <span class="number">32</span>] = preimage.try_into().expect(<span class="string">&quot;Failed to parse preimage&quot;</span>);
@@ -1269,12 +1307,12 @@
 
     <span class="kw">async fn </span>buy_preimage_via_direct_swap(
         client: ClientArc,
-        invoice: Bolt11Invoice,
+        payment_data: PaymentData,
         contract: OutgoingContractAccount,
         common: GatewayPayCommon,
     ) -&gt; GatewayPayStateMachine {
         <span class="macro">debug!</span>(<span class="string">&quot;Buying preimage via direct swap for contract {contract:?}&quot;</span>);
-        <span class="kw">match </span>invoice.try_into() {
+        <span class="kw">match </span>payment_data.try_into() {
             <span class="prelude-val">Ok</span>(swap_params) =&gt; <span class="kw">match </span>client
                 .get_first_module::&lt;GatewayClientModule&gt;()
                 .gateway_handle_direct_swap(swap_params)
@@ -1378,6 +1416,7 @@
         redeem_key: bitcoin::KeyPair,
         timelock_delta: u64,
         consensus_block_count: u64,
+        payment_data: <span class="kw-2">&amp;</span>PaymentData,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentParameters, OutgoingContractError&gt; {
         <span class="kw">let </span>our_pub_key = secp256k1::PublicKey::from_keypair(<span class="kw-2">&amp;</span>redeem_key);
 
@@ -1389,16 +1428,13 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingContractError::NotOurKey);
         }
 
-        <span class="kw">let </span>invoice = account.contract.invoice.clone();
-        <span class="kw">let </span>invoice_amount = Amount::from_msats(
-            invoice
-                .amount_milli_satoshis()
-                .ok_or(OutgoingContractError::InvoiceMissingAmount)<span class="question-mark">?</span>,
-        );
+        <span class="kw">let </span>payment_amount = payment_data
+            .amount()
+            .ok_or(OutgoingContractError::InvoiceMissingAmount)<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>account.amount &lt; invoice_amount {
+        <span class="kw">if </span>account.amount &lt; payment_amount {
             <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingContractError::Underfunded(
-                invoice_amount,
+                payment_amount,
                 account.amount,
             ));
         }
@@ -1410,14 +1446,16 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingContractError::TimeoutTooClose);
         }
 
-        <span class="kw">if </span>invoice.is_expired() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingContractError::InvoiceExpired(invoice.expiry_time()));
+        <span class="kw">if </span>payment_data.is_expired() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingContractError::InvoiceExpired(
+                payment_data.expiry_duration(),
+            ));
         }
 
         <span class="prelude-val">Ok</span>(PaymentParameters {
             max_delay: max_delay.unwrap(),
             max_send_amount: account.amount,
-            invoice,
+            payment_data: payment_data.clone(),
         })
     }
 
@@ -1428,9 +1466,9 @@
     // direct swap between the two federations.
     </span><span class="kw">async fn </span>check_swap_to_federation(
         context: GatewayClientContext,
-        invoice: Bolt11Invoice,
+        payment_data: PaymentData,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;ClientArc&gt; {
-        <span class="kw">let </span>rhints = invoice.route_hints();
+        <span class="kw">let </span>rhints = payment_data.route_hints();
         <span class="kw">match </span>rhints.first().and_then(|rh| rh.<span class="number">0</span>.last()) {
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
             <span class="prelude-val">Some</span>(hop) =&gt; {
@@ -1459,7 +1497,7 @@
 </span><span class="kw">pub struct </span>PaymentParameters {
     max_delay: u64,
     max_send_amount: Amount,
-    invoice: lightning_invoice::Bolt11Invoice,
+    payment_data: PaymentData,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]

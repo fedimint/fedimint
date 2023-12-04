@@ -577,6 +577,90 @@
 <a href="#577" id="577">577</a>
 <a href="#578" id="578">578</a>
 <a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -589,13 +673,16 @@
 <span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
+<span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, IdentifiableContract};
+<span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::{
-    LightningClientContext, LightningGateway, LightningInput, LightningOutputOutcome,
+    LightningClientContext, LightningGateway, LightningInput, LightningOutputOutcome, PrunedInvoice,
 };
+<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, error, warn};
@@ -622,7 +709,8 @@
 ///  Refund -- await transaction acceptance --&gt; Refunded
 ///  Refund -- await transaction rejected --&gt; Failure
 /// ```
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="attr">#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>LightningPayStates {
     CreatedOutgoingLnContract(LightningPayCreatedOutgoingLnContract),
     Canceled,
@@ -641,7 +729,7 @@
     <span class="kw">pub </span>contract: OutgoingContractData,
     <span class="kw">pub </span>gateway_fee: Amount,
     <span class="kw">pub </span>preimage_auth: sha256::Hash,
-    <span class="kw">pub </span>payment_hash: sha256::Hash,
+    <span class="kw">pub </span>invoice: lightning_invoice::Bolt11Invoice,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -792,7 +880,11 @@
             <span class="prelude-val">Ok</span>(timelock) =&gt; {
                 <span class="comment">// Success case: funding transaction is accepted
                 </span><span class="kw">let </span>common = old_state.common.clone();
-                <span class="kw">let </span>payload = PayInvoicePayload::new(common.clone());
+                <span class="kw">let </span>payload = <span class="kw">if </span>gateway.supports_private_payments {
+                    PayInvoicePayload::new_pruned(common.clone())
+                } <span class="kw">else </span>{
+                    PayInvoicePayload::new(common.clone())
+                };
                 LightningPayStateMachine {
                     common: old_state.common,
                     state: LightningPayStates::Funded(LightningPayFunded {
@@ -841,7 +933,7 @@
         <span class="kw">let </span>payload = <span class="self">self</span>.payload.clone();
         <span class="kw">let </span>contract_id = <span class="self">self</span>.payload.contract_id;
         <span class="kw">let </span>timelock = <span class="self">self</span>.timelock;
-        <span class="kw">let </span>payment_hash = common.payment_hash;
+        <span class="kw">let </span>payment_hash = <span class="kw-2">*</span>common.invoice.payment_hash();
         <span class="macro">vec!</span>[StateTransition::new(
             <span class="self">Self</span>::gateway_pay_invoice(gateway, payload),
             <span class="kw">move </span>|dbtx, result, old_state| {
@@ -1138,21 +1230,97 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub struct </span>PayInvoicePayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>contract_id: ContractId,
+    <span class="doccomment">/// Metadata on how to obtain the preimage
+    </span><span class="kw">pub </span>payment_data: PaymentData,
     <span class="kw">pub </span>preimage_auth: sha256::Hash,
-    <span class="kw">pub </span>payment_hash: sha256::Hash,
 }
 
 <span class="kw">impl </span>PayInvoicePayload {
-    <span class="kw">pub fn </span>new(common: LightningPayCommon) -&gt; <span class="self">Self </span>{
+    <span class="kw">fn </span>new(common: LightningPayCommon) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             contract_id: common.contract.contract_account.contract.contract_id(),
             federation_id: common.federation_id,
             preimage_auth: common.preimage_auth,
-            payment_hash: common.payment_hash,
+            payment_data: PaymentData::Invoice(common.invoice),
+        }
+    }
+
+    <span class="kw">fn </span>new_pruned(common: LightningPayCommon) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            contract_id: common.contract.contract_account.contract.contract_id(),
+            federation_id: common.federation_id,
+            preimage_auth: common.preimage_auth,
+            payment_data: PaymentData::PrunedInvoice(
+                common.invoice.try_into().expect(<span class="string">&quot;Invoice has amount&quot;</span>),
+            ),
+        }
+    }
+}
+
+<span class="doccomment">/// Data needed to pay an invoice, may be the whole invoice or only the required
+/// parts of it.
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+</span><span class="kw">pub enum </span>PaymentData {
+    Invoice(Bolt11Invoice),
+    PrunedInvoice(PrunedInvoice),
+}
+
+<span class="kw">impl </span>PaymentData {
+    <span class="kw">pub fn </span>amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            PaymentData::Invoice(invoice) =&gt; {
+                invoice.amount_milli_satoshis().map(Amount::from_msats)
+            }
+            PaymentData::PrunedInvoice(PrunedInvoice { amount, .. }) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>amount),
+        }
+    }
+
+    <span class="kw">pub fn </span>destination(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; secp256k1_zkp::PublicKey {
+        <span class="kw">match </span><span class="self">self </span>{
+            PaymentData::Invoice(invoice) =&gt; invoice
+                .payee_pub_key()
+                .cloned()
+                .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            PaymentData::PrunedInvoice(PrunedInvoice { destination, .. }) =&gt; <span class="kw-2">*</span>destination,
+        }
+    }
+
+    <span class="kw">pub fn </span>payment_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; sha256::Hash {
+        <span class="kw">match </span><span class="self">self </span>{
+            PaymentData::Invoice(invoice) =&gt; <span class="kw-2">*</span>invoice.payment_hash(),
+            PaymentData::PrunedInvoice(PrunedInvoice { payment_hash, .. }) =&gt; <span class="kw-2">*</span>payment_hash,
+        }
+    }
+
+    <span class="kw">pub fn </span>route_hints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;RouteHint&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            PaymentData::Invoice(invoice) =&gt; {
+                invoice.route_hints().into_iter().map(Into::into).collect()
+            }
+            PaymentData::PrunedInvoice(PrunedInvoice { route_hints, .. }) =&gt; route_hints.clone(),
+        }
+    }
+
+    <span class="kw">pub fn </span>is_expired(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="kw">match </span><span class="self">self </span>{
+            PaymentData::Invoice(invoice) =&gt; invoice.is_expired(),
+            PaymentData::PrunedInvoice(PrunedInvoice {
+                timestamp, expiry, ..
+            }) =&gt; timestamp
+                .checked_add(<span class="kw-2">*</span>expiry)
+                .map(|expiry_time| expiry_time &lt; now())
+                .unwrap_or(<span class="bool-val">false</span>),
+        }
+    }
+
+    <span class="kw">pub fn </span>expiry_duration(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Duration {
+        <span class="kw">match </span><span class="self">self </span>{
+            PaymentData::Invoice(invoice) =&gt; invoice.expiry_time(),
+            PaymentData::PrunedInvoice(PrunedInvoice { expiry, .. }) =&gt; <span class="kw-2">*</span>expiry,
         }
     }
 }

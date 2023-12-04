@@ -74,10 +74,6 @@
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::Amount;
@@ -107,9 +103,6 @@
     <span class="doccomment">/// Public key of the user that can claim the money back after the timelock
     /// expires
     </span><span class="kw">pub </span>user_key: secp256k1::PublicKey,
-    <span class="comment">// FIXME: use pruned, privacy friendly version without description etc.
-    </span><span class="doccomment">/// Invoice containing metadata on how to obtain the preimage
-    </span><span class="kw">pub </span>invoice: lightning_invoice::Bolt11Invoice,
     <span class="doccomment">/// Flag that can be set by the gateway and allows the client to claim an
     /// early refund
     </span><span class="kw">pub </span>cancelled: bool,
@@ -122,7 +115,6 @@
         Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.gateway_key, <span class="kw-2">&amp;mut </span>engine).expect(<span class="string">&quot;Hashing never fails&quot;</span>);
         Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.timelock, <span class="kw-2">&amp;mut </span>engine).expect(<span class="string">&quot;Hashing never fails&quot;</span>);
         Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.user_key, <span class="kw-2">&amp;mut </span>engine).expect(<span class="string">&quot;Hashing never fails&quot;</span>);
-        Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.invoice, <span class="kw-2">&amp;mut </span>engine).expect(<span class="string">&quot;Hashing never fails&quot;</span>);
         ContractId::from_engine(engine)
     }
 }
