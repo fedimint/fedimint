@@ -171,36 +171,35 @@
         "fenix": "fenix",
         "flake-utils": "flake-utils_3",
         "nixpkgs": "nixpkgs",
-        "nixpkgs-unstable": "nixpkgs-unstable",
         "systems": "systems_4"
       },
       "locked": {
-        "lastModified": 1699681206,
-        "narHash": "sha256-vg/aDhDPV8QUi2rE3O5C/FgSaxOPZRsuRNvto5aY/JM=",
+        "lastModified": 1701663854,
+        "narHash": "sha256-w2AswCSDCzQo8rD44MdQsDvCY1EuG8rz9jm9qgn7Wy0=",
         "owner": "rustshop",
         "repo": "flakebox",
-        "rev": "390c23bc911b354f16db4d925dbe9b1f795308ed",
+        "rev": "0d2e745bd8ca43ff0cb952debc4bea600e161508",
         "type": "github"
       },
       "original": {
         "owner": "rustshop",
         "repo": "flakebox",
-        "rev": "390c23bc911b354f16db4d925dbe9b1f795308ed",
+        "rev": "0d2e745bd8ca43ff0cb952debc4bea600e161508",
         "type": "github"
       }
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1699291058,
-        "narHash": "sha256-5ggduoaAMPHUy4riL+OrlAZE14Kh7JWX4oLEs22ZqfU=",
+        "lastModified": 1701156937,
+        "narHash": "sha256-jpMJOFvOTejx211D8z/gz0ErRtQPy6RXxgD2ZB86mso=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "41de143fda10e33be0f47eab2bfe08a50f234267",
+        "rev": "7c4c20509c4363195841faa6c911777a134acdf3",
         "type": "github"
       },
       "original": {
         "owner": "nixos",
-        "ref": "nixos-23.05",
+        "ref": "nixos-23.11",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -222,22 +221,6 @@
       }
     },
     "nixpkgs-unstable": {
-      "locked": {
-        "lastModified": 1699099776,
-        "narHash": "sha256-X09iKJ27mGsGambGfkKzqvw5esP1L/Rf8H3u3fCqIiU=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "85f1ba3e51676fa8cc604a3d863d729026a6b8eb",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs-unstable_2": {
       "locked": {
         "lastModified": 1701436327,
         "narHash": "sha256-tRHbnoNI8SIM5O5xuxOmtSLnswEByzmnQcGGyNRjxsE=",
@@ -276,7 +259,7 @@
         "flakebox": "flakebox",
         "nixpkgs": "nixpkgs_2",
         "nixpkgs-kitman": "nixpkgs-kitman",
-        "nixpkgs-unstable": "nixpkgs-unstable_2"
+        "nixpkgs-unstable": "nixpkgs-unstable"
       }
     },
     "rust-analyzer-src": {
