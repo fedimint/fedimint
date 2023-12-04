@@ -14,6 +14,7 @@ pub mod config;
 pub mod contracts;
 pub mod db;
 
+use std::io::{Error, ErrorKind, Read, Write};
 use std::time::{Duration, SystemTime};
 
 use anyhow::bail;
@@ -23,7 +24,8 @@ use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::sm::Context;
 use fedimint_client::ClientArc;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Amount};
@@ -237,7 +239,10 @@ impl std::fmt::Display for LightningOutputOutcomeV0 {
 
 /// Information about a gateway that is stored locally and expires based on
 /// local system time
-#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
+///
+/// Should only be serialized and deserialized in formats that can ignore
+/// additional fields as this struct may be extended in the future.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct LightningGatewayRegistration {
     pub info: LightningGateway,
     /// Indicates if this announcement has been vetted by the federation
@@ -245,6 +250,33 @@ pub struct LightningGatewayRegistration {
     /// Limits the validity of the announcement to allow updates, anchored to
     /// local system time
     pub valid_until: SystemTime,
+}
+
+impl Encodable for LightningGatewayRegistration {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let json_repr = serde_json::to_string(self).map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to serialize LightningGatewayRegistration: {e}"),
+            )
+        })?;
+
+        json_repr.consensus_encode(writer)
+    }
+}
+
+impl Decodable for LightningGatewayRegistration {
+    fn consensus_decode<R: Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let json_repr = String::consensus_decode(r, modules)?;
+        serde_json::from_str(&json_repr).map_err(|e| {
+            DecodeError::new_custom(
+                anyhow::Error::new(e).context("Failed to deserialize LightningGatewayRegistration"),
+            )
+        })
+    }
 }
 
 impl LightningGatewayRegistration {
@@ -272,7 +304,10 @@ impl LightningGatewayRegistration {
 /// expires based on a TTL to allow for sharing between nodes with
 /// unsynchronized clocks which can each anchor the announcement to their local
 /// system time.
-#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
+///
+/// Should only be serialized and deserialized in formats that can ignore
+/// additional fields as this struct may be extended in the future.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct LightningGatewayAnnouncement {
     pub info: LightningGateway,
     /// Indicates if this announcement has been vetted by the federation
