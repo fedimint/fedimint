@@ -1,6 +1,6 @@
 [package]
 name = "devimint"
-version = "0.2.0-rc3"
+version = "0.2.0-rc4"
 edition = "2021"
 license = "MIT"
 publish = false

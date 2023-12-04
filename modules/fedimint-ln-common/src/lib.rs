@@ -14,25 +14,29 @@ pub mod config;
 pub mod contracts;
 pub mod db;
 
+use std::io::{Error, ErrorKind, Read, Write};
 use std::time::{Duration, SystemTime};
 
-use anyhow::bail;
+use anyhow::{bail, Context as AnyhowContext};
+use bitcoin_hashes::sha256;
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::sm::Context;
 use fedimint_client::ClientArc;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Amount};
-use lightning_invoice::RoutingFees;
+use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
 
 use crate::contracts::incoming::OfferId;
 use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, PreimageDecryptionShare};
+use crate::route_hints::RouteHint;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("ln");
 const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 0);
@@ -235,7 +239,10 @@ impl std::fmt::Display for LightningOutputOutcomeV0 {
 
 /// Information about a gateway that is stored locally and expires based on
 /// local system time
-#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
+///
+/// Should only be serialized and deserialized in formats that can ignore
+/// additional fields as this struct may be extended in the future.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct LightningGatewayRegistration {
     pub info: LightningGateway,
     /// Indicates if this announcement has been vetted by the federation
@@ -243,6 +250,33 @@ pub struct LightningGatewayRegistration {
     /// Limits the validity of the announcement to allow updates, anchored to
     /// local system time
     pub valid_until: SystemTime,
+}
+
+impl Encodable for LightningGatewayRegistration {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let json_repr = serde_json::to_string(self).map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to serialize LightningGatewayRegistration: {e}"),
+            )
+        })?;
+
+        json_repr.consensus_encode(writer)
+    }
+}
+
+impl Decodable for LightningGatewayRegistration {
+    fn consensus_decode<R: Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let json_repr = String::consensus_decode(r, modules)?;
+        serde_json::from_str(&json_repr).map_err(|e| {
+            DecodeError::new_custom(
+                anyhow::Error::new(e).context("Failed to deserialize LightningGatewayRegistration"),
+            )
+        })
+    }
 }
 
 impl LightningGatewayRegistration {
@@ -270,7 +304,10 @@ impl LightningGatewayRegistration {
 /// expires based on a TTL to allow for sharing between nodes with
 /// unsynchronized clocks which can each anchor the announcement to their local
 /// system time.
-#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
+///
+/// Should only be serialized and deserialized in formats that can ignore
+/// additional fields as this struct may be extended in the future.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct LightningGatewayAnnouncement {
     pub info: LightningGateway,
     /// Indicates if this announcement has been vetted by the federation
@@ -315,6 +352,8 @@ pub struct LightningGateway {
     #[serde(with = "serde_routing_fees")]
     pub fees: RoutingFees,
     pub gateway_id: secp256k1::PublicKey,
+    /// Indicates if the gateway supports private payments
+    pub supports_private_payments: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
@@ -427,6 +466,26 @@ pub mod route_hints {
                     })
                     .collect(),
             )
+        }
+    }
+
+    impl From<lightning_invoice::RouteHint> for RouteHint {
+        fn from(rh: lightning_invoice::RouteHint) -> Self {
+            RouteHint(rh.0.into_iter().map(Into::into).collect())
+        }
+    }
+
+    impl From<lightning_invoice::RouteHintHop> for RouteHintHop {
+        fn from(rhh: lightning_invoice::RouteHintHop) -> Self {
+            RouteHintHop {
+                src_node_id: rhh.src_node_id,
+                short_channel_id: rhh.short_channel_id,
+                base_msat: rhh.fees.base_msat,
+                proportional_millionths: rhh.fees.proportional_millionths,
+                cltv_expiry_delta: rhh.cltv_expiry_delta,
+                htlc_minimum_msat: rhh.htlc_minimum_msat,
+                htlc_maximum_msat: rhh.htlc_maximum_msat,
+            }
         }
     }
 }
@@ -578,4 +637,44 @@ pub async fn ln_operation(
     }
 
     Ok(operation)
+}
+
+/// Data needed to pay an invoice
+///
+/// This is a subset of the data from a [`lightning_invoice::Bolt11Invoice`]
+/// that does not contain the description, which increases privacy for the user.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+pub struct PrunedInvoice {
+    pub amount: Amount,
+    pub destination: secp256k1::PublicKey,
+    pub payment_hash: sha256::Hash,
+    pub payment_secret: [u8; 32],
+    pub route_hints: Vec<RouteHint>,
+    pub min_final_cltv_delta: u64,
+    pub timestamp: SystemTime,
+    pub expiry: Duration,
+}
+
+impl TryFrom<Bolt11Invoice> for PrunedInvoice {
+    type Error = anyhow::Error;
+
+    fn try_from(invoice: Bolt11Invoice) -> Result<Self, Self::Error> {
+        Ok(PrunedInvoice {
+            amount: Amount::from_msats(
+                invoice
+                    .amount_milli_satoshis()
+                    .context("invoice amount is missing")?,
+            ),
+            destination: invoice
+                .payee_pub_key()
+                .cloned()
+                .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            payment_hash: *invoice.payment_hash(),
+            payment_secret: invoice.payment_secret().0,
+            route_hints: invoice.route_hints().into_iter().map(Into::into).collect(),
+            min_final_cltv_delta: invoice.min_final_cltv_expiry_delta(),
+            timestamp: invoice.timestamp(),
+            expiry: invoice.expiry_time(),
+        })
+    }
 }

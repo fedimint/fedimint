@@ -4,6 +4,7 @@ pub mod pay;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::ensure;
 use async_stream::stream;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::derivable_secret::ChildId;
@@ -26,7 +27,7 @@ use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, Transaction
 use fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
-use fedimint_ln_client::pay::PayInvoicePayload;
+use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{create_incoming_contract_output, LightningClientInit};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::LightningClientConfig;
@@ -284,6 +285,7 @@ impl GatewayClientModule {
                 route_hints,
                 fees: self.fees,
                 gateway_id,
+                supports_private_payments: self.lnrpc.supports_private_payments(),
             },
             ttl,
             vetted: false,
@@ -515,6 +517,16 @@ impl GatewayClientModule {
     ) -> anyhow::Result<OperationId> {
         let payload = pay_invoice_payload.clone();
 
+        if matches!(
+            pay_invoice_payload.payment_data,
+            PaymentData::PrunedInvoice { .. }
+        ) {
+            ensure!(
+                self.lnrpc.supports_private_payments(),
+                "Private payments are not supported by the lightning node"
+            );
+        }
+
         self.client_ctx
             .module_autocommit(
                 |dbtx, _| {
@@ -736,14 +748,13 @@ pub struct SwapParameters {
     amount_msat: Amount,
 }
 
-impl TryFrom<lightning_invoice::Bolt11Invoice> for SwapParameters {
+impl TryFrom<PaymentData> for SwapParameters {
     type Error = anyhow::Error;
 
-    fn try_from(s: lightning_invoice::Bolt11Invoice) -> Result<Self, Self::Error> {
-        let payment_hash = *s.payment_hash();
+    fn try_from(s: PaymentData) -> Result<Self, Self::Error> {
+        let payment_hash = s.payment_hash();
         let amount_msat = s
-            .amount_milli_satoshis()
-            .map(Amount::from_msats)
+            .amount()
             .ok_or_else(|| anyhow::anyhow!("Amountless invoice cannot be used in direct swap"))?;
         Ok(Self {
             payment_hash,

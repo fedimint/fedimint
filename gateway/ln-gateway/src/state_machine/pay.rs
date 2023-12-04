@@ -11,13 +11,12 @@ use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, TransactionId};
-use fedimint_ln_client::pay::PayInvoicePayload;
+use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract, Preimage};
 use fedimint_ln_common::{LightningInput, LightningOutput};
 use futures::future;
-use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio_stream::StreamExt;
@@ -200,8 +199,9 @@ impl GatewayPayInvoice {
     ) -> GatewayPayStateMachine {
         match Self::await_get_payment_parameters(
             global_context,
-            pay_invoice_payload.contract_id,
             context.clone(),
+            pay_invoice_payload.contract_id,
+            pay_invoice_payload.payment_data.clone(),
         )
         .await
         {
@@ -244,7 +244,7 @@ impl GatewayPayInvoice {
         // Verify that this client is authorized to receive the preimage.
         if let Err(err) = Self::verify_preimage_authentication(
             &context,
-            payload.payment_hash,
+            payload.payment_data.payment_hash(),
             payload.preimage_auth,
             contract.clone(),
         )
@@ -261,12 +261,12 @@ impl GatewayPayInvoice {
         }
 
         if let Some(client) =
-            Self::check_swap_to_federation(context.clone(), payment_parameters.invoice.clone())
+            Self::check_swap_to_federation(context.clone(), payment_parameters.payment_data.clone())
                 .await
         {
             Self::buy_preimage_via_direct_swap(
                 client,
-                payment_parameters.invoice.clone(),
+                payment_parameters.payment_data.clone(),
                 contract.clone(),
                 common.clone(),
             )
@@ -284,8 +284,9 @@ impl GatewayPayInvoice {
 
     async fn await_get_payment_parameters(
         global_context: DynGlobalClientContext,
-        contract_id: ContractId,
         context: GatewayClientContext,
+        contract_id: ContractId,
+        payment_data: PaymentData,
     ) -> Result<(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError> {
         debug!("Await payment parameters for outgoing contract {contract_id:?}");
         let account = global_context
@@ -332,6 +333,7 @@ impl GatewayPayInvoice {
                 context.redeem_key,
                 context.timelock_delta,
                 consensus_block_count.unwrap(),
+                &payment_data,
             )
             .await
             .map_err(|e| {
@@ -361,19 +363,36 @@ impl GatewayPayInvoice {
         common: GatewayPayCommon,
     ) -> GatewayPayStateMachine {
         debug!("Buying preimage over lightning for contract {contract:?}");
-        let invoice = buy_preimage.invoice.clone();
+        let payment_data = buy_preimage.payment_data.clone();
+
         let max_delay = buy_preimage.max_delay;
-        let max_fee_msat = buy_preimage.max_send_amount.msats;
-        match context
-            .lnrpc
-            .pay(PayInvoiceRequest {
-                invoice: invoice.to_string(),
-                max_delay,
-                max_fee_msat,
-                payment_hash: invoice.payment_hash().to_vec(),
-            })
-            .await
-        {
+        let max_fee = buy_preimage.max_send_amount
+            - buy_preimage
+                .payment_data
+                .amount()
+                .expect("We already checked that an amount was supplied");
+
+        let payment_result = match buy_preimage.payment_data {
+            PaymentData::Invoice(invoice) => {
+                context
+                    .lnrpc
+                    .pay(PayInvoiceRequest {
+                        invoice: invoice.to_string(),
+                        max_delay,
+                        max_fee_msat: max_fee.msats,
+                        payment_hash: payment_data.payment_hash().to_vec(),
+                    })
+                    .await
+            }
+            PaymentData::PrunedInvoice(invoice) => {
+                context
+                    .lnrpc
+                    .pay_private(invoice, buy_preimage.max_delay, max_fee)
+                    .await
+            }
+        };
+
+        match payment_result {
             Ok(PayInvoiceResponse { preimage, .. }) => {
                 debug!("Preimage received for contract {contract:?}");
                 let slice: [u8; 32] = preimage.try_into().expect("Failed to parse preimage");
@@ -409,12 +428,12 @@ impl GatewayPayInvoice {
 
     async fn buy_preimage_via_direct_swap(
         client: ClientArc,
-        invoice: Bolt11Invoice,
+        payment_data: PaymentData,
         contract: OutgoingContractAccount,
         common: GatewayPayCommon,
     ) -> GatewayPayStateMachine {
         debug!("Buying preimage via direct swap for contract {contract:?}");
-        match invoice.try_into() {
+        match payment_data.try_into() {
             Ok(swap_params) => match client
                 .get_first_module::<GatewayClientModule>()
                 .gateway_handle_direct_swap(swap_params)
@@ -518,6 +537,7 @@ impl GatewayPayInvoice {
         redeem_key: bitcoin::KeyPair,
         timelock_delta: u64,
         consensus_block_count: u64,
+        payment_data: &PaymentData,
     ) -> Result<PaymentParameters, OutgoingContractError> {
         let our_pub_key = secp256k1::PublicKey::from_keypair(&redeem_key);
 
@@ -529,16 +549,13 @@ impl GatewayPayInvoice {
             return Err(OutgoingContractError::NotOurKey);
         }
 
-        let invoice = account.contract.invoice.clone();
-        let invoice_amount = Amount::from_msats(
-            invoice
-                .amount_milli_satoshis()
-                .ok_or(OutgoingContractError::InvoiceMissingAmount)?,
-        );
+        let payment_amount = payment_data
+            .amount()
+            .ok_or(OutgoingContractError::InvoiceMissingAmount)?;
 
-        if account.amount < invoice_amount {
+        if account.amount < payment_amount {
             return Err(OutgoingContractError::Underfunded(
-                invoice_amount,
+                payment_amount,
                 account.amount,
             ));
         }
@@ -550,14 +567,16 @@ impl GatewayPayInvoice {
             return Err(OutgoingContractError::TimeoutTooClose);
         }
 
-        if invoice.is_expired() {
-            return Err(OutgoingContractError::InvoiceExpired(invoice.expiry_time()));
+        if payment_data.is_expired() {
+            return Err(OutgoingContractError::InvoiceExpired(
+                payment_data.expiry_duration(),
+            ));
         }
 
         Ok(PaymentParameters {
             max_delay: max_delay.unwrap(),
             max_send_amount: account.amount,
-            invoice,
+            payment_data: payment_data.clone(),
         })
     }
 
@@ -568,9 +587,9 @@ impl GatewayPayInvoice {
     // direct swap between the two federations.
     async fn check_swap_to_federation(
         context: GatewayClientContext,
-        invoice: Bolt11Invoice,
+        payment_data: PaymentData,
     ) -> Option<ClientArc> {
-        let rhints = invoice.route_hints();
+        let rhints = payment_data.route_hints();
         match rhints.first().and_then(|rh| rh.0.last()) {
             None => None,
             Some(hop) => {
@@ -599,7 +618,7 @@ impl GatewayPayInvoice {
 pub struct PaymentParameters {
     max_delay: u64,
     max_send_amount: Amount,
-    invoice: lightning_invoice::Bolt11Invoice,
+    payment_data: PaymentData,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
