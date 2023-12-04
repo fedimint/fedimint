@@ -17,7 +17,7 @@ pub mod db;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::time::{Duration, SystemTime};
 
-use anyhow::bail;
+use anyhow::{bail, Context as AnyhowContext};
 use bitcoin_hashes::sha256;
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
@@ -29,7 +29,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Amount};
-use lightning_invoice::RoutingFees;
+use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -653,4 +653,28 @@ pub struct PrunedInvoice {
     pub min_final_cltv_delta: u64,
     pub timestamp: SystemTime,
     pub expiry: Duration,
+}
+
+impl TryFrom<Bolt11Invoice> for PrunedInvoice {
+    type Error = anyhow::Error;
+
+    fn try_from(invoice: Bolt11Invoice) -> Result<Self, Self::Error> {
+        Ok(PrunedInvoice {
+            amount: Amount::from_msats(
+                invoice
+                    .amount_milli_satoshis()
+                    .context("invoice amount is missing")?,
+            ),
+            destination: invoice
+                .payee_pub_key()
+                .cloned()
+                .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            payment_hash: *invoice.payment_hash(),
+            payment_secret: invoice.payment_secret().0,
+            route_hints: invoice.route_hints().into_iter().map(Into::into).collect(),
+            min_final_cltv_delta: invoice.min_final_cltv_expiry_delta(),
+            timestamp: invoice.timestamp(),
+            expiry: invoice.expiry_time(),
+        })
+    }
 }
