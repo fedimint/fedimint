@@ -58,8 +58,7 @@ async fn backup_encode_decode_roundtrip() -> anyhow::Result<()> {
 
     let backup = client1.create_backup(Metadata::empty()).await?;
 
-    let backup_bin =
-        fedimint_core::encoding::Encodable::consensus_encode_to_vec(&backup).expect("encode");
+    let backup_bin = fedimint_core::encoding::Encodable::consensus_encode_to_vec(&backup);
 
     let backup_decoded: ClientBackup = fedimint_core::encoding::Decodable::consensus_decode(
         &mut Cursor::new(&backup_bin),

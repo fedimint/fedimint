@@ -83,7 +83,7 @@ impl ClientBackup {
 
     /// Encrypt with a key and turn into [`EncryptedClientBackup`]
     pub fn encrypt_to(&self, key: &fedimint_aead::LessSafeKey) -> Result<EncryptedClientBackup> {
-        let encoded = Encodable::consensus_encode_to_vec(self)?;
+        let encoded = Encodable::consensus_encode_to_vec(self);
 
         let encrypted = fedimint_aead::encrypt(encoded, key)?;
         Ok(EncryptedClientBackup(encrypted))

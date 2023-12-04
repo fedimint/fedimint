@@ -64,10 +64,7 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
         let mut items = Vec::new();
 
         if let Some(item) = self.leftover_item.take() {
-            let n_bytes_item = item
-                .consensus_encode_to_vec()
-                .expect("Writing to a vector cant fail")
-                .len();
+            let n_bytes_item = item.consensus_encode_to_vec().len();
 
             if n_bytes_item + n_bytes <= BYTE_LIMIT {
                 n_bytes += n_bytes_item;
@@ -84,10 +81,7 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
                 continue;
             }
 
-            let n_bytes_item = item
-                .consensus_encode_to_vec()
-                .expect("Writing to a vector cant fail")
-                .len();
+            let n_bytes_item = item.consensus_encode_to_vec().len();
 
             if n_bytes + n_bytes_item <= BYTE_LIMIT {
                 n_bytes += n_bytes_item;
@@ -98,9 +92,7 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
             }
         }
 
-        let bytes = items
-            .consensus_encode_to_vec()
-            .expect("Writing to a vector cant fail");
+        let bytes = items.consensus_encode_to_vec();
 
         assert!(bytes.len() <= BYTE_LIMIT);
 

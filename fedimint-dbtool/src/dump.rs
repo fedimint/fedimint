@@ -155,8 +155,8 @@ impl DatabaseDump {
                         .await?
                         .map(|(k, v)| {
                             (
-                                k.consensus_encode_to_hex().expect("can't fail"),
-                                Box::new(v.consensus_encode_to_hex().expect("can't fail")),
+                                k.consensus_encode_to_hex(),
+                                Box::new(v.consensus_encode_to_hex()),
                             )
                         })
                         .collect::<BTreeMap<String, Box<_>>>()

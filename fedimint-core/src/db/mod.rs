@@ -1748,8 +1748,7 @@ macro_rules! push_db_pair_items {
                 .await
                 .map(|(key, val)| {
                     (
-                        $crate::encoding::Encodable::consensus_encode_to_hex(&key)
-                            .expect("can't fail"),
+                        $crate::encoding::Encodable::consensus_encode_to_hex(&key),
                         val,
                     )
                 })
@@ -1768,8 +1767,7 @@ macro_rules! push_db_pair_items_no_serde {
                 .await
                 .map(|(key, val)| {
                     (
-                        $crate::encoding::Encodable::consensus_encode_to_hex(&key)
-                            .expect("can't fail"),
+                        $crate::encoding::Encodable::consensus_encode_to_hex(&key),
                         SerdeWrapper::from_encodable(val),
                     )
                 })

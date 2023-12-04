@@ -717,9 +717,7 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
             consensus: ServerModuleConsensusConfig {
                 kind: consensus.kind(),
                 version: consensus.version(),
-                config: consensus
-                    .consensus_encode_to_vec()
-                    .expect("serialization can't fail"),
+                config: consensus.consensus_encode_to_vec(),
             },
             consensus_json: JsonWithKind::new(
                 kind,

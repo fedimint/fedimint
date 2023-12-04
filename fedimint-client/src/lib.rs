@@ -1467,7 +1467,7 @@ impl ClientBuilder {
         match dbtx.get_value(&EncodedClientSecretKey).await {
             Some(_) => bail!("Encoded client secret already exists, cannot overwrite"),
             None => {
-                let encoded_secret = T::consensus_encode_to_vec(&secret)?;
+                let encoded_secret = T::consensus_encode_to_vec(&secret);
                 dbtx.insert_entry(&EncodedClientSecretKey, &encoded_secret)
                     .await;
                 dbtx.commit_tx().await;
