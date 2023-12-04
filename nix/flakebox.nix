@@ -1,4 +1,4 @@
-{ pkgs, pkgs-unstable, pkgs-kitman, flakeboxLib, toolchains, advisory-db, profiles, craneMultiBuild, replaceGitHash }:
+{ pkgs, pkgs-kitman, flakeboxLib, toolchains, advisory-db, profiles, craneMultiBuild, replaceGitHash }:
 let
   lib = pkgs.lib;
 

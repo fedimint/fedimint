@@ -1,7 +1,8 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # nixpkgs - We use nixpkgs as input of `flakebox`, as it locks things like toolchains,
+    #           in versions that are actually tested in flakebox's CI to cross-compile things
+    #           well. This also saves us download and Nix evaluation time.
     nixpkgs-kitman.url = "github:jkitman/nixpkgs/add-esplora-pkg";
     flake-utils.url = "github:numtide/flake-utils";
     flakebox = {
@@ -13,20 +14,15 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-kitman, flake-utils, flakebox, advisory-db }:
+  outputs = { self, nixpkgs-kitman, flake-utils, flakebox, advisory-db }:
     flake-utils.lib.eachDefaultSystem
       (system:
         let
-          pkgs-unstable = import nixpkgs-unstable {
-            inherit system;
-          };
 
-          pkgs = import nixpkgs {
+          pkgs = import flakebox.inputs.nixpkgs {
             inherit system;
             overlays = [
               (final: prev: {
-                cargo-udeps = pkgs-unstable.cargo-udeps;
-                wasm-bindgen-cli = pkgs-unstable.wasm-bindgen-cli;
 
                 clightning = prev.clightning.overrideAttrs (oldAttrs: {
                   configureFlags = [ "--enable-developer" "--disable-valgrind" ];
@@ -36,7 +32,7 @@
 
                 # Note: we are using cargo-nextest from pkgs-unstable because it has some fixes we need
                 # Note: shell script adding DYLD_FALLBACK_LIBRARY_PATH because of: https://github.com/nextest-rs/nextest/issues/962
-                cargo-nextest = pkgs.writeShellScriptBin "cargo-nextest" "exec env DYLD_FALLBACK_LIBRARY_PATH=\"$(dirname $(${pkgs.which}/bin/which rustc))/../lib\" ${pkgs-unstable.cargo-nextest}/bin/cargo-nextest \"$@\"";
+                cargo-nextest = pkgs.writeShellScriptBin "cargo-nextest" "exec env DYLD_FALLBACK_LIBRARY_PATH=\"$(dirname $(${pkgs.which}/bin/which rustc))/../lib\" ${prev.cargo-nextest}/bin/cargo-nextest \"$@\"";
 
                 cargo-llvm-cov = prev.rustPlatform.buildRustPackage rec {
                   pname = "cargo-llvm-cov";
@@ -156,7 +152,7 @@
 
 
           craneMultiBuild = import nix/flakebox.nix {
-            inherit pkgs pkgs-unstable pkgs-kitman flakeboxLib advisory-db replaceGitHash;
+            inherit pkgs pkgs-kitman flakeboxLib advisory-db replaceGitHash;
 
             # Yes, you're seeing right. We're passing result of this call as an argument
             # to it.
