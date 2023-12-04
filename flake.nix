@@ -102,6 +102,15 @@
                 "rust-src"
                 "llvm-tools-preview"
               ];
+
+              motd = {
+                enable = true;
+                command = ''
+                  >&2 echo "🚧 In an enfort to improve documentation, we now require all structs and"
+                  >&2 echo "🚧 and public methods to be documented with a docstring."
+                  >&2 echo "🚧 See https://github.com/fedimint/fedimint/issues/3807"
+                '';
+              };
               # we have our own weird CI workflows
               github.ci.enable = false;
               just.includePaths = [
