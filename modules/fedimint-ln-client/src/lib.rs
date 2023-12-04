@@ -526,7 +526,6 @@ impl LightningClientModule {
             gateway_key: gateway.gateway_redeem_key,
             timelock: absolute_timelock as u32,
             user_key: user_sk.public_key(),
-            invoice,
             cancelled: false,
         };
 
@@ -548,7 +547,7 @@ impl LightningClientModule {
                         contract: outgoing_payment.clone(),
                         gateway_fee: Amount::from_msats(base_fee + margin_fee),
                         preimage_auth,
-                        payment_hash,
+                        invoice: invoice.clone(),
                     },
                     state: LightningPayStates::CreatedOutgoingLnContract(
                         LightningPayCreatedOutgoingLnContract {

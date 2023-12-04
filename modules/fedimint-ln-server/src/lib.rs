@@ -1159,7 +1159,6 @@ mod tests {
     };
     use fedimint_ln_common::db::{ContractKey, LightningAuditItemKey};
     use fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
-    use lightning_invoice::Bolt11Invoice;
     use rand::rngs::OsRng;
     use secp256k1::{generate_keypair, PublicKey};
 
@@ -1338,15 +1337,12 @@ mod tests {
         let server = Lightning::new(server_cfg[0].clone(), &mut tg).unwrap();
 
         let preimage = Preimage([42u8; 32]);
-        let invoice = str::parse::<Bolt11Invoice>("lnbc10u1pjq37rgsp5cry9r0qqdzp0tl0m27jedvxtrazq0v8xh5rfvzuhm7yxydg50m9qpp5r0cjzjzt7pjwae8trp6dtteh6hstdakzv68atpqx0zshaexghpwsdqqcqpjrzjqfzekav6v27ra0lf3geqmg3hj3xvfu652cuyhk8aa7naqdqvwh6x7zagh5qqy3qqqyqqqqqpqqqqqqgq9q9qyysgq6vf5z83a2q2ua9nwanmc7pql26pwt8smt2xzwp7kjd0mgplmy925s5yz6nlfxt99p2dlffw82gw8kte7lv87pcf4nahslg2vyhhkzwqqxuqmgp")
-            .expect("should parse a valid invoice string");
         let gateway_key = random_pub_key();
         let outgoing_contract = FundedContract::Outgoing(OutgoingContract {
             hash: preimage.consensus_hash(),
             gateway_key,
             timelock: 1000000,
             user_key: random_pub_key(),
-            invoice,
             cancelled: false,
         });
         let contract_id = outgoing_contract.contract_id();
@@ -1420,7 +1416,7 @@ mod fedimint_migration_tests {
         prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_33, BYTE_8, STRING_64,
     };
     use futures::StreamExt;
-    use lightning_invoice::{Bolt11Invoice, RoutingFees};
+    use lightning_invoice::RoutingFees;
     use rand::distributions::Standard;
     use rand::prelude::Distribution;
     use rand::rngs::OsRng;
@@ -1462,13 +1458,11 @@ mod fedimint_migration_tests {
             },
         )
         .await;
-        let invoice = str::parse::<Bolt11Invoice>("lnbc10u1pjq37rgsp5cry9r0qqdzp0tl0m27jedvxtrazq0v8xh5rfvzuhm7yxydg50m9qpp5r0cjzjzt7pjwae8trp6dtteh6hstdakzv68atpqx0zshaexghpwsdqqcqpjrzjqfzekav6v27ra0lf3geqmg3hj3xvfu652cuyhk8aa7naqdqvwh6x7zagh5qqy3qqqyqqqqqpqqqqqqgq9q9qyysgq6vf5z83a2q2ua9nwanmc7pql26pwt8smt2xzwp7kjd0mgplmy925s5yz6nlfxt99p2dlffw82gw8kte7lv87pcf4nahslg2vyhhkzwqqxuqmgp");
         let outgoing_contract = FundedContract::Outgoing(outgoing::OutgoingContract {
             hash: secp256k1::hashes::sha256::Hash::hash(&[0, 2, 3, 4, 5, 6, 7, 8]),
             gateway_key: pk,
             timelock: 1000000,
             user_key: pk,
-            invoice: invoice.unwrap(),
             cancelled: false,
         });
         dbtx.insert_new_entry(
@@ -1526,6 +1520,7 @@ mod fedimint_migration_tests {
                     proportional_millionths: 0,
                 },
                 gateway_id: pk,
+                supports_private_payments: false,
             },
             valid_until: fedimint_core::time::now(),
             vetted: false,
