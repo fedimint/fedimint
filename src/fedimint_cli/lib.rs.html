@@ -853,6 +853,17 @@
 <a href="#853" id="853">853</a>
 <a href="#854" id="854">854</a>
 <a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
@@ -1082,7 +1093,7 @@
     }
 }
 
-<span class="attr">#[derive(Parser)]
+<span class="attr">#[derive(Parser, Clone)]
 #[command(version)]
 </span><span class="kw">struct </span>Opts {
     <span class="doccomment">/// The working directory of the client containing the config and db
@@ -1096,6 +1107,11 @@
     <span class="doccomment">/// Guardian password for authentication
     </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
     </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
+
+    <span class="doccomment">/// Activate more verbose logging, for full control use the RUST_LOG env
+    /// variable
+    </span><span class="attr">#[arg(short = <span class="string">&#39;v&#39;</span>, long)]
+    </span>verbose: bool,
 
     <span class="attr">#[clap(subcommand)]
     </span>command: Command,
@@ -1338,6 +1354,7 @@ Examples:
 
 <span class="kw">pub struct </span>FedimintCli {
     module_inits: ClientModuleInitRegistry,
+    cli_args: Opts,
 }
 
 <span class="kw">impl </span>FedimintCli {
@@ -1352,12 +1369,18 @@ Examples:
             }
         }
 
-        TracingSetup::default().init().expect(<span class="string">&quot;tracing initializes&quot;</span>);
+        <span class="kw">let </span>cli_args = Opts::parse();
+        <span class="kw">let </span>base_level = <span class="kw">if </span>cli_args.verbose { <span class="string">&quot;info&quot; </span>} <span class="kw">else </span>{ <span class="string">&quot;warn&quot; </span>};
+        TracingSetup::default()
+            .with_base_level(base_level)
+            .init()
+            .expect(<span class="string">&quot;tracing initializes&quot;</span>);
 
         <span class="macro">debug!</span>(<span class="string">&quot;Starting fedimint-cli (version: {CODE_VERSION})&quot;</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             module_inits: ClientModuleInitRegistry::new(),
+            cli_args,
         })
     }
 
@@ -1376,8 +1399,7 @@ Examples:
     }
 
     <span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="kw">let </span>cli = Opts::parse();
-        <span class="kw">match </span><span class="self">self</span>.handle_command(cli).<span class="kw">await </span>{
+        <span class="kw">match </span><span class="self">self</span>.handle_command(<span class="self">self</span>.cli_args.clone()).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(output) =&gt; {
                 <span class="comment">// ignore if there&#39;s anyone reading the stuff we&#39;re writing out
                 </span><span class="kw">let _ </span>= <span class="macro">writeln!</span>(std::io::stdout(), <span class="string">&quot;{output}&quot;</span>);

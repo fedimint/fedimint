@@ -143,6 +143,16 @@
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fs::File;
 <span class="kw">use </span>std::{env, io};
 
@@ -174,6 +184,7 @@
 <span class="doccomment">/// Consolidates the setup of server tracing into a helper
 </span><span class="attr">#[derive(Default)]
 </span><span class="kw">pub struct </span>TracingSetup {
+    base_level: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
     </span>tokio_console_bind: <span class="prelude-ty">Option</span>&lt;std::net::SocketAddr&gt;,
     <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
@@ -210,6 +221,14 @@
         <span class="self">self
     </span>}
 
+    <span class="doccomment">/// Sets the log level applied to most modules. Some overly chatty modules
+    /// are muted even if this is set to a lower log level, use the `RUST_LOG`
+    /// environment variable to override.
+    </span><span class="kw">pub fn </span>with_base_level(<span class="kw-2">&amp;mut </span><span class="self">self</span>, level: <span class="kw">impl </span>Into&lt;String&gt;) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="self">self</span>.base_level = <span class="prelude-val">Some</span>(level.into());
+        <span class="self">self
+    </span>}
+
     <span class="doccomment">/// Initialize the logging, must be called for tracing to begin
     </span><span class="kw">pub fn </span>init(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">use </span>tracing_subscriber::fmt::writer::{BoxMakeWriter, Tee};
@@ -219,7 +238,8 @@
             <span class="comment">// We prefix everything with a default general log level and
             // good per-module specific default. User provided RUST_LOG
             // can override one or both
-            </span><span class="string">&quot;info,{},{},{},{}&quot;</span>,
+            </span><span class="string">&quot;{},{},{},{},{}&quot;</span>,
+            <span class="self">self</span>.base_level.as_deref().unwrap_or(<span class="string">&quot;info&quot;</span>),
             <span class="string">&quot;jsonrpsee_core::client::async_client=off&quot;</span>,
             <span class="string">&quot;jsonrpsee_server=warn,jsonrpsee_server::transport=off&quot;</span>,
             <span class="string">&quot;AlephBFT-=error&quot;</span>,
