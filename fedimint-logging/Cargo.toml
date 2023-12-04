@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-logging"
-version = "0.2.0-rc3"
+version = "0.2.0-rc4"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "contains some utilities for logging and tracing"

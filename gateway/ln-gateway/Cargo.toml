@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-ln-gateway"
-version = "0.2.0-rc3"
+version = "0.2.0-rc4"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "ln-gateway is a core lightning plugin which allows a Lightning node operator to receive or pay Lightning invoices on behalf of fedimint users."
@@ -37,15 +37,15 @@ bitcoin_hashes = "0.11.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
 cln-plugin = "0.1.5"
 cln-rpc = { workspace = true }
-fedimint-client = { version = "0.2.0-rc3", path = "../../fedimint-client" }
-fedimint-core = { version = "0.2.0-rc3", path = "../../fedimint-core" }
-fedimint-logging = { version = "0.2.0-rc3", path = "../../fedimint-logging" }
-fedimint-rocksdb = { version = "0.2.0-rc3", path = "../../fedimint-rocksdb" }
-fedimint-ln-client = { version = "0.2.0-rc3", path = "../../modules/fedimint-ln-client" }
-fedimint-ln-common = { version = "0.2.0-rc3", path = "../../modules/fedimint-ln-common" }
-fedimint-mint-client = { version = "0.2.0-rc3", path = "../../modules/fedimint-mint-client" }
-fedimint-dummy-client = { version = "0.2.0-rc3", path = "../../modules/fedimint-dummy-client" }
-fedimint-wallet-client = { version = "0.2.0-rc3", path = "../../modules/fedimint-wallet-client" }
+fedimint-client = { version = "0.2.0-rc4", path = "../../fedimint-client" }
+fedimint-core = { version = "0.2.0-rc4", path = "../../fedimint-core" }
+fedimint-logging = { version = "0.2.0-rc4", path = "../../fedimint-logging" }
+fedimint-rocksdb = { version = "0.2.0-rc4", path = "../../fedimint-rocksdb" }
+fedimint-ln-client = { version = "0.2.0-rc4", path = "../../modules/fedimint-ln-client" }
+fedimint-ln-common = { version = "0.2.0-rc4", path = "../../modules/fedimint-ln-common" }
+fedimint-mint-client = { version = "0.2.0-rc4", path = "../../modules/fedimint-mint-client" }
+fedimint-dummy-client = { version = "0.2.0-rc4", path = "../../modules/fedimint-dummy-client" }
+fedimint-wallet-client = { version = "0.2.0-rc4", path = "../../modules/fedimint-wallet-client" }
 futures = "0.3.24"
 erased-serde = "0.3"
 lightning-invoice = "0.26.0"
@@ -80,5 +80,5 @@ threshold_crypto = { workspace = true }
 assert_matches = "1.5.0"
 
 [build-dependencies]
-fedimint-build = { version = "0.2.0-rc3", path = "../../fedimint-build" }
+fedimint-build = { version = "0.2.0-rc4", path = "../../fedimint-build" }
 tonic-build = "0.10.2"
