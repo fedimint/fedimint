@@ -1,8 +1,13 @@
 {
   inputs = {
-    # nixpkgs - We use nixpkgs as input of `flakebox`, as it locks things like toolchains,
-    #           in versions that are actually tested in flakebox's CI to cross-compile things
-    #           well. This also saves us download and Nix evaluation time.
+    nixpkgs = {
+      url = "github:nixpkgs/nixos-23.11";
+      # We use nixpkgs as input of `flakebox`, as it locks things like
+      # toolchains, in versions that are actually tested in flakebox's CI to
+      # cross-compile things well. This also saves us download and Nix
+      # evaluation time.
+      follows = "flakebox/nixpkgs";
+    };
     flake-utils.url = "github:numtide/flake-utils";
     flakebox = {
       url = "github:rustshop/flakebox?rev=0d2e745bd8ca43ff0cb952debc4bea600e161508";
@@ -13,12 +18,12 @@
     };
   };
 
-  outputs = { self, flake-utils, flakebox, advisory-db }:
+  outputs = { self, nixpkgs, flake-utils, flakebox, advisory-db }:
     flake-utils.lib.eachDefaultSystem
       (system:
         let
 
-          pkgs = import flakebox.inputs.nixpkgs {
+          pkgs = import nixpkgs {
             inherit system;
             overlays = [
               (final: prev: {

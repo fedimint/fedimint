@@ -208,7 +208,11 @@
       "inputs": {
         "advisory-db": "advisory-db",
         "flake-utils": "flake-utils",
-        "flakebox": "flakebox"
+        "flakebox": "flakebox",
+        "nixpkgs": [
+          "flakebox",
+          "nixpkgs"
+        ]
       }
     },
     "rust-analyzer-src": {
