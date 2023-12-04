@@ -480,6 +480,7 @@ impl Gateway {
                                             if config.network != lightning_network {
                                                 warn!("Lightning node does not match previously configured gateway network : ({:?})", config.network);
                                                 info!("Changing gateway network to match lightning node network : ({:?})", lightning_network);
+                                                self.handle_disconnect(htlc_task_group).await;
                                                 self.handle_set_configuration_msg(SetConfigurationPayload {
                                                     password: Some(config.password),
                                                     network: Some(lightning_network),
