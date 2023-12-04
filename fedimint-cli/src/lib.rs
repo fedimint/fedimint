@@ -227,7 +227,7 @@ impl fmt::Display for CliError {
     }
 }
 
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[command(version)]
 struct Opts {
     /// The working directory of the client containing the config and db
@@ -241,6 +241,11 @@ struct Opts {
     /// Guardian password for authentication
     #[arg(long, env = "FM_PASSWORD")]
     password: Option<String>,
+
+    /// Activate more verbose logging, for full control use the RUST_LOG env
+    /// variable
+    #[arg(short = 'v', long)]
+    verbose: bool,
 
     #[clap(subcommand)]
     command: Command,
@@ -483,6 +488,7 @@ struct PayRequest {
 
 pub struct FedimintCli {
     module_inits: ClientModuleInitRegistry,
+    cli_args: Opts,
 }
 
 impl FedimintCli {
@@ -497,12 +503,18 @@ impl FedimintCli {
             }
         }
 
-        TracingSetup::default().init().expect("tracing initializes");
+        let cli_args = Opts::parse();
+        let base_level = if cli_args.verbose { "info" } else { "warn" };
+        TracingSetup::default()
+            .with_base_level(base_level)
+            .init()
+            .expect("tracing initializes");
 
         debug!("Starting fedimint-cli (version: {CODE_VERSION})");
 
         Ok(Self {
             module_inits: ClientModuleInitRegistry::new(),
+            cli_args,
         })
     }
 
@@ -521,8 +533,7 @@ impl FedimintCli {
     }
 
     pub async fn run(&mut self) {
-        let cli = Opts::parse();
-        match self.handle_command(cli).await {
+        match self.handle_command(self.cli_args.clone()).await {
             Ok(output) => {
                 // ignore if there's anyone reading the stuff we're writing out
                 let _ = writeln!(std::io::stdout(), "{output}");

@@ -29,6 +29,7 @@ pub const LOG_CLIENT_RECOVERY_MINT: &str = "client::recovery::mint";
 /// Consolidates the setup of server tracing into a helper
 #[derive(Default)]
 pub struct TracingSetup {
+    base_level: Option<String>,
     #[cfg(feature = "telemetry")]
     tokio_console_bind: Option<std::net::SocketAddr>,
     #[cfg(feature = "telemetry")]
@@ -65,6 +66,14 @@ impl TracingSetup {
         self
     }
 
+    /// Sets the log level applied to most modules. Some overly chatty modules
+    /// are muted even if this is set to a lower log level, use the `RUST_LOG`
+    /// environment variable to override.
+    pub fn with_base_level(&mut self, level: impl Into<String>) -> &mut Self {
+        self.base_level = Some(level.into());
+        self
+    }
+
     /// Initialize the logging, must be called for tracing to begin
     pub fn init(&mut self) -> anyhow::Result<()> {
         use tracing_subscriber::fmt::writer::{BoxMakeWriter, Tee};
@@ -74,7 +83,8 @@ impl TracingSetup {
             // We prefix everything with a default general log level and
             // good per-module specific default. User provided RUST_LOG
             // can override one or both
-            "info,{},{},{},{}",
+            "{},{},{},{},{}",
+            self.base_level.as_deref().unwrap_or("info"),
             "jsonrpsee_core::client::async_client=off",
             "jsonrpsee_server=warn,jsonrpsee_server::transport=off",
             "AlephBFT-=error",
