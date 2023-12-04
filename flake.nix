@@ -3,7 +3,6 @@
     # nixpkgs - We use nixpkgs as input of `flakebox`, as it locks things like toolchains,
     #           in versions that are actually tested in flakebox's CI to cross-compile things
     #           well. This also saves us download and Nix evaluation time.
-    nixpkgs-kitman.url = "github:jkitman/nixpkgs/add-esplora-pkg";
     flake-utils.url = "github:numtide/flake-utils";
     flakebox = {
       url = "github:rustshop/flakebox?rev=0d2e745bd8ca43ff0cb952debc4bea600e161508";
@@ -14,7 +13,7 @@
     };
   };
 
-  outputs = { self, nixpkgs-kitman, flake-utils, flakebox, advisory-db }:
+  outputs = { self, flake-utils, flakebox, advisory-db }:
     flake-utils.lib.eachDefaultSystem
       (system:
         let
@@ -23,6 +22,10 @@
             inherit system;
             overlays = [
               (final: prev: {
+
+                esplora-electrs = prev.callPackage ./nix/esplora-electrs.nix {
+                  inherit (prev.darwin.apple_sdk.frameworks) Security;
+                };
 
                 clightning = prev.clightning.overrideAttrs (oldAttrs: {
                   configureFlags = [ "--enable-developer" "--disable-valgrind" ];
@@ -48,10 +51,6 @@
                 };
               })
             ];
-          };
-
-          pkgs-kitman = import nixpkgs-kitman {
-            inherit system;
           };
 
           lib = pkgs.lib;
@@ -152,7 +151,7 @@
 
 
           craneMultiBuild = import nix/flakebox.nix {
-            inherit pkgs pkgs-kitman flakeboxLib advisory-db replaceGitHash;
+            inherit pkgs flakeboxLib advisory-db replaceGitHash;
 
             # Yes, you're seeing right. We're passing result of this call as an argument
             # to it.

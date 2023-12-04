@@ -204,28 +204,11 @@
         "type": "github"
       }
     },
-    "nixpkgs-kitman": {
-      "locked": {
-        "lastModified": 1677533122,
-        "narHash": "sha256-nYSQfuPruk5oAF0J7Pp3/Si3tS/H1lg4Rwi7QIbgDJ8=",
-        "owner": "jkitman",
-        "repo": "nixpkgs",
-        "rev": "61ccef8bc0a010a21ccdeb10a92220a47d8149ac",
-        "type": "github"
-      },
-      "original": {
-        "owner": "jkitman",
-        "ref": "add-esplora-pkg",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "root": {
       "inputs": {
         "advisory-db": "advisory-db",
         "flake-utils": "flake-utils",
-        "flakebox": "flakebox",
-        "nixpkgs-kitman": "nixpkgs-kitman"
+        "flakebox": "flakebox"
       }
     },
     "rust-analyzer-src": {

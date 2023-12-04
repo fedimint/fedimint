@@ -1,4 +1,4 @@
-{ pkgs, pkgs-kitman, flakeboxLib, toolchains, advisory-db, profiles, craneMultiBuild, replaceGitHash }:
+{ pkgs, flakeboxLib, toolchains, advisory-db, profiles, craneMultiBuild, replaceGitHash }:
 let
   lib = pkgs.lib;
 
@@ -152,7 +152,7 @@ let
       lnd
       netcat
       perl
-      pkgs-kitman.esplora
+      esplora-electrs
       procps
       which
       cargo-nextest
