@@ -253,6 +253,15 @@ impl Opts {
             .ok_or_cli_msg(CliErrorKind::IOError, "`--data-dir=` argument not set.")
     }
 
+    /// Get and create if doesn't exist the workdir
+    async fn workdir_create(&self) -> CliResult<&PathBuf> {
+        let dir = self.workdir()?;
+
+        tokio::fs::create_dir_all(&dir).await.map_err_cli_io()?;
+
+        Ok(dir)
+    }
+
     fn admin_client(&self, cfg: &ClientConfig) -> CliResult<WsAdminClient> {
         let our_id = &self
             .our_id
@@ -277,7 +286,7 @@ impl Opts {
     }
 
     async fn load_rocks_db(&self) -> CliResult<Locked<fedimint_rocksdb::RocksDb>> {
-        let db_path = self.workdir()?.join("client.db");
+        let db_path = self.workdir_create().await?.join("client.db");
         let lock_path = db_path.with_extension("db.lock");
         Ok(LockedBuilder::new(&lock_path)
             .await
