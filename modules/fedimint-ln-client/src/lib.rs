@@ -14,7 +14,7 @@ use anyhow::{bail, ensure, format_err, Context};
 use api::LnFederationApi;
 use async_stream::stream;
 use bitcoin::{KeyPair, Network};
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
 use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
 };
@@ -55,13 +55,13 @@ use fedimint_ln_common::{
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningModuleTypes,
     LightningOutput, LightningOutputV0,
 };
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use incoming::IncomingSmError;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
 };
 use rand::{CryptoRng, Rng, RngCore};
-use secp256k1::{PublicKey, ThirtyTwoByteHash};
+use secp256k1::{PublicKey, Scalar, Signing, ThirtyTwoByteHash, Verification};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -113,6 +113,27 @@ impl PayType {
             PayType::Lightning(_) => "lightning",
         }
         .into()
+    }
+}
+
+/// Where to receive the payment to, either to ourselves or to another user
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub enum ReceivingKey {
+    /// The keypair used to receive payments for ourselves, we will use this to
+    /// sweep to our own ecash wallet on success
+    Personal(KeyPair),
+    /// A public key of another user, the lightning payment will be locked to
+    /// this key for them to claim on success
+    External(PublicKey),
+}
+
+impl ReceivingKey {
+    /// The public key of the receiving key
+    pub fn public_key(&self) -> PublicKey {
+        match self {
+            ReceivingKey::Personal(keypair) => keypair.public_key(),
+            ReceivingKey::External(public_key) => *public_key,
+        }
     }
 }
 
@@ -235,7 +256,7 @@ pub struct LightningClientInit;
 #[apply(async_trait_maybe_send!)]
 impl ModuleInit for LightningClientInit {
     type Common = LightningCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(2);
 
     async fn dump_database(
         &self,
@@ -318,6 +339,14 @@ impl ClientModuleInit for LightningClientInit {
                 Ok(None)
             })
         });
+
+        migrations.insert(
+            DatabaseVersion(1),
+            move |_, module_instance_id, active_states, inactive_states, decoders| {
+                db::migrate_to_v2(module_instance_id, active_states, inactive_states, decoders)
+                    .boxed()
+            },
+        );
 
         migrations
     }
@@ -646,15 +675,17 @@ impl LightningClientModule {
         Ok((client_output, contract_id))
     }
 
+    /// Returns a bool indicating if it was an external receive
     async fn await_receive_success(
         &self,
         operation_id: OperationId,
-    ) -> Result<(), LightningReceiveError> {
+    ) -> Result<bool, LightningReceiveError> {
         let mut stream = self.notifier.subscribe(operation_id).await;
         loop {
             match stream.next().await {
                 Some(LightningClientStateMachines::Receive(state)) => match state.state {
-                    LightningReceiveStates::Funded(_) => return Ok(()),
+                    LightningReceiveStates::Funded(_) => return Ok(false),
+                    LightningReceiveStates::Success(outpoints) => return Ok(outpoints.is_empty()), /* if the outpoints are empty, it was an external receive */
                     LightningReceiveStates::Canceled(e) => {
                         return Err(e);
                     }
@@ -734,6 +765,7 @@ impl LightningClientModule {
         &'a self,
         amount: Amount,
         description: lightning_invoice::Bolt11InvoiceDescription<'a>,
+        receiving_key: ReceivingKey,
         mut rng: impl RngCore + CryptoRng + 'a,
         expiry_time: Option<u64>,
         src_node_id: secp256k1::PublicKey,
@@ -746,8 +778,7 @@ impl LightningClientModule {
         ClientOutput<LightningOutput, LightningClientStateMachines>,
         [u8; 32],
     )> {
-        let payment_keypair = KeyPair::new(&self.secp, &mut rng);
-        let preimage_key: [u8; 33] = payment_keypair.public_key().serialize();
+        let preimage_key: [u8; 33] = receiving_key.public_key().serialize();
         let preimage = sha256::Hash::hash(&preimage_key);
         let payment_hash = sha256::Hash::hash(&preimage);
 
@@ -815,7 +846,7 @@ impl LightningClientModule {
                     state: LightningReceiveStates::SubmittedOffer(LightningReceiveSubmittedOffer {
                         offer_txid: txid,
                         invoice: sm_invoice.clone(),
-                        payment_keypair,
+                        receiving_key,
                     }),
                 },
             )]
@@ -1329,6 +1360,76 @@ impl LightningClientModule {
         extra_meta: M,
         gateway: Option<LightningGateway>,
     ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+        let receiving_key =
+            ReceivingKey::Personal(KeyPair::new(&self.secp, &mut rand::rngs::OsRng));
+        self.create_bolt11_invoice_internal(
+            amount,
+            description,
+            expiry_time,
+            receiving_key,
+            extra_meta,
+            gateway,
+        )
+        .await
+    }
+
+    /// Receive over LN with a new invoice for another user, tweaking their key
+    /// by the given index
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_bolt11_invoice_for_user_tweaked<M: Serialize + Send + Sync>(
+        &self,
+        amount: Amount,
+        description: lightning_invoice::Bolt11InvoiceDescription<'_>,
+        expiry_time: Option<u64>,
+        user_key: PublicKey,
+        index: u64,
+        extra_meta: M,
+        gateway: Option<LightningGateway>,
+    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+        let tweaked_key = tweak_user_key(&self.secp, user_key, index);
+        self.create_bolt11_invoice_for_user(
+            amount,
+            description,
+            expiry_time,
+            tweaked_key,
+            extra_meta,
+            gateway,
+        )
+        .await
+    }
+
+    /// Receive over LN with a new invoice for another user
+    pub async fn create_bolt11_invoice_for_user<M: Serialize + Send + Sync>(
+        &self,
+        amount: Amount,
+        description: lightning_invoice::Bolt11InvoiceDescription<'_>,
+        expiry_time: Option<u64>,
+        user_key: PublicKey,
+        extra_meta: M,
+        gateway: Option<LightningGateway>,
+    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+        let receiving_key = ReceivingKey::External(user_key);
+        self.create_bolt11_invoice_internal(
+            amount,
+            description,
+            expiry_time,
+            receiving_key,
+            extra_meta,
+            gateway,
+        )
+        .await
+    }
+
+    /// Receive over LN with a new invoice
+    async fn create_bolt11_invoice_internal<M: Serialize + Send + Sync>(
+        &self,
+        amount: Amount,
+        description: lightning_invoice::Bolt11InvoiceDescription<'_>,
+        expiry_time: Option<u64>,
+        receiving_key: ReceivingKey,
+        extra_meta: M,
+        gateway: Option<LightningGateway>,
+    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
         let (src_node_id, short_channel_id, route_hints) = match gateway {
             Some(current_gateway) => (
                 current_gateway.node_pub_key,
@@ -1346,6 +1447,7 @@ impl LightningClientModule {
             .create_lightning_receive_output(
                 amount,
                 description,
+                receiving_key,
                 rand::rngs::OsRng,
                 expiry_time,
                 src_node_id,
@@ -1417,7 +1519,13 @@ impl LightningClientModule {
                 yield LnReceiveState::WaitingForPayment { invoice: invoice.to_string(), timeout: invoice.expiry_time() };
 
                 match self_ref.await_receive_success(operation_id).await {
-                    Ok(()) => {
+                    Ok(is_external) => {
+                        // If the payment was external, we can consider it claimed
+                        if is_external {
+                            yield LnReceiveState::Claimed;
+                            return;
+                        }
+
                         yield LnReceiveState::Funded;
 
                         if let Ok(out_points) = self_ref.await_claim_acceptance(operation_id).await {
@@ -1573,4 +1681,20 @@ async fn set_payment_result(
         dbtx.insert_entry(&PaymentResultKey { payment_hash }, &payment_result)
             .await;
     }
+}
+
+/// Tweak a user key with an index, this is used to generate a new key for each
+/// invoice. This is done to not be able to link invoices to the same user.
+fn tweak_user_key<Ctx: Verification + Signing>(
+    secp: &Secp256k1<Ctx>,
+    user_key: PublicKey,
+    index: u64,
+) -> PublicKey {
+    let mut hasher = HmacEngine::<sha256::Hash>::new(&user_key.serialize()[..]);
+    hasher.input(&index.to_be_bytes());
+    let tweak = Hmac::from_engine(hasher).into_inner();
+
+    user_key
+        .add_exp_tweak(secp, &Scalar::from_be_bytes(tweak).expect("can't fail"))
+        .expect("tweak is always 32 bytes, other failure modes are negligible")
 }
