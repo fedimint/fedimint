@@ -51,15 +51,15 @@ impl Client {
     /// TODO: Get rid of built-in client, make it a normal `Client` and let them
     /// fork each other as they please.
     async fn new_forked(name: &str) -> Result<Client> {
-        let workdir: PathBuf = env::var("FM_CLIENT_DIR")?.parse()?;
-        let client_dir = workdir.join("clients").join(name);
+        let data_dir: PathBuf = env::var("FM_CLIENT_DIR")?.parse()?;
+        let client_dir = data_dir.join("clients").join(name);
 
         std::fs::create_dir_all(&client_dir)?;
 
         cmd!(
             "cp",
             "-R",
-            workdir.join("client.db").display(),
+            data_dir.join("client.db").display(),
             client_dir.join("client.db").display()
         )
         .run()
@@ -131,9 +131,10 @@ impl Federation {
         load_from_file(&cfg_path)
     }
 
+    /// Read the invite code from the client data dir
     pub fn invite_code(&self) -> Result<String> {
-        let workdir: PathBuf = env::var("FM_CLIENT_DIR")?.parse()?;
-        let invite_code = fs::read_to_string(workdir.join("invite-code"))?;
+        let data_dir: PathBuf = env::var("FM_CLIENT_DIR")?.parse()?;
+        let invite_code = fs::read_to_string(data_dir.join("invite-code"))?;
         Ok(invite_code)
     }
 

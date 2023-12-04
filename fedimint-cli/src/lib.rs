@@ -231,8 +231,8 @@ impl fmt::Display for CliError {
 #[command(version)]
 struct Opts {
     /// The working directory of the client containing the config and db
-    #[arg(long = "data-dir", alias = "workdir", env = "FM_CLIENT_DIR")]
-    workdir: Option<PathBuf>,
+    #[arg(long = "data-dir", env = "FM_CLIENT_DIR")]
+    data_dir: Option<PathBuf>,
 
     /// Peer id of the guardian
     #[arg(env = "FM_OUR_ID", long, value_parser = parse_peer_id)]
@@ -247,15 +247,15 @@ struct Opts {
 }
 
 impl Opts {
-    fn workdir(&self) -> CliResult<&PathBuf> {
-        self.workdir
+    fn data_dir(&self) -> CliResult<&PathBuf> {
+        self.data_dir
             .as_ref()
             .ok_or_cli_msg(CliErrorKind::IOError, "`--data-dir=` argument not set.")
     }
 
-    /// Get and create if doesn't exist the workdir
-    async fn workdir_create(&self) -> CliResult<&PathBuf> {
-        let dir = self.workdir()?;
+    /// Get and create if doesn't exist the data dir
+    async fn data_dir_create(&self) -> CliResult<&PathBuf> {
+        let dir = self.data_dir()?;
 
         tokio::fs::create_dir_all(&dir).await.map_err_cli_io()?;
 
@@ -286,7 +286,7 @@ impl Opts {
     }
 
     async fn load_rocks_db(&self) -> CliResult<Locked<fedimint_rocksdb::RocksDb>> {
-        let db_path = self.workdir_create().await?.join("client.db");
+        let db_path = self.data_dir_create().await?.join("client.db");
         let lock_path = db_path.with_extension("db.lock");
         Ok(LockedBuilder::new(&lock_path)
             .await
