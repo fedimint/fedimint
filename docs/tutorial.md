@@ -191,7 +191,7 @@ Commands:
   help             Print this message or the help of the given subcommand(s)
 
 Options:
-      --data-dir <WORKDIR>   The working directory of the client containing the config and db [env: FM_DATA_DIR=]
+      --data-dir <DATA_DIR>  The working directory of the client containing the config and db [env: FM_CLIENT_DIR=]
       --our-id <OUR_ID>      Peer id of the guardian [env: FM_OUR_ID=]
       --password <PASSWORD>  Guardian password for authentication [env: FM_PASSWORD=]
   -h, --help                 Print help
