@@ -576,7 +576,7 @@ pub struct PayInvoicePayload {
 }
 
 impl PayInvoicePayload {
-    pub fn new(common: LightningPayCommon) -> Self {
+    fn new(common: LightningPayCommon) -> Self {
         Self {
             contract_id: common.contract.contract_account.contract.contract_id(),
             federation_id: common.federation_id,
@@ -585,35 +585,14 @@ impl PayInvoicePayload {
         }
     }
 
-    pub fn new_pruned(common: LightningPayCommon) -> Self {
+    fn new_pruned(common: LightningPayCommon) -> Self {
         Self {
             contract_id: common.contract.contract_account.contract.contract_id(),
             federation_id: common.federation_id,
             preimage_auth: common.preimage_auth,
-            payment_data: PaymentData::PrunedInvoice(PrunedInvoice {
-                amount: Amount::from_msats(
-                    common
-                        .invoice
-                        .amount_milli_satoshis()
-                        .expect("Invoice must have amount"),
-                ),
-                destination: common
-                    .invoice
-                    .payee_pub_key()
-                    .cloned()
-                    .unwrap_or_else(|| common.invoice.recover_payee_pub_key()),
-                payment_hash: *common.invoice.payment_hash(),
-                payment_secret: common.invoice.payment_secret().0,
-                route_hints: common
-                    .invoice
-                    .route_hints()
-                    .into_iter()
-                    .map(Into::into)
-                    .collect(),
-                min_final_cltv_delta: common.invoice.min_final_cltv_expiry_delta(),
-                timestamp: common.invoice.timestamp(),
-                expiry: common.invoice.expiry_time(),
-            }),
+            payment_data: PaymentData::PrunedInvoice(
+                common.invoice.try_into().expect("Invoice has amount"),
+            ),
         }
     }
 }
