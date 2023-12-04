@@ -529,6 +529,7 @@
 <a href="#529" id="529">529</a>
 <a href="#530" id="530">530</a>
 <a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
@@ -582,15 +583,15 @@
     /// TODO: Get rid of built-in client, make it a normal `Client` and let them
     /// fork each other as they please.
     </span><span class="kw">async fn </span>new_forked(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
-        <span class="kw">let </span>workdir: PathBuf = env::var(<span class="string">&quot;FM_CLIENT_DIR&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
-        <span class="kw">let </span>client_dir = workdir.join(<span class="string">&quot;clients&quot;</span>).join(name);
+        <span class="kw">let </span>data_dir: PathBuf = env::var(<span class="string">&quot;FM_CLIENT_DIR&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
+        <span class="kw">let </span>client_dir = data_dir.join(<span class="string">&quot;clients&quot;</span>).join(name);
 
         std::fs::create_dir_all(<span class="kw-2">&amp;</span>client_dir)<span class="question-mark">?</span>;
 
         <span class="macro">cmd!</span>(
             <span class="string">&quot;cp&quot;</span>,
             <span class="string">&quot;-R&quot;</span>,
-            workdir.join(<span class="string">&quot;client.db&quot;</span>).display(),
+            data_dir.join(<span class="string">&quot;client.db&quot;</span>).display(),
             client_dir.join(<span class="string">&quot;client.db&quot;</span>).display()
         )
         .run()
@@ -662,9 +663,10 @@
         load_from_file(<span class="kw-2">&amp;</span>cfg_path)
     }
 
-    <span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>workdir: PathBuf = env::var(<span class="string">&quot;FM_CLIENT_DIR&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
-        <span class="kw">let </span>invite_code = fs::read_to_string(workdir.join(<span class="string">&quot;invite-code&quot;</span>))<span class="question-mark">?</span>;
+    <span class="doccomment">/// Read the invite code from the client data dir
+    </span><span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+        <span class="kw">let </span>data_dir: PathBuf = env::var(<span class="string">&quot;FM_CLIENT_DIR&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
+        <span class="kw">let </span>invite_code = fs::read_to_string(data_dir.join(<span class="string">&quot;invite-code&quot;</span>))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(invite_code)
     }
 
