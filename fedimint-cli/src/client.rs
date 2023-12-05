@@ -61,9 +61,16 @@ pub enum ClientCmd {
     Reissue { oob_notes: OOBNotes },
     /// Prepare notes to send to a third party as a payment
     Spend {
+        /// The amount of e-cash to spend
         amount: Amount,
+        /// If the exact amount cannot be represented, return e-cash of a higher
+        /// value instead of failing
         #[clap(long)]
         allow_overpay: bool,
+        /// After how many seconds we will try to reclaim the e-cash if it
+        /// hasn't been redeemed by the recipient. Defaults to one week.
+        #[clap(long, default_value_t = 60 * 60 * 24 * 7)]
+        timeout: u64,
     },
     /// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
@@ -197,16 +204,15 @@ pub async fn handle_command(
         ClientCmd::Spend {
             amount,
             allow_overpay,
+            timeout,
         } => {
+            warn!("The client will try to double-spend these notes after the duration specified by the --timeout option to recover any unclaimed e-cash.");
+
             let mint_module = client.get_first_module::<MintClientModule>();
+            let timeout = Duration::from_secs(timeout);
             let (operation, notes) = if allow_overpay {
                 let (operation, notes) = mint_module
-                    .spend_notes_with_selector(
-                        &SelectNotesWithAtleastAmount,
-                        amount,
-                        Duration::from_secs(3600),
-                        (),
-                    )
+                    .spend_notes_with_selector(&SelectNotesWithAtleastAmount, amount, timeout, ())
                     .await?;
 
                 let overspend_amount = notes.total_amount() - amount;
@@ -220,12 +226,7 @@ pub async fn handle_command(
                 (operation, notes)
             } else {
                 mint_module
-                    .spend_notes_with_selector(
-                        &SelectNotesWithExactAmount,
-                        amount,
-                        Duration::from_secs(3600),
-                        (),
-                    )
+                    .spend_notes_with_selector(&SelectNotesWithExactAmount, amount, timeout, ())
                     .await?
             };
             info!("Spend e-cash operation: {operation}");
