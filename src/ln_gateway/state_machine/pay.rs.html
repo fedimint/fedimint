@@ -876,10 +876,8 @@
 <a href="#876" id="876">876</a>
 <a href="#877" id="877">877</a>
 <a href="#878" id="878">878</a>
-<a href="#879" id="879">879</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -1015,8 +1013,8 @@
     </span>TimeoutTooClose,
     <span class="attr">#[error(<span class="string">&quot;Gateway could not retrieve metadata about the contract.&quot;</span>)]
     </span>MissingContractData,
-    <span class="attr">#[error(<span class="string">&quot;The invoice is expired. Expiry duration: {0:?}&quot;</span>)]
-    </span>InvoiceExpired(Duration),
+    <span class="attr">#[error(<span class="string">&quot;The invoice is expired. Expiry happened at timestamp: {0}&quot;</span>)]
+    </span>InvoiceExpired(u64),
 }
 
 <span class="attr">#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
@@ -1448,7 +1446,7 @@
 
         <span class="kw">if </span>payment_data.is_expired() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingContractError::InvoiceExpired(
-                payment_data.expiry_duration(),
+                payment_data.expiry_timestamp(),
             ));
         }
 

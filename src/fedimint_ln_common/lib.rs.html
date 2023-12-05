@@ -678,6 +678,12 @@
 <a href="#678" id="678">678</a>
 <a href="#679" id="679">679</a>
 <a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -1331,14 +1337,21 @@
     <span class="kw">pub </span>payment_secret: [u8; <span class="number">32</span>],
     <span class="kw">pub </span>route_hints: Vec&lt;RouteHint&gt;,
     <span class="kw">pub </span>min_final_cltv_delta: u64,
-    <span class="kw">pub </span>timestamp: SystemTime,
-    <span class="kw">pub </span>expiry: Duration,
+    <span class="doccomment">/// Time at which the invoice expires in seconds since unix epoch
+    </span><span class="kw">pub </span>expiry_timestamp: u64,
 }
 
 <span class="kw">impl </span>TryFrom&lt;Bolt11Invoice&gt; <span class="kw">for </span>PrunedInvoice {
     <span class="kw">type </span>Error = anyhow::Error;
 
     <span class="kw">fn </span>try_from(invoice: Bolt11Invoice) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
+        <span class="comment">// We use expires_at since it doesn&#39;t rely on the std feature in
+        // lightning-invoice. See #3838.
+        </span><span class="kw">let </span>expiry_timestamp = invoice
+            .expires_at()
+            .map(|t| t.as_secs())
+            .unwrap_or(u64::MAX);
+
         <span class="prelude-val">Ok</span>(PrunedInvoice {
             amount: Amount::from_msats(
                 invoice
@@ -1353,8 +1366,7 @@
             payment_secret: invoice.payment_secret().<span class="number">0</span>,
             route_hints: invoice.route_hints().into_iter().map(Into::into).collect(),
             min_final_cltv_delta: invoice.min_final_cltv_expiry_delta(),
-            timestamp: invoice.timestamp(),
-            expiry: invoice.expiry_time(),
+            expiry_timestamp,
         })
     }
 }
