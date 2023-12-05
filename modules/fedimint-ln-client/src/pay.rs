@@ -643,20 +643,13 @@ impl PaymentData {
     }
 
     pub fn is_expired(&self) -> bool {
-        match self {
-            PaymentData::Invoice(invoice) => invoice.is_expired(),
-            PaymentData::PrunedInvoice(PrunedInvoice {
-                expiry_timestamp, ..
-            }) => {
-                let Some(now) = now().duration_since(UNIX_EPOCH).map(|t| t.as_secs()).ok() else {
-                    // Something is very wrong (time out of bounds), we'll not attempt too pay the
-                    // invoice
-                    return true;
-                };
+        let Some(now) = now().duration_since(UNIX_EPOCH).map(|t| t.as_secs()).ok() else {
+            // Something is very wrong (time out of bounds), we'll not attempt too pay the
+            // invoice
+            return true;
+        };
 
-                *expiry_timestamp < now
-            }
-        }
+        self.expiry_timestamp() < now
     }
 
     /// Returns the expiry timestamp in seconds since the UNIX epoch
