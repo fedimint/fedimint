@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -646,18 +646,29 @@ impl PaymentData {
         match self {
             PaymentData::Invoice(invoice) => invoice.is_expired(),
             PaymentData::PrunedInvoice(PrunedInvoice {
-                timestamp, expiry, ..
-            }) => timestamp
-                .checked_add(*expiry)
-                .map(|expiry_time| expiry_time < now())
-                .unwrap_or(false),
+                expiry_timestamp, ..
+            }) => {
+                let Some(now) = now().duration_since(UNIX_EPOCH).map(|t| t.as_secs()).ok() else {
+                    // Something is very wrong (time out of bounds), we'll not attempt too pay the
+                    // invoice
+                    return true;
+                };
+
+                *expiry_timestamp < now
+            }
         }
     }
 
-    pub fn expiry_duration(&self) -> Duration {
+    /// Returns the expiry timestamp in seconds since the UNIX epoch
+    pub fn expiry_timestamp(&self) -> u64 {
         match self {
-            PaymentData::Invoice(invoice) => invoice.expiry_time(),
-            PaymentData::PrunedInvoice(PrunedInvoice { expiry, .. }) => *expiry,
+            PaymentData::Invoice(invoice) => invoice
+                .expires_at()
+                .map(|t| t.as_secs())
+                .unwrap_or(u64::MAX),
+            PaymentData::PrunedInvoice(PrunedInvoice {
+                expiry_timestamp, ..
+            }) => *expiry_timestamp,
         }
     }
 }

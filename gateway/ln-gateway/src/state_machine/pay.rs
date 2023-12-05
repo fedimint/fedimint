@@ -1,6 +1,5 @@
 use std::fmt::Display;
 use std::sync::Arc;
-use std::time::Duration;
 
 use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -136,8 +135,8 @@ pub enum OutgoingContractError {
     TimeoutTooClose,
     #[error("Gateway could not retrieve metadata about the contract.")]
     MissingContractData,
-    #[error("The invoice is expired. Expiry duration: {0:?}")]
-    InvoiceExpired(Duration),
+    #[error("The invoice is expired. Expiry happened at timestamp: {0}")]
+    InvoiceExpired(u64),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
@@ -569,7 +568,7 @@ impl GatewayPayInvoice {
 
         if payment_data.is_expired() {
             return Err(OutgoingContractError::InvoiceExpired(
-                payment_data.expiry_duration(),
+                payment_data.expiry_timestamp(),
             ));
         }
 
