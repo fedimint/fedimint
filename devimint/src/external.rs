@@ -592,11 +592,14 @@ impl Electrs {
             .to_str()
             .context("non utf8 path")?;
 
+        let daemon_dir = &process_mgr.globals.FM_BTC_DIR.display();
+
         let conf = format!(
             include_str!("cfg/electrs.toml"),
             rpc_port = process_mgr.globals.FM_PORT_BTC_RPC,
             p2p_port = process_mgr.globals.FM_PORT_BTC_P2P,
             electrs_port = process_mgr.globals.FM_PORT_ELECTRS,
+            monitoring_port = process_mgr.globals.FM_PORT_ELECTRS_MONITORING,
         );
         debug!("electrs conf: {:?}", conf);
         write_overwrite_async(
@@ -608,6 +611,7 @@ impl Electrs {
             "electrs",
             "--conf-dir={electrs_dir}",
             "--db-dir={electrs_dir}",
+            "--daemon-dir={daemon_dir}"
         );
         let process = process_mgr.spawn_daemon("electrs", cmd).await?;
         info!(target: LOG_DEVIMINT, "electrs started");

@@ -1,5 +1,6 @@
 auth = "bitcoin:bitcoin"
 daemon_rpc_addr = "127.0.0.1:{rpc_port}"
 daemon_p2p_addr = "127.0.0.1:{p2p_port}"
+monitoring_addr = "127.0.0.1:{monitoring_port}"
 electrum_rpc_addr = "127.0.0.1:{electrs_port}"
 network = "regtest"
