@@ -1390,6 +1390,7 @@
 <a href="#1390" id="1390">1390</a>
 <a href="#1391" id="1391">1391</a>
 <a href="#1392" id="1392">1392</a>
+<a href="#1393" id="1393">1393</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -1872,6 +1873,7 @@
                                             <span class="kw">if </span>config.network != lightning_network {
                                                 <span class="macro">warn!</span>(<span class="string">&quot;Lightning node does not match previously configured gateway network : ({:?})&quot;</span>, config.network);
                                                 <span class="macro">info!</span>(<span class="string">&quot;Changing gateway network to match lightning node network : ({:?})&quot;</span>, lightning_network);
+                                                <span class="self">self</span>.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
                                                 <span class="self">self</span>.handle_set_configuration_msg(SetConfigurationPayload {
                                                     password: <span class="prelude-val">Some</span>(config.password),
                                                     network: <span class="prelude-val">Some</span>(lightning_network),
