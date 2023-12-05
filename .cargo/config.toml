@@ -1,17 +1,2 @@
 [build]
 rustflags = ["--cfg", "tokio_unstable"]
-
-[target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "link-arg=-fuse-ld=mold", "-C", "link-arg=-Wl,--compress-debug-sections=zlib", "--cfg", "tokio_unstable"]
-
-[target.armv7-linux-androideabi]
-rustflags = ["-C", "link-arg=--compress-debug-sections=zlib", "--cfg", "tokio_unstable"]
-
-[target.aarch64-linux-android]
-rustflags = ["-C", "link-arg=--compress-debug-sections=zlib", "--cfg", "tokio_unstable"]
-
-[target.x86_64-linux-android]
-rustflags = ["-C", "link-arg=--compress-debug-sections=zlib", "--cfg", "tokio_unstable"]
-
-[target.i686-linux-android]
-rustflags = ["-C", "link-arg=--compress-debug-sections=zlib", "--cfg", "tokio_unstable"]

@@ -9,7 +9,6 @@
 , Security
 , rustPlatform
 }:
-
 let
   rocksdb = rocksdb_6_23;
 in
