@@ -651,14 +651,21 @@ pub struct PrunedInvoice {
     pub payment_secret: [u8; 32],
     pub route_hints: Vec<RouteHint>,
     pub min_final_cltv_delta: u64,
-    pub timestamp: SystemTime,
-    pub expiry: Duration,
+    /// Time at which the invoice expires in seconds since unix epoch
+    pub expiry_timestamp: u64,
 }
 
 impl TryFrom<Bolt11Invoice> for PrunedInvoice {
     type Error = anyhow::Error;
 
     fn try_from(invoice: Bolt11Invoice) -> Result<Self, Self::Error> {
+        // We use expires_at since it doesn't rely on the std feature in
+        // lightning-invoice. See #3838.
+        let expiry_timestamp = invoice
+            .expires_at()
+            .map(|t| t.as_secs())
+            .unwrap_or(u64::MAX);
+
         Ok(PrunedInvoice {
             amount: Amount::from_msats(
                 invoice
@@ -673,8 +680,7 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
             payment_secret: invoice.payment_secret().0,
             route_hints: invoice.route_hints().into_iter().map(Into::into).collect(),
             min_final_cltv_delta: invoice.min_final_cltv_expiry_delta(),
-            timestamp: invoice.timestamp(),
-            expiry: invoice.expiry_time(),
+            expiry_timestamp,
         })
     }
 }
