@@ -21,11 +21,7 @@ where
     T: Encodable,
     S: serde::Serializer,
 {
-    ser.serialize_str(
-        &t.consensus_encode_to_hex().map_err(|e| {
-            serde::ser::Error::custom(format!("encodable serialization failed: {e:?}"))
-        })?,
-    )
+    ser.serialize_str(&t.consensus_encode_to_hex())
 }
 
 pub fn deserialize<'de, T: Decodable, D>(de: D) -> Result<T, D::Error>

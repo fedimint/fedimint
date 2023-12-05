@@ -161,7 +161,7 @@ impl Bitcoind {
 
     pub async fn get_raw_transaction(&self, txid: &bitcoin::Txid) -> Result<String> {
         let tx = self.client().get_raw_transaction(txid, None)?;
-        let bytes = tx.consensus_encode_to_vec()?;
+        let bytes = tx.consensus_encode_to_vec();
         Ok(bytes.to_hex())
     }
 

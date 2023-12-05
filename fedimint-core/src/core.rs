@@ -185,7 +185,7 @@ pub struct DynUnknown(pub Vec<u8>);
 
 impl fmt::Display for DynUnknown {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0.consensus_encode_to_hex().expect("can't fail"))
+        f.write_str(&self.0.consensus_encode_to_hex())
     }
 }
 

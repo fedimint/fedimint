@@ -25,7 +25,7 @@ fn sanity_ecash_backup_decode_encode() -> Result<()> {
         modules: Default::default(),
     };
 
-    let encoded = orig.consensus_encode_to_vec()?;
+    let encoded = orig.consensus_encode_to_vec();
     assert_eq!(encoded.len(), 16 * 1024);
     assert_eq!(
         orig,

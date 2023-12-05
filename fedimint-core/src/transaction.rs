@@ -87,13 +87,10 @@ impl Transaction {
                 .is_err()
             {
                 return Err(TransactionError::InvalidSignature {
-                    tx: self.consensus_encode_to_hex().expect("Can't fail"),
-                    hash: self
-                        .tx_hash()
-                        .consensus_encode_to_hex()
-                        .expect("Can't fail"),
-                    sig: signature.consensus_encode_to_hex().expect("Can't fail"),
-                    key: pk.consensus_encode_to_hex().expect("Can't fail"),
+                    tx: self.consensus_encode_to_hex(),
+                    hash: self.tx_hash().consensus_encode_to_hex(),
+                    sig: signature.consensus_encode_to_hex(),
+                    key: pk.consensus_encode_to_hex(),
                 });
             }
         }

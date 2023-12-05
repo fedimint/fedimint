@@ -72,16 +72,18 @@ pub trait Encodable {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error>;
 
     /// [`Self::consensus_encode`] to newly allocated `Vec<u8>`
-    fn consensus_encode_to_vec(&self) -> Result<Vec<u8>, std::io::Error> {
+    fn consensus_encode_to_vec(&self) -> Vec<u8> {
         let mut bytes = vec![];
-        self.consensus_encode(&mut bytes)?;
-        Ok(bytes)
+        self.consensus_encode(&mut bytes)
+            .expect("encoding to bytes can't fail for io reasons");
+        bytes
     }
 
-    fn consensus_encode_to_hex(&self) -> Result<String, std::io::Error> {
+    fn consensus_encode_to_hex(&self) -> String {
         let mut bytes = vec![];
-        self.consensus_encode(&mut bytes)?;
-        Ok(bytes.to_hex())
+        self.consensus_encode(&mut bytes)
+            .expect("encoding to bytes can't fail for io reasons");
+        bytes.to_hex()
     }
 
     /// Generate a SHA256 hash of the consensus encoding using the default hash

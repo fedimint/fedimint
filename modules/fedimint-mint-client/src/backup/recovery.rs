@@ -138,7 +138,6 @@ impl MintRestoreInProgressState {
                     )
                     .await
                     .consensus_encode_to_hex()
-                    .expect("Serialization here can't fail")
             },
             move |dbtx, new_state_hex, old_state_machine: MintRestoreStateMachine| {
                 let new_state = MintRestoreInProgressState::consensus_decode_hex(

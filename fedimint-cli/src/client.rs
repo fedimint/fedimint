@@ -512,7 +512,7 @@ async fn wait_for_ln_payment(
                             serde_json::to_value(PayInvoiceResponse {
                                 operation_id,
                                 contract_id,
-                                preimage: preimage.consensus_encode_to_hex().expect("Cannot fail"),
+                                preimage: preimage.consensus_encode_to_hex(),
                             })
                             .unwrap(),
                         ));
