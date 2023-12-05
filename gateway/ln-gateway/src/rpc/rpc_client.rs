@@ -3,8 +3,8 @@ use std::result::Result;
 use bitcoin::Address;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, TransactionId};
-use reqwest::StatusCode;
 pub use reqwest::{Error, Response};
+use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thiserror::Error;
@@ -39,12 +39,12 @@ impl GatewayRpcClient {
 
     pub async fn get_info(&self) -> GatewayRpcResult<GatewayInfo> {
         let url = self.base_url.join("/info").expect("invalid base url");
-        self.call(url, ()).await
+        self.call_get(url).await
     }
 
     pub async fn get_balance(&self, payload: BalancePayload) -> GatewayRpcResult<Amount> {
         let url = self.base_url.join("/balance").expect("invalid base url");
-        self.call(url, payload).await
+        self.call_post(url, payload).await
     }
 
     pub async fn get_deposit_address(
@@ -52,12 +52,12 @@ impl GatewayRpcClient {
         payload: DepositAddressPayload,
     ) -> GatewayRpcResult<Address> {
         let url = self.base_url.join("/address").expect("invalid base url");
-        self.call(url, payload).await
+        self.call_post(url, payload).await
     }
 
     pub async fn withdraw(&self, payload: WithdrawPayload) -> GatewayRpcResult<TransactionId> {
         let url = self.base_url.join("/withdraw").expect("invalid base url");
-        self.call(url, payload).await
+        self.call_post(url, payload).await
     }
 
     pub async fn connect_federation(
@@ -68,22 +68,22 @@ impl GatewayRpcClient {
             .base_url
             .join("/connect-fed")
             .expect("invalid base url");
-        self.call(url, payload).await
+        self.call_post(url, payload).await
     }
 
     pub async fn leave_federation(&self, payload: LeaveFedPayload) -> GatewayRpcResult<()> {
         let url = self.base_url.join("/leave-fed").expect("invalid base url");
-        self.call(url, payload).await
+        self.call_post(url, payload).await
     }
 
     pub async fn backup(&self, payload: BackupPayload) -> GatewayRpcResult<()> {
         let url = self.base_url.join("/backup").expect("invalid base url");
-        self.call(url, payload).await
+        self.call_post(url, payload).await
     }
 
     pub async fn restore(&self, payload: RestorePayload) -> GatewayRpcResult<()> {
         let url = self.base_url.join("/restore").expect("invalid base url");
-        self.call(url, payload).await
+        self.call_post(url, payload).await
     }
 
     pub async fn set_configuration(
@@ -94,31 +94,42 @@ impl GatewayRpcClient {
             .base_url
             .join("/set_configuration")
             .expect("invalid base url");
-        self.call(url, payload).await
+        self.call(Method::POST, url, Some(payload)).await
     }
 
-    async fn call<P, T: DeserializeOwned>(
+    async fn call<P: Serialize, T: DeserializeOwned>(
         &self,
+        method: Method,
         url: SafeUrl,
-        payload: P,
-    ) -> Result<T, GatewayRpcError>
-    where
-        P: Serialize,
-    {
-        let mut builder = self.client.post(url.to_unsafe());
+        payload: Option<P>,
+    ) -> Result<T, GatewayRpcError> {
+        let mut builder = self.client.request(method, url.to_unsafe());
         if let Some(password) = self.password.clone() {
             builder = builder.bearer_auth(password);
         }
-        let response = builder
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .json(&payload)
-            .send()
-            .await?;
+        if let Some(payload) = payload {
+            builder = builder
+                .json(&payload)
+                .header(reqwest::header::CONTENT_TYPE, "application/json")
+        }
+        let response = builder.send().await?;
 
         match response.status() {
             StatusCode::OK => Ok(response.json().await?),
             status => Err(GatewayRpcError::BadStatus(status)),
         }
+    }
+
+    async fn call_get<T: DeserializeOwned>(&self, url: SafeUrl) -> Result<T, GatewayRpcError> {
+        self.call(Method::GET, url, None::<()>).await
+    }
+
+    async fn call_post<P: Serialize, T: DeserializeOwned>(
+        &self,
+        url: SafeUrl,
+        payload: P,
+    ) -> Result<T, GatewayRpcError> {
+        self.call(Method::POST, url, Some(payload)).await
     }
 }
 
