@@ -66,10 +66,12 @@ let
     {
       ROCKSDB_STATIC = "true";
       ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
-      SNAPPY_LIB_DIR = "${pkgs.pkgsStatic.snappy}/lib/";
 
       "ROCKSDB_${target_underscores}_STATIC" = "true";
       "ROCKSDB_${target_underscores}_LIB_DIR" = "${pkgs.rocksdb}/lib/";
+    } // pkgs.lib.optionalAttrs (!(pkgs.stdenv.isDarwin && pkgs.stdenv.isx86_64)) {
+      # FIX: error: don't yet have a `targetPackages.darwin.LibsystemCross for x86_64-apple-darwin`
+      SNAPPY_LIB_DIR = "${pkgs.pkgsStatic.snappy}/lib/";
       "SNAPPY_${target_underscores}_LIB_DIR" = "${pkgs.pkgsStatic.snappy}/lib/";
     } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
       # macos can't static libraries
