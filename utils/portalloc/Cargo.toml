@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-portalloc"
-version = "0.2.0-rc4"
+version = "0.2.0-rc5"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "Port allocation utility for Fedimint"
@@ -19,4 +19,4 @@ serde_json = { version = "1.0.91", features = ["preserve_order"] }
 tracing = "0.1.37"
 rand = "0.8"
 dirs = "5.0.1"
-fedimint-core = { version = "0.2.0-rc4", path = "../../fedimint-core" }
+fedimint-core = { version = "0.2.0-rc5", path = "../../fedimint-core" }
