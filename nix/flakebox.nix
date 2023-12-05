@@ -338,6 +338,12 @@ rec {
     buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/tests/devimint-cli-test.sh";
   };
 
+  devimintCliTestSingle = craneLibTests.mkCargoDerivation {
+      pname = "${commonCliTestArgs.pname}-cli";
+      cargoArtifacts = workspaceBuild;
+      buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/tests/devimint-cli-test-single.sh";
+    };
+
   cliLoadTestToolTest = craneLibTests.mkCargoDerivation {
     pname = "${commonCliTestArgs.pname}-cli";
     cargoArtifacts = workspaceBuild;
