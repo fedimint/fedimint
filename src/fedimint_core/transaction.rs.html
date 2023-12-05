@@ -133,9 +133,6 @@
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
 <a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -225,13 +222,10 @@
                 .is_err()
             {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(TransactionError::InvalidSignature {
-                    tx: <span class="self">self</span>.consensus_encode_to_hex().expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
-                    hash: <span class="self">self
-                        </span>.tx_hash()
-                        .consensus_encode_to_hex()
-                        .expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
-                    sig: signature.consensus_encode_to_hex().expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
-                    key: pk.consensus_encode_to_hex().expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
+                    tx: <span class="self">self</span>.consensus_encode_to_hex(),
+                    hash: <span class="self">self</span>.tx_hash().consensus_encode_to_hex(),
+                    sig: signature.consensus_encode_to_hex(),
+                    key: pk.consensus_encode_to_hex(),
                 });
             }
         }

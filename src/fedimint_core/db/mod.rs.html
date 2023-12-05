@@ -2783,8 +2783,6 @@
 <a href="#2783" id="2783">2783</a>
 <a href="#2784" id="2784">2784</a>
 <a href="#2785" id="2785">2785</a>
-<a href="#2786" id="2786">2786</a>
-<a href="#2787" id="2787">2787</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -4535,8 +4533,7 @@
                 .<span class="kw">await
                 </span>.map(|(key, val)| {
                     (
-                        <span class="macro-nonterminal">$crate::encoding::Encodable::consensus_encode_to_hex</span>(<span class="kw-2">&amp;</span>key)
-                            .expect(<span class="string">&quot;can&#39;t fail&quot;</span>),
+                        <span class="macro-nonterminal">$crate::encoding::Encodable::consensus_encode_to_hex</span>(<span class="kw-2">&amp;</span>key),
                         val,
                     )
                 })
@@ -4555,8 +4552,7 @@
                 .<span class="kw">await
                 </span>.map(|(key, val)| {
                     (
-                        <span class="macro-nonterminal">$crate::encoding::Encodable::consensus_encode_to_hex</span>(<span class="kw-2">&amp;</span>key)
-                            .expect(<span class="string">&quot;can&#39;t fail&quot;</span>),
+                        <span class="macro-nonterminal">$crate::encoding::Encodable::consensus_encode_to_hex</span>(<span class="kw-2">&amp;</span>key),
                         SerdeWrapper::from_encodable(val),
                     )
                 })

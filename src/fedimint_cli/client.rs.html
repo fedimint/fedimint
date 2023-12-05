@@ -1144,7 +1144,7 @@
                             serde_json::to_value(PayInvoiceResponse {
                                 operation_id,
                                 contract_id,
-                                preimage: preimage.consensus_encode_to_hex().expect(<span class="string">&quot;Cannot fail&quot;</span>),
+                                preimage: preimage.consensus_encode_to_hex(),
                             })
                             .unwrap(),
                         ));

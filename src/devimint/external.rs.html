@@ -857,7 +857,7 @@
 
     <span class="kw">pub async fn </span>get_raw_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span>tx = <span class="self">self</span>.client().get_raw_transaction(txid, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>bytes = tx.consensus_encode_to_vec()<span class="question-mark">?</span>;
+        <span class="kw">let </span>bytes = tx.consensus_encode_to_vec();
         <span class="prelude-val">Ok</span>(bytes.to_hex())
     }
 

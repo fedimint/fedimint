@@ -919,8 +919,6 @@
 <a href="#919" id="919">919</a>
 <a href="#920" id="920">920</a>
 <a href="#921" id="921">921</a>
-<a href="#922" id="922">922</a>
-<a href="#923" id="923">923</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1640,9 +1638,7 @@
             consensus: ServerModuleConsensusConfig {
                 kind: consensus.kind(),
                 version: consensus.version(),
-                config: consensus
-                    .consensus_encode_to_vec()
-                    .expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>),
+                config: consensus.consensus_encode_to_vec(),
             },
             consensus_json: JsonWithKind::new(
                 kind,

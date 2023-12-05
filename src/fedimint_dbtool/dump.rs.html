@@ -460,8 +460,8 @@
                         .<span class="kw">await</span><span class="question-mark">?
                         </span>.map(|(k, v)| {
                             (
-                                k.consensus_encode_to_hex().expect(<span class="string">&quot;can&#39;t fail&quot;</span>),
-                                Box::new(v.consensus_encode_to_hex().expect(<span class="string">&quot;can&#39;t fail&quot;</span>)),
+                                k.consensus_encode_to_hex(),
+                                Box::new(v.consensus_encode_to_hex()),
                             )
                         })
                         .collect::&lt;BTreeMap&lt;String, Box&lt;<span class="kw">_</span>&gt;&gt;&gt;()

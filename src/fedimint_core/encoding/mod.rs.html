@@ -1199,6 +1199,8 @@
 <a href="#1199" id="1199">1199</a>
 <a href="#1200" id="1200">1200</a>
 <a href="#1201" id="1201">1201</a>
+<a href="#1202" id="1202">1202</a>
+<a href="#1203" id="1203">1203</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -1273,16 +1275,18 @@
     </span><span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt;;
 
     <span class="doccomment">/// [`Self::consensus_encode`] to newly allocated `Vec&lt;u8&gt;`
-    </span><span class="kw">fn </span>consensus_encode_to_vec(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, std::io::Error&gt; {
+    </span><span class="kw">fn </span>consensus_encode_to_vec(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(bytes)
+        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
+            .expect(<span class="string">&quot;encoding to bytes can&#39;t fail for io reasons&quot;</span>);
+        bytes
     }
 
-    <span class="kw">fn </span>consensus_encode_to_hex(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode_to_hex(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(bytes.to_hex())
+        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
+            .expect(<span class="string">&quot;encoding to bytes can&#39;t fail for io reasons&quot;</span>);
+        bytes.to_hex()
     }
 
     <span class="doccomment">/// Generate a SHA256 hash of the consensus encoding using the default hash

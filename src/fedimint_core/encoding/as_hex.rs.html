@@ -76,10 +76,6 @@
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Serde implementations using hex-encoded encodables
 //!
 //! Oftentimes it&#39;s convenient to de/serialize consensus encodable data
@@ -103,11 +99,7 @@
     </span>T: Encodable,
     S: serde::Serializer,
 {
-    ser.serialize_str(
-        <span class="kw-2">&amp;</span>t.consensus_encode_to_hex().map_err(|e| {
-            serde::ser::Error::custom(<span class="macro">format!</span>(<span class="string">&quot;encodable serialization failed: {e:?}&quot;</span>))
-        })<span class="question-mark">?</span>,
-    )
+    ser.serialize_str(<span class="kw-2">&amp;</span>t.consensus_encode_to_hex())
 }
 
 <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">&#39;de</span>, T: Decodable, D&gt;(de: D) -&gt; <span class="prelude-ty">Result</span>&lt;T, D::Error&gt;

@@ -3273,7 +3273,7 @@
         </span><span class="kw">match </span>dbtx.get_value(<span class="kw-2">&amp;</span>EncodedClientSecretKey).<span class="kw">await </span>{
             <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Encoded client secret already exists, cannot overwrite&quot;</span>),
             <span class="prelude-val">None </span>=&gt; {
-                <span class="kw">let </span>encoded_secret = T::consensus_encode_to_vec(<span class="kw-2">&amp;</span>secret)<span class="question-mark">?</span>;
+                <span class="kw">let </span>encoded_secret = T::consensus_encode_to_vec(<span class="kw-2">&amp;</span>secret);
                 dbtx.insert_entry(<span class="kw-2">&amp;</span>EncodedClientSecretKey, <span class="kw-2">&amp;</span>encoded_secret)
                     .<span class="kw">await</span>;
                 dbtx.commit_tx().<span class="kw">await</span>;
