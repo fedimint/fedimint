@@ -1428,6 +1428,33 @@ impl<Note: Send> NotesSelector<Note> for SelectNotesWithAtleastAmount {
     }
 }
 
+/// Select notes with total amount of *exactly* `request_amount`. If the amount
+/// cannot be represented with the available denominations an error is returned,
+/// this **does not** mean that the balance is too low.
+pub struct SelectNotesWithExactAmount;
+
+#[apply(async_trait_maybe_send!)]
+impl<Note: Send> NotesSelector<Note> for SelectNotesWithExactAmount {
+    async fn select_notes(
+        &self,
+        #[cfg(not(target_family = "wasm"))] stream: impl futures::Stream<Item = (Amount, Note)> + Send,
+        #[cfg(target_family = "wasm")] stream: impl futures::Stream<Item = (Amount, Note)>,
+        requested_amount: Amount,
+    ) -> anyhow::Result<TieredMulti<Note>> {
+        let notes = select_notes_from_stream(stream, requested_amount).await?;
+
+        if notes.total_amount() != requested_amount {
+            bail!(
+                "Could not select notes with exact amount. Requested amount: {}. Selected amount: {}",
+                requested_amount,
+                notes.total_amount()
+            );
+        }
+
+        Ok(notes)
+    }
+}
+
 // We are using a greedy algorithm to select notes. We start with the largest
 // then proceed to the lowest tiers/denominations.
 // But there is a catch: we don't know if there are enough notes in the lowest

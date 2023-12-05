@@ -20,7 +20,9 @@ use fedimint_ln_client::{
     PayType,
 };
 use fedimint_ln_common::contracts::ContractId;
-use fedimint_mint_client::{MintClientModule, OOBNotes};
+use fedimint_mint_client::{
+    MintClientModule, OOBNotes, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
+};
 use fedimint_wallet_client::{WalletClientModule, WithdrawState};
 use futures::StreamExt;
 use itertools::Itertools;
@@ -29,7 +31,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use time::format_description::well_known::iso8601;
 use time::OffsetDateTime;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::{metadata_from_clap_cli, LnInvoiceResponse};
 
@@ -58,7 +60,11 @@ pub enum ClientCmd {
     /// Reissue notes received from a third party to avoid double spends
     Reissue { oob_notes: OOBNotes },
     /// Prepare notes to send to a third party as a payment
-    Spend { amount: Amount },
+    Spend {
+        amount: Amount,
+        #[clap(long)]
+        allow_overpay: bool,
+    },
     /// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
     Validate { oob_notes: OOBNotes },
@@ -188,11 +194,40 @@ pub async fn handle_command(
 
             Ok(serde_json::to_value(amount).unwrap())
         }
-        ClientCmd::Spend { amount } => {
-            let (operation, notes) = client
-                .get_first_module::<MintClientModule>()
-                .spend_notes(amount, Duration::from_secs(3600), ())
-                .await?;
+        ClientCmd::Spend {
+            amount,
+            allow_overpay,
+        } => {
+            let mint_module = client.get_first_module::<MintClientModule>();
+            let (operation, notes) = if allow_overpay {
+                let (operation, notes) = mint_module
+                    .spend_notes_with_selector(
+                        &SelectNotesWithAtleastAmount,
+                        amount,
+                        Duration::from_secs(3600),
+                        (),
+                    )
+                    .await?;
+
+                let overspend_amount = notes.total_amount() - amount;
+                if overspend_amount != Amount::ZERO {
+                    warn!(
+                        "Selected notes {} worth more than requested",
+                        overspend_amount
+                    );
+                }
+
+                (operation, notes)
+            } else {
+                mint_module
+                    .spend_notes_with_selector(
+                        &SelectNotesWithExactAmount,
+                        amount,
+                        Duration::from_secs(3600),
+                        (),
+                    )
+                    .await?
+            };
             info!("Spend e-cash operation: {operation}");
 
             Ok(json!({
