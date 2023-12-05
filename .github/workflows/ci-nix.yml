@@ -345,9 +345,6 @@ jobs:
     strategy:
       matrix:
         build:
-          - flake-output: client-pkgs
-            bins: ""
-            deb: fedimint
           - flake-output: fedimint-pkgs
             bins: fedimintd,fedimint-cli
             deb: fedimint
@@ -399,17 +396,21 @@ jobs:
 
       - name: Build DEB package
         run: |
-          nix bundle -L --bundler github:NixOS/bundlers#toDEB --accept-flake-config -o ${{ matrix.build.deb }}.deb .#${{ matrix.build.flake-output }}
-          # workaround: https://github.com/actions/upload-artifact/issues/92
-          mkdir -p debs
-          cp -a ${{ matrix.build.deb }}.deb/*.deb ./debs/
+          bins="${{ matrix.build.bins }}"
+          for bin in ${bins//,/ } ; do
+            nix bundle -L --bundler github:NixOS/bundlers#toDEB --accept-flake-config -o debs/$bin .#$bin
+            # workaround: https://github.com/actions/upload-artifact/issues/92
+            cp -a debs/$bin/*.deb debs/
+          done
 
       - name: Build RPM package
         run: |
-          nix bundle -L --bundler github:NixOS/bundlers#toRPM --accept-flake-config -o ${{ matrix.build.deb }}.rpm .#${{ matrix.build.flake-output }}
-          # workaround: https://github.com/actions/upload-artifact/issues/92
-          mkdir -p rpms
-          cp -a ${{ matrix.build.deb }}.rpm/*.rpm ./rpms/
+          bins="${{ matrix.build.bins }}"
+          for bin in ${bins//,/ } ; do
+            nix bundle -L --bundler github:NixOS/bundlers#toRPM --accept-flake-config -o rpms/$bin .#$bin
+            # workaround: https://github.com/actions/upload-artifact/issues/92
+            cp -a rpms/$bin/*.rpm rpms/
+          done
 
       - name: Upload DEB packages
         uses: actions/upload-artifact@v3
