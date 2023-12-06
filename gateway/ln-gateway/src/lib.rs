@@ -77,7 +77,7 @@ use crate::lnrpc_client::GatewayLightningBuilder;
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, GatewayInfo,
-    InfoPayload, RestorePayload, WithdrawPayload,
+    RestorePayload, WithdrawPayload,
 };
 use crate::state_machine::GatewayExtPayStates;
 
@@ -616,7 +616,7 @@ impl Gateway {
         *lock = state;
     }
 
-    pub async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
+    pub async fn handle_get_info(&self) -> Result<GatewayInfo> {
         if let GatewayState::Running {
             lnrpc,
             lightning_public_key,
