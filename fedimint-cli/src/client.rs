@@ -23,11 +23,12 @@ use fedimint_ln_common::contracts::ContractId;
 use fedimint_mint_client::{MintClientModule, OOBNotes};
 use fedimint_wallet_client::{WalletClientModule, WithdrawState};
 use futures::StreamExt;
+use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use time::format_description::well_known::iso8601;
 use time::OffsetDateTime;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{metadata_from_clap_cli, LnInvoiceResponse};
 
@@ -74,9 +75,13 @@ pub enum ClientCmd {
     },
     /// Wait for incoming invoice to be paid
     AwaitInvoice { operation_id: OperationId },
-    /// Pay a lightning invoice via a gateway
+    /// Pay a lightning invoice or lnurl via a gateway
     LnPay {
-        bolt11: lightning_invoice::Bolt11Invoice,
+        /// Lightning invoice or lnurl
+        payment_info: String,
+        /// Amount to pay, used for lnurl
+        #[clap(long, value_parser = parse_fedimint_amount)]
+        amount: Option<Amount>,
         /// Will return immediately after funding the payment
         #[clap(long, action)]
         finish_in_background: bool,
@@ -235,9 +240,12 @@ pub async fn handle_command(
             ))
         }
         ClientCmd::LnPay {
-            bolt11,
+            payment_info,
+            amount,
             finish_in_background,
         } => {
+            let bolt11 = get_invoice(&payment_info, amount).await?;
+            info!("Paying invoice: {bolt11}");
             let lightning_module = client.get_first_module::<LightningClientModule>();
             lightning_module.select_active_gateway().await?;
 
@@ -485,6 +493,51 @@ pub async fn handle_command(
         ClientCmd::Config => {
             let config = client.get_config_json();
             Ok(serde_json::to_value(config).expect("Client config is serializable"))
+        }
+    }
+}
+
+async fn get_invoice(info: &str, amount: Option<Amount>) -> anyhow::Result<Bolt11Invoice> {
+    let info = info.trim();
+    match lightning_invoice::Bolt11Invoice::from_str(info) {
+        Ok(invoice) => {
+            debug!("Parsed parameter as bolt11 invoice: {invoice}");
+            match (invoice.amount_milli_satoshis(), amount) {
+                (Some(_), Some(_)) => {
+                    bail!("Amount specified in both invoice and command line")
+                }
+                (None, _) => {
+                    bail!("We don't support invoices without an amount")
+                }
+                _ => {}
+            };
+            Ok(invoice)
+        }
+        Err(e) => {
+            let lnurl = if info.to_lowercase().starts_with("lnurl") {
+                lnurl::lnurl::LnUrl::from_str(info)?
+            } else if info.contains('@') {
+                lnurl::lightning_address::LightningAddress::from_str(info)?.lnurl()
+            } else {
+                bail!("Invalid invoice or lnurl: {e:?}");
+            };
+            debug!("Parsed parameter as lnurl: {lnurl:?}");
+            let amount = amount.context("When using a lnurl, an amount must be specified")?;
+            let async_client = lnurl::AsyncClient::from_client(reqwest::Client::new());
+            let response = async_client.make_request(&lnurl.url).await?;
+            match response {
+                lnurl::LnUrlResponse::LnUrlPayResponse(response) => {
+                    let invoice = async_client
+                        .get_invoice(&response, amount.msats, None, None)
+                        .await?;
+                    let invoice = Bolt11Invoice::from_str(invoice.invoice())?;
+                    assert_eq!(invoice.amount_milli_satoshis(), Some(amount.msats));
+                    Ok(invoice)
+                }
+                other => {
+                    bail!("Unexpected response from lnurl: {other:?}");
+                }
+            }
         }
     }
 }
