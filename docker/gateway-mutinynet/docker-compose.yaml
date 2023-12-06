@@ -3,7 +3,8 @@ version: "3"
 
 services:
   gatewayd:
-    image: fedimint/gatewayd:v0.2.0-rc5
+    image: gatewayd-local:latest
+    pull_policy: never
     command: gatewayd lnd
     environment:
       # Path to folder containing gateway config and data files
@@ -84,11 +85,12 @@ services:
     restart: always
 
   thunderhub:
-    image: apotdevin/thunderhub:base-v0.13.20
+    image: local/fedimintui-thunderhub
     environment:
       - ACCOUNT_CONFIG_PATH=/thconfig/accounts.yaml
       - HOST=0.0.0.0
       - PORT=3002
+      - FM_GATEWAY_API="http://"
     ports:
       - "0.0.0.0:3002:3002"
     volumes:
