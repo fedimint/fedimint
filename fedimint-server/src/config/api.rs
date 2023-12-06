@@ -53,6 +53,9 @@ pub struct ConfigGenApi {
     config_generated_tx: Sender<ServerConfig>,
     /// Task group for running DKG
     task_group: TaskGroup,
+
+    /// Version hash
+    version_hash: String,
 }
 
 impl ConfigGenApi {
@@ -62,6 +65,7 @@ impl ConfigGenApi {
         db: Database,
         config_generated_tx: Sender<ServerConfig>,
         task_group: &mut TaskGroup,
+        version_hash: String,
     ) -> Self {
         let config_gen_api = Self {
             data_dir,
@@ -69,6 +73,7 @@ impl ConfigGenApi {
             db,
             config_generated_tx,
             task_group: task_group.clone(),
+            version_hash,
         };
         info!(target: fedimint_logging::LOG_NET_PEER_DKG, "Created new config gen Api");
         config_gen_api
@@ -253,6 +258,7 @@ impl ConfigGenApi {
                     registry,
                     DelayCalculator::PROD_DEFAULT,
                     &mut task_group,
+                    self_clone.version_hash.clone(),
                 )
                 .await;
                 task_group
@@ -786,6 +792,7 @@ mod tests {
                 data_dir: dir.clone(),
                 settings: settings.clone(),
                 db,
+                version_hash: "dummyversionhash".to_owned(),
             };
 
             // our id doesn't really exist at this point

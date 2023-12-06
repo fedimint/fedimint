@@ -31,7 +31,6 @@ use tracing::{error, info};
 
 use crate::config::api::ConfigGenParamsLocal;
 use crate::config::distributedgen::{DkgRunner, PeerHandleOps};
-use crate::config::io::CODE_VERSION;
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::NumPeers;
 use crate::multiplexed::PeerConnectionMultiplexer;
@@ -224,6 +223,7 @@ impl ServerConfig {
         broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
         broadcast_secret_key: SecretKey,
         modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>,
+        version_hash: String,
     ) -> Self {
         let private = ServerConfigPrivate {
             api_auth: params.local.api_auth.clone(),
@@ -241,7 +241,7 @@ impl ServerConfig {
             modules: Default::default(),
         };
         let consensus = ServerConfigConsensus {
-            code_version: CODE_VERSION.to_string(),
+            code_version: version_hash,
             version: CORE_CONSENSUS_VERSION,
             broadcast_public_keys,
             broadcast_expected_rounds_per_session: DEFAULT_BROADCAST_EXPECTED_ROUNDS_PER_SESSION,
@@ -390,6 +390,7 @@ impl ServerConfig {
     pub fn trusted_dealer_gen(
         params: &HashMap<PeerId, ConfigGenParams>,
         registry: ServerModuleInitRegistry,
+        version_hash: String,
     ) -> BTreeMap<PeerId, Self> {
         let peer0 = &params[&PeerId::from(0)];
 
@@ -427,6 +428,7 @@ impl ServerConfig {
                         .iter()
                         .map(|(module_id, cfgs)| (*module_id, cfgs[&id].clone()))
                         .collect(),
+                    version_hash.clone(),
                 );
                 (id, config)
             })
@@ -441,6 +443,7 @@ impl ServerConfig {
         registry: ServerModuleInitRegistry,
         delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,
+        version_hash: String,
     ) -> DkgResult<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
         let server_conn = connect(
@@ -470,8 +473,11 @@ impl ServerConfig {
 
         // in case we are running by ourselves, avoid DKG
         if peers.len() == 1 {
-            let server =
-                Self::trusted_dealer_gen(&HashMap::from([(*our_id, params.clone())]), registry);
+            let server = Self::trusted_dealer_gen(
+                &HashMap::from([(*our_id, params.clone())]),
+                registry,
+                version_hash,
+            );
             return Ok(server[our_id].clone());
         }
         info!(
@@ -557,6 +563,7 @@ impl ServerConfig {
             broadcast_public_keys,
             broadcast_sk,
             module_cfgs,
+            version_hash,
         );
 
         info!(

@@ -76,6 +76,9 @@ pub struct FedimintServer {
     pub settings: ConfigGenSettings,
     /// Database shared by the API and consensus
     pub db: Database,
+
+    /// Version hash
+    pub version_hash: String,
 }
 
 impl FedimintServer {
@@ -122,6 +125,7 @@ impl FedimintServer {
             self.db.clone(),
             config_generated_tx,
             &mut task_group,
+            self.version_hash.clone(),
         );
 
         // Attempt get the config with local password, otherwise start config gen

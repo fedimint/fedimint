@@ -126,6 +126,7 @@ impl Fixtures {
             ServerModuleInitRegistry::from(self.servers.clone()),
             ClientModuleInitRegistry::from(self.clients.clone()),
             self.primary_client,
+            "fedimint-testing-dummy-version-hash".to_owned(),
         )
         .await
     }
