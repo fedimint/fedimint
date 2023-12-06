@@ -65,8 +65,7 @@
                   };
                   makeFlags = [ "VERSION=v${version}" ];
                   configureFlags = [ "--enable-developer" "--disable-valgrind" ];
-                } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
-                  NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation -w";
+                  NIX_CFLAGS_COMPILE = "-w";
                 });
 
                 # Note: shell script adding DYLD_FALLBACK_LIBRARY_PATH because of: https://github.com/nextest-rs/nextest/issues/962
