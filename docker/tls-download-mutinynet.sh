@@ -202,7 +202,7 @@ wait_fedimintd_ready() {
   flags=$1
   while true; do 
     status=$(curl $flags -s -q -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "method": "status", "params": [{"params":null}],"id":1}'  "https://fedimintd.${host_name[*]}" | jq -r .result.server )
-    if [[ $status == "AwaitingPassword" ]]; then
+    if [[ $status == "awaiting_password" ]]; then
       echo
       break
     else
