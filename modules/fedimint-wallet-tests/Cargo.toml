@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-wallet-tests"
-version = "0.2.0-rc5"
+version = "0.2.0-rc6"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-wallet-tests contains integration tests for the lightning module"

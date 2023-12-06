@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-wallet-server"
-version = "0.2.0-rc5"
+version = "0.2.0-rc6"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-wallet is a n on-chain bitcoin wallet module. It uses a key-value store and is not a standard HD wallet."
@@ -16,9 +16,9 @@ anyhow = "1.0.66"
 async-trait = "0.1"
 bitcoin = { version = "0.29.2", features = [ "rand", "serde"] }
 erased-serde = "0.3"
-fedimint-core = { version = "0.2.0-rc5", path = "../../fedimint-core" }
-fedimint-wallet-common = { version = "0.2.0-rc5", path = "../fedimint-wallet-common" }
-fedimint-bitcoind = { version = "0.2.0-rc5", path = "../../fedimint-bitcoind" }
+fedimint-core = { version = "0.2.0-rc6", path = "../../fedimint-core" }
+fedimint-wallet-common = { version = "0.2.0-rc6", path = "../fedimint-wallet-common" }
+fedimint-bitcoind = { version = "0.2.0-rc6", path = "../../fedimint-bitcoind" }
 futures = "0.3"
 miniscript = { version = "9.0.2", features = [ "compiler", "serde" ] }
 impl-tools = "0.8.0"
@@ -32,7 +32,7 @@ tokio = { version = "1.26.0", features = ["sync"], optional = true }
 tracing ="0.1.37"
 url = "2.3.1"
 validator = { version = "0.16", features = ["derive"] }
-fedimint-server = { version = "0.2.0-rc5", path = "../../fedimint-server" }
+fedimint-server = { version = "0.2.0-rc6", path = "../../fedimint-server" }
 
 [dev-dependencies]
 fedimint-testing = { path = "../../fedimint-testing" }
