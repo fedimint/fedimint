@@ -3,7 +3,7 @@ version: "3"
 
 services:
   fedimintd:
-    image: fedimint/fedimintd:v0.2.0-rc3
+    image: fedimint/fedimintd:v0.2.0-rc5
     volumes:
       - fedimintd_data:/data
     ports:
@@ -23,7 +23,7 @@ services:
     platform: linux/amd64
 
   guardian-ui:
-    image: fedimintui/guardian-ui:0.2.0-rc3
+    image: fedimintui/guardian-ui:0.2.0-rc4
     ports:
       - "0.0.0.0:3000:3000"
     environment:
