@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-recoverytool"
-version = "0.2.0-rc5"
+version = "0.2.0-rc6"
 edition = "2021"
 authors = ["The Fedimint Developers"]
 description = "recoverytool allows retrieving on-chain funds from a offline federation"
@@ -15,15 +15,15 @@ path = "src/main.rs"
 anyhow = "1.0.69"
 bitcoin = "0.29.2"
 clap = { version = "4.4.7", features = [ "derive", "env" ] }
-fedimint-aead = { version = "0.2.0-rc5", path = "../crypto/aead" }
-fedimint-core = { version = "0.2.0-rc5", path = "../fedimint-core" }
-fedimint-rocksdb = { version = "0.2.0-rc5", path = "../fedimint-rocksdb" }
-fedimint-server = { version = "0.2.0-rc5", path = "../fedimint-server" }
-fedimint-wallet-server = { version = "0.2.0-rc5", path = "../modules/fedimint-wallet-server" }
-fedimint-logging = { version = "0.2.0-rc5", path = "../fedimint-logging" }
-fedimint-ln-common = { version = "0.2.0-rc5", path = "../modules/fedimint-ln-common" }
-fedimint-ln-server = { version = "0.2.0-rc5", path = "../modules/fedimint-ln-server" }
-fedimint-mint-server = { version = "0.2.0-rc5", path = "../modules/fedimint-mint-server" }
+fedimint-aead = { version = "0.2.0-rc6", path = "../crypto/aead" }
+fedimint-core = { version = "0.2.0-rc6", path = "../fedimint-core" }
+fedimint-rocksdb = { version = "0.2.0-rc6", path = "../fedimint-rocksdb" }
+fedimint-server = { version = "0.2.0-rc6", path = "../fedimint-server" }
+fedimint-wallet-server = { version = "0.2.0-rc6", path = "../modules/fedimint-wallet-server" }
+fedimint-logging = { version = "0.2.0-rc6", path = "../fedimint-logging" }
+fedimint-ln-common = { version = "0.2.0-rc6", path = "../modules/fedimint-ln-common" }
+fedimint-ln-server = { version = "0.2.0-rc6", path = "../modules/fedimint-ln-server" }
+fedimint-mint-server = { version = "0.2.0-rc6", path = "../modules/fedimint-mint-server" }
 futures = "0.3.26"
 miniscript = { version = "9.0.2" }
 secp256k1 = { version = "0.24.3", features = [ "serde", "global-context" ] }
