@@ -102,6 +102,7 @@ declare_vars! {
         FM_PORT_LND_RPC: u16 = port_alloc(1)?;
         FM_PORT_LND_REST: u16 = port_alloc(1)?;
         FM_PORT_ELECTRS: u16 = port_alloc(1)?;
+        FM_PORT_ELECTRS_MONITORING: u16 = port_alloc(1)?;
         FM_PORT_ESPLORA: u16 = port_alloc(1)?;
         // 3 = p2p + api + metrics
         FM_PORT_FEDIMINTD_BASE: u16 = port_alloc((3 * fed_size).try_into().unwrap())?;

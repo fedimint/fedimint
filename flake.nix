@@ -1,11 +1,16 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
-    nixpkgs-kitman.url = "github:jkitman/nixpkgs/add-esplora-pkg";
+    nixpkgs = {
+      url = "github:nixos/nixpkgs/nixos-23.11";
+      # We use nixpkgs as input of `flakebox`, as it locks things like
+      # toolchains, in versions that are actually tested in flakebox's CI to
+      # cross-compile things well. This also saves us download and Nix
+      # evaluation time.
+      follows = "flakebox/nixpkgs";
+    };
     flake-utils.url = "github:numtide/flake-utils";
     flakebox = {
-      url = "github:rustshop/flakebox?rev=390c23bc911b354f16db4d925dbe9b1f795308ed";
+      url = "github:dpc/flakebox?rev=4c659e425a347e0e90fc661c48e7fb20014cc120";
     };
     advisory-db = {
       url = "github:rustsec/advisory-db";
@@ -13,30 +18,58 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-kitman, flake-utils, flakebox, advisory-db }:
+  outputs = { self, nixpkgs, flake-utils, flakebox, advisory-db }:
     flake-utils.lib.eachDefaultSystem
       (system:
         let
-          pkgs-unstable = import nixpkgs-unstable {
-            inherit system;
-          };
 
           pkgs = import nixpkgs {
             inherit system;
             overlays = [
               (final: prev: {
-                cargo-udeps = pkgs-unstable.cargo-udeps;
-                wasm-bindgen-cli = pkgs-unstable.wasm-bindgen-cli;
 
-                clightning = prev.clightning.overrideAttrs (oldAttrs: {
-                  configureFlags = [ "--enable-developer" "--disable-valgrind" ];
-                } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
-                  NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation -w";
+                rocksdb_7_10 = prev.rocksdb_7_10.overrideAttrs (oldAttrs:
+                  pkgs.lib.optionalAttrs pkgs.stdenv.isDarwin {
+                    # C++ and its damn super-fragie compilation
+                    env = oldAttrs.env // {
+                      NIX_CFLAGS_COMPILE = oldAttrs.env.NIX_CFLAGS_COMPILE + " -Wno-error=unused-but-set-variable";
+                    };
+                  });
+
+                rocksdb_6_23 = prev.rocksdb_6_23.overrideAttrs (oldAttrs:
+                  pkgs.lib.optionalAttrs pkgs.stdenv.isDarwin {
+                    # C++ and its damn super-fragie compilation
+                    env = oldAttrs.env // {
+                      NIX_CFLAGS_COMPILE = oldAttrs.env.NIX_CFLAGS_COMPILE + " -Wno-error=unused-but-set-variable -Wno-error=deprecated-copy";
+                    };
+                  });
+
+                esplora-electrs = prev.callPackage ./nix/esplora-electrs.nix {
+                  inherit (prev.darwin.apple_sdk.frameworks) Security;
+                };
+
+                bitcoind = prev.bitcoind.overrideAttrs (oldAttrs: {
+                  # tests broken on Mac for some reason
+                  doCheck = !prev.stdenv.isDarwin;
                 });
 
-                # Note: we are using cargo-nextest from pkgs-unstable because it has some fixes we need
+                # syncing channels doesn't work right on newer versions, exactly like described here
+                # https://bitcoin.stackexchange.com/questions/84765/how-can-channel-policy-be-missing
+                # note that config-time `--enable-developer` turns into run-time `--developer` at some
+                # point
+                clightning = prev.clightning.overrideAttrs (oldAttrs: rec {
+                  version = "23.05.2";
+                  src = prev.fetchurl {
+                    url = "https://github.com/ElementsProject/lightning/releases/download/v${version}/clightning-v${version}.zip";
+                    sha256 = "sha256-Tj5ybVaxpk5wmOw85LkeU4pgM9NYl6SnmDG2gyXrTHw=";
+                  };
+                  makeFlags = [ "VERSION=v${version}" ];
+                  configureFlags = [ "--enable-developer" "--disable-valgrind" ];
+                  NIX_CFLAGS_COMPILE = "-w";
+                });
+
                 # Note: shell script adding DYLD_FALLBACK_LIBRARY_PATH because of: https://github.com/nextest-rs/nextest/issues/962
-                cargo-nextest = pkgs.writeShellScriptBin "cargo-nextest" "exec env DYLD_FALLBACK_LIBRARY_PATH=\"$(dirname $(${pkgs.which}/bin/which rustc))/../lib\" ${pkgs-unstable.cargo-nextest}/bin/cargo-nextest \"$@\"";
+                cargo-nextest = pkgs.writeShellScriptBin "cargo-nextest" "exec env DYLD_FALLBACK_LIBRARY_PATH=\"$(dirname $(${pkgs.which}/bin/which rustc))/../lib\" ${prev.cargo-nextest}/bin/cargo-nextest \"$@\"";
 
                 cargo-llvm-cov = prev.rustPlatform.buildRustPackage rec {
                   pname = "cargo-llvm-cov";
@@ -52,10 +85,6 @@
                 };
               })
             ];
-          };
-
-          pkgs-kitman = import nixpkgs-kitman {
-            inherit system;
           };
 
           lib = pkgs.lib;
@@ -87,7 +116,28 @@
             };
           };
 
-          toolchainsAll = (pkgs.lib.getAttrs
+          toolchainArgs = {
+            extraRustFlags = "--cfg tokio_unstable";
+          } // lib.optionalAttrs pkgs.stdenv.isDarwin {
+            # on Darwin newest stdenv doesn't seem to work
+            # linking rocksdb
+            stdenv = pkgs.clang11Stdenv;
+          };
+
+          # all standard toolchains provided by flakebox
+          toolchainsStd =
+            flakeboxLib.mkStdFenixToolchains toolchainArgs;
+
+          # toolchains for the native build (default shell)
+          toolchainsNative = (pkgs.lib.getAttrs
+            [
+              "default"
+            ]
+            toolchainsStd
+          );
+
+          # toolchains for the `cross` shell
+          toolchainsCross = (pkgs.lib.getAttrs
             ([
               "default"
               "nightly"
@@ -101,18 +151,23 @@
               "aarch64-ios-sim"
               "x86_64-ios"
             ])
-            (flakeboxLib.mkStdFenixToolchains { })
+            toolchainsStd
           );
+
+          # toolchains for the wasm build (`crossWasm` shell)
           toolchainsWasm = (pkgs.lib.getAttrs
             [
               "default"
               "wasm32-unknown"
             ]
-            (flakeboxLib.mkStdFenixToolchains { })
           );
 
+          toolchainNative = flakeboxLib.mkFenixMultiToolchain {
+            toolchains = toolchainsNative;
+          };
+
           toolchainAll = flakeboxLib.mkFenixMultiToolchain {
-            toolchains = toolchainsAll;
+            toolchains = toolchainsCross;
           };
           toolchainWasm = flakeboxLib.mkFenixMultiToolchain {
             toolchains = toolchainsWasm;
@@ -156,13 +211,13 @@
 
 
           craneMultiBuild = import nix/flakebox.nix {
-            inherit pkgs pkgs-unstable pkgs-kitman flakeboxLib advisory-db replaceGitHash;
+            inherit pkgs flakeboxLib advisory-db replaceGitHash;
 
             # Yes, you're seeing right. We're passing result of this call as an argument
             # to it.
             inherit craneMultiBuild;
 
-            toolchains = toolchainsAll;
+            toolchains = toolchainsCross;
             profiles = [ "dev" "ci" "test" "release" ];
           };
 
@@ -170,6 +225,7 @@
 
             let
               commonShellArgs = craneMultiBuild.commonEnvsShell // craneMultiBuild.commonArgs // {
+                toolchain = toolchainNative;
                 buildInputs = craneMultiBuild.commonArgs.buildInputs;
                 nativeBuildInputs = craneMultiBuild.commonArgs.nativeBuildInputs ++ [
                   pkgs.cargo-llvm-cov
