@@ -133,16 +133,30 @@ pub struct Fedimintd {
 }
 
 impl Fedimintd {
+    /// Start a new `fedimintd`
     pub fn new() -> anyhow::Result<Fedimintd> {
+        Self::new_custom(CODE_VERSION)
+    }
+
+    /// Start a new custom `fedimintd`
+    ///
+    /// Like [`Self::new`] but with an ability to customize version strings.
+    pub fn new_custom(version_hash: &str) -> anyhow::Result<Fedimintd> {
+        assert_eq!(
+            CODE_VERSION.len(),
+            version_hash.len(),
+            "version_hash must have an expected length"
+        );
+
         let mut args = std::env::args();
         if let Some(ref arg) = args.nth(1) {
             if arg.as_str() == "version-hash" {
-                println!("{CODE_VERSION}");
+                println!("{}", version_hash);
                 std::process::exit(0);
             }
         }
 
-        info!("Starting fedimintd (version: {CODE_VERSION})");
+        info!("Starting fedimintd (version_hash: {})", version_hash);
 
         Ok(Self {
             server_gens: ServerModuleInitRegistry::new(),
