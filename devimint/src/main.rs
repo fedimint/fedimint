@@ -354,6 +354,21 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .state();
     anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
 
+    // # Test the correct descriptor is used
+    let config = cmd!(fed, "config").out_json().await?;
+    let guardian_count = config["global"]["api_endpoints"].as_object().unwrap().len();
+    let descriptor = config["modules"]["2"]["peg_in_descriptor"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    info!("Testing generated descriptor for {guardian_count} guardian federation");
+    if guardian_count == 1 {
+        assert!(descriptor.contains("wpkh("));
+    } else {
+        assert!(descriptor.contains("wsh(sortedmulti("));
+    }
+
     // # Client tests
     info!("Testing Client");
     // ## reissue e-cash

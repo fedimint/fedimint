@@ -63,6 +63,11 @@ function devimint_cli_test() {
 }
 export -f devimint_cli_test
 
+function devimint_cli_test_single() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-cli-test-single.sh
+}
+export -f devimint_cli_test_single
+
 function load_test_tool_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/load-test-tool-test.sh
 }
@@ -126,6 +131,7 @@ if parallel \
   lightning_reconnect_test \
   gateway_reboot_test \
   devimint_cli_test \
+  devimint_cli_test_single \
   load_test_tool_test \
   recoverytool_tests ; then
   >&2 echo "All tests successful"
