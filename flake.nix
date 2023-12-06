@@ -10,7 +10,7 @@
     };
     flake-utils.url = "github:numtide/flake-utils";
     flakebox = {
-      url = "github:dpc/flakebox?rev=13ed388a7de5e5ec1859c59794b539e5d9d89feb";
+      url = "github:dpc/flakebox?rev=4c659e425a347e0e90fc661c48e7fb20014cc120";
     };
     advisory-db = {
       url = "github:rustsec/advisory-db";
