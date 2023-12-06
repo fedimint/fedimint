@@ -131,13 +131,24 @@
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::result::Result;
 
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
-<span class="kw">use </span>reqwest::StatusCode;
 <span class="kw">pub use </span>reqwest::{Error, Response};
+<span class="kw">use </span>reqwest::{Method, StatusCode};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>thiserror::Error;
@@ -172,12 +183,12 @@
 
     <span class="kw">pub async fn </span>get_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayRpcResult&lt;GatewayInfo&gt; {
         <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/info&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
-        <span class="self">self</span>.call(url, ()).<span class="kw">await
+        <span class="self">self</span>.call_get(url).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: BalancePayload) -&gt; GatewayRpcResult&lt;Amount&gt; {
         <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/balance&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
-        <span class="self">self</span>.call(url, payload).<span class="kw">await
+        <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>get_deposit_address(
@@ -185,12 +196,12 @@
         payload: DepositAddressPayload,
     ) -&gt; GatewayRpcResult&lt;Address&gt; {
         <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/address&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
-        <span class="self">self</span>.call(url, payload).<span class="kw">await
+        <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>withdraw(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: WithdrawPayload) -&gt; GatewayRpcResult&lt;TransactionId&gt; {
         <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/withdraw&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
-        <span class="self">self</span>.call(url, payload).<span class="kw">await
+        <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>connect_federation(
@@ -201,22 +212,22 @@
             </span>.base_url
             .join(<span class="string">&quot;/connect-fed&quot;</span>)
             .expect(<span class="string">&quot;invalid base url&quot;</span>);
-        <span class="self">self</span>.call(url, payload).<span class="kw">await
+        <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>leave_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: LeaveFedPayload) -&gt; GatewayRpcResult&lt;()&gt; {
         <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/leave-fed&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
-        <span class="self">self</span>.call(url, payload).<span class="kw">await
+        <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>backup(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: BackupPayload) -&gt; GatewayRpcResult&lt;()&gt; {
         <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/backup&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
-        <span class="self">self</span>.call(url, payload).<span class="kw">await
+        <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>restore(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: RestorePayload) -&gt; GatewayRpcResult&lt;()&gt; {
         <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/restore&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
-        <span class="self">self</span>.call(url, payload).<span class="kw">await
+        <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>set_configuration(
@@ -227,32 +238,43 @@
             </span>.base_url
             .join(<span class="string">&quot;/set_configuration&quot;</span>)
             .expect(<span class="string">&quot;invalid base url&quot;</span>);
-        <span class="self">self</span>.call(url, payload).<span class="kw">await
+        <span class="self">self</span>.call(Method::POST, url, <span class="prelude-val">Some</span>(payload)).<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>call&lt;P, T: DeserializeOwned&gt;(
+    <span class="kw">async fn </span>call&lt;P: Serialize, T: DeserializeOwned&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        method: Method,
         url: SafeUrl,
-        payload: P,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;T, GatewayRpcError&gt;
-    <span class="kw">where
-        </span>P: Serialize,
-    {
-        <span class="kw">let </span><span class="kw-2">mut </span>builder = <span class="self">self</span>.client.post(url.to_unsafe());
+        payload: <span class="prelude-ty">Option</span>&lt;P&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;T, GatewayRpcError&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>builder = <span class="self">self</span>.client.request(method, url.to_unsafe());
         <span class="kw">if let </span><span class="prelude-val">Some</span>(password) = <span class="self">self</span>.password.clone() {
             builder = builder.bearer_auth(password);
         }
-        <span class="kw">let </span>response = builder
-            .header(reqwest::header::CONTENT_TYPE, <span class="string">&quot;application/json&quot;</span>)
-            .json(<span class="kw-2">&amp;</span>payload)
-            .send()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(payload) = payload {
+            builder = builder
+                .json(<span class="kw-2">&amp;</span>payload)
+                .header(reqwest::header::CONTENT_TYPE, <span class="string">&quot;application/json&quot;</span>)
+        }
+        <span class="kw">let </span>response = builder.send().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">match </span>response.status() {
             StatusCode::OK =&gt; <span class="prelude-val">Ok</span>(response.json().<span class="kw">await</span><span class="question-mark">?</span>),
             status =&gt; <span class="prelude-val">Err</span>(GatewayRpcError::BadStatus(status)),
         }
     }
+
+    <span class="kw">async fn </span>call_get&lt;T: DeserializeOwned&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, url: SafeUrl) -&gt; <span class="prelude-ty">Result</span>&lt;T, GatewayRpcError&gt; {
+        <span class="self">self</span>.call(Method::GET, url, <span class="prelude-val">None</span>::&lt;()&gt;).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>call_post&lt;P: Serialize, T: DeserializeOwned&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        url: SafeUrl,
+        payload: P,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;T, GatewayRpcError&gt; {
+        <span class="self">self</span>.call(Method::POST, url, <span class="prelude-val">Some</span>(payload)).<span class="kw">await
+    </span>}
 }
 
 <span class="kw">pub type </span>GatewayRpcResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, GatewayRpcError&gt;;

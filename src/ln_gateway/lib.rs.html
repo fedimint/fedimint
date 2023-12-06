@@ -1470,7 +1470,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::run_webserver;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, GatewayInfo,
-    InfoPayload, RestorePayload, WithdrawPayload,
+    RestorePayload, WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayExtPayStates;
 
@@ -2009,7 +2009,7 @@
         <span class="kw-2">*</span>lock = state;
     }
 
-    <span class="kw">pub async fn </span>handle_get_info(<span class="kw-2">&amp;</span><span class="self">self</span>, _payload: InfoPayload) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayInfo&gt; {
+    <span class="kw">pub async fn </span>handle_get_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayInfo&gt; {
         <span class="kw">if let </span>GatewayState::Running {
             lnrpc,
             lightning_public_key,

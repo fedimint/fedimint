@@ -180,9 +180,6 @@
 <a href="#180" id="180">180</a>
 <a href="#181" id="181">181</a>
 <a href="#182" id="182">182</a>
-<a href="#183" id="183">183</a>
-<a href="#184" id="184">184</a>
-<a href="#185" id="185">185</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::response::IntoResponse;
@@ -198,8 +195,8 @@
 <span class="kw">use </span>tracing::{error, instrument};
 
 <span class="kw">use super</span>::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, InfoPayload,
-    LeaveFedPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, LeaveFedPayload,
+    RestorePayload, SetConfigurationPayload, WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::GatewayConfiguration;
 <span class="kw">use crate</span>::{Gateway, GatewayError};
@@ -218,7 +215,7 @@
 
         <span class="comment">// Authenticated, public routes used for gateway administration
         </span><span class="kw">let </span>admin_routes = Router::new()
-            .route(<span class="string">&quot;/info&quot;</span>, post(info))
+            .route(<span class="string">&quot;/info&quot;</span>, get(info))
             .route(<span class="string">&quot;/balance&quot;</span>, post(balance))
             .route(<span class="string">&quot;/address&quot;</span>, post(address))
             .route(<span class="string">&quot;/withdraw&quot;</span>, post(withdraw))
@@ -232,7 +229,7 @@
     } <span class="kw">else </span>{
         <span class="kw">let </span>routes = Router::new()
             .route(<span class="string">&quot;/set_configuration&quot;</span>, post(set_configuration))
-            .route(<span class="string">&quot;/info&quot;</span>, post(info));
+            .route(<span class="string">&quot;/info&quot;</span>, get(info));
         (routes, Router::new())
     };
 
@@ -263,11 +260,8 @@
 <span class="doccomment">/// Display high-level information about the Gateway
 </span><span class="attr">#[debug_handler]
 #[instrument(skip_all, err)]
-</span><span class="kw">async fn </span>info(
-    Extension(gateway): Extension&lt;Gateway&gt;,
-    Json(payload): Json&lt;InfoPayload&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
-    <span class="kw">let </span>info = gateway.handle_get_info(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+</span><span class="kw">async fn </span>info(Extension(gateway): Extension&lt;Gateway&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
+    <span class="kw">let </span>info = gateway.handle_get_info().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(info)))
 }
 
