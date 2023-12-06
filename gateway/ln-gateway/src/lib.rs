@@ -907,10 +907,6 @@ impl Gateway {
         }: SetConfigurationPayload,
     ) -> Result<()> {
         let gw_state = self.state.read().await.clone();
-        if matches!(gw_state, GatewayState::Disconnected) {
-            return Err(GatewayError::Disconnected);
-        }
-
         let lightning_network = match gw_state {
             GatewayState::Running {
                 lightning_network, ..
