@@ -694,6 +694,10 @@
 <a href="#694" id="694">694</a>
 <a href="#695" id="695">695</a>
 <a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -1288,11 +1292,14 @@
             .to_str()
             .context(<span class="string">&quot;non utf8 path&quot;</span>)<span class="question-mark">?</span>;
 
+        <span class="kw">let </span>daemon_dir = <span class="kw-2">&amp;</span>process_mgr.globals.FM_BTC_DIR.display();
+
         <span class="kw">let </span>conf = <span class="macro">format!</span>(
             <span class="macro">include_str!</span>(<span class="string">&quot;cfg/electrs.toml&quot;</span>),
             rpc_port = process_mgr.globals.FM_PORT_BTC_RPC,
             p2p_port = process_mgr.globals.FM_PORT_BTC_P2P,
             electrs_port = process_mgr.globals.FM_PORT_ELECTRS,
+            monitoring_port = process_mgr.globals.FM_PORT_ELECTRS_MONITORING,
         );
         <span class="macro">debug!</span>(<span class="string">&quot;electrs conf: {:?}&quot;</span>, conf);
         write_overwrite_async(
@@ -1304,7 +1311,8 @@
             <span class="string">&quot;electrs&quot;</span>,
             <span class="string">&quot;--conf-dir={electrs_dir}&quot;</span>,
             <span class="string">&quot;--db-dir={electrs_dir}&quot;</span>,
-        );
+            <span class="string">&quot;--daemon-dir={daemon_dir}&quot;
+        </span>);
         <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">&quot;electrs&quot;</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;electrs started&quot;</span>);
 

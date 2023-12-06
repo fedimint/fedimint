@@ -166,6 +166,7 @@
 <a href="#166" id="166">166</a>
 <a href="#167" id="167">167</a>
 <a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
@@ -270,6 +271,7 @@
         FM_PORT_LND_RPC: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
         FM_PORT_LND_REST: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
         FM_PORT_ELECTRS: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
+        FM_PORT_ELECTRS_MONITORING: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
         FM_PORT_ESPLORA: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
         <span class="comment">// 3 = p2p + api + metrics
         </span>FM_PORT_FEDIMINTD_BASE: u16 = port_alloc((<span class="number">3 </span>* fed_size).try_into().unwrap())<span class="question-mark">?</span>;
