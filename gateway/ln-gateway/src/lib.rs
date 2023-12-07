@@ -1130,7 +1130,11 @@ impl Gateway {
                                     }
                                 }
                             } else {
-                                warn!("GatewayState must be Running to register with federation. Current state: {gateway_state:?}");
+                                // We need to retry more often if the gateway is not in the Running state
+                                const NOT_RUNNING_RETRY: Duration = Duration::from_secs(10);
+                                info!("Will not register federation yet because gateway still not in Running state. Current state: {gateway_state:?}. Will keep waiting, next retry in {NOT_RUNNING_RETRY:?}...");
+                                sleep(NOT_RUNNING_RETRY).await;
+                                continue;
                             }
                         } else {
                             warn!("Cannot register clients because gateway configuration is not set.");
