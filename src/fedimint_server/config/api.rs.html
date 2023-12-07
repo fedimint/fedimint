@@ -1029,6 +1029,13 @@
 <a href="#1029" id="1029">1029</a>
 <a href="#1030" id="1030">1030</a>
 <a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1084,6 +1091,9 @@
     </span>config_generated_tx: Sender&lt;ServerConfig&gt;,
     <span class="doccomment">/// Task group for running DKG
     </span>task_group: TaskGroup,
+
+    <span class="doccomment">/// Version hash
+    </span>version_hash: String,
 }
 
 <span class="kw">impl </span>ConfigGenApi {
@@ -1093,6 +1103,7 @@
         db: Database,
         config_generated_tx: Sender&lt;ServerConfig&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        version_hash: String,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>config_gen_api = <span class="self">Self </span>{
             data_dir,
@@ -1100,6 +1111,7 @@
             db,
             config_generated_tx,
             task_group: task_group.clone(),
+            version_hash,
         };
         <span class="macro">info!</span>(target: fedimint_logging::LOG_NET_PEER_DKG, <span class="string">&quot;Created new config gen Api&quot;</span>);
         config_gen_api
@@ -1284,6 +1296,7 @@
                     registry,
                     DelayCalculator::PROD_DEFAULT,
                     <span class="kw-2">&amp;mut </span>task_group,
+                    self_clone.version_hash.clone(),
                 )
                 .<span class="kw">await</span>;
                 task_group
@@ -1817,6 +1830,7 @@
                 data_dir: dir.clone(),
                 settings: settings.clone(),
                 db,
+                version_hash: <span class="string">&quot;dummyversionhash&quot;</span>.to_owned(),
             };
 
             <span class="comment">// our id doesn&#39;t really exist at this point

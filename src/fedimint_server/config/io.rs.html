@@ -120,9 +120,6 @@
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a>
-<a href="#125" id="125">125</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::Write;
@@ -134,9 +131,6 @@
 <span class="kw">use </span>serde::Serialize;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
-
-<span class="doccomment">/// Version of the server code (should be the same among peers)
-</span><span class="kw">pub const </span>CODE_VERSION: <span class="kw-2">&amp;</span>str = <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>);
 
 <span class="doccomment">/// Client configuration file
 </span><span class="kw">pub const </span>CLIENT_CONFIG: <span class="kw-2">&amp;</span>str = <span class="string">&quot;client&quot;</span>;

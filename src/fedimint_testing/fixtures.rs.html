@@ -231,6 +231,7 @@
 <a href="#231" id="231">231</a>
 <a href="#232" id="232">232</a>
 <a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -359,6 +360,7 @@
             ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone()),
             ClientModuleInitRegistry::from(<span class="self">self</span>.clients.clone()),
             <span class="self">self</span>.primary_client,
+            <span class="string">&quot;fedimint-testing-dummy-version-hash&quot;</span>.to_owned(),
         )
         .<span class="kw">await
     </span>}

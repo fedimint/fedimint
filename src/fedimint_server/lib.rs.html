@@ -321,6 +321,10 @@
 <a href="#321" id="321">321</a>
 <a href="#322" id="322">322</a>
 <a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -399,6 +403,9 @@
     </span><span class="kw">pub </span>settings: ConfigGenSettings,
     <span class="doccomment">/// Database shared by the API and consensus
     </span><span class="kw">pub </span>db: Database,
+
+    <span class="doccomment">/// Version hash
+    </span><span class="kw">pub </span>version_hash: String,
 }
 
 <span class="kw">impl </span>FedimintServer {
@@ -445,6 +452,7 @@
             <span class="self">self</span>.db.clone(),
             config_generated_tx,
             <span class="kw-2">&amp;mut </span>task_group,
+            <span class="self">self</span>.version_hash.clone(),
         );
 
         <span class="comment">// Attempt get the config with local password, otherwise start config gen

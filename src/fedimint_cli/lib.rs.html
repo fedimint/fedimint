@@ -864,6 +864,11 @@
 <a href="#864" id="864">864</a>
 <a href="#865" id="865">865</a>
 <a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
@@ -1358,13 +1363,18 @@ Examples:
 }
 
 <span class="kw">impl </span>FedimintCli {
-    <span class="kw">pub fn </span>new() -&gt; anyhow::Result&lt;FedimintCli&gt; {
-        <span class="kw">pub const </span>CODE_VERSION: <span class="kw-2">&amp;</span>str = <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>);
+    <span class="doccomment">/// Build a new `fedimintd` with a custom version hash
+    </span><span class="kw">pub fn </span>new(version_hash: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;FedimintCli&gt; {
+        <span class="macro">assert_eq!</span>(
+            <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>).len(),
+            version_hash.len(),
+            <span class="string">&quot;version_hash must have an expected length&quot;
+        </span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>args = std::env::args();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>arg) = args.nth(<span class="number">1</span>) {
             <span class="kw">if </span>arg.as_str() == <span class="string">&quot;version-hash&quot; </span>{
-                <span class="macro">println!</span>(<span class="string">&quot;{CODE_VERSION}&quot;</span>);
+                <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, version_hash);
                 std::process::exit(<span class="number">0</span>);
             }
         }
@@ -1376,7 +1386,7 @@ Examples:
             .init()
             .expect(<span class="string">&quot;tracing initializes&quot;</span>);
 
-        <span class="macro">debug!</span>(<span class="string">&quot;Starting fedimint-cli (version: {CODE_VERSION})&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">&quot;Starting fedimint-cli (version: {})&quot;</span>, version_hash);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             module_inits: ClientModuleInitRegistry::new(),
