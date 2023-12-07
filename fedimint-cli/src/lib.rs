@@ -492,15 +492,6 @@ pub struct FedimintCli {
 }
 
 impl FedimintCli {
-    /// Start a new `fedimint-cli` in an unmodified upstream version
-    // not meant for public consumption, but public because binary
-    // is in a separate crate
-    #[doc(hidden)]
-    pub fn new_upstream() -> anyhow::Result<FedimintCli> {
-        pub const CODE_VERSION: &str = env!("FEDIMINT_BUILD_CODE_VERSION");
-        Self::new(CODE_VERSION)
-    }
-
     /// Build a new `fedimintd` with a custom version hash
     pub fn new(version_hash: &str) -> anyhow::Result<FedimintCli> {
         assert_eq!(

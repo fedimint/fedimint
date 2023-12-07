@@ -117,7 +117,7 @@ fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
 /// // Note: not called `main` to avoid rustdoc executing it
 /// // #[tokio::main]
 /// async fn main_() -> anyhow::Result<()> {
-///     Fedimintd::new()?
+///     Fedimintd::new(env!("FEDIMINT_BUILD_CODE_VERSION"))?
 ///         // use `.with_default_modules()` to avoid having
 ///         // to import these manually
 ///         .with_module(WalletInit)
@@ -134,14 +134,6 @@ pub struct Fedimintd {
 }
 
 impl Fedimintd {
-    /// Start a new `fedimintd` in an unmodified upstream version
-    // not meant for public consumption, but public because binary
-    // is in a separate crate
-    #[doc(hidden)]
-    pub fn new_upstream() -> anyhow::Result<Fedimintd> {
-        Self::new(env!("FEDIMINT_BUILD_CODE_VERSION"))
-    }
-
     /// Start a new custom `fedimintd`
     ///
     /// Like [`Self::new`] but with an ability to customize version strings.
