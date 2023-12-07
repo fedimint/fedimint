@@ -134,15 +134,18 @@ pub struct Fedimintd {
 }
 
 impl Fedimintd {
-    /// Start a new `fedimintd`
-    pub fn new() -> anyhow::Result<Fedimintd> {
-        Self::new_custom(env!("FEDIMINT_BUILD_CODE_VERSION"))
+    /// Start a new `fedimintd` in an unmodified upstream version
+    // not meant for public consumption, but public because binary
+    // is in a separate crate
+    #[doc(hidden)]
+    pub fn new_upstream() -> anyhow::Result<Fedimintd> {
+        Self::new(env!("FEDIMINT_BUILD_CODE_VERSION"))
     }
 
     /// Start a new custom `fedimintd`
     ///
     /// Like [`Self::new`] but with an ability to customize version strings.
-    pub fn new_custom(version_hash: &str) -> anyhow::Result<Fedimintd> {
+    pub fn new(version_hash: &str) -> anyhow::Result<Fedimintd> {
         assert_eq!(
             env!("FEDIMINT_BUILD_CODE_VERSION").len(),
             version_hash.len(),
