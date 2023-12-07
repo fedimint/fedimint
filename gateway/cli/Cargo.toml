@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-gateway-cli"
-version = "0.2.0-rc6"
+version = "0.2.0-rc7"
 edition = "2021"
 license = "MIT"
 description = "CLI tool to control lightning gateway"
@@ -19,9 +19,9 @@ axum = "0.6.4"
 axum-macros = "0.3.1"
 bitcoin = { version = "0.29.2", features = ["serde"] }
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
-ln-gateway = { version = "0.2.0-rc6", package = "fedimint-ln-gateway", path= "../ln-gateway" }
-fedimint-core = { version = "0.2.0-rc6", path = "../../fedimint-core" }
-fedimint-logging = { version = "0.2.0-rc6", path = "../../fedimint-logging" }
+ln-gateway = { version = "0.2.0-rc7", package = "fedimint-ln-gateway", path= "../ln-gateway" }
+fedimint-core = { version = "0.2.0-rc7", path = "../../fedimint-core" }
+fedimint-logging = { version = "0.2.0-rc7", path = "../../fedimint-logging" }
 reqwest = { version = "0.11.14", features = [ "json", "rustls-tls" ], default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.91"
@@ -31,4 +31,4 @@ url = { version = "2.3.1", features = ["serde"] }
 clap_complete = "4.3.1"
 
 [build-dependencies]
-fedimint-build = { version = "0.2.0-rc6", path = "../../fedimint-build" }
+fedimint-build = { version = "0.2.0-rc7", path = "../../fedimint-build" }
