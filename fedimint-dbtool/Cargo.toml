@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-dbtool"
-version = "0.2.0-rc6"
+version = "0.2.0-rc7"
 edition = "2021"
 license = "MIT"
 description = "Tool to inspect Fedimint client and server databases"
@@ -14,25 +14,25 @@ name = "fedimint-dbtool"
 
 [dependencies]
 anyhow = "1.0.68"
-fedimint-aead = { version = "0.2.0-rc6", path = "../crypto/aead" }
+fedimint-aead = { version = "0.2.0-rc7", path = "../crypto/aead" }
 bitcoin_hashes = "0.11.0"
 bytes = "1.4.0"
 clap = { version = "4.1.6", features = ["derive", "env"] }
-fedimint-core = { version = "0.2.0-rc6", path = "../fedimint-core" }
-fedimint-client = { version = "0.2.0-rc6", path = "../fedimint-client" }
-fedimint-server = { version = "0.2.0-rc6", path = "../fedimint-server" }
-fedimint-rocksdb = { version = "0.2.0-rc6", path = "../fedimint-rocksdb" }
-fedimint-mint-server = { version = "0.2.0-rc6", path = "../modules/fedimint-mint-server" }
-fedimint-mint-client = { version = "0.2.0-rc6", path = "../modules/fedimint-mint-client" }
-fedimint-ln-server = { version = "0.2.0-rc6", path = "../modules/fedimint-ln-server" }
-fedimint-ln-client = { version = "0.2.0-rc6", path = "../modules/fedimint-ln-client" }
-fedimint-logging = { version = "0.2.0-rc6", path = "../fedimint-logging" }
-fedimint-wallet-server = { version = "0.2.0-rc6", path = "../modules/fedimint-wallet-server" }
-fedimint-wallet-client = { version = "0.2.0-rc6", path = "../modules/fedimint-wallet-client" }
+fedimint-core = { version = "0.2.0-rc7", path = "../fedimint-core" }
+fedimint-client = { version = "0.2.0-rc7", path = "../fedimint-client" }
+fedimint-server = { version = "0.2.0-rc7", path = "../fedimint-server" }
+fedimint-rocksdb = { version = "0.2.0-rc7", path = "../fedimint-rocksdb" }
+fedimint-mint-server = { version = "0.2.0-rc7", path = "../modules/fedimint-mint-server" }
+fedimint-mint-client = { version = "0.2.0-rc7", path = "../modules/fedimint-mint-client" }
+fedimint-ln-server = { version = "0.2.0-rc7", path = "../modules/fedimint-ln-server" }
+fedimint-ln-client = { version = "0.2.0-rc7", path = "../modules/fedimint-ln-client" }
+fedimint-logging = { version = "0.2.0-rc7", path = "../fedimint-logging" }
+fedimint-wallet-server = { version = "0.2.0-rc7", path = "../modules/fedimint-wallet-server" }
+fedimint-wallet-client = { version = "0.2.0-rc7", path = "../modules/fedimint-wallet-client" }
 futures = "0.3.24"
 erased-serde = "0.3"
 hex = { version = "0.4.3", features = ["serde"] }
-ln-gateway = { package = "fedimint-ln-gateway", version = "0.2.0-rc6", path = "../gateway/ln-gateway" }
+ln-gateway = { package = "fedimint-ln-gateway", version = "0.2.0-rc7", path = "../gateway/ln-gateway" }
 serde = { version = "1.0.149", features = ["derive"] }
 serde_json = "1.0.91"
 strum = "0.24"
