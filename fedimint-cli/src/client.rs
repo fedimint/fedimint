@@ -96,7 +96,12 @@ pub enum ClientCmd {
         gateway_id: secp256k1::PublicKey,
     },
     /// Generate a new deposit address, funds sent to it can later be claimed
-    DepositAddress,
+    DepositAddress {
+        /// How long the client should watch the address for incoming
+        /// transactions, time in seconds
+        #[clap(long, default_value_t = 60*60*24*7)]
+        timeout: u64,
+    },
     /// Wait for deposit on previously generated address
     AwaitDeposit { operation_id: OperationId },
     /// Withdraw funds from the federation
@@ -322,10 +327,10 @@ pub async fn handle_command(
             gateway_json["active"] = json!(true);
             Ok(serde_json::to_value(gateway_json).unwrap())
         }
-        ClientCmd::DepositAddress => {
+        ClientCmd::DepositAddress { timeout } => {
             let (operation_id, address) = client
                 .get_first_module::<WalletClientModule>()
-                .get_deposit_address(now() + Duration::from_secs(600), ())
+                .get_deposit_address(now() + Duration::from_secs(timeout), ())
                 .await?;
             Ok(serde_json::json! {
                 {
