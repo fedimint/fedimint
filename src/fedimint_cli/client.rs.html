@@ -683,6 +683,11 @@
 <a href="#683" id="683">683</a>
 <a href="#684" id="684">684</a>
 <a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -781,7 +786,12 @@
         </span>gateway_id: secp256k1::PublicKey,
     },
     <span class="doccomment">/// Generate a new deposit address, funds sent to it can later be claimed
-    </span>DepositAddress,
+    </span>DepositAddress {
+        <span class="doccomment">/// How long the client should watch the address for incoming
+        /// transactions, time in seconds
+        </span><span class="attr">#[clap(long, default_value_t = <span class="number">60</span><span class="kw-2">*</span><span class="number">60</span><span class="kw-2">*</span><span class="number">24</span><span class="kw-2">*</span><span class="number">7</span>)]
+        </span>timeout: u64,
+    },
     <span class="doccomment">/// Wait for deposit on previously generated address
     </span>AwaitDeposit { operation_id: OperationId },
     <span class="doccomment">/// Withdraw funds from the federation
@@ -1007,10 +1017,10 @@
             gateway_json[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">true</span>);
             <span class="prelude-val">Ok</span>(serde_json::to_value(gateway_json).unwrap())
         }
-        ClientCmd::DepositAddress =&gt; {
+        ClientCmd::DepositAddress { timeout } =&gt; {
             <span class="kw">let </span>(operation_id, address) = client
                 .get_first_module::&lt;WalletClientModule&gt;()
-                .get_deposit_address(now() + Duration::from_secs(<span class="number">600</span>), ())
+                .get_deposit_address(now() + Duration::from_secs(timeout), ())
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(<span class="macro">serde_json::json! </span>{
                 {
