@@ -1,0 +1,12 @@
+{
+  // Required
+  "repoOwner": "fedimint",
+  "repoName": "fedimint",
+
+  // the branches available to backport to
+  "targetBranchChoices": ["releases/v0.1", "releases/v0.2"],
+
+  // Optional: automatically merge backport PR
+  "autoMerge": false,
+  "autoMergeMethod": "merge"
+}
