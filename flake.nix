@@ -26,7 +26,26 @@
             overlays = [
               (final: prev: {
                 cargo-udeps = pkgs-unstable.cargo-udeps;
-                wasm-bindgen-cli = pkgs-unstable.wasm-bindgen-cli;
+
+                wasm-bindgen-cli = final.rustPlatform.buildRustPackage rec {
+                  pname = "wasm-bindgen-cli";
+                  version = "0.2.88";
+                  hash = "sha256-CpyB2poKIqP4Zfn3Gk1hA9m6EQ/ZiyO91wZViMH7Wsk=";
+                  cargoHash = "sha256-0D5ABJ3jwsrFIvXSOYgOqJtV5B9JUsHZfJEKl6PO47I=";
+
+                  src = final.fetchCrate {
+                    inherit pname version hash;
+                  };
+
+                  nativeBuildInputs = [ final.pkg-config ];
+
+                  buildInputs = [ final.openssl ] ++ lib.optionals stdenv.isDarwin [ final.curl final.Security ];
+
+                  nativeCheckInputs = [ final.nodejs ];
+
+                  # tests require it to be ran in the wasm-bindgen monorepo
+                  doCheck = false;
+                };
 
                 clightning = prev.clightning.overrideAttrs (oldAttrs: {
                   configureFlags = [ "--enable-developer" "--disable-valgrind" ];
