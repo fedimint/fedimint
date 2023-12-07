@@ -492,13 +492,18 @@ pub struct FedimintCli {
 }
 
 impl FedimintCli {
-    pub fn new() -> anyhow::Result<FedimintCli> {
-        pub const CODE_VERSION: &str = env!("FEDIMINT_BUILD_CODE_VERSION");
+    /// Build a new `fedimintd` with a custom version hash
+    pub fn new(version_hash: &str) -> anyhow::Result<FedimintCli> {
+        assert_eq!(
+            env!("FEDIMINT_BUILD_CODE_VERSION").len(),
+            version_hash.len(),
+            "version_hash must have an expected length"
+        );
 
         let mut args = std::env::args();
         if let Some(ref arg) = args.nth(1) {
             if arg.as_str() == "version-hash" {
-                println!("{CODE_VERSION}");
+                println!("{}", version_hash);
                 std::process::exit(0);
             }
         }
@@ -510,7 +515,7 @@ impl FedimintCli {
             .init()
             .expect("tracing initializes");
 
-        debug!("Starting fedimint-cli (version: {CODE_VERSION})");
+        debug!("Starting fedimint-cli (version: {})", version_hash);
 
         Ok(Self {
             module_inits: ClientModuleInitRegistry::new(),

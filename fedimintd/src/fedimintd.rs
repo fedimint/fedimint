@@ -20,7 +20,7 @@ use fedimint_ln_server::LightningInit;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintInit;
 use fedimint_server::config::api::ConfigGenSettings;
-use fedimint_server::config::io::{CODE_VERSION, DB_FILE, PLAINTEXT_PASSWORD};
+use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
 use fedimint_server::FedimintServer;
 use fedimint_wallet_server::WalletInit;
 use futures::FutureExt;
@@ -117,7 +117,7 @@ fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
 /// // Note: not called `main` to avoid rustdoc executing it
 /// // #[tokio::main]
 /// async fn main_() -> anyhow::Result<()> {
-///     Fedimintd::new()?
+///     Fedimintd::new(env!("FEDIMINT_BUILD_CODE_VERSION"))?
 ///         // use `.with_default_modules()` to avoid having
 ///         // to import these manually
 ///         .with_module(WalletInit)
@@ -130,23 +130,34 @@ fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
 pub struct Fedimintd {
     pub server_gens: ServerModuleInitRegistry,
     pub server_gen_params: ServerModuleConfigGenParamsRegistry,
+    pub version_hash: String,
 }
 
 impl Fedimintd {
-    pub fn new() -> anyhow::Result<Fedimintd> {
+    /// Start a new custom `fedimintd`
+    ///
+    /// Like [`Self::new`] but with an ability to customize version strings.
+    pub fn new(version_hash: &str) -> anyhow::Result<Fedimintd> {
+        assert_eq!(
+            env!("FEDIMINT_BUILD_CODE_VERSION").len(),
+            version_hash.len(),
+            "version_hash must have an expected length"
+        );
+
         let mut args = std::env::args();
         if let Some(ref arg) = args.nth(1) {
             if arg.as_str() == "version-hash" {
-                println!("{CODE_VERSION}");
+                println!("{}", version_hash);
                 std::process::exit(0);
             }
         }
 
-        info!("Starting fedimintd (version: {CODE_VERSION})");
+        info!("Starting fedimintd (version_hash: {})", version_hash);
 
         Ok(Self {
             server_gens: ServerModuleInitRegistry::new(),
             server_gen_params: ServerModuleConfigGenParamsRegistry::default(),
+            version_hash: version_hash.to_owned(),
         })
     }
 
@@ -203,6 +214,7 @@ impl Fedimintd {
                     task_group.clone(),
                     self.server_gens,
                     self.server_gen_params,
+                    self.version_hash,
                 )
                 .await
                 {
@@ -256,6 +268,7 @@ async fn run(
     task_group: TaskGroup,
     module_inits: ServerModuleInitRegistry,
     mut module_inits_params: ServerModuleConfigGenParamsRegistry,
+    version_hash: String,
 ) -> anyhow::Result<()> {
     attach_default_module_init_params(
         BitcoinRpcConfig::from_env_vars()?,
@@ -296,6 +309,7 @@ async fn run(
             registry: module_inits,
         },
         db,
+        version_hash,
     };
     if let Some(bind_metrics_api) = opts.bind_metrics_api.as_ref() {
         let (api_result, metrics_api_result) = futures::join!(

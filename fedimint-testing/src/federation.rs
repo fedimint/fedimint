@@ -102,12 +102,13 @@ impl FederationTest {
         server_init: ServerModuleInitRegistry,
         client_init: ClientModuleInitRegistry,
         primary_client: ModuleInstanceId,
+        version_hash: String,
     ) -> Self {
         let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
         let params =
             local_config_gen_params(&peers, base_port, params).expect("Generates local config");
 
-        let configs = ServerConfig::trusted_dealer_gen(&params, server_init.clone());
+        let configs = ServerConfig::trusted_dealer_gen(&params, server_init.clone(), version_hash);
         let network = MockNetwork::new();
 
         let mut task = TaskGroup::new();
