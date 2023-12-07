@@ -1382,7 +1382,6 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     Ok(())
 }
 
-// TODO: test the direct method using tweaks
 pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     #[allow(unused_variables)]
     let DevFed {
@@ -1397,11 +1396,61 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     } = dev_fed;
     let data_dir = env::var("FM_DATA_DIR")?;
 
-    let peg_in_values = HashSet::from([12_345_000, 23_456_000, 34_567_000]);
-    for peg_in_value in &peg_in_values {
-        fed.pegin(*peg_in_value).await?;
+    let mut fed_utxos_sats = HashSet::from([12_345_000, 23_456_000, 34_567_000]);
+    for sats in &fed_utxos_sats {
+        fed.pegin(*sats).await?;
     }
-    let total_pegged_in = peg_in_values.iter().sum::<u64>();
+
+    // Initiate a withdrawal to verify the recoverytool recognizes change outputs
+    let withdrawal_address = bitcoind.get_new_address().await?;
+    let withdraw_res = cmd!(
+        fed,
+        "withdraw",
+        "--address",
+        &withdrawal_address,
+        "--amount",
+        "5000 sat"
+    )
+    .out_json()
+    .await?;
+
+    let fees_sat = withdraw_res["fees_sat"]
+        .as_u64()
+        .expect("withdrawal should contain fees");
+    let txid: Txid = withdraw_res["txid"]
+        .as_str()
+        .expect("withdrawal should contain txid string")
+        .parse()
+        .expect("txid should be parsable");
+    let tx_hex = poll("Waiting for transaction in mempool", None, || async {
+        bitcoind
+            .get_raw_transaction(&txid)
+            .await
+            .context("getrawtransaction")
+            .map_err(ControlFlow::Continue)
+    })
+    .await
+    .expect("withdrawal tx failed to reach mempool");
+
+    let tx = bitcoin::Transaction::consensus_decode_hex(&tx_hex, &Default::default())?;
+    assert_eq!(tx.input.len(), 1);
+    assert_eq!(tx.output.len(), 2);
+
+    let withdrawal_address = bitcoin::Address::from_str(&withdrawal_address)?;
+    let change_output = tx
+        .output
+        .iter()
+        .find(|o| o.to_owned().script_pubkey != withdrawal_address.script_pubkey())
+        .expect("withdrawal must have change output");
+    assert!(fed_utxos_sats.insert(change_output.value));
+
+    // Remove the utxo consumed from the withdrawal tx
+    let total_output_sats = tx.output.iter().map(|o| o.value).sum::<u64>();
+    let input_sats = total_output_sats + fees_sat;
+    assert!(fed_utxos_sats.remove(&input_sats));
+
+    let total_fed_sats = fed_utxos_sats.iter().sum::<u64>();
+    fed.generate_epochs(2).await?;
 
     let now = fedimint_core::time::now();
     info!("Recovering using utxos method");
@@ -1418,14 +1467,14 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     .out_json()
     .await?;
     let outputs = output.as_array().context("expected an array")?;
-    assert_eq!(outputs.len(), peg_in_values.len());
+    assert_eq!(outputs.len(), fed_utxos_sats.len());
 
     assert_eq!(
         outputs
             .iter()
             .map(|o| o["amount_sat"].as_u64().unwrap())
             .collect::<HashSet<_>>(),
-        peg_in_values
+        fed_utxos_sats
     );
     let utxos_descriptors = outputs
         .iter()
@@ -1461,8 +1510,8 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     let diff = balances_after.mine.immature + balances_after.mine.trusted
         - balances_before.mine.immature
         - balances_before.mine.trusted;
-    // Funds from descriptors should match the total pegged in
-    assert_eq!(diff.to_sat(), total_pegged_in);
+    // Funds from descriptors should match the the fed's utxos
+    assert_eq!(diff.to_sat(), total_fed_sats);
     info!("Recovering using epochs method");
     let outputs = loop {
         let output = cmd!(
@@ -1478,7 +1527,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         .out_json()
         .await?;
         let outputs = output.as_array().context("expected an array")?;
-        if outputs.len() == peg_in_values.len() {
+        if outputs.len() >= fed_utxos_sats.len() {
             break outputs.clone();
         } else if now.elapsed()? > Duration::from_secs(180) {
             // 3 minutes should be enough to finish one or two sessions
@@ -1491,8 +1540,11 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         .iter()
         .map(|o| o["descriptor"].as_str().unwrap())
         .collect::<HashSet<_>>();
-    // Both methods should yield the same descriptors
-    assert_eq!(utxos_descriptors, epochs_descriptors);
+    // Epochs method includes descriptors from spent outputs, so we only need to
+    // verify the epochs method includes all available utxos
+    for utxo_descriptor in utxos_descriptors.iter() {
+        assert!(epochs_descriptors.contains(*utxo_descriptor))
+    }
     Ok(())
 }
 
