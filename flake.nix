@@ -28,6 +28,26 @@
             overlays = [
               (final: prev: {
 
+                wasm-bindgen-cli = final.rustPlatform.buildRustPackage rec {
+                  pname = "wasm-bindgen-cli";
+                  version = "0.2.89";
+                  hash = "sha256-IPxP68xtNSpwJjV2yNMeepAS0anzGl02hYlSTvPocz8=";
+                  cargoHash = "sha256-pBeQaG6i65uJrJptZQLuIaCb/WCQMhba1Z1OhYqA8Zc=";
+
+                  src = final.fetchCrate {
+                    inherit pname version hash;
+                  };
+
+                  nativeBuildInputs = [ final.pkg-config ];
+
+                  buildInputs = [ final.openssl ] ++ lib.optionals stdenv.isDarwin [ final.curl final.Security ];
+
+                  nativeCheckInputs = [ final.nodejs ];
+
+                  # tests require it to be ran in the wasm-bindgen monorepo
+                  doCheck = false;
+                };
+
                 rocksdb_7_10 = prev.rocksdb_7_10.overrideAttrs (oldAttrs:
                   pkgs.lib.optionalAttrs pkgs.stdenv.isDarwin {
                     # C++ and its damn super-fragie compilation

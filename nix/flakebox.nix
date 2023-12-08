@@ -136,6 +136,7 @@ let
     ] ++ lib.optionals stdenv.isDarwin [
       libiconv
       darwin.apple_sdk.frameworks.Security
+      darwin.apple_sdk.frameworks.SystemConfiguration
     ] ++ builtins.attrValues {
       inherit (pkgs) openssl;
     };
@@ -341,10 +342,10 @@ rec {
   };
 
   devimintCliTestSingle = craneLibTests.mkCargoDerivation {
-      pname = "${commonCliTestArgs.pname}-cli";
-      cargoArtifacts = workspaceBuild;
-      buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/tests/devimint-cli-test-single.sh";
-    };
+    pname = "${commonCliTestArgs.pname}-cli";
+    cargoArtifacts = workspaceBuild;
+    buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/tests/devimint-cli-test-single.sh";
+  };
 
   cliLoadTestToolTest = craneLibTests.mkCargoDerivation {
     pname = "${commonCliTestArgs.pname}-cli";
