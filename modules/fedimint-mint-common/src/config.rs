@@ -24,7 +24,7 @@ pub struct MintGenParamsConsensus {
 // The maximum size of an E-Cash note (1,000,000 coins)
 // Changing this value is considered a breaking change because it is not saved
 // in `MintGenParamsConsensus` but instead is hardcoded here
-const MAX_DENOMINATION_SIZE: Amount = Amount::from_sats(1_000_000 * 100_000_000);
+const MAX_DENOMINATION_SIZE: Amount = Amount::from_bitcoins(1_000_000);
 
 impl MintGenParamsConsensus {
     pub fn new(denomination_base: u16) -> Self {

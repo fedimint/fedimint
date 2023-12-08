@@ -14,7 +14,7 @@ use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::time::now;
-use fedimint_core::{Amount, BitcoinAmountOrAll, ParseAmountError, TieredMulti, TieredSummary};
+use fedimint_core::{Amount, BitcoinAmountOrAll, TieredMulti, TieredSummary};
 use fedimint_ln_client::{
     InternalPayState, LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment,
     PayType,
@@ -58,10 +58,7 @@ pub enum ClientCmd {
     /// Reissue notes received from a third party to avoid double spends
     Reissue { oob_notes: OOBNotes },
     /// Prepare notes to send to a third party as a payment
-    Spend {
-        #[clap(value_parser = parse_fedimint_amount)]
-        amount: Amount,
-    },
+    Spend { amount: Amount },
     /// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
     Validate { oob_notes: OOBNotes },
@@ -75,7 +72,7 @@ pub enum ClientCmd {
     },
     /// Create a lightning invoice to receive payment via gateway
     LnInvoice {
-        #[clap(long, value_parser = parse_fedimint_amount)]
+        #[clap(long)]
         amount: Amount,
         #[clap(long, default_value = "")]
         description: String,
@@ -89,7 +86,7 @@ pub enum ClientCmd {
         /// Lightning invoice or lnurl
         payment_info: String,
         /// Amount to pay, used for lnurl
-        #[clap(long, value_parser = parse_fedimint_amount)]
+        #[clap(long)]
         amount: Option<Amount>,
         /// Will return immediately after funding the payment
         #[clap(long, action)]
@@ -727,16 +724,6 @@ struct InfoResponse {
     total_amount_msat: Amount,
     total_num_notes: usize,
     denominations_msat: TieredSummary,
-}
-
-pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_core::Amount, ParseAmountError> {
-    if let Some(i) = s.find(char::is_alphabetic) {
-        let (amt, denom) = s.split_at(i);
-        fedimint_core::Amount::from_str_in(amt, denom.parse()?)
-    } else {
-        //default to millisatoshi
-        fedimint_core::Amount::from_str_in(s, bitcoin::Denomination::MilliSatoshi)
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
