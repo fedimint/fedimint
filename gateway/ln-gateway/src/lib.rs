@@ -521,7 +521,7 @@ impl Gateway {
                                         }
                                     }
                                     Err(e) => {
-                                        error!("Failed to retrieve Lightning info: {e:?}");
+                                        warn!("Failed to retrieve Lightning info: {e:?}");
                                     }
                                 }
                             }
@@ -532,7 +532,7 @@ impl Gateway {
 
                         self.handle_disconnect(htlc_task_group).await;
 
-                        error!("Disconnected from Lightning Node. Waiting 5 seconds and trying again");
+                        warn!("Disconnected from Lightning Node. Waiting 5 seconds and trying again");
                         sleep(Duration::from_secs(5)).await;
                     }
                 },
@@ -1119,13 +1119,13 @@ impl Gateway {
                                                 )
                                                 .await
                                             {
-                                                error!("Error registering federation {federation_id}: {e:?}");
+                                                warn!("Error registering federation {federation_id}: {e:?}");
                                             }
                                         }
                                     }
                                     Err(e) => {
-                                        error!(
-                                            "Could not retrieve route hints, gateway will not be registered: {e:?}"
+                                        warn!(
+                                            "Could not retrieve route hints, gateway will not be registered for now: {e:?}"
                                         );
                                     }
                                 }
