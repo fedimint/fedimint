@@ -10,10 +10,10 @@ use serde::Serialize;
 use thiserror::Error;
 
 use super::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, LeaveFedPayload,
-    RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
+    FederationConnectionInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, RestorePayload,
+    SetConfigurationPayload, WithdrawPayload,
 };
-use crate::rpc::{FederationInfo, GatewayInfo};
 
 pub struct GatewayRpcClient {
     // Base URL to gateway web server
@@ -42,6 +42,11 @@ impl GatewayRpcClient {
         self.call_get(url).await
     }
 
+    pub async fn get_config(&self, payload: ConfigPayload) -> GatewayRpcResult<GatewayFedConfig> {
+        let url = self.base_url.join("/config").expect("invalid base url");
+        self.call_post(url, payload).await
+    }
+
     pub async fn get_balance(&self, payload: BalancePayload) -> GatewayRpcResult<Amount> {
         let url = self.base_url.join("/balance").expect("invalid base url");
         self.call_post(url, payload).await
@@ -63,7 +68,7 @@ impl GatewayRpcClient {
     pub async fn connect_federation(
         &self,
         payload: ConnectFedPayload,
-    ) -> GatewayRpcResult<FederationInfo> {
+    ) -> GatewayRpcResult<FederationConnectionInfo> {
         let url = self
             .base_url
             .join("/connect-fed")
@@ -94,7 +99,7 @@ impl GatewayRpcClient {
             .base_url
             .join("/set_configuration")
             .expect("invalid base url");
-        self.call(Method::POST, url, Some(payload)).await
+        self.call_post(url, payload).await
     }
 
     async fn call<P: Serialize, T: DeserializeOwned>(
