@@ -14,7 +14,7 @@ use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::time::now;
-use fedimint_core::{Amount, BitcoinAmountOrAll, ParseAmountError, TieredSummary};
+use fedimint_core::{Amount, BitcoinAmountOrAll, ParseAmountError, TieredMulti, TieredSummary};
 use fedimint_ln_client::{
     InternalPayState, LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment,
     PayType,
@@ -23,6 +23,7 @@ use fedimint_ln_common::contracts::ContractId;
 use fedimint_mint_client::{MintClientModule, OOBNotes};
 use fedimint_wallet_client::{WalletClientModule, WithdrawState};
 use futures::StreamExt;
+use itertools::Itertools;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -64,6 +65,14 @@ pub enum ClientCmd {
     /// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
     Validate { oob_notes: OOBNotes },
+    /// Splits a string containing multiple e-cash notes (e.g. from the `spend`
+    /// command) into ones that contain exactly one.
+    Split { oob_notes: OOBNotes },
+    /// Combines two or more serialized e-cash notes strings
+    Combine {
+        #[clap(required = true)]
+        oob_notes: Vec<OOBNotes>,
+    },
     /// Create a lightning invoice to receive payment via gateway
     LnInvoice {
         #[clap(long, value_parser = parse_fedimint_amount)]
@@ -201,6 +210,55 @@ pub async fn handle_command(
 
             Ok(json!({
                 "amount_msat": amount,
+            }))
+        }
+        ClientCmd::Split { oob_notes } => {
+            let federation = oob_notes.federation_id_prefix();
+            let notes = oob_notes
+                .notes()
+                .iter()
+                .map(|(amount, notes)| {
+                    let notes = notes
+                        .iter()
+                        .map(|note| {
+                            OOBNotes::new(
+                                federation,
+                                TieredMulti::new(
+                                    vec![(*amount, vec![*note])].into_iter().collect(),
+                                ),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    (amount, notes)
+                })
+                .collect::<BTreeMap<_, _>>();
+
+            Ok(json!({
+                "notes": notes,
+            }))
+        }
+        ClientCmd::Combine { oob_notes } => {
+            let federation_id_prefix = match oob_notes
+                .iter()
+                .map(|notes| notes.federation_id_prefix())
+                .all_equal_value()
+            {
+                Ok(id) => id,
+                Err(None) => panic!("At least one e-cash notes string expected"),
+                Err(Some((a, b))) => {
+                    bail!("Trying to combine e-cash from different federations: {a} and {b}");
+                }
+            };
+
+            let combined_notes = oob_notes
+                .iter()
+                .flat_map(|notes| notes.notes().iter_items().map(|(amt, note)| (amt, *note)))
+                .collect();
+
+            let combined_oob_notes = OOBNotes::new(federation_id_prefix, combined_notes);
+
+            Ok(json!({
+                "notes": combined_oob_notes,
             }))
         }
         ClientCmd::LnInvoice {

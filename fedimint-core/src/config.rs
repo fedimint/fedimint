@@ -221,6 +221,12 @@ pub struct FederationId(pub sha256::Hash);
 /// happen.
 pub struct FederationIdPrefix([u8; 4]);
 
+impl Display for FederationIdPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        format_hex(&self.0, f)
+    }
+}
+
 impl Display for FederationId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         format_hex(&self.0, f)

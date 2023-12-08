@@ -26,6 +26,7 @@ bitcoin_hashes = "0.11.0"
 time = { version = "0.3.25", features = [ "formatting" ] }
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env" ], default-features = false }
 futures = "0.3.28"
+itertools = "0.12.0"
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
 fedimint-aead = { version = "0.3.0-alpha", path = "../crypto/aead" }
 fedimint-bip39 = { version = "0.3.0-alpha", path = "../fedimint-bip39" }
