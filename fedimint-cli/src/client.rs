@@ -14,7 +14,7 @@ use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::time::now;
-use fedimint_core::{Amount, BitcoinAmountOrAll, ParseAmountError, TieredSummary};
+use fedimint_core::{Amount, BitcoinAmountOrAll, ParseAmountError, TieredMulti, TieredSummary};
 use fedimint_ln_client::{
     InternalPayState, LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment,
     PayType,
@@ -64,6 +64,9 @@ pub enum ClientCmd {
     /// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
     Validate { oob_notes: OOBNotes },
+    /// Splits a string containing multiple e-cash notes (e.g. from the `spend`
+    /// command) into ones that contain exactly one.
+    Split { oob_notes: OOBNotes },
     /// Create a lightning invoice to receive payment via gateway
     LnInvoice {
         #[clap(long, value_parser = parse_fedimint_amount)]
@@ -201,6 +204,31 @@ pub async fn handle_command(
 
             Ok(json!({
                 "amount_msat": amount,
+            }))
+        }
+        ClientCmd::Split { oob_notes } => {
+            let federation = oob_notes.federation_id_prefix();
+            let notes = oob_notes
+                .notes()
+                .iter()
+                .map(|(amount, notes)| {
+                    let notes = notes
+                        .iter()
+                        .map(|note| {
+                            OOBNotes::new(
+                                federation,
+                                TieredMulti::new(
+                                    vec![(*amount, vec![*note])].into_iter().collect(),
+                                ),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    (amount, notes)
+                })
+                .collect::<BTreeMap<_, _>>();
+
+            Ok(json!({
+                "notes": notes,
             }))
         }
         ClientCmd::LnInvoice {
