@@ -339,6 +339,9 @@
 <a href="#339" id="339">339</a>
 <a href="#340" id="340">340</a>
 <a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Add;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -357,7 +360,7 @@
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tracing::error;
+<span class="kw">use </span>tracing::{error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::LightningClientStateMachines;
 
@@ -552,8 +555,11 @@
                 },
                 <span class="comment">// FIXME: should we filter for retryable errors here to not swallow implementation
                 // bugs? (there exist more places like this)
-                </span><span class="prelude-val">Err</span>(error) =&gt; {
-                    <span class="macro">error!</span>(<span class="string">&quot;External LN payment error waiting for preimage decryption: {error:?}&quot;</span>);
+                </span><span class="prelude-val">Err</span>(error) <span class="kw">if </span>error.is_retryable() =&gt; {
+                    <span class="macro">info!</span>(<span class="string">&quot;External LN payment retryable error waiting for preimage decryption: {error:?}&quot;</span>);
+                }
+                <span class="prelude-val">Err</span>(error) =&gt; {
+                    <span class="macro">warn!</span>(<span class="string">&quot;External LN payment non-retryable error waiting for preimage decryption: {error:?}&quot;</span>);
                 }
             }
 

@@ -1914,7 +1914,7 @@
                                         }
                                     }
                                     <span class="prelude-val">Err</span>(e) =&gt; {
-                                        <span class="macro">error!</span>(<span class="string">&quot;Failed to retrieve Lightning info: {e:?}&quot;</span>);
+                                        <span class="macro">warn!</span>(<span class="string">&quot;Failed to retrieve Lightning info: {e:?}&quot;</span>);
                                     }
                                 }
                             }
@@ -1925,7 +1925,7 @@
 
                         <span class="self">self</span>.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
 
-                        <span class="macro">error!</span>(<span class="string">&quot;Disconnected from Lightning Node. Waiting 5 seconds and trying again&quot;</span>);
+                        <span class="macro">warn!</span>(<span class="string">&quot;Disconnected from Lightning Node. Waiting 5 seconds and trying again&quot;</span>);
                         sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
                     }
                 },
@@ -2512,13 +2512,13 @@
                                                 )
                                                 .<span class="kw">await
                                             </span>{
-                                                <span class="macro">error!</span>(<span class="string">&quot;Error registering federation {federation_id}: {e:?}&quot;</span>);
+                                                <span class="macro">warn!</span>(<span class="string">&quot;Error registering federation {federation_id}: {e:?}&quot;</span>);
                                             }
                                         }
                                     }
                                     <span class="prelude-val">Err</span>(e) =&gt; {
-                                        <span class="macro">error!</span>(
-                                            <span class="string">&quot;Could not retrieve route hints, gateway will not be registered: {e:?}&quot;
+                                        <span class="macro">warn!</span>(
+                                            <span class="string">&quot;Could not retrieve route hints, gateway will not be registered for now: {e:?}&quot;
                                         </span>);
                                     }
                                 }
