@@ -688,6 +688,64 @@
 <a href="#688" id="688">688</a>
 <a href="#689" id="689">689</a>
 <a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -704,7 +762,7 @@
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::time::now;
-<span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll, ParseAmountError, TieredSummary};
+<span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll, ParseAmountError, TieredMulti, TieredSummary};
 <span class="kw">use </span>fedimint_ln_client::{
     InternalPayState, LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment,
     PayType,
@@ -713,6 +771,7 @@
 <span class="kw">use </span>fedimint_mint_client::{MintClientModule, OOBNotes};
 <span class="kw">use </span>fedimint_wallet_client::{WalletClientModule, WithdrawState};
 <span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
@@ -754,6 +813,14 @@
     <span class="doccomment">/// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
     </span>Validate { oob_notes: OOBNotes },
+    <span class="doccomment">/// Splits a string containing multiple e-cash notes (e.g. from the `spend`
+    /// command) into ones that contain exactly one.
+    </span>Split { oob_notes: OOBNotes },
+    <span class="doccomment">/// Combines two or more serialized e-cash notes strings
+    </span>Combine {
+        <span class="attr">#[clap(required = <span class="bool-val">true</span>)]
+        </span>oob_notes: Vec&lt;OOBNotes&gt;,
+    },
     <span class="doccomment">/// Create a lightning invoice to receive payment via gateway
     </span>LnInvoice {
         <span class="attr">#[clap(long, value_parser = parse_fedimint_amount)]
@@ -891,6 +958,55 @@
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
                 <span class="string">&quot;amount_msat&quot;</span>: amount,
+            }))
+        }
+        ClientCmd::Split { oob_notes } =&gt; {
+            <span class="kw">let </span>federation = oob_notes.federation_id_prefix();
+            <span class="kw">let </span>notes = oob_notes
+                .notes()
+                .iter()
+                .map(|(amount, notes)| {
+                    <span class="kw">let </span>notes = notes
+                        .iter()
+                        .map(|note| {
+                            OOBNotes::new(
+                                federation,
+                                TieredMulti::new(
+                                    <span class="macro">vec!</span>[(<span class="kw-2">*</span>amount, <span class="macro">vec!</span>[<span class="kw-2">*</span>note])].into_iter().collect(),
+                                ),
+                            )
+                        })
+                        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+                    (amount, notes)
+                })
+                .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+
+            <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
+                <span class="string">&quot;notes&quot;</span>: notes,
+            }))
+        }
+        ClientCmd::Combine { oob_notes } =&gt; {
+            <span class="kw">let </span>federation_id_prefix = <span class="kw">match </span>oob_notes
+                .iter()
+                .map(|notes| notes.federation_id_prefix())
+                .all_equal_value()
+            {
+                <span class="prelude-val">Ok</span>(id) =&gt; id,
+                <span class="prelude-val">Err</span>(<span class="prelude-val">None</span>) =&gt; <span class="macro">panic!</span>(<span class="string">&quot;At least one e-cash notes string expected&quot;</span>),
+                <span class="prelude-val">Err</span>(<span class="prelude-val">Some</span>((a, b))) =&gt; {
+                    <span class="macro">bail!</span>(<span class="string">&quot;Trying to combine e-cash from different federations: {a} and {b}&quot;</span>);
+                }
+            };
+
+            <span class="kw">let </span>combined_notes = oob_notes
+                .iter()
+                .flat_map(|notes| notes.notes().iter_items().map(|(amt, note)| (amt, <span class="kw-2">*</span>note)))
+                .collect();
+
+            <span class="kw">let </span>combined_oob_notes = OOBNotes::new(federation_id_prefix, combined_notes);
+
+            <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
+                <span class="string">&quot;notes&quot;</span>: combined_oob_notes,
             }))
         }
         ClientCmd::LnInvoice {
