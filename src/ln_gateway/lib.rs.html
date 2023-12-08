@@ -1387,6 +1387,10 @@
 <a href="#1387" id="1387">1387</a>
 <a href="#1388" id="1388">1388</a>
 <a href="#1389" id="1389">1389</a>
+<a href="#1390" id="1390">1390</a>
+<a href="#1391" id="1391">1391</a>
+<a href="#1392" id="1392">1392</a>
+<a href="#1393" id="1393">1393</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -2519,7 +2523,11 @@
                                     }
                                 }
                             } <span class="kw">else </span>{
-                                <span class="macro">warn!</span>(<span class="string">&quot;GatewayState must be Running to register with federation. Current state: {gateway_state:?}&quot;</span>);
+                                <span class="comment">// We need to retry more often if the gateway is not in the Running state
+                                </span><span class="kw">const </span>NOT_RUNNING_RETRY: Duration = Duration::from_secs(<span class="number">10</span>);
+                                <span class="macro">info!</span>(<span class="string">&quot;Will not register federation yet because gateway still not in Running state. Current state: {gateway_state:?}. Will keep waiting, next retry in {NOT_RUNNING_RETRY:?}...&quot;</span>);
+                                sleep(NOT_RUNNING_RETRY).<span class="kw">await</span>;
+                                <span class="kw">continue</span>;
                             }
                         } <span class="kw">else </span>{
                             <span class="macro">warn!</span>(<span class="string">&quot;Cannot register clients because gateway configuration is not set.&quot;</span>);
