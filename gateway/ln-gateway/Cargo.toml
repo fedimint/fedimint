@@ -67,7 +67,7 @@ thiserror = "1.0.39"
 tokio = { version = "1.26", features = ["full"] }
 tokio-stream = "0.1.11"
 tonic = { version = "0.9", features = ["transport", "tls"] }
-tonic_lnd = { git = "https://github.com/fedimint/tonic_lnd", branch="master", features = ["lightningrpc", "routerrpc"] }
+tonic_lnd = { workspace = true }
 tower-http = { version = "0.4.3", features = ["cors", "auth"] }
 tracing = { version = "0.1.37", default-features = false, features= ["log", "attributes", "std"] }
 url = { version = "2.3.1", features = ["serde"] }

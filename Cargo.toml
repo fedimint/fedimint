@@ -63,6 +63,7 @@ keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 [workspace.dependencies]
 threshold_crypto = { version = "0.1", package = "fedimint-threshold-crypto" }
 hbbft = { version= "0.1", package = "fedimint-hbbft" }
+tonic_lnd = { git = "https://github.com/fedimint/tonic_lnd", rev = "d0c8f1fea035dbfae9398aa388664112bc4dfd2a", features = ["lightningrpc", "routerrpc"] }
 
 [profile.dev]
 

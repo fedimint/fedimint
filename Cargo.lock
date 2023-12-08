@@ -5234,7 +5234,7 @@ dependencies = [
 [[package]]
 name = "tonic_lnd"
 version = "0.5.1"
-source = "git+https://github.com/fedimint/tonic_lnd?branch=master#d0c8f1fea035dbfae9398aa388664112bc4dfd2a"
+source = "git+https://github.com/fedimint/tonic_lnd?rev=d0c8f1fea035dbfae9398aa388664112bc4dfd2a#d0c8f1fea035dbfae9398aa388664112bc4dfd2a"
 dependencies = [
  "hex",
  "prost 0.9.0",
