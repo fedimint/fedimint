@@ -5,7 +5,6 @@ use std::{env, fs};
 
 use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin::Network;
-use bitcoincore_rpc::RpcApi;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, WsAdminClient,
 };
@@ -219,10 +218,7 @@ impl Federation {
 
     pub async fn await_block_sync(&self) -> Result<u64> {
         let finality_delay = self.get_finality_delay().await?;
-        // Fedimint's IBitcoindRpc considers block count the total number of blocks,
-        // where bitcoind's rpc returns the height. Since the genesis block has height
-        // 0, we need to add 1 to get the total block count.
-        let block_count = self.bitcoind.client().get_block_count()? + 1;
+        let block_count = self.bitcoind.get_block_count()?;
         let expected = block_count.saturating_sub(finality_delay.into());
         cmd!(self, "dev", "wait-block-count", expected)
             .run()
