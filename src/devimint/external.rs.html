@@ -698,6 +698,15 @@
 <a href="#698" id="698">698</a>
 <a href="#699" id="699">699</a>
 <a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -818,6 +827,15 @@
 
     <span class="kw">pub fn </span>client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;bitcoincore_rpc::Client&gt; {
         <span class="self">self</span>.client.clone()
+    }
+
+    <span class="doccomment">/// Returns the total number of blocks in the chain.
+    ///
+    /// Fedimint&#39;s IBitcoindRpc considers block count the total number of
+    /// blocks, where bitcoind&#39;s rpc returns the height. Since the genesis
+    /// block has height 0, we need to add 1 to get the total block count.
+    </span><span class="kw">pub fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client().get_block_count()<span class="question-mark">? </span>+ <span class="number">1</span>)
     }
 
     <span class="kw">pub async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
