@@ -29,6 +29,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Amount};
+use lightning::util::ser::{WithoutLength, Writeable};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -647,6 +648,9 @@ pub async fn ln_operation(
 pub struct PrunedInvoice {
     pub amount: Amount,
     pub destination: secp256k1::PublicKey,
+    /// Wire-format encoding of feature bit vector
+    #[serde(with = "fedimint_core::hex::serde", default)]
+    pub destination_features: Vec<u8>,
     pub payment_hash: sha256::Hash,
     pub payment_secret: [u8; 32],
     pub route_hints: Vec<RouteHint>,
@@ -666,6 +670,16 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
             .map(|t| t.as_secs())
             .unwrap_or(u64::MAX);
 
+        let destination_features = if let Some(features) = invoice.features() {
+            let mut feature_bytes = vec![];
+            WithoutLength(features)
+                .write(&mut feature_bytes)
+                .expect("Writing to byte vec can't fail");
+            feature_bytes
+        } else {
+            vec![]
+        };
+
         Ok(PrunedInvoice {
             amount: Amount::from_msats(
                 invoice
@@ -676,6 +690,7 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
                 .payee_pub_key()
                 .cloned()
                 .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            destination_features,
             payment_hash: *invoice.payment_hash(),
             payment_secret: invoice.payment_secret().0,
             route_hints: invoice.route_hints().into_iter().map(Into::into).collect(),

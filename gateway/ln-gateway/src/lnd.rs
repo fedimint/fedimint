@@ -3,6 +3,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::ensure;
 use async_trait::async_trait;
 use bitcoin_hashes::hex::ToHex;
 use fedimint_core::task::{sleep, TaskGroup};
@@ -571,12 +572,18 @@ impl ILnRpcClient for GatewayLndClient {
                         failure_reason: format!("max delay exceeds valid LND range {error:?}"),
                     })?;
 
+            let dest_features = wire_features_to_lnd_feature_vec(&invoice.destination_features)
+                .map_err(|e| LightningRpcError::FailedPayment {
+                    failure_reason: e.to_string(),
+                })?;
+
             debug!("LND payment does not exist for invoice {invoice:?}, will attempt to pay");
             let payments = client
                 .router()
                 .send_payment_v2(SendPaymentRequest {
                     amt_msat,
                     dest: invoice.destination.serialize().to_vec(),
+                    dest_features,
                     payment_hash: invoice.payment_hash.to_vec(),
                     payment_addr: invoice.payment_secret.to_vec(),
                     route_hints: route_hints_to_lnd(&invoice.route_hints),
@@ -748,4 +755,66 @@ fn route_hints_to_lnd(
                 .collect(),
         })
         .collect()
+}
+
+fn wire_features_to_lnd_feature_vec(features_wire_encoded: &[u8]) -> anyhow::Result<Vec<i32>> {
+    ensure!(
+        features_wire_encoded.len() <= 1_000,
+        "Will not process feature bit vectors larger than 1000 byte"
+    );
+
+    let lnd_features = features_wire_encoded
+        .iter()
+        .rev()
+        .enumerate()
+        .flat_map(|(byte_idx, &feature_byte)| {
+            (0..8).filter_map(move |bit_idx| {
+                if (feature_byte & (1u8 << bit_idx)) != 0 {
+                    Some(
+                        i32::try_from(byte_idx * 8 + bit_idx)
+                            .expect("Index will never exceed i32::MAX for feature vectors <8MB"),
+                    )
+                } else {
+                    None
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+
+    Ok(lnd_features)
+}
+
+#[cfg(test)]
+mod tests {
+    use bitcoin_hashes::hex::FromHex;
+    use lightning::ln::features::Bolt11InvoiceFeatures;
+    use lightning::util::ser::{WithoutLength, Writeable};
+
+    use super::wire_features_to_lnd_feature_vec;
+
+    #[test]
+    fn features_to_lnd() {
+        assert_eq!(
+            wire_features_to_lnd_feature_vec(&[]).unwrap(),
+            Vec::<i32>::new()
+        );
+
+        let features_payment_secret = {
+            let mut f = Bolt11InvoiceFeatures::empty();
+            f.set_payment_secret_optional();
+            WithoutLength(&f).encode()
+        };
+        assert_eq!(
+            wire_features_to_lnd_feature_vec(&features_payment_secret).unwrap(),
+            vec![15]
+        );
+
+        // Phoenix feature flags
+        let features_payment_secret =
+            Vec::from_hex("20000000000000000000000002000000024100").unwrap();
+        assert_eq!(
+            wire_features_to_lnd_feature_vec(&features_payment_secret).unwrap(),
+            vec![8, 14, 17, 49, 149]
+        );
+    }
 }
