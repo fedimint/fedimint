@@ -219,18 +219,15 @@ impl Federation {
 
     pub async fn await_block_sync(&self) -> Result<u64> {
         let finality_delay = self.get_finality_delay().await?;
-        let bitcoind_block_count = self.bitcoind.client().get_blockchain_info()?.blocks;
-        let expected = bitcoind_block_count.saturating_sub(finality_delay.into());
+        // Fedimint's IBitcoindRpc considers block count the total number of blocks,
+        // where bitcoind's rpc returns the height. Since the genesis block has height
+        // 0, we need to add 1 to get the total block count.
+        let block_count = self.bitcoind.client().get_block_count()? + 1;
+        let expected = block_count.saturating_sub(finality_delay.into());
         cmd!(self, "dev", "wait-block-count", expected)
             .run()
             .await?;
         Ok(expected)
-    }
-
-    pub async fn generate_first_epoch(&self) -> Result<()> {
-        // TODO: optimize this
-        self.generate_epochs(1).await?;
-        Ok(())
     }
 
     async fn get_finality_delay(&self) -> Result<u32, anyhow::Error> {
@@ -291,12 +288,26 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn generate_epochs(&self, epochs: usize) -> Result<()> {
+    /// Mines enough blocks to finalize mempool transactions, then waits for
+    /// federation to process finalized blocks.
+    ///
+    /// ex:
+    ///   tx submitted to mempool at height 100
+    ///   finality delay = 10
+    ///   mine finality delay blocks + 1 => new height 111
+    ///   tx included in block 101
+    ///   highest finalized height = 111 - 10 = 101
+    pub async fn finalize_mempool_tx(&self) -> Result<()> {
         let finality_delay = self.get_finality_delay().await?;
-        for _ in 0..epochs {
-            self.bitcoind.mine_blocks(finality_delay.into()).await?;
-            self.await_block_sync().await?;
-        }
+        let blocks_to_mine = finality_delay + 1;
+        self.bitcoind.mine_blocks(blocks_to_mine.into()).await?;
+        self.await_block_sync().await?;
+        Ok(())
+    }
+
+    pub async fn mine_then_wait_blocks_sync(&self, blocks: u64) -> Result<()> {
+        self.bitcoind.mine_blocks(blocks).await?;
+        self.await_block_sync().await?;
         Ok(())
     }
 

@@ -152,7 +152,7 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
             .run()
             .await?;
         info!(target: LOG_DEVIMINT, "Generating first epoch");
-        fed.generate_first_epoch().await?;
+        fed.mine_then_wait_blocks_sync(10).await?;
         Ok(())
     })?;
 

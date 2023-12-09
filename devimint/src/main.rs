@@ -1368,18 +1368,17 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
 
     // test a peer missing out on epochs and needing to rejoin
     fed.terminate_server(0).await?;
-    fed.generate_epochs(10).await?;
+    fed.mine_then_wait_blocks_sync(100).await?;
 
     fed.start_server(process_mgr, 0).await?;
-    fed.generate_epochs(10).await?;
+    fed.mine_then_wait_blocks_sync(100).await?;
     fed.await_all_peers().await?;
     info!(target: LOG_DEVIMINT, "Server 0 successfully rejoined!");
-    bitcoind.mine_blocks(100).await?;
+    fed.mine_then_wait_blocks_sync(100).await?;
 
     // now test what happens if consensus needs to be restarted
     fed.terminate_server(1).await?;
-    bitcoind.mine_blocks(100).await?;
-    fed.await_block_sync().await?;
+    fed.mine_then_wait_blocks_sync(100).await?;
     fed.terminate_server(2).await?;
     fed.terminate_server(3).await?;
 
@@ -1465,7 +1464,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     assert!(fed_utxos_sats.remove(&input_sats));
 
     let total_fed_sats = fed_utxos_sats.iter().sum::<u64>();
-    fed.generate_epochs(2).await?;
+    fed.finalize_mempool_tx().await?;
 
     let now = fedimint_core::time::now();
     info!("Recovering using utxos method");
