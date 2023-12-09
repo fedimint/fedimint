@@ -331,7 +331,7 @@
             .run()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;Generating first epoch&quot;</span>);
-        fed.generate_first_epoch().<span class="kw">await</span><span class="question-mark">?</span>;
+        fed.mine_then_wait_blocks_sync(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     })<span class="question-mark">?</span>;
 

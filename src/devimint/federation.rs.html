@@ -530,6 +530,17 @@
 <a href="#530" id="530">530</a>
 <a href="#531" id="531">531</a>
 <a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
@@ -751,18 +762,15 @@
 
     <span class="kw">pub async fn </span>await_block_sync(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
         <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>bitcoind_block_count = <span class="self">self</span>.bitcoind.client().get_blockchain_info()<span class="question-mark">?</span>.blocks;
-        <span class="kw">let </span>expected = bitcoind_block_count.saturating_sub(finality_delay.into());
+        <span class="comment">// Fedimint&#39;s IBitcoindRpc considers block count the total number of blocks,
+        // where bitcoind&#39;s rpc returns the height. Since the genesis block has height
+        // 0, we need to add 1 to get the total block count.
+        </span><span class="kw">let </span>block_count = <span class="self">self</span>.bitcoind.client().get_block_count()<span class="question-mark">? </span>+ <span class="number">1</span>;
+        <span class="kw">let </span>expected = block_count.saturating_sub(finality_delay.into());
         <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;wait-block-count&quot;</span>, expected)
             .run()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(expected)
-    }
-
-    <span class="kw">pub async fn </span>generate_first_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="comment">// TODO: optimize this
-        </span><span class="self">self</span>.generate_epochs(<span class="number">1</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">async fn </span>get_finality_delay(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u32, anyhow::Error&gt; {
@@ -823,12 +831,26 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>generate_epochs(<span class="kw-2">&amp;</span><span class="self">self</span>, epochs: usize) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="doccomment">/// Mines enough blocks to finalize mempool transactions, then waits for
+    /// federation to process finalized blocks.
+    ///
+    /// ex:
+    ///   tx submitted to mempool at height 100
+    ///   finality delay = 10
+    ///   mine finality delay blocks + 1 =&gt; new height 111
+    ///   tx included in block 101
+    ///   highest finalized height = 111 - 10 = 101
+    </span><span class="kw">pub async fn </span>finalize_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">for _ in </span><span class="number">0</span>..epochs {
-            <span class="self">self</span>.bitcoind.mine_blocks(finality_delay.into()).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
-        }
+        <span class="kw">let </span>blocks_to_mine = finality_delay + <span class="number">1</span>;
+        <span class="self">self</span>.bitcoind.mine_blocks(blocks_to_mine.into()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">pub async fn </span>mine_then_wait_blocks_sync(<span class="kw-2">&amp;</span><span class="self">self</span>, blocks: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.bitcoind.mine_blocks(blocks).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
