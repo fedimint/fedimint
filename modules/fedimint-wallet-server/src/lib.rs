@@ -935,7 +935,7 @@ impl Wallet {
     ) {
         info!(
             new_height,
-            block_to_go = new_height - old_height,
+            blocks_to_go = new_height - old_height,
             "New consensus height, syncing up",
         );
 
