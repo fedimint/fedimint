@@ -120,6 +120,15 @@ impl Bitcoind {
         self.client.clone()
     }
 
+    /// Returns the total number of blocks in the chain.
+    ///
+    /// Fedimint's IBitcoindRpc considers block count the total number of
+    /// blocks, where bitcoind's rpc returns the height. Since the genesis
+    /// block has height 0, we need to add 1 to get the total block count.
+    pub fn get_block_count(&self) -> Result<u64> {
+        Ok(self.client().get_block_count()? + 1)
+    }
+
     pub async fn mine_blocks(&self, block_num: u64) -> Result<()> {
         info!(target: LOG_DEVIMINT, ?block_num, "Mining bitcoin blocks");
         let client = self.client();
