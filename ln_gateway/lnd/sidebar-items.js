@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["LND_PAYMENT_TIMEOUT_SECONDS"],"fn":["route_hints_to_lnd"],"struct":["GatewayLndClient"],"type":["HtlcSubscriptionSender"]};
+window.SIDEBAR_ITEMS = {"constant":["LND_PAYMENT_TIMEOUT_SECONDS"],"fn":["route_hints_to_lnd","wire_features_to_lnd_feature_vec"],"struct":["GatewayLndClient"],"type":["HtlcSubscriptionSender"]};

@@ -684,6 +684,21 @@
 <a href="#684" id="684">684</a>
 <a href="#685" id="685">685</a>
 <a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -715,6 +730,7 @@
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Amount};
+<span class="kw">use </span>lightning::util::ser::{WithoutLength, Writeable};
 <span class="kw">use </span>lightning_invoice::{Bolt11Invoice, RoutingFees};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
@@ -1333,6 +1349,9 @@
 </span><span class="kw">pub struct </span>PrunedInvoice {
     <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>destination: secp256k1::PublicKey,
+    <span class="doccomment">/// Wire-format encoding of feature bit vector
+    </span><span class="attr">#[serde(with = <span class="string">&quot;fedimint_core::hex::serde&quot;</span>, default)]
+    </span><span class="kw">pub </span>destination_features: Vec&lt;u8&gt;,
     <span class="kw">pub </span>payment_hash: sha256::Hash,
     <span class="kw">pub </span>payment_secret: [u8; <span class="number">32</span>],
     <span class="kw">pub </span>route_hints: Vec&lt;RouteHint&gt;,
@@ -1352,6 +1371,16 @@
             .map(|t| t.as_secs())
             .unwrap_or(u64::MAX);
 
+        <span class="kw">let </span>destination_features = <span class="kw">if let </span><span class="prelude-val">Some</span>(features) = invoice.features() {
+            <span class="kw">let </span><span class="kw-2">mut </span>feature_bytes = <span class="macro">vec!</span>[];
+            WithoutLength(features)
+                .write(<span class="kw-2">&amp;mut </span>feature_bytes)
+                .expect(<span class="string">&quot;Writing to byte vec can&#39;t fail&quot;</span>);
+            feature_bytes
+        } <span class="kw">else </span>{
+            <span class="macro">vec!</span>[]
+        };
+
         <span class="prelude-val">Ok</span>(PrunedInvoice {
             amount: Amount::from_msats(
                 invoice
@@ -1362,6 +1391,7 @@
                 .payee_pub_key()
                 .cloned()
                 .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            destination_features,
             payment_hash: <span class="kw-2">*</span>invoice.payment_hash(),
             payment_secret: invoice.payment_secret().<span class="number">0</span>,
             route_hints: invoice.route_hints().into_iter().map(Into::into).collect(),

@@ -749,11 +749,81 @@
 <a href="#749" id="749">749</a>
 <a href="#750" id="750">750</a>
 <a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
@@ -1322,12 +1392,18 @@
                         failure_reason: <span class="macro">format!</span>(<span class="string">&quot;max delay exceeds valid LND range {error:?}&quot;</span>),
                     })<span class="question-mark">?</span>;
 
+            <span class="kw">let </span>dest_features = wire_features_to_lnd_feature_vec(<span class="kw-2">&amp;</span>invoice.destination_features)
+                .map_err(|e| LightningRpcError::FailedPayment {
+                    failure_reason: e.to_string(),
+                })<span class="question-mark">?</span>;
+
             <span class="macro">debug!</span>(<span class="string">&quot;LND payment does not exist for invoice {invoice:?}, will attempt to pay&quot;</span>);
             <span class="kw">let </span>payments = client
                 .router()
                 .send_payment_v2(SendPaymentRequest {
                     amt_msat,
                     dest: invoice.destination.serialize().to_vec(),
+                    dest_features,
                     payment_hash: invoice.payment_hash.to_vec(),
                     payment_addr: invoice.payment_secret.to_vec(),
                     route_hints: route_hints_to_lnd(<span class="kw-2">&amp;</span>invoice.route_hints),
@@ -1499,5 +1575,67 @@
                 .collect(),
         })
         .collect()
+}
+
+<span class="kw">fn </span>wire_features_to_lnd_feature_vec(features_wire_encoded: <span class="kw-2">&amp;</span>[u8]) -&gt; anyhow::Result&lt;Vec&lt;i32&gt;&gt; {
+    <span class="macro">ensure!</span>(
+        features_wire_encoded.len() &lt;= <span class="number">1_000</span>,
+        <span class="string">&quot;Will not process feature bit vectors larger than 1000 byte&quot;
+    </span>);
+
+    <span class="kw">let </span>lnd_features = features_wire_encoded
+        .iter()
+        .rev()
+        .enumerate()
+        .flat_map(|(byte_idx, <span class="kw-2">&amp;</span>feature_byte)| {
+            (<span class="number">0</span>..<span class="number">8</span>).filter_map(<span class="kw">move </span>|bit_idx| {
+                <span class="kw">if </span>(feature_byte &amp; (<span class="number">1u8 </span>&lt;&lt; bit_idx)) != <span class="number">0 </span>{
+                    <span class="prelude-val">Some</span>(
+                        i32::try_from(byte_idx * <span class="number">8 </span>+ bit_idx)
+                            .expect(<span class="string">&quot;Index will never exceed i32::MAX for feature vectors &lt;8MB&quot;</span>),
+                    )
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">None
+                </span>}
+            })
+        })
+        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+    <span class="prelude-val">Ok</span>(lnd_features)
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>bitcoin_hashes::hex::FromHex;
+    <span class="kw">use </span>lightning::ln::features::Bolt11InvoiceFeatures;
+    <span class="kw">use </span>lightning::util::ser::{WithoutLength, Writeable};
+
+    <span class="kw">use </span><span class="kw">super</span>::wire_features_to_lnd_feature_vec;
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>features_to_lnd() {
+        <span class="macro">assert_eq!</span>(
+            wire_features_to_lnd_feature_vec(<span class="kw-2">&amp;</span>[]).unwrap(),
+            Vec::&lt;i32&gt;::new()
+        );
+
+        <span class="kw">let </span>features_payment_secret = {
+            <span class="kw">let </span><span class="kw-2">mut </span>f = Bolt11InvoiceFeatures::empty();
+            f.set_payment_secret_optional();
+            WithoutLength(<span class="kw-2">&amp;</span>f).encode()
+        };
+        <span class="macro">assert_eq!</span>(
+            wire_features_to_lnd_feature_vec(<span class="kw-2">&amp;</span>features_payment_secret).unwrap(),
+            <span class="macro">vec!</span>[<span class="number">15</span>]
+        );
+
+        <span class="comment">// Phoenix feature flags
+        </span><span class="kw">let </span>features_payment_secret =
+            Vec::from_hex(<span class="string">&quot;20000000000000000000000002000000024100&quot;</span>).unwrap();
+        <span class="macro">assert_eq!</span>(
+            wire_features_to_lnd_feature_vec(<span class="kw-2">&amp;</span>features_payment_secret).unwrap(),
+            <span class="macro">vec!</span>[<span class="number">8</span>, <span class="number">14</span>, <span class="number">17</span>, <span class="number">49</span>, <span class="number">149</span>]
+        );
+    }
 }
 </code></pre></div></section></main></body></html>
