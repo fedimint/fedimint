@@ -45,7 +45,7 @@ use fedimint_ln_common::contracts::outgoing::{
 };
 use fedimint_ln_common::contracts::{
     Contract, ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract, Preimage,
-    PreimageKey,
+    PreimageKey, PreimagePayout,
 };
 use fedimint_ln_common::{
     ContractOutput, LightningClientContext, LightningCommonInit, LightningGateway,
@@ -721,8 +721,12 @@ impl LightningClientModule {
         ClientOutput<LightningOutput, LightningClientStateMachines>,
     )> {
         let payment_keypair = KeyPair::new(&self.secp, &mut rng);
-        let preimage_key: [u8; 33] = payment_keypair.public_key().serialize();
-        let payment_hash = sha256::Hash::hash(&sha256::Hash::hash(&preimage_key));
+        let preimage_key = PreimageKey(vec![PreimagePayout {
+            pub_key: payment_keypair.public_key(),
+            msats: amount.msats,
+        }]);
+        let payment_hash =
+            sha256::Hash::hash(&sha256::Hash::hash(&preimage_key.consensus_encode_to_vec()));
 
         // Temporary lightning node pubkey
         let (node_secret_key, node_public_key) = self.secp.generate_keypair(&mut rng);
@@ -799,10 +803,7 @@ impl LightningClientModule {
         let ln_output = LightningOutput::new_v0_offer(IncomingContractOffer {
             amount,
             hash: payment_hash,
-            encrypted_preimage: EncryptedPreimage::new(
-                PreimageKey(preimage_key),
-                &self.cfg.threshold_pub_key,
-            ),
+            encrypted_preimage: EncryptedPreimage::new(preimage_key, &self.cfg.threshold_pub_key),
             expiry_time,
         });
 

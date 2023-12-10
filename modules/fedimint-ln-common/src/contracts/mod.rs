@@ -1,7 +1,7 @@
 pub mod incoming;
 pub mod outgoing;
 
-use std::io::Error;
+use std::io::{Error, Read, Write};
 
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::{hash_newtype, Hash as BitcoinHash};
@@ -121,18 +121,62 @@ impl Decodable for ContractId {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct Preimage(pub [u8; 32]);
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct PreimageKey(#[serde(with = "serde_big_array::BigArray")] pub [u8; 33]);
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub struct PreimagePayout {
+    pub pub_key: secp256k1::PublicKey,
+    pub msats: u64,
+}
 
-impl PreimageKey {
-    /// Create a Schnorr public key
-    ///
-    /// # Errors
-    ///
-    /// Returns [`secp256k1::Error::InvalidPublicKey`] if the Preimage does not
-    /// represent a valid Secp256k1 point x coordinate.
-    pub fn to_public_key(&self) -> Result<secp256k1::PublicKey, secp256k1::Error> {
-        secp256k1::PublicKey::from_slice(&self.0)
+impl Encodable for PreimagePayout {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        writer.write(&self.pub_key.serialize())?;
+        writer.write(&self.msats.to_be_bytes())?;
+        Ok(33 + 8)
+    }
+}
+
+impl Decodable for PreimagePayout {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        _modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let mut pub_key = [0u8; 33];
+        d.read_exact(&mut pub_key).unwrap();
+        let mut msats = [0u8; 8];
+        d.read_exact(&mut msats).unwrap();
+        Ok(PreimagePayout {
+            pub_key: secp256k1::PublicKey::from_slice(&pub_key).unwrap(),
+            msats: u64::from_be_bytes(msats),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub struct PreimageKey(pub Vec<PreimagePayout>);
+
+impl Encodable for PreimageKey {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let mut size = 0;
+        let len = self.0.len() as u16;
+        size += len.consensus_encode(writer)?;
+        for payout in &self.0 {
+            size += payout.consensus_encode(writer)?;
+        }
+        Ok(size)
+    }
+}
+
+impl Decodable for PreimageKey {
+    fn consensus_decode<R: Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let len = u16::consensus_decode(r, modules)?;
+        let mut payouts = Vec::with_capacity(len as usize);
+        for _ in 0..len {
+            payouts.push(PreimagePayout::consensus_decode(r, modules)?);
+        }
+        Ok(PreimageKey(payouts))
     }
 }
 
@@ -166,6 +210,6 @@ pub struct PreimageDecryptionShare(pub threshold_crypto::DecryptionShare);
 
 impl EncryptedPreimage {
     pub fn new(preimage_key: PreimageKey, key: &threshold_crypto::PublicKey) -> EncryptedPreimage {
-        EncryptedPreimage(key.encrypt(preimage_key.0))
+        EncryptedPreimage(key.encrypt(preimage_key.consensus_encode_to_vec()))
     }
 }

@@ -10,7 +10,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
-use fedimint_core::encoding::Encodable;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
@@ -466,23 +466,16 @@ impl ServerModule for Lightning {
                 dbtx.remove_by_prefix(&AgreedDecryptionShareContractIdPrefix(contract_id))
                     .await;
 
-                let decrypted_preimage = if preimage_vec.len() == 33
-                    && contract.hash == sha256::Hash::hash(&sha256::Hash::hash(&preimage_vec))
-                {
-                    let preimage = PreimageKey(
-                        preimage_vec
-                            .as_slice()
-                            .try_into()
-                            .expect("Invalid preimage length"),
-                    );
-                    if preimage.to_public_key().is_ok() {
+                let decrypted_preimage =
+                    if contract.hash == sha256::Hash::hash(&sha256::Hash::hash(&preimage_vec)) {
+                        let preimage = PreimageKey::consensus_decode(
+                            &mut lightning::io::Cursor::new(&preimage_vec),
+                            &Default::default(),
+                        )?;
                         DecryptedPreimage::Some(preimage)
                     } else {
                         DecryptedPreimage::Invalid
-                    }
-                } else {
-                    DecryptedPreimage::Invalid
-                };
+                    };
 
                 debug!(?decrypted_preimage);
 
@@ -594,10 +587,15 @@ impl ServerModule for Lightning {
                     return Err(LightningInputError::ContractNotReady);
                 }
                 // … either the user may spend the funds since they sold a valid preimage …
-                DecryptedPreimage::Some(preimage) => match preimage.to_public_key() {
-                    Ok(pub_key) => pub_key,
-                    Err(_) => return Err(LightningInputError::InvalidPreimage),
-                },
+                DecryptedPreimage::Some(preimage) => {
+                    // fixme, i dont think this handles double spends?
+                    preimage
+                        .0
+                        .iter()
+                        .find(|p| p.msats == input.amount.msats)
+                        .map(|p| p.pub_key)
+                        .ok_or(LightningInputError::InvalidPreimage)?
+                }
                 // … or the gateway may claim back funds for not receiving the advertised preimage.
                 DecryptedPreimage::Invalid => incoming.contract.gateway_key,
             },
@@ -1057,7 +1055,9 @@ impl Lightning {
         {
             DecryptedPreimage::Some(key) => (
                 incoming_contract_account,
-                Some(Preimage(sha256::Hash::hash(&key.0).into_inner())),
+                Some(Preimage(
+                    sha256::Hash::hash(&key.consensus_encode_to_vec()).into_inner(),
+                )),
             ),
             _ => (incoming_contract_account, None),
         }
@@ -1155,7 +1155,7 @@ mod tests {
     use fedimint_ln_common::contracts::outgoing::OutgoingContract;
     use fedimint_ln_common::contracts::{
         DecryptedPreimage, EncryptedPreimage, FundedContract, IdentifiableContract, Preimage,
-        PreimageKey,
+        PreimageKey, PreimagePayout,
     };
     use fedimint_ln_common::db::{ContractKey, LightningAuditItemKey};
     use fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
@@ -1275,10 +1275,14 @@ mod tests {
         let mut tg = TaskGroup::new();
         let server = Lightning::new(server_cfg[0].clone(), &mut tg).unwrap();
 
-        let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
+        let payout = PreimagePayout {
+            pub_key: generate_keypair(&mut OsRng).1,
+            msats: 1000,
+        };
+        let preimage = PreimageKey(vec![payout]);
         let funded_incoming_contract = FundedContract::Incoming(FundedIncomingContract {
             contract: IncomingContract {
-                hash: sha256::Hash::hash(&sha256::Hash::hash(&preimage.0)),
+                hash: sha256::Hash::hash(&sha256::Hash::hash(&preimage.consensus_encode_to_vec())),
                 encrypted_preimage: EncryptedPreimage(
                     client_cfg.threshold_pub_key.encrypt(preimage.0),
                 ),
@@ -1293,7 +1297,9 @@ mod tests {
 
         let contract_id = funded_incoming_contract.contract_id();
         let audit_key = LightningAuditItemKey::from_funded_contract(&funded_incoming_contract);
-        let amount = Amount { msats: 1000 };
+        let amount = Amount {
+            msats: payout.msats,
+        };
         let lightning_input = LightningInput::new_v0(contract_id, amount, None);
 
         module_dbtx.insert_new_entry(&audit_key, &amount).await;
