@@ -19,7 +19,7 @@ async-trait = "*"
 bitcoin = "0.29.2"
 bitcoincore-rpc = "0.16.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions" ], default-features = false }
-cln-rpc = "0.1.1"
+cln-rpc = "<= 0.1.2"
 fedimint-core  = { path = "../fedimint-core" }
 fedimint-client  = { path = "../fedimint-client" }
 fedimint-server  = { path = "../fedimint-server" }
