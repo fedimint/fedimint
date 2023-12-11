@@ -925,6 +925,11 @@
 <a href="#925" id="925">925</a>
 <a href="#926" id="926">926</a>
 <a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a>
+<a href="#931" id="931">931</a>
+<a href="#932" id="932">932</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1086,6 +1091,11 @@
 <span class="kw">impl </span>GlobalClientConfig {
     <span class="kw">pub fn </span>federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
         FederationId(<span class="self">self</span>.api_endpoints.consensus_hash())
+    }
+
+    <span class="doccomment">/// Federation name from config metadata (if set)
+    </span><span class="kw">pub fn </span>federation_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+        <span class="self">self</span>.meta.get(META_FEDERATION_NAME_KEY).map(|x| <span class="kw-2">&amp;**</span>x)
     }
 }
 
