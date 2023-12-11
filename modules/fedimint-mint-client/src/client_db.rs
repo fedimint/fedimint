@@ -1,3 +1,4 @@
+use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, Amount};
 use fedimint_mint_common::Nonce;
@@ -11,6 +12,7 @@ use crate::SpendableNote;
 pub enum DbKeyPrefix {
     Note = 0x20,
     NextECashNoteIndex = 0x2a,
+    CancelledOOBSpend = 0x2b,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -49,4 +51,22 @@ impl_db_record!(
 impl_db_lookup!(
     key = NextECashNoteIndexKey,
     query_prefix = NextECashNoteIndexKeyPrefix
+);
+
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+pub struct CancelledOOBSpendKey(pub OperationId);
+
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+pub struct CancelledOOBSpendKeyPrefix;
+
+impl_db_record!(
+    key = CancelledOOBSpendKey,
+    value = (),
+    db_prefix = DbKeyPrefix::CancelledOOBSpend,
+    notify_on_modify = true,
+);
+
+impl_db_lookup!(
+    key = CancelledOOBSpendKey,
+    query_prefix = CancelledOOBSpendKeyPrefix,
 );
