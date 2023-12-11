@@ -160,6 +160,11 @@ impl GlobalClientConfig {
     pub fn federation_id(&self) -> FederationId {
         FederationId(self.api_endpoints.consensus_hash())
     }
+
+    /// Federation name from config metadata (if set)
+    pub fn federation_name(&self) -> Option<&str> {
+        self.meta.get(META_FEDERATION_NAME_KEY).map(|x| &**x)
+    }
 }
 
 impl ClientConfig {
