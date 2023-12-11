@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-core"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-core provides common code used by both client and server."
@@ -30,7 +30,7 @@ strum = "0.24"
 strum_macros = "0.24"
 hex = { version = "0.4.3", features = [ "serde"] }
 sha3 = "0.10.5"
-tbs = { package = "fedimint-tbs", version = "0.2.0-rc7", path = "../crypto/tbs" }
+tbs = { package = "fedimint-tbs", version = "0.2.0-rc8", path = "../crypto/tbs" }
 tokio = { version = "1.26.0", features = ["sync", "io-util"] }
 thiserror = "1.0.39"
 tracing ="0.1.37"
@@ -42,8 +42,8 @@ bitcoin_hashes = { version = "0.11", features = ["serde"] }
 erased-serde = "0.3"
 lightning = "0.0.118"
 lightning-invoice = "0.26.0"
-fedimint-derive = { version = "0.2.0-rc7", path = "../fedimint-derive" }
-fedimint-logging = { version = "0.2.0-rc7", path = "../fedimint-logging" }
+fedimint-derive = { version = "0.2.0-rc8", path = "../fedimint-derive" }
+fedimint-logging = { version = "0.2.0-rc8", path = "../fedimint-logging" }
 rand = "0.8.5"
 miniscript = { version = "9.0.2", features = [ "compiler", "serde" ] }
 secp256k1-zkp = { version = "0.7.0", features = [ "use-serde", "bitcoin_hashes", "global-context" ] }

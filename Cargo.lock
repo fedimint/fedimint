@@ -1020,7 +1020,7 @@ dependencies = [
 
 [[package]]
 name = "devimint"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "axum",
@@ -1234,7 +1234,7 @@ checksum = "6999dc1837253364c2ebb0704ba97994bd874e8f195d665c50b7548f6ea92764"
 
 [[package]]
 name = "fedimint-aead"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "argon2",
@@ -1245,7 +1245,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-bip39"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "bip39",
  "fedimint-client",
@@ -1255,7 +1255,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-bitcoind"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1275,14 +1275,14 @@ dependencies = [
 
 [[package]]
 name = "fedimint-build"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "fedimint-cli"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1323,7 +1323,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-client"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -1371,7 +1371,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-core"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -1424,7 +1424,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dbtool"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "bitcoin_hashes 0.11.0",
@@ -1456,7 +1456,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-derive"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "itertools 0.11.0",
  "proc-macro2",
@@ -1466,7 +1466,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-derive-secret"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "fedimint-core",
@@ -1478,7 +1478,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-client"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1499,7 +1499,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-common"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1519,7 +1519,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-server"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1540,7 +1540,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-tests"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "fedimint-client",
@@ -1560,7 +1560,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gateway-cli"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1605,7 +1605,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-hkdf"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "bitcoin_hashes 0.11.0",
 ]
@@ -1639,7 +1639,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-client"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -1673,7 +1673,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-common"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -1704,7 +1704,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-gateway"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -1759,7 +1759,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-server"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -1795,7 +1795,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-tests"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -1820,7 +1820,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-load-test-tool"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "base64 0.20.0",
@@ -1850,7 +1850,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-logging"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "console-subscriber",
@@ -1863,7 +1863,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-metrics"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "axum",
@@ -1876,7 +1876,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-client"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -1912,7 +1912,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-common"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1936,7 +1936,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-server"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -1968,7 +1968,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-tests"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "fedimint-client",
@@ -1988,7 +1988,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-portalloc"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2002,7 +2002,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-recoverytool"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "bitcoin 0.29.2",
@@ -2029,7 +2029,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-rocksdb"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2044,7 +2044,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-server"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "aleph-bft",
  "aleph-bft-types",
@@ -2093,7 +2093,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-tbs"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "bincode",
  "bitcoin_hashes 0.11.0",
@@ -2109,7 +2109,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-testing"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2188,7 +2188,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-client"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -2219,7 +2219,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-common"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2245,7 +2245,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-server"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2274,7 +2274,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-tests"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2322,7 +2322,7 @@ dependencies = [
 
 [[package]]
 name = "fedimintd"
-version = "0.2.0-rc7"
+version = "0.2.0-rc8"
 dependencies = [
  "anyhow",
  "async-trait",
