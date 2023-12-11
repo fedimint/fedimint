@@ -150,7 +150,7 @@
 <span class="comment">// The maximum size of an E-Cash note (1,000,000 coins)
 // Changing this value is considered a breaking change because it is not saved
 // in `MintGenParamsConsensus` but instead is hardcoded here
-</span><span class="kw">const </span>MAX_DENOMINATION_SIZE: Amount = Amount::from_sats(<span class="number">1_000_000 </span>* <span class="number">100_000_000</span>);
+</span><span class="kw">const </span>MAX_DENOMINATION_SIZE: Amount = Amount::from_bitcoins(<span class="number">1_000_000</span>);
 
 <span class="kw">impl </span>MintGenParamsConsensus {
     <span class="kw">pub fn </span>new(denomination_base: u16) -&gt; <span class="self">Self </span>{

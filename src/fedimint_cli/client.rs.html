@@ -733,19 +733,6 @@
 <a href="#733" id="733">733</a>
 <a href="#734" id="734">734</a>
 <a href="#735" id="735">735</a>
-<a href="#736" id="736">736</a>
-<a href="#737" id="737">737</a>
-<a href="#738" id="738">738</a>
-<a href="#739" id="739">739</a>
-<a href="#740" id="740">740</a>
-<a href="#741" id="741">741</a>
-<a href="#742" id="742">742</a>
-<a href="#743" id="743">743</a>
-<a href="#744" id="744">744</a>
-<a href="#745" id="745">745</a>
-<a href="#746" id="746">746</a>
-<a href="#747" id="747">747</a>
-<a href="#748" id="748">748</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -762,7 +749,7 @@
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::time::now;
-<span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll, ParseAmountError, TieredMulti, TieredSummary};
+<span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll, TieredMulti, TieredSummary};
 <span class="kw">use </span>fedimint_ln_client::{
     InternalPayState, LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment,
     PayType,
@@ -806,10 +793,7 @@
     <span class="doccomment">/// Reissue notes received from a third party to avoid double spends
     </span>Reissue { oob_notes: OOBNotes },
     <span class="doccomment">/// Prepare notes to send to a third party as a payment
-    </span>Spend {
-        <span class="attr">#[clap(value_parser = parse_fedimint_amount)]
-        </span>amount: Amount,
-    },
+    </span>Spend { amount: Amount },
     <span class="doccomment">/// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
     </span>Validate { oob_notes: OOBNotes },
@@ -823,7 +807,7 @@
     },
     <span class="doccomment">/// Create a lightning invoice to receive payment via gateway
     </span>LnInvoice {
-        <span class="attr">#[clap(long, value_parser = parse_fedimint_amount)]
+        <span class="attr">#[clap(long)]
         </span>amount: Amount,
         <span class="attr">#[clap(long, default_value = <span class="string">&quot;&quot;</span>)]
         </span>description: String,
@@ -837,7 +821,7 @@
         <span class="doccomment">/// Lightning invoice or lnurl
         </span>payment_info: String,
         <span class="doccomment">/// Amount to pay, used for lnurl
-        </span><span class="attr">#[clap(long, value_parser = parse_fedimint_amount)]
+        </span><span class="attr">#[clap(long)]
         </span>amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
         <span class="doccomment">/// Will return immediately after funding the payment
         </span><span class="attr">#[clap(long, action)]
@@ -1475,16 +1459,6 @@
     total_amount_msat: Amount,
     total_num_notes: usize,
     denominations_msat: TieredSummary,
-}
-
-<span class="kw">pub fn </span>parse_fedimint_amount(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_core::Amount, ParseAmountError&gt; {
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(i) = s.find(char::is_alphabetic) {
-        <span class="kw">let </span>(amt, denom) = s.split_at(i);
-        fedimint_core::Amount::from_str_in(amt, denom.parse()<span class="question-mark">?</span>)
-    } <span class="kw">else </span>{
-        <span class="comment">//default to millisatoshi
-        </span>fedimint_core::Amount::from_str_in(s, bitcoin::Denomination::MilliSatoshi)
-    }
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
