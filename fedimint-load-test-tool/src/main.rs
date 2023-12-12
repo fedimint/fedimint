@@ -590,7 +590,7 @@ async fn get_coordinator_client(
     let (client, invite_code) = if let Some(db_path) = db_path {
         let coordinator_db = db_path.join("coordinator.db");
         if coordinator_db.exists() {
-            build_client(None, Some(&coordinator_db)).await?
+            build_client(invite_code.clone(), Some(&coordinator_db)).await?
         } else {
             tokio::fs::create_dir_all(db_path).await?;
             build_client(

@@ -182,6 +182,10 @@ impl ClientConfig {
             ..self
         })
     }
+
+    pub fn federation_id(&self) -> FederationId {
+        self.global.federation_id()
+    }
 }
 
 /// The federation id is a copy of the authentication threshold public key of

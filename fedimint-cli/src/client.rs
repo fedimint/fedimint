@@ -10,7 +10,7 @@ use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use fedimint_client::backup::Metadata;
 use fedimint_client::ClientArc;
-use fedimint_core::config::{ClientConfig, FederationId};
+use fedimint_core::config::FederationId;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::time::now;
@@ -150,7 +150,12 @@ pub enum ClientCmd {
     DiscoverVersion,
     /// Restore the previously created backup of mint notes (with `backup`
     /// command)
-    Restore { mnemonic: String },
+    Restore {
+        #[clap(long)]
+        mnemonic: String,
+        #[clap(long)]
+        invite_code: String,
+    },
     /// Print the secret key of the client
     PrintSecret,
     ListOperations {
@@ -174,7 +179,6 @@ pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Erro
 
 pub async fn handle_command(
     command: ClientCmd,
-    _config: ClientConfig,
     client: ClientArc,
 ) -> anyhow::Result<serde_json::Value> {
     match command {

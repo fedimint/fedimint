@@ -115,7 +115,8 @@ declare_vars! {
         FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join("lnd")).await?;
         FM_BTC_DIR: PathBuf = mkdir(FM_TEST_DIR.join("bitcoin")).await?;
         FM_DATA_DIR: PathBuf = FM_TEST_DIR.clone();
-        FM_CLIENT_DIR: PathBuf = mkdir(FM_TEST_DIR.join("client")).await?;
+        FM_CLIENT_BASE_DIR: PathBuf = mkdir(FM_TEST_DIR.join("clients")).await?;
+        FM_CLIENT_DIR: PathBuf = mkdir(FM_TEST_DIR.join("clients").join("default")).await?;
         FM_ELECTRS_DIR: PathBuf = mkdir(FM_TEST_DIR.join("electrs")).await?;
         FM_ESPLORA_DIR: PathBuf = mkdir(FM_TEST_DIR.join("esplora")).await?;
         FM_READY_FILE: PathBuf = FM_TEST_DIR.join("ready");

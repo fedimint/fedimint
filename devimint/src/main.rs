@@ -10,7 +10,7 @@ use bitcoincore_rpc::bitcoin::Txid;
 use bitcoincore_rpc::{bitcoin, RpcApi};
 use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
-use devimint::federation::{Federation, Fedimintd};
+use devimint::federation::{Client, Federation, Fedimintd};
 use devimint::util::{poll, ProcessManager};
 use devimint::{
     cmd, dev_fed, external_daemons, poll_eq, vars, DevFed, ExternalDaemons, Gatewayd,
@@ -400,7 +400,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // This test can't tolerate "spend", but not "reissue"d coins currently,
     // and there's a no clean way to do `reissue` on `spend` output ATM
     // so just putting it here for time being.
-    cli_tests_backup_and_restore(&fed).await?;
+    cli_tests_backup_and_restore(&fed, fed.internal_client()).await?;
 
     // # Spend from client
     info!("Testing spending from client");
@@ -970,6 +970,8 @@ async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> 
         "partner-ping-pong",
         "--test-duration-secs",
         "2",
+        "--invite-code",
+        invite_code
     )
     .out_string()
     .await?;
@@ -996,6 +998,8 @@ async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> 
         "self-payment",
         "--test-duration-secs",
         "2",
+        "--invite-code",
+        invite_code
     )
     .out_string()
     .await?;
@@ -1011,13 +1015,13 @@ async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> 
     Ok(())
 }
 
-async fn cli_tests_backup_and_restore(fed_cli: &Federation) -> Result<()> {
-    let secret = cmd!(fed_cli, "print-secret").out_json().await?["secret"]
+async fn cli_tests_backup_and_restore(fed: &Federation, reference_client: &Client) -> Result<()> {
+    let secret = cmd!(reference_client, "print-secret").out_json().await?["secret"]
         .as_str()
         .map(ToOwned::to_owned)
         .unwrap();
 
-    let pre_notes = cmd!(fed_cli, "info").out_json().await?;
+    let pre_notes = cmd!(reference_client, "info").out_json().await?;
 
     let pre_balance = pre_notes["total_amount_msat"].as_u64().unwrap();
 
@@ -1035,21 +1039,20 @@ async fn cli_tests_backup_and_restore(fed_cli: &Federation) -> Result<()> {
     // Testing restore in different setups would require multiple clients,
     // which is a larger refactor.
     {
-        let client = fed_cli.fork_client("restore-without-backup").await?;
-        let _ = cmd!(client, "wipe", "--force",).out_json().await?;
+        let client = Client::create("restore-without-backup").await?;
 
-        assert_eq!(
-            0,
-            cmd!(client, "info").out_json().await?["total_amount_msat"]
-                .as_u64()
-                .unwrap()
-        );
-
-        let post_balance = cmd!(client, "restore", &secret,)
-            .out_json()
-            .await?
-            .as_u64()
-            .unwrap();
+        let post_balance = cmd!(
+            client,
+            "restore",
+            "--mnemonic",
+            &secret,
+            "--invite-code",
+            fed.invite_code()?
+        )
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
 
         let post_notes = cmd!(client, "info").out_json().await?;
 
@@ -1059,18 +1062,19 @@ async fn cli_tests_backup_and_restore(fed_cli: &Federation) -> Result<()> {
 
     // with a backup
     {
-        let client = fed_cli.fork_client("restore-with-backup").await?;
-        let _ = cmd!(client, "backup",).out_json().await?;
+        let _ = cmd!(reference_client, "backup",).out_json().await?;
+        let client = Client::create("restore-with-backup").await?;
 
-        let _ = cmd!(client, "wipe", "--force",).out_json().await?;
-
-        assert_eq!(
-            0,
-            cmd!(client, "info").out_json().await?["total_amount_msat"]
-                .as_u64()
-                .unwrap()
-        );
-        let _ = cmd!(client, "restore", &secret,).out_json().await?;
+        let _ = cmd!(
+            client,
+            "restore",
+            "--mnemonic",
+            &secret,
+            "--invite-code",
+            fed.invite_code()?
+        )
+        .out_json()
+        .await?;
 
         let post_notes = cmd!(client, "info").out_json().await?;
         let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();

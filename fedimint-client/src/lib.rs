@@ -74,7 +74,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, ensure, Context};
+use anyhow::{anyhow, bail, Context};
 use async_stream::stream;
 use db::{
     CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix,
@@ -92,7 +92,7 @@ use fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
 };
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, IRawDatabase,
+    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -109,11 +109,12 @@ use fedimint_core::{
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
+use fedimint_logging::LOG_CLIENT;
 use futures::StreamExt;
 use module::{DynClientModule, FinalClient};
 use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
-use secret::DeriveableSecretClientExt;
+use secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy as _};
 use thiserror::Error;
 #[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
@@ -631,8 +632,8 @@ pub struct Client {
 impl Client {
     /// Initialize a client builder that can be configured to create a new
     /// client.
-    pub fn builder() -> ClientBuilder {
-        ClientBuilder::default()
+    pub fn builder(db: DatabaseSource) -> ClientBuilder {
+        ClientBuilder::new(db)
     }
 
     pub fn api(&self) -> &(dyn IGlobalFederationApi + 'static) {
@@ -641,6 +642,78 @@ impl Client {
 
     pub fn api_clone(&self) -> DynGlobalApi {
         self.api.clone()
+    }
+
+    pub async fn get_config_from_db(db: &Database) -> Option<ClientConfig> {
+        let mut dbtx = db.begin_transaction().await;
+        #[allow(clippy::let_and_return)]
+        let config = dbtx
+            .find_by_prefix(&ClientConfigKeyPrefix)
+            .await
+            .next()
+            .await
+            .map(|(_, config)| config);
+        config
+    }
+
+    pub async fn store_encodable_client_secret<T: Encodable>(
+        db: &Database,
+        secret: T,
+    ) -> anyhow::Result<()> {
+        let mut dbtx = db.begin_transaction().await;
+
+        // Don't overwrite an existing secret
+        match dbtx.get_value(&EncodedClientSecretKey).await {
+            Some(_) => bail!("Encoded client secret already exists, cannot overwrite"),
+            None => {
+                let encoded_secret = T::consensus_encode_to_vec(&secret);
+                dbtx.insert_entry(&EncodedClientSecretKey, &encoded_secret)
+                    .await;
+                dbtx.commit_tx().await;
+                Ok(())
+            }
+        }
+    }
+
+    pub async fn load_decodable_client_secret<T: Decodable>(db: &Database) -> anyhow::Result<T> {
+        let Some(secret) = Self::load_decodable_client_secret_opt(db).await? else {
+            bail!("Encoded client secret not present in DB")
+        };
+
+        Ok(secret)
+    }
+    pub async fn load_decodable_client_secret_opt<T: Decodable>(
+        db: &Database,
+    ) -> anyhow::Result<Option<T>> {
+        let mut dbtx = db.begin_transaction_nc().await;
+
+        let client_secret = dbtx.get_value(&EncodedClientSecretKey).await;
+
+        Ok(match client_secret {
+            Some(client_secret) => Some(
+                T::consensus_decode(&mut client_secret.as_slice(), &Default::default())
+                    .map_err(|e| anyhow!("Decoding failed: {e}"))?,
+            ),
+            None => None,
+        })
+    }
+
+    pub async fn load_or_generate_client_secret(db: &Database) -> anyhow::Result<[u8; 64]> {
+        let client_secret = match Self::load_decodable_client_secret::<[u8; 64]>(db).await {
+            Ok(secret) => secret,
+            Err(_) => {
+                let secret = PlainRootSecretStrategy::random(&mut thread_rng());
+                Self::store_encodable_client_secret(db, secret)
+                    .await
+                    .expect("Storing client secret must work");
+                secret
+            }
+        };
+        Ok(client_secret)
+    }
+
+    pub async fn is_initialized(db: &Database) -> bool {
+        Self::get_config_from_db(db).await.is_some()
     }
 
     pub async fn start_executor(self: &Arc<Self>) {
@@ -1361,12 +1434,11 @@ impl FederationInfo {
     }
 }
 
-#[derive(Default)]
 pub struct ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
-    config: Option<FederationInfo>,
-    db: Option<DatabaseSource>,
+    db: DatabaseSource,
+    stopped: bool,
 }
 
 pub enum DatabaseSource {
@@ -1377,7 +1449,26 @@ pub enum DatabaseSource {
     Reuse(ClientArc),
 }
 
+impl AsRef<Database> for DatabaseSource {
+    fn as_ref(&self) -> &Database {
+        match self {
+            DatabaseSource::Fresh(db) => db,
+            #[allow(deprecated)]
+            DatabaseSource::Reuse(client) => client.db(),
+        }
+    }
+}
+
 impl ClientBuilder {
+    fn new(db: DatabaseSource) -> Self {
+        ClientBuilder {
+            module_inits: Default::default(),
+            primary_module_instance: Default::default(),
+            db,
+            stopped: false,
+        }
+    }
+
     /// Replace module generator registry entirely
     pub fn with_module_inits(&mut self, module_inits: ClientModuleInitRegistry) {
         self.module_inits = module_inits;
@@ -1388,24 +1479,8 @@ impl ClientBuilder {
         self.module_inits.attach(module_init);
     }
 
-    /// Instructs the client builder to use this `FederationInfo` in building a
-    /// client. A `FederationInfo` can be created from either an invite code via
-    /// [`FederationInfo::from_invite_code`] or from a config via
-    /// [`FederationInfo::from_config`].
-    ///
-    /// ## Failure Conditions
-    ///
-    /// If a config already exists in the builder, calling this method
-    /// fails. If a `ClientConfig` already exists in the database, calling
-    /// `ClientBuilder::build` fails.
-    /// - You can use `get_config_from_db` to check if a config exists in the
-    ///   database.
-    pub fn with_federation_info(&mut self, federation_info: FederationInfo) {
-        let was_replaced = self.config.replace(federation_info).is_some();
-        assert!(
-            !was_replaced,
-            "Only one configuration source can be given to the builder."
-        )
+    pub fn stopped(&mut self) {
+        self.stopped = true;
     }
 
     /// Uses this module with the given instance id as the primary module. See
@@ -1424,172 +1499,101 @@ impl ClientBuilder {
         )
     }
 
-    // TODO: impl config from file
-    // TODO: impl config from federation
-
-    /// Uses this database to store the client state
-    pub fn with_raw_database<D: IRawDatabase + 'static>(&mut self, db: D) {
-        self.with_database(db.into());
+    pub fn db(&self) -> &Database {
+        self.db.as_ref()
     }
 
-    // /// Uses this database to store the client state, allowing for flexibility
-    // /// on the caller side by accepting a type-erased trait object.
-    pub fn with_database(&mut self, db: Database) {
-        let was_replaced = self.db.replace(DatabaseSource::Fresh(db)).is_some();
-        assert!(
-            !was_replaced,
-            "Only one database can be given to the builder."
-        );
-    }
-
-    /// Re-uses the database of an old client. Useful for restarting the client
-    /// on recovery without fully shutting down the DB and not being able to
-    /// re-open it.
-    ///
-    /// ## Panics
-    /// If the old and new client use different config since that might make the
-    /// DB incompatible.
-    #[deprecated(
-        note = "DatabaseSource::Reuse was a workound and LN Gateway should stop using it. See https://github.com/fedimint/fedimint/pull/3781#issuecomment-1835319259"
-    )]
-    pub fn with_old_client_database(&mut self, client: ClientArc) {
-        #[allow(deprecated)]
-        let was_replaced = self.db.replace(DatabaseSource::Reuse(client)).is_some();
-        assert!(
-            !was_replaced,
-            "Only one database can be given to the builder."
-        );
-    }
-
-    pub async fn store_encodable_client_secret<T: Encodable>(
-        &mut self,
-        secret: T,
-    ) -> anyhow::Result<()> {
-        let mut dbtx = match self.db.as_ref().ok_or(anyhow!("No database provided"))? {
-            DatabaseSource::Fresh(db) => db.begin_transaction().await,
-            #[allow(deprecated)]
-            DatabaseSource::Reuse(client) => client.db().begin_transaction().await,
+    pub async fn load_existing_config(&self) -> anyhow::Result<ClientConfig> {
+        let Some(config) = Client::get_config_from_db(self.db.as_ref()).await else {
+            bail!("Client database not initialized")
         };
 
-        // Don't overwrite an existing secret
-        match dbtx.get_value(&EncodedClientSecretKey).await {
-            Some(_) => bail!("Encoded client secret already exists, cannot overwrite"),
-            None => {
-                let encoded_secret = T::consensus_encode_to_vec(&secret);
-                dbtx.insert_entry(&EncodedClientSecretKey, &encoded_secret)
-                    .await;
-                dbtx.commit_tx().await;
-                Ok(())
-            }
-        }
+        Ok(config)
     }
 
-    pub async fn load_decodable_client_secret<T: Decodable>(&mut self) -> anyhow::Result<T> {
-        let mut dbtx = match self.db.as_ref().ok_or(anyhow!("No database provided"))? {
-            DatabaseSource::Fresh(db) => db.begin_transaction().await,
-            #[allow(deprecated)]
-            DatabaseSource::Reuse(client) => client.db().begin_transaction().await,
-        };
-
-        let client_secret = dbtx.get_value(&EncodedClientSecretKey).await;
-        dbtx.commit_tx().await;
-
-        match client_secret {
-            Some(client_secret) => {
-                T::consensus_decode(&mut client_secret.as_slice(), &Default::default())
-                    .map_err(|e| anyhow!("Decoding failed: {e}"))
-            }
-            None => bail!("Encoded client secret not present in DB"),
-        }
-    }
-
-    pub async fn get_federation_id(&self) -> anyhow::Result<FederationId> {
-        if let Some(db) = self.db.as_ref() {
-            let db = match db {
-                DatabaseSource::Fresh(db) => db,
-                #[allow(deprecated)]
-                DatabaseSource::Reuse(client) => &client.inner.db,
-            };
-            if let Some(config) = get_config_from_db(db).await {
-                return Ok(config.global.federation_id());
-            }
-        }
-
-        if let Some(federation_info) = &self.config {
-            return Ok(federation_info.federation_id());
-        }
-
-        bail!("No config source present");
-    }
-
-    pub async fn build_restoring_from_backup(
+    pub async fn join(
         self,
         root_secret: DerivableSecret,
+        config: ClientConfig,
+        invite_code: InviteCode,
+    ) -> anyhow::Result<ClientArc> {
+        if Client::is_initialized(self.db.as_ref()).await {
+            bail!("Client database already initialized")
+        }
+
+        {
+            debug!(target: LOG_CLIENT, "Initializing client database");
+            let mut dbtx = self.db.as_ref().begin_transaction().await;
+            // Save config to DB
+            dbtx.insert_new_entry(
+                &ClientConfigKey {
+                    id: config.federation_id(),
+                },
+                &config,
+            )
+            .await;
+            dbtx.insert_new_entry(&ClientInviteCodeKey {}, &invite_code)
+                .await;
+
+            dbtx.commit_tx_result().await?;
+        }
+        let stopped = self.stopped;
+
+        let client = self.build_stopped(root_secret, config).await?;
+        if !stopped {
+            client.start_executor().await;
+        }
+        Ok(client)
+    }
+
+    pub async fn recover(
+        self,
+        root_secret: DerivableSecret,
+        config: ClientConfig,
+        invite_code: InviteCode,
     ) -> anyhow::Result<(ClientArc, Metadata)> {
-        // TODO: assert DB is empty (what does that mean? maybe needs a method that
-        // checks if "wipe" was called on modules?)
+        let client = Self::join(self, root_secret, config, invite_code).await?;
 
-        // let db_is_empty = raw_dbtx
-        //     .raw_find_by_prefix(&[])
-        //     .await
-        //     .expect("DB read failed")
-        //     .next()
-        //     .await
-        //     .is_none();
-        // assert!(
-        //     db_is_empty,
-        //     "Database is not empty, cannot restore from backup"
-        // );
-
-        let client = self.build(root_secret).await?;
         let backup = client.download_backup_from_federation().await?;
         let metadata = client.restore_from_backup(backup).await?;
 
         Ok((client, metadata))
     }
 
-    /// Build a [`Client`] and start its executor
-    pub async fn build(self, root_secret: DerivableSecret) -> anyhow::Result<ClientArc> {
-        let client = self.build_stopped(root_secret).await?;
-        client.start_executor().await;
+    pub async fn open(self, root_secret: DerivableSecret) -> anyhow::Result<ClientArc> {
+        let Some(config) = Client::get_config_from_db(self.db.as_ref()).await else {
+            bail!("Client database not initialized")
+        };
+        let stopped = self.stopped;
+
+        let client = self.build_stopped(root_secret, config).await?;
+        if !stopped {
+            client.start_executor().await;
+        }
         Ok(client)
     }
 
     /// Build a [`Client`] but do not start the executor
-    pub async fn build_stopped(self, root_secret: DerivableSecret) -> anyhow::Result<ClientArc> {
-        let (config, decoders, db) = match self.db.ok_or(anyhow!("No database was provided"))? {
-            DatabaseSource::Fresh(db) => {
-                let config = get_config(&db, self.config.clone()).await?;
+    pub async fn build_stopped(
+        self,
+        root_secret: DerivableSecret,
+        config: ClientConfig,
+    ) -> anyhow::Result<ClientArc> {
+        let mut decoders = client_decoders(
+            &self.module_inits,
+            config
+                .modules
+                .iter()
+                .map(|(module_instance, module_config)| (*module_instance, module_config.kind())),
+        )?;
+        decoders.register_module(
+            TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+            ModuleKind::from_static_str("tx_submission"),
+            tx_submission_sm_decoder(),
+        );
+        let db = self.db.as_ref().to_owned().with_decoders(decoders.clone());
 
-                let mut decoders = client_decoders(
-                    &self.module_inits,
-                    config
-                        .modules
-                        .iter()
-                        .map(|(module_instance, module_config)| {
-                            (*module_instance, module_config.kind())
-                        }),
-                )?;
-                decoders.register_module(
-                    TRANSACTION_SUBMISSION_MODULE_INSTANCE,
-                    ModuleKind::from_static_str("tx_submission"),
-                    tx_submission_sm_decoder(),
-                );
-                let db = db.with_decoders(decoders.clone());
-
-                (config, decoders, db)
-            }
-            #[allow(deprecated)]
-            DatabaseSource::Reuse(client) => {
-                let db = client.inner.db.clone();
-                let decoders = client.inner.decoders.clone();
-                let config = get_config(&db, self.config.clone()).await?;
-
-                (config, decoders, db)
-            }
-        };
-
-        let config = config.redecode_raw(&decoders)?;
+        let config = config.clone().redecode_raw(&decoders)?;
 
         let primary_module_instance = self
             .primary_module_instance
@@ -1691,53 +1695,6 @@ impl ClientBuilder {
     }
 }
 
-// Sources config from database or from config source specified
-async fn get_config(
-    db: &Database,
-    maybe_federation_info: Option<FederationInfo>,
-) -> anyhow::Result<ClientConfig> {
-    if let Some(config) = get_config_from_db(db).await {
-        ensure!(
-            maybe_federation_info.is_none(),
-            "Alternative config source provided but config was found in DB"
-        );
-        return Ok(config);
-    }
-
-    let federation_info = maybe_federation_info.ok_or(anyhow!("No config source was provided"))?;
-
-    let mut dbtx = db.begin_transaction().await;
-    // Save config to DB
-    dbtx.insert_new_entry(
-        &ClientConfigKey {
-            id: federation_info.federation_id(),
-        },
-        &federation_info.config().clone(),
-    )
-    .await;
-    // Save invite code to DB
-    if let Some(invite_code) = federation_info.invite_code() {
-        dbtx.insert_new_entry(&ClientInviteCodeKey {}, &invite_code)
-            .await;
-    }
-
-    dbtx.commit_tx_result().await?;
-
-    Ok(federation_info.config().clone())
-}
-
-pub async fn get_config_from_db(db: &Database) -> Option<ClientConfig> {
-    let mut dbtx = db.begin_transaction().await;
-    #[allow(clippy::let_and_return)]
-    let config = dbtx
-        .find_by_prefix(&ClientConfigKeyPrefix)
-        .await
-        .next()
-        .await
-        .map(|(_, config)| config);
-    config
-}
-
 pub async fn get_invite_code_from_db(db: &Database) -> Option<InviteCode> {
     let mut dbtx = db.begin_transaction().await;
     #[allow(clippy::let_and_return)]
@@ -1756,6 +1713,7 @@ async fn try_download_config(
     invite_code: InviteCode,
     max_retries: usize,
 ) -> anyhow::Result<ClientConfig> {
+    debug!(target: LOG_CLIENT, "Download client config");
     let api = Arc::new(WsFederationApi::from_invite_code(&[invite_code.clone()]))
         as Arc<dyn IGlobalFederationApi + Send + Sync + 'static>;
     let mut num_retries = 0;

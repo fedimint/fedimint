@@ -8,7 +8,7 @@ use devimint::cmd;
 use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
-use fedimint_client::{get_invite_code_from_db, ClientArc, ClientBuilder, FederationInfo};
+use fedimint_client::{Client, ClientArc, FederationInfo};
 use fedimint_core::api::InviteCode;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::db::Database;
@@ -21,7 +21,6 @@ use fedimint_mint_client::{MintClientInit, MintClientModule, MintCommonInit, OOB
 use fedimint_wallet_client::WalletClientInit;
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
-use rand::thread_rng;
 use tokio::sync::mpsc;
 use tracing::info;
 use tracing::log::warn;
@@ -130,46 +129,41 @@ pub async fn await_spend_notes_finish(
 }
 
 pub async fn build_client(
-    mut invite_code: Option<InviteCode>,
+    invite_code: Option<InviteCode>,
     rocksdb: Option<&PathBuf>,
 ) -> anyhow::Result<(ClientArc, Option<InviteCode>)> {
-    let mut client_builder = ClientBuilder::default();
+    let db = if let Some(rocksdb) = rocksdb {
+        Database::new(
+            fedimint_rocksdb::RocksDb::open(rocksdb)?,
+            Default::default(),
+        )
+    } else {
+        fedimint_core::db::mem_impl::MemDatabase::new().into()
+    };
+    let mut client_builder = Client::builder(fedimint_client::DatabaseSource::Fresh(db));
     client_builder.with_module(MintClientInit);
     client_builder.with_module(LightningClientInit);
     client_builder.with_module(WalletClientInit::default());
     client_builder.with_primary_module(1);
-    if let Some(invite_code) = &invite_code {
-        client_builder
-            .with_federation_info(FederationInfo::from_invite_code(invite_code.clone()).await?);
-    }
-    if let Some(rocksdb) = rocksdb {
-        let db = Database::new(
-            fedimint_rocksdb::RocksDb::open(rocksdb)?,
-            Default::default(),
-        );
-        if invite_code.is_none() {
-            // Best effort basis for now
-            invite_code = get_invite_code_from_db(&db).await;
-        }
-        client_builder.with_database(db)
-    } else {
-        client_builder.with_raw_database(fedimint_core::db::mem_impl::MemDatabase::new())
-    }
+    let client_secret = Client::load_or_generate_client_secret(client_builder.db()).await?;
+    let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
 
-    let client_secret = match client_builder
-        .load_decodable_client_secret::<[u8; 64]>()
-        .await
-    {
-        Ok(secret) => secret,
-        Err(_) => {
-            let secret = PlainRootSecretStrategy::random(&mut thread_rng());
-            client_builder.store_encodable_client_secret(secret).await?;
-            secret
+    let client = if !Client::is_initialized(client_builder.db()).await {
+        if let Some(invite_code) = &invite_code {
+            let federation_info = FederationInfo::from_invite_code(invite_code.clone()).await?;
+            client_builder
+                .join(
+                    root_secret,
+                    federation_info.config().clone(),
+                    invite_code.clone(),
+                )
+                .await
+        } else {
+            bail!("Database not initialize and invite code not provided");
         }
-    };
-    let client = client_builder
-        .build(PlainRootSecretStrategy::to_root_secret(&client_secret))
-        .await?;
+    } else {
+        client_builder.open(root_secret).await
+    }?;
     Ok((client, invite_code))
 }
 

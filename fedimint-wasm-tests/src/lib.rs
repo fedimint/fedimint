@@ -1,31 +1,50 @@
 use anyhow::Result;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::FederationInfo;
+use fedimint_client::{Client, FederationInfo};
 use fedimint_core::api::InviteCode;
 use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_core::db::Database;
 use fedimint_ln_client::LightningClientInit;
 use fedimint_mint_client::MintClientInit;
 use fedimint_wallet_client::WalletClientInit;
 use rand::thread_rng;
 
-async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientArc> {
-    let mut builder = fedimint_client::ClientBuilder::default();
+async fn load_or_generate_mnemonic(db: &Database) -> anyhow::Result<[u8; 64]> {
+    Ok(match Client::load_decodable_client_secret(db).await {
+        Ok(s) => s,
+
+        Err(_) => {
+            let secret = PlainRootSecretStrategy::random(&mut thread_rng());
+            Client::store_encodable_client_secret(db, secret).await?;
+            secret
+        }
+    })
+}
+
+fn make_client_builder() -> fedimint_client::ClientBuilder {
+    let mem_database = MemDatabase::default();
+    let mut builder = fedimint_client::Client::builder(fedimint_client::DatabaseSource::Fresh(
+        mem_database.into(),
+    ));
     builder.with_module(LightningClientInit);
     builder.with_module(MintClientInit);
     builder.with_module(WalletClientInit::default());
     builder.with_primary_module(1);
-    builder.with_federation_info(FederationInfo::from_invite_code(invite_code.clone()).await?);
-    builder.with_raw_database(MemDatabase::default());
-    let client_secret = match builder.load_decodable_client_secret::<[u8; 64]>().await {
-        Ok(secret) => secret,
-        Err(_) => {
-            let secret = PlainRootSecretStrategy::random(&mut thread_rng());
-            builder.store_encodable_client_secret(secret).await?;
-            secret
-        }
-    };
+
     builder
-        .build_stopped(PlainRootSecretStrategy::to_root_secret(&client_secret))
+}
+
+async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientArc> {
+    let federation_info = FederationInfo::from_invite_code(invite_code.clone()).await?;
+    let mut builder = make_client_builder();
+    let client_secret = load_or_generate_mnemonic(builder.db()).await?;
+    builder.stopped();
+    builder
+        .join(
+            PlainRootSecretStrategy::to_root_secret(&client_secret),
+            federation_info.config().to_owned(),
+            invite_code.clone(),
+        )
         .await
 }
 

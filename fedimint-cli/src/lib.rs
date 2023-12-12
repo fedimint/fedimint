@@ -15,12 +15,15 @@ use std::{fs, result};
 
 use bip39::Mnemonic;
 use clap::{CommandFactory, Parser, Subcommand};
-use db_locked::{Locked, LockedBuilder};
+use db_locked::LockedBuilder;
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_bip39::Bip39RootSecretStrategy;
+use fedimint_client::backup::Metadata;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
-use fedimint_client::{get_invite_code_from_db, ClientBuilder, FederationInfo};
+use fedimint_client::{
+    get_invite_code_from_db, Client, ClientArc, ClientBuilder, DatabaseSource, FederationInfo,
+};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
     FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, InviteCode,
@@ -28,13 +31,13 @@ use fedimint_core::api::{
 };
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::OperationId;
-use fedimint_core::db::DatabaseValue;
+use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::query::ThresholdConsensus;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{task, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
-use fedimint_logging::TracingSetup;
+use fedimint_logging::{TracingSetup, LOG_CLIENT};
 use fedimint_mint_client::{MintClientInit, MintClientModule, SpendableNote};
 use fedimint_server::config::io::SALT_FILE;
 use fedimint_wallet_client::api::WalletFederationApi;
@@ -290,7 +293,8 @@ impl Opts {
         Ok(ApiAuth(password))
     }
 
-    async fn load_rocks_db(&self) -> CliResult<Locked<fedimint_rocksdb::RocksDb>> {
+    async fn load_rocks_db(&self) -> CliResult<Database> {
+        debug!(target: LOG_CLIENT, "Loading client database");
         let db_path = self.data_dir_create().await?.join("client.db");
         let lock_path = db_path.with_extension("db.lock");
         Ok(LockedBuilder::new(&lock_path)
@@ -299,64 +303,25 @@ impl Opts {
             .with_db(
                 fedimint_rocksdb::RocksDb::open(db_path)
                     .map_err_cli_msg(CliErrorKind::IOError, "could not open database")?,
-            ))
+            )
+            .into())
     }
+}
 
-    async fn build_client_ng(
-        &self,
-        module_inits: &ClientModuleInitRegistry,
-        invite_code: Option<InviteCode>,
-    ) -> CliResult<fedimint_client::ClientArc> {
-        let mut client_builder = self.build_client_builder(module_inits, invite_code).await?;
-        let mnemonic = match client_builder
-            .load_decodable_client_secret::<Vec<u8>>()
-            .await
-        {
+async fn load_or_generate_mnemonic(db: &Database) -> Result<Mnemonic, CliError> {
+    Ok(
+        match Client::load_decodable_client_secret::<Vec<u8>>(db).await {
             Ok(entropy) => Mnemonic::from_entropy(&entropy).map_err_cli_general()?,
             Err(_) => {
                 info!("Generating mnemonic and writing entropy to client storage");
                 let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut thread_rng());
-                client_builder
-                    .store_encodable_client_secret(mnemonic.to_entropy())
+                Client::store_encodable_client_secret(db, mnemonic.to_entropy())
                     .await
                     .map_err_cli_general()?;
                 mnemonic
             }
-        };
-        let federation_id = client_builder
-            .get_federation_id()
-            .await
-            .map_err_cli_general()?;
-        client_builder
-            .build(get_default_client_secret(
-                &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
-                &federation_id,
-            ))
-            .await
-            .map_err_cli_general()
-    }
-
-    async fn build_client_builder(
-        &self,
-        module_inits: &ClientModuleInitRegistry,
-        invite_code: Option<InviteCode>,
-    ) -> CliResult<fedimint_client::ClientBuilder> {
-        let db = self.load_rocks_db().await?;
-
-        let mut client_builder = ClientBuilder::default();
-        client_builder.with_module_inits(module_inits.clone());
-        client_builder.with_primary_module(1);
-        if let Some(invite_code) = invite_code {
-            client_builder.with_federation_info(
-                FederationInfo::from_invite_code(invite_code)
-                    .await
-                    .map_err_cli_general()?,
-            );
-        }
-        client_builder.with_raw_database(db);
-
-        Ok(client_builder)
-    }
+        },
+    )
 }
 
 #[derive(Subcommand, Clone)]
@@ -550,25 +515,123 @@ impl FedimintCli {
         }
     }
 
+    async fn make_client_builder(&self, cli: &Opts) -> CliResult<ClientBuilder> {
+        let db = cli.load_rocks_db().await?;
+        let mut client_builder = Client::builder(DatabaseSource::Fresh(db));
+        client_builder.with_module_inits(self.module_inits.clone());
+        client_builder.with_primary_module(1);
+
+        Ok(client_builder)
+    }
+
+    async fn client_join(&mut self, cli: &Opts, invite_code: InviteCode) -> CliResult<ClientArc> {
+        let federation_info = FederationInfo::from_invite_code(invite_code.clone())
+            .await
+            .map_err_cli_general()?;
+
+        let client_builder = self.make_client_builder(cli).await?;
+
+        let mnemonic = load_or_generate_mnemonic(client_builder.db()).await?;
+
+        client_builder
+            .join(
+                get_default_client_secret(
+                    &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
+                    &federation_info.config().global.federation_id(),
+                ),
+                federation_info.config().clone(),
+                invite_code,
+            )
+            .await
+            .map_err_cli_general()
+    }
+
+    async fn client_open(&mut self, cli: &Opts) -> CliResult<ClientArc> {
+        let client_builder = self.make_client_builder(cli).await?;
+
+        let mnemonic = Mnemonic::from_entropy(
+            &Client::load_decodable_client_secret::<Vec<u8>>(client_builder.db())
+                .await
+                .map_err_cli_general()?,
+        )
+        .map_err_cli_general()?;
+
+        let config = client_builder
+            .load_existing_config()
+            .await
+            .map_err_cli_general()?;
+
+        let federation_id = config.federation_id();
+
+        client_builder
+            .open(get_default_client_secret(
+                &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
+                &federation_id,
+            ))
+            .await
+            .map_err_cli_general()
+    }
+
+    async fn client_recover(
+        &mut self,
+        cli: &Opts,
+        mnemonic: Mnemonic,
+        invite_code: InviteCode,
+    ) -> CliResult<(ClientArc, Metadata)> {
+        let builder = self.make_client_builder(cli).await?;
+
+        let federation_info = FederationInfo::from_invite_code(invite_code.clone())
+            .await
+            .map_err_cli_general()?;
+
+        match Client::load_decodable_client_secret_opt::<Vec<u8>>(builder.db())
+            .await
+            .map_err_cli_io()?
+        {
+            Some(existing) => {
+                if existing != mnemonic.to_entropy() {
+                    Err(anyhow::anyhow!("Previously set mnemonic does not match"))
+                        .map_err_cli_general()?;
+                }
+            }
+            None => {
+                Client::store_encodable_client_secret(builder.db(), mnemonic.to_entropy())
+                    .await
+                    .map_err_cli_io()?;
+            }
+        }
+
+        let config = federation_info.config();
+        builder
+            .recover(
+                get_default_client_secret(
+                    &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
+                    &config.federation_id(),
+                ),
+                config.to_owned(),
+                invite_code,
+            )
+            .await
+            .map_err_cli_general()
+    }
+
     async fn handle_command(&mut self, cli: Opts) -> CliOutputResult {
         match cli.command.clone() {
             Command::InviteCode => {
-                let rockdb = cli.load_rocks_db().await?;
-                let db = fedimint_core::db::Database::new(rockdb, Default::default());
+                let db = cli.load_rocks_db().await?;
                 let invite_code = get_invite_code_from_db(&db)
                     .await
                     .ok_or_cli_msg(CliErrorKind::GeneralFailure, "invite code not found")?;
                 Ok(CliOutput::InviteCode { invite_code })
             }
             Command::JoinFederation { invite_code } => {
-                let invite: InviteCode = InviteCode::from_str(&invite_code)
-                    .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid invite code")?;
+                {
+                    let invite_code: InviteCode = InviteCode::from_str(&invite_code)
+                        .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid invite code")?;
 
-                // Build client and store config in DB
-                let _client = cli
-                    .build_client_ng(&self.module_inits, Some(invite.clone()))
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failed to build client")?;
+                    // Build client and store config in DB
+                    let _client = self.client_join(&cli, invite_code).await?;
+                }
 
                 Ok(CliOutput::JoinFederation {
                     joined: invite_code,
@@ -577,48 +640,18 @@ impl FedimintCli {
             Command::VersionHash => Ok(CliOutput::VersionHash {
                 hash: env!("FEDIMINT_BUILD_CODE_VERSION").to_string(),
             }),
-            Command::Client(ClientCmd::Restore { mnemonic }) => {
+            Command::Client(ClientCmd::Restore {
+                mnemonic,
+                invite_code,
+            }) => {
+                let invite_code: InviteCode = InviteCode::from_str(&invite_code)
+                    .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid invite code")?;
                 let mnemonic = Mnemonic::from_str(&mnemonic).map_err_cli_general()?;
-                let mut client_builder = cli
-                    .build_client_builder(&self.module_inits, None)
-                    .await
-                    .map_err_cli_general()?;
-                let mnemonic = match client_builder
-                    .load_decodable_client_secret::<Vec<u8>>()
-                    .await
-                {
-                    Ok(entropy) if entropy == mnemonic.to_entropy() => mnemonic,
-                    Ok(_) => {
-                        return Err(anyhow::anyhow!(
-                            "Provided mnemonic's entropy does not match existing entropy"
-                        ))
-                        .map_err_cli_general()
-                    }
-                    Err(_) => {
-                        info!("Generating mnemonic and writing entropy to client storage");
-                        let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut thread_rng());
-                        client_builder
-                            .store_encodable_client_secret(mnemonic.to_entropy())
-                            .await
-                            .map_err_cli_general()?;
-                        mnemonic
-                    }
-                };
-                let federation_id = client_builder
-                    .get_federation_id()
-                    .await
-                    .map_err_cli_general()?;
-                let client = client_builder
-                    .build_restoring_from_backup(get_default_client_secret(
-                        &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
-                        &federation_id,
-                    ))
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
-                    .0;
+                let client = self.client_recover(&cli, mnemonic, invite_code).await?;
 
                 info!("Waiting for restore to complete");
                 let restored_amount = client
+                    .0
                     .get_first_module::<MintClientModule>()
                     .await_restore_finished()
                     .await
@@ -631,25 +664,18 @@ impl FedimintCli {
                 ))
             }
             Command::Client(command) => {
-                let client = cli
-                    .build_client_ng(&self.module_inits, None)
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
-                let config = client.get_config().clone();
+                let client = self.client_open(&cli).await?;
                 Ok(CliOutput::Raw(
-                    client::handle_command(command, config, client)
+                    client::handle_command(command, client)
                         .await
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
                 ))
             }
             Command::Admin(AdminCmd::Audit) => {
-                let user = cli
-                    .build_client_ng(&self.module_inits, None)
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
+                let client = self.client_open(&cli).await?;
 
                 let audit = cli
-                    .admin_client(user.get_config())?
+                    .admin_client(client.get_config())?
                     .audit(cli.auth()?)
                     .await?;
                 Ok(CliOutput::Raw(
@@ -658,12 +684,9 @@ impl FedimintCli {
                 ))
             }
             Command::Admin(AdminCmd::Status) => {
-                let user = cli
-                    .build_client_ng(&self.module_inits, None)
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
+                let client = self.client_open(&cli).await?;
 
-                let status = cli.admin_client(user.get_config())?.status().await?;
+                let status = cli.admin_client(client.get_config())?.status().await?;
                 Ok(CliOutput::Raw(
                     serde_json::to_value(status)
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
@@ -681,12 +704,9 @@ impl FedimintCli {
                 if let Some(auth) = auth {
                     params = params.with_auth(ApiAuth(auth))
                 }
-                let ws_api: Arc<_> = WsFederationApi::from_config(
-                    cli.build_client_ng(&self.module_inits, None)
-                        .await?
-                        .get_config(),
-                )
-                .into();
+                let client = self.client_open(&cli).await?;
+
+                let ws_api: Arc<_> = WsFederationApi::from_config(client.get_config()).into();
                 let response: Value = match peer_id {
                     Some(peer_id) => ws_api
                         .request_raw(peer_id.into(), &method, &[params.to_json()])
@@ -706,7 +726,7 @@ impl FedimintCli {
             }
             Command::Dev(DevCmd::WaitBlockCount { count: target }) => {
                 task::timeout(Duration::from_secs(30), async move {
-                    let client = cli.build_client_ng(&self.module_inits, None).await?;
+                    let client = self.client_open(&cli).await?;
                     loop {
                         let wallet = client.get_first_module::<WalletClientModule>();
                         let count = client
@@ -737,12 +757,8 @@ impl FedimintCli {
                 invite_code: InviteCode::new(url, peer, federation_id),
             }),
             Command::Dev(DevCmd::SessionCount) => {
-                let count = cli
-                    .build_client_ng(&self.module_inits, None)
-                    .await?
-                    .api()
-                    .session_count()
-                    .await?;
+                let client = self.client_open(&cli).await?;
+                let count = client.api().session_count().await?;
                 Ok(CliOutput::EpochCount { count })
             }
             Command::Dev(DevCmd::ConfigDecrypt {
@@ -790,16 +806,13 @@ impl FedimintCli {
                         "failed to decode transaction",
                     )?;
 
-                let tx = fedimint_core::transaction::Transaction::from_bytes(
-                    &bytes,
-                    cli.build_client_ng(&self.module_inits, None)
-                        .await?
-                        .decoders(),
-                )
-                .map_err_cli_msg(
-                    CliErrorKind::SerializationError,
-                    "failed to decode transaction",
-                )?;
+                let client = self.client_open(&cli).await?;
+                let tx =
+                    fedimint_core::transaction::Transaction::from_bytes(&bytes, client.decoders())
+                        .map_err_cli_msg(
+                            CliErrorKind::SerializationError,
+                            "failed to decode transaction",
+                        )?;
 
                 Ok(CliOutput::DecodeTransaction {
                     transaction: (format!("{tx:?}")),

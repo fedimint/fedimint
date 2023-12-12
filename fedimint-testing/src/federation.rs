@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::{ClientArc, ClientBuilder, FederationInfo};
+use fedimint_client::{Client, ClientArc};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::api::InviteCode;
 use fedimint_core::config::{
@@ -23,7 +23,6 @@ use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
 use fedimint_server::net::connect::{parse_host_port, Connector};
 use fedimint_server::net::peers::DelayCalculator;
 use fedimint_server::FedimintServer;
-use rand::thread_rng;
 use tokio_rustls::rustls;
 use tracing::info;
 
@@ -54,28 +53,20 @@ impl FederationTest {
 
     pub async fn new_client_with_config(&self, client_config: ClientConfig) -> ClientArc {
         info!(target: LOG_TEST, "Setting new client with config");
-        let mut client_builder = ClientBuilder::default();
+        let mut client_builder = Client::builder(fedimint_client::DatabaseSource::Fresh(
+            MemDatabase::new().into(),
+        ));
         client_builder.with_module_inits(self.client_init.clone());
         client_builder.with_primary_module(self.primary_client);
-        client_builder
-            .with_federation_info(FederationInfo::from_config(client_config).await.unwrap());
-        client_builder.with_raw_database(MemDatabase::new());
-        let client_secret = match client_builder
-            .load_decodable_client_secret::<[u8; 64]>()
+        let client_secret = Client::load_or_generate_client_secret(client_builder.db())
             .await
-        {
-            Ok(secret) => secret,
-            Err(_) => {
-                let secret = PlainRootSecretStrategy::random(&mut thread_rng());
-                client_builder
-                    .store_encodable_client_secret(secret)
-                    .await
-                    .expect("Storing client secret must work");
-                secret
-            }
-        };
+            .unwrap();
         client_builder
-            .build(PlainRootSecretStrategy::to_root_secret(&client_secret))
+            .join(
+                PlainRootSecretStrategy::to_root_secret(&client_secret),
+                client_config,
+                self.invite_code(),
+            )
             .await
             .expect("Failed to build client")
     }

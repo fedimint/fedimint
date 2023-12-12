@@ -293,6 +293,7 @@ impl Client {
 
     /// Download most recent valid backup found from the Federation
     pub async fn download_backup_from_federation(&self) -> Result<Option<ClientBackup>> {
+        debug!(target: LOG_CLIENT, "Downloading backup from the federation");
         let mut responses: Vec<_> = self
             .api
             .download_backup(&self.get_backup_id())

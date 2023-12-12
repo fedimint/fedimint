@@ -3,7 +3,8 @@ use std::path::Path;
 use anyhow::Context;
 use fedimint_core::db::IRawDatabase;
 use fedimint_core::{apply, async_trait_maybe_send};
-use tracing::info;
+use fedimint_logging::LOG_CLIENT;
+use tracing::{debug, info};
 
 /// Locked version of database
 ///
@@ -36,9 +37,10 @@ impl LockedBuilder {
 
             // TODO: Use https://github.com/cargo-bins/cargo-binstall/pull/1496 to
             // give user feedback only when the initial `new_try_exclusive` failed.
-            info!("Acquiring database lock");
+            info!(target: LOG_CLIENT, "Acquiring database lock");
             let lock =
                 fs_lock::FileLock::new_exclusive(file).context("Failed to acquire a lock file")?;
+            debug!(target: LOG_CLIENT, "Acquired database lock");
 
             Ok(LockedBuilder { lock })
         })
