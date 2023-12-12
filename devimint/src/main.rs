@@ -87,7 +87,7 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
     let iterations = 30;
     let mut reissues = Vec::with_capacity(iterations);
     for _ in 0..iterations {
-        let notes = cmd!(fed, "spend", "50000").out_json().await?["notes"]
+        let notes = cmd!(fed, "spend", "1000000").out_json().await?["notes"]
             .as_str()
             .context("note must be a string")?
             .to_owned();
@@ -106,7 +106,7 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
             .lightning_client_lock()
             .await?
             .add_invoice(tonic_lnd::lnrpc::Invoice {
-                value_msat: 100_000,
+                value_msat: 1_000_000,
                 ..Default::default()
             })
             .await?
@@ -136,7 +136,7 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
         let invoice = cmd!(
             fed,
             "ln-invoice",
-            "--amount=100000msat",
+            "--amount=1000000msat",
             "--description=incoming-over-lnd-gw"
         )
         .out_json()
@@ -253,7 +253,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "config-decrypt/encrypt failed"
     );
 
-    fed.pegin_gateway(99_999, &gw_cln).await?;
+    fed.pegin_gateway(10_000_000, &gw_cln).await?;
 
     let fed_id = fed.federation_id().await;
     let invite = fed.invite_code()?;
@@ -283,7 +283,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     info!("Testing LND can pay CLN directly");
     let invoice = cln
         .request(cln_rpc::model::requests::InvoiceRequest {
-            amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(42_000)),
+            amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(1_200_000)),
             description: "test".to_string(),
             label: "test2".to_string(),
             expiry: Some(60),
@@ -320,7 +320,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .lightning_client_lock()
         .await?
         .add_invoice(tonic_lnd::lnrpc::Invoice {
-            value_msat: 100_000,
+            value_msat: 1_000_000,
             ..Default::default()
         })
         .await?
@@ -373,8 +373,8 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     info!("Testing Client");
     // ## reissue e-cash
     info!("Testing reissuing e-cash");
-    const CLIENT_START_AMOUNT: u64 = 420000;
-    const CLIENT_SPEND_AMOUNT: u64 = 42;
+    const CLIENT_START_AMOUNT: u64 = 5_000_000_000;
+    const CLIENT_SPEND_AMOUNT: u64 = 1_100_000;
 
     let initial_client_balance = fed.client_balance().await?;
     assert_eq!(initial_client_balance, 0);
@@ -425,7 +425,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let client_post_spend_balance = fed.client_balance().await?;
     assert_eq!(client_post_spend_balance, CLIENT_START_AMOUNT);
 
-    let reissue_amount: u64 = 4096;
+    let reissue_amount: u64 = 409600;
 
     // Ensure that client can reissue after spending
     info!("Testing reissuing e-cash after spending");
@@ -483,7 +483,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .lightning_client_lock()
         .await?
         .add_invoice(tonic_lnd::lnrpc::Invoice {
-            value_msat: 3000,
+            value_msat: 1_200_000,
             ..Default::default()
         })
         .await?
@@ -504,7 +504,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .state();
     anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
 
-    // Assert balances changed by 3000 msat (amount sent) + 0 msat (fee)
+    // Assert balances changed by 1_200_000 msat (amount sent) + 0 msat (fee)
     let final_cln_outgoing_client_balance = fed.client_balance().await?;
     let final_cln_outgoing_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
@@ -512,7 +512,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_u64()
         .unwrap();
 
-    let expected_diff = 3000;
+    let expected_diff = 1_200_000;
     anyhow::ensure!(
         initial_client_balance - final_cln_outgoing_client_balance == expected_diff,
         "Client balance changed by {} on CLN outgoing payment, expected {expected_diff}",
@@ -527,7 +527,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let ln_response_val = cmd!(
         fed,
         "ln-invoice",
-        "--amount=1000msat",
+        "--amount=1100000msat",
         "--description='incoming-over-cln-gw'"
     )
     .out_json()
@@ -564,7 +564,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let operation_id = ln_invoice_response.operation_id;
     cmd!(fed, "await-invoice", operation_id).run().await?;
 
-    // Assert balances changed by 1000 msat
+    // Assert balances changed by 1100000 msat
     let final_cln_incoming_client_balance = fed.client_balance().await?;
     let final_cln_incoming_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
@@ -572,13 +572,13 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_u64()
         .unwrap();
     anyhow::ensure!(
-        final_cln_incoming_client_balance - final_cln_outgoing_client_balance == 1000,
-        "Client balance changed by {} on CLN incoming payment, expected 1000",
+        final_cln_incoming_client_balance - final_cln_outgoing_client_balance == 1100000,
+        "Client balance changed by {} on CLN incoming payment, expected 1100000",
         final_cln_incoming_client_balance - final_cln_outgoing_client_balance
     );
     anyhow::ensure!(
-        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == 1000,
-        "CLN Gateway balance changed by {} on CLN incoming payment, expected 1000",
+        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == 1100000,
+        "CLN Gateway balance changed by {} on CLN incoming payment, expected 1100000",
         final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance
     );
 
@@ -595,7 +595,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     let invoice = cln
         .request(cln_rpc::model::requests::InvoiceRequest {
-            amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(1000)),
+            amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(2_000_000)),
             description: "lnd-gw-to-cln".to_string(),
             label: "test-client".to_string(),
             expiry: Some(60),
@@ -622,7 +622,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         cln_rpc::model::responses::WaitanyinvoiceStatus::PAID
     ));
 
-    // Assert balances changed by 1000 msat (amount sent) + 0 msat (fee)
+    // Assert balances changed by 2_000_000 msat (amount sent) + 0 msat (fee)
     let final_lnd_outgoing_client_balance = fed.client_balance().await?;
     let final_lnd_outgoing_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
@@ -630,13 +630,13 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_u64()
         .unwrap();
     anyhow::ensure!(
-        final_cln_incoming_client_balance - final_lnd_outgoing_client_balance == 1000,
-        "Client balance changed by {} on LND outgoing payment, expected 1000",
+        final_cln_incoming_client_balance - final_lnd_outgoing_client_balance == 2_000_000,
+        "Client balance changed by {} on LND outgoing payment, expected 2_000_000",
         final_cln_incoming_client_balance - final_lnd_outgoing_client_balance
     );
     anyhow::ensure!(
-        final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == 1000,
-        "LND Gateway balance changed by {} on LND outgoing payment, expected 1000",
+        final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == 2_000_000,
+        "LND Gateway balance changed by {} on LND outgoing payment, expected 2_000_000",
         final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance
     );
 
@@ -645,7 +645,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let ln_response_val = cmd!(
         fed,
         "ln-invoice",
-        "--amount=1000msat",
+        "--amount=1300000msat",
         "--description='incoming-over-lnd-gw'"
     )
     .out_json()
@@ -679,7 +679,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let operation_id = ln_invoice_response.operation_id;
     cmd!(fed, "await-invoice", operation_id).run().await?;
 
-    // Assert balances changed by 1000 msat
+    // Assert balances changed by 1_300_000 msat
     let final_lnd_incoming_client_balance = fed.client_balance().await?;
     let final_lnd_incoming_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
@@ -687,13 +687,13 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_u64()
         .unwrap();
     anyhow::ensure!(
-        final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance == 1000,
-        "Client balance changed by {} on LND incoming payment, expected 1000",
+        final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance == 1_300_000,
+        "Client balance changed by {} on LND incoming payment, expected 1_300_000",
         final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance
     );
     anyhow::ensure!(
-        final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance == 1000,
-        "LND Gateway balance changed by {} on LND incoming payment, expected 1000",
+        final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance == 1_300_000,
+        "LND Gateway balance changed by {} on LND incoming payment, expected 1_300_000",
         final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance
     );
 
@@ -735,7 +735,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "--address",
         &address,
         "--amount",
-        "5000 sat"
+        "50000 sat"
     )
     .out_json()
     .await?;
@@ -759,10 +759,10 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     assert!(tx
         .output
         .iter()
-        .any(|o| o.script_pubkey == address.script_pubkey() && o.value == 5000));
+        .any(|o| o.script_pubkey == address.script_pubkey() && o.value == 50000));
 
     let post_withdraw_walletng_balance = fed.client_balance().await?;
-    let expected_wallet_balance = initial_walletng_balance - 5_000_000 - (fees_sat * 1000);
+    let expected_wallet_balance = initial_walletng_balance - 50_000_000 - (fees_sat * 1000);
 
     assert_eq!(post_withdraw_walletng_balance, expected_wallet_balance);
 
