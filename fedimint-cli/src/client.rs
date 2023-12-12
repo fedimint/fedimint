@@ -138,12 +138,6 @@ pub enum ClientCmd {
         // TODO: Can we make it `*Map<String, String>` and avoid custom parsing?
         metadata: Vec<String>,
     },
-    /// Wipe the state of the client (mostly for testing purposes)
-    #[clap(hide = true)]
-    Wipe {
-        #[clap(long)]
-        force: bool,
-    },
     /// Discover the common api version to use to communicate with the
     /// federation
     #[clap(hide = true)]
@@ -461,13 +455,6 @@ pub async fn handle_command(
         }
         ClientCmd::Restore { .. } => {
             panic!("Has to be handled before initializing client")
-        }
-        ClientCmd::Wipe { force } => {
-            if !force {
-                bail!("This will wipe the state of the client irrecoverably. Use `--force` to proceed.")
-            }
-            client.wipe_state().await?;
-            Ok(serde_json::to_value(()).unwrap())
         }
         ClientCmd::PrintSecret => {
             let entropy = client.get_decoded_client_secret::<Vec<u8>>().await?;

@@ -208,36 +208,6 @@ impl Client {
         Ok(())
     }
 
-    /// Wipe the client state (including module state)
-    pub async fn wipe_state(&self) -> Result<()> {
-        let mut dbtx = self.db().begin_transaction().await;
-        info!(target: LOG_CLIENT, "Wiping client state");
-        for (id, kind, module) in self.modules.iter_modules() {
-            if !module.supports_backup() {
-                continue;
-            }
-
-            info!(
-                target: LOG_CLIENT,
-                module_kind = %kind,
-                module_id = id,
-                "Wiping module state"
-            );
-            module
-                .wipe(
-                    &mut dbtx.to_ref_with_prefix_module_id(id).into_nc(),
-                    id,
-                    self.executor.clone(),
-                )
-                .await?;
-        }
-        dbtx.commit_tx().await;
-
-        debug!(target: LOG_CLIENT, "Wiping client state complete");
-
-        Ok(())
-    }
-
     /// Upload `backup` to federation
     pub async fn upload_backup(&self, backup: EncryptedClientBackup) -> Result<()> {
         let size = backup.len();
