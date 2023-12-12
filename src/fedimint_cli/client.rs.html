@@ -733,6 +733,42 @@
 <a href="#733" id="733">733</a>
 <a href="#734" id="734">734</a>
 <a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -755,7 +791,9 @@
     PayType,
 };
 <span class="kw">use </span>fedimint_ln_common::contracts::ContractId;
-<span class="kw">use </span>fedimint_mint_client::{MintClientModule, OOBNotes};
+<span class="kw">use </span>fedimint_mint_client::{
+    MintClientModule, OOBNotes, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
+};
 <span class="kw">use </span>fedimint_wallet_client::{WalletClientModule, WithdrawState};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>itertools::Itertools;
@@ -764,7 +802,7 @@
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>time::format_description::well_known::iso8601;
 <span class="kw">use </span>time::OffsetDateTime;
-<span class="kw">use </span>tracing::{debug, info};
+<span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="kw">use crate</span>::{metadata_from_clap_cli, LnInvoiceResponse};
 
@@ -793,7 +831,18 @@
     <span class="doccomment">/// Reissue notes received from a third party to avoid double spends
     </span>Reissue { oob_notes: OOBNotes },
     <span class="doccomment">/// Prepare notes to send to a third party as a payment
-    </span>Spend { amount: Amount },
+    </span>Spend {
+        <span class="doccomment">/// The amount of e-cash to spend
+        </span>amount: Amount,
+        <span class="doccomment">/// If the exact amount cannot be represented, return e-cash of a higher
+        /// value instead of failing
+        </span><span class="attr">#[clap(long)]
+        </span>allow_overpay: bool,
+        <span class="doccomment">/// After how many seconds we will try to reclaim the e-cash if it
+        /// hasn&#39;t been redeemed by the recipient. Defaults to one week.
+        </span><span class="attr">#[clap(long, default_value_t = <span class="number">60 </span>* <span class="number">60 </span>* <span class="number">24 </span>* <span class="number">7</span>)]
+        </span>timeout: u64,
+    },
     <span class="doccomment">/// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
     </span>Validate { oob_notes: OOBNotes },
@@ -923,11 +972,34 @@
 
             <span class="prelude-val">Ok</span>(serde_json::to_value(amount).unwrap())
         }
-        ClientCmd::Spend { amount } =&gt; {
-            <span class="kw">let </span>(operation, notes) = client
-                .get_first_module::&lt;MintClientModule&gt;()
-                .spend_notes(amount, Duration::from_secs(<span class="number">3600</span>), ())
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+        ClientCmd::Spend {
+            amount,
+            allow_overpay,
+            timeout,
+        } =&gt; {
+            <span class="macro">warn!</span>(<span class="string">&quot;The client will try to double-spend these notes after the duration specified by the --timeout option to recover any unclaimed e-cash.&quot;</span>);
+
+            <span class="kw">let </span>mint_module = client.get_first_module::&lt;MintClientModule&gt;();
+            <span class="kw">let </span>timeout = Duration::from_secs(timeout);
+            <span class="kw">let </span>(operation, notes) = <span class="kw">if </span>allow_overpay {
+                <span class="kw">let </span>(operation, notes) = mint_module
+                    .spend_notes_with_selector(<span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount, amount, timeout, ())
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="kw">let </span>overspend_amount = notes.total_amount() - amount;
+                <span class="kw">if </span>overspend_amount != Amount::ZERO {
+                    <span class="macro">warn!</span>(
+                        <span class="string">&quot;Selected notes {} worth more than requested&quot;</span>,
+                        overspend_amount
+                    );
+                }
+
+                (operation, notes)
+            } <span class="kw">else </span>{
+                mint_module
+                    .spend_notes_with_selector(<span class="kw-2">&amp;</span>SelectNotesWithExactAmount, amount, timeout, ())
+                    .<span class="kw">await</span><span class="question-mark">?
+            </span>};
             <span class="macro">info!</span>(<span class="string">&quot;Spend e-cash operation: {operation}&quot;</span>);
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
