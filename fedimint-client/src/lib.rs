@@ -1371,6 +1371,9 @@ pub struct ClientBuilder {
 
 pub enum DatabaseSource {
     Fresh(Database),
+    #[deprecated(
+        note = "DatabaseSource::Reuse was a workound and is deprecated now. See https://github.com/fedimint/fedimint/pull/3781#issuecomment-1835319259"
+    )]
     Reuse(ClientArc),
 }
 
@@ -1446,7 +1449,11 @@ impl ClientBuilder {
     /// ## Panics
     /// If the old and new client use different config since that might make the
     /// DB incompatible.
+    #[deprecated(
+        note = "DatabaseSource::Reuse was a workound and LN Gateway should stop using it. See https://github.com/fedimint/fedimint/pull/3781#issuecomment-1835319259"
+    )]
     pub fn with_old_client_database(&mut self, client: ClientArc) {
+        #[allow(deprecated)]
         let was_replaced = self.db.replace(DatabaseSource::Reuse(client)).is_some();
         assert!(
             !was_replaced,
@@ -1460,6 +1467,7 @@ impl ClientBuilder {
     ) -> anyhow::Result<()> {
         let mut dbtx = match self.db.as_ref().ok_or(anyhow!("No database provided"))? {
             DatabaseSource::Fresh(db) => db.begin_transaction().await,
+            #[allow(deprecated)]
             DatabaseSource::Reuse(client) => client.db().begin_transaction().await,
         };
 
@@ -1479,6 +1487,7 @@ impl ClientBuilder {
     pub async fn load_decodable_client_secret<T: Decodable>(&mut self) -> anyhow::Result<T> {
         let mut dbtx = match self.db.as_ref().ok_or(anyhow!("No database provided"))? {
             DatabaseSource::Fresh(db) => db.begin_transaction().await,
+            #[allow(deprecated)]
             DatabaseSource::Reuse(client) => client.db().begin_transaction().await,
         };
 
@@ -1498,6 +1507,7 @@ impl ClientBuilder {
         if let Some(db) = self.db.as_ref() {
             let db = match db {
                 DatabaseSource::Fresh(db) => db,
+                #[allow(deprecated)]
                 DatabaseSource::Reuse(client) => &client.inner.db,
             };
             if let Some(config) = get_config_from_db(db).await {
@@ -1569,6 +1579,7 @@ impl ClientBuilder {
 
                 (config, decoders, db)
             }
+            #[allow(deprecated)]
             DatabaseSource::Reuse(client) => {
                 let db = client.inner.db.clone();
                 let decoders = client.inner.decoders.clone();
