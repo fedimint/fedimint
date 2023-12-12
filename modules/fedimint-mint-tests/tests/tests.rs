@@ -1,6 +1,8 @@
 use std::io::Cursor;
+use std::time::Duration;
 
 use fedimint_client::backup::{ClientBackup, Metadata};
+use fedimint_core::task::sleep;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -12,6 +14,7 @@ use fedimint_mint_client::{
 use fedimint_mint_common::config::MintGenParams;
 use fedimint_mint_server::MintInit;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
+use tracing::info;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(MintClientInit, MintInit, MintGenParams::default());
@@ -69,6 +72,38 @@ async fn backup_encode_decode_roundtrip() -> anyhow::Result<()> {
     assert_eq!(backup, backup_decoded);
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
+    // Print notes for client1
+    let fed = fixtures().new_fed().await;
+    let client = fed.new_client().await;
+    let dummy_module = client.get_first_module::<DummyClientModule>();
+    let (op, outpoint) = dummy_module.print_money(sats(1000)).await?;
+    client.await_primary_module_output(op, outpoint).await?;
+
+    // Spend from client1 to client2
+    let mint_module = client.get_first_module::<MintClientModule>();
+    let (op, _) = mint_module.spend_notes(sats(750), TIMEOUT, ()).await?;
+    let sub1 = &mut mint_module.subscribe_spend_notes(op).await?.into_stream();
+    assert_eq!(sub1.ok().await?, SpendOOBState::Created);
+
+    mint_module.try_cancel_spend_notes(op).await;
+    assert_eq!(sub1.ok().await?, SpendOOBState::UserCanceledProcessing);
+    assert_eq!(sub1.ok().await?, SpendOOBState::UserCanceledSuccess);
+
+    info!("Refund tx accepted, waiting for refunded e-cash");
+
+    // FIXME: UserCanceledSuccess should mean the money is in our wallet
+    for _ in 0..200 {
+        sleep(Duration::from_millis(100)).await;
+        if client.get_balance().await == sats(1000) {
+            return Ok(());
+        }
+    }
+
+    panic!("Did not receive refund in time");
 }
 
 #[tokio::test(flavor = "multi_thread")]
