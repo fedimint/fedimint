@@ -20,7 +20,7 @@ pub mod util;
 
 use std::net::TcpListener;
 use std::path::PathBuf;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::Duration;
 
 use anyhow::bail;
 use rand::{thread_rng, Rng};
@@ -28,13 +28,10 @@ use tracing::warn;
 
 use crate::data::DataDir;
 
-type UnixTimstap = u64;
+type UnixTimestamp = u64;
 
-pub fn now_ts() -> UnixTimstap {
-    fedimint_core::time::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("localt time out of valid range")
-        .as_secs()
+pub fn now_ts() -> UnixTimestamp {
+    fedimint_core::time::duration_since_epoch().as_secs()
 }
 
 pub fn data_dir() -> anyhow::Result<PathBuf> {
