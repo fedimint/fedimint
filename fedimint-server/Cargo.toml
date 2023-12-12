@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-server"
-version = "0.2.0-rc8"
+version = "0.2.0-rc9"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint is the main consensus code for processing transactions and REST API"
@@ -14,7 +14,7 @@ name = "fedimint_server"
 path = "src/lib.rs"
 
 [dependencies]
-fedimint-aead = { version = "0.2.0-rc8", path = "../crypto/aead" }
+fedimint-aead = { version = "0.2.0-rc9", path = "../crypto/aead" }
 anyhow = "1.0.66"
 async-channel = "1.8.0"
 async-trait = "0.1.73"
@@ -25,8 +25,8 @@ bytes = "1.4.0"
 hbbft = { workspace = true }
 futures = "0.3.24"
 itertools = "0.10.5"
-fedimint-core = { version = "0.2.0-rc8", path = "../fedimint-core" }
-fedimint-logging = { version = "0.2.0-rc8", path = "../fedimint-logging" }
+fedimint-core = { version = "0.2.0-rc9", path = "../fedimint-core" }
+fedimint-logging = { version = "0.2.0-rc9", path = "../fedimint-logging" }
 rand = "0.8"
 rcgen = "=0.10.0"
 secp256k1-zkp = { version = "0.7.0", features = [ "global-context", "bitcoin_hashes" ] }
@@ -35,7 +35,7 @@ serde_json = "1.0.91"
 sha3 = "0.10.5"
 strum = "0.24"
 strum_macros = "0.24"
-tbs = { package = "fedimint-tbs", version = "0.2.0-rc8", path = "../crypto/tbs" }
+tbs = { package = "fedimint-tbs", version = "0.2.0-rc9", path = "../crypto/tbs" }
 thiserror = "1.0.39"
 tracing ="0.1.37"
 url = { version = "2.3.1", features = ["serde"] }
@@ -61,4 +61,4 @@ fedimint-testing = { path = "../fedimint-testing" }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
 
 [build-dependencies]
-fedimint-build = { version = "0.2.0-rc8", path = "../fedimint-build" }
+fedimint-build = { version = "0.2.0-rc9", path = "../fedimint-build" }
