@@ -1739,6 +1739,15 @@ async fn exec_user_command(exec: Vec<ffi::OsString>) -> Result<(), anyhow::Error
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    pub const CODE_VERSION: &str = env!("FEDIMINT_BUILD_CODE_VERSION");
+
+    let mut args = std::env::args();
+    if let Some(ref arg) = args.nth(1) {
+        if arg.as_str() == "version-hash" {
+            println!("{CODE_VERSION}");
+            std::process::exit(0);
+        }
+    }
     match handle_command().await {
         Ok(r) => Ok(r),
         Err(e) => {
