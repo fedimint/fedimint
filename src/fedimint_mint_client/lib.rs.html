@@ -1762,6 +1762,26 @@
 <a href="#1762" id="1762">1762</a>
 <a href="#1763" id="1763">1763</a>
 <a href="#1764" id="1764">1764</a>
+<a href="#1765" id="1765">1765</a>
+<a href="#1766" id="1766">1766</a>
+<a href="#1767" id="1767">1767</a>
+<a href="#1768" id="1768">1768</a>
+<a href="#1769" id="1769">1769</a>
+<a href="#1770" id="1770">1770</a>
+<a href="#1771" id="1771">1771</a>
+<a href="#1772" id="1772">1772</a>
+<a href="#1773" id="1773">1773</a>
+<a href="#1774" id="1774">1774</a>
+<a href="#1775" id="1775">1775</a>
+<a href="#1776" id="1776">1776</a>
+<a href="#1777" id="1777">1777</a>
+<a href="#1778" id="1778">1778</a>
+<a href="#1779" id="1779">1779</a>
+<a href="#1780" id="1780">1780</a>
+<a href="#1781" id="1781">1781</a>
+<a href="#1782" id="1782">1782</a>
+<a href="#1783" id="1783">1783</a>
+<a href="#1784" id="1784">1784</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1797,13 +1817,15 @@
 <span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+<span class="kw">use </span>fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-<span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
+<span class="kw">use </span>fedimint_core::util::{BoxFuture, BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
     TieredMulti, TieredSummary, TransactionId,
@@ -1823,7 +1845,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::backup::recovery::MintRestoreInProgressState;
 <span class="kw">use </span><span class="kw">crate</span>::backup::{EcashBackup, EcashBackupV0};
 <span class="kw">use </span><span class="kw">crate</span>::client_db::{
-    NextECashNoteIndexKey, NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix,
+    CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
+    NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix,
 };
 <span class="kw">use </span><span class="kw">crate</span>::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
@@ -2075,6 +2098,16 @@
                         <span class="string">&quot;NextECashNoteIndex&quot;
                     </span>);
                 }
+                DbKeyPrefix::CancelledOOBSpend =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        CancelledOOBSpendKeyPrefix,
+                        CancelledOOBSpendKey,
+                        (),
+                        mint_client_items,
+                        <span class="string">&quot;CancelledOOBSpendKey&quot;
+                    </span>);
+                }
             }
         }
 
@@ -2092,14 +2125,12 @@
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
-        <span class="kw">let </span>(cancel_oob_payment_bc, <span class="kw">_</span>) = tokio::sync::broadcast::channel(<span class="number">16</span>);
         <span class="prelude-val">Ok</span>(MintClientModule {
             federation_id: <span class="kw-2">*</span>args.federation_id(),
             cfg: args.cfg().clone(),
             secret: args.module_root_secret().clone(),
             secp: Secp256k1::new(),
             notifier: args.notifier().clone(),
-            cancel_oob_payment_bc,
             client_ctx: args.context(),
         })
     }
@@ -2137,7 +2168,6 @@
     secret: DerivableSecret,
     secp: Secp256k1&lt;All&gt;,
     notifier: ModuleNotifier&lt;DynGlobalClientContext, MintClientStateMachines&gt;,
-    cancel_oob_payment_bc: tokio::sync::broadcast::Sender&lt;OperationId&gt;,
     client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
 }
 
@@ -2148,12 +2178,18 @@
     <span class="kw">pub </span>tbs_pks: Tiered&lt;AggregatePublicKey&gt;,
     <span class="kw">pub </span>peer_tbs_pks: BTreeMap&lt;PeerId, Tiered&lt;tbs::PublicKeyShare&gt;&gt;,
     <span class="kw">pub </span>secret: DerivableSecret,
-    <span class="kw">pub </span>cancel_oob_payment_bc: tokio::sync::broadcast::Sender&lt;OperationId&gt;,
+    <span class="comment">// FIXME: putting a DB ref here is an antipattern, global context should become more powerful
+    // but we need to consider it more carefully as its APIs will be harder to change.
+    </span><span class="kw">pub </span>module_db: Database,
 }
 
 <span class="kw">impl </span>MintClientContext {
-    <span class="kw">fn </span>subscribe_cancel_oob_payment(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; tokio::sync::broadcast::Receiver&lt;OperationId&gt; {
-        <span class="self">self</span>.cancel_oob_payment_bc.subscribe()
+    <span class="kw">fn </span>await_cancel_oob_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; BoxFuture&lt;<span class="lifetime">&#39;static</span>, ()&gt; {
+        <span class="kw">let </span>db = <span class="self">self</span>.module_db.clone();
+        Box::pin(<span class="kw">async move </span>{
+            db.wait_key_exists(<span class="kw-2">&amp;</span>CancelledOOBSpendKey(operation_id))
+                .<span class="kw">await</span>;
+        })
     }
 }
 
@@ -2173,7 +2209,7 @@
             tbs_pks: <span class="self">self</span>.cfg.tbs_pks.clone(),
             peer_tbs_pks: <span class="self">self</span>.cfg.peer_tbs_pks.clone(),
             secret: <span class="self">self</span>.secret.clone(),
-            cancel_oob_payment_bc: <span class="self">self</span>.cancel_oob_payment_bc.clone(),
+            module_db: <span class="self">self</span>.client_ctx.module_db().clone(),
         }
     }
 
@@ -2996,8 +3032,12 @@
     /// spent this operation will fail which can be observed using
     /// [`MintClientModule::subscribe_spend_notes`].
     </span><span class="kw">pub async fn </span>try_cancel_spend_notes(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) {
-        <span class="comment">// TODO: make robust by writing to the DB, this can fail
-        </span><span class="kw">let _ </span>= <span class="self">self</span>.cancel_oob_payment_bc.send(operation_id);
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>CancelledOOBSpendKey(operation_id), <span class="kw-2">&amp;</span>())
+            .<span class="kw">await</span>;
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = dbtx.commit_tx_result().<span class="kw">await </span>{
+            <span class="macro">warn!</span>(<span class="string">&quot;We tried to cancel the same OOB spend multiple times concurrently: {e}&quot;</span>);
+        }
     }
 
     <span class="doccomment">/// Subscribe to updates on the progress of a raw e-cash spend operation

@@ -50,7 +50,28 @@
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::core::OperationId;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, Amount};
 <span class="kw">use </span>fedimint_mint_common::Nonce;
 <span class="kw">use </span>serde::Serialize;
@@ -63,6 +84,7 @@
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     Note = <span class="number">0x20</span>,
     NextECashNoteIndex = <span class="number">0x2a</span>,
+    CancelledOOBSpend = <span class="number">0x2b</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -101,5 +123,23 @@
 <span class="macro">impl_db_lookup!</span>(
     key = NextECashNoteIndexKey,
     query_prefix = NextECashNoteIndexKeyPrefix
+);
+
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>CancelledOOBSpendKey(<span class="kw">pub </span>OperationId);
+
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>CancelledOOBSpendKeyPrefix;
+
+<span class="macro">impl_db_record!</span>(
+    key = CancelledOOBSpendKey,
+    value = (),
+    db_prefix = DbKeyPrefix::CancelledOOBSpend,
+    notify_on_modify = <span class="bool-val">true</span>,
+);
+
+<span class="macro">impl_db_lookup!</span>(
+    key = CancelledOOBSpendKey,
+    query_prefix = CancelledOOBSpendKeyPrefix,
 );
 </code></pre></div></section></main></body></html>
