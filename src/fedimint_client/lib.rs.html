@@ -1804,6 +1804,17 @@
 <a href="#1804" id="1804">1804</a>
 <a href="#1805" id="1805">1805</a>
 <a href="#1806" id="1806">1806</a>
+<a href="#1807" id="1807">1807</a>
+<a href="#1808" id="1808">1808</a>
+<a href="#1809" id="1809">1809</a>
+<a href="#1810" id="1810">1810</a>
+<a href="#1811" id="1811">1811</a>
+<a href="#1812" id="1812">1812</a>
+<a href="#1813" id="1813">1813</a>
+<a href="#1814" id="1814">1814</a>
+<a href="#1815" id="1815">1815</a>
+<a href="#1816" id="1816">1816</a>
+<a href="#1817" id="1817">1817</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3177,7 +3188,10 @@
 
 <span class="kw">pub enum </span>DatabaseSource {
     Fresh(Database),
-    Reuse(ClientArc),
+    <span class="attr">#[deprecated(
+        note = <span class="string">&quot;DatabaseSource::Reuse was a workound and is deprecated now. See https://github.com/fedimint/fedimint/pull/3781#issuecomment-1835319259&quot;
+    </span>)]
+    </span>Reuse(ClientArc),
 }
 
 <span class="kw">impl </span>ClientBuilder {
@@ -3252,8 +3266,12 @@
     /// ## Panics
     /// If the old and new client use different config since that might make the
     /// DB incompatible.
+    </span><span class="attr">#[deprecated(
+        note = <span class="string">&quot;DatabaseSource::Reuse was a workound and LN Gateway should stop using it. See https://github.com/fedimint/fedimint/pull/3781#issuecomment-1835319259&quot;
+    </span>)]
     </span><span class="kw">pub fn </span>with_old_client_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>, client: ClientArc) {
-        <span class="kw">let </span>was_replaced = <span class="self">self</span>.db.replace(DatabaseSource::Reuse(client)).is_some();
+        <span class="attr">#[allow(deprecated)]
+        </span><span class="kw">let </span>was_replaced = <span class="self">self</span>.db.replace(DatabaseSource::Reuse(client)).is_some();
         <span class="macro">assert!</span>(
             !was_replaced,
             <span class="string">&quot;Only one database can be given to the builder.&quot;
@@ -3266,7 +3284,8 @@
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="kw">match </span><span class="self">self</span>.db.as_ref().ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No database provided&quot;</span>))<span class="question-mark">? </span>{
             DatabaseSource::Fresh(db) =&gt; db.begin_transaction().<span class="kw">await</span>,
-            DatabaseSource::Reuse(client) =&gt; client.db().begin_transaction().<span class="kw">await</span>,
+            <span class="attr">#[allow(deprecated)]
+            </span>DatabaseSource::Reuse(client) =&gt; client.db().begin_transaction().<span class="kw">await</span>,
         };
 
         <span class="comment">// Don&#39;t overwrite an existing secret
@@ -3285,7 +3304,8 @@
     <span class="kw">pub async fn </span>load_decodable_client_secret&lt;T: Decodable&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;T&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="kw">match </span><span class="self">self</span>.db.as_ref().ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No database provided&quot;</span>))<span class="question-mark">? </span>{
             DatabaseSource::Fresh(db) =&gt; db.begin_transaction().<span class="kw">await</span>,
-            DatabaseSource::Reuse(client) =&gt; client.db().begin_transaction().<span class="kw">await</span>,
+            <span class="attr">#[allow(deprecated)]
+            </span>DatabaseSource::Reuse(client) =&gt; client.db().begin_transaction().<span class="kw">await</span>,
         };
 
         <span class="kw">let </span>client_secret = dbtx.get_value(<span class="kw-2">&amp;</span>EncodedClientSecretKey).<span class="kw">await</span>;
@@ -3304,7 +3324,8 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(db) = <span class="self">self</span>.db.as_ref() {
             <span class="kw">let </span>db = <span class="kw">match </span>db {
                 DatabaseSource::Fresh(db) =&gt; db,
-                DatabaseSource::Reuse(client) =&gt; <span class="kw-2">&amp;</span>client.inner.db,
+                <span class="attr">#[allow(deprecated)]
+                </span>DatabaseSource::Reuse(client) =&gt; <span class="kw-2">&amp;</span>client.inner.db,
             };
             <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = get_config_from_db(db).<span class="kw">await </span>{
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(config.global.federation_id());
@@ -3375,7 +3396,8 @@
 
                 (config, decoders, db)
             }
-            DatabaseSource::Reuse(client) =&gt; {
+            <span class="attr">#[allow(deprecated)]
+            </span>DatabaseSource::Reuse(client) =&gt; {
                 <span class="kw">let </span>db = client.inner.db.clone();
                 <span class="kw">let </span>decoders = client.inner.decoders.clone();
                 <span class="kw">let </span>config = get_config(<span class="kw-2">&amp;</span>db, <span class="self">self</span>.config.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
