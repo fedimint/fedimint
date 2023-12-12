@@ -8,7 +8,8 @@ use fedimint_core::api::{
 use fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
-    LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT,
+    GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
+    REGISTER_GATEWAY_ENDPOINT,
 };
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::query::UnionResponses;
@@ -18,7 +19,7 @@ use itertools::Itertools;
 
 use crate::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 use crate::contracts::outgoing::OutgoingContractAccount;
-use crate::contracts::{ContractId, FundedContract, Preimage};
+use crate::contracts::{ContractId, DecryptedPreimageStatus, FundedContract, Preimage};
 use crate::{ContractAccount, LightningGateway, LightningGatewayAnnouncement};
 
 #[apply(async_trait_maybe_send!)]
@@ -31,6 +32,10 @@ pub trait LnFederationApi {
         &self,
         contract: ContractId,
     ) -> FederationResult<ContractAccount>;
+    async fn get_decrypted_preimage_status(
+        &self,
+        contract: ContractId,
+    ) -> FederationResult<(IncomingContractAccount, DecryptedPreimageStatus)>;
     async fn wait_preimage_decrypted(
         &self,
         contract: ContractId,
@@ -100,6 +105,17 @@ where
     ) -> FederationResult<ContractAccount> {
         self.request_current_consensus(
             AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT.to_string(),
+            ApiRequestErased::new(contract),
+        )
+        .await
+    }
+
+    async fn get_decrypted_preimage_status(
+        &self,
+        contract: ContractId,
+    ) -> FederationResult<(IncomingContractAccount, DecryptedPreimageStatus)> {
+        self.request_current_consensus(
+            GET_DECRYPTED_PREIMAGE_STATUS.to_string(),
             ApiRequestErased::new(contract),
         )
         .await

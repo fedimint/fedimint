@@ -33,6 +33,7 @@ pub const VERSION_ENDPOINT: &str = "version";
 pub const AWAIT_ACCOUNT_ENDPOINT: &str = "await_account";
 pub const AWAIT_BLOCK_HEIGHT_ENDPOINT: &str = "await_block_height";
 pub const AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT: &str = "await_outgoing_contract_cancelled";
+pub const GET_DECRYPTED_PREIMAGE_STATUS: &str = "get_decrypted_preimage_status";
 pub const AWAIT_PREIMAGE_DECRYPTION: &str = "await_preimage_decryption";
 pub const AWAIT_OFFER_ENDPOINT: &str = "await_offer";
 pub const AWAIT_TRANSACTION_ENDPOINT: &str = "await_transaction";

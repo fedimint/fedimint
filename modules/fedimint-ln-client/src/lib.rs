@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::iter::once;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use anyhow::{bail, ensure, format_err, Context};
 use async_stream::stream;
@@ -757,9 +757,7 @@ impl LightningClientModule {
             final_route_hints.append(&mut two_hop_route_hints);
         }
 
-        let duration_since_epoch = fedimint_core::time::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap();
+        let duration_since_epoch = fedimint_core::time::duration_since_epoch();
 
         let mut invoice_builder = InvoiceBuilder::new(network_to_currency(network))
             .amount_milli_satoshis(amount.msats)
