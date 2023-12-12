@@ -7,6 +7,7 @@ use std::io::Error;
 use std::num::ParseIntError;
 use std::str::FromStr;
 
+use anyhow::bail;
 use bitcoin::Denomination;
 use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
@@ -85,6 +86,8 @@ impl FromStr for PeerId {
     }
 }
 
+pub const SATS_PER_BITCOIN: u64 = 100_000_000;
+
 /// Represents an amount of BTC inside the system. The base denomination is
 /// milli satoshi for now, this is also why the amount type from rust-bitcoin
 /// isn't used instead.
@@ -118,9 +121,13 @@ impl Amount {
         Amount::from_msats(sats * 1000)
     }
 
+    pub const fn from_bitcoins(bitcoins: u64) -> Amount {
+        Amount::from_sats(bitcoins * SATS_PER_BITCOIN)
+    }
+
     pub fn from_str_in(s: &str, denom: Denomination) -> Result<Amount, ParseAmountError> {
         if let Denomination::MilliSatoshi = denom {
-            return Self::from_str(s);
+            return Ok(Self::from_msats(s.parse()?));
         }
         let btc_amt = bitcoin::util::amount::Amount::from_str_in(s, denom)?;
         Ok(Self::from(btc_amt))
@@ -130,6 +137,23 @@ impl Amount {
         Amount {
             msats: self.msats.saturating_sub(other.msats),
         }
+    }
+
+    // Makes sure we're dealing with a precision of satoshi or higher
+    pub fn ensure_sats_precision(&self) -> anyhow::Result<()> {
+        if self.msats % 1000 != 0 {
+            bail!("Amount is using a precision smaller than satoshi, cannot convert to satoshis");
+        }
+        Ok(())
+    }
+
+    pub fn try_into_sats(&self) -> anyhow::Result<u64> {
+        self.ensure_sats_precision()?;
+        Ok(self.msats / 1000)
+    }
+
+    pub const fn sats_round_down(&self) -> u64 {
+        self.msats / 1000
     }
 }
 
@@ -146,6 +170,26 @@ pub fn sats(amount: u64) -> Amount {
     Amount::from_sats(amount)
 }
 
+pub mod amount {
+    pub mod serde {
+        pub mod as_msat {
+            //! Serialize and deserialize [`Amount`](crate::Amount) as integers
+            //! denominated in milli-satoshi. Use with
+            //! `#[serde(with = "amount::serde::as_msat")]`.
+
+            use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+            pub fn serialize<S: Serializer>(a: &crate::Amount, s: S) -> Result<S::Ok, S::Error> {
+                u64::serialize(&a.msats, s)
+            }
+
+            pub fn deserialize<'d, D: Deserializer<'d>>(d: D) -> Result<crate::Amount, D::Error> {
+                Ok(crate::Amount::from_msats(u64::deserialize(d)?))
+            }
+        }
+    }
+}
+
 /// Amount of bitcoin to send, or "all" to send all available funds
 #[derive(Debug, Eq, PartialEq, Copy, Hash, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -156,15 +200,14 @@ pub enum BitcoinAmountOrAll {
 }
 
 impl FromStr for BitcoinAmountOrAll {
-    type Err = bitcoin::util::amount::ParseAmountError;
+    type Err = anyhow::Error;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         if s == "all" {
             Ok(BitcoinAmountOrAll::All)
         } else {
-            bitcoin::Amount::from_str(s)
-                .map(BitcoinAmountOrAll::Amount)
-                .map_err(|_| bitcoin::util::amount::ParseAmountError::InvalidFormat)
+            let amount = crate::Amount::from_str(s)?;
+            Ok(BitcoinAmountOrAll::Amount(amount.try_into()?))
         }
     }
 }
@@ -382,7 +425,13 @@ impl FromStr for Amount {
     type Err = ParseAmountError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Amount { msats: s.parse()? })
+        if let Some(i) = s.find(char::is_alphabetic) {
+            let (amt, denom) = s.split_at(i);
+            Amount::from_str_in(amt.trim(), denom.trim().parse()?)
+        } else {
+            // default to millisatoshi
+            Amount::from_str_in(s.trim(), bitcoin::Denomination::MilliSatoshi)
+        }
     }
 }
 
@@ -392,6 +441,14 @@ impl From<bitcoin::Amount> for Amount {
         Amount {
             msats: amt.to_sat() * 1000,
         }
+    }
+}
+
+impl TryFrom<Amount> for bitcoin::Amount {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Amount) -> anyhow::Result<Self> {
+        value.try_into_sats().map(bitcoin::Amount::from_sat)
     }
 }
 
@@ -480,6 +537,44 @@ mod tests {
         let feerate = Feerate { sats_per_kvb: 1000 };
         assert_eq!(bitcoin::Amount::from_sat(25), feerate.calculate_fee(100));
         assert_eq!(bitcoin::Amount::from_sat(26), feerate.calculate_fee(101));
+    }
+
+    #[test]
+    fn test_amount_parsing() {
+        // msats
+        assert_eq!(Amount::from_msats(123), Amount::from_str("123").unwrap());
+        assert_eq!(
+            Amount::from_msats(123),
+            Amount::from_str("123msat").unwrap()
+        );
+        assert_eq!(
+            Amount::from_msats(123),
+            Amount::from_str("123 msat").unwrap()
+        );
+        assert_eq!(
+            Amount::from_msats(123),
+            Amount::from_str("123 msats").unwrap()
+        );
+        // sats
+        assert_eq!(Amount::from_sats(123), Amount::from_str("123sat").unwrap());
+        assert_eq!(Amount::from_sats(123), Amount::from_str("123 sat").unwrap());
+        assert_eq!(
+            Amount::from_sats(123),
+            Amount::from_str("123satoshi").unwrap()
+        );
+        assert_eq!(
+            Amount::from_sats(123),
+            Amount::from_str("123satoshis").unwrap()
+        );
+        // btc
+        assert_eq!(
+            Amount::from_bitcoins(123),
+            Amount::from_str("123btc").unwrap()
+        );
+        assert_eq!(
+            Amount::from_sats(12_345_600_000),
+            Amount::from_str("123.456btc").unwrap()
+        );
     }
 
     #[test]
