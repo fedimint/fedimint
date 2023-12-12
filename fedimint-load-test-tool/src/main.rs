@@ -892,7 +892,10 @@ async fn do_self_payment(
         client_create_invoice(client, invoice_amount, event_sender).await?;
     let pay_invoice_time = fedimint_core::time::now();
     let lightning_module = client.get_first_module::<LightningClientModule>();
-    lightning_module.pay_bolt11_invoice(invoice, ()).await?;
+    let gateway = lightning_module.select_active_gateway_opt().await;
+    lightning_module
+        .pay_bolt11_invoice(gateway, invoice, ())
+        .await?;
     wait_invoice_payment(
         prefix,
         "gateway",
@@ -917,7 +920,10 @@ async fn do_partner_ping_pong(
         client_create_invoice(partner, invoice_amount, event_sender).await?;
     let pay_invoice_time = fedimint_core::time::now();
     let lightning_module = client.get_first_module::<LightningClientModule>();
-    lightning_module.pay_bolt11_invoice(invoice, ()).await?;
+    let gateway = lightning_module.select_active_gateway_opt().await;
+    lightning_module
+        .pay_bolt11_invoice(gateway, invoice, ())
+        .await?;
     wait_invoice_payment(
         prefix,
         "gateway",
@@ -932,8 +938,9 @@ async fn do_partner_ping_pong(
         client_create_invoice(client, invoice_amount, event_sender).await?;
     let pay_invoice_time = fedimint_core::time::now();
     let partner_lightning_module = partner.get_first_module::<LightningClientModule>();
+    let gateway = partner_lightning_module.select_active_gateway_opt().await;
     partner_lightning_module
-        .pay_bolt11_invoice(invoice, ())
+        .pay_bolt11_invoice(gateway, invoice, ())
         .await?;
     wait_invoice_payment(
         prefix,

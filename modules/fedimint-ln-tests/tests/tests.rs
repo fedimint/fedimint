@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use assert_matches::assert_matches;
+use fedimint_client::Client;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -32,6 +33,15 @@ async fn gateway(fixtures: &Fixtures, fed: &FederationTest) -> GatewayTest {
         .await;
     gateway.connect_fed(fed).await;
     gateway
+}
+
+async fn pay_invoice(
+    client: &Client,
+    invoice: Bolt11Invoice,
+) -> anyhow::Result<OutgoingLightningPayment> {
+    let ln_module = client.get_first_module::<LightningClientModule>();
+    let gateway = ln_module.select_active_gateway_opt().await;
+    ln_module.pay_bolt11_invoice(gateway, invoice, ()).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -124,10 +134,7 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
         payment_type,
         contract_id: _,
         fee: _,
-    } = client2
-        .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice, ())
-        .await?;
+    } = pay_invoice(&client2, invoice).await?;
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
@@ -181,10 +188,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client2
-        .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice.clone(), ())
-        .await?;
+    } = pay_invoice(&client2, invoice.clone()).await?;
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
@@ -208,10 +212,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client2
-        .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice, ())
-        .await?;
+    } = pay_invoice(&client2, invoice).await?;
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
@@ -256,10 +257,7 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client1
-        .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice.clone(), ())
-        .await?;
+    } = pay_invoice(&client1, invoice.clone()).await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client1
@@ -281,10 +279,7 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client2
-        .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice.clone(), ())
-        .await?;
+    } = pay_invoice(&client2, invoice.clone()).await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client2
@@ -325,10 +320,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client
-        .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice.clone(), ())
-        .await?;
+    } = pay_invoice(&client, invoice.clone()).await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client
@@ -352,10 +344,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client
-        .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice, ())
-        .await?;
+    } = pay_invoice(&client, invoice).await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client
@@ -407,10 +396,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client2
-        .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice, ())
-        .await?;
+    } = pay_invoice(&client2, invoice).await?;
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
@@ -446,10 +432,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client2
-        .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(invoice, ())
-        .await?;
+    } = pay_invoice(&client2, invoice).await?;
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
@@ -486,11 +469,7 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     )
     .unwrap();
 
-    let error = client1
-        .get_first_module::<LightningClientModule>()
-        .pay_bolt11_invoice(signet_invoice, ())
-        .await
-        .unwrap_err();
+    let error = pay_invoice(&client1, signet_invoice).await.unwrap_err();
     assert_eq!(
         error.to_string(),
         "Invalid invoice currency: expected=Regtest, got=Signet"

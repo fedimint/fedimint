@@ -169,12 +169,14 @@ mod tests {
         }
 
         let bolt11 = faucet::generate_invoice(11).await?;
+
+        let gateway = lightning_module.select_active_gateway_opt().await;
         let OutgoingLightningPayment {
             payment_type,
             contract_id: _,
             fee: _,
         } = lightning_module
-            .pay_bolt11_invoice(bolt11.parse()?, ())
+            .pay_bolt11_invoice(gateway, bolt11.parse()?, ())
             .await?;
         let PayType::Lightning(operation_id) = payment_type else {
             unreachable!("paying invoice over lightning");

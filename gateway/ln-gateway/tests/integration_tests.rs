@@ -54,6 +54,14 @@ use reqwest::StatusCode;
 use secp256k1::PublicKey;
 use tracing::info;
 
+async fn pay_invoice(
+    ln_module: &LightningClientModule,
+    invoice: Bolt11Invoice,
+) -> anyhow::Result<OutgoingLightningPayment> {
+    let gateway = ln_module.select_active_gateway_opt().await;
+    ln_module.pay_bolt11_invoice(gateway, invoice, ()).await
+}
+
 fn fixtures() -> Fixtures {
     info!(target: LOG_TEST, "Setting up fixtures");
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
@@ -146,9 +154,7 @@ async fn pay_valid_invoice(
         payment_type,
         contract_id,
         fee: _,
-    } = user_lightning_module
-        .pay_bolt11_invoice(invoice.clone(), ())
-        .await?;
+    } = pay_invoice(user_lightning_module, invoice.clone()).await?;
     match payment_type {
         PayType::Lightning(pay_op) => {
             let mut pay_sub = user_lightning_module
@@ -272,10 +278,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                 payment_type: _,
                 contract_id,
                 fee: _,
-            } = user_client
-                .get_first_module::<LightningClientModule>()
-                .pay_bolt11_invoice(invoice.clone(), ())
-                .await?;
+            } = pay_invoice(&user_client.get_first_module(), invoice.clone()).await?;
 
             // Try to directly claim the outgoing contract with an invalid preimage
             let gateway_module = gateway.get_first_module::<GatewayClientModule>();
@@ -346,9 +349,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
                 payment_type,
                 contract_id,
                 fee: _,
-            } = lightning_module
-                .pay_bolt11_invoice(invoice.clone(), ())
-                .await?;
+            } = pay_invoice(&lightning_module, invoice.clone()).await?;
             match payment_type {
                 PayType::Lightning(pay_op) => {
                     let mut pay_sub = lightning_module
@@ -716,9 +717,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                 payment_type,
                 contract_id,
                 fee: _,
-            } = lightning_module
-                .pay_bolt11_invoice(invoice.clone(), ())
-                .await?;
+            } = pay_invoice(&lightning_module, invoice.clone()).await?;
             match payment_type {
                 PayType::Lightning(pay_op) => {
                     let mut pay_sub = lightning_module
@@ -1162,10 +1161,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
                 payment_type,
                 contract_id: _,
                 fee,
-            } = client1
-                .get_first_module::<LightningClientModule>()
-                .pay_bolt11_invoice(invoice.clone(), ())
-                .await?;
+            } = pay_invoice(&client1.get_first_module(), invoice.clone()).await?;
             match payment_type {
                 PayType::Lightning(pay_op) => {
                     let mut pay_sub = client1

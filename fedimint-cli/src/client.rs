@@ -254,11 +254,14 @@ pub async fn handle_command(
             let lightning_module = client.get_first_module::<LightningClientModule>();
             lightning_module.select_active_gateway().await?;
 
+            let gateway = lightning_module.select_active_gateway_opt().await;
             let OutgoingLightningPayment {
                 payment_type,
                 contract_id,
                 fee,
-            } = lightning_module.pay_bolt11_invoice(bolt11, ()).await?;
+            } = lightning_module
+                .pay_bolt11_invoice(gateway, bolt11, ())
+                .await?;
             let operation_id = payment_type.operation_id();
             info!("Gateway fee: {fee}, payment operation id: {operation_id}");
             if finish_in_background {
