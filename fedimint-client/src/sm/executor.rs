@@ -21,7 +21,7 @@ use futures::future::select_all;
 use futures::stream::StreamExt;
 use tokio::select;
 use tokio::sync::{oneshot, Mutex};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn, Instrument};
 
 use super::state::StateTransitionFunction;
 use crate::sm::notifier::Notifier;
@@ -434,102 +434,112 @@ where
             };
             transitions = remaining_transitions;
             let (transition_outcome, state, transition_fn, meta) = completed_result;
-            // TODO: add a INFO version without all the details
-            debug!(
-                ?state,
-                transition_outcome = ?AbbreviateJson(&transition_outcome),
-                "Executing state transition"
-            );
+            let operation_id = state.operation_id();
+            // info level because spans only log when any event happens within a span.
+            let span = tracing::info_span!("state_machine_transition", %operation_id);
+            async {
+                info!("Executing state transition");
+                debug!(
+                    ?state,
+                    transition_outcome = ?AbbreviateJson(&transition_outcome),
+                );
 
-            let active_or_inactive_state = self
-                .db
-                .autocommit(
-                    |dbtx, _| {
-                        let state = state.clone();
-                        let transition_fn = transition_fn.clone();
-                        let transition_outcome = transition_outcome.clone();
-                        Box::pin(async move {
-                            let new_state = transition_fn(
-                                &mut ClientSMDatabaseTransaction::new(
-                                    &mut dbtx.to_ref(),
-                                    state.module_instance_id(),
-                                ),
-                                transition_outcome,
-                                state.clone(),
-                            )
-                            .await;
-                            dbtx.remove_entry(&ActiveStateKey::from_state(state.clone()))
+                let active_or_inactive_state = self
+                    .db
+                    .autocommit(
+                        |dbtx, _| {
+                            let state = state.clone();
+                            let transition_fn = transition_fn.clone();
+                            let transition_outcome = transition_outcome.clone();
+                            Box::pin(async move {
+                                let new_state = transition_fn(
+                                    &mut ClientSMDatabaseTransaction::new(
+                                        &mut dbtx.to_ref(),
+                                        state.module_instance_id(),
+                                    ),
+                                    transition_outcome,
+                                    state.clone(),
+                                )
                                 .await;
-                            dbtx.insert_entry(
-                                &InactiveStateKey::from_state(state.clone()),
-                                &meta.into_inactive(),
-                            )
-                            .await;
+                                dbtx.remove_entry(&ActiveStateKey::from_state(state.clone()))
+                                    .await;
+                                dbtx.insert_entry(
+                                    &InactiveStateKey::from_state(state.clone()),
+                                    &meta.into_inactive(),
+                                )
+                                .await;
 
-                            let context = &self
-                                .module_contexts
-                                .get(&state.module_instance_id())
-                                .expect("Unknown module");
+                                let context = &self
+                                    .module_contexts
+                                    .get(&state.module_instance_id())
+                                    .expect("Unknown module");
 
-                            let global_context = global_context_gen(
-                                state.module_instance_id(),
-                                state.operation_id(),
-                            );
-                            if new_state.is_terminal(context, &global_context) {
-                                // TODO: log state machine id or something
-                                debug!("State machine reached terminal state");
-                                let k = InactiveStateKey::from_state(new_state.clone());
-                                let v = ActiveState::new().into_inactive();
-                                dbtx.insert_entry(&k, &v).await;
-                                Ok(ActiveOrInactiveState::Inactive {
-                                    dyn_state: new_state,
-                                })
-                            } else {
-                                let k = ActiveStateKey::from_state(new_state.clone());
-                                let v = ActiveState::new();
-                                dbtx.insert_entry(&k, &v).await;
-                                Ok(ActiveOrInactiveState::Active {
-                                    dyn_state: new_state,
-                                    active_state: v,
-                                })
-                            }
-                        })
-                    },
-                    Some(100),
-                )
-                .await
-                .map_err(|e| match e {
-                    AutocommitError::CommitFailed {
-                        last_error,
-                        attempts,
-                    } => last_error.context(format!("Failed to commit after {attempts} attempts")),
-                    AutocommitError::ClosureError { error, .. } => error,
-                })?;
+                                let global_context = global_context_gen(
+                                    state.module_instance_id(),
+                                    state.operation_id(),
+                                );
+                                if new_state.is_terminal(context, &global_context) {
+                                    // TODO: log state machine id or something
+                                    debug!("State machine reached terminal state");
+                                    let k = InactiveStateKey::from_state(new_state.clone());
+                                    let v = ActiveState::new().into_inactive();
+                                    dbtx.insert_entry(&k, &v).await;
+                                    Ok(ActiveOrInactiveState::Inactive {
+                                        dyn_state: new_state,
+                                    })
+                                } else {
+                                    let k = ActiveStateKey::from_state(new_state.clone());
+                                    let v = ActiveState::new();
+                                    dbtx.insert_entry(&k, &v).await;
+                                    Ok(ActiveOrInactiveState::Active {
+                                        dyn_state: new_state,
+                                        active_state: v,
+                                    })
+                                }
+                            })
+                        },
+                        Some(100),
+                    )
+                    .await
+                    .map_err(|e| match e {
+                        AutocommitError::CommitFailed {
+                            last_error,
+                            attempts,
+                        } => last_error
+                            .context(format!("Failed to commit after {attempts} attempts")),
+                        AutocommitError::ClosureError { error, .. } => error,
+                    })?;
 
-            // TODO: add a INFO version without all the details
-            debug!(
-                outcome = ?active_or_inactive_state,
-                "Finished executing state transition"
-            );
+                // TODO: add a INFO version without all the details
+                debug!(
+                    outcome = ?active_or_inactive_state,
+                    "Finished executing state transition"
+                );
 
-            active_state_count -= 1;
-            match active_or_inactive_state {
-                ActiveOrInactiveState::Active {
-                    dyn_state,
-                    active_state,
-                } => {
-                    if let Some(transition) =
-                        self.get_transition_for(dyn_state.clone(), active_state, global_context_gen)
-                    {
-                        active_state_count += 1;
-                        transitions.push(transition);
+                active_state_count -= 1;
+                match active_or_inactive_state {
+                    ActiveOrInactiveState::Active {
+                        dyn_state,
+                        active_state,
+                    } => {
+                        if let Some(transition) = self.get_transition_for(
+                            dyn_state.clone(),
+                            active_state,
+                            global_context_gen,
+                        ) {
+                            active_state_count += 1;
+                            transitions.push(transition);
+                        }
+                        self.notifier.notify(dyn_state);
                     }
-                    self.notifier.notify(dyn_state);
+                    ActiveOrInactiveState::Inactive { dyn_state } => {
+                        self.notifier.notify(dyn_state);
+                    }
                 }
-                ActiveOrInactiveState::Inactive { dyn_state } => {
-                    self.notifier.notify(dyn_state);
-                }
+                anyhow::Ok(())
             }
+            .instrument(span)
+            .await?
         }
     }
 
