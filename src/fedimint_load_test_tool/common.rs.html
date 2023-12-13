@@ -408,6 +408,9 @@
 <a href="#408" id="408">408</a>
 <a href="#409" id="409">409</a>
 <a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -639,11 +642,14 @@
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>m = fedimint_core::time::now();
     <span class="kw">let </span>lightning_module = <span class="kw-2">&amp;</span>client.get_first_module::&lt;LightningClientModule&gt;();
+    <span class="kw">let </span>gateway = lightning_module.select_active_gateway_opt().<span class="kw">await</span>;
     <span class="kw">let </span>OutgoingLightningPayment {
         payment_type,
         contract_id: <span class="kw">_</span>,
         fee: <span class="kw">_</span>,
-    } = lightning_module.pay_bolt11_invoice(invoice, ()).<span class="kw">await</span><span class="question-mark">?</span>;
+    } = lightning_module
+        .pay_bolt11_invoice(gateway, invoice, ())
+        .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>operation_id = <span class="kw">match </span>payment_type {
         fedimint_ln_client::PayType::Internal(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Internal payment not expected&quot;</span>),
         fedimint_ln_client::PayType::Lightning(operation_id) =&gt; operation_id,

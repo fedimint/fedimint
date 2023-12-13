@@ -1517,6 +1517,22 @@
 <a href="#1517" id="1517">1517</a>
 <a href="#1518" id="1518">1518</a>
 <a href="#1519" id="1519">1519</a>
+<a href="#1520" id="1520">1520</a>
+<a href="#1521" id="1521">1521</a>
+<a href="#1522" id="1522">1522</a>
+<a href="#1523" id="1523">1523</a>
+<a href="#1524" id="1524">1524</a>
+<a href="#1525" id="1525">1525</a>
+<a href="#1526" id="1526">1526</a>
+<a href="#1527" id="1527">1527</a>
+<a href="#1528" id="1528">1528</a>
+<a href="#1529" id="1529">1529</a>
+<a href="#1530" id="1530">1530</a>
+<a href="#1531" id="1531">1531</a>
+<a href="#1532" id="1532">1532</a>
+<a href="#1533" id="1533">1533</a>
+<a href="#1534" id="1534">1534</a>
+<a href="#1535" id="1535">1535</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -1583,7 +1599,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tracing::{debug, error};
+<span class="kw">use </span>tracing::{debug, error, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     LightningGatewayKeyPrefix, MetaOverrides, MetaOverridesKey, MetaOverridesPrefix,
@@ -2338,6 +2354,16 @@
         ))
     }
 
+    <span class="kw">pub async fn </span>select_active_gateway_opt(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;LightningGateway&gt; {
+        <span class="kw">match </span><span class="self">self</span>.select_active_gateway().<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(gw) =&gt; <span class="prelude-val">Some</span>(gw),
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="macro">warn!</span>(<span class="question-mark">?</span>e, <span class="string">&quot;Could not select a gateway&quot;</span>);
+                <span class="prelude-val">None
+            </span>}
+        }
+    }
+
     <span class="doccomment">/// The set active gateway, or a random one if none has been set
     </span><span class="kw">pub async fn </span>select_active_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;LightningGateway&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
@@ -2526,9 +2552,15 @@
         <span class="prelude-val">Ok</span>(gateways)
     }
 
-    <span class="doccomment">/// Pays a LN invoice with our available funds
+    <span class="doccomment">/// Pays a LN invoice with our available funds using the supplied `gateway`
+    /// if one was provided and the invoice is not an internal one. If none is
+    /// supplied only internal payments are possible.
+    ///
+    /// The `gateway` can be acquired by calling
+    /// [`LightningClientModule::select_active_gateway`].
     </span><span class="kw">pub async fn </span>pay_bolt11_invoice&lt;M: Serialize + MaybeSend + MaybeSync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        maybe_gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
         invoice: Bolt11Invoice,
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;OutgoingLightningPayment&gt; {
@@ -2585,12 +2617,12 @@
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             (PayType::Internal(operation_id), output, contract_id)
         } <span class="kw">else </span>{
-            <span class="kw">let </span>active_gateway = <span class="self">self</span>.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>gateway = maybe_gateway.context(<span class="string">&quot;No LN gateway available&quot;</span>)<span class="question-mark">?</span>;
             <span class="kw">let </span>(output, contract_id) = <span class="self">self
                 </span>.create_outgoing_output(
                     operation_id,
                     invoice.clone(),
-                    active_gateway,
+                    gateway,
                     <span class="self">self</span>.client_ctx.get_config().global.federation_id(),
                     rand::rngs::OsRng,
                 )

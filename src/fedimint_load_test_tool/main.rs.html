@@ -1294,6 +1294,13 @@
 <a href="#1294" id="1294">1294</a>
 <a href="#1295" id="1295">1295</a>
 <a href="#1296" id="1296">1296</a>
+<a href="#1297" id="1297">1297</a>
+<a href="#1298" id="1298">1298</a>
+<a href="#1299" id="1299">1299</a>
+<a href="#1300" id="1300">1300</a>
+<a href="#1301" id="1301">1301</a>
+<a href="#1302" id="1302">1302</a>
+<a href="#1303" id="1303">1303</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -2188,7 +2195,10 @@
         client_create_invoice(client, invoice_amount, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
     <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-    lightning_module.pay_bolt11_invoice(invoice, ()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>gateway = lightning_module.select_active_gateway_opt().<span class="kw">await</span>;
+    lightning_module
+        .pay_bolt11_invoice(gateway, invoice, ())
+        .<span class="kw">await</span><span class="question-mark">?</span>;
     wait_invoice_payment(
         prefix,
         <span class="string">&quot;gateway&quot;</span>,
@@ -2213,7 +2223,10 @@
         client_create_invoice(partner, invoice_amount, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
     <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-    lightning_module.pay_bolt11_invoice(invoice, ()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>gateway = lightning_module.select_active_gateway_opt().<span class="kw">await</span>;
+    lightning_module
+        .pay_bolt11_invoice(gateway, invoice, ())
+        .<span class="kw">await</span><span class="question-mark">?</span>;
     wait_invoice_payment(
         prefix,
         <span class="string">&quot;gateway&quot;</span>,
@@ -2228,8 +2241,9 @@
         client_create_invoice(client, invoice_amount, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
     <span class="kw">let </span>partner_lightning_module = partner.get_first_module::&lt;LightningClientModule&gt;();
+    <span class="kw">let </span>gateway = partner_lightning_module.select_active_gateway_opt().<span class="kw">await</span>;
     partner_lightning_module
-        .pay_bolt11_invoice(invoice, ())
+        .pay_bolt11_invoice(gateway, invoice, ())
         .<span class="kw">await</span><span class="question-mark">?</span>;
     wait_invoice_payment(
         prefix,

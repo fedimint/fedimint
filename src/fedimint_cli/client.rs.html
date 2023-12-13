@@ -769,6 +769,9 @@
 <a href="#769" id="769">769</a>
 <a href="#770" id="770">770</a>
 <a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -1116,11 +1119,14 @@
             <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
             lightning_module.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
+            <span class="kw">let </span>gateway = lightning_module.select_active_gateway_opt().<span class="kw">await</span>;
             <span class="kw">let </span>OutgoingLightningPayment {
                 payment_type,
                 contract_id,
                 fee,
-            } = lightning_module.pay_bolt11_invoice(bolt11, ()).<span class="kw">await</span><span class="question-mark">?</span>;
+            } = lightning_module
+                .pay_bolt11_invoice(gateway, bolt11, ())
+                .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>operation_id = payment_type.operation_id();
             <span class="macro">info!</span>(<span class="string">&quot;Gateway fee: {fee}, payment operation id: {operation_id}&quot;</span>);
             <span class="kw">if </span>finish_in_background {
