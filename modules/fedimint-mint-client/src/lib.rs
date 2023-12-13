@@ -33,13 +33,15 @@ use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{AutocommitError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-use fedimint_core::util::{BoxStream, NextOrPending};
+use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
     TieredMulti, TieredSummary, TransactionId,
@@ -59,7 +61,8 @@ use tracing::{debug, info, warn};
 use crate::backup::recovery::MintRestoreInProgressState;
 use crate::backup::{EcashBackup, EcashBackupV0};
 use crate::client_db::{
-    NextECashNoteIndexKey, NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix,
+    CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
+    NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix,
 };
 use crate::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
@@ -311,6 +314,16 @@ impl ModuleInit for MintClientInit {
                         "NextECashNoteIndex"
                     );
                 }
+                DbKeyPrefix::CancelledOOBSpend => {
+                    push_db_pair_items!(
+                        dbtx,
+                        CancelledOOBSpendKeyPrefix,
+                        CancelledOOBSpendKey,
+                        (),
+                        mint_client_items,
+                        "CancelledOOBSpendKey"
+                    );
+                }
             }
         }
 
@@ -328,14 +341,12 @@ impl ClientModuleInit for MintClientInit {
     }
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
-        let (cancel_oob_payment_bc, _) = tokio::sync::broadcast::channel(16);
         Ok(MintClientModule {
             federation_id: *args.federation_id(),
             cfg: args.cfg().clone(),
             secret: args.module_root_secret().clone(),
             secp: Secp256k1::new(),
             notifier: args.notifier().clone(),
-            cancel_oob_payment_bc,
             client_ctx: args.context(),
         })
     }
@@ -373,7 +384,6 @@ pub struct MintClientModule {
     secret: DerivableSecret,
     secp: Secp256k1<All>,
     notifier: ModuleNotifier<DynGlobalClientContext, MintClientStateMachines>,
-    cancel_oob_payment_bc: tokio::sync::broadcast::Sender<OperationId>,
     client_ctx: ClientContext<Self>,
 }
 
@@ -384,12 +394,18 @@ pub struct MintClientContext {
     pub tbs_pks: Tiered<AggregatePublicKey>,
     pub peer_tbs_pks: BTreeMap<PeerId, Tiered<tbs::PublicKeyShare>>,
     pub secret: DerivableSecret,
-    pub cancel_oob_payment_bc: tokio::sync::broadcast::Sender<OperationId>,
+    // FIXME: putting a DB ref here is an antipattern, global context should become more powerful
+    // but we need to consider it more carefully as its APIs will be harder to change.
+    pub module_db: Database,
 }
 
 impl MintClientContext {
-    fn subscribe_cancel_oob_payment(&self) -> tokio::sync::broadcast::Receiver<OperationId> {
-        self.cancel_oob_payment_bc.subscribe()
+    fn await_cancel_oob_payment(&self, operation_id: OperationId) -> BoxFuture<'static, ()> {
+        let db = self.module_db.clone();
+        Box::pin(async move {
+            db.wait_key_exists(&CancelledOOBSpendKey(operation_id))
+                .await;
+        })
     }
 }
 
@@ -409,7 +425,7 @@ impl ClientModule for MintClientModule {
             tbs_pks: self.cfg.tbs_pks.clone(),
             peer_tbs_pks: self.cfg.peer_tbs_pks.clone(),
             secret: self.secret.clone(),
-            cancel_oob_payment_bc: self.cancel_oob_payment_bc.clone(),
+            module_db: self.client_ctx.module_db().clone(),
         }
     }
 
@@ -1232,8 +1248,12 @@ impl MintClientModule {
     /// spent this operation will fail which can be observed using
     /// [`MintClientModule::subscribe_spend_notes`].
     pub async fn try_cancel_spend_notes(&self, operation_id: OperationId) {
-        // TODO: make robust by writing to the DB, this can fail
-        let _ = self.cancel_oob_payment_bc.send(operation_id);
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        dbtx.insert_entry(&CancelledOOBSpendKey(operation_id), &())
+            .await;
+        if let Err(e) = dbtx.commit_tx_result().await {
+            warn!("We tried to cancel the same OOB spend multiple times concurrently: {e}");
+        }
     }
 
     /// Subscribe to updates on the progress of a raw e-cash spend operation

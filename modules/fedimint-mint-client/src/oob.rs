@@ -93,12 +93,11 @@ impl MintOOBStatesCreated {
         context: &MintClientContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<MintOOBStateMachine>> {
-        // TODO: pass refund contexts into state transitions
         let user_cancel_gc = global_context.clone();
         let timeout_cancel_gc = global_context.clone();
         vec![
             StateTransition::new(
-                await_user_cancels(operation_id, context.subscribe_cancel_oob_payment()),
+                context.await_cancel_oob_payment(operation_id),
                 move |dbtx, (), state| {
                     Box::pin(transition_user_cancel(state, dbtx, user_cancel_gc.clone()))
                 },
@@ -115,18 +114,6 @@ impl MintOOBStatesCreated {
             ),
         ]
     }
-}
-
-async fn await_user_cancels(
-    operation_id: OperationId,
-    mut oob_cancel_receiver: tokio::sync::broadcast::Receiver<OperationId>,
-) {
-    while let Ok(op) = oob_cancel_receiver.recv().await {
-        if operation_id == op {
-            return;
-        }
-    }
-    std::future::pending().await
 }
 
 async fn transition_user_cancel(
