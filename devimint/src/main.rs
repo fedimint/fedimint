@@ -1948,8 +1948,12 @@ async fn main() -> Result<()> {
     match handle_command().await {
         Ok(r) => Ok(r),
         Err(e) => {
-            let ready_file = PathBuf::from(env::var("FM_TEST_DIR")?).join("ready");
-            write_overwrite_async(ready_file, "ERROR").await?;
+            if let Ok(test_dir) = env::var("FM_TEST_DIR") {
+                let ready_file = PathBuf::from(test_dir).join("ready");
+                write_overwrite_async(ready_file, "ERROR").await?;
+            } else {
+                warn!(target: LOG_DEVIMINT, "FM_TEST_DIR was not set");
+            }
             Err(e)
         }
     }
