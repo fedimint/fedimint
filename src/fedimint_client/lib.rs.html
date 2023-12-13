@@ -1773,48 +1773,6 @@
 <a href="#1773" id="1773">1773</a>
 <a href="#1774" id="1774">1774</a>
 <a href="#1775" id="1775">1775</a>
-<a href="#1776" id="1776">1776</a>
-<a href="#1777" id="1777">1777</a>
-<a href="#1778" id="1778">1778</a>
-<a href="#1779" id="1779">1779</a>
-<a href="#1780" id="1780">1780</a>
-<a href="#1781" id="1781">1781</a>
-<a href="#1782" id="1782">1782</a>
-<a href="#1783" id="1783">1783</a>
-<a href="#1784" id="1784">1784</a>
-<a href="#1785" id="1785">1785</a>
-<a href="#1786" id="1786">1786</a>
-<a href="#1787" id="1787">1787</a>
-<a href="#1788" id="1788">1788</a>
-<a href="#1789" id="1789">1789</a>
-<a href="#1790" id="1790">1790</a>
-<a href="#1791" id="1791">1791</a>
-<a href="#1792" id="1792">1792</a>
-<a href="#1793" id="1793">1793</a>
-<a href="#1794" id="1794">1794</a>
-<a href="#1795" id="1795">1795</a>
-<a href="#1796" id="1796">1796</a>
-<a href="#1797" id="1797">1797</a>
-<a href="#1798" id="1798">1798</a>
-<a href="#1799" id="1799">1799</a>
-<a href="#1800" id="1800">1800</a>
-<a href="#1801" id="1801">1801</a>
-<a href="#1802" id="1802">1802</a>
-<a href="#1803" id="1803">1803</a>
-<a href="#1804" id="1804">1804</a>
-<a href="#1805" id="1805">1805</a>
-<a href="#1806" id="1806">1806</a>
-<a href="#1807" id="1807">1807</a>
-<a href="#1808" id="1808">1808</a>
-<a href="#1809" id="1809">1809</a>
-<a href="#1810" id="1810">1810</a>
-<a href="#1811" id="1811">1811</a>
-<a href="#1812" id="1812">1812</a>
-<a href="#1813" id="1813">1813</a>
-<a href="#1814" id="1814">1814</a>
-<a href="#1815" id="1815">1815</a>
-<a href="#1816" id="1816">1816</a>
-<a href="#1817" id="1817">1817</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1891,7 +1849,7 @@
 <span class="kw">use </span>std::sync::{Arc, Weak};
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context};
+<span class="kw">use </span>anyhow::{anyhow, bail, Context};
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>db::{
     CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix,
@@ -1909,7 +1867,7 @@
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
 };
 <span class="kw">use </span>fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, IRawDatabase,
+    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1926,11 +1884,12 @@
 };
 <span class="kw">pub use </span>fedimint_derive_secret <span class="kw">as </span>derivable_secret;
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>module::{DynClientModule, FinalClient};
 <span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>secp256k1_zkp::{PublicKey, Secp256k1};
-<span class="kw">use </span>secret::DeriveableSecretClientExt;
+<span class="kw">use </span>secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy <span class="kw">as _</span>};
 <span class="kw">use </span>thiserror::Error;
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>tokio::runtime::{Handle <span class="kw">as </span>RuntimeHandle, RuntimeFlavor};
@@ -2448,8 +2407,8 @@
 <span class="kw">impl </span>Client {
     <span class="doccomment">/// Initialize a client builder that can be configured to create a new
     /// client.
-    </span><span class="kw">pub fn </span>builder() -&gt; ClientBuilder {
-        ClientBuilder::default()
+    </span><span class="kw">pub fn </span>builder(db: DatabaseSource) -&gt; ClientBuilder {
+        ClientBuilder::new(db)
     }
 
     <span class="kw">pub fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IGlobalFederationApi + <span class="lifetime">&#39;static</span>) {
@@ -2458,6 +2417,78 @@
 
     <span class="kw">pub fn </span>api_clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynGlobalApi {
         <span class="self">self</span>.api.clone()
+    }
+
+    <span class="kw">pub async fn </span>get_config_from_db(db: <span class="kw-2">&amp;</span>Database) -&gt; <span class="prelude-ty">Option</span>&lt;ClientConfig&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+        <span class="attr">#[allow(clippy::let_and_return)]
+        </span><span class="kw">let </span>config = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigKeyPrefix)
+            .<span class="kw">await
+            </span>.next()
+            .<span class="kw">await
+            </span>.map(|(<span class="kw">_</span>, config)| config);
+        config
+    }
+
+    <span class="kw">pub async fn </span>store_encodable_client_secret&lt;T: Encodable&gt;(
+        db: <span class="kw-2">&amp;</span>Database,
+        secret: T,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+
+        <span class="comment">// Don&#39;t overwrite an existing secret
+        </span><span class="kw">match </span>dbtx.get_value(<span class="kw-2">&amp;</span>EncodedClientSecretKey).<span class="kw">await </span>{
+            <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Encoded client secret already exists, cannot overwrite&quot;</span>),
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="kw">let </span>encoded_secret = T::consensus_encode_to_vec(<span class="kw-2">&amp;</span>secret);
+                dbtx.insert_entry(<span class="kw-2">&amp;</span>EncodedClientSecretKey, <span class="kw-2">&amp;</span>encoded_secret)
+                    .<span class="kw">await</span>;
+                dbtx.commit_tx().<span class="kw">await</span>;
+                <span class="prelude-val">Ok</span>(())
+            }
+        }
+    }
+
+    <span class="kw">pub async fn </span>load_decodable_client_secret&lt;T: Decodable&gt;(db: <span class="kw-2">&amp;</span>Database) -&gt; anyhow::Result&lt;T&gt; {
+        <span class="kw">let </span><span class="prelude-val">Some</span>(secret) = <span class="self">Self</span>::load_decodable_client_secret_opt(db).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+            <span class="macro">bail!</span>(<span class="string">&quot;Encoded client secret not present in DB&quot;</span>)
+        };
+
+        <span class="prelude-val">Ok</span>(secret)
+    }
+    <span class="kw">pub async fn </span>load_decodable_client_secret_opt&lt;T: Decodable&gt;(
+        db: <span class="kw-2">&amp;</span>Database,
+    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;T&gt;&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
+
+        <span class="kw">let </span>client_secret = dbtx.get_value(<span class="kw-2">&amp;</span>EncodedClientSecretKey).<span class="kw">await</span>;
+
+        <span class="prelude-val">Ok</span>(<span class="kw">match </span>client_secret {
+            <span class="prelude-val">Some</span>(client_secret) =&gt; <span class="prelude-val">Some</span>(
+                T::consensus_decode(<span class="kw-2">&amp;mut </span>client_secret.as_slice(), <span class="kw-2">&amp;</span>Default::default())
+                    .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;Decoding failed: {e}&quot;</span>))<span class="question-mark">?</span>,
+            ),
+            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
+        })
+    }
+
+    <span class="kw">pub async fn </span>load_or_generate_client_secret(db: <span class="kw-2">&amp;</span>Database) -&gt; anyhow::Result&lt;[u8; <span class="number">64</span>]&gt; {
+        <span class="kw">let </span>client_secret = <span class="kw">match </span><span class="self">Self</span>::load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;(db).<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(secret) =&gt; secret,
+            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                <span class="kw">let </span>secret = PlainRootSecretStrategy::random(<span class="kw-2">&amp;mut </span>thread_rng());
+                <span class="self">Self</span>::store_encodable_client_secret(db, secret)
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;Storing client secret must work&quot;</span>);
+                secret
+            }
+        };
+        <span class="prelude-val">Ok</span>(client_secret)
+    }
+
+    <span class="kw">pub async fn </span>is_initialized(db: <span class="kw-2">&amp;</span>Database) -&gt; bool {
+        <span class="self">Self</span>::get_config_from_db(db).<span class="kw">await</span>.is_some()
     }
 
     <span class="kw">pub async fn </span>start_executor(<span class="self">self</span>: <span class="kw-2">&amp;</span>Arc&lt;<span class="self">Self</span>&gt;) {
@@ -3178,12 +3209,11 @@
     }
 }
 
-<span class="attr">#[derive(Default)]
-</span><span class="kw">pub struct </span>ClientBuilder {
+<span class="kw">pub struct </span>ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
-    config: <span class="prelude-ty">Option</span>&lt;FederationInfo&gt;,
-    db: <span class="prelude-ty">Option</span>&lt;DatabaseSource&gt;,
+    db: DatabaseSource,
+    stopped: bool,
 }
 
 <span class="kw">pub enum </span>DatabaseSource {
@@ -3194,7 +3224,26 @@
     </span>Reuse(ClientArc),
 }
 
+<span class="kw">impl </span>AsRef&lt;Database&gt; <span class="kw">for </span>DatabaseSource {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
+        <span class="kw">match </span><span class="self">self </span>{
+            DatabaseSource::Fresh(db) =&gt; db,
+            <span class="attr">#[allow(deprecated)]
+            </span>DatabaseSource::Reuse(client) =&gt; client.db(),
+        }
+    }
+}
+
 <span class="kw">impl </span>ClientBuilder {
+    <span class="kw">fn </span>new(db: DatabaseSource) -&gt; <span class="self">Self </span>{
+        ClientBuilder {
+            module_inits: Default::default(),
+            primary_module_instance: Default::default(),
+            db,
+            stopped: <span class="bool-val">false</span>,
+        }
+    }
+
     <span class="doccomment">/// Replace module generator registry entirely
     </span><span class="kw">pub fn </span>with_module_inits(<span class="kw-2">&amp;mut </span><span class="self">self</span>, module_inits: ClientModuleInitRegistry) {
         <span class="self">self</span>.module_inits = module_inits;
@@ -3205,24 +3254,8 @@
         <span class="self">self</span>.module_inits.attach(module_init);
     }
 
-    <span class="doccomment">/// Instructs the client builder to use this `FederationInfo` in building a
-    /// client. A `FederationInfo` can be created from either an invite code via
-    /// [`FederationInfo::from_invite_code`] or from a config via
-    /// [`FederationInfo::from_config`].
-    ///
-    /// ## Failure Conditions
-    ///
-    /// If a config already exists in the builder, calling this method
-    /// fails. If a `ClientConfig` already exists in the database, calling
-    /// `ClientBuilder::build` fails.
-    /// - You can use `get_config_from_db` to check if a config exists in the
-    ///   database.
-    </span><span class="kw">pub fn </span>with_federation_info(<span class="kw-2">&amp;mut </span><span class="self">self</span>, federation_info: FederationInfo) {
-        <span class="kw">let </span>was_replaced = <span class="self">self</span>.config.replace(federation_info).is_some();
-        <span class="macro">assert!</span>(
-            !was_replaced,
-            <span class="string">&quot;Only one configuration source can be given to the builder.&quot;
-        </span>)
+    <span class="kw">pub fn </span>stopped(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.stopped = <span class="bool-val">true</span>;
     }
 
     <span class="doccomment">/// Uses this module with the given instance id as the primary module. See
@@ -3241,172 +3274,101 @@
         </span>)
     }
 
-    <span class="comment">// TODO: impl config from file
-    // TODO: impl config from federation
-
-    </span><span class="doccomment">/// Uses this database to store the client state
-    </span><span class="kw">pub fn </span>with_raw_database&lt;D: IRawDatabase + <span class="lifetime">&#39;static</span>&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, db: D) {
-        <span class="self">self</span>.with_database(db.into());
+    <span class="kw">pub fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
+        <span class="self">self</span>.db.as_ref()
     }
 
-    <span class="comment">// /// Uses this database to store the client state, allowing for flexibility
-    // /// on the caller side by accepting a type-erased trait object.
-    </span><span class="kw">pub fn </span>with_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>, db: Database) {
-        <span class="kw">let </span>was_replaced = <span class="self">self</span>.db.replace(DatabaseSource::Fresh(db)).is_some();
-        <span class="macro">assert!</span>(
-            !was_replaced,
-            <span class="string">&quot;Only one database can be given to the builder.&quot;
-        </span>);
-    }
-
-    <span class="doccomment">/// Re-uses the database of an old client. Useful for restarting the client
-    /// on recovery without fully shutting down the DB and not being able to
-    /// re-open it.
-    ///
-    /// ## Panics
-    /// If the old and new client use different config since that might make the
-    /// DB incompatible.
-    </span><span class="attr">#[deprecated(
-        note = <span class="string">&quot;DatabaseSource::Reuse was a workound and LN Gateway should stop using it. See https://github.com/fedimint/fedimint/pull/3781#issuecomment-1835319259&quot;
-    </span>)]
-    </span><span class="kw">pub fn </span>with_old_client_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>, client: ClientArc) {
-        <span class="attr">#[allow(deprecated)]
-        </span><span class="kw">let </span>was_replaced = <span class="self">self</span>.db.replace(DatabaseSource::Reuse(client)).is_some();
-        <span class="macro">assert!</span>(
-            !was_replaced,
-            <span class="string">&quot;Only one database can be given to the builder.&quot;
-        </span>);
-    }
-
-    <span class="kw">pub async fn </span>store_encodable_client_secret&lt;T: Encodable&gt;(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        secret: T,
-    ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="kw">match </span><span class="self">self</span>.db.as_ref().ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No database provided&quot;</span>))<span class="question-mark">? </span>{
-            DatabaseSource::Fresh(db) =&gt; db.begin_transaction().<span class="kw">await</span>,
-            <span class="attr">#[allow(deprecated)]
-            </span>DatabaseSource::Reuse(client) =&gt; client.db().begin_transaction().<span class="kw">await</span>,
+    <span class="kw">pub async fn </span>load_existing_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ClientConfig&gt; {
+        <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="self">self</span>.db.as_ref()).<span class="kw">await else </span>{
+            <span class="macro">bail!</span>(<span class="string">&quot;Client database not initialized&quot;</span>)
         };
 
-        <span class="comment">// Don&#39;t overwrite an existing secret
-        </span><span class="kw">match </span>dbtx.get_value(<span class="kw-2">&amp;</span>EncodedClientSecretKey).<span class="kw">await </span>{
-            <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Encoded client secret already exists, cannot overwrite&quot;</span>),
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="kw">let </span>encoded_secret = T::consensus_encode_to_vec(<span class="kw-2">&amp;</span>secret);
-                dbtx.insert_entry(<span class="kw-2">&amp;</span>EncodedClientSecretKey, <span class="kw-2">&amp;</span>encoded_secret)
-                    .<span class="kw">await</span>;
-                dbtx.commit_tx().<span class="kw">await</span>;
-                <span class="prelude-val">Ok</span>(())
-            }
-        }
+        <span class="prelude-val">Ok</span>(config)
     }
 
-    <span class="kw">pub async fn </span>load_decodable_client_secret&lt;T: Decodable&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;T&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="kw">match </span><span class="self">self</span>.db.as_ref().ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No database provided&quot;</span>))<span class="question-mark">? </span>{
-            DatabaseSource::Fresh(db) =&gt; db.begin_transaction().<span class="kw">await</span>,
-            <span class="attr">#[allow(deprecated)]
-            </span>DatabaseSource::Reuse(client) =&gt; client.db().begin_transaction().<span class="kw">await</span>,
-        };
-
-        <span class="kw">let </span>client_secret = dbtx.get_value(<span class="kw-2">&amp;</span>EncodedClientSecretKey).<span class="kw">await</span>;
-        dbtx.commit_tx().<span class="kw">await</span>;
-
-        <span class="kw">match </span>client_secret {
-            <span class="prelude-val">Some</span>(client_secret) =&gt; {
-                T::consensus_decode(<span class="kw-2">&amp;mut </span>client_secret.as_slice(), <span class="kw-2">&amp;</span>Default::default())
-                    .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;Decoding failed: {e}&quot;</span>))
-            }
-            <span class="prelude-val">None </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Encoded client secret not present in DB&quot;</span>),
-        }
-    }
-
-    <span class="kw">pub async fn </span>get_federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;FederationId&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(db) = <span class="self">self</span>.db.as_ref() {
-            <span class="kw">let </span>db = <span class="kw">match </span>db {
-                DatabaseSource::Fresh(db) =&gt; db,
-                <span class="attr">#[allow(deprecated)]
-                </span>DatabaseSource::Reuse(client) =&gt; <span class="kw-2">&amp;</span>client.inner.db,
-            };
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = get_config_from_db(db).<span class="kw">await </span>{
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(config.global.federation_id());
-            }
-        }
-
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(federation_info) = <span class="kw-2">&amp;</span><span class="self">self</span>.config {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(federation_info.federation_id());
-        }
-
-        <span class="macro">bail!</span>(<span class="string">&quot;No config source present&quot;</span>);
-    }
-
-    <span class="kw">pub async fn </span>build_restoring_from_backup(
+    <span class="kw">pub async fn </span>join(
         <span class="self">self</span>,
         root_secret: DerivableSecret,
+        config: ClientConfig,
+        invite_code: InviteCode,
+    ) -&gt; anyhow::Result&lt;ClientArc&gt; {
+        <span class="kw">if </span>Client::is_initialized(<span class="self">self</span>.db.as_ref()).<span class="kw">await </span>{
+            <span class="macro">bail!</span>(<span class="string">&quot;Client database already initialized&quot;</span>)
+        }
+
+        {
+            <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">&quot;Initializing client database&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.as_ref().begin_transaction().<span class="kw">await</span>;
+            <span class="comment">// Save config to DB
+            </span>dbtx.insert_new_entry(
+                <span class="kw-2">&amp;</span>ClientConfigKey {
+                    id: config.federation_id(),
+                },
+                <span class="kw-2">&amp;</span>config,
+            )
+            .<span class="kw">await</span>;
+            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ClientInviteCodeKey {}, <span class="kw-2">&amp;</span>invite_code)
+                .<span class="kw">await</span>;
+
+            dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+        <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
+
+        <span class="kw">let </span>client = <span class="self">self</span>.build_stopped(root_secret, config).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if </span>!stopped {
+            client.start_executor().<span class="kw">await</span>;
+        }
+        <span class="prelude-val">Ok</span>(client)
+    }
+
+    <span class="kw">pub async fn </span>recover(
+        <span class="self">self</span>,
+        root_secret: DerivableSecret,
+        config: ClientConfig,
+        invite_code: InviteCode,
     ) -&gt; anyhow::Result&lt;(ClientArc, Metadata)&gt; {
-        <span class="comment">// TODO: assert DB is empty (what does that mean? maybe needs a method that
-        // checks if &quot;wipe&quot; was called on modules?)
+        <span class="kw">let </span>client = <span class="self">Self</span>::join(<span class="self">self</span>, root_secret, config, invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        // let db_is_empty = raw_dbtx
-        //     .raw_find_by_prefix(&amp;[])
-        //     .await
-        //     .expect(&quot;DB read failed&quot;)
-        //     .next()
-        //     .await
-        //     .is_none();
-        // assert!(
-        //     db_is_empty,
-        //     &quot;Database is not empty, cannot restore from backup&quot;
-        // );
-
-        </span><span class="kw">let </span>client = <span class="self">self</span>.build(root_secret).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>backup = client.download_backup_from_federation().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>metadata = client.restore_from_backup(backup).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>((client, metadata))
     }
 
-    <span class="doccomment">/// Build a [`Client`] and start its executor
-    </span><span class="kw">pub async fn </span>build(<span class="self">self</span>, root_secret: DerivableSecret) -&gt; anyhow::Result&lt;ClientArc&gt; {
-        <span class="kw">let </span>client = <span class="self">self</span>.build_stopped(root_secret).<span class="kw">await</span><span class="question-mark">?</span>;
-        client.start_executor().<span class="kw">await</span>;
+    <span class="kw">pub async fn </span>open(<span class="self">self</span>, root_secret: DerivableSecret) -&gt; anyhow::Result&lt;ClientArc&gt; {
+        <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="self">self</span>.db.as_ref()).<span class="kw">await else </span>{
+            <span class="macro">bail!</span>(<span class="string">&quot;Client database not initialized&quot;</span>)
+        };
+        <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
+
+        <span class="kw">let </span>client = <span class="self">self</span>.build_stopped(root_secret, config).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if </span>!stopped {
+            client.start_executor().<span class="kw">await</span>;
+        }
         <span class="prelude-val">Ok</span>(client)
     }
 
     <span class="doccomment">/// Build a [`Client`] but do not start the executor
-    </span><span class="kw">pub async fn </span>build_stopped(<span class="self">self</span>, root_secret: DerivableSecret) -&gt; anyhow::Result&lt;ClientArc&gt; {
-        <span class="kw">let </span>(config, decoders, db) = <span class="kw">match </span><span class="self">self</span>.db.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No database was provided&quot;</span>))<span class="question-mark">? </span>{
-            DatabaseSource::Fresh(db) =&gt; {
-                <span class="kw">let </span>config = get_config(<span class="kw-2">&amp;</span>db, <span class="self">self</span>.config.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+    </span><span class="kw">pub async fn </span>build_stopped(
+        <span class="self">self</span>,
+        root_secret: DerivableSecret,
+        config: ClientConfig,
+    ) -&gt; anyhow::Result&lt;ClientArc&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>decoders = client_decoders(
+            <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits,
+            config
+                .modules
+                .iter()
+                .map(|(module_instance, module_config)| (<span class="kw-2">*</span>module_instance, module_config.kind())),
+        )<span class="question-mark">?</span>;
+        decoders.register_module(
+            TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+            ModuleKind::from_static_str(<span class="string">&quot;tx_submission&quot;</span>),
+            tx_submission_sm_decoder(),
+        );
+        <span class="kw">let </span>db = <span class="self">self</span>.db.as_ref().to_owned().with_decoders(decoders.clone());
 
-                <span class="kw">let </span><span class="kw-2">mut </span>decoders = client_decoders(
-                    <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits,
-                    config
-                        .modules
-                        .iter()
-                        .map(|(module_instance, module_config)| {
-                            (<span class="kw-2">*</span>module_instance, module_config.kind())
-                        }),
-                )<span class="question-mark">?</span>;
-                decoders.register_module(
-                    TRANSACTION_SUBMISSION_MODULE_INSTANCE,
-                    ModuleKind::from_static_str(<span class="string">&quot;tx_submission&quot;</span>),
-                    tx_submission_sm_decoder(),
-                );
-                <span class="kw">let </span>db = db.with_decoders(decoders.clone());
-
-                (config, decoders, db)
-            }
-            <span class="attr">#[allow(deprecated)]
-            </span>DatabaseSource::Reuse(client) =&gt; {
-                <span class="kw">let </span>db = client.inner.db.clone();
-                <span class="kw">let </span>decoders = client.inner.decoders.clone();
-                <span class="kw">let </span>config = get_config(<span class="kw-2">&amp;</span>db, <span class="self">self</span>.config.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-
-                (config, decoders, db)
-            }
-        };
-
-        <span class="kw">let </span>config = config.redecode_raw(<span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+        <span class="kw">let </span>config = config.clone().redecode_raw(<span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>primary_module_instance = <span class="self">self
             </span>.primary_module_instance
@@ -3508,53 +3470,6 @@
     }
 }
 
-<span class="comment">// Sources config from database or from config source specified
-</span><span class="kw">async fn </span>get_config(
-    db: <span class="kw-2">&amp;</span>Database,
-    maybe_federation_info: <span class="prelude-ty">Option</span>&lt;FederationInfo&gt;,
-) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = get_config_from_db(db).<span class="kw">await </span>{
-        <span class="macro">ensure!</span>(
-            maybe_federation_info.is_none(),
-            <span class="string">&quot;Alternative config source provided but config was found in DB&quot;
-        </span>);
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(config);
-    }
-
-    <span class="kw">let </span>federation_info = maybe_federation_info.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No config source was provided&quot;</span>))<span class="question-mark">?</span>;
-
-    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-    <span class="comment">// Save config to DB
-    </span>dbtx.insert_new_entry(
-        <span class="kw-2">&amp;</span>ClientConfigKey {
-            id: federation_info.federation_id(),
-        },
-        <span class="kw-2">&amp;</span>federation_info.config().clone(),
-    )
-    .<span class="kw">await</span>;
-    <span class="comment">// Save invite code to DB
-    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(invite_code) = federation_info.invite_code() {
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ClientInviteCodeKey {}, <span class="kw-2">&amp;</span>invite_code)
-            .<span class="kw">await</span>;
-    }
-
-    dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="prelude-val">Ok</span>(federation_info.config().clone())
-}
-
-<span class="kw">pub async fn </span>get_config_from_db(db: <span class="kw-2">&amp;</span>Database) -&gt; <span class="prelude-ty">Option</span>&lt;ClientConfig&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-    <span class="attr">#[allow(clippy::let_and_return)]
-    </span><span class="kw">let </span>config = dbtx
-        .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigKeyPrefix)
-        .<span class="kw">await
-        </span>.next()
-        .<span class="kw">await
-        </span>.map(|(<span class="kw">_</span>, config)| config);
-    config
-}
-
 <span class="kw">pub async fn </span>get_invite_code_from_db(db: <span class="kw-2">&amp;</span>Database) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
     <span class="attr">#[allow(clippy::let_and_return)]
@@ -3573,6 +3488,7 @@
     invite_code: InviteCode,
     max_retries: usize,
 ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
+    <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">&quot;Download client config&quot;</span>);
     <span class="kw">let </span>api = Arc::new(WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]))
         <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>IGlobalFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>&gt;;
     <span class="kw">let </span><span class="kw-2">mut </span>num_retries = <span class="number">0</span>;

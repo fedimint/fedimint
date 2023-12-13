@@ -66,12 +66,15 @@
 <a href="#66" id="66">66</a>
 <a href="#67" id="67">67</a>
 <a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>fedimint_core::db::IRawDatabase;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
-<span class="kw">use </span>tracing::info;
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT;
+<span class="kw">use </span>tracing::{debug, info};
 
 <span class="doccomment">/// Locked version of database
 ///
@@ -104,9 +107,10 @@
 
             <span class="comment">// TODO: Use https://github.com/cargo-bins/cargo-binstall/pull/1496 to
             // give user feedback only when the initial `new_try_exclusive` failed.
-            </span><span class="macro">info!</span>(<span class="string">&quot;Acquiring database lock&quot;</span>);
+            </span><span class="macro">info!</span>(target: LOG_CLIENT, <span class="string">&quot;Acquiring database lock&quot;</span>);
             <span class="kw">let </span>lock =
                 fs_lock::FileLock::new_exclusive(file).context(<span class="string">&quot;Failed to acquire a lock file&quot;</span>)<span class="question-mark">?</span>;
+            <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">&quot;Acquired database lock&quot;</span>);
 
             <span class="prelude-val">Ok</span>(LockedBuilder { lock })
         })

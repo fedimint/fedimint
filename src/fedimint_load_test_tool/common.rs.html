@@ -405,12 +405,6 @@
 <a href="#405" id="405">405</a>
 <a href="#406" id="406">406</a>
 <a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
-<a href="#413" id="413">413</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -421,7 +415,7 @@
 <span class="kw">use </span>devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::transaction::TransactionBuilder;
-<span class="kw">use </span>fedimint_client::{get_invite_code_from_db, ClientArc, ClientBuilder, FederationInfo};
+<span class="kw">use </span>fedimint_client::{Client, ClientArc, FederationInfo};
 <span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, OperationId};
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -434,7 +428,6 @@
 <span class="kw">use </span>fedimint_wallet_client::WalletClientInit;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
-<span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>tracing::log::warn;
@@ -543,46 +536,41 @@
 }
 
 <span class="kw">pub async fn </span>build_client(
-    <span class="kw-2">mut </span>invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
+    invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
     rocksdb: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>PathBuf&gt;,
 ) -&gt; anyhow::Result&lt;(ClientArc, <span class="prelude-ty">Option</span>&lt;InviteCode&gt;)&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
+    <span class="kw">let </span>db = <span class="kw">if let </span><span class="prelude-val">Some</span>(rocksdb) = rocksdb {
+        Database::new(
+            fedimint_rocksdb::RocksDb::open(rocksdb)<span class="question-mark">?</span>,
+            Default::default(),
+        )
+    } <span class="kw">else </span>{
+        fedimint_core::db::mem_impl::MemDatabase::new().into()
+    };
+    <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(fedimint_client::DatabaseSource::Fresh(db));
     client_builder.with_module(MintClientInit);
     client_builder.with_module(LightningClientInit);
     client_builder.with_module(WalletClientInit::default());
     client_builder.with_primary_module(<span class="number">1</span>);
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(invite_code) = <span class="kw-2">&amp;</span>invite_code {
-        client_builder
-            .with_federation_info(FederationInfo::from_invite_code(invite_code.clone()).<span class="kw">await</span><span class="question-mark">?</span>);
-    }
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(rocksdb) = rocksdb {
-        <span class="kw">let </span>db = Database::new(
-            fedimint_rocksdb::RocksDb::open(rocksdb)<span class="question-mark">?</span>,
-            Default::default(),
-        );
-        <span class="kw">if </span>invite_code.is_none() {
-            <span class="comment">// Best effort basis for now
-            </span>invite_code = get_invite_code_from_db(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
-        }
-        client_builder.with_database(db)
-    } <span class="kw">else </span>{
-        client_builder.with_raw_database(fedimint_core::db::mem_impl::MemDatabase::new())
-    }
+    <span class="kw">let </span>client_secret = Client::load_or_generate_client_secret(client_builder.db()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>root_secret = PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret);
 
-    <span class="kw">let </span>client_secret = <span class="kw">match </span>client_builder
-        .load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;()
-        .<span class="kw">await
-    </span>{
-        <span class="prelude-val">Ok</span>(secret) =&gt; secret,
-        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-            <span class="kw">let </span>secret = PlainRootSecretStrategy::random(<span class="kw-2">&amp;mut </span>thread_rng());
-            client_builder.store_encodable_client_secret(secret).<span class="kw">await</span><span class="question-mark">?</span>;
-            secret
+    <span class="kw">let </span>client = <span class="kw">if </span>!Client::is_initialized(client_builder.db()).<span class="kw">await </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(invite_code) = <span class="kw-2">&amp;</span>invite_code {
+            <span class="kw">let </span>federation_info = FederationInfo::from_invite_code(invite_code.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+            client_builder
+                .join(
+                    root_secret,
+                    federation_info.config().clone(),
+                    invite_code.clone(),
+                )
+                .<span class="kw">await
+        </span>} <span class="kw">else </span>{
+            <span class="macro">bail!</span>(<span class="string">&quot;Database not initialize and invite code not provided&quot;</span>);
         }
-    };
-    <span class="kw">let </span>client = client_builder
-        .build(PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret))
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+    } <span class="kw">else </span>{
+        client_builder.open(root_secret).<span class="kw">await
+    </span>}<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>((client, invite_code))
 }
 

@@ -149,6 +149,8 @@
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
@@ -156,7 +158,7 @@
 
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-<span class="kw">use </span>fedimint_client::{get_config_from_db, ClientBuilder, FederationInfo};
+<span class="kw">use </span>fedimint_client::{Client, FederationInfo};
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -226,52 +228,54 @@
             gateway_db,
         });
 
-        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
-        client_builder.with_module_inits(registry);
-        client_builder.with_primary_module(<span class="self">self</span>.primary_module);
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(old_client) = old_client {
-            client_builder.with_old_client_database(old_client);
+        <span class="kw">let </span>db_source = <span class="kw">if let </span><span class="prelude-val">Some</span>(old_client) = old_client {
+            fedimint_client::DatabaseSource::Reuse(old_client)
         } <span class="kw">else </span>{
             <span class="kw">let </span>db_path = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">&quot;{federation_id}.db&quot;</span>));
-            {
-                <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
-                    GatewayError::DatabaseError(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Error opening rocksdb: {e:?}&quot;</span>))
-                })<span class="question-mark">?</span>;
-
-                <span class="comment">// Initialize a client database to check if a config was previously saved in it
-                </span><span class="kw">let </span>db = Database::new(rocksdb, ModuleDecoderRegistry::default());
-                <span class="kw">if </span>(get_config_from_db(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>).is_none() {
-                    client_builder
-                        .with_federation_info(FederationInfo::from_invite_code(invite_code).<span class="kw">await</span><span class="question-mark">?</span>);
-                }
-            }
 
             <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
                 GatewayError::DatabaseError(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Error opening rocksdb: {e:?}&quot;</span>))
             })<span class="question-mark">?</span>;
-            client_builder.with_raw_database(rocksdb);
-        }
+            <span class="kw">let </span>db = Database::new(rocksdb, ModuleDecoderRegistry::default());
 
-        <span class="kw">let </span>client_secret = <span class="kw">match </span>client_builder
-            .load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;()
-            .<span class="kw">await
-        </span>{
-            <span class="prelude-val">Ok</span>(secret) =&gt; secret,
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                <span class="macro">info!</span>(<span class="string">&quot;Generating secret and writing to client storage&quot;</span>);
-                <span class="kw">let </span>secret = PlainRootSecretStrategy::random(<span class="kw-2">&amp;mut </span>thread_rng());
-                client_builder
-                    .store_encodable_client_secret(secret)
-                    .<span class="kw">await
-                    </span>.map_err(GatewayError::ClientStateMachineError)<span class="question-mark">?</span>;
-                secret
-            }
+            fedimint_client::DatabaseSource::Fresh(db)
         };
-        client_builder
-            <span class="comment">// TODO: make this configurable?
-            </span>.build(PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret))
-            .<span class="kw">await
-            </span>.map_err(GatewayError::ClientStateMachineError)
+
+        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db_source);
+        client_builder.with_module_inits(registry);
+        client_builder.with_primary_module(<span class="self">self</span>.primary_module);
+
+        <span class="kw">let </span>client_secret =
+            <span class="kw">match </span>Client::load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;(client_builder.db()).<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(secret) =&gt; secret,
+                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                    <span class="macro">info!</span>(<span class="string">&quot;Generating secret and writing to client storage&quot;</span>);
+                    <span class="kw">let </span>secret = PlainRootSecretStrategy::random(<span class="kw-2">&amp;mut </span>thread_rng());
+                    Client::store_encodable_client_secret(client_builder.db(), secret)
+                        .<span class="kw">await
+                        </span>.map_err(GatewayError::ClientStateMachineError)<span class="question-mark">?</span>;
+                    secret
+                }
+            };
+
+        <span class="kw">let </span>root_secret = PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret);
+        <span class="kw">if </span>Client::is_initialized(client_builder.db()).<span class="kw">await </span>{
+            client_builder
+                <span class="comment">// TODO: make this configurable?
+                </span>.open(root_secret)
+                .<span class="kw">await
+        </span>} <span class="kw">else </span>{
+            <span class="kw">let </span>federation_info = FederationInfo::from_invite_code(invite_code.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+            client_builder
+                <span class="comment">// TODO: make this configurable?
+                </span>.join(
+                    root_secret,
+                    federation_info.config().to_owned(),
+                    invite_code,
+                )
+                .<span class="kw">await
+        </span>}
+        .map_err(GatewayError::ClientStateMachineError)
     }
 
     <span class="kw">pub async fn </span>save_config(

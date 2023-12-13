@@ -204,34 +204,72 @@
 <a href="#204" id="204">204</a>
 <a href="#205" id="205">205</a>
 <a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-<span class="kw">use </span>fedimint_client::FederationInfo;
+<span class="kw">use </span>fedimint_client::{Client, FederationInfo};
 <span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
+<span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_ln_client::LightningClientInit;
 <span class="kw">use </span>fedimint_mint_client::MintClientInit;
 <span class="kw">use </span>fedimint_wallet_client::WalletClientInit;
 <span class="kw">use </span>rand::thread_rng;
 
-<span class="kw">async fn </span>client(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientArc&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>builder = fedimint_client::ClientBuilder::default();
+<span class="kw">async fn </span>load_or_generate_mnemonic(db: <span class="kw-2">&amp;</span>Database) -&gt; anyhow::Result&lt;[u8; <span class="number">64</span>]&gt; {
+    <span class="prelude-val">Ok</span>(<span class="kw">match </span>Client::load_decodable_client_secret(db).<span class="kw">await </span>{
+        <span class="prelude-val">Ok</span>(s) =&gt; s,
+
+        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+            <span class="kw">let </span>secret = PlainRootSecretStrategy::random(<span class="kw-2">&amp;mut </span>thread_rng());
+            Client::store_encodable_client_secret(db, secret).<span class="kw">await</span><span class="question-mark">?</span>;
+            secret
+        }
+    })
+}
+
+<span class="kw">fn </span>make_client_builder() -&gt; fedimint_client::ClientBuilder {
+    <span class="kw">let </span>mem_database = MemDatabase::default();
+    <span class="kw">let </span><span class="kw-2">mut </span>builder = fedimint_client::Client::builder(fedimint_client::DatabaseSource::Fresh(
+        mem_database.into(),
+    ));
     builder.with_module(LightningClientInit);
     builder.with_module(MintClientInit);
     builder.with_module(WalletClientInit::default());
     builder.with_primary_module(<span class="number">1</span>);
-    builder.with_federation_info(FederationInfo::from_invite_code(invite_code.clone()).<span class="kw">await</span><span class="question-mark">?</span>);
-    builder.with_raw_database(MemDatabase::default());
-    <span class="kw">let </span>client_secret = <span class="kw">match </span>builder.load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;().<span class="kw">await </span>{
-        <span class="prelude-val">Ok</span>(secret) =&gt; secret,
-        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-            <span class="kw">let </span>secret = PlainRootSecretStrategy::random(<span class="kw-2">&amp;mut </span>thread_rng());
-            builder.store_encodable_client_secret(secret).<span class="kw">await</span><span class="question-mark">?</span>;
-            secret
-        }
-    };
+
     builder
-        .build_stopped(PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret))
+}
+
+<span class="kw">async fn </span>client(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientArc&gt; {
+    <span class="kw">let </span>federation_info = FederationInfo::from_invite_code(invite_code.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>builder = make_client_builder();
+    <span class="kw">let </span>client_secret = load_or_generate_mnemonic(builder.db()).<span class="kw">await</span><span class="question-mark">?</span>;
+    builder.stopped();
+    builder
+        .join(
+            PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret),
+            federation_info.config().to_owned(),
+            invite_code.clone(),
+        )
         .<span class="kw">await
 </span>}
 

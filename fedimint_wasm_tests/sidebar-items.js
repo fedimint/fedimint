@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["client"],"mod":["faucet","tests"]};
+window.SIDEBAR_ITEMS = {"fn":["client","load_or_generate_mnemonic","make_client_builder"],"mod":["faucet","tests"]};

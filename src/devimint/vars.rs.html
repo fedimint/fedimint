@@ -167,6 +167,7 @@
 <a href="#167" id="167">167</a>
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
@@ -284,7 +285,8 @@
         FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;lnd&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
         FM_BTC_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;bitcoin&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
         FM_DATA_DIR: PathBuf = FM_TEST_DIR.clone();
-        FM_CLIENT_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;client&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_CLIENT_BASE_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;clients&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_CLIENT_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;clients&quot;</span>).join(<span class="string">&quot;default&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
         FM_ELECTRS_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;electrs&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
         FM_ESPLORA_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;esplora&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
         FM_READY_FILE: PathBuf = FM_TEST_DIR.join(<span class="string">&quot;ready&quot;</span>);

@@ -763,15 +763,6 @@
 <a href="#763" id="763">763</a>
 <a href="#764" id="764">764</a>
 <a href="#765" id="765">765</a>
-<a href="#766" id="766">766</a>
-<a href="#767" id="767">767</a>
-<a href="#768" id="768">768</a>
-<a href="#769" id="769">769</a>
-<a href="#770" id="770">770</a>
-<a href="#771" id="771">771</a>
-<a href="#772" id="772">772</a>
-<a href="#773" id="773">773</a>
-<a href="#774" id="774">774</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -784,7 +775,7 @@
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_client::backup::Metadata;
 <span class="kw">use </span>fedimint_client::ClientArc;
-<span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
+<span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::time::now;
@@ -912,19 +903,18 @@
         </span><span class="comment">// TODO: Can we make it `*Map&lt;String, String&gt;` and avoid custom parsing?
         </span>metadata: Vec&lt;String&gt;,
     },
-    <span class="doccomment">/// Wipe the state of the client (mostly for testing purposes)
-    </span><span class="attr">#[clap(hide = <span class="bool-val">true</span>)]
-    </span>Wipe {
-        <span class="attr">#[clap(long)]
-        </span>force: bool,
-    },
     <span class="doccomment">/// Discover the common api version to use to communicate with the
     /// federation
     </span><span class="attr">#[clap(hide = <span class="bool-val">true</span>)]
     </span>DiscoverVersion,
     <span class="doccomment">/// Restore the previously created backup of mint notes (with `backup`
     /// command)
-    </span>Restore { mnemonic: String },
+    </span>Restore {
+        <span class="attr">#[clap(long)]
+        </span>mnemonic: String,
+        <span class="attr">#[clap(long)]
+        </span>invite_code: String,
+    },
     <span class="doccomment">/// Print the secret key of the client
     </span>PrintSecret,
     ListOperations {
@@ -948,7 +938,6 @@
 
 <span class="kw">pub async fn </span>handle_command(
     command: ClientCmd,
-    _config: ClientConfig,
     client: ClientArc,
 ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
     <span class="kw">match </span>command {
@@ -1231,13 +1220,6 @@
         }
         ClientCmd::Restore { .. } =&gt; {
             <span class="macro">panic!</span>(<span class="string">&quot;Has to be handled before initializing client&quot;</span>)
-        }
-        ClientCmd::Wipe { force } =&gt; {
-            <span class="kw">if </span>!force {
-                <span class="macro">bail!</span>(<span class="string">&quot;This will wipe the state of the client irrecoverably. Use `--force` to proceed.&quot;</span>)
-            }
-            client.wipe_state().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(serde_json::to_value(()).unwrap())
         }
         ClientCmd::PrintSecret =&gt; {
             <span class="kw">let </span>entropy = client.get_decoded_client_secret::&lt;Vec&lt;u8&gt;&gt;().<span class="kw">await</span><span class="question-mark">?</span>;

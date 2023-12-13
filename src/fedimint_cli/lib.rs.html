@@ -869,6 +869,19 @@
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
 <a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
@@ -886,12 +899,15 @@
 
 <span class="kw">use </span>bip39::Mnemonic;
 <span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
-<span class="kw">use </span>db_locked::{Locked, LockedBuilder};
+<span class="kw">use </span>db_locked::LockedBuilder;
 <span class="kw">use </span>fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 <span class="kw">use </span>fedimint_bip39::Bip39RootSecretStrategy;
+<span class="kw">use </span>fedimint_client::backup::Metadata;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 <span class="kw">use </span>fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
-<span class="kw">use </span>fedimint_client::{get_invite_code_from_db, ClientBuilder, FederationInfo};
+<span class="kw">use </span>fedimint_client::{
+    get_invite_code_from_db, Client, ClientArc, ClientBuilder, DatabaseSource, FederationInfo,
+};
 <span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
 <span class="kw">use </span>fedimint_core::api::{
     FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, InviteCode,
@@ -899,13 +915,13 @@
 };
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::core::OperationId;
-<span class="kw">use </span>fedimint_core::db::DatabaseValue;
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseValue};
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
 <span class="kw">use </span>fedimint_core::query::ThresholdConsensus;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{task, PeerId, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::LightningClientInit;
-<span class="kw">use </span>fedimint_logging::TracingSetup;
+<span class="kw">use </span>fedimint_logging::{TracingSetup, LOG_CLIENT};
 <span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintClientModule, SpendableNote};
 <span class="kw">use </span>fedimint_server::config::io::SALT_FILE;
 <span class="kw">use </span>fedimint_wallet_client::api::WalletFederationApi;
@@ -1161,7 +1177,8 @@
         <span class="prelude-val">Ok</span>(ApiAuth(password))
     }
 
-    <span class="kw">async fn </span>load_rocks_db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;Locked&lt;fedimint_rocksdb::RocksDb&gt;&gt; {
+    <span class="kw">async fn </span>load_rocks_db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;Database&gt; {
+        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">&quot;Loading client database&quot;</span>);
         <span class="kw">let </span>db_path = <span class="self">self</span>.data_dir_create().<span class="kw">await</span><span class="question-mark">?</span>.join(<span class="string">&quot;client.db&quot;</span>);
         <span class="kw">let </span>lock_path = db_path.with_extension(<span class="string">&quot;db.lock&quot;</span>);
         <span class="prelude-val">Ok</span>(LockedBuilder::new(<span class="kw-2">&amp;</span>lock_path)
@@ -1170,64 +1187,25 @@
             </span>.with_db(
                 fedimint_rocksdb::RocksDb::open(db_path)
                     .map_err_cli_msg(CliErrorKind::IOError, <span class="string">&quot;could not open database&quot;</span>)<span class="question-mark">?</span>,
-            ))
+            )
+            .into())
     }
+}
 
-    <span class="kw">async fn </span>build_client_ng(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_inits: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
-        invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
-    ) -&gt; CliResult&lt;fedimint_client::ClientArc&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = <span class="self">self</span>.build_client_builder(module_inits, invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>mnemonic = <span class="kw">match </span>client_builder
-            .load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;()
-            .<span class="kw">await
-        </span>{
+<span class="kw">async fn </span>load_or_generate_mnemonic(db: <span class="kw-2">&amp;</span>Database) -&gt; <span class="prelude-ty">Result</span>&lt;Mnemonic, CliError&gt; {
+    <span class="prelude-val">Ok</span>(
+        <span class="kw">match </span>Client::load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;(db).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(entropy) =&gt; Mnemonic::from_entropy(<span class="kw-2">&amp;</span>entropy).map_err_cli_general()<span class="question-mark">?</span>,
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
                 <span class="macro">info!</span>(<span class="string">&quot;Generating mnemonic and writing entropy to client storage&quot;</span>);
                 <span class="kw">let </span>mnemonic = Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::random(<span class="kw-2">&amp;mut </span>thread_rng());
-                client_builder
-                    .store_encodable_client_secret(mnemonic.to_entropy())
+                Client::store_encodable_client_secret(db, mnemonic.to_entropy())
                     .<span class="kw">await
                     </span>.map_err_cli_general()<span class="question-mark">?</span>;
                 mnemonic
             }
-        };
-        <span class="kw">let </span>federation_id = client_builder
-            .get_federation_id()
-            .<span class="kw">await
-            </span>.map_err_cli_general()<span class="question-mark">?</span>;
-        client_builder
-            .build(get_default_client_secret(
-                <span class="kw-2">&amp;</span>Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::to_root_secret(<span class="kw-2">&amp;</span>mnemonic),
-                <span class="kw-2">&amp;</span>federation_id,
-            ))
-            .<span class="kw">await
-            </span>.map_err_cli_general()
-    }
-
-    <span class="kw">async fn </span>build_client_builder(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_inits: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
-        invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
-    ) -&gt; CliResult&lt;fedimint_client::ClientBuilder&gt; {
-        <span class="kw">let </span>db = <span class="self">self</span>.load_rocks_db().<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
-        client_builder.with_module_inits(module_inits.clone());
-        client_builder.with_primary_module(<span class="number">1</span>);
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(invite_code) = invite_code {
-            client_builder.with_federation_info(
-                FederationInfo::from_invite_code(invite_code)
-                    .<span class="kw">await
-                    </span>.map_err_cli_general()<span class="question-mark">?</span>,
-            );
-        }
-        client_builder.with_raw_database(db);
-
-        <span class="prelude-val">Ok</span>(client_builder)
-    }
+        },
+    )
 }
 
 <span class="attr">#[derive(Subcommand, Clone)]
@@ -1421,25 +1399,123 @@ Examples:
         }
     }
 
+    <span class="kw">async fn </span>make_client_builder(<span class="kw-2">&amp;</span><span class="self">self</span>, cli: <span class="kw-2">&amp;</span>Opts) -&gt; CliResult&lt;ClientBuilder&gt; {
+        <span class="kw">let </span>db = cli.load_rocks_db().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(DatabaseSource::Fresh(db));
+        client_builder.with_module_inits(<span class="self">self</span>.module_inits.clone());
+        client_builder.with_primary_module(<span class="number">1</span>);
+
+        <span class="prelude-val">Ok</span>(client_builder)
+    }
+
+    <span class="kw">async fn </span>client_join(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cli: <span class="kw-2">&amp;</span>Opts, invite_code: InviteCode) -&gt; CliResult&lt;ClientArc&gt; {
+        <span class="kw">let </span>federation_info = FederationInfo::from_invite_code(invite_code.clone())
+            .<span class="kw">await
+            </span>.map_err_cli_general()<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>client_builder = <span class="self">self</span>.make_client_builder(cli).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>mnemonic = load_or_generate_mnemonic(client_builder.db()).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        client_builder
+            .join(
+                get_default_client_secret(
+                    <span class="kw-2">&amp;</span>Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::to_root_secret(<span class="kw-2">&amp;</span>mnemonic),
+                    <span class="kw-2">&amp;</span>federation_info.config().global.federation_id(),
+                ),
+                federation_info.config().clone(),
+                invite_code,
+            )
+            .<span class="kw">await
+            </span>.map_err_cli_general()
+    }
+
+    <span class="kw">async fn </span>client_open(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cli: <span class="kw-2">&amp;</span>Opts) -&gt; CliResult&lt;ClientArc&gt; {
+        <span class="kw">let </span>client_builder = <span class="self">self</span>.make_client_builder(cli).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>mnemonic = Mnemonic::from_entropy(
+            <span class="kw-2">&amp;</span>Client::load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;(client_builder.db())
+                .<span class="kw">await
+                </span>.map_err_cli_general()<span class="question-mark">?</span>,
+        )
+        .map_err_cli_general()<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>config = client_builder
+            .load_existing_config()
+            .<span class="kw">await
+            </span>.map_err_cli_general()<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>federation_id = config.federation_id();
+
+        client_builder
+            .open(get_default_client_secret(
+                <span class="kw-2">&amp;</span>Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::to_root_secret(<span class="kw-2">&amp;</span>mnemonic),
+                <span class="kw-2">&amp;</span>federation_id,
+            ))
+            .<span class="kw">await
+            </span>.map_err_cli_general()
+    }
+
+    <span class="kw">async fn </span>client_recover(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        cli: <span class="kw-2">&amp;</span>Opts,
+        mnemonic: Mnemonic,
+        invite_code: InviteCode,
+    ) -&gt; CliResult&lt;(ClientArc, Metadata)&gt; {
+        <span class="kw">let </span>builder = <span class="self">self</span>.make_client_builder(cli).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>federation_info = FederationInfo::from_invite_code(invite_code.clone())
+            .<span class="kw">await
+            </span>.map_err_cli_general()<span class="question-mark">?</span>;
+
+        <span class="kw">match </span>Client::load_decodable_client_secret_opt::&lt;Vec&lt;u8&gt;&gt;(builder.db())
+            .<span class="kw">await
+            </span>.map_err_cli_io()<span class="question-mark">?
+        </span>{
+            <span class="prelude-val">Some</span>(existing) =&gt; {
+                <span class="kw">if </span>existing != mnemonic.to_entropy() {
+                    <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Previously set mnemonic does not match&quot;</span>))
+                        .map_err_cli_general()<span class="question-mark">?</span>;
+                }
+            }
+            <span class="prelude-val">None </span>=&gt; {
+                Client::store_encodable_client_secret(builder.db(), mnemonic.to_entropy())
+                    .<span class="kw">await
+                    </span>.map_err_cli_io()<span class="question-mark">?</span>;
+            }
+        }
+
+        <span class="kw">let </span>config = federation_info.config();
+        builder
+            .recover(
+                get_default_client_secret(
+                    <span class="kw-2">&amp;</span>Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::to_root_secret(<span class="kw-2">&amp;</span>mnemonic),
+                    <span class="kw-2">&amp;</span>config.federation_id(),
+                ),
+                config.to_owned(),
+                invite_code,
+            )
+            .<span class="kw">await
+            </span>.map_err_cli_general()
+    }
+
     <span class="kw">async fn </span>handle_command(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cli: Opts) -&gt; CliOutputResult {
         <span class="kw">match </span>cli.command.clone() {
             Command::InviteCode =&gt; {
-                <span class="kw">let </span>rockdb = cli.load_rocks_db().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>db = fedimint_core::db::Database::new(rockdb, Default::default());
+                <span class="kw">let </span>db = cli.load_rocks_db().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>invite_code = get_invite_code_from_db(<span class="kw-2">&amp;</span>db)
                     .<span class="kw">await
                     </span>.ok_or_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;invite code not found&quot;</span>)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::InviteCode { invite_code })
             }
             Command::JoinFederation { invite_code } =&gt; {
-                <span class="kw">let </span>invite: InviteCode = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code)
-                    .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>;
+                {
+                    <span class="kw">let </span>invite_code: InviteCode = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code)
+                        .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>;
 
-                <span class="comment">// Build client and store config in DB
-                </span><span class="kw">let </span>_client = cli
-                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits, <span class="prelude-val">Some</span>(invite.clone()))
-                    .<span class="kw">await
-                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failed to build client&quot;</span>)<span class="question-mark">?</span>;
+                    <span class="comment">// Build client and store config in DB
+                    </span><span class="kw">let </span>_client = <span class="self">self</span>.client_join(<span class="kw-2">&amp;</span>cli, invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
+                }
 
                 <span class="prelude-val">Ok</span>(CliOutput::JoinFederation {
                     joined: invite_code,
@@ -1448,49 +1524,19 @@ Examples:
             Command::VersionHash =&gt; <span class="prelude-val">Ok</span>(CliOutput::VersionHash {
                 hash: <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>).to_string(),
             }),
-            Command::Client(ClientCmd::Restore { mnemonic }) =&gt; {
+            Command::Client(ClientCmd::Restore {
+                mnemonic,
+                invite_code,
+            }) =&gt; {
+                <span class="kw">let </span>invite_code: InviteCode = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code)
+                    .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>;
                 <span class="kw">let </span>mnemonic = Mnemonic::from_str(<span class="kw-2">&amp;</span>mnemonic).map_err_cli_general()<span class="question-mark">?</span>;
-                <span class="kw">let </span><span class="kw-2">mut </span>client_builder = cli
-                    .build_client_builder(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits, <span class="prelude-val">None</span>)
-                    .<span class="kw">await
-                    </span>.map_err_cli_general()<span class="question-mark">?</span>;
-                <span class="kw">let </span>mnemonic = <span class="kw">match </span>client_builder
-                    .load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;()
-                    .<span class="kw">await
-                </span>{
-                    <span class="prelude-val">Ok</span>(entropy) <span class="kw">if </span>entropy == mnemonic.to_entropy() =&gt; mnemonic,
-                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
-                            <span class="string">&quot;Provided mnemonic&#39;s entropy does not match existing entropy&quot;
-                        </span>))
-                        .map_err_cli_general()
-                    }
-                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;Generating mnemonic and writing entropy to client storage&quot;</span>);
-                        <span class="kw">let </span>mnemonic = Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::random(<span class="kw-2">&amp;mut </span>thread_rng());
-                        client_builder
-                            .store_encodable_client_secret(mnemonic.to_entropy())
-                            .<span class="kw">await
-                            </span>.map_err_cli_general()<span class="question-mark">?</span>;
-                        mnemonic
-                    }
-                };
-                <span class="kw">let </span>federation_id = client_builder
-                    .get_federation_id()
-                    .<span class="kw">await
-                    </span>.map_err_cli_general()<span class="question-mark">?</span>;
-                <span class="kw">let </span>client = client_builder
-                    .build_restoring_from_backup(get_default_client_secret(
-                        <span class="kw-2">&amp;</span>Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::to_root_secret(<span class="kw-2">&amp;</span>mnemonic),
-                        <span class="kw-2">&amp;</span>federation_id,
-                    ))
-                    .<span class="kw">await
-                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?
-                    </span>.<span class="number">0</span>;
+                <span class="kw">let </span>client = <span class="self">self</span>.client_recover(<span class="kw-2">&amp;</span>cli, mnemonic, invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="macro">info!</span>(<span class="string">&quot;Waiting for restore to complete&quot;</span>);
                 <span class="kw">let </span>restored_amount = client
-                    .get_first_module::&lt;MintClientModule&gt;()
+                    .<span class="number">0
+                    </span>.get_first_module::&lt;MintClientModule&gt;()
                     .await_restore_finished()
                     .<span class="kw">await
                     </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
@@ -1502,25 +1548,18 @@ Examples:
                 ))
             }
             Command::Client(command) =&gt; {
-                <span class="kw">let </span>client = cli
-                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits, <span class="prelude-val">None</span>)
-                    .<span class="kw">await
-                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
-                <span class="kw">let </span>config = client.get_config().clone();
+                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
-                    client::handle_command(command, config, client)
+                    client::handle_command(command, client)
                         .<span class="kw">await
                         </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>,
                 ))
             }
             Command::Admin(AdminCmd::Audit) =&gt; {
-                <span class="kw">let </span>user = cli
-                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits, <span class="prelude-val">None</span>)
-                    .<span class="kw">await
-                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
+                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="kw">let </span>audit = cli
-                    .admin_client(user.get_config())<span class="question-mark">?
+                    .admin_client(client.get_config())<span class="question-mark">?
                     </span>.audit(cli.auth()<span class="question-mark">?</span>)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
@@ -1529,12 +1568,9 @@ Examples:
                 ))
             }
             Command::Admin(AdminCmd::Status) =&gt; {
-                <span class="kw">let </span>user = cli
-                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits, <span class="prelude-val">None</span>)
-                    .<span class="kw">await
-                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
+                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="kw">let </span>status = cli.admin_client(user.get_config())<span class="question-mark">?</span>.status().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>status = cli.admin_client(client.get_config())<span class="question-mark">?</span>.status().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
                     serde_json::to_value(status)
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;invalid response&quot;</span>)<span class="question-mark">?</span>,
@@ -1552,12 +1588,9 @@ Examples:
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(auth) = auth {
                     params = params.with_auth(ApiAuth(auth))
                 }
-                <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; = WsFederationApi::from_config(
-                    cli.build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits, <span class="prelude-val">None</span>)
-                        .<span class="kw">await</span><span class="question-mark">?
-                        </span>.get_config(),
-                )
-                .into();
+                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; = WsFederationApi::from_config(client.get_config()).into();
                 <span class="kw">let </span>response: Value = <span class="kw">match </span>peer_id {
                     <span class="prelude-val">Some</span>(peer_id) =&gt; ws_api
                         .request_raw(peer_id.into(), <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])
@@ -1577,7 +1610,7 @@ Examples:
             }
             Command::Dev(DevCmd::WaitBlockCount { count: target }) =&gt; {
                 task::timeout(Duration::from_secs(<span class="number">30</span>), <span class="kw">async move </span>{
-                    <span class="kw">let </span>client = cli.build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">loop </span>{
                         <span class="kw">let </span>wallet = client.get_first_module::&lt;WalletClientModule&gt;();
                         <span class="kw">let </span>count = client
@@ -1608,12 +1641,8 @@ Examples:
                 invite_code: InviteCode::new(url, peer, federation_id),
             }),
             Command::Dev(DevCmd::SessionCount) =&gt; {
-                <span class="kw">let </span>count = cli
-                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits, <span class="prelude-val">None</span>)
-                    .<span class="kw">await</span><span class="question-mark">?
-                    </span>.api()
-                    .session_count()
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>count = client.api().session_count().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::EpochCount { count })
             }
             Command::Dev(DevCmd::ConfigDecrypt {
@@ -1661,16 +1690,13 @@ Examples:
                         <span class="string">&quot;failed to decode transaction&quot;</span>,
                     )<span class="question-mark">?</span>;
 
-                <span class="kw">let </span>tx = fedimint_core::transaction::Transaction::from_bytes(
-                    <span class="kw-2">&amp;</span>bytes,
-                    cli.build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits, <span class="prelude-val">None</span>)
-                        .<span class="kw">await</span><span class="question-mark">?
-                        </span>.decoders(),
-                )
-                .map_err_cli_msg(
-                    CliErrorKind::SerializationError,
-                    <span class="string">&quot;failed to decode transaction&quot;</span>,
-                )<span class="question-mark">?</span>;
+                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>tx =
+                    fedimint_core::transaction::Transaction::from_bytes(<span class="kw-2">&amp;</span>bytes, client.decoders())
+                        .map_err_cli_msg(
+                            CliErrorKind::SerializationError,
+                            <span class="string">&quot;failed to decode transaction&quot;</span>,
+                        )<span class="question-mark">?</span>;
 
                 <span class="prelude-val">Ok</span>(CliOutput::DecodeTransaction {
                     transaction: (<span class="macro">format!</span>(<span class="string">&quot;{tx:?}&quot;</span>)),

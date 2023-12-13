@@ -930,6 +930,10 @@
 <a href="#930" id="930">930</a>
 <a href="#931" id="931">931</a>
 <a href="#932" id="932">932</a>
+<a href="#933" id="933">933</a>
+<a href="#934" id="934">934</a>
+<a href="#935" id="935">935</a>
+<a href="#936" id="936">936</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1113,6 +1117,10 @@
                 .collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>,
             ..<span class="self">self
         </span>})
+    }
+
+    <span class="kw">pub fn </span>federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
+        <span class="self">self</span>.global.federation_id()
     }
 }
 

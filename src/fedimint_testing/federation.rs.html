@@ -207,20 +207,11 @@
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
 <a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-<span class="kw">use </span>fedimint_client::{ClientArc, ClientBuilder, FederationInfo};
+<span class="kw">use </span>fedimint_client::{Client, ClientArc};
 <span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 <span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::config::{
@@ -241,7 +232,6 @@
 <span class="kw">use </span>fedimint_server::net::connect::{parse_host_port, Connector};
 <span class="kw">use </span>fedimint_server::net::peers::DelayCalculator;
 <span class="kw">use </span>fedimint_server::FedimintServer;
-<span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::info;
 
@@ -272,28 +262,20 @@
 
     <span class="kw">pub async fn </span>new_client_with_config(<span class="kw-2">&amp;</span><span class="self">self</span>, client_config: ClientConfig) -&gt; ClientArc {
         <span class="macro">info!</span>(target: LOG_TEST, <span class="string">&quot;Setting new client with config&quot;</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
+        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(fedimint_client::DatabaseSource::Fresh(
+            MemDatabase::new().into(),
+        ));
         client_builder.with_module_inits(<span class="self">self</span>.client_init.clone());
         client_builder.with_primary_module(<span class="self">self</span>.primary_client);
-        client_builder
-            .with_federation_info(FederationInfo::from_config(client_config).<span class="kw">await</span>.unwrap());
-        client_builder.with_raw_database(MemDatabase::new());
-        <span class="kw">let </span>client_secret = <span class="kw">match </span>client_builder
-            .load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;()
+        <span class="kw">let </span>client_secret = Client::load_or_generate_client_secret(client_builder.db())
             .<span class="kw">await
-        </span>{
-            <span class="prelude-val">Ok</span>(secret) =&gt; secret,
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                <span class="kw">let </span>secret = PlainRootSecretStrategy::random(<span class="kw-2">&amp;mut </span>thread_rng());
-                client_builder
-                    .store_encodable_client_secret(secret)
-                    .<span class="kw">await
-                    </span>.expect(<span class="string">&quot;Storing client secret must work&quot;</span>);
-                secret
-            }
-        };
+            </span>.unwrap();
         client_builder
-            .build(PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret))
+            .join(
+                PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret),
+                client_config,
+                <span class="self">self</span>.invite_code(),
+            )
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Failed to build client&quot;</span>)
     }
