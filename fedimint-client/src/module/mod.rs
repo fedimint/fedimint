@@ -24,7 +24,7 @@ use secp256k1_zkp::PublicKey;
 
 use self::init::ClientModuleInit;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
-use crate::sm::{self, ActiveState, Context, DynContext, DynState, Executor, State};
+use crate::sm::{self, ActiveState, Context, DynContext, DynState, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use crate::{
     oplog, AddStateMachinesResult, ClientArc, ClientWeak, DynGlobalClientContext,
@@ -464,15 +464,6 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         anyhow::bail!("Backup not supported");
     }
 
-    async fn wipe(
-        &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
-        _module_instance_id: ModuleInstanceId,
-        _executor: Executor<DynGlobalClientContext>,
-    ) -> anyhow::Result<()> {
-        anyhow::bail!("Wiping not supported");
-    }
-
     /// Does this module support being a primary module
     ///
     /// If it does it must implement:
@@ -640,13 +631,6 @@ pub trait IClientModule: Debug {
         snapshot: Option<DynModuleBackup>,
     ) -> anyhow::Result<()>;
 
-    async fn wipe(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        module_instance_id: ModuleInstanceId,
-        executor: Executor<DynGlobalClientContext>,
-    ) -> anyhow::Result<()>;
-
     fn supports_being_primary(&self) -> bool;
 
     async fn create_sufficient_input(
@@ -757,15 +741,6 @@ where
             .transpose()?;
 
         <T as ClientModule>::restore(self, typed_snapshot).await
-    }
-
-    async fn wipe(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        module_instance_id: ModuleInstanceId,
-        executor: Executor<DynGlobalClientContext>,
-    ) -> anyhow::Result<()> {
-        <T as ClientModule>::wipe(self, dbtx, module_instance_id, executor).await
     }
 
     fn supports_being_primary(&self) -> bool {

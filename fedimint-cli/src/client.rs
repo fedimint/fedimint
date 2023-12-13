@@ -10,7 +10,7 @@ use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use fedimint_client::backup::Metadata;
 use fedimint_client::ClientArc;
-use fedimint_core::config::{ClientConfig, FederationId};
+use fedimint_core::config::FederationId;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::time::now;
@@ -138,19 +138,18 @@ pub enum ClientCmd {
         // TODO: Can we make it `*Map<String, String>` and avoid custom parsing?
         metadata: Vec<String>,
     },
-    /// Wipe the state of the client (mostly for testing purposes)
-    #[clap(hide = true)]
-    Wipe {
-        #[clap(long)]
-        force: bool,
-    },
     /// Discover the common api version to use to communicate with the
     /// federation
     #[clap(hide = true)]
     DiscoverVersion,
     /// Restore the previously created backup of mint notes (with `backup`
     /// command)
-    Restore { mnemonic: String },
+    Restore {
+        #[clap(long)]
+        mnemonic: String,
+        #[clap(long)]
+        invite_code: String,
+    },
     /// Print the secret key of the client
     PrintSecret,
     ListOperations {
@@ -174,7 +173,6 @@ pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Erro
 
 pub async fn handle_command(
     command: ClientCmd,
-    _config: ClientConfig,
     client: ClientArc,
 ) -> anyhow::Result<serde_json::Value> {
     match command {
@@ -457,13 +455,6 @@ pub async fn handle_command(
         }
         ClientCmd::Restore { .. } => {
             panic!("Has to be handled before initializing client")
-        }
-        ClientCmd::Wipe { force } => {
-            if !force {
-                bail!("This will wipe the state of the client irrecoverably. Use `--force` to proceed.")
-            }
-            client.wipe_state().await?;
-            Ok(serde_json::to_value(()).unwrap())
         }
         ClientCmd::PrintSecret => {
             let entropy = client.get_decoded_client_secret::<Vec<u8>>().await?;

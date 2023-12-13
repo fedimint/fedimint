@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::{get_config_from_db, ClientBuilder, FederationInfo};
+use fedimint_client::{Client, FederationInfo};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -75,52 +75,54 @@ impl GatewayClientBuilder {
             gateway_db,
         });
 
-        let mut client_builder = ClientBuilder::default();
-        client_builder.with_module_inits(registry);
-        client_builder.with_primary_module(self.primary_module);
-        if let Some(old_client) = old_client {
-            client_builder.with_old_client_database(old_client);
+        let db_source = if let Some(old_client) = old_client {
+            fedimint_client::DatabaseSource::Reuse(old_client)
         } else {
             let db_path = self.work_dir.join(format!("{federation_id}.db"));
-            {
-                let rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
-                    GatewayError::DatabaseError(anyhow::anyhow!("Error opening rocksdb: {e:?}"))
-                })?;
-
-                // Initialize a client database to check if a config was previously saved in it
-                let db = Database::new(rocksdb, ModuleDecoderRegistry::default());
-                if (get_config_from_db(&db).await).is_none() {
-                    client_builder
-                        .with_federation_info(FederationInfo::from_invite_code(invite_code).await?);
-                }
-            }
 
             let rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
                 GatewayError::DatabaseError(anyhow::anyhow!("Error opening rocksdb: {e:?}"))
             })?;
-            client_builder.with_raw_database(rocksdb);
-        }
+            let db = Database::new(rocksdb, ModuleDecoderRegistry::default());
 
-        let client_secret = match client_builder
-            .load_decodable_client_secret::<[u8; 64]>()
-            .await
-        {
-            Ok(secret) => secret,
-            Err(_) => {
-                info!("Generating secret and writing to client storage");
-                let secret = PlainRootSecretStrategy::random(&mut thread_rng());
-                client_builder
-                    .store_encodable_client_secret(secret)
-                    .await
-                    .map_err(GatewayError::ClientStateMachineError)?;
-                secret
-            }
+            fedimint_client::DatabaseSource::Fresh(db)
         };
-        client_builder
-            // TODO: make this configurable?
-            .build(PlainRootSecretStrategy::to_root_secret(&client_secret))
-            .await
-            .map_err(GatewayError::ClientStateMachineError)
+
+        let mut client_builder = Client::builder(db_source);
+        client_builder.with_module_inits(registry);
+        client_builder.with_primary_module(self.primary_module);
+
+        let client_secret =
+            match Client::load_decodable_client_secret::<[u8; 64]>(client_builder.db()).await {
+                Ok(secret) => secret,
+                Err(_) => {
+                    info!("Generating secret and writing to client storage");
+                    let secret = PlainRootSecretStrategy::random(&mut thread_rng());
+                    Client::store_encodable_client_secret(client_builder.db(), secret)
+                        .await
+                        .map_err(GatewayError::ClientStateMachineError)?;
+                    secret
+                }
+            };
+
+        let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
+        if Client::is_initialized(client_builder.db()).await {
+            client_builder
+                // TODO: make this configurable?
+                .open(root_secret)
+                .await
+        } else {
+            let federation_info = FederationInfo::from_invite_code(invite_code.clone()).await?;
+            client_builder
+                // TODO: make this configurable?
+                .join(
+                    root_secret,
+                    federation_info.config().to_owned(),
+                    invite_code,
+                )
+                .await
+        }
+        .map_err(GatewayError::ClientStateMachineError)
     }
 
     pub async fn save_config(

@@ -16,6 +16,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ModuleCommon};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
+use fedimint_logging::LOG_DEVIMINT;
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
 use fedimint_wallet_client::config::WalletClientConfig;
@@ -23,7 +24,7 @@ use fedimintd::attach_default_module_init_params;
 use fedimintd::fedimintd::FM_EXTRA_DKG_META_VAR;
 use futures::future::join_all;
 use rand::Rng;
-use tracing::info;
+use tracing::{debug, info};
 
 use super::external::Bitcoind;
 use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
@@ -36,41 +37,85 @@ pub struct Federation {
     members: BTreeMap<usize, Fedimintd>,
     vars: BTreeMap<usize, vars::Fedimintd>,
     bitcoind: Bitcoind,
+
+    /// Built in [`Client`]
+    client: Client,
 }
 
 /// `fedimint-cli` instance (basically path with client state: config + db)
 pub struct Client {
-    path: PathBuf,
+    name: String,
 }
 
 impl Client {
-    /// Create a [`Client`] that starts with a state that is a copy of
-    /// of a [`Federation`] built-in client's state.
-    ///
-    /// TODO: Get rid of built-in client, make it a normal `Client` and let them
-    /// fork each other as they please.
-    async fn new_forked(name: &str) -> Result<Client> {
-        let data_dir: PathBuf = env::var("FM_CLIENT_DIR")?.parse()?;
-        let client_dir = data_dir.join("clients").join(name);
+    fn client_dir(&self) -> PathBuf {
+        let data_dir: PathBuf = env::var("FM_DATA_DIR")
+            .expect("FM_DATA_DIR not set")
+            .parse()
+            .expect("FM_DATA_DIR invalid");
+        data_dir.join("clients").join(&self.name)
+    }
 
-        std::fs::create_dir_all(&client_dir)?;
+    /// Create a [`Client`] that starts with a fresh state.
+    ///
+    /// Fails if directory exists. See [`Self::open_or_create`]
+    /// if that's not desired.
+    pub async fn create(name: &str) -> Result<Client> {
+        let client = Self {
+            name: name.to_owned(),
+        };
+
+        if !client.client_dir().exists() {
+            std::fs::create_dir_all(client.client_dir())?;
+        } else {
+            bail!("Client already exists: {name}");
+        }
+
+        Ok(client)
+    }
+
+    /// Open or create a [`Client`] that starts with a fresh state.
+    pub async fn open_or_create(name: &str) -> Result<Client> {
+        let client = Self {
+            name: name.to_owned(),
+        };
+
+        if !client.client_dir().exists() {
+            std::fs::create_dir_all(client.client_dir())?;
+        }
+
+        Ok(client)
+    }
+
+    /// Client to join a federation
+    pub async fn join_federation(&self, invite_code: String) -> Result<()> {
+        debug!(target: LOG_DEVIMINT, "Joining federation with the main client");
+        cmd!(self, "join-federation", invite_code).run().await?;
+
+        Ok(())
+    }
+
+    /// Create a [`Client`] that starts with a state that is a copy of
+    /// of another one.
+    async fn new_forked(&self, name: &str) -> Result<Client> {
+        let new = Client::create(name).await?;
 
         cmd!(
             "cp",
             "-R",
-            data_dir.join("client.db").display(),
-            client_dir.join("client.db").display()
+            self.client_dir().join("client.db").display(),
+            new.client_dir().display()
         )
         .run()
         .await?;
 
-        Ok(Self { path: client_dir })
+        Ok(new)
     }
 
     pub async fn cmd(&self) -> Command {
         cmd!(
             "fedimint-cli",
-            format!("--data-dir={}", self.path.display())
+            format!("--data-dir={}", self.client_dir().display())
         )
     }
 }
@@ -122,6 +167,7 @@ impl Federation {
             members,
             vars,
             bitcoind,
+            client: Client::open_or_create("default").await?,
         })
     }
 
@@ -137,9 +183,23 @@ impl Federation {
         Ok(invite_code)
     }
 
+    /// Built-in, default, internal [`Client`]
+    ///
+    /// We should be moving away from using it for anything.
+    pub fn internal_client(&self) -> &Client {
+        &self.client
+    }
+
     /// Fork the built-in client of `Federation` and give it a name
     pub async fn fork_client(&self, name: &str) -> Result<Client> {
-        Client::new_forked(name).await
+        Client::new_forked(&self.client, name).await
+    }
+
+    /// New [`Client`] that already joined `self`
+    pub async fn new_joined_client(&self, name: &str) -> Result<Client> {
+        let client = Client::create(name).await?;
+        client.join_federation(self.invite_code()?).await?;
+        Ok(client)
     }
 
     pub async fn start_server(&mut self, process_mgr: &ProcessManager, peer: usize) -> Result<()> {
@@ -162,8 +222,7 @@ impl Federation {
     }
 
     pub async fn cmd(&self) -> Command {
-        let cfg_dir = env::var("FM_CLIENT_DIR").unwrap();
-        cmd!("fedimint-cli", "--data-dir={cfg_dir}")
+        self.client.cmd().await
     }
 
     pub async fn pegin(&self, amount_sats: u64) -> Result<()> {

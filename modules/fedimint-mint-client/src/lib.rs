@@ -27,7 +27,7 @@ use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::{ClientContext, ClientDbTxContext, ClientModule, IClientModule};
 use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
-use fedimint_client::sm::{Context, DynState, Executor, ModuleNotifier, State, StateTransition};
+use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::api::GlobalFederationApi;
@@ -550,18 +550,6 @@ impl ClientModule for MintClientModule {
             })
     }
 
-    async fn wipe(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        _module_instance_id: ModuleInstanceId,
-        _executor: Executor<DynGlobalClientContext>,
-    ) -> anyhow::Result<()> {
-        debug!(target: LOG_TARGET, "Wiping mint module state");
-        Self::wipe_all_spendable_notes(dbtx).await;
-        // TODO: wipe active states or all states?
-        Ok(())
-    }
-
     fn supports_being_primary(&self) -> bool {
         true
     }
@@ -950,12 +938,6 @@ impl MintClientModule {
                 .await)
                 .into_iter(),
         )
-    }
-
-    async fn wipe_all_spendable_notes(dbtx: &mut DatabaseTransaction<'_>) {
-        debug!(target: LOG_TARGET, "Wiping all spendable notes");
-        dbtx.remove_by_prefix(&NoteKeyPrefix).await;
-        assert!(Self::get_all_spendable_notes(dbtx).await.is_empty());
     }
 
     async fn get_next_note_index(
