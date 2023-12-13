@@ -31,8 +31,7 @@ use fedimint_core::{
 use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
-use jsonrpsee_core::client::ClientT;
-use jsonrpsee_core::Error as JsonRpcError;
+use jsonrpsee_core::client::{ClientT, Error as JsonRpcClientError};
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 #[cfg(not(target_family = "wasm"))]
@@ -62,7 +61,7 @@ use crate::transaction::{SerdeTransaction, Transaction, TransactionError};
 use crate::util::SafeUrl;
 
 pub type PeerResult<T> = Result<T, PeerError>;
-pub type JsonRpcResult<T> = Result<T, jsonrpsee_core::Error>;
+pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
 pub type FederationResult<T> = Result<T, FederationError>;
 pub type SerdeOutputOutcome = SerdeModuleEncoding<DynOutputOutcome>;
 
@@ -74,7 +73,7 @@ pub enum PeerError {
     #[error("Invalid peer id: {peer_id}")]
     InvalidPeerId { peer_id: PeerId },
     #[error("Rpc error: {0}")]
-    Rpc(#[from] JsonRpcError),
+    Rpc(#[from] JsonRpcClientError),
     #[error("Invalid response: {0}")]
     InvalidResponse(String),
 }
@@ -86,11 +85,11 @@ impl PeerError {
             PeerError::InvalidPeerId { peer_id: _ } => false,
             PeerError::Rpc(rpc_e) => match rpc_e {
                 // TODO: Does this cover all retryable cases?
-                JsonRpcError::Transport(_) => true,
-                JsonRpcError::MaxSlotsExceeded => true,
-                JsonRpcError::RequestTimeout => true,
-                JsonRpcError::RestartNeeded(_) => true,
-                JsonRpcError::Call(e) => e.code() == 404,
+                JsonRpcClientError::Transport(_) => true,
+                JsonRpcClientError::MaxSlotsExceeded => true,
+                JsonRpcClientError::RequestTimeout => true,
+                JsonRpcClientError::RestartNeeded(_) => true,
+                JsonRpcClientError::Call(e) => e.code() == 404,
                 _ => false,
             },
             PeerError::InvalidResponse(_) => false,
@@ -176,7 +175,7 @@ pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
         peer_id: PeerId,
         method: &str,
         params: &[Value],
-    ) -> result::Result<Value, jsonrpsee_core::Error>;
+    ) -> result::Result<Value, JsonRpcClientError>;
 }
 
 /// Set of api versions for each component (core + modules)
@@ -220,7 +219,7 @@ pub trait FederationApiExt: IFederationApi {
                 let result = if let Some(timeout) = timeout {
                     match fedimint_core::task::timeout(timeout, request).await {
                         Ok(result) => result,
-                        Err(_timeout) => Err(JsonRpcError::RequestTimeout),
+                        Err(_timeout) => Err(JsonRpcClientError::RequestTimeout),
                     }
                 } else {
                     request.await
@@ -782,7 +781,7 @@ impl<C: JsonRpcClient + Debug + 'static> IFederationApi for WsFederationApi<C> {
             .peers
             .iter()
             .find(|m| m.peer_id == peer_id)
-            .ok_or_else(|| JsonRpcError::Custom(format!("Invalid peer_id: {peer_id}")))?;
+            .ok_or_else(|| JsonRpcClientError::Custom(format!("Invalid peer_id: {peer_id}")))?;
 
         let method = match self.module_id {
             None => method.to_string(),
@@ -794,13 +793,13 @@ impl<C: JsonRpcClient + Debug + 'static> IFederationApi for WsFederationApi<C> {
 
 #[apply(async_trait_maybe_send!)]
 pub trait JsonRpcClient: ClientT + Sized + MaybeSend + MaybeSync {
-    async fn connect(url: &SafeUrl) -> result::Result<Self, JsonRpcError>;
+    async fn connect(url: &SafeUrl) -> result::Result<Self, JsonRpcClientError>;
     fn is_connected(&self) -> bool;
 }
 
 #[apply(async_trait_maybe_send!)]
 impl JsonRpcClient for WsClient {
-    async fn connect(url: &SafeUrl) -> result::Result<Self, JsonRpcError> {
+    async fn connect(url: &SafeUrl) -> result::Result<Self, JsonRpcClientError> {
         #[cfg(not(target_family = "wasm"))]
         return WsClientBuilder::default()
             .use_webpki_rustls()
@@ -1020,7 +1019,7 @@ mod tests {
 
     use super::*;
 
-    type Result<T = ()> = std::result::Result<T, JsonRpcError>;
+    type Result<T = ()> = std::result::Result<T, JsonRpcClientError>;
 
     #[apply(async_trait_maybe_send!)]
     trait SimpleClient: Sized {
@@ -1066,7 +1065,7 @@ mod tests {
         async fn batch_request<'a, R>(
             &self,
             _batch: BatchRequestBuilder<'a>,
-        ) -> std::result::Result<BatchResponse<'a, R>, jsonrpsee_core::Error>
+        ) -> std::result::Result<BatchResponse<'a, R>, jsonrpsee_core::client::Error>
         where
             R: DeserializeOwned + fmt::Debug + 'a,
         {
@@ -1151,7 +1150,7 @@ mod tests {
                 // slow down
                 task::sleep(Duration::from_millis(100)).await;
                 if FAIL.lock().unwrap().contains(&id) {
-                    Err(jsonrpsee_core::Error::Transport(anyhow!(
+                    Err(jsonrpsee_core::client::Error::Transport(anyhow!(
                         "intentional error"
                     )))
                 } else {
@@ -1167,7 +1166,7 @@ mod tests {
                 if self.is_connected() {
                     Ok("null".to_string())
                 } else {
-                    Err(jsonrpsee_core::Error::Transport(anyhow!(
+                    Err(jsonrpsee_core::client::Error::Transport(anyhow!(
                         "client is disconnected"
                     )))
                 }
