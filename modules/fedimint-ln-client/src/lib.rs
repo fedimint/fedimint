@@ -56,7 +56,6 @@ use futures::StreamExt;
 use incoming::IncomingSmError;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
-    DEFAULT_EXPIRY_TIME,
 };
 use rand::seq::IteratorRandom;
 use rand::{CryptoRng, Rng, RngCore};
@@ -88,6 +87,10 @@ use crate::receive::{
 const OUTGOING_LN_CONTRACT_TIMELOCK: u64 = 500;
 
 const META_OVERRIDE_CACHE_DURATION: Duration = Duration::from_secs(10 * 60);
+
+// 24 hours. Many wallets default to 1 hour, but it's a bad user experience if
+// invoices expire too quickly
+const DEFAULT_INVOICE_EXPIRY_TIME: Duration = Duration::from_secs(60 * 60 * 24);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 #[serde(rename_all = "snake_case")]
@@ -770,7 +773,7 @@ impl LightningClientModule {
             .min_final_cltv_expiry_delta(18)
             .payee_pub_key(node_public_key)
             .expiry_time(Duration::from_secs(
-                expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
+                expiry_time.unwrap_or(DEFAULT_INVOICE_EXPIRY_TIME.as_secs()),
             ));
 
         for rh in final_route_hints {
