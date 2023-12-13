@@ -34,10 +34,11 @@ use fedimint_core::PeerId;
 use itertools::Itertools;
 use tokio::sync::mpsc::Sender;
 use tokio_rustls::rustls;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::config::io::{
-    read_server_config, write_server_config, CONFIG_STAGING_DIR, PLAINTEXT_PASSWORD, SALT_FILE,
+    read_server_config, write_server_config, CONFIG_STAGING_DIR, PLAINTEXT_PASSWORD, PRIVATE_EXT,
+    SALT_EXT, SALT_FILE, SERVER_FILES,
 };
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use crate::net::peers::DelayCalculator;
@@ -284,7 +285,8 @@ impl ConfigGenApi {
                     let mut state = self_clone.state.lock().expect("lock poisoned");
                     match config {
                         Ok(config) => {
-                            self_clone.stage_configs(&config, &state)?;
+                            let cfg_staging_dir = self_clone.stage_configs(&config, &state)?;
+                            self_clone.check_server_files(cfg_staging_dir)?;
                             state.status = ServerStatus::VerifyingConfigs;
                             state.config = Some(config);
                             info!(
@@ -329,7 +331,7 @@ impl ConfigGenApi {
     }
 
     /// Writes the configs to a staging directory disk after they are generated
-    fn stage_configs(&self, config: &ServerConfig, state: &ConfigGenState) -> ApiResult<()> {
+    fn stage_configs(&self, config: &ServerConfig, state: &ConfigGenState) -> ApiResult<PathBuf> {
         let cfg_staging_dir = self.data_dir.join(CONFIG_STAGING_DIR);
         fs::create_dir_all(&cfg_staging_dir)
             .map_err(|e| ApiError::server_error(format!("Unable to modify data dir {e:?}")))?;
@@ -338,10 +340,89 @@ impl ConfigGenApi {
         let io_error = |e| ApiError::server_error(format!("Unable to write to data dir {e:?}"));
 
         // TODO: Make writing password optional
-        write_new(cfg_staging_dir.join(PLAINTEXT_PASSWORD), &auth).map_err(io_error)?;
-        write_new(cfg_staging_dir.join(SALT_FILE), random_salt()).map_err(io_error)?;
-        write_server_config(config, cfg_staging_dir, &auth, &state.settings.registry)
-            .map_err(|e| ApiError::server_error(format!("Unable to encrypt configs {e:?}")))
+        let password_path = cfg_staging_dir
+            .join(PLAINTEXT_PASSWORD)
+            .with_extension(PRIVATE_EXT);
+        write_new(password_path, &auth).map_err(io_error)?;
+
+        let salt_path = cfg_staging_dir.join(SALT_FILE).with_extension(SALT_EXT);
+        write_new(salt_path, random_salt()).map_err(io_error)?;
+
+        write_server_config(
+            config,
+            cfg_staging_dir.clone(),
+            &auth,
+            &state.settings.registry,
+        )
+        .map_err(|e| ApiError::server_error(format!("Unable to encrypt configs {e:?}")))?;
+        Ok(cfg_staging_dir)
+    }
+
+    /// Checks all server files have been persisted in a given directory
+    fn check_server_files(&self, dir: PathBuf) -> ApiResult<()> {
+        let entries = fs::read_dir(dir)
+            .map_err(|e| ApiError::server_error(format!("Unable to read entries in dir {e:?}")))?;
+        let mut expected_files = SERVER_FILES.clone();
+
+        for entry in entries {
+            let path = match entry {
+                Ok(val) => {
+                    if val
+                        .file_type()
+                        .map_err(|e| {
+                            ApiError::server_error(format!("Unable to determine file type {e:?}"))
+                        })?
+                        .is_file()
+                    {
+                        val.path()
+                    } else {
+                        warn!(
+                            target: fedimint_logging::LOG_NET_PEER_DKG,
+                            "Skipping file or directory while verifying server files. Path could be a directory",
+                        );
+                        continue;
+                    }
+                }
+                Err(e) => {
+                    return Err(ApiError::server_error(format!("{e:?}")));
+                }
+            };
+
+            let stem = path
+                .file_stem()
+                .ok_or(ApiError::server_error(
+                    "Failed to get file stem".to_string(),
+                ))?
+                .to_str()
+                .ok_or(ApiError::server_error(
+                    "Failed to convert file stem to string".to_string(),
+                ))?
+                .to_owned();
+
+            let ext = path
+                .extension()
+                .unwrap_or_default()
+                .to_str()
+                .ok_or(ApiError::server_error(
+                    "Failed to convert file extension to string".to_string(),
+                ))?
+                .to_owned();
+
+            if !expected_files.remove(&(stem, ext)) {
+                return Err(ApiError::server_error(format!(
+                    "Unexpected file in config staging dir: {path:?}"
+                )));
+            }
+        }
+
+        if !expected_files.is_empty() {
+            return Err(ApiError::server_error(format!(
+                "Missing files in config staging dir: {:?}",
+                expected_files
+            )));
+        }
+
+        Ok(())
     }
 
     /// Moves configuration artifacts from a staging directory to a permanent
@@ -366,13 +447,10 @@ impl ConfigGenApi {
                     "Failed to convert file name to string".to_string(),
                 ))?;
 
-            // TODO: https://github.com/fedimint/fedimint/issues/3692
-
             let dest = self.data_dir.join(filename);
             fs::rename(&path, &dest)
                 .map_err(|e| ApiError::server_error(format!("Unable to modify data dir {e:?}")))?;
         }
-
         Ok(())
     }
 
@@ -415,6 +493,7 @@ impl ConfigGenApi {
         let cfg_staging_dir = self.data_dir.join(CONFIG_STAGING_DIR);
         if cfg_staging_dir.exists() {
             self.persist_staged_configs(&cfg_staging_dir)?;
+            self.check_server_files(self.data_dir.clone())?;
             self.remove_staged_configs(&cfg_staging_dir)?;
         }
 
@@ -899,7 +978,7 @@ mod tests {
     use tracing::info;
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
-    use crate::config::io::{read_server_config, CONFIG_STAGING_DIR, PLAINTEXT_PASSWORD};
+    use crate::config::io::{read_plain_password, read_server_config, CONFIG_STAGING_DIR};
     use crate::config::{DynServerModuleInit, ServerConfig, DEFAULT_MAX_CLIENT_CONNECTIONS};
     use crate::fedimint_core::module::ServerModuleInit;
     use crate::FedimintServer;
@@ -1084,7 +1163,7 @@ mod tests {
                 self.dir.clone()
             };
 
-            let auth = fs::read_to_string(cfg_dir.join(PLAINTEXT_PASSWORD));
+            let auth = read_plain_password(cfg_dir.clone());
             read_server_config(&auth.unwrap(), cfg_dir.clone()).unwrap()
         }
     }

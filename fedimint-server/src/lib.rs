@@ -2,7 +2,6 @@
 extern crate fedimint_core;
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::net::SocketAddr;
 use std::panic::AssertUnwindSafe;
 use std::path::PathBuf;
@@ -12,7 +11,6 @@ use anyhow::{anyhow as format_err, Context};
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::HashEngine;
 use bitcoin_hashes::{sha256, Hash};
-use config::io::PLAINTEXT_PASSWORD;
 use config::ServerConfig;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
@@ -31,6 +29,7 @@ use tokio::runtime::Runtime;
 use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
+use crate::config::io::read_plain_password;
 use crate::consensus::server::ConsensusServer;
 use crate::net::api::{ConsensusApi, RpcHandlerCtx};
 use crate::net::connect::TlsTcpConnector;
@@ -129,7 +128,7 @@ impl FedimintServer {
         );
 
         // Attempt get the config with local password, otherwise start config gen
-        if let Ok(password) = fs::read_to_string(self.data_dir.join(PLAINTEXT_PASSWORD)) {
+        if let Ok(password) = read_plain_password(self.data_dir.clone()) {
             config_gen
                 .set_password(ApiAuth(password.clone()))
                 .map_err(|_| format_err!("Unable to use local password"))?;

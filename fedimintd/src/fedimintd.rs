@@ -20,7 +20,7 @@ use fedimint_ln_server::LightningInit;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintInit;
 use fedimint_server::config::api::ConfigGenSettings;
-use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
+use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD, PRIVATE_EXT};
 use fedimint_server::FedimintServer;
 use fedimint_wallet_server::WalletInit;
 use futures::FutureExt;
@@ -290,7 +290,11 @@ async fn run(
     // on each run we want to pass the currently passed password, so we need to
     // overwrite
     if let Some(password) = opts.password {
-        write_overwrite(opts.data_dir.join(PLAINTEXT_PASSWORD), password)?;
+        let password_path = opts
+            .data_dir
+            .join(PLAINTEXT_PASSWORD)
+            .with_extension(PRIVATE_EXT);
+        write_overwrite(password_path, password)?;
     };
     let default_params = ConfigGenParamsRequest {
         meta: opts.extra_dkg_meta.clone(),
