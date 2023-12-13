@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::Duration;
 
 use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -10,7 +10,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use fedimint_core::time::now;
+use fedimint_core::time::duration_since_epoch;
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
@@ -643,13 +643,7 @@ impl PaymentData {
     }
 
     pub fn is_expired(&self) -> bool {
-        let Some(now) = now().duration_since(UNIX_EPOCH).map(|t| t.as_secs()).ok() else {
-            // Something is very wrong (time out of bounds), we'll not attempt too pay the
-            // invoice
-            return true;
-        };
-
-        self.expiry_timestamp() < now
+        self.expiry_timestamp() < duration_since_epoch().as_secs()
     }
 
     /// Returns the expiry timestamp in seconds since the UNIX epoch

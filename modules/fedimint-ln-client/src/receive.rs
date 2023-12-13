@@ -1,4 +1,3 @@
-use std::ops::Add;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -12,11 +11,12 @@ use fedimint_core::task::sleep;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
+use fedimint_ln_common::contracts::DecryptedPreimageStatus;
 use fedimint_ln_common::{LightningClientContext, LightningInput};
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::LightningClientStateMachines;
 
@@ -171,27 +171,20 @@ impl LightningReceiveConfirmedInvoice {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<LightningReceiveStateMachine>> {
         let invoice = self.invoice.clone();
-        let timeout = invoice.expiry_time();
         let keypair = self.keypair;
         let global_context = global_context.clone();
-        vec![
-            StateTransition::new(
-                Self::await_incoming_contract_account(invoice, global_context.clone()),
-                move |dbtx, contract, old_state| {
-                    Box::pin(Self::transition_funded(
-                        old_state,
-                        keypair,
-                        contract,
-                        dbtx,
-                        global_context.clone(),
-                    ))
-                },
-            ),
-            StateTransition::new(
-                Self::await_payment_timeout(timeout),
-                |_dbtx, (), old_state| Box::pin(Self::transition_timeout(old_state)),
-            ),
-        ]
+        vec![StateTransition::new(
+            Self::await_incoming_contract_account(invoice, global_context.clone()),
+            move |dbtx, contract, old_state| {
+                Box::pin(Self::transition_funded(
+                    old_state,
+                    keypair,
+                    contract,
+                    dbtx,
+                    global_context.clone(),
+                ))
+            },
+        )]
     }
 
     async fn await_incoming_contract_account(
@@ -200,14 +193,29 @@ impl LightningReceiveConfirmedInvoice {
     ) -> Result<IncomingContractAccount, LightningReceiveError> {
         let contract_id = (*invoice.payment_hash()).into();
         loop {
+            // Consider time before the api call to account for network delays
+            let now_since_epoch = fedimint_core::time::duration_since_epoch();
             match global_context
                 .module_api()
-                .wait_preimage_decrypted(contract_id)
+                .get_decrypted_preimage_status(contract_id)
                 .await
             {
-                Ok((incoming_contract_account, preimage)) => match preimage {
-                    Some(_) => return Ok(incoming_contract_account),
-                    None => return Err(LightningReceiveError::InvalidPreimage),
+                Ok((incoming_contract_account, status)) => match status {
+                    DecryptedPreimageStatus::Pending => {
+                        // only when we are sure that the invoice is still pending that we can check
+                        // for a timeout
+                        const TOLERANCE: Duration = Duration::from_secs(60); // tolerate some clock skew
+                        let invoice_since_epoch = invoice.duration_since_epoch() + TOLERANCE;
+                        if now_since_epoch > invoice_since_epoch {
+                            return Err(LightningReceiveError::Timeout);
+                        } else {
+                            debug!("Still waiting preimage decryption for contract {contract_id}");
+                        }
+                    }
+                    DecryptedPreimageStatus::Some(_) => return Ok(incoming_contract_account),
+                    DecryptedPreimageStatus::Invalid => {
+                        return Err(LightningReceiveError::InvalidPreimage)
+                    }
                 },
                 // FIXME: should we filter for retryable errors here to not swallow implementation
                 // bugs? (there exist more places like this)
@@ -218,7 +226,6 @@ impl LightningReceiveConfirmedInvoice {
                     warn!("External LN payment non-retryable error waiting for preimage decryption: {error:?}");
                 }
             }
-
             sleep(RETRY_DELAY).await;
         }
     }
@@ -265,23 +272,6 @@ impl LightningReceiveConfirmedInvoice {
         };
 
         global_context.claim_input(dbtx, client_input).await
-    }
-
-    async fn await_payment_timeout(timeout: Duration) {
-        // Add 10% of the invoice expiry_time as a buffer before we stop awaiting the
-        // payment
-        let timeout_buffer = timeout.as_secs_f64() * 0.1;
-        let payment_timeout = timeout.add(Duration::from_secs_f64(timeout_buffer));
-        sleep(payment_timeout).await
-    }
-
-    async fn transition_timeout(
-        old_state: LightningReceiveStateMachine,
-    ) -> LightningReceiveStateMachine {
-        LightningReceiveStateMachine {
-            operation_id: old_state.operation_id,
-            state: LightningReceiveStates::Canceled(LightningReceiveError::Timeout),
-        }
     }
 }
 
