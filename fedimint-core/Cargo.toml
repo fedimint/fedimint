@@ -22,8 +22,8 @@ backtrace = "0.3.67"
 bincode = "1.3.1"
 bech32 = "0.9.1"
 itertools = "0.10.5"
-jsonrpsee-types = { version = "0.20.0" }
-jsonrpsee-core = { version = "0.20.0", features = [ "client" ] }
+jsonrpsee-types = { version = "0.21.0" }
+jsonrpsee-core = { version = "0.21.0", features = [ "client" ] }
 serde = { version = "1.0.149", features = [ "derive" ] }
 serde_json = "1.0.91"
 strum = "0.24"
@@ -52,12 +52,12 @@ bitvec = "1.0.1"
 parity-scale-codec = { version = "3.5.0", features = ["derive"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-jsonrpsee-ws-client = { version = "0.20.0", features = ["webpki-tls"], default-features = false }
+jsonrpsee-ws-client = { version = "0.21.0", features = ["webpki-tls"], default-features = false }
 tokio = { version = "1.25.0", features = ["full", "tracing"] }
 tokio-rustls = "0.23.4"
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-jsonrpsee-wasm-client = { version = "0.20.0", default-features = false }
+jsonrpsee-wasm-client = { version = "0.21.0", default-features = false }
 async-lock = "2.7"
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend
