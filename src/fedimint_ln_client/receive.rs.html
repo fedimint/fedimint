@@ -332,18 +332,7 @@
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
 <a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Add;
-<span class="kw">use </span>std::sync::Arc;
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
@@ -356,11 +345,12 @@
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractAccount;
+<span class="kw">use </span>fedimint_ln_common::contracts::DecryptedPreimageStatus;
 <span class="kw">use </span>fedimint_ln_common::{LightningClientContext, LightningInput};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tracing::{error, info, warn};
+<span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::LightningClientStateMachines;
 
@@ -515,27 +505,20 @@
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;LightningReceiveStateMachine&gt;&gt; {
         <span class="kw">let </span>invoice = <span class="self">self</span>.invoice.clone();
-        <span class="kw">let </span>timeout = invoice.expiry_time();
         <span class="kw">let </span>keypair = <span class="self">self</span>.keypair;
         <span class="kw">let </span>global_context = global_context.clone();
-        <span class="macro">vec!</span>[
-            StateTransition::new(
-                <span class="self">Self</span>::await_incoming_contract_account(invoice, global_context.clone()),
-                <span class="kw">move </span>|dbtx, contract, old_state| {
-                    Box::pin(<span class="self">Self</span>::transition_funded(
-                        old_state,
-                        keypair,
-                        contract,
-                        dbtx,
-                        global_context.clone(),
-                    ))
-                },
-            ),
-            StateTransition::new(
-                <span class="self">Self</span>::await_payment_timeout(timeout),
-                |_dbtx, (), old_state| Box::pin(<span class="self">Self</span>::transition_timeout(old_state)),
-            ),
-        ]
+        <span class="macro">vec!</span>[StateTransition::new(
+            <span class="self">Self</span>::await_incoming_contract_account(invoice, global_context.clone()),
+            <span class="kw">move </span>|dbtx, contract, old_state| {
+                Box::pin(<span class="self">Self</span>::transition_funded(
+                    old_state,
+                    keypair,
+                    contract,
+                    dbtx,
+                    global_context.clone(),
+                ))
+            },
+        )]
     }
 
     <span class="kw">async fn </span>await_incoming_contract_account(
@@ -544,14 +527,29 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;IncomingContractAccount, LightningReceiveError&gt; {
         <span class="kw">let </span>contract_id = (<span class="kw-2">*</span>invoice.payment_hash()).into();
         <span class="kw">loop </span>{
+            <span class="comment">// Consider time before the api call to account for network delays
+            </span><span class="kw">let </span>now_since_epoch = fedimint_core::time::duration_since_epoch();
             <span class="kw">match </span>global_context
                 .module_api()
-                .wait_preimage_decrypted(contract_id)
+                .get_decrypted_preimage_status(contract_id)
                 .<span class="kw">await
             </span>{
-                <span class="prelude-val">Ok</span>((incoming_contract_account, preimage)) =&gt; <span class="kw">match </span>preimage {
-                    <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(incoming_contract_account),
-                    <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(LightningReceiveError::InvalidPreimage),
+                <span class="prelude-val">Ok</span>((incoming_contract_account, status)) =&gt; <span class="kw">match </span>status {
+                    DecryptedPreimageStatus::Pending =&gt; {
+                        <span class="comment">// only when we are sure that the invoice is still pending that we can check
+                        // for a timeout
+                        </span><span class="kw">const </span>TOLERANCE: Duration = Duration::from_secs(<span class="number">60</span>); <span class="comment">// tolerate some clock skew
+                        </span><span class="kw">let </span>invoice_since_epoch = invoice.duration_since_epoch() + TOLERANCE;
+                        <span class="kw">if </span>now_since_epoch &gt; invoice_since_epoch {
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(LightningReceiveError::Timeout);
+                        } <span class="kw">else </span>{
+                            <span class="macro">debug!</span>(<span class="string">&quot;Still waiting preimage decryption for contract {contract_id}&quot;</span>);
+                        }
+                    }
+                    DecryptedPreimageStatus::Some(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(incoming_contract_account),
+                    DecryptedPreimageStatus::Invalid =&gt; {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningReceiveError::InvalidPreimage)
+                    }
                 },
                 <span class="comment">// FIXME: should we filter for retryable errors here to not swallow implementation
                 // bugs? (there exist more places like this)
@@ -562,7 +560,6 @@
                     <span class="macro">warn!</span>(<span class="string">&quot;External LN payment non-retryable error waiting for preimage decryption: {error:?}&quot;</span>);
                 }
             }
-
             sleep(RETRY_DELAY).<span class="kw">await</span>;
         }
     }
@@ -610,23 +607,6 @@
 
         global_context.claim_input(dbtx, client_input).<span class="kw">await
     </span>}
-
-    <span class="kw">async fn </span>await_payment_timeout(timeout: Duration) {
-        <span class="comment">// Add 10% of the invoice expiry_time as a buffer before we stop awaiting the
-        // payment
-        </span><span class="kw">let </span>timeout_buffer = timeout.as_secs_f64() * <span class="number">0.1</span>;
-        <span class="kw">let </span>payment_timeout = timeout.add(Duration::from_secs_f64(timeout_buffer));
-        sleep(payment_timeout).<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>transition_timeout(
-        old_state: LightningReceiveStateMachine,
-    ) -&gt; LightningReceiveStateMachine {
-        LightningReceiveStateMachine {
-            operation_id: old_state.operation_id,
-            state: LightningReceiveStates::Canceled(LightningReceiveError::Timeout),
-        }
-    }
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]

@@ -99,9 +99,6 @@
 <a href="#99" id="99">99</a>
 <a href="#100" id="100">100</a>
 <a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! A library for cooperative port allocation between multiple processes.
 //!
 //! Fedimint tests in many places need to allocate ranges of unused ports for
@@ -124,7 +121,7 @@
 
 <span class="kw">use </span>std::net::TcpListener;
 <span class="kw">use </span>std::path::PathBuf;
-<span class="kw">use </span>std::time::{Duration, UNIX_EPOCH};
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>rand::{thread_rng, Rng};
@@ -132,13 +129,10 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::data::DataDir;
 
-<span class="kw">type </span>UnixTimstap = u64;
+<span class="kw">type </span>UnixTimestamp = u64;
 
-<span class="kw">pub fn </span>now_ts() -&gt; UnixTimstap {
-    fedimint_core::time::now()
-        .duration_since(UNIX_EPOCH)
-        .expect(<span class="string">&quot;localt time out of valid range&quot;</span>)
-        .as_secs()
+<span class="kw">pub fn </span>now_ts() -&gt; UnixTimestamp {
+    fedimint_core::time::duration_since_epoch().as_secs()
 }
 
 <span class="kw">pub fn </span>data_dir() -&gt; anyhow::Result&lt;PathBuf&gt; {

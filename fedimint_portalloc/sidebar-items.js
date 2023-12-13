@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["data_dir","now_ts","port_alloc"],"mod":["data","util"],"type":["UnixTimstap"]};
+window.SIDEBAR_ITEMS = {"fn":["data_dir","now_ts","port_alloc"],"mod":["data","util"],"type":["UnixTimestamp"]};

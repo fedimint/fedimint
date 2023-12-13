@@ -1298,9 +1298,6 @@
 <a href="#1298" id="1298">1298</a>
 <a href="#1299" id="1299">1299</a>
 <a href="#1300" id="1300">1300</a>
-<a href="#1301" id="1301">1301</a>
-<a href="#1302" id="1302">1302</a>
-<a href="#1303" id="1303">1303</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -2431,10 +2428,7 @@
     opts: Opts,
     <span class="kw-2">mut </span>event_receiver: mpsc::UnboundedReceiver&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span>timestamp_seconds = fedimint_core::time::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    <span class="kw">let </span>timestamp_seconds = fedimint_core::time::duration_since_epoch().as_secs();
     <span class="kw">let </span><span class="kw-2">mut </span>metrics_json_output_files = <span class="macro">vec!</span>[];
     <span class="kw">let </span><span class="kw-2">mut </span>previous_metrics = <span class="macro">vec!</span>[];
     <span class="kw">let </span><span class="kw-2">mut </span>comparison_output = <span class="prelude-val">None</span>;

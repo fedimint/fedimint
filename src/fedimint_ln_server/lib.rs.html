@@ -1709,6 +1709,36 @@
 <a href="#1709" id="1709">1709</a>
 <a href="#1710" id="1710">1710</a>
 <a href="#1711" id="1711">1711</a>
+<a href="#1712" id="1712">1712</a>
+<a href="#1713" id="1713">1713</a>
+<a href="#1714" id="1714">1714</a>
+<a href="#1715" id="1715">1715</a>
+<a href="#1716" id="1716">1716</a>
+<a href="#1717" id="1717">1717</a>
+<a href="#1718" id="1718">1718</a>
+<a href="#1719" id="1719">1719</a>
+<a href="#1720" id="1720">1720</a>
+<a href="#1721" id="1721">1721</a>
+<a href="#1722" id="1722">1722</a>
+<a href="#1723" id="1723">1723</a>
+<a href="#1724" id="1724">1724</a>
+<a href="#1725" id="1725">1725</a>
+<a href="#1726" id="1726">1726</a>
+<a href="#1727" id="1727">1727</a>
+<a href="#1728" id="1728">1728</a>
+<a href="#1729" id="1729">1729</a>
+<a href="#1730" id="1730">1730</a>
+<a href="#1731" id="1731">1731</a>
+<a href="#1732" id="1732">1732</a>
+<a href="#1733" id="1733">1733</a>
+<a href="#1734" id="1734">1734</a>
+<a href="#1735" id="1735">1735</a>
+<a href="#1736" id="1736">1736</a>
+<a href="#1737" id="1737">1737</a>
+<a href="#1738" id="1738">1738</a>
+<a href="#1739" id="1739">1739</a>
+<a href="#1740" id="1740">1740</a>
+<a href="#1741" id="1741">1741</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -1725,7 +1755,8 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
-    LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT,
+    GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
+    REGISTER_GATEWAY_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
@@ -1745,8 +1776,9 @@
 };
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 <span class="kw">use </span>fedimint_ln_common::contracts::{
-    Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
-    IdentifiableContract, Preimage, PreimageDecryptionShare, PreimageKey,
+    Contract, ContractId, ContractOutcome, DecryptedPreimage, DecryptedPreimageStatus,
+    EncryptedPreimage, FundedContract, IdentifiableContract, Preimage, PreimageDecryptionShare,
+    PreimageKey,
 };
 <span class="kw">use </span>fedimint_ln_common::db::{
     AgreedDecryptionShareContractIdPrefix, AgreedDecryptionShareKey,
@@ -2600,6 +2632,12 @@
                 }
             },
             <span class="macro">api_endpoint! </span>{
+                GET_DECRYPTED_PREIMAGE_STATUS,
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; (IncomingContractAccount, DecryptedPreimageStatus) {
+                    <span class="prelude-val">Ok</span>(module.get_decrypted_preimage_status(context, contract_id).<span class="kw">await</span>)
+                }
+            },
+            <span class="macro">api_endpoint! </span>{
                 AWAIT_PREIMAGE_DECRYPTION,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; (IncomingContractAccount, <span class="prelude-ty">Option</span>&lt;Preimage&gt;) {
                     <span class="prelude-val">Ok</span>(module.wait_preimage_decrypted(context, contract_id).<span class="kw">await</span>)
@@ -2741,6 +2779,28 @@
             });
         future.<span class="kw">await
     </span>}
+
+    <span class="kw">async fn </span>get_decrypted_preimage_status(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        context: <span class="kw-2">&amp;mut </span>ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;,
+        contract_id: ContractId,
+    ) -&gt; (IncomingContractAccount, DecryptedPreimageStatus) {
+        <span class="kw">let </span>f_contract = context.wait_key_exists(ContractKey(contract_id));
+        <span class="kw">let </span>contract = f_contract.<span class="kw">await</span>;
+        <span class="kw">let </span>incoming_contract_account = <span class="self">Self</span>::get_incoming_contract_account(contract);
+        <span class="kw">match </span><span class="kw-2">&amp;</span>incoming_contract_account.contract.decrypted_preimage {
+            DecryptedPreimage::Some(key) =&gt; (
+                incoming_contract_account.to_owned(),
+                DecryptedPreimageStatus::Some(Preimage(sha256::Hash::hash(<span class="kw-2">&amp;</span>key.<span class="number">0</span>).into_inner())),
+            ),
+            DecryptedPreimage::Pending =&gt; {
+                (incoming_contract_account, DecryptedPreimageStatus::Pending)
+            }
+            DecryptedPreimage::Invalid =&gt; {
+                (incoming_contract_account, DecryptedPreimageStatus::Invalid)
+            }
+        }
+    }
 
     <span class="kw">async fn </span>wait_preimage_decrypted(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

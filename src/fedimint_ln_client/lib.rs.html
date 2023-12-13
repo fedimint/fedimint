@@ -1531,8 +1531,6 @@
 <a href="#1531" id="1531">1531</a>
 <a href="#1532" id="1532">1532</a>
 <a href="#1533" id="1533">1533</a>
-<a href="#1534" id="1534">1534</a>
-<a href="#1535" id="1535">1535</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -1542,7 +1540,7 @@
 <span class="kw">use </span>std::iter::once;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::{Duration, SystemTime};
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, ensure, format_err, Context};
 <span class="kw">use </span>async_stream::stream;
@@ -2295,9 +2293,7 @@
             final_route_hints.append(<span class="kw-2">&amp;mut </span>two_hop_route_hints);
         }
 
-        <span class="kw">let </span>duration_since_epoch = fedimint_core::time::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap();
+        <span class="kw">let </span>duration_since_epoch = fedimint_core::time::duration_since_epoch();
 
         <span class="kw">let </span><span class="kw-2">mut </span>invoice_builder = InvoiceBuilder::new(network.into())
             .amount_milli_satoshis(amount.msats)
