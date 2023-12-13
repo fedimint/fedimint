@@ -14,7 +14,8 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
-    LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT,
+    GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
+    REGISTER_GATEWAY_ENDPOINT,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -34,8 +35,9 @@ use fedimint_ln_common::config::{
 };
 use fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 use fedimint_ln_common::contracts::{
-    Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
-    IdentifiableContract, Preimage, PreimageDecryptionShare, PreimageKey,
+    Contract, ContractId, ContractOutcome, DecryptedPreimage, DecryptedPreimageStatus,
+    EncryptedPreimage, FundedContract, IdentifiableContract, Preimage, PreimageDecryptionShare,
+    PreimageKey,
 };
 use fedimint_ln_common::db::{
     AgreedDecryptionShareContractIdPrefix, AgreedDecryptionShareKey,
@@ -889,6 +891,12 @@ impl ServerModule for Lightning {
                 }
             },
             api_endpoint! {
+                GET_DECRYPTED_PREIMAGE_STATUS,
+                async |module: &Lightning, context, contract_id: ContractId| -> (IncomingContractAccount, DecryptedPreimageStatus) {
+                    Ok(module.get_decrypted_preimage_status(context, contract_id).await)
+                }
+            },
+            api_endpoint! {
                 AWAIT_PREIMAGE_DECRYPTION,
                 async |module: &Lightning, context, contract_id: ContractId| -> (IncomingContractAccount, Option<Preimage>) {
                     Ok(module.wait_preimage_decrypted(context, contract_id).await)
@@ -1029,6 +1037,28 @@ impl Lightning {
                 }
             });
         future.await
+    }
+
+    async fn get_decrypted_preimage_status(
+        &self,
+        context: &mut ApiEndpointContext<'_>,
+        contract_id: ContractId,
+    ) -> (IncomingContractAccount, DecryptedPreimageStatus) {
+        let f_contract = context.wait_key_exists(ContractKey(contract_id));
+        let contract = f_contract.await;
+        let incoming_contract_account = Self::get_incoming_contract_account(contract);
+        match &incoming_contract_account.contract.decrypted_preimage {
+            DecryptedPreimage::Some(key) => (
+                incoming_contract_account.to_owned(),
+                DecryptedPreimageStatus::Some(Preimage(sha256::Hash::hash(&key.0).into_inner())),
+            ),
+            DecryptedPreimage::Pending => {
+                (incoming_contract_account, DecryptedPreimageStatus::Pending)
+            }
+            DecryptedPreimage::Invalid => {
+                (incoming_contract_account, DecryptedPreimageStatus::Invalid)
+            }
+        }
     }
 
     async fn wait_preimage_decrypted(

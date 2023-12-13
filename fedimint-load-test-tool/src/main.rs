@@ -1128,10 +1128,7 @@ async fn handle_metrics_summary(
     opts: Opts,
     mut event_receiver: mpsc::UnboundedReceiver<MetricEvent>,
 ) -> anyhow::Result<()> {
-    let timestamp_seconds = fedimint_core::time::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let timestamp_seconds = fedimint_core::time::duration_since_epoch().as_secs();
     let mut metrics_json_output_files = vec![];
     let mut previous_metrics = vec![];
     let mut comparison_output = None;

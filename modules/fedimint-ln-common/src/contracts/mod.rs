@@ -136,6 +136,17 @@ impl PreimageKey {
     }
 }
 
+/// Current status of preimage decryption
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub enum DecryptedPreimageStatus {
+    /// There aren't enough decryption shares yet
+    Pending,
+    /// The decrypted preimage was valid
+    Some(Preimage),
+    /// The decrypted preimage was invalid
+    Invalid,
+}
+
 /// Possible outcomes of preimage decryption
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum DecryptedPreimage {
