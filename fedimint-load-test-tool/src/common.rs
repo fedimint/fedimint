@@ -229,11 +229,14 @@ pub async fn gateway_pay_invoice(
 ) -> anyhow::Result<()> {
     let m = fedimint_core::time::now();
     let lightning_module = &client.get_first_module::<LightningClientModule>();
+    let gateway = lightning_module.select_active_gateway_opt().await;
     let OutgoingLightningPayment {
         payment_type,
         contract_id: _,
         fee: _,
-    } = lightning_module.pay_bolt11_invoice(invoice, ()).await?;
+    } = lightning_module
+        .pay_bolt11_invoice(gateway, invoice, ())
+        .await?;
     let operation_id = match payment_type {
         fedimint_ln_client::PayType::Internal(_) => bail!("Internal payment not expected"),
         fedimint_ln_client::PayType::Lightning(operation_id) => operation_id,
