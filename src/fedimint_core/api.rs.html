@@ -1246,7 +1246,6 @@
 <a href="#1246" id="1246">1246</a>
 <a href="#1247" id="1247">1247</a>
 <a href="#1248" id="1248">1248</a>
-<a href="#1249" id="1249">1249</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1280,8 +1279,7 @@
 <span class="kw">use </span>fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::{Future, StreamExt};
-<span class="kw">use </span>jsonrpsee_core::client::ClientT;
-<span class="kw">use </span>jsonrpsee_core::Error <span class="kw">as </span>JsonRpcError;
+<span class="kw">use </span>jsonrpsee_core::client::{ClientT, Error <span class="kw">as </span>JsonRpcClientError};
 <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
 </span><span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -1311,7 +1309,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::util::SafeUrl;
 
 <span class="kw">pub type </span>PeerResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, PeerError&gt;;
-<span class="kw">pub type </span>JsonRpcResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, jsonrpsee_core::Error&gt;;
+<span class="kw">pub type </span>JsonRpcResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, JsonRpcClientError&gt;;
 <span class="kw">pub type </span>FederationResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, FederationError&gt;;
 <span class="kw">pub type </span>SerdeOutputOutcome = SerdeModuleEncoding&lt;DynOutputOutcome&gt;;
 
@@ -1323,7 +1321,7 @@
     <span class="attr">#[error(<span class="string">&quot;Invalid peer id: {peer_id}&quot;</span>)]
     </span>InvalidPeerId { peer_id: PeerId },
     <span class="attr">#[error(<span class="string">&quot;Rpc error: {0}&quot;</span>)]
-    </span>Rpc(<span class="attr">#[from] </span>JsonRpcError),
+    </span>Rpc(<span class="attr">#[from] </span>JsonRpcClientError),
     <span class="attr">#[error(<span class="string">&quot;Invalid response: {0}&quot;</span>)]
     </span>InvalidResponse(String),
 }
@@ -1335,11 +1333,11 @@
             PeerError::InvalidPeerId { peer_id: <span class="kw">_ </span>} =&gt; <span class="bool-val">false</span>,
             PeerError::Rpc(rpc_e) =&gt; <span class="kw">match </span>rpc_e {
                 <span class="comment">// TODO: Does this cover all retryable cases?
-                </span>JsonRpcError::Transport(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-                JsonRpcError::MaxSlotsExceeded =&gt; <span class="bool-val">true</span>,
-                JsonRpcError::RequestTimeout =&gt; <span class="bool-val">true</span>,
-                JsonRpcError::RestartNeeded(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-                JsonRpcError::Call(e) =&gt; e.code() == <span class="number">404</span>,
+                </span>JsonRpcClientError::Transport(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+                JsonRpcClientError::MaxSlotsExceeded =&gt; <span class="bool-val">true</span>,
+                JsonRpcClientError::RequestTimeout =&gt; <span class="bool-val">true</span>,
+                JsonRpcClientError::RestartNeeded(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+                JsonRpcClientError::Call(e) =&gt; e.code() == <span class="number">404</span>,
                 <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
             },
             PeerError::InvalidResponse(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
@@ -1425,7 +1423,7 @@
         peer_id: PeerId,
         method: <span class="kw-2">&amp;</span>str,
         params: <span class="kw-2">&amp;</span>[Value],
-    ) -&gt; result::Result&lt;Value, jsonrpsee_core::Error&gt;;
+    ) -&gt; result::Result&lt;Value, JsonRpcClientError&gt;;
 }
 
 <span class="doccomment">/// Set of api versions for each component (core + modules)
@@ -1469,7 +1467,7 @@
                 <span class="kw">let </span>result = <span class="kw">if let </span><span class="prelude-val">Some</span>(timeout) = timeout {
                     <span class="kw">match </span>fedimint_core::task::timeout(timeout, request).<span class="kw">await </span>{
                         <span class="prelude-val">Ok</span>(result) =&gt; result,
-                        <span class="prelude-val">Err</span>(_timeout) =&gt; <span class="prelude-val">Err</span>(JsonRpcError::RequestTimeout),
+                        <span class="prelude-val">Err</span>(_timeout) =&gt; <span class="prelude-val">Err</span>(JsonRpcClientError::RequestTimeout),
                     }
                 } <span class="kw">else </span>{
                     request.<span class="kw">await
@@ -2031,7 +2029,7 @@
             </span>.peers
             .iter()
             .find(|m| m.peer_id == peer_id)
-            .ok_or_else(|| JsonRpcError::Custom(<span class="macro">format!</span>(<span class="string">&quot;Invalid peer_id: {peer_id}&quot;</span>)))<span class="question-mark">?</span>;
+            .ok_or_else(|| JsonRpcClientError::Custom(<span class="macro">format!</span>(<span class="string">&quot;Invalid peer_id: {peer_id}&quot;</span>)))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>method = <span class="kw">match </span><span class="self">self</span>.module_id {
             <span class="prelude-val">None </span>=&gt; method.to_string(),
@@ -2043,13 +2041,13 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>JsonRpcClient: ClientT + Sized + MaybeSend + MaybeSync {
-    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt;;
+    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt;;
     <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>JsonRpcClient <span class="kw">for </span>WsClient {
-    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt; {
+    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt; {
         <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
         </span><span class="kw">return </span>WsClientBuilder::default()
             .use_webpki_rustls()
@@ -2269,7 +2267,7 @@
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
-    <span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T = ()&gt; = std::result::Result&lt;T, JsonRpcError&gt;;
+    <span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T = ()&gt; = std::result::Result&lt;T, JsonRpcClientError&gt;;
 
     <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
     </span><span class="kw">trait </span>SimpleClient: Sized {
@@ -2315,7 +2313,7 @@
         <span class="kw">async fn </span>batch_request&lt;<span class="lifetime">&#39;a</span>, R&gt;(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             _batch: BatchRequestBuilder&lt;<span class="lifetime">&#39;a</span>&gt;,
-        ) -&gt; std::result::Result&lt;BatchResponse&lt;<span class="lifetime">&#39;a</span>, R&gt;, jsonrpsee_core::Error&gt;
+        ) -&gt; std::result::Result&lt;BatchResponse&lt;<span class="lifetime">&#39;a</span>, R&gt;, jsonrpsee_core::client::Error&gt;
         <span class="kw">where
             </span>R: DeserializeOwned + fmt::Debug + <span class="lifetime">&#39;a</span>,
         {
@@ -2400,7 +2398,7 @@
                 <span class="comment">// slow down
                 </span>task::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
                 <span class="kw">if </span>FAIL.lock().unwrap().contains(<span class="kw-2">&amp;</span>id) {
-                    <span class="prelude-val">Err</span>(jsonrpsee_core::Error::Transport(<span class="macro">anyhow!</span>(
+                    <span class="prelude-val">Err</span>(jsonrpsee_core::client::Error::Transport(<span class="macro">anyhow!</span>(
                         <span class="string">&quot;intentional error&quot;
                     </span>)))
                 } <span class="kw">else </span>{
@@ -2416,7 +2414,7 @@
                 <span class="kw">if </span><span class="self">self</span>.is_connected() {
                     <span class="prelude-val">Ok</span>(<span class="string">&quot;null&quot;</span>.to_string())
                 } <span class="kw">else </span>{
-                    <span class="prelude-val">Err</span>(jsonrpsee_core::Error::Transport(<span class="macro">anyhow!</span>(
+                    <span class="prelude-val">Err</span>(jsonrpsee_core::client::Error::Transport(<span class="macro">anyhow!</span>(
                         <span class="string">&quot;client is disconnected&quot;
                     </span>)))
                 }
