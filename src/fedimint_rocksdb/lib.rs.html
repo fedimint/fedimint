@@ -592,10 +592,46 @@
 <a href="#592" id="592">592</a>
 <a href="#593" id="593">593</a>
 <a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">use </span>std::path::Path;
+<span class="kw">use </span>std::str::FromStr;
 
-<span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::db::{
     IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
@@ -604,6 +640,7 @@
 <span class="kw">use </span>futures::stream;
 <span class="kw">pub use </span>rocksdb;
 <span class="kw">use </span>rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
+<span class="kw">use </span>tracing::debug;
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>RocksDb(rocksdb::OptimisticTransactionDB);
@@ -611,9 +648,10 @@
 <span class="kw">pub struct </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt;(rocksdb::Transaction&lt;<span class="lifetime">&#39;a</span>, rocksdb::OptimisticTransactionDB&gt;);
 
 <span class="kw">impl </span>RocksDb {
-    <span class="kw">pub fn </span>open(db_path: <span class="kw">impl </span>AsRef&lt;Path&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;RocksDb, rocksdb::Error&gt; {
+    <span class="kw">pub fn </span>open(db_path: <span class="kw">impl </span>AsRef&lt;Path&gt;) -&gt; anyhow::Result&lt;RocksDb&gt; {
+        <span class="kw">let </span>opts = get_default_options()<span class="question-mark">?</span>;
         <span class="kw">let </span>db: rocksdb::OptimisticTransactionDB =
-            rocksdb::OptimisticTransactionDB::&lt;rocksdb::SingleThreaded&gt;::open_default(<span class="kw-2">&amp;</span>db_path)<span class="question-mark">?</span>;
+            rocksdb::OptimisticTransactionDB::&lt;rocksdb::SingleThreaded&gt;::open(<span class="kw-2">&amp;</span>opts, <span class="kw-2">&amp;</span>db_path)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(RocksDb(db))
     }
 
@@ -622,14 +660,46 @@
     </span>}
 }
 
+<span class="kw">fn </span>is_power_of_two(num: usize) -&gt; bool {
+    num.count_ones() == <span class="number">1
+</span>}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>is_power_of_two_sanity() {
+    <span class="macro">assert!</span>(!is_power_of_two(<span class="number">0</span>));
+    <span class="macro">assert!</span>(is_power_of_two(<span class="number">1</span>));
+    <span class="macro">assert!</span>(is_power_of_two(<span class="number">2</span>));
+    <span class="macro">assert!</span>(!is_power_of_two(<span class="number">3</span>));
+    <span class="macro">assert!</span>(is_power_of_two(<span class="number">4</span>));
+    <span class="macro">assert!</span>(!is_power_of_two(<span class="number">5</span>));
+    <span class="macro">assert!</span>(is_power_of_two(<span class="number">2 </span>&lt;&lt; <span class="number">10</span>));
+    <span class="macro">assert!</span>(!is_power_of_two((<span class="number">2 </span>&lt;&lt; <span class="number">10</span>) + <span class="number">1</span>));
+}
+
+<span class="kw">fn </span>get_default_options() -&gt; anyhow::Result&lt;rocksdb::Options&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>opts = rocksdb::Options::default();
+    <span class="kw">const </span>VAR_NAME: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_ROCKSDB_WRITE_BUFFER_SIZE&quot;</span>;
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(var) = std::env::var(VAR_NAME) {
+        <span class="macro">debug!</span>(var, <span class="string">&quot;Using custom write buffer size&quot;</span>);
+        <span class="kw">let </span>size: usize =
+            FromStr::from_str(<span class="kw-2">&amp;</span>var).with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Could not parse {VAR_NAME}&quot;</span>))<span class="question-mark">?</span>;
+        <span class="kw">if </span>!is_power_of_two(size) {
+            <span class="macro">bail!</span>(<span class="string">&quot;{} is not a power of 2&quot;</span>, VAR_NAME);
+        }
+        opts.set_write_buffer_size(size);
+    }
+    opts.create_if_missing(<span class="bool-val">true</span>);
+    <span class="prelude-val">Ok</span>(opts)
+}
+
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>RocksDbReadOnly(rocksdb::DB);
 
 <span class="kw">pub struct </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>rocksdb::DB);
 
 <span class="kw">impl </span>RocksDbReadOnly {
-    <span class="kw">pub fn </span>open_read_only(db_path: <span class="kw">impl </span>AsRef&lt;Path&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;RocksDbReadOnly, rocksdb::Error&gt; {
-        <span class="kw">let </span>opts = rocksdb::Options::default();
+    <span class="kw">pub fn </span>open_read_only(db_path: <span class="kw">impl </span>AsRef&lt;Path&gt;) -&gt; anyhow::Result&lt;RocksDbReadOnly&gt; {
+        <span class="kw">let </span>opts = get_default_options()<span class="question-mark">?</span>;
         <span class="kw">let </span>db = rocksdb::DB::open_for_read_only(<span class="kw-2">&amp;</span>opts, db_path, <span class="bool-val">false</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(RocksDbReadOnly(db))
     }

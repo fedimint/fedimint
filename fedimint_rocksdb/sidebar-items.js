@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["next_prefix"],"struct":["RocksDb","RocksDbReadOnly","RocksDbReadOnlyTransaction","RocksDbTransaction"]};
+window.SIDEBAR_ITEMS = {"fn":["get_default_options","is_power_of_two","next_prefix"],"struct":["RocksDb","RocksDbReadOnly","RocksDbReadOnlyTransaction","RocksDbTransaction"]};

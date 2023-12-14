@@ -168,6 +168,8 @@
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
@@ -318,6 +320,8 @@
         </span>FM_TEST_BITCOIND_RPC: String = <span class="macro">f!</span>(<span class="string">&quot;http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}&quot;</span>);
         FM_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">&quot;http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}&quot;</span>);
         FM_BITCOIN_RPC_KIND: String = <span class="string">&quot;bitcoind&quot;</span>;
+
+        FM_ROCKSDB_WRITE_BUFFER_SIZE : String = (<span class="number">1 </span>&lt;&lt; <span class="number">20</span>).to_string();
     }
 }
 
