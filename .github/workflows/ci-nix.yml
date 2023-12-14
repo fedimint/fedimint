@@ -136,7 +136,7 @@ jobs:
 
       - name: Upload failed test build dirs
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: "fedimint-failed-test-logs-${{ github.run_number }}-${{ matrix.host}}"
           path: |
@@ -389,7 +389,7 @@ jobs:
           done
 
       - name: Upload Binaries
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: "${{ matrix.build.flake-output}}-linux-x86_64"
           path: "bins/**"
@@ -413,13 +413,13 @@ jobs:
           done
 
       - name: Upload DEB packages
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: "deb-bundle"
           path: "debs/**.deb"
 
       - name: Upload RPM packages
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: "rpm-bundle"
           path: "rpms/**.rpm"
