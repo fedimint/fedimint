@@ -37,7 +37,7 @@ use tokio_rustls::rustls;
 use tracing::{error, info, warn};
 
 use crate::config::io::{
-    read_server_config, write_server_config, CONFIG_STAGING_DIR, PLAINTEXT_PASSWORD, PRIVATE_EXT,
+    read_server_config, write_server_config, CONFIG_STAGING_DIR, PASSWORD_FILE, PRIVATE_EXT,
     SALT_EXT, SALT_FILE, SERVER_FILES,
 };
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
@@ -341,7 +341,7 @@ impl ConfigGenApi {
 
         // TODO: Make writing password optional
         let password_path = cfg_staging_dir
-            .join(PLAINTEXT_PASSWORD)
+            .join(PASSWORD_FILE)
             .with_extension(PRIVATE_EXT);
         write_new(password_path, &auth).map_err(io_error)?;
 

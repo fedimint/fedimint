@@ -20,7 +20,7 @@ use fedimint_ln_server::LightningInit;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintInit;
 use fedimint_server::config::api::ConfigGenSettings;
-use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD, PRIVATE_EXT};
+use fedimint_server::config::io::{DB_FILE, PASSWORD_FILE, PRIVATE_EXT};
 use fedimint_server::FedimintServer;
 use fedimint_wallet_server::WalletInit;
 use futures::FutureExt;
@@ -292,7 +292,7 @@ async fn run(
     if let Some(password) = opts.password {
         let password_path = opts
             .data_dir
-            .join(PLAINTEXT_PASSWORD)
+            .join(PASSWORD_FILE)
             .with_extension(PRIVATE_EXT);
         write_overwrite(password_path, password)?;
     };
