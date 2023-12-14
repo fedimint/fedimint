@@ -72,7 +72,7 @@ pub(crate) struct MintRestoreInProgressState {
     start_epoch: u64,
     next_epoch: u64,
     end_epoch: u64,
-    spendable_notes: TieredMulti<SpendableNote>,
+    spendable_notes: BTreeMap<Nonce, (Amount, SpendableNote)>,
     /// Nonces that we track that are currently spendable.
     pending_outputs: BTreeMap<Nonce, (OutPoint, Amount, NoteIssuanceRequest)>,
     /// Next nonces that we expect might soon get used.
@@ -301,7 +301,11 @@ impl MintRestoreInProgressState {
             start_epoch: backup.session_count,
             next_epoch: backup.session_count,
             end_epoch: current_epoch_count + 1,
-            spendable_notes: backup.spendable_notes,
+            spendable_notes: backup
+                .spendable_notes
+                .into_iter_items()
+                .map(|(amount, note)| (note.nonce(), (amount, note)))
+                .collect(),
             pending_outputs: backup
                 .pending_notes
                 .into_iter()
@@ -360,6 +364,7 @@ impl MintRestoreInProgressState {
             MintInput::V0(input) => {
                 // We attempt to delete any nonce we see as spent, simple
                 self.pending_outputs.remove(&input.note.nonce);
+                self.spendable_notes.remove(&input.note.nonce);
             }
             MintInput::Default { variant, .. } => {
                 trace!("Ignoring future mint input variant {variant}");
@@ -542,8 +547,8 @@ impl MintRestoreInProgressState {
 
     fn finalize(self) -> EcashRecoveryFinalState {
         EcashRecoveryFinalState {
-            spendable_notes: self.spendable_notes,
-            unconfirmed_notes: self.pending_outputs.values().cloned().collect(),
+            spendable_notes: self.spendable_notes.into_values().collect(),
+            unconfirmed_notes: self.pending_outputs.into_values().collect(),
             // next note idx is the last one detected as used + 1
             next_note_idx: Tiered::from_iter(
                 self.last_mined_nonce_idx
