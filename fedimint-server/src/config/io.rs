@@ -28,7 +28,7 @@ pub const CONSENSUS_CONFIG_FILE: &str = "consensus";
 pub const CLIENT_INVITE_CODE_FILE: &str = "invite-code";
 
 /// Salt backup for combining with the private key
-pub const SALT_FILE: &str = "private";
+pub const SALT_FILE: &str = "salt";
 
 /// Plain-text stored password, used to restart the server without having to
 /// send a password in via the API
@@ -37,8 +37,6 @@ pub const PASSWORD_FILE: &str = "password";
 /// Database file name
 pub const DB_FILE: &str = "database";
 
-pub const SALT_EXT: &str = "salt";
-// TODO: this is confusing with PRIVATE_KEYS_FILE, SALT_FILE
 pub const PRIVATE_EXT: &str = "private";
 pub const JSON_EXT: &str = "json";
 const ENCRYPTED_EXT: &str = "encrypt";
@@ -52,7 +50,7 @@ lazy_static! {
         m.insert((LOCAL_CONFIG_FILE.to_owned(), JSON_EXT.to_owned()));
         m.insert((CONSENSUS_CONFIG_FILE.to_owned(), JSON_EXT.to_owned()));
         m.insert((CLIENT_INVITE_CODE_FILE.to_owned(), "".to_owned()));
-        m.insert((SALT_FILE.to_owned(), SALT_EXT.to_owned()));
+        m.insert((SALT_FILE.to_owned(), PRIVATE_EXT.to_owned()));
         m.insert((PASSWORD_FILE.to_owned(), PRIVATE_EXT.to_owned()));
         m
     };
@@ -76,7 +74,7 @@ pub fn read_server_config(password: &str, path: PathBuf) -> anyhow::Result<Serve
 }
 
 fn read_salt_file(path: PathBuf) -> anyhow::Result<String> {
-    let salt = fs::read_to_string(path.join(SALT_FILE).with_extension(SALT_EXT))?;
+    let salt = fs::read_to_string(path.join(SALT_FILE).with_extension(PRIVATE_EXT))?;
     Ok(salt)
 }
 

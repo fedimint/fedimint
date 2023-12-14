@@ -38,7 +38,7 @@ use tracing::{error, info, warn};
 
 use crate::config::io::{
     read_server_config, write_server_config, CONFIG_STAGING_DIR, PASSWORD_FILE, PRIVATE_EXT,
-    SALT_EXT, SALT_FILE, SERVER_FILES,
+    SALT_FILE, SERVER_FILES,
 };
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use crate::net::peers::DelayCalculator;
@@ -345,7 +345,7 @@ impl ConfigGenApi {
             .with_extension(PRIVATE_EXT);
         write_new(password_path, &auth).map_err(io_error)?;
 
-        let salt_path = cfg_staging_dir.join(SALT_FILE).with_extension(SALT_EXT);
+        let salt_path = cfg_staging_dir.join(SALT_FILE).with_extension(PRIVATE_EXT);
         write_new(salt_path, random_salt()).map_err(io_error)?;
 
         write_server_config(

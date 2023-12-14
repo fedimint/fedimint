@@ -36,7 +36,7 @@ use fedimint_core::{task, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::{MintClientInit, MintClientModule, SpendableNote};
-use fedimint_server::config::io::{SALT_EXT, SALT_FILE};
+use fedimint_server::config::io::{PRIVATE_EXT, SALT_FILE};
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 use rand::thread_rng;
@@ -824,7 +824,7 @@ fn salt_from_file_path(file_path: &Path) -> PathBuf {
         .parent()
         .expect("File has no parent?!")
         .join(SALT_FILE)
-        .with_extension(SALT_EXT)
+        .with_extension(PRIVATE_EXT)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
