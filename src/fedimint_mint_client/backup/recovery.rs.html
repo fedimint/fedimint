@@ -606,6 +606,11 @@
 <a href="#606" id="606">606</a>
 <a href="#607" id="607">607</a>
 <a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt;
@@ -680,7 +685,7 @@
     start_epoch: u64,
     next_epoch: u64,
     end_epoch: u64,
-    spendable_notes: TieredMulti&lt;SpendableNote&gt;,
+    spendable_notes: BTreeMap&lt;Nonce, (Amount, SpendableNote)&gt;,
     <span class="doccomment">/// Nonces that we track that are currently spendable.
     </span>pending_outputs: BTreeMap&lt;Nonce, (OutPoint, Amount, NoteIssuanceRequest)&gt;,
     <span class="doccomment">/// Next nonces that we expect might soon get used.
@@ -909,7 +914,11 @@
             start_epoch: backup.session_count,
             next_epoch: backup.session_count,
             end_epoch: current_epoch_count + <span class="number">1</span>,
-            spendable_notes: backup.spendable_notes,
+            spendable_notes: backup
+                .spendable_notes
+                .into_iter_items()
+                .map(|(amount, note)| (note.nonce(), (amount, note)))
+                .collect(),
             pending_outputs: backup
                 .pending_notes
                 .into_iter()
@@ -968,6 +977,7 @@
             MintInput::V0(input) =&gt; {
                 <span class="comment">// We attempt to delete any nonce we see as spent, simple
                 </span><span class="self">self</span>.pending_outputs.remove(<span class="kw-2">&amp;</span>input.note.nonce);
+                <span class="self">self</span>.spendable_notes.remove(<span class="kw-2">&amp;</span>input.note.nonce);
             }
             MintInput::Default { variant, .. } =&gt; {
                 <span class="macro">trace!</span>(<span class="string">&quot;Ignoring future mint input variant {variant}&quot;</span>);
@@ -1150,8 +1160,8 @@
 
     <span class="kw">fn </span>finalize(<span class="self">self</span>) -&gt; EcashRecoveryFinalState {
         EcashRecoveryFinalState {
-            spendable_notes: <span class="self">self</span>.spendable_notes,
-            unconfirmed_notes: <span class="self">self</span>.pending_outputs.values().cloned().collect(),
+            spendable_notes: <span class="self">self</span>.spendable_notes.into_values().collect(),
+            unconfirmed_notes: <span class="self">self</span>.pending_outputs.into_values().collect(),
             <span class="comment">// next note idx is the last one detected as used + 1
             </span>next_note_idx: Tiered::from_iter(
                 <span class="self">self</span>.last_mined_nonce_idx
