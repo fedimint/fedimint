@@ -1,7 +1,8 @@
 #![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
 use std::path::Path;
+use std::str::FromStr;
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use fedimint_core::db::{
     IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
@@ -10,6 +11,7 @@ use fedimint_core::db::{
 use futures::stream;
 pub use rocksdb;
 use rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
+use tracing::debug;
 
 #[derive(Debug)]
 pub struct RocksDb(rocksdb::OptimisticTransactionDB);
@@ -17,9 +19,10 @@ pub struct RocksDb(rocksdb::OptimisticTransactionDB);
 pub struct RocksDbTransaction<'a>(rocksdb::Transaction<'a, rocksdb::OptimisticTransactionDB>);
 
 impl RocksDb {
-    pub fn open(db_path: impl AsRef<Path>) -> Result<RocksDb, rocksdb::Error> {
+    pub fn open(db_path: impl AsRef<Path>) -> anyhow::Result<RocksDb> {
+        let opts = get_default_options()?;
         let db: rocksdb::OptimisticTransactionDB =
-            rocksdb::OptimisticTransactionDB::<rocksdb::SingleThreaded>::open_default(&db_path)?;
+            rocksdb::OptimisticTransactionDB::<rocksdb::SingleThreaded>::open(&opts, &db_path)?;
         Ok(RocksDb(db))
     }
 
@@ -28,14 +31,46 @@ impl RocksDb {
     }
 }
 
+fn is_power_of_two(num: usize) -> bool {
+    num.count_ones() == 1
+}
+
+#[test]
+fn is_power_of_two_sanity() {
+    assert!(!is_power_of_two(0));
+    assert!(is_power_of_two(1));
+    assert!(is_power_of_two(2));
+    assert!(!is_power_of_two(3));
+    assert!(is_power_of_two(4));
+    assert!(!is_power_of_two(5));
+    assert!(is_power_of_two(2 << 10));
+    assert!(!is_power_of_two((2 << 10) + 1));
+}
+
+fn get_default_options() -> anyhow::Result<rocksdb::Options> {
+    let mut opts = rocksdb::Options::default();
+    const VAR_NAME: &str = "FM_ROCKSDB_WRITE_BUFFER_SIZE";
+    if let Ok(var) = std::env::var(VAR_NAME) {
+        debug!(var, "Using custom write buffer size");
+        let size: usize =
+            FromStr::from_str(&var).with_context(|| format!("Could not parse {VAR_NAME}"))?;
+        if !is_power_of_two(size) {
+            bail!("{} is not a power of 2", VAR_NAME);
+        }
+        opts.set_write_buffer_size(size);
+    }
+    opts.create_if_missing(true);
+    Ok(opts)
+}
+
 #[derive(Debug)]
 pub struct RocksDbReadOnly(rocksdb::DB);
 
 pub struct RocksDbReadOnlyTransaction<'a>(&'a rocksdb::DB);
 
 impl RocksDbReadOnly {
-    pub fn open_read_only(db_path: impl AsRef<Path>) -> Result<RocksDbReadOnly, rocksdb::Error> {
-        let opts = rocksdb::Options::default();
+    pub fn open_read_only(db_path: impl AsRef<Path>) -> anyhow::Result<RocksDbReadOnly> {
+        let opts = get_default_options()?;
         let db = rocksdb::DB::open_for_read_only(&opts, db_path, false)?;
         Ok(RocksDbReadOnly(db))
     }

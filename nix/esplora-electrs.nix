@@ -18,10 +18,17 @@ rustPlatform.buildRustPackage {
   version = "20230218";
 
   src = fetchFromGitHub {
-    owner = "Blockstream";
-    repo = "electrs";
-    rev = "adedee15f1fe460398a7045b292604df2161adc0";
-    hash = "sha256-KnN5C7wFtDF10yxf+1dqIMUb8Q+UuCz4CMQrUFAChuA=";
+    # original:
+    # owner = "Blockstream";
+    # repo = "electrs";
+    # rev = "adedee15f1fe460398a7045b292604df2161adc0";
+    # hash = "sha256-KnN5C7wFtDF10yxf+1dqIMUb8Q+UuCz4CMQrUFAChuA=";
+
+    # pre-allocation size patch:
+    owner = "dpc";
+    repo = "esplora-electrs";
+    rev = "8186331b7ca33668d838dab91e2dc52c388ac689";
+    hash = "sha256-D+ZdtZ57RoQsqebW0f2KsWz5/Di4Joy6walqGvGm/4o=";
   };
 
 
