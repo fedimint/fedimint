@@ -16,7 +16,7 @@ use crate::config::ServerConfig;
 pub const CLIENT_CONFIG_FILE: &str = "client";
 
 /// Server encrypted private keys file
-pub const PRIVATE_KEYS_FILE: &str = "private";
+pub const PRIVATE_KEYS_FILE: &str = "keys";
 
 /// Server locally configurable file
 pub const LOCAL_CONFIG_FILE: &str = "local";

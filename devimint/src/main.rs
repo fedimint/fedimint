@@ -215,7 +215,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         fed,
         "dev",
         "config-decrypt",
-        "--in-file={data_dir}/fedimintd-0/private.encrypt",
+        "--in-file={data_dir}/fedimintd-0/keys.encrypt",
         "--out-file={data_dir}/fedimintd-0/config-plaintext.json"
     )
     .env("FM_PASSWORD", "pass")
