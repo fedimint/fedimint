@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-mint-client"
-version = "0.2.0-rc9"
+version = "0.2.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-mint is a chaumian ecash mint module."
@@ -23,11 +23,11 @@ bitcoin_hashes = "0.11.0"
 erased-serde = "0.3"
 futures = "0.3"
 itertools = "0.10.5"
-fedimint-core = { version = "0.2.0-rc9", path = "../../fedimint-core" }
-fedimint-client = { version = "0.2.0-rc9", path = "../../fedimint-client" }
-fedimint-derive-secret = { version = "0.2.0-rc9", path = "../../crypto/derive-secret"}
-fedimint-mint-common ={ version = "0.2.0-rc9", path = "../fedimint-mint-common" }
-fedimint-logging = { version = "0.2.0-rc9", path = "../../fedimint-logging" }
+fedimint-core = { version = "0.2.0", path = "../../fedimint-core" }
+fedimint-client = { version = "0.2.0", path = "../../fedimint-client" }
+fedimint-derive-secret = { version = "0.2.0", path = "../../crypto/derive-secret"}
+fedimint-mint-common ={ version = "0.2.0", path = "../fedimint-mint-common" }
+fedimint-logging = { version = "0.2.0", path = "../../fedimint-logging" }
 rand = "0.8"
 secp256k1 = "0.24.2"
 secp256k1-zkp = "0.7.0"
@@ -36,7 +36,7 @@ serde-big-array = "0.5.1"
 serde_json = "1.0.96"
 strum = "0.24"
 strum_macros = "0.24"
-tbs = { package = "fedimint-tbs", version = "0.2.0-rc9", path = "../../crypto/tbs" }
+tbs = { package = "fedimint-tbs", version = "0.2.0", path = "../../crypto/tbs" }
 thiserror = "1.0.39"
 threshold_crypto = { workspace = true }
 tokio = { version = "1.27.0", features = [ "sync" ] }
