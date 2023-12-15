@@ -361,6 +361,8 @@
 <a href="#361" id="361">361</a>
 <a href="#362" id="362">362</a>
 <a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Incoming State Machine
 //!
 //! This shared state machine is used by clients
@@ -522,6 +524,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), IncomingSmError&gt; {
         <span class="macro">debug!</span>(<span class="string">&quot;Awaiting funding success for outpoint: {out_point:?}&quot;</span>);
         <span class="kw">for </span>retry <span class="kw">in </span><span class="number">0</span>.. {
+            <span class="kw">let </span>sleep = (retry * <span class="number">15</span>).min(<span class="number">90</span>);
             <span class="kw">match </span>global_context
                 .api()
                 .await_output_outcome::&lt;LightningOutputOutcome&gt;(
@@ -532,15 +535,14 @@
                 .<span class="kw">await
             </span>{
                 <span class="prelude-val">Err</span>(OutputOutcomeError::Timeout(<span class="kw">_</span>)) =&gt; {
-                    <span class="kw">let </span>sleep = retry * <span class="number">15</span>;
                     <span class="macro">info!</span>(<span class="string">&quot;Temporarily funding timeout for outpoint: {out_point:?}, will retry again in {sleep}s&quot;</span>);
-                    <span class="comment">// give some time for other things to run
-                    </span>fedimint_core::task::sleep(Duration::from_secs(sleep)).<span class="kw">await</span>;
-                    <span class="kw">continue</span>;
                 }
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
                     <span class="macro">debug!</span>(<span class="string">&quot;Funding success for outpoint: {out_point:?}&quot;</span>);
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                }
+                <span class="prelude-val">Err</span>(OutputOutcomeError::Federation(e)) <span class="kw">if </span>e.is_retryable() =&gt; {
+                    <span class="macro">debug!</span>(<span class="string">&quot;Awaiting output outcome failed, retrying in {sleep}s&quot;</span>,);
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">warn!</span>(<span class="string">&quot;Funding failed for outpoint: {out_point:?}: {e:?}&quot;</span>);
@@ -549,6 +551,8 @@
                     });
                 }
             }
+            <span class="comment">// give some time for other things to run
+            </span>fedimint_core::task::sleep(Duration::from_secs(sleep)).<span class="kw">await</span>;
         }
 
         <span class="macro">unreachable!</span>(<span class="string">&quot;there is too many u64s to ever get here&quot;</span>)
