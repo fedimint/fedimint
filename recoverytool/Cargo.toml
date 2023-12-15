@@ -7,6 +7,9 @@ description = "recoverytool allows retrieving on-chain funds from a offline fede
 license = "MIT"
 repository = "https://github.com/fedimint/fedimint"
 
+[package.metadata.docs.rs]
+rustc-args = ["--cfg", "tokio_unstable"]
+
 [[bin]]
 name = "recoverytool"
 path = "src/main.rs"

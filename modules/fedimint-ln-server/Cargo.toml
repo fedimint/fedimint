@@ -7,6 +7,9 @@ description = "fedimint-ln is a lightning payment service module."
 license = "MIT"
 repository = "https://github.com/fedimint/fedimint"
 
+[package.metadata.docs.rs]
+rustc-args = ["--cfg", "tokio_unstable"]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
