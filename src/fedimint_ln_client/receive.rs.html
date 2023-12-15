@@ -332,6 +332,7 @@
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
 <a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -539,8 +540,9 @@
                         <span class="comment">// only when we are sure that the invoice is still pending that we can check
                         // for a timeout
                         </span><span class="kw">const </span>TOLERANCE: Duration = Duration::from_secs(<span class="number">60</span>); <span class="comment">// tolerate some clock skew
-                        </span><span class="kw">let </span>invoice_since_epoch = invoice.duration_since_epoch() + TOLERANCE;
-                        <span class="kw">if </span>now_since_epoch &gt; invoice_since_epoch {
+                        </span><span class="kw">let </span>invoice_expiration_epoch =
+                            invoice.duration_since_epoch() + invoice.expiry_time() + TOLERANCE;
+                        <span class="kw">if </span>now_since_epoch &gt; invoice_expiration_epoch {
                             <span class="kw">return </span><span class="prelude-val">Err</span>(LightningReceiveError::Timeout);
                         } <span class="kw">else </span>{
                             <span class="macro">debug!</span>(<span class="string">&quot;Still waiting preimage decryption for contract {contract_id}&quot;</span>);
