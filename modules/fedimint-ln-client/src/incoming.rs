@@ -159,6 +159,7 @@ impl FundingOfferState {
     ) -> Result<(), IncomingSmError> {
         debug!("Awaiting funding success for outpoint: {out_point:?}");
         for retry in 0.. {
+            let sleep = (retry * 15).min(90);
             match global_context
                 .api()
                 .await_output_outcome::<LightningOutputOutcome>(
@@ -169,15 +170,14 @@ impl FundingOfferState {
                 .await
             {
                 Err(OutputOutcomeError::Timeout(_)) => {
-                    let sleep = retry * 15;
                     info!("Temporarily funding timeout for outpoint: {out_point:?}, will retry again in {sleep}s");
-                    // give some time for other things to run
-                    fedimint_core::task::sleep(Duration::from_secs(sleep)).await;
-                    continue;
                 }
                 Ok(_) => {
                     debug!("Funding success for outpoint: {out_point:?}");
                     return Ok(());
+                }
+                Err(OutputOutcomeError::Federation(e)) if e.is_retryable() => {
+                    debug!("Awaiting output outcome failed, retrying in {sleep}s",);
                 }
                 Err(e) => {
                     warn!("Funding failed for outpoint: {out_point:?}: {e:?}");
@@ -186,6 +186,8 @@ impl FundingOfferState {
                     });
                 }
             }
+            // give some time for other things to run
+            fedimint_core::task::sleep(Duration::from_secs(sleep)).await;
         }
 
         unreachable!("there is too many u64s to ever get here")
