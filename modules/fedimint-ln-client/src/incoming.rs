@@ -159,7 +159,7 @@ impl FundingOfferState {
     ) -> Result<(), IncomingSmError> {
         debug!("Awaiting funding success for outpoint: {out_point:?}");
         for retry in 0.. {
-            let sleep = retry * 15;
+            let sleep = (retry * 15).min(90);
             match global_context
                 .api()
                 .await_output_outcome::<LightningOutputOutcome>(
