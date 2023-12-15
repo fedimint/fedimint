@@ -1,15 +1,13 @@
 use std::collections::BTreeSet;
 
 use bitcoin_hashes_12::sha256;
+use fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::session_outcome::{consensus_hash_sha256, SchnorrSignature};
 use tokio::sync::watch;
 
 use crate::LOG_CONSENSUS;
-
-// This limits the RAM consumption of a Unit to roughly 50kB
-const BYTE_LIMIT: usize = 50_000;
 
 #[derive(
     Clone, Debug, PartialEq, Eq, Hash, parity_scale_codec::Encode, parity_scale_codec::Decode,
@@ -25,7 +23,7 @@ impl UnitData {
     pub fn is_valid(&self) -> bool {
         match self {
             UnitData::Signature(..) => true,
-            UnitData::Batch(bytes, ..) => bytes.len() <= BYTE_LIMIT,
+            UnitData::Batch(bytes, ..) => bytes.len() <= ALEPH_BFT_UNIT_BYTE_LIMIT,
         }
     }
 }
@@ -66,7 +64,7 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
         if let Some(item) = self.leftover_item.take() {
             let n_bytes_item = item.consensus_encode_to_vec().len();
 
-            if n_bytes_item + n_bytes <= BYTE_LIMIT {
+            if n_bytes_item + n_bytes <= ALEPH_BFT_UNIT_BYTE_LIMIT {
                 n_bytes += n_bytes_item;
                 items.push(item);
             } else {
@@ -83,7 +81,7 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
 
             let n_bytes_item = item.consensus_encode_to_vec().len();
 
-            if n_bytes + n_bytes_item <= BYTE_LIMIT {
+            if n_bytes + n_bytes_item <= ALEPH_BFT_UNIT_BYTE_LIMIT {
                 n_bytes += n_bytes_item;
                 items.push(item);
             } else {
@@ -94,7 +92,7 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
 
         let bytes = items.consensus_encode_to_vec();
 
-        assert!(bytes.len() <= BYTE_LIMIT);
+        assert!(bytes.len() <= ALEPH_BFT_UNIT_BYTE_LIMIT);
 
         return Some(UnitData::Batch(bytes));
     }

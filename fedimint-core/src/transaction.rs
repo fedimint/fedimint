@@ -6,6 +6,7 @@ use fedimint_core::{Amount, TransactionId};
 use secp256k1_zkp::schnorr;
 use thiserror::Error;
 
+use crate::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use crate::core::{DynInputError, DynOutputError};
 
 /// An atomic value transfer operation within the Fedimint system and consensus
@@ -34,6 +35,19 @@ pub struct Transaction {
 pub type SerdeTransaction = SerdeModuleEncoding<Transaction>;
 
 impl Transaction {
+    /// Maximum size that a transaction can have while still fitting into an
+    /// AlephBFT unit. Subtracting 32 bytes is overly conservative, even in the
+    /// worst case the CI serialization around the transaction should never add
+    /// that much overhead. But since the byte limit is 50kb right now a few
+    /// bytes more or less won't make a difference and we can afford the safety
+    /// margin.
+    ///
+    /// A realistic value would be 7:
+    ///  * 1 byte for length of vector of CIs
+    ///  * 1 byte for the CI enum variant
+    ///  * 5 byte for the CI enum variant length
+    pub const MAX_TX_SIZE: usize = ALEPH_BFT_UNIT_BYTE_LIMIT - 32;
+
     /// Hash of the transaction (excluding the signature).
     ///
     /// Transaction signature commits to this hash.

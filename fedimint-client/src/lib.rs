@@ -74,7 +74,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, bail, ensure, Context};
 use async_stream::stream;
 use db::{
     CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix,
@@ -991,6 +991,12 @@ impl Client {
         let (transaction, mut states, change_range) = self
             .finalize_transaction(&mut dbtx.to_ref_nc(), operation_id, tx_builder)
             .await?;
+
+        ensure!(
+            transaction.consensus_encode_to_vec().len() <= Transaction::MAX_TX_SIZE,
+            "The generated transaction would be rejected by the federation for being too large."
+        );
+
         let txid = transaction.tx_hash();
         let change_outpoints = change_range
             .into_iter()
