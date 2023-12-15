@@ -205,8 +205,9 @@ impl LightningReceiveConfirmedInvoice {
                         // only when we are sure that the invoice is still pending that we can check
                         // for a timeout
                         const TOLERANCE: Duration = Duration::from_secs(60); // tolerate some clock skew
-                        let invoice_since_epoch = invoice.duration_since_epoch() + TOLERANCE;
-                        if now_since_epoch > invoice_since_epoch {
+                        let invoice_expiration_epoch =
+                            invoice.duration_since_epoch() + invoice.expiry_time() + TOLERANCE;
+                        if now_since_epoch > invoice_expiration_epoch {
                             return Err(LightningReceiveError::Timeout);
                         } else {
                             debug!("Still waiting preimage decryption for contract {contract_id}");
