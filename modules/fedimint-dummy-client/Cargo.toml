@@ -7,6 +7,9 @@ description = "fedimint-dummy is a dummy example fedimint module."
 license = "MIT"
 repository = "https://github.com/fedimint/fedimint"
 
+[package.metadata.docs.rs]
+rustc-args = ["--cfg", "tokio_unstable"]
+
 [lib]
 name = "fedimint_dummy_client"
 path = "src/lib.rs"
