@@ -6,6 +6,9 @@ license = "MIT"
 description = "fedimint-metrics allows exporting prometheus metrics from Fedimint."
 repository = "https://github.com/fedimint/fedimint"
 
+[package.metadata.docs.rs]
+rustc-args = ["--cfg", "tokio_unstable"]
+
 [lib]
 name = "fedimint_metrics"
 path = "./src/lib.rs"
