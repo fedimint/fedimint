@@ -25,7 +25,10 @@ use crate::{ContractAccount, LightningGateway, LightningGatewayAnnouncement};
 #[apply(async_trait_maybe_send!)]
 pub trait LnFederationApi {
     async fn fetch_consensus_block_count(&self) -> FederationResult<Option<u64>>;
-    async fn fetch_contract(&self, contract: ContractId) -> FederationResult<ContractAccount>;
+    async fn fetch_contract(
+        &self,
+        contract: ContractId,
+    ) -> FederationResult<Option<ContractAccount>>;
     async fn wait_contract(&self, contract: ContractId) -> FederationResult<ContractAccount>;
     async fn wait_block_height(&self, block_height: u64) -> FederationResult<()>;
     async fn wait_outgoing_contract_cancelled(
@@ -75,7 +78,10 @@ where
         .await
     }
 
-    async fn fetch_contract(&self, contract: ContractId) -> FederationResult<ContractAccount> {
+    async fn fetch_contract(
+        &self,
+        contract: ContractId,
+    ) -> FederationResult<Option<ContractAccount>> {
         self.request_current_consensus(
             ACCOUNT_ENDPOINT.to_string(),
             ApiRequestErased::new(contract),
