@@ -11,7 +11,7 @@ use fedimint_core::task::sleep;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
-use fedimint_ln_common::contracts::DecryptedPreimageStatus;
+use fedimint_ln_common::contracts::{DecryptedPreimage, FundedContract};
 use fedimint_ln_common::{LightningClientContext, LightningInput};
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
@@ -194,30 +194,31 @@ impl LightningReceiveConfirmedInvoice {
         let contract_id = (*invoice.payment_hash()).into();
         loop {
             // Consider time before the api call to account for network delays
-            let now_since_epoch = fedimint_core::time::duration_since_epoch();
-            match global_context
-                .module_api()
-                .get_decrypted_preimage_status(contract_id)
-                .await
-            {
-                Ok((incoming_contract_account, status)) => match status {
-                    DecryptedPreimageStatus::Pending => {
-                        // only when we are sure that the invoice is still pending that we can check
-                        // for a timeout
-                        const TOLERANCE: Duration = Duration::from_secs(60); // tolerate some clock skew
-                        let invoice_expiration_epoch =
-                            invoice.duration_since_epoch() + invoice.expiry_time() + TOLERANCE;
-                        if now_since_epoch > invoice_expiration_epoch {
-                            return Err(LightningReceiveError::Timeout);
-                        } else {
-                            debug!("Still waiting preimage decryption for contract {contract_id}");
+            let now_epoch = fedimint_core::time::duration_since_epoch();
+            match get_incoming_contract(&global_context, contract_id).await {
+                Ok(Some(incoming_contract_account)) => {
+                    match incoming_contract_account.contract.decrypted_preimage {
+                        DecryptedPreimage::Pending => {
+                            // Previously we would time out here but we may miss a payment if we do
+                            // so
+                            info!("Waiting for preimage decryption for contract {contract_id}");
+                        }
+                        DecryptedPreimage::Some(_) => return Ok(incoming_contract_account),
+                        DecryptedPreimage::Invalid => {
+                            return Err(LightningReceiveError::InvalidPreimage)
                         }
                     }
-                    DecryptedPreimageStatus::Some(_) => return Ok(incoming_contract_account),
-                    DecryptedPreimageStatus::Invalid => {
-                        return Err(LightningReceiveError::InvalidPreimage)
+                }
+                Ok(None) => {
+                    // only when we are sure that the invoice is still pending that we can
+                    // check for a timeout
+                    const CLOCK_SKEW_TOLERANCE: Duration = Duration::from_secs(60);
+                    if has_invoice_expired(&invoice, now_epoch, CLOCK_SKEW_TOLERANCE) {
+                        return Err(LightningReceiveError::Timeout);
+                    } else {
+                        debug!("Still waiting preimage decryption for contract {contract_id}");
                     }
-                },
+                }
                 // FIXME: should we filter for retryable errors here to not swallow implementation
                 // bugs? (there exist more places like this)
                 Err(error) if error.is_retryable() => {
@@ -276,6 +277,42 @@ impl LightningReceiveConfirmedInvoice {
     }
 }
 
+fn has_invoice_expired(
+    invoice: &Bolt11Invoice,
+    now_epoch: Duration,
+    clock_skew_tolerance: Duration,
+) -> bool {
+    assert!(now_epoch >= clock_skew_tolerance);
+    // tolerate some clock skew
+    invoice.would_expire(now_epoch - clock_skew_tolerance)
+}
+
+async fn get_incoming_contract(
+    global_context: &DynGlobalClientContext,
+    contract_id: fedimint_ln_common::contracts::ContractId,
+) -> Result<Option<IncomingContractAccount>, fedimint_core::api::FederationError> {
+    match global_context
+        .module_api()
+        .fetch_contract(contract_id)
+        .await
+    {
+        Ok(Some(contract)) => {
+            if let FundedContract::Incoming(incoming) = contract.contract {
+                Ok(Some(IncomingContractAccount {
+                    amount: contract.amount,
+                    contract: incoming.contract,
+                }))
+            } else {
+                Err(fedimint_core::api::FederationError::general(
+                    anyhow::anyhow!("Contract {contract_id} is not an incoming contract"),
+                ))
+            }
+        }
+        Ok(None) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct LightningReceiveFunded {
     txid: TransactionId,
@@ -331,5 +368,60 @@ impl LightningReceiveFunded {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use bitcoin_hashes::{sha256, Hash};
+    use lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret};
+    use secp256k1::SecretKey;
+
+    use super::*;
+
+    #[test]
+    fn test_invoice_expiration() -> anyhow::Result<()> {
+        let now = fedimint_core::time::duration_since_epoch();
+        let one_second = Duration::from_secs(1);
+        for expiration in [one_second, Duration::from_secs(3600)] {
+            for tolerance in [one_second, Duration::from_secs(60)] {
+                let invoice = invoice(now, expiration)?;
+                assert!(!has_invoice_expired(&invoice, now - one_second, tolerance));
+                assert!(!has_invoice_expired(&invoice, now, tolerance));
+                assert!(!has_invoice_expired(&invoice, now + expiration, tolerance));
+                assert!(!has_invoice_expired(
+                    &invoice,
+                    now + expiration + tolerance - one_second,
+                    tolerance
+                ));
+                assert!(has_invoice_expired(
+                    &invoice,
+                    now + expiration + tolerance,
+                    tolerance
+                ));
+                assert!(has_invoice_expired(
+                    &invoice,
+                    now + expiration + tolerance + one_second,
+                    tolerance
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn invoice(now_epoch: Duration, expiry_time: Duration) -> anyhow::Result<Bolt11Invoice> {
+        let ctx = bitcoin::secp256k1::Secp256k1::new();
+        let secret_key = SecretKey::new(&mut rand::thread_rng());
+        Ok(InvoiceBuilder::new(Currency::Regtest)
+            .description("".to_string())
+            .payment_hash(sha256::Hash::hash(&[0; 32]))
+            .duration_since_epoch(now_epoch)
+            .min_final_cltv_expiry_delta(0)
+            .payment_secret(PaymentSecret([0; 32]))
+            .amount_milli_satoshis(1000)
+            .expiry_time(expiry_time)
+            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &secret_key))?)
     }
 }
