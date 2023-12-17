@@ -227,16 +227,21 @@ impl Federation {
 
     pub async fn pegin(&self, amount_sats: u64) -> Result<()> {
         info!(amount_sats, "Peg-in");
-        let deposit = cmd!(self, "deposit-address").out_json().await?;
+        self.pegin_client(amount_sats, &self.client).await
+    }
+
+    pub async fn pegin_client(&self, amount: u64, client: &Client) -> Result<()> {
+        info!(amount, "Pegging-in client funds");
+        let deposit = cmd!(client, "deposit-address").out_json().await?;
         let deposit_address = deposit["address"].as_str().unwrap();
         let deposit_operation_id = deposit["operation_id"].as_str().unwrap();
 
         self.bitcoind
-            .send_to(deposit_address.to_owned(), amount_sats)
+            .send_to(deposit_address.to_owned(), amount)
             .await?;
         self.bitcoind.mine_blocks(21).await?;
 
-        cmd!(self, "await-deposit", deposit_operation_id)
+        cmd!(client, "await-deposit", deposit_operation_id)
             .run()
             .await?;
         Ok(())
