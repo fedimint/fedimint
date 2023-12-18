@@ -172,27 +172,61 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
         anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
         ln_receives.push(start_time.elapsed());
     }
+
+    info!("Testing latency of internal payments within a federation");
+    let mut fm_internal_pay = Vec::with_capacity(iterations);
+    let sender = fed.new_joined_client("internal-swap-sender").await?;
+    fed.pegin_client(10_000_000, &sender).await?;
+    for _ in 0..iterations {
+        let recv = cmd!(
+            fed,
+            "ln-invoice",
+            "--amount=1000000msat",
+            "--description=internal-swap-invoice"
+        )
+        .out_json()
+        .await?;
+        let invoice = recv["invoice"]
+            .as_str()
+            .context("invoice must be string")?
+            .to_owned();
+        let recv_op = recv["operation_id"]
+            .as_str()
+            .context("operation id must be string")?
+            .to_owned();
+
+        let start_time = Instant::now();
+        cmd!(sender, "ln-pay", invoice).run().await?;
+        cmd!(fed, "await-invoice", recv_op).run().await?;
+        fm_internal_pay.push(start_time.elapsed());
+    }
+
     let reissue_stats = stats_for(reissues);
     let ln_sends_stats = stats_for(ln_sends);
     let ln_receives_stats = stats_for(ln_receives);
+    let fm_pay_stats = stats_for(fm_internal_pay);
     println!(
         "================= RESULTS ==================\n\
               REISSUE: {reissue_stats}\n\
               LN SEND: {ln_sends_stats}\n\
-              LN RECV: {ln_receives_stats}"
+              LN RECV: {ln_receives_stats}\n\
+              FM PAY: {fm_pay_stats}"
     );
     // FIXME: should be smaller
     assert!(reissue_stats.median < Duration::from_secs(4));
     assert!(ln_sends_stats.median < Duration::from_secs(6));
     assert!(ln_receives_stats.median < Duration::from_secs(6));
+    assert!(fm_pay_stats.median < Duration::from_secs(6));
     let factor = 3; // FIXME: should be much smaller
     assert!(reissue_stats.p90 < reissue_stats.median * factor);
     assert!(ln_sends_stats.p90 < ln_sends_stats.median * factor);
     assert!(ln_receives_stats.p90 < ln_receives_stats.median * factor);
+    assert!(fm_pay_stats.p90 < fm_pay_stats.median * factor);
     let factor = 3.1f64; // FIXME: should be much smaller
     assert!(reissue_stats.max.as_secs_f64() < reissue_stats.p90.as_secs_f64() * factor);
     assert!(ln_sends_stats.max.as_secs_f64() < ln_sends_stats.p90.as_secs_f64() * factor);
     assert!(ln_receives_stats.max.as_secs_f64() < ln_receives_stats.p90.as_secs_f64() * factor);
+    assert!(fm_pay_stats.max.as_secs_f64() < fm_pay_stats.p90.as_secs_f64() * factor);
     Ok(())
 }
 
