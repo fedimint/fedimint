@@ -596,6 +596,11 @@
 <a href="#596" id="596">596</a>
 <a href="#597" id="597">597</a>
 <a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
@@ -825,16 +830,21 @@
 
     <span class="kw">pub async fn </span>pegin(<span class="kw-2">&amp;</span><span class="self">self</span>, amount_sats: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">info!</span>(amount_sats, <span class="string">&quot;Peg-in&quot;</span>);
-        <span class="kw">let </span>deposit = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;deposit-address&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.pegin_client(amount_sats, <span class="kw-2">&amp;</span><span class="self">self</span>.client).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>pegin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, client: <span class="kw-2">&amp;</span>Client) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="macro">info!</span>(amount, <span class="string">&quot;Pegging-in client funds&quot;</span>);
+        <span class="kw">let </span>deposit = <span class="macro">cmd!</span>(client, <span class="string">&quot;deposit-address&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>deposit_address = deposit[<span class="string">&quot;address&quot;</span>].as_str().unwrap();
         <span class="kw">let </span>deposit_operation_id = deposit[<span class="string">&quot;operation_id&quot;</span>].as_str().unwrap();
 
         <span class="self">self</span>.bitcoind
-            .send_to(deposit_address.to_owned(), amount_sats)
+            .send_to(deposit_address.to_owned(), amount)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;await-deposit&quot;</span>, deposit_operation_id)
+        <span class="macro">cmd!</span>(client, <span class="string">&quot;await-deposit&quot;</span>, deposit_operation_id)
             .run()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
