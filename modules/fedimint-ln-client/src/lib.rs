@@ -1075,11 +1075,9 @@ impl LightningClientModule {
         };
 
         // Verify that no other outgoing contract exists or the value is empty
-        if let Ok(contract) = self.module_api.fetch_contract(contract_id).await {
+        if let Ok(Some(contract)) = self.module_api.fetch_contract(contract_id).await {
             if contract.amount.msats != 0 {
-                return Err(anyhow::anyhow!(
-                    "Funded contract already exists. ContractId: {contract_id}"
-                ));
+                anyhow::bail!("Funded contract already exists. ContractId: {contract_id}");
             }
         }
 
