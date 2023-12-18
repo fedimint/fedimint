@@ -260,6 +260,12 @@
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -287,7 +293,10 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>LnFederationApi {
     <span class="kw">async fn </span>fetch_consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;;
-    <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt;;
+    <span class="kw">async fn </span>fetch_contract(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        contract: ContractId,
+    ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;ContractAccount&gt;&gt;;
     <span class="kw">async fn </span>wait_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt;;
     <span class="kw">async fn </span>wait_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u64) -&gt; FederationResult&lt;()&gt;;
     <span class="kw">async fn </span>wait_outgoing_contract_cancelled(
@@ -337,7 +346,10 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt; {
+    <span class="kw">async fn </span>fetch_contract(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        contract: ContractId,
+    ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;ContractAccount&gt;&gt; {
         <span class="self">self</span>.request_current_consensus(
             ACCOUNT_ENDPOINT.to_string(),
             ApiRequestErased::new(contract),

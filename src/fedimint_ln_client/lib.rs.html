@@ -1529,8 +1529,6 @@
 <a href="#1529" id="1529">1529</a>
 <a href="#1530" id="1530">1530</a>
 <a href="#1531" id="1531">1531</a>
-<a href="#1532" id="1532">1532</a>
-<a href="#1533" id="1533">1533</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -2627,11 +2625,9 @@
         };
 
         <span class="comment">// Verify that no other outgoing contract exists or the value is empty
-        </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(contract) = <span class="self">self</span>.module_api.fetch_contract(contract_id).<span class="kw">await </span>{
+        </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(contract)) = <span class="self">self</span>.module_api.fetch_contract(contract_id).<span class="kw">await </span>{
             <span class="kw">if </span>contract.amount.msats != <span class="number">0 </span>{
-                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
-                    <span class="string">&quot;Funded contract already exists. ContractId: {contract_id}&quot;
-                </span>));
+                <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Funded contract already exists. ContractId: {contract_id}&quot;</span>);
             }
         }
 

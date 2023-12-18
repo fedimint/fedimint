@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["RETRY_DELAY"],"enum":["LightningReceiveError","LightningReceiveStates"],"struct":["LightningReceiveConfirmedInvoice","LightningReceiveFunded","LightningReceiveStateMachine","LightningReceiveSubmittedOffer"]};
+window.SIDEBAR_ITEMS = {"constant":["RETRY_DELAY"],"enum":["LightningReceiveError","LightningReceiveStates"],"fn":["get_incoming_contract","has_invoice_expired"],"struct":["LightningReceiveConfirmedInvoice","LightningReceiveFunded","LightningReceiveStateMachine","LightningReceiveSubmittedOffer"]};

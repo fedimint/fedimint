@@ -333,6 +333,98 @@
 <a href="#333" id="333">333</a>
 <a href="#334" id="334">334</a>
 <a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -346,7 +438,7 @@
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractAccount;
-<span class="kw">use </span>fedimint_ln_common::contracts::DecryptedPreimageStatus;
+<span class="kw">use </span>fedimint_ln_common::contracts::{DecryptedPreimage, FundedContract};
 <span class="kw">use </span>fedimint_ln_common::{LightningClientContext, LightningInput};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -529,30 +621,31 @@
         <span class="kw">let </span>contract_id = (<span class="kw-2">*</span>invoice.payment_hash()).into();
         <span class="kw">loop </span>{
             <span class="comment">// Consider time before the api call to account for network delays
-            </span><span class="kw">let </span>now_since_epoch = fedimint_core::time::duration_since_epoch();
-            <span class="kw">match </span>global_context
-                .module_api()
-                .get_decrypted_preimage_status(contract_id)
-                .<span class="kw">await
-            </span>{
-                <span class="prelude-val">Ok</span>((incoming_contract_account, status)) =&gt; <span class="kw">match </span>status {
-                    DecryptedPreimageStatus::Pending =&gt; {
-                        <span class="comment">// only when we are sure that the invoice is still pending that we can check
-                        // for a timeout
-                        </span><span class="kw">const </span>TOLERANCE: Duration = Duration::from_secs(<span class="number">60</span>); <span class="comment">// tolerate some clock skew
-                        </span><span class="kw">let </span>invoice_expiration_epoch =
-                            invoice.duration_since_epoch() + invoice.expiry_time() + TOLERANCE;
-                        <span class="kw">if </span>now_since_epoch &gt; invoice_expiration_epoch {
-                            <span class="kw">return </span><span class="prelude-val">Err</span>(LightningReceiveError::Timeout);
-                        } <span class="kw">else </span>{
-                            <span class="macro">debug!</span>(<span class="string">&quot;Still waiting preimage decryption for contract {contract_id}&quot;</span>);
+            </span><span class="kw">let </span>now_epoch = fedimint_core::time::duration_since_epoch();
+            <span class="kw">match </span>get_incoming_contract(<span class="kw-2">&amp;</span>global_context, contract_id).<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(incoming_contract_account)) =&gt; {
+                    <span class="kw">match </span>incoming_contract_account.contract.decrypted_preimage {
+                        DecryptedPreimage::Pending =&gt; {
+                            <span class="comment">// Previously we would time out here but we may miss a payment if we do
+                            // so
+                            </span><span class="macro">info!</span>(<span class="string">&quot;Waiting for preimage decryption for contract {contract_id}&quot;</span>);
+                        }
+                        DecryptedPreimage::Some(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(incoming_contract_account),
+                        DecryptedPreimage::Invalid =&gt; {
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(LightningReceiveError::InvalidPreimage)
                         }
                     }
-                    DecryptedPreimageStatus::Some(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(incoming_contract_account),
-                    DecryptedPreimageStatus::Invalid =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningReceiveError::InvalidPreimage)
+                }
+                <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {
+                    <span class="comment">// only when we are sure that the invoice is still pending that we can
+                    // check for a timeout
+                    </span><span class="kw">const </span>CLOCK_SKEW_TOLERANCE: Duration = Duration::from_secs(<span class="number">60</span>);
+                    <span class="kw">if </span>has_invoice_expired(<span class="kw-2">&amp;</span>invoice, now_epoch, CLOCK_SKEW_TOLERANCE) {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningReceiveError::Timeout);
+                    } <span class="kw">else </span>{
+                        <span class="macro">debug!</span>(<span class="string">&quot;Still waiting preimage decryption for contract {contract_id}&quot;</span>);
                     }
-                },
+                }
                 <span class="comment">// FIXME: should we filter for retryable errors here to not swallow implementation
                 // bugs? (there exist more places like this)
                 </span><span class="prelude-val">Err</span>(error) <span class="kw">if </span>error.is_retryable() =&gt; {
@@ -611,6 +704,42 @@
     </span>}
 }
 
+<span class="kw">fn </span>has_invoice_expired(
+    invoice: <span class="kw-2">&amp;</span>Bolt11Invoice,
+    now_epoch: Duration,
+    clock_skew_tolerance: Duration,
+) -&gt; bool {
+    <span class="macro">assert!</span>(now_epoch &gt;= clock_skew_tolerance);
+    <span class="comment">// tolerate some clock skew
+    </span>invoice.would_expire(now_epoch - clock_skew_tolerance)
+}
+
+<span class="kw">async fn </span>get_incoming_contract(
+    global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
+    contract_id: fedimint_ln_common::contracts::ContractId,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;IncomingContractAccount&gt;, fedimint_core::api::FederationError&gt; {
+    <span class="kw">match </span>global_context
+        .module_api()
+        .fetch_contract(contract_id)
+        .<span class="kw">await
+    </span>{
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(contract)) =&gt; {
+            <span class="kw">if let </span>FundedContract::Incoming(incoming) = contract.contract {
+                <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(IncomingContractAccount {
+                    amount: contract.amount,
+                    contract: incoming.contract,
+                }))
+            } <span class="kw">else </span>{
+                <span class="prelude-val">Err</span>(fedimint_core::api::FederationError::general(
+                    <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Contract {contract_id} is not an incoming contract&quot;</span>),
+                ))
+            }
+        }
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+        <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e),
+    }
+}
+
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningReceiveFunded {
     txid: TransactionId,
@@ -666,6 +795,61 @@
                 }
             }
         }
+    }
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>std::time::Duration;
+
+    <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
+    <span class="kw">use </span>lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret};
+    <span class="kw">use </span>secp256k1::SecretKey;
+
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_invoice_expiration() -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>now = fedimint_core::time::duration_since_epoch();
+        <span class="kw">let </span>one_second = Duration::from_secs(<span class="number">1</span>);
+        <span class="kw">for </span>expiration <span class="kw">in </span>[one_second, Duration::from_secs(<span class="number">3600</span>)] {
+            <span class="kw">for </span>tolerance <span class="kw">in </span>[one_second, Duration::from_secs(<span class="number">60</span>)] {
+                <span class="kw">let </span>invoice = invoice(now, expiration)<span class="question-mark">?</span>;
+                <span class="macro">assert!</span>(!has_invoice_expired(<span class="kw-2">&amp;</span>invoice, now - one_second, tolerance));
+                <span class="macro">assert!</span>(!has_invoice_expired(<span class="kw-2">&amp;</span>invoice, now, tolerance));
+                <span class="macro">assert!</span>(!has_invoice_expired(<span class="kw-2">&amp;</span>invoice, now + expiration, tolerance));
+                <span class="macro">assert!</span>(!has_invoice_expired(
+                    <span class="kw-2">&amp;</span>invoice,
+                    now + expiration + tolerance - one_second,
+                    tolerance
+                ));
+                <span class="macro">assert!</span>(has_invoice_expired(
+                    <span class="kw-2">&amp;</span>invoice,
+                    now + expiration + tolerance,
+                    tolerance
+                ));
+                <span class="macro">assert!</span>(has_invoice_expired(
+                    <span class="kw-2">&amp;</span>invoice,
+                    now + expiration + tolerance + one_second,
+                    tolerance
+                ));
+            }
+        }
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">fn </span>invoice(now_epoch: Duration, expiry_time: Duration) -&gt; anyhow::Result&lt;Bolt11Invoice&gt; {
+        <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
+        <span class="kw">let </span>secret_key = SecretKey::new(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+        <span class="prelude-val">Ok</span>(InvoiceBuilder::new(Currency::Regtest)
+            .description(<span class="string">&quot;&quot;</span>.to_string())
+            .payment_hash(sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">32</span>]))
+            .duration_since_epoch(now_epoch)
+            .min_final_cltv_expiry_delta(<span class="number">0</span>)
+            .payment_secret(PaymentSecret([<span class="number">0</span>; <span class="number">32</span>]))
+            .amount_milli_satoshis(<span class="number">1000</span>)
+            .expiry_time(expiry_time)
+            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>secret_key))<span class="question-mark">?</span>)
     }
 }
 </code></pre></div></section></main></body></html>
