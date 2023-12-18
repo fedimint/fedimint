@@ -98,7 +98,7 @@ impl IBitcoindRpc for BitcoinClient {
         Ok(height.map(|h| h as u64))
     }
 
-    async fn watch_script_history(&self, script: &Script) -> anyhow::Result<Vec<Transaction>> {
+    async fn watch_script_history(&self, script: &Script) -> anyhow::Result<()> {
         // start watching for this script in our wallet to avoid the need to rescan the
         // blockchain, labeling it so we can reference it later
         block_in_place(|| {
@@ -106,6 +106,10 @@ impl IBitcoindRpc for BitcoinClient {
                 .import_address_script(script, Some(&script.to_string()), Some(false), None)
         })?;
 
+        Ok(())
+    }
+
+    async fn get_script_history(&self, script: &Script) -> anyhow::Result<Vec<Transaction>> {
         let mut results = vec![];
         let list = block_in_place(|| {
             self.0
