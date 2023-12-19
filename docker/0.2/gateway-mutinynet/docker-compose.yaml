@@ -1,0 +1,171 @@
+# Important: 127.0.0.1 should be replaced by the external ip address of the machine
+version: "3"
+
+services:
+  gatewayd:
+    image: fedimint/gatewayd:v0.1.3
+    command: gatewayd lnd
+    environment:
+      # Path to folder containing gateway config and data files
+      - FM_GATEWAY_DATA_DIR=/gateway_data
+      # Gateway webserver listen address
+      - FM_GATEWAY_LISTEN_ADDR=0.0.0.0:8175
+      # Public URL from which the webserver API is reachable
+      - FM_GATEWAY_API_ADDR=http://127.0.0.1:8175
+      # Gateway webserver authentication password
+      - FM_GATEWAY_PASSWORD=thereisnosecondbest
+      # Configured gateway routing fees Format: <base_msat>,<proportional_millionths>
+      - FM_GATEWAY_FEES=0,0
+      # LND RPC address
+      - FM_LND_RPC_ADDR=https://lnd:10009
+      # LND TLS cert file path
+      - FM_LND_TLS_CERT=/lnd_data/tls.cert
+      # LND macaroon file path
+      - FM_LND_MACAROON=/lnd_data/data/chain/bitcoin/signet/admin.macaroon
+    volumes:
+      - gateway_datadir:/gateway_data
+      - lnd_datadir:/lnd_data:ro
+    ports:
+      - "8175:8175"
+      - "8080:8080"
+    depends_on:
+      - lnd
+    restart: always
+    platform: linux/amd64
+
+  gateway-ui:
+    image: fedimintui/gateway-ui:0.1
+    # image: gateway-ui
+    ports:
+      - "0.0.0.0:3001:3001"
+    environment:
+      - PORT=3001
+      - REACT_APP_FM_GATEWAY_API=http://127.0.0.1:8175
+      - REACT_APP_FM_GATEWAY_PASSWORD=thereisnosecondbest
+    depends_on:
+      - gatewayd
+    restart: always
+    platform: linux/amd64
+
+  lnd:
+    image: lightninglabs/lnd:v0.16.4-beta
+    entrypoint: bash
+    command:
+      - -c
+      - lnd --bitcoin.active --bitcoin.signet --bitcoin.dnsseed=0 --bitcoin.node=bitcoind --protocol.wumbo-channels --bitcoind.rpchost=bitcoind --bitcoind.rpcuser=bitcoin --bitcoind.rpcpass=bitcoin --bitcoind.zmqpubrawblock=tcp://bitcoind:48332 --bitcoind.zmqpubrawtx=tcp://bitcoind:48333 --listen=0.0.0.0:9735 --rpclisten=0.0.0.0:10009 --restlisten=0.0.0.0:8080 --tlsextradomain=lnd --noseedbackup
+    ports:
+      - "10009:10009"
+      - "0.0.0.0:9735:9735"
+    volumes:
+      - lnd_datadir:/root/.lnd
+    depends_on:
+      - bitcoind
+    restart: always
+
+  thunderhub_config_writer:
+    image: alpine:latest
+    command:
+      - sh
+      - -c
+      - |
+        cat <<EOF > /thconfig/accounts.yaml
+        masterPassword: "thereisnosecondbest"
+        accounts:
+          - name: "main lnd"
+            serverUrl: "https://lnd:10009"
+            lndDir: "/root/.lnd"
+            network: signet
+        EOF
+        tail -f /dev/null
+    volumes:
+      - thunderhub_datadir:/thconfig
+    depends_on:
+      - lnd
+    restart: always
+
+  thunderhub:
+    image: apotdevin/thunderhub:base-v0.13.20
+    environment:
+      - ACCOUNT_CONFIG_PATH=/thconfig/accounts.yaml
+      - HOST=0.0.0.0
+      - PORT=3002
+    ports:
+      - "0.0.0.0:3002:3002"
+    volumes:
+      - lnd_datadir:/root/.lnd
+      - thunderhub_datadir:/thconfig
+    depends_on:
+      - thunderhub_config_writer
+    restart: always
+
+  rtl_config_writer:
+    image: alpine:latest
+    command:
+      - sh
+      - -c
+      - |
+        cat <<EOF > /rtl_data/RTL-Config.json
+        {
+          "multiPass": "thereisnosecondbest",
+          "port": "3003",
+          "defaultNodeIndex": 1,
+            "SSO": {
+            "rtlSSO": 0,
+            "rtlCookiePath": "",
+            "logoutRedirectLink": ""
+          },
+          "nodes": [
+            {
+              "index": 1,
+              "lnNode": "LND",
+              "lnImplementation": "LND",
+              "Authentication": {
+                "macaroonPath": "/root/.lnd/data/chain/bitcoin/signet",
+                "configPath": "/root/.lnd/lnd.conf"
+              },
+              "Settings": {
+                "logLevel": "ERROR",
+                "lnServerUrl": "https://lnd:8080",
+                "fiatConversion": false,
+                "unannouncedChannels": false
+              }
+            }
+          ]
+        }
+        EOF
+        tail -f /dev/null
+    volumes:
+      - rtl_datadir:/rtl_data
+    depends_on:
+      - lnd
+    restart: always
+
+  rtl:
+    image: shahanafarooqui/rtl:0.14.0
+    environment:
+      - RTL_CONFIG_PATH=/rtl_data
+    volumes:
+      - rtl_datadir:/rtl_data
+      - lnd_datadir:/root/.lnd
+    ports:
+      - 0.0.0.0:3003:3003
+    depends_on:
+      - rtl_config_writer
+    restart: always
+
+  bitcoind:
+    image: fedimint/mutinynet-bitcoind:master
+    command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
+    ports:
+      - 0.0.0.0:38333:38333
+    volumes:
+      - "bitcoin_datadir:/root/.bitcoin"
+    restart: always
+    platform: linux/amd64
+
+volumes:
+  bitcoin_datadir:
+  lnd_datadir:
+  gateway_datadir:
+  thunderhub_datadir:
+  rtl_datadir:

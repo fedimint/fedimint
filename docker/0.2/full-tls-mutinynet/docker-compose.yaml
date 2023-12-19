@@ -1,0 +1,418 @@
+# Best used if called by 'tls-download-mutinynet.sh' script
+# fedimint.my-super-host.com should be replaced by a domain controlled by you and all DNS below should redirect to the IP of your server.
+# Domains:
+# - fedimint.my-super-host.com
+# - fedimintd.fedimint.my-super-host.com
+# - guardian-ui.fedimint.my-super-host.com
+# - gatewayd.fedimint.my-super-host.com
+# - gateway-ui.fedimint.my-super-host.com
+# - rtl.fedimint.my-super-host.com
+# - xmpp.fedimint.my-super-host.com
+
+version: "3.3"
+
+services:
+  traefik:
+    image: "traefik:v2.10"
+    container_name: "traefik"
+    command:
+      #- "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "443:443"
+    volumes:
+      - "letsencrypt_data:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  fedimintd:
+    image: fedimint/fedimintd:v0.1.3
+    volumes:
+      - fedimintd_data:/data
+    ports:
+      - "0.0.0.0:8173:8173"
+    environment:
+      - FM_BITCOIN_RPC_KIND=bitcoind
+      - FM_BITCOIN_RPC_URL=http://bitcoin:bitcoin@bitcoind:38332
+      - FM_BITCOIN_NETWORK=signet
+      - FM_BIND_P2P=0.0.0.0:8173
+      - FM_P2P_URL=fedimint://fedimint.my-super-host.com:8173
+      - FM_BIND_API=0.0.0.0:80
+      - FM_API_URL=wss://fedimintd.fedimint.my-super-host.com
+      - FM_EXTRA_DKG_META=chat_server_domain=xmpp.fedimint.my-super-host.com
+    restart: always
+    platform: linux/amd64
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.fedimintd.loadbalancer.server.port=80"
+      - "traefik.http.routers.fedimintd.rule=Host(`fedimintd.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.fedimintd.entrypoints=websecure"
+      - "traefik.http.routers.fedimintd.tls.certresolver=myresolver"
+
+  guardian-ui:
+    image: fedimintui/guardian-ui:0.1
+    environment:
+      - PORT=80
+      - REACT_APP_FM_CONFIG_API=wss://fedimintd.fedimint.my-super-host.com
+    depends_on:
+      - fedimintd
+    restart: always
+    platform: linux/amd64
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.guardian-ui.loadbalancer.server.port=80"
+      - "traefik.http.routers.guardian-ui.rule=Host(`guardian-ui.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.guardian-ui.entrypoints=websecure"
+      - "traefik.http.routers.guardian-ui.tls.certresolver=myresolver"
+
+  gatewayd:
+    image: fedimint/gatewayd:v0.1.3
+    command: gatewayd lnd
+    environment:
+      # Path to folder containing gateway config and data files
+      - FM_GATEWAY_DATA_DIR=/gateway_data
+      # Gateway webserver listen address
+      - FM_GATEWAY_LISTEN_ADDR=0.0.0.0:80
+      # Public URL from which the webserver API is reachable
+      - FM_GATEWAY_API_ADDR=https://gatewayd.fedimint.my-super-host.com
+      # Gateway webserver authentication password
+      - FM_GATEWAY_PASSWORD=thereisnosecondbest
+      # Configured gateway routing fees Format: <base_msat>,<proportional_millionths>
+      - FM_GATEWAY_FEES=0,0
+      # LND RPC address
+      - FM_LND_RPC_ADDR=https://lnd:10009
+      # LND TLS cert file path
+      - FM_LND_TLS_CERT=/lnd_data/tls.cert
+      # LND macaroon file path
+      - FM_LND_MACAROON=/lnd_data/data/chain/bitcoin/signet/admin.macaroon
+    volumes:
+      - gateway_datadir:/gateway_data
+      - lnd_datadir:/lnd_data
+    depends_on:
+      - lnd
+    restart: always
+    platform: linux/amd64
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.gatewayd.loadbalancer.server.port=80"
+      - "traefik.http.routers.gatewayd.rule=Host(`gatewayd.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.gatewayd.entrypoints=websecure"
+      - "traefik.http.routers.gatewayd.tls.certresolver=myresolver"
+
+  gateway-ui:
+    image: fedimintui/gateway-ui:0.1
+    environment:
+      - PORT=80
+      - REACT_APP_FM_GATEWAY_API=https://gatewayd.fedimint.my-super-host.com
+      - REACT_APP_FM_GATEWAY_PASSWORD=thereisnosecondbest
+    depends_on:
+      - gatewayd
+    restart: always
+    platform: linux/amd64
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.gateway-ui.loadbalancer.server.port=80"
+      - "traefik.http.routers.gateway-ui.rule=Host(`gateway-ui.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.gateway-ui.entrypoints=websecure"
+      - "traefik.http.routers.gateway-ui.tls.certresolver=myresolver"
+
+  lnd:
+    image: lightninglabs/lnd:v0.16.4-beta
+    entrypoint: bash
+    command:
+      - -c
+      - lnd --bitcoin.active --bitcoin.signet --bitcoin.dnsseed=0 --bitcoin.node=bitcoind --protocol.wumbo-channels --bitcoind.rpchost=bitcoind --bitcoind.rpcuser=bitcoin --bitcoind.rpcpass=bitcoin --bitcoind.zmqpubrawblock=tcp://bitcoind:48332 --bitcoind.zmqpubrawtx=tcp://bitcoind:48333 --listen=0.0.0.0:9735 --rpclisten=0.0.0.0:10009 --restlisten=0.0.0.0:8080 --tlsextradomain=lnd --noseedbackup
+    ports:
+      - "10009:10009"
+      - "0.0.0.0:9735:9735"
+    volumes:
+      - lnd_datadir:/root/.lnd
+    depends_on:
+      - bitcoind
+    restart: always
+
+  # Enable only after https://github.com/apotdevin/thunderhub/pull/545 is fully merged and released
+  # thunderhub_config_writer:
+  #   image: alpine:latest
+  #   command:
+  #     - sh
+  #     - -c
+  #     - |
+  #       cat <<EOF > /thconfig/accounts.yaml
+  #       masterPassword: "thereisnosecondbest"
+  #       accounts:
+  #         - name: "main lnd"
+  #           serverUrl: "https://lnd:10009"
+  #           lndDir: "/root/.lnd"
+  #           network: signet
+  #       EOF
+  #       tail -f /dev/null
+  #   volumes:
+  #     - thunderhub_datadir:/thconfig
+  #   depends_on:
+  #     - lnd
+  #   restart: always
+
+  # thunderhub:
+  #   image: apotdevin/thunderhub:base-v0.13.19
+  #   environment:
+  #     - ACCOUNT_CONFIG_PATH=/thconfig/accounts.yaml
+  #     - HOST=0.0.0.0
+  #     - PORT=3002
+  #   ports:
+  #     - "0.0.0.0:3002:3002"
+  #   volumes:
+  #     - lnd_datadir:/root/.lnd
+  #     - thunderhub_datadir:/thconfig
+  #   depends_on:
+  #     - thunderhub_config_writer
+  #   restart: always
+
+  rtl_config_writer:
+    image: alpine:latest
+    command:
+      - sh
+      - -c
+      - |
+        cat <<EOF > /rtl_data/RTL-Config.json
+        {
+          "multiPass": "thereisnosecondbest",
+          "port": "80",
+          "defaultNodeIndex": 1,
+            "SSO": {
+            "rtlSSO": 0,
+            "rtlCookiePath": "",
+            "logoutRedirectLink": ""
+          },
+          "nodes": [
+            {
+              "index": 1,
+              "lnNode": "LND",
+              "lnImplementation": "LND",
+              "Authentication": {
+                "macaroonPath": "/root/.lnd/data/chain/bitcoin/signet",
+                "configPath": "/root/.lnd/lnd.conf"
+              },
+              "Settings": {
+                "logLevel": "ERROR",
+                "lnServerUrl": "https://lnd:8080",
+                "fiatConversion": false,
+                "unannouncedChannels": false
+              }
+            }
+          ]
+        }
+        EOF
+        tail -f /dev/null
+    volumes:
+      - rtl_datadir:/rtl_data
+    depends_on:
+      - lnd
+    restart: always
+
+  rtl:
+    image: shahanafarooqui/rtl:0.14.0
+    environment:
+      - RTL_CONFIG_PATH=/rtl_data
+    volumes:
+      - rtl_datadir:/rtl_data
+      - lnd_datadir:/root/.lnd
+    depends_on:
+      - rtl_config_writer
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.rtl.loadbalancer.server.port=80"
+      - "traefik.http.routers.rtl.rule=Host(`rtl.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.rtl.entrypoints=websecure"
+      - "traefik.http.routers.rtl.tls.certresolver=myresolver"
+
+  bitcoind:
+    image: fedimint/mutinynet-bitcoind:latest
+    command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
+    ports:
+      - 0.0.0.0:38333:38333
+    volumes:
+      - "bitcoin_datadir:/root/.bitcoin"
+    restart: always
+    platform: linux/amd64
+
+  prosody_config_writer:
+    image: alpine:latest
+    command:
+      - sh
+      - -c
+      - |
+        cat <<EOF > /prosody_data/prosody.cfg.lua
+        pidfile = "/run/prosody/prosody.pid"
+        -- log = "*syslog"
+        log = {
+          {levels = {min = "info"}, to = "console"};
+        }
+
+        data_path = "/var/lib/prosody"
+        plugin_paths = {
+        }
+
+        admins = {  }
+
+        -- we already build with libevent, so we can just enable it for a more performant server
+        use_libevent = true
+
+        modules_enabled = {
+          "admin_adhoc";
+          "blocklist";
+          "bookmarks";
+          "bosh";
+          "carbons";
+          -- "cloud_notify"; -- not working now, perhaps use it if we ever enable push?
+          "csi";
+          "dialback";
+          "disco";
+          "http_files";
+          "limits";
+          "mam";
+          "pep";
+          "ping";
+          "private";
+          "proxy65";
+          "register";
+          "roster";
+          "saslauth";
+          "smacks";
+          "time";
+          "tls";
+          "uptime";
+          "vcard";
+          "version";
+          "websocket";
+          "admin_shell";
+          "http";
+        };
+
+        disco_items = {
+        { "muc.xmpp.fedimint.my-super-host.com", "muc.xmpp.fedimint.my-super-host.com MUC endpoint"};
+        };
+
+        allow_registration = true
+
+        c2s_require_encryption = false
+
+        s2s_require_encryption = true
+
+        s2s_secure_auth = true
+
+        s2s_insecure_domains = {  }
+
+        s2s_secure_domains = {  }
+
+        authentication = "internal_hashed"
+
+        http_interfaces = { "*", "::" }
+
+        https_interfaces = { "*", "::" }
+
+        http_ports = { 5280 }
+
+        https_ports = { 5281 }
+
+        -- Rate limits
+        -- Enable rate limits for incoming client and server connections. These help
+        -- protect from excessive resource consumption and denial-of-service attacks.
+
+        limits = {
+            c2s = {
+                rate = "10kb/s";
+            };
+            s2sin = {
+                rate = "30kb/s";
+            };
+        }
+
+        -- Archiving configuration
+        -- If mod_mam is enabled, Prosody will store a copy of every message. This
+        -- is used to synchronize conversations between multiple clients, even if
+        -- they are offline. This setting controls how long Prosody will keep
+        -- messages in the archive before removing them.
+
+        archive_expires_after = "1w" -- Remove archived messages after 1 week
+
+        -- You can also configure messages to be stored in-memory only. For more
+        -- archiving options, see https://prosody.im/doc/modules/mod_mam
+
+        -- Uncomment to enable statistics
+        -- For more info see https://prosody.im/doc/statistics
+        statistics = "internal"
+
+        -- Certificates
+        -- Every virtual host and component needs a certificate so that clients and
+        -- servers can securely verify its identity. Prosody will automatically load
+        -- certificates/keys from the directory specified here.
+        -- For more information, including how to use 'prosodyctl' to auto-import certificates
+        -- (from e.g. Let's Encrypt) see https://prosody.im/doc/certificates
+
+        -- Location of directory to find certificates in (relative to main config file):
+        -- certificates = "certs"
+
+        -- SSL termination is done elsewhere so we assume these are secure
+        consider_websocket_secure = true
+        consider_bosh_secure = true
+        http_external_url = "https://xmpp.fedimint.my-super-host.com/"
+        trusted_proxies = { "0.0.0.0/0", "::" }
+
+        Component "muc.xmpp.fedimint.my-super-host.com" "muc"
+            modules_enabled = { "muc_mam"; "vcard_muc"; }
+            name = "Chat Rooms"
+            restrict_room_creation = false
+            max_history_messages = 50
+            muc_room_locking = true
+            muc_room_lock_timeout = 300
+            muc_tombstones = true
+            muc_tombstone_expiry = 2678400
+            muc_room_default_public = true
+            muc_room_default_members_only = false
+            muc_room_default_moderated = false
+            muc_room_default_public_jids = false
+            muc_room_default_change_subject = false
+            muc_room_default_history_length = 20
+            muc_room_default_language = "en"
+
+        VirtualHost "xmpp.fedimint.my-super-host.com"
+          enabled = true;
+        EOF
+        tail -f /dev/null
+    volumes:
+      - prosody_datadir:/prosody_data
+    restart: always
+
+  xmpp:
+    image: fedimint/xmpp-prosody-chat-server:master
+    command:
+      - prosody
+      - --config
+      - /prosody_data/prosody.cfg.lua
+    volumes:
+      - prosody_datadir:/prosody_data
+    depends_on:
+      - prosody_config_writer
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.xmpp.loadbalancer.server.port=5280"
+      - "traefik.http.routers.xmpp.rule=Host(`xmpp.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.xmpp.entrypoints=websecure"
+      - "traefik.http.routers.xmpp.tls.certresolver=myresolver"
+
+volumes:
+  letsencrypt_data:
+  fedimintd_data:
+  bitcoin_datadir:
+  lnd_datadir:
+  gateway_datadir:
+  thunderhub_datadir:
+  rtl_datadir:
+  prosody_datadir:

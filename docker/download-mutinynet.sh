@@ -1,5 +1,5 @@
 #!/bin/bash
-
+# shellcheck disable=SC2128,SC2178
 # This file downloads the mutinynet docker-compose files for the LN gateway and fedimintd
 # You can download and run it with: curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/download-mutinynet.sh | bash
 
@@ -44,6 +44,30 @@ download() {
   curl -sSL $url -o $path
 }
 
+while true; do
+  read -p "Enter the version of Fedimint you want to use [0 for latest (0.2), 1 for 0.1, 2 for 0.2, or 'exit' to quit]: " -a fedimint_version < /dev/tty
+  case "$fedimint_version" in
+    1)
+      fedimint_version=0.1
+      break
+      ;;
+    2)
+      fedimint_version=0.2
+      break
+      ;;
+    ""|0)
+      fedimint_version=latest
+      break
+      ;;
+    "exit")
+      exit 1
+      ;;
+    *)
+      echo "Invalid input. Please enter 0 for latest, 1 for 0.1, 2 for 0.2, or 'exit' to quit."
+      ;;
+  esac
+done
+
 GATEWAY_DIR=gateway
 FEDIMINTD_DIR=fedimintd
 
@@ -62,7 +86,7 @@ replace_external_ip() {
 read -p "Do you want to install fedimintd? [Y/n] " -n 1 -r -a fedimintd_install < /dev/tty
 if [[ ${fedimintd_install[*]} =~ ^[Yy]?$ ]]; then
   mkdir -p $FEDIMINTD_DIR
-  download https://raw.githubusercontent.com/fedimint/fedimint/master/docker/fedimintd-mutinynet/docker-compose.yaml $FEDIMINTD_DIR/docker-compose.yaml
+  download https://raw.githubusercontent.com/fedimint/fedimint/master/docker/${fedimint_version}/fedimintd-mutinynet/docker-compose.yaml $FEDIMINTD_DIR/docker-compose.yaml
   replace_external_ip $FEDIMINTD_DIR/docker-compose.yaml
 fi
 
@@ -75,7 +99,7 @@ if [[ ${gateway_install[*]} =~ ^[Yy]?$ ]]; then
     gateway_password=$DEFAULT_GATEWAY_PASSWORD
   fi
   mkdir -p $GATEWAY_DIR
-  download https://raw.githubusercontent.com/fedimint/fedimint/master/docker/gateway-mutinynet/docker-compose.yaml $GATEWAY_DIR/docker-compose.yaml
+  download https://raw.githubusercontent.com/fedimint/fedimint/master/docker/${fedimint_version}/gateway-mutinynet/docker-compose.yaml $GATEWAY_DIR/docker-compose.yaml
   replace_external_ip $GATEWAY_DIR/docker-compose.yaml
   sed -i "s/$DEFAULT_GATEWAY_PASSWORD/$gateway_password/g" $GATEWAY_DIR/docker-compose.yaml
 fi
