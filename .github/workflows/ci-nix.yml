@@ -59,6 +59,9 @@ jobs:
       - name: Check udeps
         run: nix build -L .#nightly.test.workspaceCargoUdeps
 
+      - name: Check `nix flake show`
+        run: nix flake show .#
+
   build:
     if: github.repository == 'fedimint/fedimint'
     strategy:

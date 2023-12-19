@@ -189,6 +189,7 @@
               "default"
               "wasm32-unknown"
             ]
+            toolchainsStd
           );
 
           toolchainNative = flakeboxLib.mkFenixMultiToolchain {
