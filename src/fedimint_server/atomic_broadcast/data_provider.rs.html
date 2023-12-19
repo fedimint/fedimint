@@ -97,20 +97,16 @@
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
 <a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 
 <span class="kw">use </span>bitcoin_hashes_12::sha256;
+<span class="kw">use </span>fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::session_outcome::{consensus_hash_sha256, SchnorrSignature};
 <span class="kw">use </span>tokio::sync::watch;
 
 <span class="kw">use </span><span class="kw">crate</span>::LOG_CONSENSUS;
-
-<span class="comment">// This limits the RAM consumption of a Unit to roughly 50kB
-</span><span class="kw">const </span>BYTE_LIMIT: usize = <span class="number">50_000</span>;
 
 <span class="attr">#[derive(
     Clone, Debug, PartialEq, Eq, Hash, parity_scale_codec::Encode, parity_scale_codec::Decode,
@@ -126,7 +122,7 @@
     </span><span class="kw">pub fn </span>is_valid(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="kw">match </span><span class="self">self </span>{
             UnitData::Signature(..) =&gt; <span class="bool-val">true</span>,
-            UnitData::Batch(bytes, ..) =&gt; bytes.len() &lt;= BYTE_LIMIT,
+            UnitData::Batch(bytes, ..) =&gt; bytes.len() &lt;= ALEPH_BFT_UNIT_BYTE_LIMIT,
         }
     }
 }
@@ -167,7 +163,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(item) = <span class="self">self</span>.leftover_item.take() {
             <span class="kw">let </span>n_bytes_item = item.consensus_encode_to_vec().len();
 
-            <span class="kw">if </span>n_bytes_item + n_bytes &lt;= BYTE_LIMIT {
+            <span class="kw">if </span>n_bytes_item + n_bytes &lt;= ALEPH_BFT_UNIT_BYTE_LIMIT {
                 n_bytes += n_bytes_item;
                 items.push(item);
             } <span class="kw">else </span>{
@@ -184,7 +180,7 @@
 
             <span class="kw">let </span>n_bytes_item = item.consensus_encode_to_vec().len();
 
-            <span class="kw">if </span>n_bytes + n_bytes_item &lt;= BYTE_LIMIT {
+            <span class="kw">if </span>n_bytes + n_bytes_item &lt;= ALEPH_BFT_UNIT_BYTE_LIMIT {
                 n_bytes += n_bytes_item;
                 items.push(item);
             } <span class="kw">else </span>{
@@ -195,7 +191,7 @@
 
         <span class="kw">let </span>bytes = items.consensus_encode_to_vec();
 
-        <span class="macro">assert!</span>(bytes.len() &lt;= BYTE_LIMIT);
+        <span class="macro">assert!</span>(bytes.len() &lt;= ALEPH_BFT_UNIT_BYTE_LIMIT);
 
         <span class="kw">return </span><span class="prelude-val">Some</span>(UnitData::Batch(bytes));
     }

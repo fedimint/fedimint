@@ -133,6 +133,20 @@
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
 <a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -141,6 +155,7 @@
 <span class="kw">use </span>secp256k1_zkp::schnorr;
 <span class="kw">use </span>thiserror::Error;
 
+<span class="kw">use </span><span class="kw">crate</span>::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 <span class="kw">use </span><span class="kw">crate</span>::core::{DynInputError, DynOutputError};
 
 <span class="doccomment">/// An atomic value transfer operation within the Fedimint system and consensus
@@ -169,6 +184,19 @@
 <span class="kw">pub type </span>SerdeTransaction = SerdeModuleEncoding&lt;Transaction&gt;;
 
 <span class="kw">impl </span>Transaction {
+    <span class="doccomment">/// Maximum size that a transaction can have while still fitting into an
+    /// AlephBFT unit. Subtracting 32 bytes is overly conservative, even in the
+    /// worst case the CI serialization around the transaction should never add
+    /// that much overhead. But since the byte limit is 50kb right now a few
+    /// bytes more or less won&#39;t make a difference and we can afford the safety
+    /// margin.
+    ///
+    /// A realistic value would be 7:
+    ///  * 1 byte for length of vector of CIs
+    ///  * 1 byte for the CI enum variant
+    ///  * 5 byte for the CI enum variant length
+    </span><span class="kw">pub const </span>MAX_TX_SIZE: usize = ALEPH_BFT_UNIT_BYTE_LIMIT - <span class="number">32</span>;
+
     <span class="doccomment">/// Hash of the transaction (excluding the signature).
     ///
     /// Transaction signature commits to this hash.

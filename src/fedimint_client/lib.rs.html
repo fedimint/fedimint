@@ -1773,6 +1773,12 @@
 <a href="#1773" id="1773">1773</a>
 <a href="#1774" id="1774">1774</a>
 <a href="#1775" id="1775">1775</a>
+<a href="#1776" id="1776">1776</a>
+<a href="#1777" id="1777">1777</a>
+<a href="#1778" id="1778">1778</a>
+<a href="#1779" id="1779">1779</a>
+<a href="#1780" id="1780">1780</a>
+<a href="#1781" id="1781">1781</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1849,7 +1855,7 @@
 <span class="kw">use </span>std::sync::{Arc, Weak};
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{anyhow, bail, Context};
+<span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context};
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>db::{
     CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix,
@@ -2766,6 +2772,12 @@
         <span class="kw">let </span>(transaction, <span class="kw-2">mut </span>states, change_range) = <span class="self">self
             </span>.finalize_transaction(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), operation_id, tx_builder)
             .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="macro">ensure!</span>(
+            transaction.consensus_encode_to_vec().len() &lt;= Transaction::MAX_TX_SIZE,
+            <span class="string">&quot;The generated transaction would be rejected by the federation for being too large.&quot;
+        </span>);
+
         <span class="kw">let </span>txid = transaction.tx_hash();
         <span class="kw">let </span>change_outpoints = change_range
             .into_iter()

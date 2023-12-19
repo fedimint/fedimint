@@ -934,6 +934,10 @@
 <a href="#934" id="934">934</a>
 <a href="#935" id="935">935</a>
 <a href="#936" id="936">936</a>
+<a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -969,6 +973,10 @@
     ModuleConsensusVersion,
 };
 <span class="kw">use crate</span>::{maybe_add_send_sync, PeerId};
+
+<span class="comment">// TODO: make configurable
+</span><span class="doccomment">/// This limits the RAM consumption of a AlephBFT Unit to roughly 50kB
+</span><span class="kw">pub const </span>ALEPH_BFT_UNIT_BYTE_LIMIT: usize = <span class="number">50_000</span>;
 
 <span class="doccomment">/// [`serde_json::Value`] that must contain `kind: String` field
 ///
