@@ -85,7 +85,19 @@ lazy_static! {
         "contracts::FundedContract::Outgoing"
     ))
     .unwrap();
-    static ref AMOUNTS_BUCKETS_SATS: Vec<f64> = vec![0.0, 0.5, 1.0, 1000.0];
+    static ref AMOUNTS_BUCKETS_SATS: Vec<f64> = vec![
+        0.0,
+        0.1,
+        1.0,
+        10.0,
+        100.0,
+        1000.0,
+        10000.0,
+        100000.0,
+        1000000.0,
+        10000000.0,
+        100000000.0
+    ];
     static ref LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS: Histogram =
         register_histogram!(histogram_opts!(
             "ln_funded_contract_incoming_account_amounts_sats",
@@ -686,18 +698,7 @@ impl ServerModule for Lightning {
                     .await
                     .is_none()
                 {
-                    match &updated_contract_account.contract {
-                        FundedContract::Incoming(_) => {
-                            LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS
-                                .observe(updated_contract_account.amount.msats as f64 / 1000.0);
-                            LN_FUNDED_CONTRACT_INCOMING.inc();
-                        }
-                        FundedContract::Outgoing(_) => {
-                            LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS
-                                .observe(updated_contract_account.amount.msats as f64 / 1000.0);
-                            LN_FUNDED_CONTRACT_OUTGOING.inc();
-                        }
-                    }
+                    calculate_funded_contract_metrics(updated_contract_account, dbtx);
                 }
 
                 dbtx.insert_new_entry(
@@ -763,7 +764,7 @@ impl ServerModule for Lightning {
                 dbtx.insert_new_entry(&OfferKey(offer.hash), &(*offer).clone())
                     .await;
 
-                LN_INCOMING_OFFER.inc();
+                calculate_incoming_offer_metric(dbtx);
 
                 Ok(TransactionItemAmount::ZERO)
             }
@@ -818,7 +819,7 @@ impl ServerModule for Lightning {
                 )
                 .await;
 
-                LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.inc();
+                calculate_output_outcome_cancel_metrics(dbtx);
 
                 Ok(TransactionItemAmount::ZERO)
             }
@@ -1161,6 +1162,36 @@ impl Lightning {
             dbtx.remove_entry(&key).await;
         }
     }
+}
+
+fn calculate_funded_contract_metrics(
+    updated_contract_account: ContractAccount,
+    dbtx: &mut DatabaseTransaction<'_>,
+) {
+    dbtx.on_commit(move || match updated_contract_account.contract {
+        FundedContract::Incoming(_) => {
+            LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS
+                .observe(updated_contract_account.amount.sats_f64());
+            LN_FUNDED_CONTRACT_INCOMING.inc();
+        }
+        FundedContract::Outgoing(_) => {
+            LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS
+                .observe(updated_contract_account.amount.sats_f64());
+            LN_FUNDED_CONTRACT_OUTGOING.inc();
+        }
+    });
+}
+
+fn calculate_incoming_offer_metric(dbtx: &mut DatabaseTransaction<'_>) {
+    dbtx.on_commit(move || {
+        LN_INCOMING_OFFER.inc();
+    });
+}
+
+fn calculate_output_outcome_cancel_metrics(dbtx: &mut DatabaseTransaction<'_>) {
+    dbtx.on_commit(move || {
+        LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.inc();
+    });
 }
 
 #[cfg(test)]
