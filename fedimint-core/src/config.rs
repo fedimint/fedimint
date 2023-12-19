@@ -34,6 +34,10 @@ use crate::module::{
 };
 use crate::{maybe_add_send_sync, PeerId};
 
+// TODO: make configurable
+/// This limits the RAM consumption of a AlephBFT Unit to roughly 50kB
+pub const ALEPH_BFT_UNIT_BYTE_LIMIT: usize = 50_000;
+
 /// [`serde_json::Value`] that must contain `kind: String` field
 ///
 /// TODO: enforce at ser/deserialization
