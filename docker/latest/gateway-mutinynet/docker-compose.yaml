@@ -3,7 +3,7 @@ version: "3"
 
 services:
   gatewayd:
-    image: fedimint/gatewayd:v0.1.3
+    image: fedimint/gatewayd:latest
     command: gatewayd lnd
     environment:
       # Path to folder containing gateway config and data files
@@ -34,7 +34,7 @@ services:
     platform: linux/amd64
 
   gateway-ui:
-    image: fedimintui/gateway-ui:0.1
+    image: fedimintui/gateway-ui:latest
     # image: gateway-ui
     ports:
       - "0.0.0.0:3001:3001"
@@ -48,7 +48,7 @@ services:
     platform: linux/amd64
 
   lnd:
-    image: lightninglabs/lnd:v0.16.4-beta
+    image: lightninglabs/lnd:v0.17.3-beta
     entrypoint: bash
     command:
       - -c

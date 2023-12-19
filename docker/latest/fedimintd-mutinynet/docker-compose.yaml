@@ -3,7 +3,7 @@ version: "3"
 
 services:
   fedimintd:
-    image: fedimint/fedimintd:v0.1.3
+    image: fedimint/fedimintd:latest
     volumes:
       - fedimintd_data:/data
     ports:
@@ -23,7 +23,7 @@ services:
     platform: linux/amd64
 
   guardian-ui:
-    image: fedimintui/guardian-ui:0.1
+    image: fedimintui/guardian-ui:latest
     ports:
       - "0.0.0.0:3000:3000"
     environment:
@@ -37,6 +37,7 @@ services:
 volumes:
   fedimintd_data:
     driver: local
+
 # Example of running it without docker compose:
 # docker run -it -e FM_BITCOIN_RPC_KIND=esplora -e FM_BITCOIN_RPC_URL=https://mutinynet.com/api/ -e FM_BIND_P2P=0.0.0.0:8173 -e FM_P2P_URL=fedimint://127.0.0.1:8173 -e FM_BIND_API=0.0.0.0:8174 -e FM_API_URL=ws://127.0.0.1:8174  -p 0.0.0.0:8173:8173 -p 0.0.0.0:8174:8174 fedimint/fedimintd:master
 # docker run -e REACT_APP_FM_CONFIG_API="ws://127.0.0.1:8174" -it fedimintui/guardian-ui

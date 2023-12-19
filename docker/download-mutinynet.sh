@@ -1,5 +1,4 @@
 #!/bin/bash
-# shellcheck disable=SC2128,SC2178
 # This file downloads the mutinynet docker-compose files for the LN gateway and fedimintd
 # You can download and run it with: curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/download-mutinynet.sh | bash
 
@@ -45,18 +44,18 @@ download() {
 }
 
 while true; do
-  read -p "Enter the version of Fedimint you want to use [0 for latest (0.2), 1 for 0.1, 2 for 0.2, or 'exit' to quit]: " -a fedimint_version < /dev/tty
+  read -p "Enter the version of Fedimint you want to use [0 for latest (0.2), 1 for 0.1, 2 for 0.2, or 'exit' to quit]: " fedimint_version
   case "$fedimint_version" in
     1)
-      fedimint_version=0.1
+      fedimint_version="0.1"
       break
       ;;
     2)
-      fedimint_version=0.2
+      fedimint_version="0.2"
       break
       ;;
     ""|0)
-      fedimint_version=latest
+      fedimint_version="latest"
       break
       ;;
     "exit")
