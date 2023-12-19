@@ -30,7 +30,7 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
 
   fedimintd:
-    image: fedimint/fedimintd:v0.1.3
+    image: fedimint/fedimintd:v0.2.1
     volumes:
       - fedimintd_data:/data
     ports:
@@ -54,7 +54,7 @@ services:
       - "traefik.http.routers.fedimintd.tls.certresolver=myresolver"
 
   guardian-ui:
-    image: fedimintui/guardian-ui:0.1
+    image: fedimintui/guardian-ui:0.2.0
     environment:
       - PORT=80
       - REACT_APP_FM_CONFIG_API=wss://fedimintd.fedimint.my-super-host.com
@@ -70,7 +70,7 @@ services:
       - "traefik.http.routers.guardian-ui.tls.certresolver=myresolver"
 
   gatewayd:
-    image: fedimint/gatewayd:v0.1.3
+    image: fedimint/gatewayd:v0.2.1
     command: gatewayd lnd
     environment:
       # Path to folder containing gateway config and data files
@@ -104,7 +104,7 @@ services:
       - "traefik.http.routers.gatewayd.tls.certresolver=myresolver"
 
   gateway-ui:
-    image: fedimintui/gateway-ui:0.1
+    image: fedimintui/gateway-ui:0.2.0
     environment:
       - PORT=80
       - REACT_APP_FM_GATEWAY_API=https://gatewayd.fedimint.my-super-host.com
@@ -121,7 +121,7 @@ services:
       - "traefik.http.routers.gateway-ui.tls.certresolver=myresolver"
 
   lnd:
-    image: lightninglabs/lnd:v0.16.4-beta
+    image: lightninglabs/lnd:v0.17.3-beta
     entrypoint: bash
     command:
       - -c
@@ -135,104 +135,46 @@ services:
       - bitcoind
     restart: always
 
-  # Enable only after https://github.com/apotdevin/thunderhub/pull/545 is fully merged and released
-  # thunderhub_config_writer:
-  #   image: alpine:latest
-  #   command:
-  #     - sh
-  #     - -c
-  #     - |
-  #       cat <<EOF > /thconfig/accounts.yaml
-  #       masterPassword: "thereisnosecondbest"
-  #       accounts:
-  #         - name: "main lnd"
-  #           serverUrl: "https://lnd:10009"
-  #           lndDir: "/root/.lnd"
-  #           network: signet
-  #       EOF
-  #       tail -f /dev/null
-  #   volumes:
-  #     - thunderhub_datadir:/thconfig
-  #   depends_on:
-  #     - lnd
-  #   restart: always
-
-  # thunderhub:
-  #   image: apotdevin/thunderhub:base-v0.13.19
-  #   environment:
-  #     - ACCOUNT_CONFIG_PATH=/thconfig/accounts.yaml
-  #     - HOST=0.0.0.0
-  #     - PORT=3002
-  #   ports:
-  #     - "0.0.0.0:3002:3002"
-  #   volumes:
-  #     - lnd_datadir:/root/.lnd
-  #     - thunderhub_datadir:/thconfig
-  #   depends_on:
-  #     - thunderhub_config_writer
-  #   restart: always
-
-  rtl_config_writer:
+  thunderhub_config_writer:
     image: alpine:latest
     command:
       - sh
       - -c
       - |
-        cat <<EOF > /rtl_data/RTL-Config.json
-        {
-          "multiPass": "thereisnosecondbest",
-          "port": "80",
-          "defaultNodeIndex": 1,
-            "SSO": {
-            "rtlSSO": 0,
-            "rtlCookiePath": "",
-            "logoutRedirectLink": ""
-          },
-          "nodes": [
-            {
-              "index": 1,
-              "lnNode": "LND",
-              "lnImplementation": "LND",
-              "Authentication": {
-                "macaroonPath": "/root/.lnd/data/chain/bitcoin/signet",
-                "configPath": "/root/.lnd/lnd.conf"
-              },
-              "Settings": {
-                "logLevel": "ERROR",
-                "lnServerUrl": "https://lnd:8080",
-                "fiatConversion": false,
-                "unannouncedChannels": false
-              }
-            }
-          ]
-        }
+        cat <<EOF > /thconfig/accounts.yaml
+        masterPassword: "thereisnosecondbest"
+        accounts:
+          - name: "main lnd"
+            serverUrl: "lnd:10009"
+            lndDir: "/root/.lnd"
+            network: signet
         EOF
         tail -f /dev/null
     volumes:
-      - rtl_datadir:/rtl_data
+      - thunderhub_datadir:/thconfig
     depends_on:
       - lnd
     restart: always
 
-  rtl:
-    image: shahanafarooqui/rtl:0.14.0
+  thunderhub:
+    image: fedimintui/fedimint-thunderhub:0.2.0
     environment:
-      - RTL_CONFIG_PATH=/rtl_data
+      - ACCOUNT_CONFIG_PATH=/thconfig/accounts.yaml
+      - HOST=0.0.0.0
+      - PORT=3002
+      - FM_GATEWAY_API=http://143.198.55.236:8175
+      - FM_GATEWAY_PASSWORD=thereisnosecondbest
+    ports:
+      - "0.0.0.0:3002:3002"
     volumes:
-      - rtl_datadir:/rtl_data
       - lnd_datadir:/root/.lnd
+      - thunderhub_datadir:/thconfig
     depends_on:
-      - rtl_config_writer
+      - thunderhub_config_writer
     restart: always
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.rtl.loadbalancer.server.port=80"
-      - "traefik.http.routers.rtl.rule=Host(`rtl.fedimint.my-super-host.com`)"
-      - "traefik.http.routers.rtl.entrypoints=websecure"
-      - "traefik.http.routers.rtl.tls.certresolver=myresolver"
 
   bitcoind:
-    image: fedimint/mutinynet-bitcoind:latest
+    image: fedimint/mutinynet-bitcoind:master
     command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
     ports:
       - 0.0.0.0:38333:38333
@@ -414,5 +356,4 @@ volumes:
   lnd_datadir:
   gateway_datadir:
   thunderhub_datadir:
-  rtl_datadir:
   prosody_datadir:

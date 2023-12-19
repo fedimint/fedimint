@@ -72,7 +72,7 @@ services:
         masterPassword: "thereisnosecondbest"
         accounts:
           - name: "main lnd"
-            serverUrl: "https://lnd:10009"
+            serverUrl: "lnd:10009"
             lndDir: "/root/.lnd"
             network: signet
         EOF
@@ -84,11 +84,13 @@ services:
     restart: always
 
   thunderhub:
-    image: apotdevin/thunderhub:base-v0.13.20
+    image: fedimintui/fedimint-thunderhub:latest
     environment:
       - ACCOUNT_CONFIG_PATH=/thconfig/accounts.yaml
       - HOST=0.0.0.0
       - PORT=3002
+      - FM_GATEWAY_API=http://143.198.55.236:8175
+      - FM_GATEWAY_PASSWORD=thereisnosecondbest
     ports:
       - "0.0.0.0:3002:3002"
     volumes:
@@ -98,74 +100,8 @@ services:
       - thunderhub_config_writer
     restart: always
 
-  rtl_config_writer:
-    image: alpine:latest
-    command:
-      - sh
-      - -c
-      - |
-        cat <<EOF > /rtl_data/RTL-Config.json
-        {
-          "multiPass": "thereisnosecondbest",
-          "port": "3003",
-          "defaultNodeIndex": 1,
-            "SSO": {
-            "rtlSSO": 0,
-            "rtlCookiePath": "",
-            "logoutRedirectLink": ""
-          },
-          "nodes": [
-            {
-              "index": 1,
-              "lnNode": "LND",
-              "lnImplementation": "LND",
-              "Authentication": {
-                "macaroonPath": "/root/.lnd/data/chain/bitcoin/signet",
-                "configPath": "/root/.lnd/lnd.conf"
-              },
-              "Settings": {
-                "logLevel": "ERROR",
-                "lnServerUrl": "https://lnd:8080",
-                "fiatConversion": false,
-                "unannouncedChannels": false
-              }
-            }
-          ]
-        }
-        EOF
-        tail -f /dev/null
-    volumes:
-      - rtl_datadir:/rtl_data
-    depends_on:
-      - lnd
-    restart: always
-
-  rtl:
-    image: shahanafarooqui/rtl:0.14.0
-    environment:
-      - RTL_CONFIG_PATH=/rtl_data
-    volumes:
-      - rtl_datadir:/rtl_data
-      - lnd_datadir:/root/.lnd
-    ports:
-      - 0.0.0.0:3003:3003
-    depends_on:
-      - rtl_config_writer
-    restart: always
-
-  bitcoind:
-    image: fedimint/mutinynet-bitcoind:master
-    command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
-    ports:
-      - 0.0.0.0:38333:38333
-    volumes:
-      - "bitcoin_datadir:/root/.bitcoin"
-    restart: always
-    platform: linux/amd64
-
 volumes:
   bitcoin_datadir:
   lnd_datadir:
   gateway_datadir:
   thunderhub_datadir:
-  rtl_datadir:
