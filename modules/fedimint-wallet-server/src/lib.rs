@@ -48,9 +48,10 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::sleep;
 use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeers,
-    OutPoint, PeerId, ServerModule,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, Feerate,
+    NumPeers, OutPoint, PeerId, ServerModule,
 };
+use fedimint_metrics::{histogram_opts, lazy_static, prometheus, register_histogram, Histogram};
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
@@ -70,6 +71,52 @@ use rand::rngs::OsRng;
 use secp256k1::{Message, Scalar};
 use strum::IntoEnumIterator;
 use tracing::{debug, error, info, instrument, trace, warn};
+
+lazy_static! {
+    static ref AMOUNTS_BUCKETS_SATS: Vec<f64> = vec![
+        0.0,
+        0.1,
+        1.0,
+        10.0,
+        100.0,
+        1000.0,
+        10000.0,
+        100000.0,
+        1000000.0,
+        10000000.0,
+        100000000.0
+    ];
+    static ref WALLET_PEGIN_SATS: Histogram = register_histogram!(histogram_opts!(
+        "wallet_pegin_sats",
+        "Value of peg-in transactions in sats",
+        AMOUNTS_BUCKETS_SATS.clone()
+    ))
+    .unwrap();
+    static ref WALLET_PEGIN_FEES_SATS: Histogram = register_histogram!(histogram_opts!(
+        "wallet_pegin_fees_sats",
+        "Value of peg-in fees in sats",
+        AMOUNTS_BUCKETS_SATS.clone()
+    ))
+    .unwrap();
+    static ref WALLET_PEGOUT_SATS: Histogram = register_histogram!(histogram_opts!(
+        "wallet_pegout_sats",
+        "Value of peg-out transactions in sats",
+        AMOUNTS_BUCKETS_SATS.clone()
+    ))
+    .unwrap();
+    static ref WALLET_PEGOUT_FEES_SATS: Histogram = register_histogram!(histogram_opts!(
+        "wallet_pegout_fees_sats",
+        "Value of peg-out fees in sats",
+        AMOUNTS_BUCKETS_SATS.clone()
+    ))
+    .unwrap();
+    static ref ALL_METRICS: [Box<dyn prometheus::core::Collector>; 4] = [
+        Box::new(WALLET_PEGIN_SATS.clone()),
+        Box::new(WALLET_PEGIN_FEES_SATS.clone()),
+        Box::new(WALLET_PEGOUT_SATS.clone()),
+        Box::new(WALLET_PEGOUT_FEES_SATS.clone()),
+    ];
+}
 
 #[derive(Debug, Clone)]
 pub struct WalletInit;
@@ -191,6 +238,10 @@ impl ServerModuleInit for WalletInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
+        // Ensure all metrics are initialized
+        for metric in ALL_METRICS.iter() {
+            metric.collect();
+        }
         Ok(Wallet::new(
             args.cfg().to_typed()?,
             args.db().clone(),
@@ -505,12 +556,11 @@ impl ServerModule for Wallet {
         {
             return Err(WalletInputError::PegInAlreadyClaimed);
         }
-
+        let amount = fedimint_core::Amount::from_sats(input.tx_output().value);
+        let fee = self.cfg.consensus.fee_consensus.peg_in_abs;
+        calculate_pegin_metrics(dbtx, amount, fee);
         Ok(InputMeta {
-            amount: TransactionItemAmount {
-                amount: fedimint_core::Amount::from_sats(input.tx_output().value),
-                fee: self.cfg.consensus.fee_consensus.peg_in_abs,
-            },
+            amount: TransactionItemAmount { amount, fee },
             pub_key: *input.tweak_contract_key(),
         })
     }
@@ -583,11 +633,10 @@ impl ServerModule for Wallet {
             &WalletOutputOutcome::new_v0(txid),
         )
         .await;
-
-        Ok(TransactionItemAmount {
-            amount: output.amount().into(),
-            fee: self.cfg.consensus.fee_consensus.peg_out_abs,
-        })
+        let amount: fedimint_core::Amount = output.amount().into();
+        let fee = self.cfg.consensus.fee_consensus.peg_out_abs;
+        calculate_pegout_metrics(dbtx, amount, fee);
+        Ok(TransactionItemAmount { amount, fee })
     }
 
     async fn output_status(
@@ -679,6 +728,20 @@ impl ServerModule for Wallet {
             },
         ]
     }
+}
+
+fn calculate_pegin_metrics(dbtx: &mut DatabaseTransaction<'_>, amount: Amount, fee: Amount) {
+    dbtx.on_commit(move || {
+        WALLET_PEGIN_SATS.observe(amount.sats_f64());
+        WALLET_PEGIN_FEES_SATS.observe(fee.sats_f64());
+    });
+}
+
+fn calculate_pegout_metrics(dbtx: &mut DatabaseTransaction<'_>, amount: Amount, fee: Amount) {
+    dbtx.on_commit(move || {
+        WALLET_PEGOUT_SATS.observe(amount.sats_f64());
+        WALLET_PEGOUT_FEES_SATS.observe(fee.sats_f64());
+    });
 }
 
 #[derive(Debug)]

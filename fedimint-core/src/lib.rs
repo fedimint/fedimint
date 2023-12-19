@@ -155,6 +155,10 @@ impl Amount {
     pub const fn sats_round_down(&self) -> u64 {
         self.msats / 1000
     }
+
+    pub fn sats_f64(&self) -> f64 {
+        self.msats as f64 / 1000.0
+    }
 }
 
 /// Shorthand for [`Amount::from_msats`]
