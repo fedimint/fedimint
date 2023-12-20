@@ -6,8 +6,8 @@ use fedimint_core::BitcoinAmountOrAll;
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, LeaveFedPayload,
-    RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
+    LeaveFedPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
 };
 use serde::Serialize;
 
@@ -30,6 +30,11 @@ pub enum Commands {
     VersionHash,
     /// Display high-level information about the Gateway
     Info,
+    /// Display config information about the Gateways federation
+    Config {
+        #[clap(long)]
+        federation_id: Option<FederationId>,
+    },
     /// Check gateway balance
     Balance {
         #[clap(long)]
@@ -102,6 +107,12 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Info => {
             let response = client().get_info().await?;
+
+            print_response(response).await;
+        }
+
+        Commands::Config { federation_id } => {
+            let response = client().get_config(ConfigPayload { federation_id }).await?;
 
             print_response(response).await;
         }

@@ -2,11 +2,12 @@ pub mod rpc_client;
 pub mod rpc_server;
 
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::io::Cursor;
 
 use bitcoin::{Address, Network, Txid};
 use bitcoin_hashes::hex::{FromHex, ToHex};
-use fedimint_core::config::{ClientConfig, FederationId};
+use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_ln_client::pay::PayInvoicePayload;
@@ -43,6 +44,11 @@ pub struct RestorePayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ConfigPayload {
+    pub federation_id: Option<FederationId>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BalancePayload {
     pub federation_id: FederationId,
 }
@@ -59,13 +65,17 @@ pub struct WithdrawPayload {
     pub address: Address,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FederationConnectionInfo {
+    pub federation_id: FederationId,
+    pub config: ClientConfig,
+}
+
 /// Information about one of the feds we are connected to
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FederationInfo {
-    /// Unique identifier of the fed
     pub federation_id: FederationId,
     pub balance_msat: Amount,
-    pub config: ClientConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -82,6 +92,11 @@ pub struct GatewayInfo {
     pub network: Option<Network>,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct GatewayFedConfig {
+    pub federations: BTreeMap<FederationId, JsonClientConfig>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SetConfigurationPayload {
     pub password: Option<String>,
@@ -93,6 +108,7 @@ pub struct SetConfigurationPayload {
 #[derive(Debug)]
 pub enum GatewayRequest {
     Info(GatewayRequestInner<InfoPayload>),
+    Config(GatewayRequestInner<ConfigPayload>),
     ConnectFederation(GatewayRequestInner<ConnectFedPayload>),
     PayInvoice(GatewayRequestInner<PayInvoicePayload>),
     Balance(GatewayRequestInner<BalancePayload>),
@@ -131,9 +147,10 @@ macro_rules! impl_gateway_request_trait {
 }
 
 impl_gateway_request_trait!(InfoPayload, GatewayInfo, GatewayRequest::Info);
+impl_gateway_request_trait!(ConfigPayload, GatewayFedConfig, GatewayRequest::Config);
 impl_gateway_request_trait!(
     ConnectFedPayload,
-    FederationInfo,
+    FederationConnectionInfo,
     GatewayRequest::ConnectFederation
 );
 impl_gateway_request_trait!(PayInvoicePayload, Preimage, GatewayRequest::PayInvoice);

@@ -61,7 +61,10 @@ use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning_invoice::RoutingFees;
 use lnrpc_client::{ILnRpcClient, LightningBuilder, LightningRpcError, RouteHtlcStream};
 use rand::rngs::OsRng;
-use rpc::{FederationInfo, LeaveFedPayload, SetConfigurationPayload};
+use rpc::{
+    FederationConnectionInfo, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
+    SetConfigurationPayload,
+};
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
 use state_machine::pay::OutgoingPaymentError;
@@ -76,8 +79,8 @@ use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::lnrpc_client::GatewayLightningBuilder;
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, GatewayInfo,
-    RestorePayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
+    WithdrawPayload,
 };
 use crate::state_machine::GatewayExtPayStates;
 
@@ -664,6 +667,27 @@ impl Gateway {
             network: None,
         })
     }
+    pub async fn handle_get_federation_config(
+        &self,
+        federation_id: Option<FederationId>,
+    ) -> Result<GatewayFedConfig> {
+        if let GatewayState::Running { .. } = self.state.read().await.clone() {
+            let mut federations = BTreeMap::new();
+            if let Some(federation_id) = federation_id {
+                let client = self.select_client(federation_id).await?;
+                federations.insert(federation_id, client.get_config_json());
+            } else {
+                let federation_clients = self.clients.read().await.clone().into_iter();
+                for (federation_id, client) in federation_clients {
+                    federations.insert(federation_id, client.get_config_json());
+                }
+            }
+            return Ok(GatewayFedConfig { federations });
+        }
+        Ok(GatewayFedConfig {
+            federations: BTreeMap::new(),
+        })
+    }
 
     pub async fn handle_balance_msg(&self, payload: BalancePayload) -> Result<Amount> {
         Ok(self
@@ -790,7 +814,7 @@ impl Gateway {
     async fn handle_connect_federation(
         &mut self,
         payload: ConnectFedPayload,
-    ) -> Result<FederationInfo> {
+    ) -> Result<FederationConnectionInfo> {
         if let GatewayState::Running {
             lnrpc,
             lightning_public_key,
@@ -847,9 +871,12 @@ impl Gateway {
                 )
                 .await?;
 
-            let federation_info = self.make_federation_info(&client, federation_id).await;
+            let federation_config = FederationConnectionInfo {
+                federation_id,
+                config: client.get_config().clone(),
+            };
 
-            self.check_federation_network(&federation_info, gateway_config.network)
+            self.check_federation_network(&federation_config, gateway_config.network)
                 .await?;
 
             client
@@ -872,7 +899,7 @@ impl Gateway {
                 .save_config(gw_client_cfg.clone(), dbtx)
                 .await?;
 
-            return Ok(federation_info);
+            return Ok(federation_config);
         }
 
         Err(GatewayError::Disconnected)
@@ -1223,18 +1250,16 @@ impl Gateway {
         federation_id: FederationId,
     ) -> FederationInfo {
         let balance_msat = client.get_balance().await;
-        let config = client.get_config().clone();
 
         FederationInfo {
             federation_id,
             balance_msat,
-            config,
         }
     }
 
     async fn check_federation_network(
         &self,
-        info: &FederationInfo,
+        info: &FederationConnectionInfo,
         network: Network,
     ) -> Result<()> {
         let cfg = info

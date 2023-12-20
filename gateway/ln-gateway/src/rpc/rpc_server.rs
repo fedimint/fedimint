@@ -17,6 +17,7 @@ use super::{
     RestorePayload, SetConfigurationPayload, WithdrawPayload,
 };
 use crate::db::GatewayConfiguration;
+use crate::rpc::ConfigPayload;
 use crate::{Gateway, GatewayError};
 
 pub async fn run_webserver(
@@ -34,6 +35,7 @@ pub async fn run_webserver(
         // Authenticated, public routes used for gateway administration
         let admin_routes = Router::new()
             .route("/info", get(info))
+            .route("/config", post(configuration))
             .route("/balance", post(balance))
             .route("/address", post(address))
             .route("/withdraw", post(withdraw))
@@ -47,6 +49,7 @@ pub async fn run_webserver(
     } else {
         let routes = Router::new()
             .route("/set_configuration", post(set_configuration))
+            .route("/config", get(configuration))
             .route("/info", get(info));
         (routes, Router::new())
     };
@@ -81,6 +84,19 @@ pub async fn run_webserver(
 async fn info(Extension(gateway): Extension<Gateway>) -> Result<impl IntoResponse, GatewayError> {
     let info = gateway.handle_get_info().await?;
     Ok(Json(json!(info)))
+}
+
+/// Display high-level information about the Gateway config
+#[debug_handler]
+#[instrument(skip_all, err)]
+async fn configuration(
+    Extension(gateway): Extension<Gateway>,
+    Json(payload): Json<ConfigPayload>,
+) -> Result<impl IntoResponse, GatewayError> {
+    let gateway_fed_config = gateway
+        .handle_get_federation_config(payload.federation_id)
+        .await?;
+    Ok(Json(json!(gateway_fed_config)))
 }
 
 /// Display gateway ecash note balance
