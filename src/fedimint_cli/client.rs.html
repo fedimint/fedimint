@@ -763,6 +763,14 @@
 <a href="#763" id="763">763</a>
 <a href="#764" id="764">764</a>
 <a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -866,6 +874,9 @@
         <span class="doccomment">/// Amount to pay, used for lnurl
         </span><span class="attr">#[clap(long)]
         </span>amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
+        <span class="doccomment">/// Invoice comment/description, used on lnurl
+        </span><span class="attr">#[clap(long)]
+        </span>lnurl_comment: <span class="prelude-ty">Option</span>&lt;String&gt;,
         <span class="doccomment">/// Will return immediately after funding the payment
         </span><span class="attr">#[clap(long, action)]
         </span>finish_in_background: bool,
@@ -1102,8 +1113,9 @@
             payment_info,
             amount,
             finish_in_background,
+            lnurl_comment,
         } =&gt; {
-            <span class="kw">let </span>bolt11 = get_invoice(<span class="kw-2">&amp;</span>payment_info, amount).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>bolt11 = get_invoice(<span class="kw-2">&amp;</span>payment_info, amount, lnurl_comment).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">info!</span>(<span class="string">&quot;Paying invoice: {bolt11}&quot;</span>);
             <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
             lightning_module.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1352,7 +1364,11 @@
     }
 }
 
-<span class="kw">async fn </span>get_invoice(info: <span class="kw-2">&amp;</span>str, amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;) -&gt; anyhow::Result&lt;Bolt11Invoice&gt; {
+<span class="kw">async fn </span>get_invoice(
+    info: <span class="kw-2">&amp;</span>str,
+    amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
+    lnurl_comment: <span class="prelude-ty">Option</span>&lt;String&gt;,
+) -&gt; anyhow::Result&lt;Bolt11Invoice&gt; {
     <span class="kw">let </span>info = info.trim();
     <span class="kw">match </span>lightning_invoice::Bolt11Invoice::from_str(info) {
         <span class="prelude-val">Ok</span>(invoice) =&gt; {
@@ -1383,7 +1399,7 @@
             <span class="kw">match </span>response {
                 lnurl::LnUrlResponse::LnUrlPayResponse(response) =&gt; {
                     <span class="kw">let </span>invoice = async_client
-                        .get_invoice(<span class="kw-2">&amp;</span>response, amount.msats, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>)
+                        .get_invoice(<span class="kw-2">&amp;</span>response, amount.msats, <span class="prelude-val">None</span>, lnurl_comment.as_deref())
                         .<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">let </span>invoice = Bolt11Invoice::from_str(invoice.invoice())<span class="question-mark">?</span>;
                     <span class="macro">assert_eq!</span>(invoice.amount_milli_satoshis(), <span class="prelude-val">Some</span>(amount.msats));
