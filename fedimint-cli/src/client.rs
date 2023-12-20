@@ -101,6 +101,9 @@ pub enum ClientCmd {
         /// Amount to pay, used for lnurl
         #[clap(long)]
         amount: Option<Amount>,
+        /// Invoice comment/description, used on lnurl
+        #[clap(long)]
+        lnurl_comment: Option<String>,
         /// Will return immediately after funding the payment
         #[clap(long, action)]
         finish_in_background: bool,
@@ -337,8 +340,9 @@ pub async fn handle_command(
             payment_info,
             amount,
             finish_in_background,
+            lnurl_comment,
         } => {
-            let bolt11 = get_invoice(&payment_info, amount).await?;
+            let bolt11 = get_invoice(&payment_info, amount, lnurl_comment).await?;
             info!("Paying invoice: {bolt11}");
             let lightning_module = client.get_first_module::<LightningClientModule>();
             lightning_module.select_active_gateway().await?;
@@ -587,7 +591,11 @@ pub async fn handle_command(
     }
 }
 
-async fn get_invoice(info: &str, amount: Option<Amount>) -> anyhow::Result<Bolt11Invoice> {
+async fn get_invoice(
+    info: &str,
+    amount: Option<Amount>,
+    lnurl_comment: Option<String>,
+) -> anyhow::Result<Bolt11Invoice> {
     let info = info.trim();
     match lightning_invoice::Bolt11Invoice::from_str(info) {
         Ok(invoice) => {
@@ -618,7 +626,7 @@ async fn get_invoice(info: &str, amount: Option<Amount>) -> anyhow::Result<Bolt1
             match response {
                 lnurl::LnUrlResponse::LnUrlPayResponse(response) => {
                     let invoice = async_client
-                        .get_invoice(&response, amount.msats, None, None)
+                        .get_invoice(&response, amount.msats, None, lnurl_comment.as_deref())
                         .await?;
                     let invoice = Bolt11Invoice::from_str(invoice.invoice())?;
                     assert_eq!(invoice.amount_milli_satoshis(), Some(amount.msats));
