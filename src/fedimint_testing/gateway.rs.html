@@ -274,7 +274,7 @@
 <span class="kw">use </span>ln_gateway::client::GatewayClientBuilder;
 <span class="kw">use </span>ln_gateway::lnrpc_client::{ILnRpcClient, LightningBuilder};
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
-<span class="kw">use </span>ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
+<span class="kw">use </span>ln_gateway::rpc::{ConnectFedPayload, FederationConnectionInfo};
 <span class="kw">use </span>ln_gateway::{Gateway, GatewayState};
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>tempfile::TempDir;
@@ -320,7 +320,7 @@
     }
 
     <span class="doccomment">/// Connects to a new federation and stores the info
-    </span><span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;mut </span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; FederationInfo {
+    </span><span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;mut </span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; FederationConnectionInfo {
         <span class="macro">info!</span>(target: LOG_TEST, <span class="string">&quot;Sending rpc to connect gateway to federation&quot;</span>);
         <span class="kw">let </span>invite_code = fed.invite_code().to_string();
         <span class="kw">let </span>rpc = <span class="self">self

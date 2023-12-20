@@ -186,6 +186,17 @@
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
 <a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::config::FederationId;
@@ -194,8 +205,8 @@
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, LeaveFedPayload,
-    RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
+    LeaveFedPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
 };
 <span class="kw">use </span>serde::Serialize;
 
@@ -218,6 +229,11 @@
     </span>VersionHash,
     <span class="doccomment">/// Display high-level information about the Gateway
     </span>Info,
+    <span class="doccomment">/// Display config information about the Gateways federation
+    </span>Config {
+        <span class="attr">#[clap(long)]
+        </span>federation_id: <span class="prelude-ty">Option</span>&lt;FederationId&gt;,
+    },
     <span class="doccomment">/// Check gateway balance
     </span>Balance {
         <span class="attr">#[clap(long)]
@@ -290,6 +306,12 @@
         }
         Commands::Info =&gt; {
             <span class="kw">let </span>response = client().get_info().<span class="kw">await</span><span class="question-mark">?</span>;
+
+            print_response(response).<span class="kw">await</span>;
+        }
+
+        Commands::Config { federation_id } =&gt; {
+            <span class="kw">let </span>response = client().get_config(ConfigPayload { federation_id }).<span class="kw">await</span><span class="question-mark">?</span>;
 
             print_response(response).<span class="kw">await</span>;
         }
