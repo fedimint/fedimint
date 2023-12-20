@@ -205,18 +205,40 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
     let ln_sends_stats = stats_for(ln_sends);
     let ln_receives_stats = stats_for(ln_receives);
     let fm_pay_stats = stats_for(fm_internal_pay);
+
+    info!("Testing latency of restore");
+    let backup_secret = cmd!(fed, "print-secret").out_json().await?["secret"]
+        .as_str()
+        .map(ToOwned::to_owned)
+        .unwrap();
+    let restore_client = Client::create("restore").await?;
+    let start_time = Instant::now();
+    cmd!(
+        restore_client,
+        "restore",
+        "--mnemonic",
+        &backup_secret,
+        "--invite-code",
+        fed.invite_code()?
+    )
+    .run()
+    .await?;
+    let restore_time = start_time.elapsed();
+
     println!(
         "================= RESULTS ==================\n\
               REISSUE: {reissue_stats}\n\
               LN SEND: {ln_sends_stats}\n\
               LN RECV: {ln_receives_stats}\n\
-              FM PAY: {fm_pay_stats}"
+              FM PAY: {fm_pay_stats}\n\
+              RESTORE: {restore_time:?}"
     );
     // FIXME: should be smaller
     assert!(reissue_stats.median < Duration::from_secs(4));
     assert!(ln_sends_stats.median < Duration::from_secs(6));
     assert!(ln_receives_stats.median < Duration::from_secs(6));
     assert!(fm_pay_stats.median < Duration::from_secs(6));
+    assert!(restore_time < Duration::from_secs(160));
     let factor = 3; // FIXME: should be much smaller
     assert!(reissue_stats.p90 < reissue_stats.median * factor);
     assert!(ln_sends_stats.p90 < ln_sends_stats.median * factor);
