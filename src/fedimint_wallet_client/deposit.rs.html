@@ -326,7 +326,22 @@
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
 <a href="#328" id="328">328</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -435,6 +450,19 @@
         .script_pubkey();
     <span class="kw">loop </span>{
         <span class="kw">match </span>context.rpc.watch_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break</span>,
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">warn!</span>(<span class="string">&quot;Error while awaiting btc tx submitting: {e}&quot;</span>),
+        }
+        sleep(TRANSACTION_STATUS_FETCH_INTERVAL).<span class="kw">await</span>;
+    }
+    <span class="kw">for </span>attempt <span class="kw">in </span><span class="number">0u32</span>.. {
+        sleep(cmp::min(
+            TRANSACTION_STATUS_FETCH_INTERVAL * attempt,
+            Duration::from_secs(<span class="number">60 </span>* <span class="number">15</span>),
+        ))
+        .<span class="kw">await</span>;
+
+        <span class="kw">match </span>context.rpc.get_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(received) =&gt; {
                 <span class="comment">// TODO: fix
                 </span><span class="kw">if </span>received.len() &gt; <span class="number">1 </span>{
@@ -464,9 +492,9 @@
                 <span class="macro">warn!</span>(<span class="string">&quot;Error fetching transaction history for {script:?}: {e}&quot;</span>);
             }
         }
-
-        sleep(TRANSACTION_STATUS_FETCH_INTERVAL).<span class="kw">await</span>;
     }
+
+    <span class="macro">unreachable!</span>()
 }
 
 <span class="kw">async fn </span>transition_tx_seen(
