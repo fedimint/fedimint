@@ -11,7 +11,7 @@ use bitcoincore_rpc::{bitcoin, RpcApi};
 use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use devimint::federation::{Client, Federation, Fedimintd};
-use devimint::util::{poll, ProcessManager};
+use devimint::util::{poll, LoadTestTool, ProcessManager};
 use devimint::{
     cmd, dev_fed, external_daemons, poll_eq, vars, DevFed, ExternalDaemons, Gatewayd,
     LightningNode, Lightningd, Lnd,
@@ -905,7 +905,7 @@ async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
 
 async fn run_standard_load_test(load_test_temp: &Path, invite_code: &str) -> anyhow::Result<()> {
     let output = cmd!(
-        "fedimint-load-test-tool",
+        LoadTestTool,
         "--archive-dir",
         load_test_temp.display(),
         "--users",
@@ -930,7 +930,7 @@ async fn run_standard_load_test(load_test_temp: &Path, invite_code: &str) -> any
         "paid different number of invoices than expected"
     );
     let output = cmd!(
-        "fedimint-load-test-tool",
+        LoadTestTool,
         "--archive-dir",
         load_test_temp.display(),
         "--users",
@@ -962,7 +962,7 @@ async fn run_standard_load_test(load_test_temp: &Path, invite_code: &str) -> any
 async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> anyhow::Result<()> {
     info!("Testing ln-circular-load-test with 'two-gateways' strategy");
     let output = cmd!(
-        "fedimint-load-test-tool",
+        LoadTestTool,
         "--archive-dir",
         load_test_temp.display(),
         "--users",
@@ -994,7 +994,7 @@ async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> 
     info!("Testing ln-circular-load-test with 'partner-ping-pong' strategy");
     // Note invite code isn't required because we already have an archive dir
     let output = cmd!(
-        "fedimint-load-test-tool",
+        LoadTestTool,
         "--archive-dir",
         load_test_temp.display(),
         "--users",
@@ -1022,7 +1022,7 @@ async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> 
     info!("Testing ln-circular-load-test with 'self-payment' strategy");
     // Note invite code isn't required because we already have an archive dir
     let output = cmd!(
-        "fedimint-load-test-tool",
+        LoadTestTool,
         "--archive-dir",
         load_test_temp.display(),
         "--users",
@@ -1507,7 +1507,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     let now = fedimint_core::time::now();
     info!("Recovering using utxos method");
     let output = cmd!(
-        "recoverytool",
+        "recoverytool", // FIXME: create a command
         "--readonly",
         "--cfg",
         "{data_dir}/fedimintd-0",
@@ -1874,6 +1874,7 @@ async fn handle_command() -> Result<()> {
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
                         async {
+                            // FIXME: create a command
                             let faucet = process_mgr.spawn_daemon("faucet", cmd!("faucet")).await?;
 
                             poll("waiting for faucet startup", None, || async {

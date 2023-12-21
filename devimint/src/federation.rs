@@ -29,7 +29,7 @@ use tracing::{debug, info};
 use super::external::Bitcoind;
 use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 use super::vars::utf8;
-use crate::util::poll;
+use crate::util::{poll, FedimintdCmd};
 use crate::{poll_eq, vars};
 
 pub struct Federation {
@@ -114,7 +114,7 @@ impl Client {
 
     pub async fn cmd(&self) -> Command {
         cmd!(
-            "fedimint-cli",
+            crate::util::get_fedimint_cli_path(),
             format!("--data-dir={}", self.client_dir().display())
         )
     }
@@ -395,7 +395,7 @@ impl Fedimintd {
         let process = process_mgr
             .spawn_daemon(
                 &format!("fedimintd-{peer_id}"),
-                cmd!("fedimintd").envs(env.vars()),
+                cmd!(FedimintdCmd).envs(env.vars()),
             )
             .await?;
 
