@@ -43,7 +43,10 @@ impl Bitcoind {
         );
         write_overwrite_async(processmgr.globals.FM_BTC_DIR.join("bitcoin.conf"), conf).await?;
         let process = processmgr
-            .spawn_daemon("bitcoind", cmd!("bitcoind", "-datadir={btc_dir}"))
+            .spawn_daemon(
+                "bitcoind",
+                cmd!(crate::util::Bitcoind, "-datadir={btc_dir}"),
+            )
             .await?;
 
         let url = processmgr.globals.FM_BITCOIN_RPC_URL.parse()?;
@@ -256,7 +259,7 @@ impl Lightningd {
             .context("gateway-cln-extension not on path")?;
         let btc_dir = utf8(&process_mgr.globals.FM_BTC_DIR);
         let cmd = cmd!(
-            "lightningd",
+            crate::util::Lightningd,
             "--dev-fast-gossip",
             "--dev-bitcoind-poll=1",
             format!("--lightning-dir={}", utf8(cln_dir)),
@@ -343,7 +346,7 @@ impl Lnd {
         );
         write_overwrite_async(process_mgr.globals.FM_LND_DIR.join("lnd.conf"), conf).await?;
         let cmd = cmd!(
-            "lnd",
+            crate::util::Lnd,
             format!("--lnddir={}", utf8(&process_mgr.globals.FM_LND_DIR))
         );
 
@@ -617,7 +620,7 @@ impl Electrs {
         )
         .await?;
         let cmd = cmd!(
-            "electrs",
+            crate::util::Electrs,
             "--conf-dir={electrs_dir}",
             "--db-dir={electrs_dir}",
             "--daemon-dir={daemon_dir}"
@@ -655,7 +658,7 @@ impl Esplora {
         let esplora_port = process_mgr.globals.FM_PORT_ESPLORA;
         // spawn esplora
         let cmd = cmd!(
-            "esplora",
+            crate::util::Esplora,
             "--daemon-dir={daemon_dir}",
             "--db-dir={esplora_dir}",
             "--cookie=bitcoin:bitcoin",
