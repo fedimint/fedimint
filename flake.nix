@@ -10,7 +10,7 @@
     };
     flake-utils.url = "github:numtide/flake-utils";
     flakebox = {
-      url = "github:dpc/flakebox?rev=4c659e425a347e0e90fc661c48e7fb20014cc120";
+      url = "github:dpc/flakebox?rev=d7f57f94f2dca67dafd02b31b030b62f6fefecbc";
     };
     advisory-db = {
       url = "github:rustsec/advisory-db";
@@ -40,7 +40,10 @@
 
                   nativeBuildInputs = [ final.pkg-config ];
 
-                  buildInputs = [ final.openssl ] ++ lib.optionals stdenv.isDarwin [ final.curl final.Security ];
+                  buildInputs = [ final.openssl ] ++ lib.optionals stdenv.isDarwin [
+                    final.curl
+                    final.darwin.apple_sdk.frameworks.Security
+                  ];
 
                   nativeCheckInputs = [ final.nodejs ];
 
@@ -350,10 +353,10 @@
               });
 
               # Like `cross` but only with wasm
-              crossWasm = flakeboxLib.mkDevShell (craneMultiBuild.commonEnvsShell // craneMultiBuild.commonEnvsShellRocksdbLink // {
+              crossWasm = flakeboxLib.mkDevShell (commonShellArgs // {
                 toolchain = toolchainWasm;
 
-                packages = [
+                nativeBuildInputs = commonShellArgs.nativeBuildInputs or [ ] ++ [
                   pkgs.wasm-pack
                   pkgs.wasm-bindgen-cli
                   pkgs.geckodriver

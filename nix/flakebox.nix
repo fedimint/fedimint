@@ -137,9 +137,7 @@ let
       libiconv
       darwin.apple_sdk.frameworks.Security
       darwin.apple_sdk.frameworks.SystemConfiguration
-    ] ++ builtins.attrValues {
-      inherit (pkgs) openssl;
-    };
+    ];
 
     nativeBuildInputs = with pkgs; [
       pkg-config
