@@ -1,3 +1,4 @@
+use std::cmp;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -107,6 +108,19 @@ async fn await_created_btc_transaction_submitted(
         .script_pubkey();
     loop {
         match context.rpc.watch_script_history(&script).await {
+            Ok(_) => break,
+            Err(e) => warn!("Error while awaiting btc tx submitting: {e}"),
+        }
+        sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
+    }
+    for attempt in 0u32.. {
+        sleep(cmp::min(
+            TRANSACTION_STATUS_FETCH_INTERVAL * attempt,
+            Duration::from_secs(60 * 15),
+        ))
+        .await;
+
+        match context.rpc.get_script_history(&script).await {
             Ok(received) => {
                 // TODO: fix
                 if received.len() > 1 {
@@ -136,9 +150,9 @@ async fn await_created_btc_transaction_submitted(
                 warn!("Error fetching transaction history for {script:?}: {e}");
             }
         }
-
-        sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
     }
+
+    unreachable!()
 }
 
 async fn transition_tx_seen(

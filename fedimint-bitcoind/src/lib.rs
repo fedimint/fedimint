@@ -131,8 +131,14 @@ pub trait IBitcoindRpc: Debug {
     /// Watches for a script and returns any transactions associated with it
     ///
     /// Should be called once prior to transactions being submitted or watching
-    /// may not occur
-    async fn watch_script_history(&self, script: &Script) -> Result<Vec<Transaction>>;
+    /// may not occur on backends that need it
+    async fn watch_script_history(&self, script: &Script) -> Result<()>;
+
+    /// Get script transaction history
+    ///
+    /// Note: should call `watch_script_history` at least once (and ideally only
+    /// once), before calling this.
+    async fn get_script_history(&self, script: &Script) -> Result<Vec<Transaction>>;
 
     /// Returns a proof that a tx is included in the bitcoin blockchain
     async fn get_txout_proof(&self, txid: Txid) -> Result<TxOutProof>;
@@ -220,8 +226,13 @@ where
             .await
     }
 
-    async fn watch_script_history(&self, script: &Script) -> Result<Vec<Transaction>> {
+    async fn watch_script_history(&self, script: &Script) -> Result<()> {
         self.retry_call(|| async { self.inner.watch_script_history(script).await })
+            .await
+    }
+
+    async fn get_script_history(&self, script: &Script) -> Result<Vec<Transaction>> {
+        self.retry_call(|| async { self.inner.get_script_history(script).await })
             .await
     }
 

@@ -101,7 +101,12 @@ impl IBitcoindRpc for EsploraClient {
             .map(|height| height as u64))
     }
 
-    async fn watch_script_history(
+    async fn watch_script_history(&self, _: &Script) -> anyhow::Result<()> {
+        // no watching needed, has all the history already
+        Ok(())
+    }
+
+    async fn get_script_history(
         &self,
         script: &Script,
     ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
@@ -115,7 +120,6 @@ impl IBitcoindRpc for EsploraClient {
 
         Ok(transactions)
     }
-
     async fn get_txout_proof(&self, txid: Txid) -> anyhow::Result<TxOutProof> {
         let proof = self
             .0

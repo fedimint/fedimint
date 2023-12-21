@@ -107,7 +107,12 @@ impl IBitcoindRpc for ElectrumClient {
         }
     }
 
-    async fn watch_script_history(
+    async fn watch_script_history(&self, _: &Script) -> anyhow::Result<()> {
+        // no watching needed on electrs, has all the history already
+        Ok(())
+    }
+
+    async fn get_script_history(
         &self,
         script: &Script,
     ) -> anyhow::Result<Vec<bitcoin::Transaction>> {

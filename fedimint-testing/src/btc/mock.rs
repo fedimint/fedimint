@@ -303,7 +303,11 @@ impl IBitcoindRpc for FakeBitcoinTest {
         Ok(None)
     }
 
-    async fn watch_script_history(&self, script: &Script) -> BitcoinRpcResult<Vec<Transaction>> {
+    async fn watch_script_history(&self, _: &Script) -> BitcoinRpcResult<()> {
+        Ok(())
+    }
+
+    async fn get_script_history(&self, script: &Script) -> BitcoinRpcResult<Vec<Transaction>> {
         let scripts = self.scripts.lock().unwrap();
         let script = scripts.get(script);
         Ok(script.unwrap_or(&vec![]).clone())
