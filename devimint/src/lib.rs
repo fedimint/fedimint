@@ -148,7 +148,7 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
 
     tokio::try_join!(gw_cln.connect_fed(&fed), gw_lnd.connect_fed(&fed), async {
         info!(target: LOG_DEVIMINT, "Joining federation with the main client");
-        cmd!(fed, "join-federation", fed.invite_code()?)
+        cmd!(fed.internal_client(), "join-federation", fed.invite_code()?)
             .run()
             .await?;
         info!(target: LOG_DEVIMINT, "Generating first epoch");
@@ -160,7 +160,6 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
     info!(target: LOG_DEVIMINT, "await gateways registered");
     fed.await_gateways_registered().await?;
     info!(target: LOG_DEVIMINT, "gateways registered");
-    fed.use_gateway(&gw_cln).await?;
     info!(
         target: LOG_DEVIMINT,
         "starting dev federation took {:?}",
