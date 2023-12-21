@@ -126,6 +126,12 @@ jobs:
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests && (matrix.host != 'macos')
         run: nix build -L .#wasm32-unknown.ci.wasmTest --keep-failed
 
+
+      - name: Cross Tests
+        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests
+        run: |
+          ./scripts/tests/cross-test-ci-all.sh
+
       - name: Prepare failed test build dirs
         if: always()
         run:  |

@@ -61,7 +61,7 @@ impl Gatewayd {
         let process = process_mgr
             .spawn_daemon(
                 &format!("gatewayd-{ln_name}"),
-                cmd!("gatewayd", ln_name).envs(gateway_env),
+                cmd!(crate::util::Gatewayd, ln_name).envs(gateway_env),
             )
             .await?;
 
@@ -89,7 +89,7 @@ impl Gatewayd {
 
     pub async fn cmd(&self) -> Command {
         cmd!(
-            "gateway-cli",
+            crate::util::get_gateway_cli_path(),
             "--rpcpassword=theresnosecondbest",
             "-a",
             &self.addr
