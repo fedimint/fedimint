@@ -41,12 +41,14 @@ use std::marker::{self, PhantomData};
 use std::ops::{self, DerefMut};
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use fedimint_core::util::BoxFuture;
 use fedimint_logging::LOG_DB;
 use futures::{Stream, StreamExt};
 use macro_rules_attribute::apply;
+use rand::Rng;
 use serde::Serialize;
 use strum_macros::EnumIter;
 use thiserror::Error;
@@ -455,6 +457,9 @@ impl Database {
                     }
                 }
             }
+            let delay = (2u64.pow(curr_attempts.min(7) as u32) * 10).min(1000);
+            let delay = rand::thread_rng().gen_range(delay..(2 * delay));
+            crate::task::sleep(Duration::from_millis(delay)).await;
         }
     }
 
