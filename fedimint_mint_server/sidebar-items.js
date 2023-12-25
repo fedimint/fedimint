@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["BackupRequest","Mint","MintInit","SignedBackupRequest"]};
+window.SIDEBAR_ITEMS = {"fn":["calculate_mint_issued_ecash_metrics","calculate_mint_redeemed_ecash_metrics"],"struct":["ALL_METRICS","AMOUNTS_BUCKETS_SATS","BackupRequest","MINT_ISSUED_ECASH_FEES_SATS","MINT_ISSUED_ECASH_SATS","MINT_REDEEMED_ECASH_FEES_SATS","MINT_REDEEMED_ECASH_SATS","Mint","MintInit","SignedBackupRequest"]};

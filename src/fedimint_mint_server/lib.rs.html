@@ -876,6 +876,77 @@
 <a href="#876" id="876">876</a>
 <a href="#877" id="877">877</a>
 <a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
+<a href="#925" id="925">925</a>
+<a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a>
+<a href="#931" id="931">931</a>
+<a href="#932" id="932">932</a>
+<a href="#933" id="933">933</a>
+<a href="#934" id="934">934</a>
+<a href="#935" id="935">935</a>
+<a href="#936" id="936">936</a>
+<a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
+<a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a>
+<a href="#949" id="949">949</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -898,6 +969,7 @@
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeers,
     OutPoint, PeerId, ServerModule, Tiered, TieredMultiZip,
 };
+<span class="kw">use </span>fedimint_metrics::{histogram_opts, lazy_static, prometheus, register_histogram, Histogram};
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_mint_common::config::{
     FeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal,
@@ -924,6 +996,52 @@
 };
 <span class="kw">use </span>threshold_crypto::group::Curve;
 <span class="kw">use </span>tracing::{debug, info};
+
+<span class="macro">lazy_static! </span>{
+    <span class="kw">static </span><span class="kw-2">ref </span>AMOUNTS_BUCKETS_SATS: Vec&lt;f64&gt; = <span class="macro">vec!</span>[
+        <span class="number">0.0</span>,
+        <span class="number">0.1</span>,
+        <span class="number">1.0</span>,
+        <span class="number">10.0</span>,
+        <span class="number">100.0</span>,
+        <span class="number">1000.0</span>,
+        <span class="number">10000.0</span>,
+        <span class="number">100000.0</span>,
+        <span class="number">1000000.0</span>,
+        <span class="number">10000000.0</span>,
+        <span class="number">100000000.0
+    </span>];
+    <span class="kw">static </span><span class="kw-2">ref </span>MINT_REDEEMED_ECASH_SATS: Histogram = <span class="macro">register_histogram!</span>(<span class="macro">histogram_opts!</span>(
+        <span class="string">&quot;mint_redeemed_ecash_sats&quot;</span>,
+        <span class="string">&quot;Value of redeemed e-cash notes in sats&quot;</span>,
+        AMOUNTS_BUCKETS_SATS.clone()
+    ))
+    .unwrap();
+    <span class="kw">static </span><span class="kw-2">ref </span>MINT_REDEEMED_ECASH_FEES_SATS: Histogram = <span class="macro">register_histogram!</span>(<span class="macro">histogram_opts!</span>(
+        <span class="string">&quot;mint_redeemed_ecash_fees_sats&quot;</span>,
+        <span class="string">&quot;Value of e-cash fees during reissue in sats&quot;</span>,
+        AMOUNTS_BUCKETS_SATS.clone()
+    ))
+    .unwrap();
+    <span class="kw">static </span><span class="kw-2">ref </span>MINT_ISSUED_ECASH_SATS: Histogram = <span class="macro">register_histogram!</span>(<span class="macro">histogram_opts!</span>(
+        <span class="string">&quot;mint_issued_ecash_sats&quot;</span>,
+        <span class="string">&quot;Value of issued e-cash notes in sats&quot;</span>,
+        AMOUNTS_BUCKETS_SATS.clone()
+    ))
+    .unwrap();
+    <span class="kw">static </span><span class="kw-2">ref </span>MINT_ISSUED_ECASH_FEES_SATS: Histogram = <span class="macro">register_histogram!</span>(<span class="macro">histogram_opts!</span>(
+        <span class="string">&quot;mint_issued_ecash_fees_sats&quot;</span>,
+        <span class="string">&quot;Value of e-cash fees during issue in sats&quot;</span>,
+        AMOUNTS_BUCKETS_SATS.clone()
+    ))
+    .unwrap();
+    <span class="kw">static </span><span class="kw-2">ref </span>ALL_METRICS: [Box&lt;<span class="kw">dyn </span>prometheus::core::Collector&gt;; <span class="number">4</span>] = [
+        Box::new(MINT_REDEEMED_ECASH_SATS.clone()),
+        Box::new(MINT_REDEEMED_ECASH_FEES_SATS.clone()),
+        Box::new(MINT_ISSUED_ECASH_SATS.clone()),
+        Box::new(MINT_ISSUED_ECASH_FEES_SATS.clone()),
+    ];
+}
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>MintInit;
@@ -998,6 +1116,10 @@
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ServerModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;DynServerModule&gt; {
+        <span class="comment">// Ensure all metrics are initialized
+        </span><span class="kw">for </span>metric <span class="kw">in </span>ALL_METRICS.iter() {
+            metric.collect();
+        }
         <span class="prelude-val">Ok</span>(Mint::new(args.cfg().to_typed()<span class="question-mark">?</span>).into())
     }
 
@@ -1222,12 +1344,11 @@
             <span class="kw-2">&amp;</span>input.amount,
         )
         .<span class="kw">await</span>;
-
+        <span class="kw">let </span>amount = input.amount;
+        <span class="kw">let </span>fee = <span class="self">self</span>.cfg.consensus.fee_consensus.note_spend_abs;
+        calculate_mint_redeemed_ecash_metrics(dbtx, amount, fee);
         <span class="prelude-val">Ok</span>(InputMeta {
-            amount: TransactionItemAmount {
-                amount: input.amount,
-                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.note_spend_abs,
-            },
+            amount: TransactionItemAmount { amount, fee },
             pub_key: <span class="kw-2">*</span>input.note.spend_key(),
         })
     }
@@ -1253,11 +1374,10 @@
 
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::Issuance(out_point), <span class="kw-2">&amp;</span>output.amount)
             .<span class="kw">await</span>;
-
-        <span class="prelude-val">Ok</span>(TransactionItemAmount {
-            amount: output.amount,
-            fee: <span class="self">self</span>.cfg.consensus.fee_consensus.note_issuance_abs,
-        })
+        <span class="kw">let </span>amount = output.amount;
+        <span class="kw">let </span>fee = <span class="self">self</span>.cfg.consensus.fee_consensus.note_issuance_abs;
+        calculate_mint_issued_ecash_metrics(dbtx, amount, fee);
+        <span class="prelude-val">Ok</span>(TransactionItemAmount { amount, fee })
     }
 
     <span class="kw">async fn </span>output_status(
@@ -1374,6 +1494,28 @@
     ) -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>EcashBackupKey(id)).<span class="kw">await
     </span>}
+}
+
+<span class="kw">fn </span>calculate_mint_issued_ecash_metrics(
+    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    amount: Amount,
+    fee: Amount,
+) {
+    dbtx.on_commit(<span class="kw">move </span>|| {
+        MINT_ISSUED_ECASH_SATS.observe(amount.sats_f64());
+        MINT_ISSUED_ECASH_FEES_SATS.observe(fee.sats_f64());
+    });
+}
+
+<span class="kw">fn </span>calculate_mint_redeemed_ecash_metrics(
+    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    amount: Amount,
+    fee: Amount,
+) {
+    dbtx.on_commit(<span class="kw">move </span>|| {
+        MINT_REDEEMED_ECASH_SATS.observe(amount.sats_f64());
+        MINT_REDEEMED_ECASH_FEES_SATS.observe(fee.sats_f64());
+    });
 }
 
 <span class="kw">impl </span>Mint {

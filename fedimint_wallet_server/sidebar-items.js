@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["broadcast_pending_tx","nonce_from_idx","run_broadcast_pending_tx"],"struct":["StatelessWallet","Wallet","WalletInit"]};
+window.SIDEBAR_ITEMS = {"fn":["broadcast_pending_tx","calculate_pegin_metrics","calculate_pegout_metrics","nonce_from_idx","run_broadcast_pending_tx"],"struct":["ALL_METRICS","AMOUNTS_BUCKETS_SATS","StatelessWallet","WALLET_PEGIN_FEES_SATS","WALLET_PEGIN_SATS","WALLET_PEGOUT_FEES_SATS","WALLET_PEGOUT_SATS","Wallet","WalletInit"]};
