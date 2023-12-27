@@ -27,13 +27,13 @@ The [LN gateway](#LN-Gateway):
 * `gateway/cli` - provides cli access and control of a running gatewayd instance
 
 ## Federation Nodes
-Each of the nodes spawns three long-running tasks in parallel: an API task, a [HBBFT protocol](https://docs.rs/hbbft/latest/hbbft/) task, and a Fedimint consensus task.
+Each of the nodes spawns three long-running tasks in parallel: an API task, an [AlephBFT protocol](https://docs.rs/aleph-bft/latest/aleph_bft/) task, and a Fedimint consensus task.
 
 The API task in `net:api:run_server` allows clients to submit a `Transaction` and retrieve its `TransactionStatus`.
 Transactions are validated by the `FedimintConsensus` logic before being stored as proposals in the database.
 The proposed list of `ConsensusItem`s includes all possible consensus state changes, such as mint transactions or updates to the agreed-upon block height.
 
-The HBBFT protocol task handles communication between federation nodes, combining different `ConsensusItem` proposals from each node into an identical `ConsensusOutcome` during an epoch.
+The AlephBFT protocol task handles communication between federation nodes, combining different `ConsensusItem` proposals from each node into an identical `ConsensusOutcome` during an epoch.
 So long as enough nodes can communicate, epochs will be continually generated, and every node will share the same sequence of `ConsensusOutcome` data.
 
 The `FedimintConsensus` task processes each `ConsensusOutcome` by validating the proposals, updating the database, and performing any necessary actions.
