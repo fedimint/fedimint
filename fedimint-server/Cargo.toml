@@ -37,7 +37,7 @@ lazy_static = "1.4.0"
 pin-project = "1.1.5"
 rand = { workspace = true }
 rcgen = "=0.12.1"
-secp256k1-zkp = { version = "0.7.0", features = [ "global-context", "bitcoin_hashes" ] }
+secp256k1-zkp = { version = "0.7.0", features = [ "global-context" ] }
 rand_chacha = "0.3.1"
 serde = { version = "1.0.197", features = [ "derive" ] }
 serde_json = { workspace = true }
@@ -69,7 +69,7 @@ fedimint-dummy-common = { path = "../modules/fedimint-dummy-common" }
 fedimint-dummy-server = { path = "../modules/fedimint-dummy-server" }
 fedimint-testing = { path = "../fedimint-testing" }
 fedimint-portalloc = { path = "../utils/portalloc" }
-test-log = { version = "0.2", features = [ "trace" ], default-features = false }
+test-log = { version = "0.2", features = ["trace"], default-features = false }
 
 [build-dependencies]
 fedimint-build = { version = "=0.4.0-alpha", path = "../fedimint-build" }

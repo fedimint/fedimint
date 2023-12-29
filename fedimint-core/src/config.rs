@@ -8,7 +8,6 @@ use std::time::Duration;
 
 use anyhow::{bail, format_err, Context};
 use bitcoin::secp256k1;
-use bitcoin_hashes::hex::{format_hex, FromHex};
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin_hashes::{hex, sha256};
 use bls12_381::Scalar;
@@ -22,6 +21,7 @@ use fedimint_core::task::Cancelled;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use fedimint_logging::LOG_CORE;
+use hex::{format_hex, FromHex};
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -1038,7 +1038,7 @@ pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> Result<T, anyhow::Err
 pub mod serde_binary_human_readable {
     use std::borrow::Cow;
 
-    use bitcoin_hashes::hex::{FromHex, ToHex};
+    use hex::{FromHex, ToHex};
     use serde::de::DeserializeOwned;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -1046,7 +1046,7 @@ pub mod serde_binary_human_readable {
         if s.is_human_readable() {
             let bytes =
                 bincode::serialize(x).map_err(|e| serde::ser::Error::custom(format!("{e:?}")))?;
-            s.serialize_str(&bytes.to_hex())
+            s.serialize_str(&bytes.encode_hex::<String>())
         } else {
             Serialize::serialize(x, s)
         }
@@ -1055,7 +1055,7 @@ pub mod serde_binary_human_readable {
     pub fn deserialize<'d, T: DeserializeOwned, D: Deserializer<'d>>(d: D) -> Result<T, D::Error> {
         if d.is_human_readable() {
             let hex_str: Cow<str> = Deserialize::deserialize(d)?;
-            let bytes = Vec::from_hex(&hex_str).map_err(serde::de::Error::custom)?;
+            let bytes = Vec::from_hex(hex_str.as_ref()).map_err(serde::de::Error::custom)?;
             bincode::deserialize(&bytes).map_err(|e| serde::de::Error::custom(format!("{e:?}")))
         } else {
             Deserialize::deserialize(d)

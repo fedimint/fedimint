@@ -73,7 +73,7 @@ pub struct ConfigGenParamsRequest {
 mod serde_tls_cert {
     use std::borrow::Cow;
 
-    use bitcoin_hashes::hex::{FromHex, ToHex};
+    use hex::{FromHex, ToHex};
     use serde::de::Error;
     use serde::{Deserialize, Deserializer, Serializer};
 
@@ -83,7 +83,7 @@ mod serde_tls_cert {
     where
         S: Serializer,
     {
-        let hex_str = certs.0.to_hex();
+        let hex_str = certs.0.encode_hex::<String>();
         serializer.serialize_str(&hex_str)
     }
 
@@ -93,7 +93,7 @@ mod serde_tls_cert {
     {
         let value: Cow<str> = Deserialize::deserialize(deserializer)?;
         Ok(RustlsCertificate(
-            Vec::from_hex(&value).map_err(D::Error::custom)?,
+            Vec::from_hex(value.as_ref()).map_err(D::Error::custom)?,
         ))
     }
 }

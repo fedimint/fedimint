@@ -890,7 +890,7 @@ impl FedimintCli {
                 Ok(CliOutput::ConfigEncrypt)
             }
             Command::Dev(DevCmd::DecodeTransaction { hex_string }) => {
-                let bytes: Vec<u8> = bitcoin_hashes::hex::FromHex::from_hex(&hex_string)
+                let bytes: Vec<u8> = hex::FromHex::from_hex(&hex_string)
                     .map_err_cli_msg("failed to decode transaction")?;
 
                 let client = self.client_open(&cli).await?;
