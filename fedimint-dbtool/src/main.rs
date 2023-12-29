@@ -2,7 +2,6 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use bitcoin_hashes::hex::ToHex;
 use bytes::Bytes;
 use clap::{Parser, Subcommand};
 use fedimint_client::module::init::{ClientModuleInitRegistry, DynClientModuleInit};
@@ -18,6 +17,7 @@ use fedimint_mint_server::MintInit;
 use fedimint_wallet_client::WalletClientInit;
 use fedimint_wallet_server::WalletInit;
 use futures::StreamExt;
+use hex::ToHex;
 
 use crate::dump::DatabaseDump;
 
@@ -83,12 +83,16 @@ enum DbCommand {
 }
 
 fn hex_parser(hex: &str) -> Result<Bytes> {
-    let bytes: Vec<u8> = bitcoin_hashes::hex::FromHex::from_hex(hex)?;
+    let bytes: Vec<u8> = hex::FromHex::from_hex(hex)?;
     Ok(bytes.into())
 }
 
 fn print_kv(key: &[u8], value: &[u8]) {
-    println!("{} {}", key.to_hex(), value.to_hex());
+    println!(
+        "{} {}",
+        key.encode_hex::<String>(),
+        value.encode_hex::<String>()
+    );
 }
 
 #[tokio::main]

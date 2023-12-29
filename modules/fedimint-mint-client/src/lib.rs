@@ -22,7 +22,6 @@ use anyhow::{anyhow, bail, ensure, Context as _};
 use async_stream::stream;
 use backup::recovery::MintRecovery;
 use base64::Engine as _;
-use bitcoin_hashes::hex::ToHex;
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
 use client_db::DbKeyPrefix;
 use fedimint_client::module::init::{
@@ -57,6 +56,7 @@ pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::MintClientConfig;
 pub use fedimint_mint_common::*;
 use futures::{pin_mut, StreamExt};
+use hex::ToHex;
 use secp256k1::{All, KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -186,7 +186,7 @@ impl OOBNotes {
                 OOBNotesData::Default { variant, bytes } => {
                     notes_map.insert(
                         format!("default_{}", variant),
-                        serde_json::to_value(bytes.to_hex())?,
+                        serde_json::to_value(bytes.encode_hex::<String>())?,
                     );
                 }
             }

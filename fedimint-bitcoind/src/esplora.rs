@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use anyhow::format_err;
 use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
-use bitcoin_hashes::hex::ToHex;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
+use hex::ToHex;
 use tracing::{info, warn};
 
 use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
@@ -44,7 +44,7 @@ impl IBitcoindRpc for EsploraClient {
         let genesis_height: u32 = 0;
         let genesis_hash = self.0.get_block_hash(genesis_height).await?;
 
-        let network = match genesis_hash.to_hex().as_str() {
+        let network = match genesis_hash.encode_hex::<String>().as_str() {
             crate::MAINNET_GENESIS_BLOCK_HASH => Network::Bitcoin,
             crate::TESTNET_GENESIS_BLOCK_HASH => Network::Testnet,
             crate::SIGNET_GENESIS_BLOCK_HASH => Network::Signet,

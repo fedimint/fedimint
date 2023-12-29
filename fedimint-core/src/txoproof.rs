@@ -4,7 +4,7 @@ use std::io::Cursor;
 
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{BlockHash, BlockHeader, Txid};
-use bitcoin_hashes::hex::{FromHex, ToHex};
+use hex::{FromHex, ToHex};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -83,7 +83,7 @@ impl Serialize for TxOutProof {
         self.consensus_encode(&mut bytes).unwrap();
 
         if serializer.is_human_readable() {
-            serializer.serialize_str(&bytes.to_hex())
+            serializer.serialize_str(&bytes.encode_hex::<String>())
         } else {
             serializer.serialize_bytes(&bytes)
         }
@@ -98,7 +98,7 @@ impl<'de> Deserialize<'de> for TxOutProof {
         let empty_module_registry = ModuleDecoderRegistry::default();
         if deserializer.is_human_readable() {
             let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
-            let bytes = Vec::from_hex(&hex_str).map_err(D::Error::custom)?;
+            let bytes = Vec::from_hex(hex_str.as_ref()).map_err(D::Error::custom)?;
             Ok(
                 TxOutProof::consensus_decode(&mut Cursor::new(bytes), &empty_module_registry)
                     .map_err(D::Error::custom)?,
