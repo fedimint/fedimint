@@ -10,7 +10,6 @@ use fedimint_core::config::{
     META_FEDERATION_NAME_KEY,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::task::TaskGroup;
@@ -54,7 +53,9 @@ impl FederationTest {
     pub async fn new_client_with_config(&self, client_config: ClientConfig) -> ClientArc {
         info!(target: LOG_TEST, "Setting new client with config");
         let mut client_builder = Client::builder(fedimint_client::DatabaseSource::Fresh(
-            MemDatabase::new().into(),
+            fedimint_rocksdb::RocksDb::open(tempfile::tempdir().unwrap())
+                .unwrap()
+                .into(),
         ));
         client_builder.with_module_inits(self.client_init.clone());
         client_builder.with_primary_module(self.primary_client);
@@ -109,7 +110,10 @@ impl FederationTest {
 
             let instances = config.consensus.iter_module_instances();
             let decoders = server_init.available_decoders(instances).unwrap();
-            let db = Database::new(MemDatabase::new(), decoders);
+            let db = Database::new(
+                fedimint_rocksdb::RocksDb::open(tempfile::tempdir().unwrap()).unwrap(),
+                decoders,
+            );
 
             let (consensus_server, consensus_api) = ConsensusServer::new_with(
                 config.clone(),

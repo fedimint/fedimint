@@ -269,6 +269,7 @@ impl<'a> IDatabaseTransactionOps for RocksDbTransaction<'a> {
 #[async_trait]
 impl<'a> IRawDatabaseTransaction for RocksDbTransaction<'a> {
     async fn commit_tx(self) -> Result<()> {
+        tokio::task::yield_now().await;
         fedimint_core::task::block_in_place(|| {
             self.0.commit()?;
             Ok(())

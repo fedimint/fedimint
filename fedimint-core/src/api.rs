@@ -804,6 +804,7 @@ impl JsonRpcClient for WsClient {
         return WsClientBuilder::default()
             .use_webpki_rustls()
             .max_concurrent_requests(u16::MAX as usize)
+            .request_timeout(Duration::from_secs(3600))
             .build(url.as_str())
             .await;
 
