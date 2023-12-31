@@ -112,7 +112,7 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
     client2.await_primary_module_output(op, outpoint).await?;
 
     let extra_meta = "internal payment with no gateway registered".to_string();
-    let (op, invoice) = client1
+    let (op, invoice, _) = client1
         .get_first_module::<LightningClientModule>()
         .create_bolt11_invoice(
             sats(250),
@@ -172,7 +172,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     client2.await_primary_module_output(op, outpoint).await?;
 
     // TEST internal payment when there are no gateways registered
-    let (op, invoice) = client1
+    let (op, invoice, _) = client1
         .get_first_module::<LightningClientModule>()
         .create_bolt11_invoice(sats(250), "with-markers".to_string(), None, ())
         .await?;
@@ -380,7 +380,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     client2.await_primary_module_output(op, outpoint).await?;
 
     // TEST internal payment when there are no gateways registered
-    let (op, invoice) = client1
+    let (op, invoice, _) = client1
         .get_first_module::<LightningClientModule>()
         .create_bolt11_invoice(sats(250), "with-markers".to_string(), None, ())
         .await?;
@@ -416,7 +416,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     // TEST internal payment when there is a registered gateway
     gateway(&fixtures, &fed).await;
 
-    let (op, invoice) = client1
+    let (op, invoice, _) = client1
         .get_first_module::<LightningClientModule>()
         .create_bolt11_invoice(sats(250), "with-gateway-hint".to_string(), None, ())
         .await?;

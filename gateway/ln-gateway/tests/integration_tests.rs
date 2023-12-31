@@ -405,7 +405,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
 
         // User client creates invoice in federation
         let invoice_amount = sats(100);
-        let (_invoice_op, invoice) = user_client
+        let (_invoice_op, invoice, _) = user_client
             .get_first_module::<LightningClientModule>()
             .create_bolt11_invoice(
                 invoice_amount,
@@ -492,7 +492,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, user_client, _| async move {
         let gateway = gateway.remove_client(&fed).await;
         // User client creates invoice in federation
-        let (_invoice_op, invoice) = user_client
+        let (_invoice_op, invoice, _) = user_client
             .get_first_module::<LightningClientModule>()
             .create_bolt11_invoice(
                 sats(100),
@@ -806,7 +806,7 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
             gateway.connect_fed(&fed).await;
 
             let invoice_amount = sats(100);
-            let (_invoice_op, invoice) = user_client
+            let (_invoice_op, invoice, _) = user_client
                 .get_first_module::<LightningClientModule>()
                 .create_bolt11_invoice(
                     invoice_amount,
@@ -1141,7 +1141,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
 
             // User creates invoice in federation 2
             let invoice_amt = msats(2_500);
-            let (receive_op, invoice) = client2
+            let (receive_op, invoice, _) = client2
                 .get_first_module::<LightningClientModule>()
                 .create_bolt11_invoice(
                     invoice_amt,
