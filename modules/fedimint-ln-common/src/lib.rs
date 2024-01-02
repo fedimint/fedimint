@@ -344,6 +344,8 @@ pub struct LightningGateway {
     pub gateway_redeem_key: secp256k1::PublicKey,
     pub node_pub_key: secp256k1::PublicKey,
     pub lightning_alias: String,
+    /// URL to the gateway's versioned public API
+    /// (e.g. <https://gateway.example.com/v1>)
     pub api: SafeUrl,
     /// Route hints to reach the LN node of the gateway.
     ///
