@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-tbs"
-version = "0.2.1-rc3"
+version = "0.2.1-rc4"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "tbs is a helper cryptography library for threshold blind signatures"
