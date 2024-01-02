@@ -99,7 +99,8 @@ async fn main() -> anyhow::Result<()> {
     TracingSetup::default().init()?;
 
     let cli = Cli::parse();
-    let client = || GatewayRpcClient::new(cli.address, cli.rpcpassword);
+    let versioned_api = cli.address.join("v1")?;
+    let client = || GatewayRpcClient::new(versioned_api, cli.rpcpassword);
 
     match cli.command {
         Commands::VersionHash => {

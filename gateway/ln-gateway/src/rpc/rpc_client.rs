@@ -26,9 +26,9 @@ pub struct GatewayRpcClient {
 }
 
 impl GatewayRpcClient {
-    pub fn new(base_url: SafeUrl, password: Option<String>) -> Self {
+    pub fn new(versioned_api: SafeUrl, password: Option<String>) -> Self {
         Self {
-            base_url,
+            base_url: versioned_api,
             client: reqwest::Client::new(),
             password,
         }

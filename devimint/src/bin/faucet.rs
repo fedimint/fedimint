@@ -147,7 +147,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .route(
             "/gateway-api",
-            get(move || async move { format!("http://127.0.0.1:{}/", cmd.gw_lnd_port) }),
+            get(move || async move { format!("http://127.0.0.1:{}/v1", cmd.gw_lnd_port) }),
         )
         .layer(CorsLayer::permissive())
         .with_state(faucet);
