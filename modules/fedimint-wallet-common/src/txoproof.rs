@@ -2,6 +2,7 @@ use std::convert::Infallible;
 use std::hash::Hash;
 
 use bitcoin::{BlockHash, OutPoint, Transaction};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_script;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::txoproof::TxOutProof;
@@ -65,9 +66,11 @@ impl PegInProof {
         secp: &Secp256k1<C>,
         untweaked_pegin_descriptor: &Descriptor<CompressedPublicKey>,
     ) -> Result<(), PegInProofError> {
-        let script = untweaked_pegin_descriptor
-            .tweak(&self.tweak_contract_key, secp)
-            .script_pubkey();
+        let script = bitcoin30_to_bitcoin29_script(
+            untweaked_pegin_descriptor
+                .tweak(&self.tweak_contract_key, secp)
+                .script_pubkey(),
+        );
 
         let txo = self
             .transaction
@@ -130,7 +133,11 @@ impl Tweakable for Descriptor<CompressedPublicKey> {
                 ))
             }
 
-            translate_hash_fail!(CompressedPublicKey, bitcoin::PublicKey, Infallible);
+            translate_hash_fail!(
+                CompressedPublicKey,
+                miniscript::bitcoin::PublicKey,
+                Infallible
+            );
         }
         self.translate_pk(&mut CompressedPublicKeyTranslator { tweak, secp })
             .expect("can't fail")

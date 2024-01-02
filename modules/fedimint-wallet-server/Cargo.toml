@@ -25,7 +25,8 @@ fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
 fedimint-metrics = { version = "0.3.0-alpha", path = "../../fedimint-metrics" }
 fedimint-wallet-common = { version = "0.3.0-alpha", path = "../fedimint-wallet-common" }
 futures = "0.3"
-miniscript = { version = "9.0.2", features = [ "compiler", "serde" ] }
+miniscript = { version = "10.0.0", features = [ "compiler", "serde" ] }
+miniscript9 = { package = "miniscript", version = "9.0.2" }
 impl-tools = "0.8.0"
 rand = "0.8"
 secp256k1 = { version = "0.24.2", features = [ "serde" ] }

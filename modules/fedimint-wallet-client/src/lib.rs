@@ -23,6 +23,9 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransit
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::api::DynModuleApi;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address,
+};
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
@@ -38,7 +41,6 @@ use fedimint_wallet_common::config::WalletClientConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
 use futures::{Stream, StreamExt};
-use miniscript::ToPublicKey;
 use rand::{thread_rng, Rng};
 use secp256k1::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
@@ -297,14 +299,15 @@ impl WalletClientModule {
             .to_secp_key(&self.secp);
 
         let public_tweak_key = secret_tweak_key.public_key();
-        let operation_id = OperationId(public_tweak_key.to_x_only_pubkey().serialize()); // TODO: make hash?
+        let operation_id = OperationId(public_tweak_key.x_only_public_key().0.serialize()); // TODO: make hash?
 
-        let address = self
-            .cfg
-            .peg_in_descriptor
-            .tweak(&public_tweak_key, secp256k1::SECP256K1)
-            .address(self.cfg.network)
-            .unwrap();
+        let address = bitcoin30_to_bitcoin29_address(
+            self.cfg
+                .peg_in_descriptor
+                .tweak(&public_tweak_key, secp256k1::SECP256K1)
+                .address(bitcoin29_to_bitcoin30_network(self.cfg.network))
+                .unwrap(),
+        );
 
         let deposit_sm = WalletClientStates::Deposit(DepositStateMachine {
             operation_id,

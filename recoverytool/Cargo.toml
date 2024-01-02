@@ -29,7 +29,7 @@ fedimint-ln-common = { version = "0.3.0-alpha", path = "../modules/fedimint-ln-c
 fedimint-ln-server = { version = "0.3.0-alpha", path = "../modules/fedimint-ln-server" }
 fedimint-mint-server = { version = "0.3.0-alpha", path = "../modules/fedimint-mint-server" }
 futures = "0.3.26"
-miniscript = { version = "9.0.2" }
+miniscript = { version = "10.0.0" }
 secp256k1 = { version = "0.24.3", features = [ "serde", "global-context" ] }
 serde = { version = "1.0.152", features = [ "derive" ] }
 serde_json = "1.0.93"

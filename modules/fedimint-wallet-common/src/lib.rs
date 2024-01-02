@@ -384,5 +384,5 @@ pub enum ProcessPegOutSigError {
     #[error("Missing change tweak")]
     MissingOrMalformedChangeTweak,
     #[error("Error finalizing PSBT {0:?}")]
-    ErrorFinalizingPsbt(Vec<miniscript::psbt::Error>),
+    ErrorFinalizingPsbt(Vec<miniscript9::psbt::Error>),
 }

@@ -22,7 +22,8 @@ bitcoin = { version = "0.29.2", features = [ "rand", "serde"] }
 erased-serde = "0.3"
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
 futures = "0.3"
-miniscript = { version = "9.0.2", features = [ "compiler", "serde" ] }
+miniscript = { version = "10.0.0", features = [ "compiler", "serde" ] }
+miniscript9 = { package = "miniscript", version = "9.0.2" }
 impl-tools = "0.8.0"
 rand = "0.8"
 secp256k1 = { version = "0.24.2", features = [ "serde" ] }

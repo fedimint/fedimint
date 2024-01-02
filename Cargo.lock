@@ -424,7 +424,7 @@ dependencies = [
  "getrandom",
  "js-sys",
  "log",
- "miniscript",
+ "miniscript 9.0.2",
  "rand",
  "rusqlite",
  "serde",
@@ -533,6 +533,7 @@ dependencies = [
  "bitcoin_hashes 0.12.0",
  "hex_lit",
  "secp256k1 0.27.0",
+ "serde",
 ]
 
 [[package]]
@@ -558,6 +559,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d7066118b13d4b20b23645932dfb3a81ce7e29f95726c2036fa33cd7b092501"
 dependencies = [
  "bitcoin-private",
+ "serde",
 ]
 
 [[package]]
@@ -1437,7 +1439,7 @@ dependencies = [
  "lightning-invoice 0.26.0",
  "lru",
  "macro_rules_attribute",
- "miniscript",
+ "miniscript 10.0.0",
  "once_cell",
  "parity-scale-codec",
  "rand",
@@ -2047,7 +2049,7 @@ dependencies = [
  "fedimint-server",
  "fedimint-wallet-server",
  "futures",
- "miniscript",
+ "miniscript 10.0.0",
  "rand",
  "secp256k1 0.24.3",
  "serde",
@@ -2231,7 +2233,7 @@ dependencies = [
  "fedimint-wallet-common",
  "futures",
  "impl-tools",
- "miniscript",
+ "miniscript 10.0.0",
  "rand",
  "secp256k1 0.24.3",
  "serde",
@@ -2257,7 +2259,8 @@ dependencies = [
  "fedimint-core",
  "futures",
  "impl-tools",
- "miniscript",
+ "miniscript 10.0.0",
+ "miniscript 9.0.2",
  "rand",
  "secp256k1 0.24.3",
  "serde",
@@ -2287,7 +2290,8 @@ dependencies = [
  "fedimint-wallet-common",
  "futures",
  "impl-tools",
- "miniscript",
+ "miniscript 10.0.0",
+ "miniscript 9.0.2",
  "rand",
  "secp256k1 0.24.3",
  "serde",
@@ -2323,7 +2327,7 @@ dependencies = [
  "fedimint-wallet-common",
  "fedimint-wallet-server",
  "futures",
- "miniscript",
+ "miniscript 10.0.0",
  "rand",
  "secp256k1 0.24.3",
  "strum",
@@ -3619,6 +3623,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "miniscript"
+version = "10.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1eb102b66b2127a872dbcc73095b7b47aeb9d92f7b03c2b2298253ffc82c7594"
+dependencies = [
+ "bitcoin 0.30.2",
+ "bitcoin-private",
+ "serde",
+]
+
+[[package]]
 name = "miniz_oxide"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4515,6 +4530,7 @@ checksum = "25996b82292a7a57ed3508f052cfff8640d38d32018784acd714758b43da9c8f"
 dependencies = [
  "bitcoin_hashes 0.12.0",
  "secp256k1-sys 0.8.1",
+ "serde",
 ]
 
 [[package]]
