@@ -16,11 +16,12 @@ use super::{
 };
 
 pub struct GatewayRpcClient {
-    // Base URL to gateway web server
+    /// Base URL to gateway web server
+    /// This should include an applicable API version, e.g. http://localhost:8080/v1
     base_url: SafeUrl,
-    // A request client
+    /// A request client
     client: reqwest::Client,
-    // Password
+    /// Optional gateway password
     password: Option<String>,
 }
 
