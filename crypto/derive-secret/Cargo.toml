@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-derive-secret"
-version = "0.2.1-rc3"
+version = "0.2.1-rc4"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "Fedimint derivable secret implementation"
@@ -18,8 +18,8 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0.66"
-fedimint-core = { version = "0.2.1-rc3", path = "../../fedimint-core" }
-hkdf = { package = "fedimint-hkdf", version = "0.2.1-rc3", path = "../../crypto/hkdf" }
+fedimint-core = { version = "0.2.1-rc4", path = "../../fedimint-core" }
+hkdf = { package = "fedimint-hkdf", version = "0.2.1-rc4", path = "../../crypto/hkdf" }
 ring = "0.17.5"
 secp256k1-zkp = { version = "0.7.0", features = [ "serde", "bitcoin_hashes" ] }
-tbs = { package = "fedimint-tbs", version = "0.2.1-rc3", path = "../../crypto/tbs" }
+tbs = { package = "fedimint-tbs", version = "0.2.1-rc4", path = "../../crypto/tbs" }
