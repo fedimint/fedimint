@@ -14,22 +14,25 @@ use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::task::spawn;
 use fedimint_core::{BitcoinHash, NumPeers, PeerId};
 use rand::rngs::OsRng;
+use rand::{RngCore, SeedableRng};
+use rand_chacha::ChaChaRng;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use tbs::hash::hash_bytes_to_curve;
-use tbs::poly::Poly;
+use sha3::Digest;
 use tbs::Scalar;
+use threshold_crypto::ff::Field;
+use threshold_crypto::group::Curve;
 use threshold_crypto::poly::Commitment;
 use threshold_crypto::serde_impl::SerdeSecret;
-use threshold_crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
+use threshold_crypto::{G1Projective, G2Affine, G2Projective, PublicKeySet, SecretKeyShare};
 
 struct Dkg<G> {
     gen_g: G,
     peers: Vec<PeerId>,
     our_id: PeerId,
     threshold: usize,
-    f1_poly: Poly<Scalar, Scalar>,
-    f2_poly: Poly<Scalar, Scalar>,
+    f1_poly: Vec<Scalar>,
+    f2_poly: Vec<Scalar>,
     hashed_commits: BTreeMap<PeerId, Sha256>,
     commitments: BTreeMap<PeerId, Vec<G>>,
     sk_shares: BTreeMap<PeerId, Scalar>,
@@ -51,8 +54,8 @@ impl<G: DkgGroup> Dkg<G> {
         threshold: usize,
         rng: &mut impl rand::RngCore,
     ) -> (Self, DkgStep<G>) {
-        let f1_poly: Poly<Scalar, Scalar> = Poly::random(threshold - 1, rng);
-        let f2_poly: Poly<Scalar, Scalar> = Poly::random(threshold - 1, rng);
+        let f1_poly = random_scalar_coefficients(threshold - 1, rng);
+        let f2_poly = random_scalar_coefficients(threshold - 1, rng);
 
         let mut dkg = Dkg {
             gen_g: group,
@@ -70,9 +73,9 @@ impl<G: DkgGroup> Dkg<G> {
         // broadcast our commitment to the polynomials
         let commit: Vec<G> = dkg
             .f1_poly
-            .coefficients()
+            .iter()
             .map(|c| dkg.gen_g * *c)
-            .zip(dkg.f2_poly.coefficients().map(|c| dkg.gen_h() * *c))
+            .zip(dkg.f2_poly.iter().map(|c| dkg.gen_h() * *c))
             .map(|(g, h)| g + h)
             .collect();
 
@@ -116,8 +119,8 @@ impl<G: DkgGroup> Dkg<G> {
                 if self.commitments.len() == self.peers.len() {
                     let mut messages = vec![];
                     for peer in &self.peers {
-                        let s1 = self.f1_poly.evaluate(scalar(peer));
-                        let s2 = self.f2_poly.evaluate(scalar(peer));
+                        let s1 = evaluate_polynomial_scalar(&self.f1_poly, &scalar(peer));
+                        let s2 = evaluate_polynomial_scalar(&self.f2_poly, &scalar(peer));
 
                         if *peer == self.our_id {
                             self.sk_shares.insert(self.our_id, s1);
@@ -151,11 +154,7 @@ impl<G: DkgGroup> Dkg<G> {
                 };
 
                 if self.sk_shares.len() == self.peers.len() {
-                    let extract: Vec<G> = self
-                        .f1_poly
-                        .coefficients()
-                        .map(|c| self.gen_g * *c)
-                        .collect();
+                    let extract: Vec<G> = self.f1_poly.iter().map(|c| self.gen_g * *c).collect();
 
                     self.pk_shares.insert(self.our_id, extract.clone());
                     return Ok(self.broadcast(DkgMessage::Extract(extract)));
@@ -225,7 +224,11 @@ impl<G: DkgGroup> Dkg<G> {
 
     /// Get a second generator by hashing the first one to the curve
     fn gen_h(&self) -> G {
-        hash_bytes_to_curve::<G>(self.gen_g.clone().to_bytes().as_ref())
+        let mut hash_engine = sha3::Sha3_256::new();
+
+        hash_engine.update(self.gen_g.clone().to_bytes().as_ref());
+
+        G::random(&mut ChaChaRng::from_seed(hash_engine.finalize().into()))
     }
 }
 
@@ -379,6 +382,23 @@ where
     }
 }
 
+pub fn random_scalar_coefficients(degree: usize, rng: &mut impl RngCore) -> Vec<Scalar> {
+    (0..=degree).map(|_| random_scalar(rng)).collect()
+}
+
+fn random_scalar(rng: &mut impl RngCore) -> Scalar {
+    Scalar::random(rng)
+}
+
+pub fn evaluate_polynomial_scalar(coefficients: &[Scalar], x: &Scalar) -> Scalar {
+    coefficients
+        .iter()
+        .cloned()
+        .rev()
+        .reduce(|acc, coefficient| acc * x + coefficient)
+        .expect("We have at least one coefficient")
+}
+
 #[derive(Debug, Clone)]
 pub enum DkgStep<G: DkgGroup> {
     Messages(Vec<(PeerId, DkgMessage<G>)>),
@@ -399,9 +419,9 @@ pub struct ThresholdKeys {
 }
 
 impl DkgKeys<G2Projective> {
-    pub fn tbs(self) -> (Poly<G2Projective, Scalar>, tbs::SecretKeyShare) {
+    pub fn tbs(self) -> (Vec<G2Projective>, tbs::SecretKeyShare) {
         (
-            Poly::from(self.public_key_set),
+            self.public_key_set,
             tbs::SecretKeyShare(self.secret_key_share),
         )
     }
@@ -418,16 +438,27 @@ impl DkgKeys<G1Projective> {
     }
 }
 
+pub fn evaluate_polynomial_g2(coefficients: &[G2Projective], x: &Scalar) -> G2Affine {
+    coefficients
+        .iter()
+        .cloned()
+        .rev()
+        .reduce(|acc, coefficient| acc * x + coefficient)
+        .expect("We have at least one coefficient")
+        .to_affine()
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::{HashMap, VecDeque};
 
     use fedimint_core::PeerId;
     use rand::rngs::OsRng;
-    use threshold_crypto::group::Curve;
     use threshold_crypto::{G1Projective, G2Projective};
 
-    use crate::config::distributedgen::{scalar, Dkg, DkgGroup, DkgKeys, DkgStep, ThresholdKeys};
+    use crate::config::distributedgen::{
+        evaluate_polynomial_g2, scalar, Dkg, DkgGroup, DkgKeys, DkgStep, ThresholdKeys,
+    };
 
     #[test_log::test]
     fn test_dkg() {
@@ -445,9 +476,9 @@ mod tests {
 
         for (peer, keys) in run(G2Projective::generator()) {
             let (pk, sk) = keys.tbs();
-            assert_eq!(pk.coefficients().len(), 3);
+            assert_eq!(pk.len(), 3);
             assert_eq!(
-                pk.evaluate(scalar(&peer)).to_affine(),
+                evaluate_polynomial_g2(&pk, &scalar(&peer)),
                 sk.to_pub_key_share().0
             );
         }

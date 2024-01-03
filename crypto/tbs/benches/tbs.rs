@@ -4,9 +4,11 @@
 mod bench {
     extern crate test;
 
+    use std::collections::BTreeMap;
+
     use tbs::{
-        blind_message, combine_valid_shares, dealer_keygen, sign_blinded_msg, unblind_signature,
-        verify, BlindingKey, Message,
+        aggregate_signature_shares, blind_message, dealer_keygen, sign_blinded_msg,
+        unblind_signature, verify, BlindedSignatureShare, BlindingKey, Message,
     };
     use test::Bencher;
 
@@ -30,18 +32,17 @@ mod bench {
     }
 
     #[bench]
-    fn bench_combine(bencher: &mut Bencher) {
+    fn bench_aggregate(bencher: &mut Bencher) {
         let msg = Message::from_bytes(b"Hello World!");
         let bkey = BlindingKey::random();
         let bmsg = blind_message(msg, bkey);
         let (_pk, _pks, sks) = dealer_keygen(4, 5);
-        let shares = sks
-            .iter()
-            .map(|sk| sign_blinded_msg(bmsg, *sk))
-            .enumerate()
-            .collect::<Vec<_>>();
+        let shares: BTreeMap<u64, BlindedSignatureShare> = (1_u64..)
+            .zip(sks.iter().map(|sk| sign_blinded_msg(bmsg, *sk)))
+            .take(4)
+            .collect();
 
-        bencher.iter(move || combine_valid_shares(shares.clone(), 4));
+        bencher.iter(move || aggregate_signature_shares(&shares));
     }
 
     #[bench]
@@ -50,12 +51,11 @@ mod bench {
         let bkey = BlindingKey::random();
         let bmsg = blind_message(msg, bkey);
         let (_pk, _pks, sks) = dealer_keygen(4, 5);
-        let shares = sks
-            .iter()
-            .map(|sk| sign_blinded_msg(bmsg, *sk))
-            .enumerate()
-            .collect::<Vec<_>>();
-        let bsig = combine_valid_shares(shares, 4);
+        let shares = (1_u64..)
+            .zip(sks.iter().map(|sk| sign_blinded_msg(bmsg, *sk)))
+            .take(4)
+            .collect();
+        let bsig = aggregate_signature_shares(&shares);
 
         bencher.iter(|| unblind_signature(bkey, bsig));
     }
@@ -66,12 +66,11 @@ mod bench {
         let bkey = BlindingKey::random();
         let bmsg = blind_message(msg, bkey);
         let (pk, _pks, sks) = dealer_keygen(4, 5);
-        let shares = sks
-            .iter()
-            .map(|sk| sign_blinded_msg(bmsg, *sk))
-            .enumerate()
-            .collect::<Vec<_>>();
-        let bsig = combine_valid_shares(shares, 4);
+        let shares = (1_u64..)
+            .zip(sks.iter().map(|sk| sign_blinded_msg(bmsg, *sk)))
+            .take(4)
+            .collect();
+        let bsig = aggregate_signature_shares(&shares);
         let sig = unblind_signature(bkey, bsig);
 
         bencher.iter(|| verify(msg, sig, pk));

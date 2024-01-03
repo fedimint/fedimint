@@ -20,8 +20,8 @@ use fedimint_mint_common::{
 use secp256k1::{KeyPair, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
 use tbs::{
-    blind_message, combine_valid_shares, unblind_signature, AggregatePublicKey, BlindedSignature,
-    BlindingKey, PublicKeyShare,
+    aggregate_signature_shares, blind_message, unblind_signature, AggregatePublicKey,
+    BlindedSignature, BlindingKey, PublicKeyShare,
 };
 use thiserror::Error;
 use tracing::{error, trace};
@@ -238,14 +238,16 @@ impl MintOutputStatesCreated {
             match mint_keys.tier(&amount) {
                 Ok(amount_key) => issuance_request
                     .finalize(
-                        combine_valid_shares(
-                            blind_signature_shares.iter().map(|(peer, share)| {
-                                let share = share.ensure_v0_ref().expect(
+                        aggregate_signature_shares(
+                            &blind_signature_shares
+                                .iter()
+                                .map(|(peer, share)| {
+                                    let share = share.ensure_v0_ref().expect(
                                     "We only process output outcome versions created by ourselves",
                                 );
-                                (peer.to_usize(), share.0)
-                            }),
-                            blind_signature_shares.len(),
+                                    (peer.to_usize() as u64 + 1, share.0)
+                                })
+                                .collect(),
                         ),
                         *amount_key,
                     )

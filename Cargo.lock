@@ -2007,6 +2007,7 @@ dependencies = [
  "fedimint-server",
  "fedimint-tbs",
  "fedimint-testing",
+ "ff",
  "futures",
  "rand",
  "secp256k1 0.24.3",
@@ -2102,6 +2103,7 @@ dependencies = [
  "jsonrpsee",
  "parity-scale-codec",
  "rand",
+ "rand_chacha",
  "rcgen",
  "secp256k1-zkp",
  "serde",
@@ -2125,10 +2127,8 @@ dependencies = [
 name = "fedimint-tbs"
 version = "0.3.0-alpha"
 dependencies = [
- "bincode",
  "bitcoin_hashes 0.11.0",
  "bls12_381",
- "clap",
  "ff",
  "group",
  "rand",
