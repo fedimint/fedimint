@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-cli"
-version = "0.2.1-rc4"
+version = "0.2.1"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-cli is a command line interface wrapper for the client library."
@@ -30,18 +30,18 @@ time = { version = "0.3.25", features = [ "formatting" ] }
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env" ], default-features = false }
 futures = "0.3.28"
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
-fedimint-aead = { version = "0.2.1-rc4", path = "../crypto/aead" }
-fedimint-bip39 = { version = "0.2.1-rc4", path = "../fedimint-bip39" }
-fedimint-client = { version = "0.2.1-rc4", path = "../fedimint-client" }
-fedimint-core = { version = "0.2.1-rc4", path = "../fedimint-core" }
-fedimint-rocksdb = { version = "0.2.1-rc4", path = "../fedimint-rocksdb" }
-fedimint-mint-client = { version = "0.2.1-rc4", path = "../modules/fedimint-mint-client" }
-fedimint-mint-common = { version = "0.2.1-rc4", path = "../modules/fedimint-mint-common" }
-fedimint-ln-client = { version = "0.2.1-rc4", path = "../modules/fedimint-ln-client" }
-fedimint-ln-common = { version = "0.2.1-rc4", path = "../modules/fedimint-ln-common" }
-fedimint-wallet-client = { version = "0.2.1-rc4", path = "../modules/fedimint-wallet-client" }
-fedimint-logging = { version = "0.2.1-rc4", path = "../fedimint-logging" }
-fedimint-server = { version = "0.2.1-rc4", path = "../fedimint-server" }
+fedimint-aead = { version = "0.2.1", path = "../crypto/aead" }
+fedimint-bip39 = { version = "0.2.1", path = "../fedimint-bip39" }
+fedimint-client = { version = "0.2.1", path = "../fedimint-client" }
+fedimint-core = { version = "0.2.1", path = "../fedimint-core" }
+fedimint-rocksdb = { version = "0.2.1", path = "../fedimint-rocksdb" }
+fedimint-mint-client = { version = "0.2.1", path = "../modules/fedimint-mint-client" }
+fedimint-mint-common = { version = "0.2.1", path = "../modules/fedimint-mint-common" }
+fedimint-ln-client = { version = "0.2.1", path = "../modules/fedimint-ln-client" }
+fedimint-ln-common = { version = "0.2.1", path = "../modules/fedimint-ln-common" }
+fedimint-wallet-client = { version = "0.2.1", path = "../modules/fedimint-wallet-client" }
+fedimint-logging = { version = "0.2.1", path = "../fedimint-logging" }
+fedimint-server = { version = "0.2.1", path = "../fedimint-server" }
 fs-lock = "0.1.0"
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
@@ -56,4 +56,4 @@ lnurl-rs = { version = "0.3.1", features = ["async"], default-features = false }
 reqwest = { version = "0.11.14", features = [ "json", "rustls-tls" ], default-features = false }
 
 [build-dependencies]
-fedimint-build = { version = "0.2.1-rc4", path = "../fedimint-build" }
+fedimint-build = { version = "0.2.1", path = "../fedimint-build" }

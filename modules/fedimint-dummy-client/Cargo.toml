@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-dummy-client"
-version = "0.2.1-rc4"
+version = "0.2.1"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-dummy is a dummy example fedimint module."
@@ -17,9 +17,9 @@ path = "src/lib.rs"
 [dependencies]
 async-trait = "0.1.73"
 anyhow = "1.0.66"
-fedimint-dummy-common = { version = "0.2.1-rc4", path = "../fedimint-dummy-common" }
-fedimint-client = { version = "0.2.1-rc4", path = "../../fedimint-client" }
-fedimint-core = { version = "0.2.1-rc4", path = "../../fedimint-core" }
+fedimint-dummy-common = { version = "0.2.1", path = "../fedimint-dummy-common" }
+fedimint-client = { version = "0.2.1", path = "../../fedimint-client" }
+fedimint-core = { version = "0.2.1", path = "../../fedimint-core" }
 futures = "0.3"
 erased-serde = "0.3"
 rand = "0.8.5"
