@@ -21,9 +21,7 @@ use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_client::backup::Metadata;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
-use fedimint_client::{
-    get_invite_code_from_db, Client, ClientArc, ClientBuilder, DatabaseSource, FederationInfo,
-};
+use fedimint_client::{get_invite_code_from_db, Client, ClientArc, ClientBuilder, FederationInfo};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
     FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, InviteCode,
@@ -517,7 +515,7 @@ impl FedimintCli {
 
     async fn make_client_builder(&self, cli: &Opts) -> CliResult<ClientBuilder> {
         let db = cli.load_rocks_db().await?;
-        let mut client_builder = Client::builder(DatabaseSource::Fresh(db));
+        let mut client_builder = Client::builder(db);
         client_builder.with_module_inits(self.module_inits.clone());
         client_builder.with_primary_module(1);
 

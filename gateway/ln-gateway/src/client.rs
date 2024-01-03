@@ -75,38 +75,35 @@ impl GatewayClientBuilder {
             gateway_db,
         });
 
-        let db_source = if let Some(old_client) = old_client {
-            fedimint_client::DatabaseSource::Reuse(old_client)
+        let db = if let Some(old_client) = old_client {
+            old_client.db().clone()
         } else {
             let db_path = self.work_dir.join(format!("{federation_id}.db"));
 
             let rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
                 GatewayError::DatabaseError(anyhow::anyhow!("Error opening rocksdb: {e:?}"))
             })?;
-            let db = Database::new(rocksdb, ModuleDecoderRegistry::default());
-
-            fedimint_client::DatabaseSource::Fresh(db)
+            Database::new(rocksdb, ModuleDecoderRegistry::default())
         };
 
-        let mut client_builder = Client::builder(db_source);
+        let mut client_builder = Client::builder(db.clone());
         client_builder.with_module_inits(registry);
         client_builder.with_primary_module(self.primary_module);
 
-        let client_secret =
-            match Client::load_decodable_client_secret::<[u8; 64]>(client_builder.db()).await {
-                Ok(secret) => secret,
-                Err(_) => {
-                    info!("Generating secret and writing to client storage");
-                    let secret = PlainRootSecretStrategy::random(&mut thread_rng());
-                    Client::store_encodable_client_secret(client_builder.db(), secret)
-                        .await
-                        .map_err(GatewayError::ClientStateMachineError)?;
-                    secret
-                }
-            };
+        let client_secret = match Client::load_decodable_client_secret::<[u8; 64]>(&db).await {
+            Ok(secret) => secret,
+            Err(_) => {
+                info!("Generating secret and writing to client storage");
+                let secret = PlainRootSecretStrategy::random(&mut thread_rng());
+                Client::store_encodable_client_secret(&db, secret)
+                    .await
+                    .map_err(GatewayError::ClientStateMachineError)?;
+                secret
+            }
+        };
 
         let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
-        if Client::is_initialized(client_builder.db()).await {
+        if Client::is_initialized(&db).await {
             client_builder
                 // TODO: make this configurable?
                 .open(root_secret)

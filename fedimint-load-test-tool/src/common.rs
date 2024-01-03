@@ -140,7 +140,7 @@ pub async fn build_client(
     } else {
         fedimint_core::db::mem_impl::MemDatabase::new().into()
     };
-    let mut client_builder = Client::builder(fedimint_client::DatabaseSource::Fresh(db));
+    let mut client_builder = Client::builder(db);
     client_builder.with_module(MintClientInit);
     client_builder.with_module(LightningClientInit);
     client_builder.with_module(WalletClientInit::default());
