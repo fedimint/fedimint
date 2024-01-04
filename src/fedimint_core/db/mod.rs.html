@@ -3553,7 +3553,7 @@
 /// [`IDatabaseTransactionOpsCore`]
 ///
 /// In certain contexts exposing these operations would be a problem, so they
-/// arem oved to a separate trait.
+/// are moved to a separate trait.
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>IDatabaseTransactionOps: IDatabaseTransactionOpsCore + MaybeSend {
     <span class="doccomment">/// Create a savepoint during the transaction that can be rolled back to
@@ -3858,7 +3858,7 @@
     }
 }
 
-<span class="doccomment">/// Struct that implements `ISingleUseDatabaseTransaction` and can be wrapped
+<span class="doccomment">/// Struct that implements `IRawDatabaseTransaction` and can be wrapped
 /// easier in other structs since it does not consumed `self` by move.
 </span><span class="kw">struct </span>BaseDatabaseTransaction&lt;Tx&gt; {
     <span class="comment">// TODO: merge options
@@ -4082,7 +4082,7 @@
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;tx</span>, Cap&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>, Cap&gt; {
-    <span class="doccomment">/// Convert into a non-committeable version
+    <span class="doccomment">/// Convert into a non-committable version
     </span><span class="kw">pub fn </span>into_nc(<span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>, NonCommittable&gt; {
         DatabaseTransaction {
             tx: <span class="self">self</span>.tx,
