@@ -477,3 +477,336 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod fedimint_migration_tests {
+    use std::str::FromStr;
+
+    use anyhow::{ensure, Context};
+    use bitcoin_hashes::Hash;
+    use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
+    use fedimint_core::db::{
+        apply_migrations, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    };
+    use fedimint_core::encoding::Encodable;
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
+    use fedimint_core::util::SafeUrl;
+    use fedimint_core::{OutPoint, PeerId, ServerModule, TransactionId};
+    use fedimint_ln_common::contracts::incoming::{
+        FundedIncomingContract, IncomingContract, IncomingContractOffer, OfferId,
+    };
+    use fedimint_ln_common::contracts::{
+        outgoing, ContractId, DecryptedPreimage, EncryptedPreimage, FundedContract,
+        PreimageDecryptionShare, PreimageKey,
+    };
+    use fedimint_ln_common::db::{
+        AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, BlockCountVoteKey,
+        BlockCountVotePrefix, ContractKey, ContractKeyPrefix, ContractUpdateKey,
+        ContractUpdateKeyPrefix, DbKeyPrefix, EncryptedPreimageIndexKey,
+        EncryptedPreimageIndexKeyPrefix, LightningAuditItemKey, LightningAuditItemKeyPrefix,
+        LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
+        ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
+    };
+    use fedimint_ln_common::{
+        ContractAccount, LightningCommonInit, LightningGateway, LightningGatewayRegistration,
+        LightningOutputOutcomeV0,
+    };
+    use fedimint_ln_server::Lightning;
+    use fedimint_testing::db::{
+        prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_33, BYTE_8, STRING_64,
+    };
+    use futures::StreamExt;
+    use lightning_invoice::RoutingFees;
+    use rand::distributions::Standard;
+    use rand::prelude::Distribution;
+    use rand::rngs::OsRng;
+    use strum::IntoEnumIterator;
+    use threshold_crypto::G1Projective;
+
+    use crate::LightningInit;
+
+    /// Create a database with version 0 data. The database produced is not
+    /// intended to be real data or semantically correct. It is only
+    /// intended to provide coverage when reading the database
+    /// in future code versions. This function should not be updated when
+    /// database keys/values change - instead a new function should be added
+    /// that creates a new database backup that can be tested.
+    async fn create_server_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
+        let contract_id = ContractId::from_str(STRING_64).unwrap();
+        let amount = fedimint_core::Amount { msats: 1000 };
+        let threshold_key = threshold_crypto::PublicKey::from(G1Projective::identity());
+        let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
+        let incoming_contract = IncomingContract {
+            hash: secp256k1::hashes::sha256::Hash::hash(&BYTE_8),
+            encrypted_preimage: EncryptedPreimage::new(PreimageKey(BYTE_33), &threshold_key),
+            decrypted_preimage: DecryptedPreimage::Some(PreimageKey(BYTE_33)),
+            gateway_key: pk,
+        };
+        let out_point = OutPoint {
+            txid: TransactionId::all_zeros(),
+            out_idx: 0,
+        };
+        let incoming_contract = FundedContract::Incoming(FundedIncomingContract {
+            contract: incoming_contract,
+            out_point,
+        });
+        dbtx.insert_new_entry(
+            &ContractKey(contract_id),
+            &ContractAccount {
+                amount,
+                contract: incoming_contract.clone(),
+            },
+        )
+        .await;
+        let outgoing_contract = FundedContract::Outgoing(outgoing::OutgoingContract {
+            hash: secp256k1::hashes::sha256::Hash::hash(&[0, 2, 3, 4, 5, 6, 7, 8]),
+            gateway_key: pk,
+            timelock: 1000000,
+            user_key: pk,
+            cancelled: false,
+        });
+        dbtx.insert_new_entry(
+            &ContractKey(contract_id),
+            &ContractAccount {
+                amount,
+                contract: outgoing_contract.clone(),
+            },
+        )
+        .await;
+
+        let incoming_offer = IncomingContractOffer {
+            amount: fedimint_core::Amount { msats: 1000 },
+            hash: secp256k1::hashes::sha256::Hash::hash(&BYTE_8),
+            encrypted_preimage: EncryptedPreimage::new(PreimageKey(BYTE_33), &threshold_key),
+            expiry_time: None,
+        };
+        dbtx.insert_new_entry(&OfferKey(incoming_offer.hash), &incoming_offer)
+            .await;
+
+        let contract_update_key = ContractUpdateKey(OutPoint {
+            txid: TransactionId::from_slice(&BYTE_32).unwrap(),
+            out_idx: 0,
+        });
+        let lightning_output_outcome = LightningOutputOutcomeV0::Offer {
+            id: OfferId::from_str(STRING_64).unwrap(),
+        };
+        dbtx.insert_new_entry(&contract_update_key, &lightning_output_outcome)
+            .await;
+
+        let preimage_decryption_share = PreimageDecryptionShare(Standard.sample(&mut OsRng));
+        dbtx.insert_new_entry(
+            &ProposeDecryptionShareKey(contract_id),
+            &preimage_decryption_share,
+        )
+        .await;
+
+        dbtx.insert_new_entry(
+            &AgreedDecryptionShareKey(contract_id, 0.into()),
+            &preimage_decryption_share,
+        )
+        .await;
+
+        let gateway = LightningGatewayRegistration {
+            info: LightningGateway {
+                mint_channel_id: 100,
+                gateway_redeem_key: pk,
+                node_pub_key: pk,
+                lightning_alias: "FakeLightningAlias".to_string(),
+                api: SafeUrl::parse("http://example.com")
+                    .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
+                route_hints: vec![],
+                fees: RoutingFees {
+                    base_msat: 0,
+                    proportional_millionths: 0,
+                },
+                gateway_id: pk,
+                supports_private_payments: false,
+            },
+            valid_until: fedimint_core::time::now(),
+            vetted: false,
+        };
+        dbtx.insert_new_entry(&LightningGatewayKey(pk), &gateway)
+            .await;
+
+        dbtx.insert_new_entry(&BlockCountVoteKey(PeerId::from(0)), &1)
+            .await;
+
+        dbtx.insert_new_entry(&EncryptedPreimageIndexKey("foobar".consensus_hash()), &())
+            .await;
+
+        dbtx.insert_new_entry(
+            &LightningAuditItemKey::from_funded_contract(&incoming_contract),
+            &amount,
+        )
+        .await;
+
+        dbtx.insert_new_entry(
+            &LightningAuditItemKey::from_funded_contract(&outgoing_contract),
+            &amount,
+        )
+        .await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn prepare_server_db_migration_snapshots() -> anyhow::Result<()> {
+        prepare_db_migration_snapshot(
+            "lightning-server-v0",
+            |dbtx| {
+                Box::pin(async move {
+                    create_server_db_with_v0_data(dbtx).await;
+                })
+            },
+            ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_LN,
+                LightningCommonInit::KIND,
+                <Lightning as ServerModule>::decoder(),
+            )]),
+        )
+        .await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_migrations() -> anyhow::Result<()> {
+        validate_migrations(
+            "lightning-server",
+            |db| async move {
+                let module = DynServerModuleInit::from(LightningInit);
+                apply_migrations(
+                    &db,
+                    module.module_kind().to_string(),
+                    module.database_version(),
+                    module.get_database_migrations(),
+                )
+                .await
+                .context("Error applying migrations to temp database")?;
+
+                // Verify that all of the data from the lightning namespace can be read. If a
+                // database migration failed or was not properly supplied,
+                // the struct will fail to be read.
+                let mut dbtx = db.begin_transaction().await;
+
+                for prefix in DbKeyPrefix::iter() {
+                    match prefix {
+                        DbKeyPrefix::Contract => {
+                            let contracts = dbtx
+                                .find_by_prefix(&ContractKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_contracts = contracts.len();
+                            ensure!(
+                                num_contracts > 0,
+                                "validate_migrations was not able to read any contracts"
+                            );
+                        }
+                        DbKeyPrefix::AgreedDecryptionShare => {
+                            let agreed_decryption_shares = dbtx
+                                .find_by_prefix(&AgreedDecryptionShareKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_shares = agreed_decryption_shares.len();
+                            ensure!(
+                                num_shares > 0,
+                                "validate_migrations was not able to read any AgreedDecryptionShares"
+                            );
+                        }
+                        DbKeyPrefix::ContractUpdate => {
+                            let contract_updates = dbtx
+                                .find_by_prefix(&ContractUpdateKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_updates = contract_updates.len();
+                            ensure!(
+                                num_updates > 0,
+                                "validate_migrations was not able to read any ContractUpdates"
+                            );
+                        }
+                        DbKeyPrefix::LightningGateway => {
+                            let gateways = dbtx
+                                .find_by_prefix(&LightningGatewayKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_gateways = gateways.len();
+                            ensure!(
+                                num_gateways > 0,
+                                "validate_migrations was not able to read any LightningGateways"
+                            );
+                        }
+                        DbKeyPrefix::Offer => {
+                            let offers = dbtx
+                                .find_by_prefix(&OfferKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_offers = offers.len();
+                            ensure!(
+                                num_offers > 0,
+                                "validate_migrations was not able to read any Offers"
+                            );
+                        }
+                        DbKeyPrefix::ProposeDecryptionShare => {
+                            let proposed_decryption_shares = dbtx
+                                .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_shares = proposed_decryption_shares.len();
+                            ensure!(
+                                num_shares > 0,
+                                "validate_migrations was not able to read any ProposeDecryptionShares"
+                            );
+                        }
+                        DbKeyPrefix::BlockCountVote => {
+                            let block_count_vote = dbtx
+                                .find_by_prefix(&BlockCountVotePrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_votes = block_count_vote.len();
+                            ensure!(
+                                num_votes > 0,
+                                "validate_migrations was not able to read any BlockCountVote"
+                            );
+                        }
+                        DbKeyPrefix::EncryptedPreimageIndex => {
+                            let encrypted_preimage_index = dbtx
+                                .find_by_prefix(&EncryptedPreimageIndexKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_shares = encrypted_preimage_index.len();
+                            ensure!(
+                                num_shares > 0,
+                                "validate_migrations was not able to read any EncryptedPreimageIndexKeys"
+                            );
+                        }
+                        DbKeyPrefix::LightningAuditItem => {
+                            let audit_keys = dbtx
+                                .find_by_prefix(&LightningAuditItemKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+
+                            let num_audit_items = audit_keys.len();
+                            ensure!(
+                                num_audit_items == 2,
+                                "validate_migrations was not able to read both LightningAuditItemKeys"
+                            );
+                        }
+                    }
+                }
+                Ok(())
+            },
+            ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_LN,
+                LightningCommonInit::KIND,
+                <Lightning as ServerModule>::decoder(),
+            )]),
+        )
+        .await
+    }
+}
