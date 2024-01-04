@@ -2311,7 +2311,7 @@
 ) -&gt; anyhow::Result&lt;(fedimint_core::core::OperationId, Bolt11Invoice)&gt; {
     <span class="kw">let </span>create_invoice_time = fedimint_core::time::now();
     <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-    <span class="kw">let </span>(operation_id, invoice) = lightning_module
+    <span class="kw">let </span>(operation_id, invoice, <span class="kw">_</span>) = lightning_module
         .create_bolt11_invoice(invoice_amount, <span class="string">&quot;&quot;</span>.into(), <span class="prelude-val">None</span>, ())
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>elapsed = create_invoice_time.elapsed()<span class="question-mark">?</span>;

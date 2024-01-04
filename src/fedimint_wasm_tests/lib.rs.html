@@ -352,7 +352,7 @@
         client.start_executor().<span class="kw">await</span>;
         set_gateway(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-        <span class="kw">let </span>(opid, invoice) = lightning_module
+        <span class="kw">let </span>(opid, invoice, <span class="kw">_</span>) = lightning_module
             .create_bolt11_invoice(Amount::from_sats(<span class="number">21</span>), <span class="string">&quot;test&quot;</span>.to_string(), <span class="prelude-val">None</span>, ())
             .<span class="kw">await</span><span class="question-mark">?</span>;
         faucet::pay_invoice(<span class="kw-2">&amp;</span>invoice.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -391,7 +391,7 @@
         client.start_executor().<span class="kw">await</span>;
         set_gateway(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-        <span class="kw">let </span>(opid, invoice) = lightning_module
+        <span class="kw">let </span>(opid, invoice, <span class="kw">_</span>) = lightning_module
             .create_bolt11_invoice(Amount::from_sats(<span class="number">21</span>), <span class="string">&quot;test&quot;</span>.to_string(), <span class="prelude-val">None</span>, ())
             .<span class="kw">await</span><span class="question-mark">?</span>;
         faucet::pay_invoice(<span class="kw-2">&amp;</span>invoice.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;

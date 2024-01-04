@@ -1076,7 +1076,7 @@
             <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
             lightning_module.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span>(operation_id, invoice) = lightning_module
+            <span class="kw">let </span>(operation_id, invoice, <span class="kw">_</span>) = lightning_module
                 .create_bolt11_invoice(amount, description, expiry_time, ())
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(serde_json::to_value(LnInvoiceResponse {

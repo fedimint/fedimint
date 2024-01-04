@@ -1529,6 +1529,9 @@
 <a href="#1529" id="1529">1529</a>
 <a href="#1530" id="1530">1530</a>
 <a href="#1531" id="1531">1531</a>
+<a href="#1532" id="1532">1532</a>
+<a href="#1533" id="1533">1533</a>
+<a href="#1534" id="1534">1534</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -1590,7 +1593,7 @@
 };
 <span class="kw">use </span>rand::seq::IteratorRandom;
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
-<span class="kw">use </span>secp256k1::PublicKey;
+<span class="kw">use </span>secp256k1::{PublicKey, ThirtyTwoByteHash};
 <span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -2253,10 +2256,12 @@
         OperationId,
         Bolt11Invoice,
         ClientOutput&lt;LightningOutput, LightningClientStateMachines&gt;,
+        [u8; <span class="number">32</span>],
     )&gt; {
         <span class="kw">let </span>payment_keypair = KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>preimage_key: [u8; <span class="number">33</span>] = payment_keypair.public_key().serialize();
-        <span class="kw">let </span>payment_hash = sha256::Hash::hash(<span class="kw-2">&amp;</span>sha256::Hash::hash(<span class="kw-2">&amp;</span>preimage_key));
+        <span class="kw">let </span>preimage = sha256::Hash::hash(<span class="kw-2">&amp;</span>preimage_key);
+        <span class="kw">let </span>payment_hash = sha256::Hash::hash(<span class="kw-2">&amp;</span>preimage);
 
         <span class="comment">// Temporary lightning node pubkey
         </span><span class="kw">let </span>(node_secret_key, node_public_key) = <span class="self">self</span>.secp.generate_keypair(<span class="kw-2">&amp;mut </span>rng);
@@ -2345,6 +2350,7 @@
                 output: ln_output,
                 state_machines: sm_gen,
             },
+            preimage.into_32(),
         ))
     }
 
@@ -2813,7 +2819,7 @@
         description: String,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
         extra_meta: M,
-    ) -&gt; anyhow::Result&lt;(OperationId, Bolt11Invoice)&gt; {
+    ) -&gt; anyhow::Result&lt;(OperationId, Bolt11Invoice, [u8; <span class="number">32</span>])&gt; {
         <span class="kw">let </span>(src_node_id, short_channel_id, route_hints) = <span class="kw">match </span><span class="self">self</span>.select_active_gateway().<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(active_gateway) =&gt; (
@@ -2827,7 +2833,7 @@
             }
         };
 
-        <span class="kw">let </span>(operation_id, invoice, output) = <span class="self">self
+        <span class="kw">let </span>(operation_id, invoice, output, preimage) = <span class="self">self
             </span>.create_lightning_receive_output(
                 amount,
                 description,
@@ -2867,7 +2873,7 @@
             .<span class="kw">await
             </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Offer transaction was not accepted: {e:?}&quot;</span>))<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>((operation_id, invoice))
+        <span class="prelude-val">Ok</span>((operation_id, invoice, preimage))
     }
 
     <span class="kw">pub async fn </span>subscribe_ln_receive(
