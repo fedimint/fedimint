@@ -303,7 +303,7 @@ pub async fn handle_command(
             let lightning_module = client.get_first_module::<LightningClientModule>();
             lightning_module.select_active_gateway().await?;
 
-            let (operation_id, invoice) = lightning_module
+            let (operation_id, invoice, _) = lightning_module
                 .create_bolt11_invoice(amount, description, expiry_time, ())
                 .await?;
             Ok(serde_json::to_value(LnInvoiceResponse {

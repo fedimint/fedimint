@@ -127,7 +127,7 @@ mod tests {
         client.start_executor().await;
         set_gateway(&client).await?;
         let lightning_module = client.get_first_module::<LightningClientModule>();
-        let (opid, invoice) = lightning_module
+        let (opid, invoice, _) = lightning_module
             .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None, ())
             .await?;
         faucet::pay_invoice(&invoice.to_string()).await?;
@@ -166,7 +166,7 @@ mod tests {
         client.start_executor().await;
         set_gateway(&client).await?;
         let lightning_module = client.get_first_module::<LightningClientModule>();
-        let (opid, invoice) = lightning_module
+        let (opid, invoice, _) = lightning_module
             .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None, ())
             .await?;
         faucet::pay_invoice(&invoice.to_string()).await?;

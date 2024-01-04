@@ -1011,7 +1011,7 @@ async fn client_create_invoice(
 ) -> anyhow::Result<(fedimint_core::core::OperationId, Bolt11Invoice)> {
     let create_invoice_time = fedimint_core::time::now();
     let lightning_module = client.get_first_module::<LightningClientModule>();
-    let (operation_id, invoice) = lightning_module
+    let (operation_id, invoice, _) = lightning_module
         .create_bolt11_invoice(invoice_amount, "".into(), None, ())
         .await?;
     let elapsed = create_invoice_time.elapsed()?;

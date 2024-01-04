@@ -59,7 +59,7 @@ use lightning_invoice::{
 };
 use rand::seq::IteratorRandom;
 use rand::{CryptoRng, Rng, RngCore};
-use secp256k1::PublicKey;
+use secp256k1::{PublicKey, ThirtyTwoByteHash};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -722,10 +722,12 @@ impl LightningClientModule {
         OperationId,
         Bolt11Invoice,
         ClientOutput<LightningOutput, LightningClientStateMachines>,
+        [u8; 32],
     )> {
         let payment_keypair = KeyPair::new(&self.secp, &mut rng);
         let preimage_key: [u8; 33] = payment_keypair.public_key().serialize();
-        let payment_hash = sha256::Hash::hash(&sha256::Hash::hash(&preimage_key));
+        let preimage = sha256::Hash::hash(&preimage_key);
+        let payment_hash = sha256::Hash::hash(&preimage);
 
         // Temporary lightning node pubkey
         let (node_secret_key, node_public_key) = self.secp.generate_keypair(&mut rng);
@@ -814,6 +816,7 @@ impl LightningClientModule {
                 output: ln_output,
                 state_machines: sm_gen,
             },
+            preimage.into_32(),
         ))
     }
 
@@ -1282,7 +1285,7 @@ impl LightningClientModule {
         description: String,
         expiry_time: Option<u64>,
         extra_meta: M,
-    ) -> anyhow::Result<(OperationId, Bolt11Invoice)> {
+    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
         let (src_node_id, short_channel_id, route_hints) = match self.select_active_gateway().await
         {
             Ok(active_gateway) => (
@@ -1296,7 +1299,7 @@ impl LightningClientModule {
             }
         };
 
-        let (operation_id, invoice, output) = self
+        let (operation_id, invoice, output, preimage) = self
             .create_lightning_receive_output(
                 amount,
                 description,
@@ -1336,7 +1339,7 @@ impl LightningClientModule {
             .await
             .map_err(|e| anyhow::anyhow!("Offer transaction was not accepted: {e:?}"))?;
 
-        Ok((operation_id, invoice))
+        Ok((operation_id, invoice, preimage))
     }
 
     pub async fn subscribe_ln_receive(
