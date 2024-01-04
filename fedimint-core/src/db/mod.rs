@@ -768,7 +768,7 @@ where
 /// [`IDatabaseTransactionOpsCore`]
 ///
 /// In certain contexts exposing these operations would be a problem, so they
-/// arem oved to a separate trait.
+/// are moved to a separate trait.
 #[apply(async_trait_maybe_send!)]
 pub trait IDatabaseTransactionOps: IDatabaseTransactionOpsCore + MaybeSend {
     /// Create a savepoint during the transaction that can be rolled back to
@@ -1073,7 +1073,7 @@ where
     }
 }
 
-/// Struct that implements `ISingleUseDatabaseTransaction` and can be wrapped
+/// Struct that implements `IRawDatabaseTransaction` and can be wrapped
 /// easier in other structs since it does not consumed `self` by move.
 struct BaseDatabaseTransaction<Tx> {
     // TODO: merge options
@@ -1297,7 +1297,7 @@ fn decode_value<V: DatabaseValue>(
 }
 
 impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
-    /// Convert into a non-committeable version
+    /// Convert into a non-committable version
     pub fn into_nc(self) -> DatabaseTransaction<'tx, NonCommittable> {
         DatabaseTransaction {
             tx: self.tx,
