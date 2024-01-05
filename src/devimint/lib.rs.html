@@ -176,7 +176,6 @@
 <a href="#176" id="176">176</a>
 <a href="#177" id="177">177</a>
 <a href="#178" id="178">178</a>
-<a href="#179" id="179">179</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 
@@ -327,7 +326,7 @@
 
     <span class="macro">tokio::try_join!</span>(gw_cln.connect_fed(<span class="kw-2">&amp;</span>fed), gw_lnd.connect_fed(<span class="kw-2">&amp;</span>fed), <span class="kw">async </span>{
         <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;Joining federation with the main client&quot;</span>);
-        <span class="macro">cmd!</span>(fed, <span class="string">&quot;join-federation&quot;</span>, fed.invite_code()<span class="question-mark">?</span>)
+        <span class="macro">cmd!</span>(fed.internal_client(), <span class="string">&quot;join-federation&quot;</span>, fed.invite_code()<span class="question-mark">?</span>)
             .run()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;Generating first epoch&quot;</span>);
@@ -339,7 +338,6 @@
     </span><span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;await gateways registered&quot;</span>);
     fed.await_gateways_registered().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;gateways registered&quot;</span>);
-    fed.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(
         target: LOG_DEVIMINT,
         <span class="string">&quot;starting dev federation took {:?}&quot;</span>,

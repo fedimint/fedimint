@@ -592,15 +592,6 @@
 <a href="#592" id="592">592</a>
 <a href="#593" id="593">593</a>
 <a href="#594" id="594">594</a>
-<a href="#595" id="595">595</a>
-<a href="#596" id="596">596</a>
-<a href="#597" id="597">597</a>
-<a href="#598" id="598">598</a>
-<a href="#599" id="599">599</a>
-<a href="#600" id="600">600</a>
-<a href="#601" id="601">601</a>
-<a href="#602" id="602">602</a>
-<a href="#603" id="603">603</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
@@ -715,6 +706,24 @@
         <span class="prelude-val">Ok</span>(new)
     }
 
+    <span class="kw">pub async fn </span>balance(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
+        <span class="prelude-val">Ok</span>(<span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;total_amount_msat&quot;</span>]
+            .as_u64()
+            .unwrap())
+    }
+
+    <span class="kw">pub async fn </span>use_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>gateway_id = gw.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;switch-gateway&quot;</span>, gateway_id.clone())
+            .run()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">info!</span>(
+            <span class="string">&quot;Using {name} gateway&quot;</span>,
+            name = gw.ln.as_ref().unwrap().name()
+        );
+        <span class="prelude-val">Ok</span>(())
+    }
+
     <span class="kw">pub async fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
         <span class="macro">cmd!</span>(
             <span class="string">&quot;fedimint-cli&quot;</span>,
@@ -824,15 +833,6 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
-        <span class="self">self</span>.client.cmd().<span class="kw">await
-    </span>}
-
-    <span class="kw">pub async fn </span>pegin(<span class="kw-2">&amp;</span><span class="self">self</span>, amount_sats: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">info!</span>(amount_sats, <span class="string">&quot;Peg-in&quot;</span>);
-        <span class="self">self</span>.pegin_client(amount_sats, <span class="kw-2">&amp;</span><span class="self">self</span>.client).<span class="kw">await
-    </span>}
-
     <span class="kw">pub async fn </span>pegin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, client: <span class="kw-2">&amp;</span>Client) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">info!</span>(amount, <span class="string">&quot;Pegging-in client funds&quot;</span>);
         <span class="kw">let </span>deposit = <span class="macro">cmd!</span>(client, <span class="string">&quot;deposit-address&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -887,7 +887,7 @@
         <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>block_count = <span class="self">self</span>.bitcoind.get_block_count()<span class="question-mark">?</span>;
         <span class="kw">let </span>expected = block_count.saturating_sub(finality_delay.into());
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;wait-block-count&quot;</span>, expected)
+        <span class="macro">cmd!</span>(<span class="self">self</span>.client, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;wait-block-count&quot;</span>, expected)
             .run()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(expected)
@@ -913,7 +913,7 @@
 
     <span class="kw">pub async fn </span>await_gateways_registered(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         poll(<span class="string">&quot;gateways registered&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
-            <span class="kw">let </span>num_gateways = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;list-gateways&quot;</span>)
+            <span class="kw">let </span>num_gateways = <span class="macro">cmd!</span>(<span class="self">self</span>.client, <span class="string">&quot;list-gateways&quot;</span>)
                 .out_json()
                 .<span class="kw">await
                 </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
@@ -929,25 +929,13 @@
 
     <span class="kw">pub async fn </span>await_all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">cmd!</span>(
-            <span class="self">self</span>,
+            <span class="self">self</span>.client,
             <span class="string">&quot;dev&quot;</span>,
             <span class="string">&quot;api&quot;</span>,
             <span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count&quot;
         </span>)
         .run()
         .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(())
-    }
-
-    <span class="kw">pub async fn </span>use_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>gateway_id = gw.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;switch-gateway&quot;</span>, gateway_id.clone())
-            .run()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(
-            <span class="string">&quot;Using {name} gateway&quot;</span>,
-            name = gw.ln.as_ref().unwrap().name()
-        );
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -972,12 +960,6 @@
         <span class="self">self</span>.bitcoind.mine_blocks(blocks).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
-    }
-
-    <span class="kw">pub async fn </span>client_balance(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
-        <span class="prelude-val">Ok</span>(<span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;total_amount_msat&quot;</span>]
-            .as_u64()
-            .unwrap())
     }
 }
 
