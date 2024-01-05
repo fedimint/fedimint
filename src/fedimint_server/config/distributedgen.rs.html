@@ -578,15 +578,15 @@
 <span class="kw">use </span>fedimint_core::net::peers::MuxPeerConnections;
 <span class="kw">use </span>fedimint_core::task::spawn;
 <span class="kw">use </span>fedimint_core::{BitcoinHash, NumPeers, PeerId};
-<span class="kw">use </span>hbbft::crypto::poly::Commitment;
-<span class="kw">use </span>hbbft::crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>tbs::hash::hash_bytes_to_curve;
 <span class="kw">use </span>tbs::poly::Poly;
 <span class="kw">use </span>tbs::Scalar;
+<span class="kw">use </span>threshold_crypto::poly::Commitment;
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
+<span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
 
 <span class="kw">struct </span>Dkg&lt;G&gt; {
     gen_g: G,
@@ -988,9 +988,9 @@
     <span class="kw">use </span>std::collections::{HashMap, VecDeque};
 
     <span class="kw">use </span>fedimint_core::PeerId;
-    <span class="kw">use </span>hbbft::crypto::group::Curve;
-    <span class="kw">use </span>hbbft::crypto::{G1Projective, G2Projective};
     <span class="kw">use </span>rand::rngs::OsRng;
+    <span class="kw">use </span>threshold_crypto::group::Curve;
+    <span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective};
 
     <span class="kw">use </span><span class="kw">crate</span>::config::distributedgen::{scalar, Dkg, DkgGroup, DkgKeys, DkgStep, ThresholdKeys};
 
