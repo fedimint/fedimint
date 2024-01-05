@@ -112,6 +112,24 @@ impl Client {
         Ok(new)
     }
 
+    pub async fn balance(&self) -> Result<u64> {
+        Ok(cmd!(self, "info").out_json().await?["total_amount_msat"]
+            .as_u64()
+            .unwrap())
+    }
+
+    pub async fn use_gateway(&self, gw: &super::Gatewayd) -> Result<()> {
+        let gateway_id = gw.gateway_id().await?;
+        cmd!(self, "switch-gateway", gateway_id.clone())
+            .run()
+            .await?;
+        info!(
+            "Using {name} gateway",
+            name = gw.ln.as_ref().unwrap().name()
+        );
+        Ok(())
+    }
+
     pub async fn cmd(&self) -> Command {
         cmd!(
             "fedimint-cli",
@@ -221,15 +239,6 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn cmd(&self) -> Command {
-        self.client.cmd().await
-    }
-
-    pub async fn pegin(&self, amount_sats: u64) -> Result<()> {
-        info!(amount_sats, "Peg-in");
-        self.pegin_client(amount_sats, &self.client).await
-    }
-
     pub async fn pegin_client(&self, amount: u64, client: &Client) -> Result<()> {
         info!(amount, "Pegging-in client funds");
         let deposit = cmd!(client, "deposit-address").out_json().await?;
@@ -284,7 +293,7 @@ impl Federation {
         let finality_delay = self.get_finality_delay().await?;
         let block_count = self.bitcoind.get_block_count()?;
         let expected = block_count.saturating_sub(finality_delay.into());
-        cmd!(self, "dev", "wait-block-count", expected)
+        cmd!(self.client, "dev", "wait-block-count", expected)
             .run()
             .await?;
         Ok(expected)
@@ -310,7 +319,7 @@ impl Federation {
 
     pub async fn await_gateways_registered(&self) -> Result<()> {
         poll("gateways registered", None, || async {
-            let num_gateways = cmd!(self, "list-gateways")
+            let num_gateways = cmd!(self.client, "list-gateways")
                 .out_json()
                 .await
                 .map_err(ControlFlow::Continue)?
@@ -326,25 +335,13 @@ impl Federation {
 
     pub async fn await_all_peers(&self) -> Result<()> {
         cmd!(
-            self,
+            self.client,
             "dev",
             "api",
             "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count"
         )
         .run()
         .await?;
-        Ok(())
-    }
-
-    pub async fn use_gateway(&self, gw: &super::Gatewayd) -> Result<()> {
-        let gateway_id = gw.gateway_id().await?;
-        cmd!(self, "switch-gateway", gateway_id.clone())
-            .run()
-            .await?;
-        info!(
-            "Using {name} gateway",
-            name = gw.ln.as_ref().unwrap().name()
-        );
         Ok(())
     }
 
@@ -369,12 +366,6 @@ impl Federation {
         self.bitcoind.mine_blocks(blocks).await?;
         self.await_block_sync().await?;
         Ok(())
-    }
-
-    pub async fn client_balance(&self) -> Result<u64> {
-        Ok(cmd!(self, "info").out_json().await?["total_amount_msat"]
-            .as_u64()
-            .unwrap())
     }
 }
 
