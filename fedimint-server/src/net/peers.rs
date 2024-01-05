@@ -6,10 +6,9 @@
 //! details.
 
 use std::cmp::{max, min};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::net::SocketAddr;
-use std::ops::Sub;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -23,7 +22,6 @@ use fedimint_core::PeerId;
 use fedimint_logging::LOG_NET_PEER;
 use futures::future::select_all;
 use futures::{SinkExt, StreamExt};
-use hbbft::Target;
 use rand::{thread_rng, Rng};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -315,21 +313,6 @@ where
                 }
             }
         }
-    }
-}
-
-pub trait PeerSlice {
-    fn peers(&self, all_peers: &BTreeSet<PeerId>) -> Vec<PeerId>;
-}
-
-impl PeerSlice for Target<PeerId> {
-    fn peers(&self, all_peers: &BTreeSet<PeerId>) -> Vec<PeerId> {
-        let set = match self {
-            Target::AllExcept(exclude) => all_peers.sub(exclude),
-            Target::Nodes(include) => include.clone(),
-        };
-
-        set.into_iter().collect()
     }
 }
 

@@ -843,7 +843,7 @@ pub trait ServerModule: Debug + Sized {
 }
 
 /// Creates a struct that can be used to make our module-decodable structs
-/// interact with `serde`-based APIs (HBBFT, jsonrpsee). It creates a wrapper
+/// interact with `serde`-based APIs (AlephBFT, jsonrpsee). It creates a wrapper
 /// that holds the data as serialized
 // bytes internally.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]

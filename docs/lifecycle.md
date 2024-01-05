@@ -32,7 +32,7 @@ pub enum Input {
 - [Submit transaction](https://github.com/fedimint/fedimint/blob/a1f57e3c6ff860a9c4a998bf88ebad73ebdb67c9/fedimint/src/consensus/mod.rs#L105), first validation
 - [Save to DB](https://github.com/fedimint/fedimint/blob/a1f57e3c6ff860a9c4a998bf88ebad73ebdb67c9/fedimint/src/consensus/mod.rs#L115)
 - [Generate consensus proposal](https://github.com/fedimint/fedimint/blob/a1f57e3c6ff860a9c4a998bf88ebad73ebdb67c9/fedimint/src/consensus/mod.rs#L386) with all transactions submitted in the meantime
-- [Propose to HBBFT](https://github.com/fedimint/fedimint/blob/a1f57e3c6ff860a9c4a998bf88ebad73ebdb67c9/fedimint/src/lib.rs#L132)
+- [Propose to AlephBFT](https://github.com/fedimint/fedimint/blob/a1f57e3c6ff860a9c4a998bf88ebad73ebdb67c9/fedimint/src/lib.rs#L132)
 - [Process all transactions that were agreed on](https://github.com/fedimint/fedimint/blob/a1f57e3c6ff860a9c4a998bf88ebad73ebdb67c9/fedimint/src/consensus/mod.rs#L436)
 - [Each input](https://github.com/fedimint/fedimint/blob/a1f57e3c6ff860a9c4a998bf88ebad73ebdb67c9/fedimint/src/consensus/mod.rs#L447) and output are processed by its respective module, e.g. for the [Mint module](https://github.com/fedimint/fedimint/blob/a1f57e3c6ff860a9c4a998bf88ebad73ebdb67c9/modules/fedimint-mint/src/lib.rs#L194)
 - Some operations need a second round to submit signature shares, they are submitted via [per-module consensus items](https://github.com/fedimint/fedimint/blob/a1f57e3c6ff860a9c4a998bf88ebad73ebdb67c9/fedimint-api/src/module/mod.rs#L141) (see also [Generate consensus proposal](https://github.com/fedimint/fedimint/blob/a1f57e3c6ff860a9c4a998bf88ebad73ebdb67c9/fedimint/src/consensus/mod.rs#L386))

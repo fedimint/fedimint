@@ -485,8 +485,8 @@ impl ServerConfig {
             "Peer {} running distributed key generation...", our_id
         );
 
-        // hbbft uses a lower threshold of signing keys (f+1)
-        let mut dkg = DkgRunner::new(KeyType::Hbbft, peers.one_honest(), our_id, peers);
+        // BFT uses a lower threshold of signing keys (f+1)
+        let mut dkg = DkgRunner::new(KeyType::Bft, peers.one_honest(), our_id, peers);
         dkg.add(KeyType::Auth, peers.threshold());
         dkg.add(KeyType::Epoch, peers.threshold());
 
@@ -578,7 +578,7 @@ impl ServerConfig {
 /// The types of keys to run distributed key generation for
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum KeyType {
-    Hbbft,
+    Bft,
     Epoch,
     Auth,
 }
