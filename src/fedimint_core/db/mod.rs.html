@@ -2783,6 +2783,11 @@
 <a href="#2783" id="2783">2783</a>
 <a href="#2784" id="2784">2784</a>
 <a href="#2785" id="2785">2785</a>
+<a href="#2786" id="2786">2786</a>
+<a href="#2787" id="2787">2787</a>
+<a href="#2788" id="2788">2788</a>
+<a href="#2789" id="2789">2789</a>
+<a href="#2790" id="2790">2790</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -2826,12 +2831,14 @@
 <span class="kw">use </span>std::ops::{<span class="self">self</span>, DerefMut};
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>fedimint_core::util::BoxFuture;
 <span class="kw">use </span>fedimint_logging::LOG_DB;
 <span class="kw">use </span>futures::{Stream, StreamExt};
 <span class="kw">use </span>macro_rules_attribute::apply;
+<span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 <span class="kw">use </span>thiserror::Error;
@@ -3240,6 +3247,9 @@
                     }
                 }
             }
+            <span class="kw">let </span>delay = (<span class="number">2u64</span>.pow(curr_attempts.min(<span class="number">7</span>) <span class="kw">as </span>u32) * <span class="number">10</span>).min(<span class="number">1000</span>);
+            <span class="kw">let </span>delay = rand::thread_rng().gen_range(delay..(<span class="number">2 </span>* delay));
+            <span class="kw">crate</span>::task::sleep(Duration::from_millis(delay)).<span class="kw">await</span>;
         }
     }
 
