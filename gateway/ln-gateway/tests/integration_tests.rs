@@ -262,6 +262,51 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_can_change_routing_fees() -> anyhow::Result<()> {
+    single_federation_test(
+        |gateway, other_lightning_client, fed, user_client, _| async move {
+            let rpc_client = gateway
+                .get_rpc()
+                .await
+                .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
+            // Print money for user_client
+            let dummy_module = user_client.get_first_module::<DummyClientModule>();
+            let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
+            dummy_module.receive_money(outpoint).await?;
+            assert_eq!(user_client.get_balance().await, sats(1000));
+
+            let fee = "10,0".to_string();
+            let set_configuration_payload = SetConfigurationPayload {
+                password: None,
+                num_route_hints: None,
+                routing_fees: Some(fee.clone()),
+                network: None,
+            };
+            verify_rpc(
+                || rpc_client.set_configuration(set_configuration_payload.clone()),
+                StatusCode::OK,
+            )
+            .await;
+
+            // Create test invoice
+            let invoice = other_lightning_client.invoice(sats(250), None).await?;
+
+            let gateway = gateway.remove_client(&fed).await;
+            pay_valid_invoice(invoice, &user_client, &gateway).await?;
+
+            assert_eq!(
+                user_client.get_balance().await,
+                sats(1000 - 250) - msats(10)
+            );
+            assert_eq!(gateway.get_balance().await, sats(250) + msats(10));
+
+            Ok(())
+        },
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
@@ -663,6 +708,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
             fake_route_hints.clone(),
             GW_ANNOUNCEMENT_TTL,
             gateway_test.get_gateway_id(),
+            DEFAULT_FEES,
         )
         .await?;
     let lightning_module = user_client.get_first_module::<LightningClientModule>();
@@ -681,6 +727,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
             fake_route_hints,
             GW_ANNOUNCEMENT_TTL,
             gateway_test.get_gateway_id(),
+            DEFAULT_FEES,
         )
         .await?;
     let gateways = lightning_module.fetch_registered_gateways().await?;
