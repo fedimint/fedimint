@@ -200,6 +200,20 @@
 <a href="#200" id="200">200</a>
 <a href="#201" id="201">201</a>
 <a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::marker::PhantomData;
 
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, OperationId};
@@ -207,7 +221,7 @@
 <span class="kw">use </span>fedimint_core::util::broadcaststream::BroadcastStream;
 <span class="kw">use </span>fedimint_core::util::BoxStream;
 <span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>tracing::error;
+<span class="kw">use </span>tracing::{debug, error, trace};
 
 <span class="kw">use </span><span class="kw">crate</span>::sm::executor::{
     ActiveModuleOperationStateKeyPrefix, ActiveStateKey, InactiveModuleOperationStateKeyPrefix,
@@ -240,7 +254,15 @@
 
     <span class="doccomment">/// Notify all subscribers of a state transition
     </span><span class="kw">pub fn </span>notify(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState&lt;GC&gt;) {
-        <span class="kw">let </span>_res = <span class="self">self</span>.broadcast.send(state);
+        <span class="kw">let </span>queue_len = <span class="self">self</span>.broadcast.len();
+        <span class="macro">trace!</span>(<span class="question-mark">?</span>state, %queue_len, <span class="string">&quot;Sending notification about state transition&quot;</span>);
+        <span class="comment">// FIXME: use more robust notification mechanism
+        </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.broadcast.send(state) {
+            <span class="macro">error!</span>(
+                <span class="question-mark">?</span>e,
+                <span class="string">&quot;Could not send state transition notification, the client may misbehave&quot;
+            </span>);
+        }
     }
 
     <span class="doccomment">/// Create a new notifier for a specific module instance that can only
@@ -322,6 +344,7 @@
                 .<span class="kw">await
                 </span>.filter_map(<span class="kw">move </span>|state: S| <span class="kw">async move </span>{
                     <span class="kw">if </span>state.operation_id() == operation_id {
+                        <span class="macro">trace!</span>(%operation_id, <span class="question-mark">?</span>state, <span class="string">&quot;Received state transition notification&quot;</span>);
                         <span class="prelude-val">Some</span>(state)
                     } <span class="kw">else </span>{
                         <span class="prelude-val">None
@@ -363,6 +386,11 @@
                 .chain(inactive_states)
                 .collect::&lt;Vec&lt;(S, <span class="kw">_</span>)&gt;&gt;();
             all_states_timed.sort_by(|(<span class="kw">_</span>, t1), (<span class="kw">_</span>, t2)| t1.cmp(t2));
+            <span class="macro">debug!</span>(
+                %operation_id,
+                <span class="string">&quot;Returning {} state transitions from DB for notifier subscription&quot;</span>,
+                all_states_timed.len()
+            );
             all_states_timed
                 .into_iter()
                 .map(|(s, <span class="kw">_</span>)| s)
