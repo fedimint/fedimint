@@ -44,7 +44,7 @@ download() {
 }
 
 while true; do
-  read -p "Enter the version of Fedimint you want to use [0 for latest (0.2), 1 for 0.1, 2 for 0.2, or 'exit' to quit]: " fedimint_version
+  read -p "Enter the version of Fedimint you want to use [1 for 0.1, 2 for 0.2, or 'exit' to quit]: " fedimint_version
   case "$fedimint_version" in
     1)
       fedimint_version="0.1"
@@ -54,15 +54,11 @@ while true; do
       fedimint_version="0.2"
       break
       ;;
-    ""|0)
-      fedimint_version="latest"
-      break
-      ;;
     "exit")
       exit 1
       ;;
     *)
-      echo "Invalid input. Please enter 0 for latest, 1 for 0.1, 2 for 0.2, or 'exit' to quit."
+      echo "Invalid input. Please enter 1 for 0.1, 2 for 0.2, or 'exit' to quit."
       ;;
   esac
 done
