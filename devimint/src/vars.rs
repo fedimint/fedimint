@@ -152,8 +152,7 @@ declare_vars! {
             gateway_cli = crate::util::get_gateway_cli_path().join(" "),);
         FM_GWCLI_LND: String = f!("{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/",
             gateway_cli = crate::util::get_gateway_cli_path().join(" "),);
-        // FIXME: create a command
-        FM_DB_TOOL: String = f!("fedimint-dbtool");
+        FM_DB_TOOL: String = f!("{fedimint_dbtool}", fedimint_dbtool = crate::util::get_fedimint_dbtool_cli_path().join(" "));
 
         // fedimint config variables
         FM_TEST_BITCOIND_RPC: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}");
