@@ -162,7 +162,7 @@ services:
       - ACCOUNT_CONFIG_PATH=/thconfig/accounts.yaml
       - HOST=0.0.0.0
       - PORT=3002
-      - FM_GATEWAY_API=http://143.198.55.236:8175
+      - FM_GATEWAY_API=http://127.0.0.1:8175
       - FM_GATEWAY_PASSWORD=thereisnosecondbest
     ports:
       - "0.0.0.0:3002:3002"
