@@ -374,15 +374,6 @@ rec {
     '';
   };
 
-  # ciCrossTestAll = craneLibTests.mkCargoDerivation {
-  #   pname = "${commonCliTestArgs.pname}-all-cross";
-  #   cargoArtifacts = workspaceBuild;
-  #   buildPhaseCargoCommand = ''
-  #     patchShebangs ./scripts
-  #     ./scripts/tests/cross-test-ci-all.sh || exit 1
-  #   '';
-  # };
-
   alwaysFailTest = craneLibTests.mkCargoDerivation {
     pname = "${commonCliTestArgs.pname}-always-fail";
     cargoArtifacts = workspaceBuild;

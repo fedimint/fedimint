@@ -474,6 +474,25 @@ const ESPLORA_FALLBACK: &str = "esplora";
 // To override esplora binary set:
 const ENV_FM_ESPLORA_BASE_EXECUTABLE: &str = "FM_ESPLORA_BASE_EXECUTABLE";
 
+const RECOVERYTOOL_FALLBACK: &str = "recoverytool";
+// To override esplora binary set:
+const ENV_FM_RECOVERYTOOL_BASE_EXECUTABLE: &str = "FM_RECOVERYTOOL_BASE_EXECUTABLE";
+
+const FAUCET_FALLBACK: &str = "faucet";
+// To override esplora binary set:
+const ENV_FM_FAUCET_BASE_EXECUTABLE: &str = "FM_FAUCET_BASE_EXECUTABLE";
+
+const FEDIMINT_DBTOOL_FALLBACK: &str = "fedimint-dbtool";
+// To override esplora binary set:
+const ENV_FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE: &str = "FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE";
+
+pub fn get_fedimint_dbtool_cli_path() -> Vec<String> {
+    get_command_str_for_alias(
+        &[ENV_FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE],
+        &[FEDIMINT_DBTOOL_FALLBACK],
+    )
+}
+
 pub struct FedimintdCmd;
 impl FedimintdCmd {
     pub async fn cmd(self) -> Command {
@@ -635,6 +654,26 @@ impl Esplora {
         to_command(get_command_str_for_alias(
             &[ENV_FM_ESPLORA_BASE_EXECUTABLE],
             &[ESPLORA_FALLBACK],
+        ))
+    }
+}
+
+pub struct Recoverytool;
+impl Recoverytool {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_RECOVERYTOOL_BASE_EXECUTABLE],
+            &[RECOVERYTOOL_FALLBACK],
+        ))
+    }
+}
+
+pub struct Faucet;
+impl Faucet {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_FAUCET_BASE_EXECUTABLE],
+            &[FAUCET_FALLBACK],
         ))
     }
 }
