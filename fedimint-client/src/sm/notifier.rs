@@ -5,7 +5,7 @@ use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::util::broadcaststream::BroadcastStream;
 use fedimint_core::util::BoxStream;
 use futures::StreamExt;
-use tracing::error;
+use tracing::{debug, error, trace};
 
 use crate::sm::executor::{
     ActiveModuleOperationStateKeyPrefix, ActiveStateKey, InactiveModuleOperationStateKeyPrefix,
@@ -38,7 +38,15 @@ impl<GC> Notifier<GC> {
 
     /// Notify all subscribers of a state transition
     pub fn notify(&self, state: DynState<GC>) {
-        let _res = self.broadcast.send(state);
+        let queue_len = self.broadcast.len();
+        trace!(?state, %queue_len, "Sending notification about state transition");
+        // FIXME: use more robust notification mechanism
+        if let Err(e) = self.broadcast.send(state) {
+            error!(
+                ?e,
+                "Could not send state transition notification, the client may misbehave"
+            );
+        }
     }
 
     /// Create a new notifier for a specific module instance that can only
@@ -120,6 +128,7 @@ where
                 .await
                 .filter_map(move |state: S| async move {
                     if state.operation_id() == operation_id {
+                        trace!(%operation_id, ?state, "Received state transition notification");
                         Some(state)
                     } else {
                         None
@@ -161,6 +170,11 @@ where
                 .chain(inactive_states)
                 .collect::<Vec<(S, _)>>();
             all_states_timed.sort_by(|(_, t1), (_, t2)| t1.cmp(t2));
+            debug!(
+                %operation_id,
+                "Returning {} state transitions from DB for notifier subscription",
+                all_states_timed.len()
+            );
             all_states_timed
                 .into_iter()
                 .map(|(s, _)| s)
