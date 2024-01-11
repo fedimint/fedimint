@@ -22,7 +22,6 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationI
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion, TransactionItemAmount};
-use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
@@ -247,8 +246,6 @@ impl GatewayClientModule {
         &self,
         route_hints: Vec<RouteHint>,
         ttl: Duration,
-        api: SafeUrl,
-        gateway_id: secp256k1::PublicKey,
         fees: RoutingFees,
         node_pub_key: PublicKey,
         lightning_alias: String,
@@ -260,10 +257,10 @@ impl GatewayClientModule {
                 gateway_redeem_key: self.redeem_key.public_key(),
                 node_pub_key,
                 lightning_alias,
-                api,
+                api: self.gateway.gateway_parameters.api_addr.clone(),
                 route_hints,
                 fees,
-                gateway_id,
+                gateway_id: self.gateway.gateway_id,
                 supports_private_payments,
             },
             ttl,
@@ -368,10 +365,8 @@ impl GatewayClientModule {
     /// Register gateway with federation
     pub async fn register_with_federation(
         &self,
-        gateway_api: SafeUrl,
         route_hints: Vec<RouteHint>,
         time_to_live: Duration,
-        gateway_id: secp256k1::PublicKey,
         fees: RoutingFees,
         node_pub_key: PublicKey,
         lightning_alias: String,
@@ -381,8 +376,6 @@ impl GatewayClientModule {
             let registration_info = self.to_gateway_registration_info(
                 route_hints,
                 time_to_live,
-                gateway_api,
-                gateway_id,
                 fees,
                 node_pub_key,
                 lightning_alias,

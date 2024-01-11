@@ -831,11 +831,20 @@ impl Gateway {
             ..
         } = self.state.read().await.clone()
         {
-            // TODO: Check if this client has already been registered
-
             let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
                 GatewayError::InvalidMetadata(format!("Invalid federation member string {e:?}"))
             })?;
+
+            // Check if this federation has already been registered
+            if self
+                .clients
+                .read()
+                .await
+                .get(&invite_code.federation_id())
+                .is_some()
+            {
+                return Err(GatewayError::FederationAlreadyConnected);
+            }
 
             // `GatewayConfiguration` should always exist in the database when we are in the
             // `Running` state.
@@ -883,10 +892,8 @@ impl Gateway {
             client
                 .get_first_module::<GatewayClientModule>()
                 .register_with_federation(
-                    self.gateway_parameters.api_addr.clone(),
                     route_hints,
                     GW_ANNOUNCEMENT_TTL,
-                    self.gateway_id,
                     gw_client_cfg.fees,
                     lightning_public_key,
                     lightning_alias,
@@ -910,7 +917,9 @@ impl Gateway {
         Err(GatewayError::Disconnected)
     }
 
-    async fn handle_leave_federation(&mut self, payload: LeaveFedPayload) -> Result<()> {
+    pub async fn handle_leave_federation(&mut self, payload: LeaveFedPayload) -> Result<()> {
+        // TODO: This should optimistically try to contact the federation to remove the
+        // registration record
         self.remove_client(payload.federation_id).await?;
         let mut dbtx = self.gateway_db.begin_transaction().await;
         dbtx.remove_entry(&FederationIdKey {
@@ -1078,10 +1087,8 @@ impl Gateway {
                             if let Err(e) = client
                                 .get_first_module::<GatewayClientModule>()
                                 .register_with_federation(
-                                    gateway.gateway_parameters.api_addr.clone(),
                                     route_hints.clone(),
                                     GW_ANNOUNCEMENT_TTL,
-                                    gateway.gateway_id,
                                     federation_config.fees,
                                     lightning_public_key,
                                     lightning_alias.clone(),
@@ -1450,6 +1457,8 @@ pub enum GatewayError {
     UnsupportedNetwork(Network),
     #[error("Insufficient funds")]
     InsufficientFunds,
+    #[error("Federation already connected")]
+    FederationAlreadyConnected,
 }
 
 impl IntoResponse for GatewayError {
