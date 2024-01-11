@@ -1416,6 +1416,70 @@
 <a href="#1416" id="1416">1416</a>
 <a href="#1417" id="1417">1417</a>
 <a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a>
+<a href="#1421" id="1421">1421</a>
+<a href="#1422" id="1422">1422</a>
+<a href="#1423" id="1423">1423</a>
+<a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
+<a href="#1426" id="1426">1426</a>
+<a href="#1427" id="1427">1427</a>
+<a href="#1428" id="1428">1428</a>
+<a href="#1429" id="1429">1429</a>
+<a href="#1430" id="1430">1430</a>
+<a href="#1431" id="1431">1431</a>
+<a href="#1432" id="1432">1432</a>
+<a href="#1433" id="1433">1433</a>
+<a href="#1434" id="1434">1434</a>
+<a href="#1435" id="1435">1435</a>
+<a href="#1436" id="1436">1436</a>
+<a href="#1437" id="1437">1437</a>
+<a href="#1438" id="1438">1438</a>
+<a href="#1439" id="1439">1439</a>
+<a href="#1440" id="1440">1440</a>
+<a href="#1441" id="1441">1441</a>
+<a href="#1442" id="1442">1442</a>
+<a href="#1443" id="1443">1443</a>
+<a href="#1444" id="1444">1444</a>
+<a href="#1445" id="1445">1445</a>
+<a href="#1446" id="1446">1446</a>
+<a href="#1447" id="1447">1447</a>
+<a href="#1448" id="1448">1448</a>
+<a href="#1449" id="1449">1449</a>
+<a href="#1450" id="1450">1450</a>
+<a href="#1451" id="1451">1451</a>
+<a href="#1452" id="1452">1452</a>
+<a href="#1453" id="1453">1453</a>
+<a href="#1454" id="1454">1454</a>
+<a href="#1455" id="1455">1455</a>
+<a href="#1456" id="1456">1456</a>
+<a href="#1457" id="1457">1457</a>
+<a href="#1458" id="1458">1458</a>
+<a href="#1459" id="1459">1459</a>
+<a href="#1460" id="1460">1460</a>
+<a href="#1461" id="1461">1461</a>
+<a href="#1462" id="1462">1462</a>
+<a href="#1463" id="1463">1463</a>
+<a href="#1464" id="1464">1464</a>
+<a href="#1465" id="1465">1465</a>
+<a href="#1466" id="1466">1466</a>
+<a href="#1467" id="1467">1467</a>
+<a href="#1468" id="1468">1468</a>
+<a href="#1469" id="1469">1469</a>
+<a href="#1470" id="1470">1470</a>
+<a href="#1471" id="1471">1471</a>
+<a href="#1472" id="1472">1472</a>
+<a href="#1473" id="1473">1473</a>
+<a href="#1474" id="1474">1474</a>
+<a href="#1475" id="1475">1475</a>
+<a href="#1476" id="1476">1476</a>
+<a href="#1477" id="1477">1477</a>
+<a href="#1478" id="1478">1478</a>
+<a href="#1479" id="1479">1479</a>
+<a href="#1480" id="1480">1480</a>
+<a href="#1481" id="1481">1481</a>
+<a href="#1482" id="1482">1482</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -2265,7 +2329,9 @@
                 invite_code,
                 mint_channel_id,
                 timelock_delta: <span class="number">10</span>,
-                fees: gateway_config.routing_fees,
+                <span class="comment">// TODO: Today we use a global routing fees setting. When the gateway supports
+                // per-federation routing fees, this value will need to be updated.
+                </span>fees: gateway_config.routing_fees,
             };
 
             <span class="kw">let </span>route_hints =
@@ -2304,6 +2370,7 @@
                     route_hints,
                     GW_ANNOUNCEMENT_TTL,
                     <span class="self">self</span>.gateway_id,
+                    gw_client_cfg.fees,
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="self">self</span>.clients.write().<span class="kw">await</span>.insert(federation_id, client);
@@ -2397,7 +2464,11 @@
                 prev_config.num_route_hints = num_route_hints;
             }
 
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(fees_str) = routing_fees {
+            <span class="comment">// TODO: Today, the gateway only supports a single routing fee configuration.
+            // We will eventually support per-federation routing fees. This configuration
+            // will be deprecated when per-federation routing fees are
+            // supported.
+            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(fees_str) = routing_fees.clone() {
                 <span class="kw">let </span>routing_fees = GatewayFee::from_str(fees_str.as_str())<span class="question-mark">?</span>.<span class="number">0</span>;
                 prev_config.routing_fees = routing_fees;
             }
@@ -2422,9 +2493,87 @@
         dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKey, <span class="kw-2">&amp;</span>gateway_config)
             .<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>;
+
+        <span class="self">self</span>.update_federation_routing_fees(routing_fees, <span class="kw-2">&amp;</span>gateway_config)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">info!</span>(<span class="string">&quot;Set GatewayConfiguration successfully.&quot;</span>);
 
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Updates the routing fees for every federation configuration. Also
+    /// triggers a re-register of the gateway with all federations.
+    ///
+    /// TODO: Once per-federation fees are supported, this function should only
+    /// update a single federation&#39;s routing fees at a time.
+    </span><span class="kw">async fn </span>update_federation_routing_fees(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        routing_fees: <span class="prelude-ty">Option</span>&lt;String&gt;,
+        gateway_config: <span class="kw-2">&amp;</span>GatewayConfiguration,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(fees_str) = routing_fees {
+            <span class="kw">let </span>routing_fees = GatewayFee::from_str(fees_str.as_str())<span class="question-mark">?</span>.<span class="number">0</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
+            <span class="kw">let </span>configs = dbtx
+                .find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefix)
+                .<span class="kw">await
+                </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                .<span class="kw">await</span>;
+
+            <span class="kw">for </span>(id_key, <span class="kw-2">mut </span>fed_config) <span class="kw">in </span>configs {
+                fed_config.fees = routing_fees;
+                dbtx.insert_entry(<span class="kw-2">&amp;</span>id_key, <span class="kw-2">&amp;</span>fed_config).<span class="kw">await</span>;
+            }
+
+            dbtx.commit_tx().<span class="kw">await</span>;
+
+            <span class="self">Self</span>::register_all_federations(<span class="self">self</span>, gateway_config).<span class="kw">await</span>;
+        }
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Iterates through all of the federation configurations and registers the
+    /// gateway with each federation.
+    </span><span class="kw">async fn </span>register_all_federations(gateway: <span class="kw-2">&amp;</span>Gateway, gateway_config: <span class="kw-2">&amp;</span>GatewayConfiguration) {
+        <span class="kw">let </span>gateway_state = gateway.state.read().<span class="kw">await</span>.clone();
+        <span class="kw">if let </span>GatewayState::Running { lnrpc, .. } = gateway_state {
+            <span class="kw">match </span><span class="self">Self</span>::fetch_lightning_route_hints(lnrpc.clone(), gateway_config.num_route_hints)
+                .<span class="kw">await
+            </span>{
+                <span class="prelude-val">Ok</span>(route_hints) =&gt; {
+                    <span class="kw">for </span>(federation_id, client) <span class="kw">in </span>gateway.clients.read().<span class="kw">await</span>.iter() {
+                        <span class="comment">// Load the federation config to get the routing fees
+                        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = gateway.gateway_db.begin_transaction().<span class="kw">await</span>.into_nc();
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(federation_config) = dbtx
+                            .get_value(<span class="kw-2">&amp;</span>FederationIdKey { id: <span class="kw-2">*</span>federation_id })
+                            .<span class="kw">await
+                        </span>{
+                            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client
+                                .get_first_module::&lt;GatewayClientModule&gt;()
+                                .register_with_federation(
+                                    gateway.gateway_parameters.api_addr.clone(),
+                                    route_hints.clone(),
+                                    GW_ANNOUNCEMENT_TTL,
+                                    gateway.gateway_id,
+                                    federation_config.fees,
+                                )
+                                .<span class="kw">await
+                            </span>{
+                                <span class="macro">warn!</span>(<span class="string">&quot;Error registering federation {federation_id}: {e:?}&quot;</span>);
+                            }
+                        } <span class="kw">else </span>{
+                            <span class="macro">warn!</span>(<span class="string">&quot;Could not retrieve federation config for {federation_id}&quot;</span>);
+                        }
+                    }
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">warn!</span>(
+                        <span class="string">&quot;Could not retrieve route hints, gateway will not be registered for now: {e:?}&quot;
+                    </span>);
+                }
+            }
+        }
     }
 
     <span class="doccomment">/// This function will return a `GatewayConfiguration` one of two
@@ -2551,29 +2700,8 @@
                     <span class="kw">loop </span>{
                         <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = gateway.get_gateway_configuration().<span class="kw">await </span>{
                             <span class="kw">let </span>gateway_state = gateway.state.read().<span class="kw">await</span>.clone();
-                            <span class="kw">if let </span>GatewayState::Running { lnrpc, .. } = <span class="kw-2">&amp;</span>gateway_state {
-                                <span class="kw">match </span><span class="self">Self</span>::fetch_lightning_route_hints(lnrpc.clone(), gateway_config.num_route_hints).<span class="kw">await </span>{
-                                    <span class="prelude-val">Ok</span>(route_hints) =&gt; {
-                                        <span class="kw">for </span>(federation_id, client) <span class="kw">in </span>gateway.clients.read().<span class="kw">await</span>.iter() {
-                                            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client.get_first_module::&lt;GatewayClientModule&gt;()
-                                                .register_with_federation(
-                                                    gateway.gateway_parameters.api_addr.clone(),
-                                                    route_hints.clone(),
-                                                    GW_ANNOUNCEMENT_TTL,
-                                                    gateway.gateway_id,
-                                                )
-                                                .<span class="kw">await
-                                            </span>{
-                                                <span class="macro">warn!</span>(<span class="string">&quot;Error registering federation {federation_id}: {e:?}&quot;</span>);
-                                            }
-                                        }
-                                    }
-                                    <span class="prelude-val">Err</span>(e) =&gt; {
-                                        <span class="macro">warn!</span>(
-                                            <span class="string">&quot;Could not retrieve route hints, gateway will not be registered for now: {e:?}&quot;
-                                        </span>);
-                                    }
-                                }
+                            <span class="kw">if let </span>GatewayState::Running { .. } = <span class="kw-2">&amp;</span>gateway_state {
+                                <span class="self">Self</span>::register_all_federations(<span class="kw-2">&amp;</span>gateway, <span class="kw-2">&amp;</span>gateway_config).<span class="kw">await</span>;
                             } <span class="kw">else </span>{
                                 <span class="comment">// We need to retry more often if the gateway is not in the Running state
                                 </span><span class="kw">const </span>NOT_RUNNING_RETRY: Duration = Duration::from_secs(<span class="number">10</span>);
