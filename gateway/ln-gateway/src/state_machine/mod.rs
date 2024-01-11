@@ -19,7 +19,7 @@ use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlo
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction};
+use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion, TransactionItemAmount};
 use fedimint_core::util::SafeUrl;
@@ -50,11 +50,10 @@ use self::pay::{
     OutgoingPaymentError,
 };
 use crate::gateway_lnrpc::InterceptHtlcRequest;
-use crate::lnrpc_client::ILnRpcClient;
 use crate::state_machine::complete::{
     GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState,
 };
-use crate::{FederationToClientMap, ScidToFederationMap};
+use crate::Gateway;
 
 pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 pub const INITIAL_REGISTER_BACKOFF_DURATION: Duration = Duration::from_secs(15);
@@ -110,14 +109,9 @@ pub enum GatewayMeta {
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientInit {
-    pub lnrpc: Arc<dyn ILnRpcClient>,
-    pub all_clients: FederationToClientMap,
-    pub all_scids: ScidToFederationMap,
-    pub node_pub_key: secp256k1::PublicKey,
-    pub lightning_alias: String,
     pub timelock_delta: u64,
     pub mint_channel_id: u64,
-    pub gateway_db: Database,
+    pub gateway: Gateway,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -144,9 +138,6 @@ impl ClientModuleInit for GatewayClientInit {
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         Ok(GatewayClientModule {
-            lnrpc: self.lnrpc.clone(),
-            all_clients: self.all_clients.clone(),
-            all_scids: self.all_scids.clone(),
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
             redeem_key: args
@@ -154,27 +145,22 @@ impl ClientModuleInit for GatewayClientInit {
                 .child_key(ChildId(0))
                 .to_secp_key(&Secp256k1::new()),
             module_api: args.module_api().clone(),
-            node_pub_key: self.node_pub_key,
-            lightning_alias: self.lightning_alias.clone(),
             timelock_delta: self.timelock_delta,
             mint_channel_id: self.mint_channel_id,
-            gateway_db: self.gateway_db.clone(),
             client_ctx: args.context(),
+            gateway: self.gateway.clone(),
         })
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientContext {
-    lnrpc: Arc<dyn ILnRpcClient>,
-    all_clients: FederationToClientMap,
-    all_scids: ScidToFederationMap,
     redeem_key: bitcoin::KeyPair,
     timelock_delta: u64,
     secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
     pub ln_decoder: Decoder,
     notifier: ModuleNotifier<DynGlobalClientContext, GatewayClientStateMachines>,
-    gateway_db: Database,
+    gateway: Gateway,
 }
 
 impl Context for GatewayClientContext {}
@@ -194,19 +180,14 @@ impl From<&GatewayClientContext> for LightningClientContext {
 /// see [`fedimint_ln_client::LightningClientModule`]
 #[derive(Debug)]
 pub struct GatewayClientModule {
-    lnrpc: Arc<dyn ILnRpcClient>,
     cfg: LightningClientConfig,
-    all_clients: FederationToClientMap,
-    all_scids: ScidToFederationMap,
     pub notifier: ModuleNotifier<DynGlobalClientContext, GatewayClientStateMachines>,
     pub redeem_key: KeyPair,
-    node_pub_key: PublicKey,
-    lightning_alias: String,
     timelock_delta: u64,
     mint_channel_id: u64,
     module_api: DynModuleApi,
-    gateway_db: Database,
     client_ctx: ClientContext<Self>,
+    gateway: Gateway,
 }
 
 impl ClientModule for GatewayClientModule {
@@ -218,15 +199,12 @@ impl ClientModule for GatewayClientModule {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         Self::ModuleStateMachineContext {
-            lnrpc: self.lnrpc.clone(),
-            all_clients: self.all_clients.clone(),
-            all_scids: self.all_scids.clone(),
             redeem_key: self.redeem_key,
             timelock_delta: self.timelock_delta,
             secp: secp256k1_zkp::Secp256k1::new(),
             ln_decoder: self.decoder(),
             notifier: self.notifier.clone(),
-            gateway_db: self.gateway_db.clone(),
+            gateway: self.gateway.clone(),
         }
     }
 
@@ -272,18 +250,21 @@ impl GatewayClientModule {
         api: SafeUrl,
         gateway_id: secp256k1::PublicKey,
         fees: RoutingFees,
+        node_pub_key: PublicKey,
+        lightning_alias: String,
+        supports_private_payments: bool,
     ) -> LightningGatewayAnnouncement {
         LightningGatewayAnnouncement {
             info: LightningGateway {
                 mint_channel_id: self.mint_channel_id,
                 gateway_redeem_key: self.redeem_key.public_key(),
-                node_pub_key: self.node_pub_key,
-                lightning_alias: self.lightning_alias.clone(),
+                node_pub_key,
+                lightning_alias,
                 api,
                 route_hints,
                 fees,
                 gateway_id,
-                supports_private_payments: self.lnrpc.supports_private_payments(),
+                supports_private_payments,
             },
             ttl,
             vetted: false,
@@ -392,6 +373,9 @@ impl GatewayClientModule {
         time_to_live: Duration,
         gateway_id: secp256k1::PublicKey,
         fees: RoutingFees,
+        node_pub_key: PublicKey,
+        lightning_alias: String,
+        supports_private_payments: bool,
     ) -> anyhow::Result<()> {
         {
             let registration_info = self.to_gateway_registration_info(
@@ -400,6 +384,9 @@ impl GatewayClientModule {
                 gateway_api,
                 gateway_id,
                 fees,
+                node_pub_key,
+                lightning_alias,
+                supports_private_payments,
             );
 
             let federation_id = self.client_ctx.get_config().global.federation_id();
@@ -517,15 +504,20 @@ impl GatewayClientModule {
     ) -> anyhow::Result<OperationId> {
         let payload = pay_invoice_payload.clone();
 
-        if matches!(
-            pay_invoice_payload.payment_data,
-            PaymentData::PrunedInvoice { .. }
-        ) {
-            ensure!(
-                self.lnrpc.supports_private_payments(),
-                "Private payments are not supported by the lightning node"
-            );
-        }
+        self.gateway
+            .execute_with_lightning_connection(|lnrpc, _, _, _| async move {
+                if matches!(
+                    pay_invoice_payload.payment_data,
+                    PaymentData::PrunedInvoice { .. }
+                ) {
+                    ensure!(
+                        lnrpc.supports_private_payments(),
+                        "Private payments are not supported by the lightning node"
+                    );
+                }
+                Ok(())
+            })
+            .await?;
 
         self.client_ctx
             .module_autocommit(

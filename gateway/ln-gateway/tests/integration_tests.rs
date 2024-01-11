@@ -699,18 +699,30 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     let gateway = gateway_test.remove_client(&fed).await;
 
     let mut fake_api = SafeUrl::from_str("http://127.0.0.1:8175").unwrap();
-    let fake_route_hints = Vec::new();
     // Register with the federation with a low TTL to verify it will re-register
-    gateway
-        .get_first_module::<GatewayClientModule>()
-        .register_with_federation(
-            fake_api.clone(),
-            fake_route_hints.clone(),
-            GW_ANNOUNCEMENT_TTL,
-            gateway_test.get_gateway_id(),
-            DEFAULT_FEES,
-        )
+    let register_gw = gateway.clone();
+    let gateway_id = gateway_test.get_gateway_id();
+    let register_fake_api = fake_api.clone();
+    gateway_test
+        .gateway
+        .execute_with_lightning_connection(|lnrpc, pub_key, alias, _| async move {
+            register_gw
+                .get_first_module::<GatewayClientModule>()
+                .register_with_federation(
+                    register_fake_api,
+                    Vec::new(),
+                    GW_ANNOUNCEMENT_TTL,
+                    gateway_id,
+                    DEFAULT_FEES,
+                    pub_key,
+                    alias,
+                    lnrpc.supports_private_payments(),
+                )
+                .await?;
+            Ok(())
+        })
         .await?;
+
     let lightning_module = user_client.get_first_module::<LightningClientModule>();
     let gateways = lightning_module.fetch_registered_gateways().await?;
     assert!(gateways
@@ -720,16 +732,28 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     // Update the URI for the gateway then re-register
     fake_api = SafeUrl::from_str("http://127.0.0.1:8176").unwrap();
 
-    gateway
-        .get_first_module::<GatewayClientModule>()
-        .register_with_federation(
-            fake_api.clone(),
-            fake_route_hints,
-            GW_ANNOUNCEMENT_TTL,
-            gateway_test.get_gateway_id(),
-            DEFAULT_FEES,
-        )
+    let register_gw = gateway.clone();
+    let register_fake_api = fake_api.clone();
+    gateway_test
+        .gateway
+        .execute_with_lightning_connection(|lnrpc, pub_key, alias, _| async move {
+            register_gw
+                .get_first_module::<GatewayClientModule>()
+                .register_with_federation(
+                    register_fake_api,
+                    Vec::new(),
+                    GW_ANNOUNCEMENT_TTL,
+                    gateway_id,
+                    DEFAULT_FEES,
+                    pub_key,
+                    alias,
+                    lnrpc.supports_private_payments(),
+                )
+                .await?;
+            Ok(())
+        })
         .await?;
+
     let gateways = lightning_module.fetch_registered_gateways().await?;
     assert!(gateways
         .into_iter()

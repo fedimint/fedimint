@@ -23,10 +23,10 @@ use tracing::{debug, error, info, warn};
 
 use super::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
 use crate::db::PreimageAuthentication;
-use crate::fetch_lightning_node_info;
 use crate::gateway_lnrpc::{PayInvoiceRequest, PayInvoiceResponse};
 use crate::lnrpc_client::LightningRpcError;
 use crate::state_machine::GatewayClientModule;
+use crate::GatewayState;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that executes the Lightning payment on behalf of
@@ -371,25 +371,35 @@ impl GatewayPayInvoice {
                 .amount()
                 .expect("We already checked that an amount was supplied");
 
-        let payment_result = match buy_preimage.payment_data {
-            PaymentData::Invoice(invoice) => {
-                context
-                    .lnrpc
-                    .pay(PayInvoiceRequest {
-                        invoice: invoice.to_string(),
-                        max_delay,
-                        max_fee_msat: max_fee.msats,
-                        payment_hash: payment_data.payment_hash().to_vec(),
-                    })
-                    .await
-            }
-            PaymentData::PrunedInvoice(invoice) => {
-                context
-                    .lnrpc
-                    .pay_private(invoice, buy_preimage.max_delay, max_fee)
-                    .await
-            }
-        };
+        let payment_result = context
+            .gateway
+            .execute_with_lightning_connection(|lnrpc, _, _, _| async move {
+                Ok(match &buy_preimage.payment_data {
+                    PaymentData::Invoice(invoice) => {
+                        lnrpc
+                            .pay(PayInvoiceRequest {
+                                invoice: invoice.to_string(),
+                                max_delay,
+                                max_fee_msat: max_fee.msats,
+                                payment_hash: payment_data.payment_hash().to_vec(),
+                            })
+                            .await
+                    }
+                    PaymentData::PrunedInvoice(invoice) => {
+                        lnrpc
+                            .pay_private(invoice.clone(), buy_preimage.max_delay, max_fee)
+                            .await
+                    }
+                })
+            })
+            .await
+            .map_err(|_| LightningRpcError::FailedToConnect);
+
+        if let Err(error) = payment_result {
+            return Self::gateway_pay_cancel_contract(error, contract, common);
+        }
+
+        let payment_result = payment_result.expect("Already checked for error");
 
         match payment_result {
             Ok(PayInvoiceResponse { preimage, .. }) => {
@@ -405,23 +415,29 @@ impl GatewayPayInvoice {
                     )),
                 }
             }
-            Err(error) => {
-                warn!("Failed to buy preimage with {error} for contract {contract:?}");
-                let outgoing_error = OutgoingPaymentError {
-                    contract_id: contract.contract.contract_id(),
-                    contract: Some(contract.clone()),
-                    error_type: OutgoingPaymentErrorType::LightningPayError {
-                        lightning_error: error,
-                    },
-                };
-                GatewayPayStateMachine {
-                    common,
-                    state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
-                        contract,
-                        error: outgoing_error,
-                    })),
-                }
-            }
+            Err(error) => Self::gateway_pay_cancel_contract(error, contract, common),
+        }
+    }
+
+    fn gateway_pay_cancel_contract(
+        error: LightningRpcError,
+        contract: OutgoingContractAccount,
+        common: GatewayPayCommon,
+    ) -> GatewayPayStateMachine {
+        warn!("Failed to buy preimage with {error} for contract {contract:?}");
+        let outgoing_error = OutgoingPaymentError {
+            contract_id: contract.contract.contract_id(),
+            contract: Some(contract.clone()),
+            error_type: OutgoingPaymentErrorType::LightningPayError {
+                lightning_error: error,
+            },
+        };
+        GatewayPayStateMachine {
+            common,
+            state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
+                contract,
+                error: outgoing_error,
+            })),
         }
     }
 
@@ -501,7 +517,7 @@ impl GatewayPayInvoice {
         preimage_auth: sha256::Hash,
         contract: OutgoingContractAccount,
     ) -> Result<(), OutgoingPaymentError> {
-        let mut dbtx = context.gateway_db.begin_transaction().await;
+        let mut dbtx = context.gateway.gateway_db.begin_transaction().await;
         if let Some(secret_hash) = dbtx
             .get_value(&PreimageAuthentication { payment_hash })
             .await
@@ -591,24 +607,27 @@ impl GatewayPayInvoice {
         let rhints = payment_data.route_hints();
         match rhints.first().and_then(|rh| rh.0.last()) {
             None => None,
-            Some(hop) => {
-                let node_info = fetch_lightning_node_info(context.lnrpc.clone())
-                    .await
-                    .ok()?;
+            Some(hop) => match context.gateway.state.read().await.clone() {
+                GatewayState::Running {
+                    lnrpc: _,
+                    lightning_public_key,
+                    ..
+                } => {
+                    if hop.src_node_id != lightning_public_key {
+                        return None;
+                    }
 
-                if hop.src_node_id != node_info.0 {
-                    return None;
-                }
-
-                let scid_to_feds = context.all_scids.read().await;
-                match scid_to_feds.get(&hop.short_channel_id).cloned() {
-                    None => None,
-                    Some(federation_id) => {
-                        let clients = context.all_clients.read().await;
-                        clients.get(&federation_id).cloned()
+                    let scid_to_feds = context.gateway.scid_to_federation.read().await;
+                    match scid_to_feds.get(&hop.short_channel_id).cloned() {
+                        None => None,
+                        Some(federation_id) => {
+                            let clients = context.gateway.clients.read().await;
+                            clients.get(&federation_id).cloned()
+                        }
                     }
                 }
-            }
+                _ => None,
+            },
         }
     }
 }
@@ -712,7 +731,8 @@ impl GatewayPayWaitForSwapPreimage {
     ) -> Result<Preimage, OutgoingPaymentError> {
         debug!("Waiting preimage for contract {contract:?}");
         let client = context
-            .all_clients
+            .gateway
+            .clients
             .read()
             .await
             .get(&federation_id)
