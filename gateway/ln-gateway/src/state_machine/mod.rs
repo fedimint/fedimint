@@ -117,7 +117,6 @@ pub struct GatewayClientInit {
     pub lightning_alias: String,
     pub timelock_delta: u64,
     pub mint_channel_id: u64,
-    pub fees: RoutingFees,
     pub gateway_db: Database,
 }
 
@@ -159,7 +158,6 @@ impl ClientModuleInit for GatewayClientInit {
             lightning_alias: self.lightning_alias.clone(),
             timelock_delta: self.timelock_delta,
             mint_channel_id: self.mint_channel_id,
-            fees: self.fees,
             gateway_db: self.gateway_db.clone(),
             client_ctx: args.context(),
         })
@@ -206,7 +204,6 @@ pub struct GatewayClientModule {
     lightning_alias: String,
     timelock_delta: u64,
     mint_channel_id: u64,
-    fees: RoutingFees,
     module_api: DynModuleApi,
     gateway_db: Database,
     client_ctx: ClientContext<Self>,
@@ -274,6 +271,7 @@ impl GatewayClientModule {
         ttl: Duration,
         api: SafeUrl,
         gateway_id: secp256k1::PublicKey,
+        fees: RoutingFees,
     ) -> LightningGatewayAnnouncement {
         LightningGatewayAnnouncement {
             info: LightningGateway {
@@ -283,7 +281,7 @@ impl GatewayClientModule {
                 lightning_alias: self.lightning_alias.clone(),
                 api,
                 route_hints,
-                fees: self.fees,
+                fees,
                 gateway_id,
                 supports_private_payments: self.lnrpc.supports_private_payments(),
             },
@@ -393,6 +391,7 @@ impl GatewayClientModule {
         route_hints: Vec<RouteHint>,
         time_to_live: Duration,
         gateway_id: secp256k1::PublicKey,
+        fees: RoutingFees,
     ) -> anyhow::Result<()> {
         {
             let registration_info = self.to_gateway_registration_info(
@@ -400,6 +399,7 @@ impl GatewayClientModule {
                 time_to_live,
                 gateway_api,
                 gateway_id,
+                fees,
             );
 
             let federation_id = self.client_ctx.get_config().global.federation_id();

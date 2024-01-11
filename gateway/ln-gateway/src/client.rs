@@ -58,7 +58,7 @@ impl GatewayClientBuilder {
             invite_code,
             mint_channel_id,
             timelock_delta,
-            fees,
+            ..
         } = config;
         let federation_id = invite_code.federation_id();
 
@@ -69,7 +69,6 @@ impl GatewayClientBuilder {
             all_scids,
             node_pub_key,
             lightning_alias,
-            fees,
             timelock_delta,
             mint_channel_id,
             gateway_db,
