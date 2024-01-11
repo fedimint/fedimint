@@ -3,7 +3,7 @@ name = "fedimint-aead"
 version = "0.3.0-alpha"
 authors = ["The Fedimint Developers"]
 edition = "2021"
-description = "aead utilities on top of ring "
+description = "aead utilities on top of ring"
 license = "MIT"
 repository = "https://github.com/fedimint/fedimint"
 

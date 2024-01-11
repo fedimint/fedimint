@@ -61,6 +61,7 @@ keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 threshold_crypto = { version = "0.1", package = "fedimint-threshold-crypto" }
 tonic_lnd = { version = "0.1.3", package="fedimint-tonic-lnd", features = ["lightningrpc", "routerrpc"] }
 cln-rpc = { package = "fedimint-cln-rpc", version = "0.4.0" }
+fedimint-aead = { version = "0.0.1" }
 
 # Workaround: https://github.com/rust-lang/cargo/issues/12457 which causes
 #             https://github.com/ipetkov/crane/issues/370
