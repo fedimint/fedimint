@@ -428,14 +428,19 @@ impl Database {
 
             let mut dbtx = self.begin_transaction().await;
 
-            let val = tx_fn(&mut dbtx.to_ref_nc(), PhantomData)
-                .await
-                .map_err(|err| AutocommitError::ClosureError {
-                    attempts: curr_attempts,
-                    error: err,
-                })?;
+            let tx_fn_res = tx_fn(&mut dbtx.to_ref_nc(), PhantomData).await;
+            let val = match tx_fn_res {
+                Ok(val) => val,
+                Err(err) => {
+                    dbtx.ignore_uncommitted();
+                    return Err(AutocommitError::ClosureError {
+                        attempts: curr_attempts,
+                        error: err,
+                    });
+                }
+            };
 
-            let _timing /* logs on drop */ = timing::TimeReporter::new("autocmmit - commit_tx");
+            let _timing /* logs on drop */ = timing::TimeReporter::new("autocommit - commit_tx");
 
             match dbtx.commit_tx_result().await {
                 Ok(()) => {
