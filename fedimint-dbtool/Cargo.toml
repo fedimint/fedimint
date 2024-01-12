@@ -3,6 +3,7 @@ name = "fedimint-dbtool"
 version = "0.3.0-alpha"
 edition = "2021"
 license = "MIT"
+readme = "README.md"
 description = "Tool to inspect Fedimint client and server databases"
 repository = "https://github.com/fedimint/fedimint"
 
