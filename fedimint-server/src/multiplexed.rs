@@ -217,7 +217,7 @@ pub mod test {
         const NUM_REPEAT_TEST: usize = 10;
 
         for _ in 0..NUM_REPEAT_TEST {
-            let mut task_group = TaskGroup::new();
+            let task_group = TaskGroup::new();
             let task_handle = task_group.make_handle();
 
             let peer1 = PeerId::from(0);
