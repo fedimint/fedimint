@@ -620,7 +620,7 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn shutdown_task_group_after() -> anyhow::Result<()> {
-        let mut tg = TaskGroup::new();
+        let tg = TaskGroup::new();
         tg.spawn("shutdown waiter", |handle| async move {
             handle.make_shutdown_rx().await.await
         })
@@ -632,7 +632,7 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn shutdown_task_group_before() -> anyhow::Result<()> {
-        let mut tg = TaskGroup::new();
+        let tg = TaskGroup::new();
         tg.spawn("shutdown waiter", |handle| async move {
             sleep(Duration::from_millis(10)).await;
             handle.make_shutdown_rx().await.await

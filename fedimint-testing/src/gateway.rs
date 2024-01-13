@@ -126,7 +126,7 @@ impl GatewayTest {
         .expect("Failed to create gateway");
 
         let gateway_run = gateway.clone();
-        let mut root_group = TaskGroup::new();
+        let root_group = TaskGroup::new();
         let mut tg = root_group.clone();
         root_group
             .spawn("Gateway Run", |_handle| async move {

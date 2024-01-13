@@ -26,8 +26,7 @@ use fedimint_client::{
 };
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
-    FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, InviteCode,
-    JsonRpcClient, WsFederationApi,
+    FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, InviteCode, WsFederationApi,
 };
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::OperationId;
