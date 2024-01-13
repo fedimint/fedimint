@@ -838,6 +838,16 @@ impl Client {
         self.executor.add_state_machines_dbtx(dbtx, states).await
     }
 
+    pub async fn add_state_machines_inactive(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        states: Vec<DynState<DynGlobalClientContext>>,
+    ) -> AddStateMachinesResult {
+        self.executor
+            .add_state_machines_inactive_dbtx(dbtx, states)
+            .await
+    }
+
     // TODO: implement as part of [`OperationLog`]
     pub async fn get_active_operations(&self) -> HashSet<OperationId> {
         let active_states = self.executor.get_active_states().await;
@@ -1976,6 +1986,10 @@ impl ClientBuilder {
 
             for (module_instance_id, _, module) in modules.iter_modules() {
                 executor_builder.with_module_dyn(module.context(module_instance_id));
+            }
+
+            for (module_instance_id, _) in module_recoveries.iter() {
+                executor_builder.with_valid_module_id(*module_instance_id);
             }
 
             executor_builder.build(db.clone(), notifier).await
