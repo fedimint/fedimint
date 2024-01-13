@@ -24,7 +24,8 @@ use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 use fedimint_client::{get_invite_code_from_db, Client, ClientArc, ClientBuilder, FederationInfo};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
-    FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, InviteCode, WsFederationApi,
+    FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, InviteCode,
+    WsFederationApi,
 };
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::OperationId;
