@@ -1455,6 +1455,16 @@ impl Client {
         Ok(())
     }
 
+    pub async fn wait_for_all_active_state_machines(&self) -> anyhow::Result<()> {
+        loop {
+            if self.executor.get_active_states().await.is_empty() {
+                break;
+            }
+            fedimint_core::task::sleep(Duration::from_millis(100)).await;
+        }
+        Ok(())
+    }
+
     /// Set the client [`Metadata`]
     pub async fn set_metadata_dbtx(dbtx: &mut DatabaseTransaction<'_>, metadata: &Metadata) {
         dbtx.insert_new_entry(&ClientMetadataKey, metadata).await;
