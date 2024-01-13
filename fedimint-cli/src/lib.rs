@@ -25,7 +25,7 @@ use fedimint_client::{get_invite_code_from_db, Client, ClientArc, ClientBuilder,
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
     FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, InviteCode,
-    WsFederationApi,
+    JsonRpcClient, WsFederationApi,
 };
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::OperationId;
@@ -390,6 +390,9 @@ Examples:
     /// Wait for the fed to reach a consensus block count
     WaitBlockCount { count: u64 },
 
+    /// Wait for all state machines to complete
+    WaitComplete,
+
     /// Decode connection info into its JSON representation
     DecodeInviteCode { invite_code: InviteCode },
 
@@ -738,6 +741,14 @@ impl FedimintCli {
                 })
                 .await
                 .map_err_cli_msg(CliErrorKind::Timeout, "reached timeout")?
+            }
+            Command::Dev(DevCmd::WaitComplete) => {
+                let client = self.client_open(&cli).await?;
+                client
+                    .wait_for_all_active_state_machines()
+                    .await
+                    .map_err_cli_general()?;
+                Ok(CliOutput::Raw(serde_json::Value::Null))
             }
             Command::Dev(DevCmd::DecodeInviteCode { invite_code }) => {
                 Ok(CliOutput::DecodeInviteCode {

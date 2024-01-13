@@ -1125,6 +1125,7 @@ async fn cli_tests_backup_and_restore(fed: &Federation, reference_client: &Clien
         .out_json()
         .await?;
 
+        let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
         let post_notes = cmd!(client, "info").out_json().await?;
         let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
 
@@ -1148,6 +1149,7 @@ async fn cli_tests_backup_and_restore(fed: &Federation, reference_client: &Clien
         .out_json()
         .await?;
 
+        let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
         let post_notes = cmd!(client, "info").out_json().await?;
         let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
 
