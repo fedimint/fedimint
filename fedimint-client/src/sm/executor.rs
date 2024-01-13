@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
 use std::marker::PhantomData;
@@ -17,7 +17,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::spawn;
 use fedimint_core::util::BoxFuture;
 use fedimint_core::{maybe_add_send_sync, task};
-use futures::future::select_all;
+use futures::future::{self, select_all};
 use futures::stream::StreamExt;
 use tokio::select;
 use tokio::sync::{oneshot, Mutex};
@@ -63,6 +63,7 @@ struct ExecutorInner<GC> {
     db: Database,
     context: Mutex<Option<ContextGen<GC>>>,
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
+    valid_module_ids: BTreeSet<ModuleInstanceId>,
     notifier: Notifier<GC>,
     shutdown_executor: Mutex<Option<oneshot::Sender<oneshot::Sender<()>>>>,
 }
@@ -72,6 +73,7 @@ struct ExecutorInner<GC> {
 #[derive(Debug, Default)]
 pub struct ExecutorBuilder {
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
+    valid_module_ids: BTreeSet<ModuleInstanceId>,
 }
 
 impl<GC> Executor<GC>
@@ -180,6 +182,48 @@ where
         Ok(())
     }
 
+    /// Adds a number of state machines to the executor atomically with other DB
+    /// changes is `dbtx`, but without actually starting executing them.
+    ///
+    /// Like [`Self::add_state_machines_dbtx`] but useful for recovering
+    /// modules, where to module itself is not yet available (recovered) for
+    /// the executor.
+    pub async fn add_state_machines_inactive_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        states: Vec<DynState<GC>>,
+    ) -> AddStateMachinesResult {
+        for state in states {
+            if !self
+                .inner
+                .valid_module_ids
+                .contains(&state.module_instance_id())
+            {
+                return Err(AddStateMachinesError::Other(anyhow!("Unknown module")));
+            }
+
+            let is_active_state = dbtx
+                .get_value(&ActiveStateKey::from_state(state.clone()))
+                .await
+                .is_some();
+            let is_inactive_state = dbtx
+                .get_value(&InactiveStateKey::from_state(state.clone()))
+                .await
+                .is_some();
+
+            if is_active_state || is_inactive_state {
+                return Err(AddStateMachinesError::StateAlreadyExists);
+            }
+
+            dbtx.insert_entry(
+                &ActiveStateKey::from_state(state.clone()),
+                &ActiveState::new(),
+            )
+            .await;
+        }
+
+        Ok(())
+    }
     /// **Mostly used for testing**
     ///
     /// Check if state exists in the database as part of an actively running
@@ -549,6 +593,13 @@ where
             .await
             .find_by_prefix(&ActiveStateKeyPrefix::<GC>::new())
             .await
+            // ignore states from modules that are not initialized yet
+            .filter(|(state, _)| {
+                future::ready(
+                    self.module_contexts
+                        .contains_key(&state.state.module_instance_id()),
+                )
+            })
             .map(|(state, meta)| (state.state, meta))
             .collect::<Vec<_>>()
             .await
@@ -560,6 +611,13 @@ where
             .await
             .find_by_prefix(&InactiveStateKeyPrefix::new())
             .await
+            // ignore states from modules that are not initialized yet
+            .filter(|(state, _)| {
+                future::ready(
+                    self.module_contexts
+                        .contains_key(&state.state.module_instance_id()),
+                )
+            })
             .map(|(state, meta)| (state.state, meta))
             .collect::<Vec<_>>()
             .await
@@ -619,6 +677,8 @@ impl ExecutorBuilder {
     /// Allow executor being built to run state machines associated with the
     /// supplied module
     pub fn with_module_dyn(&mut self, context: DynContext) {
+        self.valid_module_ids.insert(context.module_instance_id());
+
         if self
             .module_contexts
             .insert(context.module_instance_id(), context)
@@ -626,6 +686,13 @@ impl ExecutorBuilder {
         {
             panic!("Tried to add two modules with the same instance id!");
         }
+    }
+
+    /// Allow executor to build state machines associated with the module id,
+    /// for which the module itself might not be available yet (otherwise it
+    /// would be registered with `[Self::with_module_dyn]`).
+    pub fn with_valid_module_id(&mut self, module_id: ModuleInstanceId) {
+        self.valid_module_ids.insert(module_id);
     }
 
     /// Build [`Executor`] and spawn background task in `tasks` executing active
@@ -639,6 +706,7 @@ impl ExecutorBuilder {
             db,
             context: Mutex::new(None),
             module_contexts: self.module_contexts,
+            valid_module_ids: self.valid_module_ids,
             notifier,
             shutdown_executor: Default::default(),
         });
