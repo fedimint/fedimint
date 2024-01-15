@@ -5,6 +5,7 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-derive provides helper macros for serialization."
 license = "MIT"
+readme = "../README.md"
 repository = "https://github.com/fedimint/fedimint"
 
 [lib]

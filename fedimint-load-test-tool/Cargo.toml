@@ -5,7 +5,6 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-load-test-tool is a tool to load test the fedimint server and gateway."
 license = "MIT"
-readme = "README.md"
 publish = false
 
 [[bin]]

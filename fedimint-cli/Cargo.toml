@@ -5,6 +5,7 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-cli is a command line interface wrapper for the client library."
 license = "MIT"
+readme = "../README.md"
 repository = "https://github.com/fedimint/fedimint"
 
 [package.metadata.docs.rs]
