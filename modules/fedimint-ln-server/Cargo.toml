@@ -5,6 +5,7 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-ln is a lightning payment service module."
 license = "MIT"
+readme = "../../README.md"
 repository = "https://github.com/fedimint/fedimint"
 
 [package.metadata.docs.rs]

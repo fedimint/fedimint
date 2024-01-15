@@ -3,6 +3,7 @@ name = "fedimint-gateway-cli"
 version = "0.3.0-alpha"
 edition = "2021"
 license = "MIT"
+readme = "../../README.md"
 description = "CLI tool to control lightning gateway"
 repository = "https://github.com/fedimint/fedimint"
 
