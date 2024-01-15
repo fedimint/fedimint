@@ -397,6 +397,12 @@ jobs:
           name: "${{ matrix.build.flake-output}}-linux-x86_64"
           path: "bins/**"
 
+      - name: Release Binaries
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: "bins/**"
+
       - name: Build DEB package
         run: |
           bins="${{ matrix.build.bins }}"
@@ -421,11 +427,23 @@ jobs:
           name: "deb-bundle"
           path: "debs/**.deb"
 
+      - name: Release DEB packages
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: "debs/**.deb"
+
       - name: Upload RPM packages
         uses: actions/upload-artifact@v4
         with:
           name: "rpm-bundle"
           path: "rpms/**.rpm"
+
+      - name: Release RPM packages
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: "rpms/**.rpm"
 
   notifications:
     if: always() && github.repository == 'fedimint/fedimint'
