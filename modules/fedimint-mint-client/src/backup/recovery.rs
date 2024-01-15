@@ -1,18 +1,17 @@
-use std::cmp::max;
+use std::cmp::{self, max};
 use std::collections::BTreeMap;
 use std::fmt;
 
-use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
-use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::session_outcome::SessionOutcome;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::{Amount, NumPeers, OutPoint, PeerId, Tiered, TieredMulti};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::LOG_CLIENT_RECOVERY_MINT;
 use fedimint_mint_common::{MintInput, MintOutput, Nonce};
+use futures::{Stream, StreamExt as _};
 use serde::{Deserialize, Serialize};
 use tbs::{AggregatePublicKey, BlindedMessage, PublicKeyShare};
 use threshold_crypto::G1Affine;
@@ -112,48 +111,41 @@ impl fmt::Debug for MintRecoveryState {
 impl MintRecoveryState {
     pub async fn make_progress<'a>(
         mut self,
-        api: DynGlobalApi,
-        decoders: ModuleDecoderRegistry,
         secret: DerivableSecret,
+        block_stream: &mut (impl Stream<Item = (u64, SessionOutcome)> + Unpin),
     ) -> Self {
+        /// the amount of blocks after which we save progress in the database
+        /// (return from this function)
+        const PROGRESS_SNAPSHOT_BLOCKS: u64 = 10;
         assert_eq!(secret.level(), 2);
 
-        info!(target: LOG_CLIENT_RECOVERY_MINT, "Processing block {}", self.next_epoch);
+        let block_range = self.next_epoch
+            ..cmp::min(
+                self.next_epoch.wrapping_add(PROGRESS_SNAPSHOT_BLOCKS),
+                self.end_epoch,
+            );
 
-        for accepted_item in Self::await_block(api, decoders, self.next_epoch)
-            .await
-            .items
-        {
-            if let ConsensusItem::Transaction(transaction) = accepted_item.item {
-                self.handle_transaction(&transaction, &secret);
-            }
-        }
+        debug!(
+            target: LOG_CLIENT_RECOVERY_MINT,
+            ?block_range,
+            "Processing blocks"
+        );
 
-        self.next_epoch += 1;
+        for _ in block_range {
+            let Some((block_idx, block)) = block_stream.next().await else {
+                break;
+            };
 
-        self
-    }
-
-    /// Fetch epochs in a given range and send them over `sender`
-    ///
-    /// Since WASM's `spawn` does not support join handles, we indicate
-    /// errors via `sender` itself.
-    ///
-    /// TODO: could be internal to recovery_loop?
-    async fn await_block<'a>(
-        api: DynGlobalApi,
-        decoders: ModuleDecoderRegistry,
-        index: u64,
-    ) -> SessionOutcome {
-        loop {
-            info!(target: LOG_CLIENT_RECOVERY_MINT, index, "Awaiting block {index}");
-            match api.await_block(index, &decoders).await {
-                Ok(block) => return block,
-                Err(e) => {
-                    info!(e = %e, index, "Error trying to fetch signed block");
+            assert_eq!(self.next_epoch, block_idx);
+            for accepted_item in block.items {
+                if let ConsensusItem::Transaction(transaction) = accepted_item.item {
+                    self.handle_transaction(&transaction, &secret);
                 }
             }
+
+            self.next_epoch += 1;
         }
+        self
     }
 }
 

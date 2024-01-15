@@ -11,12 +11,12 @@ mod output;
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
-use std::ffi;
 use std::fmt::{Display, Formatter};
 use std::io::Read;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use std::{ffi, ops};
 
 use anyhow::{anyhow, bail, ensure, Context as _};
 use async_stream::stream;
@@ -32,7 +32,7 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::api::GlobalFederationApi;
+use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
@@ -43,6 +43,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
+use fedimint_core::session_outcome::SessionOutcome;
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
@@ -410,10 +411,14 @@ impl MintClientInit {
 
         debug!(target: LOG_TARGET, "Creating MintRestoreStateMachine");
 
+        let mut block_stream = Self::fetch_block_stream(
+            args.api().clone(),
+            client_ctx.decoders(),
+            state.next_epoch..state.end_epoch,
+        );
+
         while !state.is_done() {
-            state = state
-                .make_progress(args.api().clone(), client_ctx.decoders(), secret.clone())
-                .await;
+            state = state.make_progress(secret.clone(), &mut block_stream).await;
 
             let mut dbtx = db.begin_transaction().await;
 
@@ -532,6 +537,43 @@ impl MintClientInit {
             )
             .await?;
         Ok(())
+    }
+
+    /// Fetch epochs in a given range and send them over `sender`
+    ///
+    /// Since WASM's `spawn` does not support join handles, we indicate
+    /// errors via `sender` itself.
+    ///
+    /// TODO: could be internal to recovery_loop?
+    fn fetch_block_stream<'a>(
+        api: DynGlobalApi,
+        decoders: ModuleDecoderRegistry,
+        epoch_range: ops::Range<u64>,
+    ) -> impl futures::Stream<Item = (u64, SessionOutcome)> + 'a {
+        // How many request for blocks to run in parallel (streaming).
+        const PARALLISM_LEVEL: usize = 8;
+
+        futures::stream::iter(epoch_range)
+            .map(move |block_idx| {
+                let api = api.clone();
+                let decoders = decoders.clone();
+                Box::pin(async move {
+                    info!(block_idx, "Fetching epoch");
+
+                    let block = loop {
+                        info!(target: LOG_CLIENT_RECOVERY_MINT, block_idx, "Awaiting signed block");
+                        match api.await_block(block_idx, &decoders).await {
+                            Ok(block) => break block,
+                            Err(e) => {
+                                info!(e = %e, block_idx, "Error trying to fetch signed block");
+                            }
+                        }
+                    };
+
+                    (block_idx, block)
+                })
+            })
+            .buffered(PARALLISM_LEVEL)
     }
 }
 
