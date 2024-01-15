@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -19,10 +20,10 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
-    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, RUN_DKG_ENDPOINT,
-    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
-    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
-    VERIFY_CONFIG_HASH_ENDPOINT,
+    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
+    RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
+    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
+    STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
 };
 use fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
@@ -35,7 +36,9 @@ use tokio::sync::mpsc::Sender;
 use tokio_rustls::rustls;
 use tracing::{error, info};
 
-use crate::config::io::{read_server_config, write_server_config, PLAINTEXT_PASSWORD, SALT_FILE};
+use crate::config::io::{
+    read_server_config, write_server_config, CONFIG_STAGING_DIR, PLAINTEXT_PASSWORD, SALT_FILE,
+};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use crate::net::peers::DelayCalculator;
 use crate::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
@@ -95,6 +98,17 @@ impl ConfigGenApi {
         let state = self.state.lock().expect("lock poisoned");
         if state.status != status {
             return Self::bad_request(&format!("Expected to be in {status:?} state"));
+        }
+        Ok(state)
+    }
+
+    fn require_any_status(
+        &self,
+        statuses: &[ServerStatus],
+    ) -> ApiResult<MutexGuard<ConfigGenState>> {
+        let state = self.state.lock().expect("lock poisoned");
+        if !statuses.contains(&state.status) {
+            return Self::bad_request(&format!("Expected to be in one of {:?} states", statuses));
         }
         Ok(state)
     }
@@ -270,7 +284,7 @@ impl ConfigGenApi {
                     let mut state = self_clone.state.lock().expect("lock poisoned");
                     match config {
                         Ok(config) => {
-                            self_clone.write_configs(&config, &state)?;
+                            self_clone.stage_configs(&config, &state)?;
                             state.status = ServerStatus::VerifyingConfigs;
                             state.config = Some(config);
                             info!(
@@ -301,17 +315,11 @@ impl ConfigGenApi {
     /// Returns the consensus config hash, tweaked by our TLS cert, to be shared
     /// with other peers
     pub fn verify_config_hash(&self) -> ApiResult<BTreeMap<PeerId, sha256::Hash>> {
-        let state = self
-            .require_status(ServerStatus::VerifyingConfigs)
-            .or_else(|_| self.require_status(ServerStatus::VerifiedConfigs))
-            .map_err(|_| {
-                ApiError::bad_request(format!(
-                    "Expected to be in {:?} or {:?} state",
-                    ServerStatus::VerifyingConfigs,
-                    ServerStatus::VerifiedConfigs
-                ))
-            })?;
-
+        let expected_status = [
+            ServerStatus::VerifyingConfigs,
+            ServerStatus::VerifiedConfigs,
+        ];
+        let state = self.require_any_status(&expected_status)?;
         let config = state
             .config
             .clone()
@@ -320,35 +328,71 @@ impl ConfigGenApi {
         Ok(get_verification_hashes(&config))
     }
 
-    /// Writes the configs to disk after they are generated
-    fn write_configs(&self, config: &ServerConfig, state: &ConfigGenState) -> ApiResult<()> {
+    /// Writes the configs to a staging directory disk after they are generated
+    fn stage_configs(&self, config: &ServerConfig, state: &ConfigGenState) -> ApiResult<()> {
+        let cfg_staging_dir = self.data_dir.join(CONFIG_STAGING_DIR);
+        fs::create_dir_all(&cfg_staging_dir)
+            .map_err(|e| ApiError::server_error(format!("Unable to modify data dir {e:?}")))?;
+
         let auth = config.private.api_auth.0.clone();
         let io_error = |e| ApiError::server_error(format!("Unable to write to data dir {e:?}"));
+
         // TODO: Make writing password optional
-        write_new(self.data_dir.join(PLAINTEXT_PASSWORD), &auth).map_err(io_error)?;
-        write_new(self.data_dir.join(SALT_FILE), random_salt()).map_err(io_error)?;
-        write_server_config(
-            config,
-            self.data_dir.clone(),
-            &auth,
-            &state.settings.registry,
-        )
-        .map_err(|e| ApiError::server_error(format!("Unable to encrypt configs {e:?}")))
+        write_new(cfg_staging_dir.join(PLAINTEXT_PASSWORD), &auth).map_err(io_error)?;
+        write_new(cfg_staging_dir.join(SALT_FILE), random_salt()).map_err(io_error)?;
+        write_server_config(config, cfg_staging_dir, &auth, &state.settings.registry)
+            .map_err(|e| ApiError::server_error(format!("Unable to encrypt configs {e:?}")))
+    }
+
+    /// Moves configuration artifacts from a staging directory to a permanent
+    /// data directory.
+    fn persist_staged_configs(&self, cfg_staging_dir: &PathBuf) -> ApiResult<()> {
+        let files = fs::read_dir(cfg_staging_dir).map_err(|e| {
+            ApiError::server_error(format!("Unable to read config staging dir {e:?}"))
+        })?;
+
+        for file_result in files {
+            let file = file_result.map_err(|e| {
+                ApiError::server_error(format!("Unable to read file in config staging dir {e:?}"))
+            })?;
+            let path = file.path();
+            let filename = path
+                .file_name()
+                .ok_or(ApiError::server_error(
+                    "Failed to get file name".to_string(),
+                ))?
+                .to_str()
+                .ok_or(ApiError::server_error(
+                    "Failed to convert file name to string".to_string(),
+                ))?;
+
+            // TODO: https://github.com/fedimint/fedimint/issues/3692
+
+            let dest = self.data_dir.join(filename);
+            fs::rename(&path, &dest)
+                .map_err(|e| ApiError::server_error(format!("Unable to modify data dir {e:?}")))?;
+        }
+
+        Ok(())
+    }
+
+    fn remove_staged_configs(&self, cfg_staging_dir: &PathBuf) -> ApiResult<()> {
+        if cfg_staging_dir.exists() {
+            fs::remove_dir_all(cfg_staging_dir)
+                .map_err(|e| ApiError::server_error(format!("Unable to modify data dir {e:?}")))
+        } else {
+            Ok(())
+        }
     }
 
     /// We have verified all our peer configs
     pub async fn verified_configs(&self) -> ApiResult<()> {
         {
-            let mut state = self
-                .require_status(ServerStatus::VerifyingConfigs)
-                .or_else(|_| self.require_status(ServerStatus::VerifiedConfigs))
-                .map_err(|_| {
-                    ApiError::bad_request(format!(
-                        "Expected to be in {:?} or {:?} state",
-                        ServerStatus::VerifyingConfigs,
-                        ServerStatus::VerifiedConfigs
-                    ))
-                })?;
+            let expected_status = [
+                ServerStatus::VerifyingConfigs,
+                ServerStatus::VerifiedConfigs,
+            ];
+            let mut state = self.require_any_status(&expected_status)?;
             if state.status == ServerStatus::VerifiedConfigs {
                 return Ok(());
             }
@@ -368,6 +412,12 @@ impl ConfigGenApi {
     /// Will force shut down the config gen API so the consensus API can start.
     /// Removes the upgrade flag when called.
     pub async fn start_consensus(&self, auth: ApiAuth) -> ApiResult<()> {
+        let cfg_staging_dir = self.data_dir.join(CONFIG_STAGING_DIR);
+        if cfg_staging_dir.exists() {
+            self.persist_staged_configs(&cfg_staging_dir)?;
+            self.remove_staged_configs(&cfg_staging_dir)?;
+        }
+
         let cfg = read_server_config(&auth.0, self.data_dir.clone())
             .map_err(|e| ApiError::bad_request(format!("Unable to decrypt configs {e:?}")))?;
 
@@ -383,6 +433,99 @@ impl ConfigGenApi {
 
     fn bad_request<T>(msg: &str) -> ApiResult<T> {
         Err(ApiError::bad_request(msg.to_string()))
+    }
+
+    pub async fn restart_federation_setup(&self) -> ApiResult<()> {
+        let leader = {
+            let expected_status = [
+                ServerStatus::SharingConfigGenParams,
+                ServerStatus::ReadyForConfigGen,
+                ServerStatus::ConfigGenFailed,
+                ServerStatus::VerifyingConfigs,
+                ServerStatus::VerifiedConfigs,
+            ];
+            let mut state = self.require_any_status(&expected_status)?;
+
+            let cfg_staging_dir = self.data_dir.join(CONFIG_STAGING_DIR);
+            self.remove_staged_configs(&cfg_staging_dir)?;
+
+            state.status = ServerStatus::SetupRestarted;
+            info!(
+                target: fedimint_logging::LOG_NET_PEER_DKG,
+                "Update config gen status to 'Setup restarted'"
+            );
+            // Create a WSClient for the leader
+            state
+                .local
+                .clone()
+                .and_then(|local| local.leader_api_url.map(WsAdminClient::new))
+        };
+
+        self.update_leader().await?;
+
+        // Followers wait for leader to signal that all peers have restarted setup
+        // The leader will signal this by setting it's status to AwaitingPassword
+        let self_clone = self.clone();
+        let mut sub_group = self.task_group.make_subgroup().await;
+        sub_group
+            .spawn("restart", move |_handle| async move {
+                if let Some(client) = leader {
+                    self_clone.await_leader_restart(client).await?;
+                } else {
+                    self_clone.await_peer_restart().await;
+                }
+                // Progress status to AwaitingPassword
+                {
+                    let mut state = self_clone.state.lock().expect("lock poisoned");
+                    state.reset();
+                }
+                self_clone.update_leader().await
+            })
+            .await;
+
+        Ok(())
+    }
+
+    // Followers wait for leader to signal that all peers have restarted setup
+    async fn await_leader_restart(&self, client: WsAdminClient) -> ApiResult<()> {
+        let mut retries = 0;
+        loop {
+            match client.status().await {
+                Ok(status) => {
+                    if status.server == ServerStatus::AwaitingPassword
+                        || status.server == ServerStatus::SharingConfigGenParams
+                    {
+                        break Ok(());
+                    }
+                }
+                Err(_) => {
+                    if retries > 3 {
+                        return Err(ApiError::not_found(
+                            "Unable to connect to the leader".to_string(),
+                        ));
+                    }
+                    retries += 1;
+                }
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+    }
+
+    // Leader waits for all peers to restart setup,
+    async fn await_peer_restart(&self) {
+        loop {
+            {
+                let state = self.state.lock().expect("lock poisoned");
+                let peers = state.peers.clone();
+                if peers
+                    .values()
+                    .all(|peer| peer.status == Some(ServerStatus::SetupRestarted))
+                {
+                    break;
+                }
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
     }
 }
 
@@ -571,6 +714,20 @@ impl ConfigGenState {
 
         Ok(ConfigGenParams { local, consensus })
     }
+
+    fn reset(&mut self) {
+        self.config = None;
+        self.peers = Default::default();
+        self.auth = None;
+        self.requested_params = None;
+        self.status = ServerStatus::AwaitingPassword;
+        self.local = None;
+
+        info!(
+            target: fedimint_logging::LOG_NET_PEER_DKG,
+            "Reset config gen state"
+        );
+    }
 }
 
 #[async_trait]
@@ -702,6 +859,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
                 Ok(())
             }
         },
+        api_endpoint! {
+            RESTART_FEDERATION_SETUP_ENDPOINT,
+            async |config: &ConfigGenApi, context, _v: ()| -> () {
+                check_auth(context)?;
+                config.restart_federation_setup().await
+            }
+        },
     ]
 }
 
@@ -728,13 +892,14 @@ mod tests {
     };
     use fedimint_dummy_server::DummyInit;
     use fedimint_logging::TracingSetup;
+    use fedimint_portalloc::port_alloc;
     use fedimint_testing::fixtures::test_dir;
     use futures::future::join_all;
     use itertools::Itertools;
     use tracing::info;
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
-    use crate::config::io::{read_server_config, PLAINTEXT_PASSWORD};
+    use crate::config::io::{read_server_config, CONFIG_STAGING_DIR, PLAINTEXT_PASSWORD};
     use crate::config::{DynServerModuleInit, ServerConfig, DEFAULT_MAX_CLIENT_CONNECTIONS};
     use crate::fedimint_core::module::ServerModuleInit;
     use crate::FedimintServer;
@@ -840,6 +1005,33 @@ mod tests {
         }
 
         /// Helper for awaiting all servers have the status
+        /// Use this BEFORE server config gen params have been set
+        async fn wait_status_preconfig(&self, status: ServerStatus, peers: &Vec<TestConfigApi>) {
+            loop {
+                let server_status = self.status().await.server;
+                if server_status == status {
+                    for peer in peers {
+                        let peer_status = peer.status().await.server;
+                        if peer_status != server_status {
+                            info!(
+                                target: fedimint_logging::LOG_TEST,
+                                "Test retrying peer server status preconfig"
+                            );
+                            sleep(Duration::from_millis(10)).await;
+                            continue;
+                        }
+                    }
+                    break;
+                }
+                info!(
+                    target: fedimint_logging::LOG_TEST,
+                    "Test retrying server status preconfig"
+                );
+            }
+        }
+
+        /// Helper for awaiting all servers have the status
+        /// Use this AFTER server config gen params have been set
         async fn wait_status(&self, status: ServerStatus) {
             loop {
                 let response = self.client.consensus_config_gen_params().await.unwrap();
@@ -885,9 +1077,15 @@ mod tests {
         }
 
         /// reads the dummy module config from the filesystem
-        fn read_config(&self) -> ServerConfig {
-            let auth = fs::read_to_string(self.dir.join(PLAINTEXT_PASSWORD));
-            read_server_config(&auth.unwrap(), self.dir.clone()).unwrap()
+        fn read_config(&self, staging: bool) -> ServerConfig {
+            let cfg_dir = if staging {
+                self.dir.join(CONFIG_STAGING_DIR)
+            } else {
+                self.dir.clone()
+            };
+
+            let auth = fs::read_to_string(cfg_dir.join(PLAINTEXT_PASSWORD));
+            read_server_config(&auth.unwrap(), cfg_dir.clone()).unwrap()
         }
     }
 
@@ -895,9 +1093,7 @@ mod tests {
     async fn test_config_api() {
         let _ = TracingSetup::default().init();
         let (data_dir, _maybe_tmp_dir_guard) = test_dir("test-config-api");
-
-        // TODO: Choose port in common way with `fedimint_env`
-        let base_port = 18103;
+        let base_port = port_alloc(1).unwrap();
 
         // let mut join_handles = vec![];
         let mut apis = vec![];
@@ -918,6 +1114,126 @@ mod tests {
             join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))).await;
         });
 
+        leader = validate_leader_setup(leader).await;
+
+        // Setup followers and send connection info
+        for follower in &mut followers {
+            assert_eq!(
+                follower.status().await.server,
+                ServerStatus::AwaitingPassword
+            );
+            follower
+                .client
+                .set_password(follower.auth.clone())
+                .await
+                .unwrap();
+            let leader_url = Some(leader.settings.api_url.clone());
+            follower.set_connections(&leader_url).await.unwrap();
+            follower.name = format!("{}_", follower.name);
+            follower.set_connections(&leader_url).await.unwrap();
+            follower.set_config_gen_params().await;
+        }
+
+        // Validate we can do a full fedimint setup
+        validate_full_setup(leader, followers).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_restart_setup() {
+        let _ = TracingSetup::default().init();
+        let (data_dir, _maybe_tmp_dir_guard) = test_dir("test-restart-setup");
+        let base_port = port_alloc(1).unwrap();
+
+        // let mut join_handles = vec![];
+        let mut apis = vec![];
+        let mut followers = vec![];
+        let (mut leader, api) = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
+
+        apis.push(api);
+
+        for i in 1..4 {
+            let port = base_port + (i * 2);
+            let (follower, api) = TestConfigApi::new(port, i, data_dir.clone()).await;
+            apis.push(api);
+            followers.push(follower);
+        }
+
+        // Run the Fedimint servers and test concurrently
+        spawn("Fedimint server apis", async move {
+            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))).await;
+        });
+
+        leader = validate_leader_setup(leader).await;
+
+        // Setup followers and send connection info
+        for follower in &mut followers {
+            assert_eq!(
+                follower.status().await.server,
+                ServerStatus::AwaitingPassword
+            );
+            follower
+                .client
+                .set_password(follower.auth.clone())
+                .await
+                .unwrap();
+            let leader_url = Some(leader.settings.api_url.clone());
+            follower.set_connections(&leader_url).await.unwrap();
+            follower.name = format!("{}_", follower.name);
+            follower.set_connections(&leader_url).await.unwrap();
+            follower.set_config_gen_params().await;
+        }
+        leader
+            .wait_status(ServerStatus::SharingConfigGenParams)
+            .await;
+
+        // Leader can trigger a setup restart
+        leader
+            .client
+            .restart_federation_setup(leader.auth.clone())
+            .await
+            .unwrap();
+
+        // All peers can trigger a setup restart. This has to be done manually by each
+        // peer, and any peer could trigger a restart before the leader does.
+        for peer in &followers {
+            peer.client
+                .restart_federation_setup(peer.auth.clone())
+                .await
+                .ok();
+        }
+
+        // Ensure all servers have restarted
+        leader
+            .wait_status_preconfig(ServerStatus::SetupRestarted, &followers)
+            .await;
+        leader
+            .wait_status_preconfig(ServerStatus::AwaitingPassword, &followers)
+            .await;
+
+        leader = validate_leader_setup(leader).await;
+
+        // Setup followers and send connection info
+        for follower in &mut followers {
+            assert_eq!(
+                follower.status().await.server,
+                ServerStatus::AwaitingPassword
+            );
+            follower
+                .client
+                .set_password(follower.auth.clone())
+                .await
+                .unwrap();
+            let leader_url = Some(leader.settings.api_url.clone());
+            follower.set_connections(&leader_url).await.unwrap();
+            follower.set_config_gen_params().await;
+        }
+
+        // Validate we can do a full fedimint setup after a restart
+        validate_full_setup(leader, followers).await;
+    }
+
+    // Validate steps when leader initiates fedimint setup
+    async fn validate_leader_setup(mut leader: TestConfigApi) -> TestConfigApi {
         assert_eq!(leader.status().await.server, ServerStatus::AwaitingPassword);
 
         // Cannot set the password twice
@@ -945,24 +1261,11 @@ mod tests {
             .unwrap();
         leader.set_config_gen_params().await;
 
-        // Setup followers and send connection info
-        for follower in &mut followers {
-            assert_eq!(
-                follower.status().await.server,
-                ServerStatus::AwaitingPassword
-            );
-            follower
-                .client
-                .set_password(follower.auth.clone())
-                .await
-                .unwrap();
-            let leader_url = Some(leader.settings.api_url.clone());
-            follower.set_connections(&leader_url).await.unwrap();
-            follower.name = format!("{}_", follower.name);
-            follower.set_connections(&leader_url).await.unwrap();
-            follower.set_config_gen_params().await;
-        }
+        leader
+    }
 
+    // Validate we can use the config api to do a full fedimint setup
+    async fn validate_full_setup(leader: TestConfigApi, mut followers: Vec<TestConfigApi>) {
         // Confirm we can get peer servers if we are the leader
         let peers = leader.client.get_config_gen_peers().await.unwrap();
         let names: Vec<_> = peers.into_iter().map(|peer| peer.name).sorted().collect();
@@ -1017,11 +1320,16 @@ mod tests {
 
         // verify the local and consensus values for peers
         for peer in all_peers.iter() {
-            let cfg = peer.read_config();
+            let cfg = peer.read_config(true); // read temporary configs from staging dir
             let dummy: DummyConfig = cfg.get_module_config_typed(0).unwrap();
             assert_eq!(dummy.consensus.tx_fee, leader_amount);
             assert_eq!(dummy.local.example, peer.name);
             assert_eq!(cfg.consensus.meta["\"test\""], leader_name);
+        }
+
+        // set verified configs
+        for peer in all_peers.iter() {
+            peer.client.verified_configs(peer.auth.clone()).await.ok();
         }
 
         // start consensus
@@ -1033,6 +1341,13 @@ mod tests {
 
         for peer in all_peers.iter() {
             assert_eq!(peer.status().await.server, ServerStatus::ConsensusRunning);
+
+            // verify the local and consensus values for peers
+            let cfg = peer.read_config(false); // read persisted configs
+            let dummy: DummyConfig = cfg.get_module_config_typed(0).unwrap();
+            assert_eq!(dummy.consensus.tx_fee, leader_amount);
+            assert_eq!(dummy.local.example, peer.name);
+            assert_eq!(cfg.consensus.meta["\"test\""], leader_name);
         }
     }
 }

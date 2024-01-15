@@ -14,9 +14,10 @@ use crate::api::{
 use crate::config::ServerModuleConfigGenParamsRegistry;
 use crate::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
-    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, RUN_DKG_ENDPOINT,
-    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
-    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
+    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
+    RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
+    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
+    STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
 };
 use crate::module::{ApiAuth, ApiRequestErased};
 use crate::PeerId;
@@ -150,6 +151,19 @@ impl WsAdminClient {
         .await
     }
 
+    /// Updates local state and notify leader that we have verified configs.
+    /// This allows for a synchronization point, before we start consensus.
+    pub async fn verified_configs(
+        &self,
+        auth: ApiAuth,
+    ) -> FederationResult<BTreeMap<PeerId, sha256::Hash>> {
+        self.request(
+            VERIFIED_CONFIGS_ENDPOINT,
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .await
+    }
+
     /// Reads the configs from the disk, starts the consensus server, and shuts
     /// down the config gen API to start the Fedimint API
     ///
@@ -179,6 +193,14 @@ impl WsAdminClient {
     pub async fn auth(&self, auth: ApiAuth) -> FederationResult<()> {
         self.request(AUTH_ENDPOINT, ApiRequestErased::default().with_auth(auth))
             .await
+    }
+
+    pub async fn restart_federation_setup(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request(
+            RESTART_FEDERATION_SETUP_ENDPOINT,
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .await
     }
 
     async fn request<Ret>(&self, method: &str, params: ApiRequestErased) -> FederationResult<Ret>

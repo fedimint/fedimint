@@ -38,3 +38,4 @@ pub const AWAIT_PREIMAGE_DECRYPTION: &str = "await_preimage_decryption";
 pub const AWAIT_OFFER_ENDPOINT: &str = "await_offer";
 pub const AWAIT_TRANSACTION_ENDPOINT: &str = "await_transaction";
 pub const INVITE_CODE_ENDPOINT: &str = "invite_code";
+pub const RESTART_FEDERATION_SETUP_ENDPOINT: &str = "restart_federation_setup";

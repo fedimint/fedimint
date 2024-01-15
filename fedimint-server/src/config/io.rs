@@ -39,6 +39,11 @@ pub const JSON_EXT: &str = "json";
 
 const ENCRYPTED_EXT: &str = "encrypt";
 
+/// Temporary directiry where server configs are stored / removed through the
+/// setup process On setup complete, the configs are moved to the server config
+/// directory and the staging directory is removed
+pub const CONFIG_STAGING_DIR: &str = "cfg_staging";
+
 /// Reads the server from the local, private, and consensus cfg files
 pub fn read_server_config(password: &str, path: PathBuf) -> anyhow::Result<ServerConfig> {
     let salt = fs::read_to_string(path.join(SALT_FILE))?;

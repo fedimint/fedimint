@@ -2079,6 +2079,7 @@ dependencies = [
  "fedimint-dummy-common",
  "fedimint-dummy-server",
  "fedimint-logging",
+ "fedimint-portalloc",
  "fedimint-tbs",
  "fedimint-testing",
  "fedimint-threshold-crypto",
