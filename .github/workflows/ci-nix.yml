@@ -39,7 +39,7 @@ jobs:
       - uses: cachix/install-nix-action@v24
         with:
           nix_path: nixpkgs=channel:nixos-22.05
-      - uses: cachix/cachix-action@v13
+      - uses: cachix/cachix-action@v14
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -94,7 +94,7 @@ jobs:
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           nix_path: nixpkgs=channel:nixos-22.05
-      - uses: cachix/cachix-action@v13
+      - uses: cachix/cachix-action@v14
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           name: fedimint
@@ -159,7 +159,7 @@ jobs:
       - uses: cachix/install-nix-action@v24
         with:
           nix_path: nixpkgs=channel:nixos-22.05
-      - uses: cachix/cachix-action@v13
+      - uses: cachix/cachix-action@v14
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -186,7 +186,7 @@ jobs:
       - uses: cachix/install-nix-action@v24
         with:
           nix_path: nixpkgs=channel:nixos-22.05
-      - uses: cachix/cachix-action@v13
+      - uses: cachix/cachix-action@v14
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -251,7 +251,7 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-22.05
 
-      - uses: cachix/cachix-action@v13
+      - uses: cachix/cachix-action@v14
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           name: fedimint
@@ -276,7 +276,7 @@ jobs:
       - uses: cachix/install-nix-action@v24
         with:
           nix_path: nixpkgs=channel:nixos-22.05
-      - uses: cachix/cachix-action@v13
+      - uses: cachix/cachix-action@v14
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -362,7 +362,7 @@ jobs:
       - uses: cachix/install-nix-action@v24
         with:
           nix_path: nixpkgs=channel:nixos-22.05
-      - uses: cachix/cachix-action@v13
+      - uses: cachix/cachix-action@v14
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
