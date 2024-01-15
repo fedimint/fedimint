@@ -273,6 +273,28 @@
 <a href="#273" id="273">273</a>
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -289,9 +311,10 @@
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerModuleConfigGenParamsRegistry;
 <span class="kw">use </span><span class="kw">crate</span>::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
-    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, RUN_DKG_ENDPOINT,
-    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
-    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
+    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
+    RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
+    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
+    STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::module::{ApiAuth, ApiRequestErased};
 <span class="kw">use </span><span class="kw">crate</span>::PeerId;
@@ -425,6 +448,19 @@
         .<span class="kw">await
     </span>}
 
+    <span class="doccomment">/// Updates local state and notify leader that we have verified configs.
+    /// This allows for a synchronization point, before we start consensus.
+    </span><span class="kw">pub async fn </span>verified_configs(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        auth: ApiAuth,
+    ) -&gt; FederationResult&lt;BTreeMap&lt;PeerId, sha256::Hash&gt;&gt; {
+        <span class="self">self</span>.request(
+            VERIFIED_CONFIGS_ENDPOINT,
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .<span class="kw">await
+    </span>}
+
     <span class="doccomment">/// Reads the configs from the disk, starts the consensus server, and shuts
     /// down the config gen API to start the Fedimint API
     ///
@@ -454,6 +490,14 @@
     </span><span class="kw">pub async fn </span>auth(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt; {
         <span class="self">self</span>.request(AUTH_ENDPOINT, ApiRequestErased::default().with_auth(auth))
             .<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>restart_federation_setup(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt; {
+        <span class="self">self</span>.request(
+            RESTART_FEDERATION_SETUP_ENDPOINT,
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>request&lt;Ret&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str, params: ApiRequestErased) -&gt; FederationResult&lt;Ret&gt;
