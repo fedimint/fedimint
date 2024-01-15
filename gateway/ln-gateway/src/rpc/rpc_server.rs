@@ -34,6 +34,8 @@ pub async fn run_webserver(
 
         // Authenticated, public routes used for gateway administration
         let admin_routes = Router::new()
+            // FIXME: deprecated >= 0.3.0
+            .route("/info", post(info))
             .route("/info", get(info))
             .route("/config", post(configuration))
             .route("/balance", post(balance))
@@ -50,6 +52,8 @@ pub async fn run_webserver(
         let routes = Router::new()
             .route("/set_configuration", post(set_configuration))
             .route("/config", get(configuration))
+            // FIXME: deprecated >= 0.3.0
+            .route("/info", post(info))
             .route("/info", get(info));
         (routes, Router::new())
     };
