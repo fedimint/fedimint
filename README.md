@@ -40,7 +40,7 @@ To do lightning payments, Fedimint requires a [Lightning Gateway](https://github
 The easiest way to run Fedimint on the Mutinynet testnet is with Clovyr, a decentralized application platform. Click the Launch buttons below to spin up a Fedimint guardian or Lightning Gateway in a couple minutes. Clovyr handles hosting, DNS, and configuration for you.
 
 - [Launch Fedimint Guardian](https://clovyr.app/apps/fedimint-guardian)
-- [Launch Lightning Gateway](https://clovyr.app/apps/lightning-gateway)
+- [Launch Lightning Gateway](https://clovyr.app/apps/fedimint-gateway)
 
 To run Fedimint on your own hardware or another cloud provider, or to run Fedimint on a different network like mainnet, see the [Fedimint Setup Guide](./docs/setup-docs.md).
 
