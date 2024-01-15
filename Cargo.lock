@@ -2184,9 +2184,9 @@ dependencies = [
 
 [[package]]
 name = "fedimint-tonic-lnd"
-version = "0.1.3"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a1213680212363f551be5913506ceba1222fa88dfbe46757a85220eeacb4fad"
+checksum = "df03ca33b5116de3051c1e233fe341e23b04c4913c7b16042497924559bc2a2e"
 dependencies = [
  "hex",
  "http-body",
