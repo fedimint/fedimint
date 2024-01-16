@@ -11,7 +11,6 @@ use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, KeyPair, OperationId};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::{

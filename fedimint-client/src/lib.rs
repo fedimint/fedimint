@@ -84,7 +84,7 @@ use db::{
     EncodedClientSecretKey, InitMode,
 };
 use fedimint_core::api::{
-    ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,
+    ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApiWithCache, IGlobalFederationApi,
     InviteCode, WsFederationApi,
 };
 use fedimint_core::config::{
@@ -191,7 +191,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// Returns a reference to the client's federation API client. The provided
     /// interface [`IGlobalFederationApi`] typically does not provide the
     /// necessary functionality, for this extension traits like
-    /// [`fedimint_core::api::GlobalFederationApi`] have to be used.
+    /// [`fedimint_core::api::IGlobalFederationApi`] have to be used.
     // TODO: Could be removed in favor of client() except for testing
     fn api(&self) -> &DynGlobalApi;
 
@@ -1637,7 +1637,9 @@ impl FederationInfo {
 
     /// Creates an API client for the federation
     pub fn api(&self) -> DynGlobalApi {
-        DynGlobalApi::from(WsFederationApi::from_config(&self.config))
+        DynGlobalApi::from(GlobalFederationApiWithCache::new(
+            WsFederationApi::from_config(&self.config),
+        ))
     }
 
     pub fn federation_id(&self) -> FederationId {
@@ -1790,7 +1792,9 @@ impl ClientBuilder {
         config: ClientConfig,
         invite_code: InviteCode,
     ) -> anyhow::Result<ClientArc> {
-        let api = DynGlobalApi::from(WsFederationApi::from_config(&config));
+        let api = DynGlobalApi::from(GlobalFederationApiWithCache::new(
+            WsFederationApi::from_config(&config),
+        ));
         let snapshot = Client::download_backup_from_federation_static(
             &api,
             &Self::federation_root_secret(&root_secret, &config),
@@ -1834,7 +1838,9 @@ impl ClientBuilder {
         let decoders = self.decoders(&config);
         let config = Self::config_decoded(config, &decoders)?;
         let db = self.db.with_decoders(decoders.clone());
-        let api = DynGlobalApi::from(WsFederationApi::from_config(&config));
+        let api = DynGlobalApi::from(GlobalFederationApiWithCache::new(
+            WsFederationApi::from_config(&config),
+        ));
 
         let init_state = Self::load_init_state(&db).await;
 
@@ -2127,8 +2133,10 @@ async fn try_download_config(
     max_retries: usize,
 ) -> anyhow::Result<ClientConfig> {
     debug!(target: LOG_CLIENT, "Download client config");
-    let api = Arc::new(WsFederationApi::from_invite_code(&[invite_code.clone()]))
-        as Arc<dyn IGlobalFederationApi + Send + Sync + 'static>;
+    let api: DynGlobalApi = GlobalFederationApiWithCache::new(WsFederationApi::from_invite_code(
+        &[invite_code.clone()],
+    ))
+    .into();
     let mut num_retries = 0;
     let wait_millis = 500;
     loop {

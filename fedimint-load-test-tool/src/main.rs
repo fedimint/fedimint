@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::Duration;
 use std::vec;
 
@@ -14,7 +13,7 @@ use common::{
 use devimint::cmd;
 use devimint::util::{GatewayClnCli, GatewayLndCli};
 use fedimint_client::ClientArc;
-use fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
+use fedimint_core::api::{DynGlobalApi, GlobalFederationApiWithCache, InviteCode, WsFederationApi};
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::spawn;
@@ -1028,7 +1027,10 @@ async fn test_download_config(
     users: u16,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
-    let api = Arc::new(WsFederationApi::from_invite_code(&[invite_code.clone()]));
+    let api: DynGlobalApi = GlobalFederationApiWithCache::new(WsFederationApi::from_invite_code(
+        &[invite_code.clone()],
+    ))
+    .into();
 
     Ok((0..users)
         .map(|_| {
@@ -1057,7 +1059,10 @@ async fn test_connect_raw_client(
     limit_endpoints: Option<usize>,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
-    let api = Arc::new(WsFederationApi::from_invite_code(&[invite_code.clone()]));
+    let api: DynGlobalApi = GlobalFederationApiWithCache::new(WsFederationApi::from_invite_code(
+        &[invite_code.clone()],
+    ))
+    .into();
     let mut cfg = api.download_client_config(&invite_code).await?;
 
     if let Some(limit_endpoints) = limit_endpoints {

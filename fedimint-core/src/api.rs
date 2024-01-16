@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::{Cursor, Read};
+use std::num::NonZeroUsize;
 use std::ops::Add;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -214,7 +215,7 @@ impl OutputOutcomeError {
 }
 /// An API (module or global) that can query a federation
 #[apply(async_trait_maybe_send!)]
-pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
+pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
     /// List of all federation peers for the purpose of iterating each peer
     /// in the federation.
     ///
@@ -245,9 +246,9 @@ pub struct ApiVersionSet {
 }
 
 /// An extension trait allowing to making federation-wide API call on top
-/// [`IFederationApi`].
+/// [`IRawFederationApi`].
 #[apply(async_trait_maybe_send!)]
-pub trait FederationApiExt: IFederationApi {
+pub trait FederationApiExt: IRawFederationApi {
     /// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
     async fn request_with_strategy<PeerRet: serde::de::DeserializeOwned, FedRet: Debug>(
@@ -375,18 +376,15 @@ pub trait FederationApiExt: IFederationApi {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<T: ?Sized> FederationApiExt for T where T: IFederationApi {}
+impl<T: ?Sized> FederationApiExt for T where T: IRawFederationApi {}
 
 /// Trait marker for the module (non-global) endpoints
-pub trait IModuleFederationApi: IFederationApi {}
+pub trait IModuleFederationApi: IRawFederationApi {}
 
 dyn_newtype_define! {
     #[derive(Clone)]
     pub DynModuleApi(Arc<IModuleFederationApi>)
 }
-
-/// Trait marker for the global (non-module) endpoints
-pub trait IGlobalFederationApi: IFederationApi {}
 
 dyn_newtype_define! {
     #[derive(Clone)]
@@ -399,9 +397,36 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
     }
 }
 
+impl DynGlobalApi {
+    pub async fn await_output_outcome<R>(
+        &self,
+        outpoint: OutPoint,
+        timeout: Duration,
+        module_decoder: &Decoder,
+    ) -> OutputOutcomeResult<R>
+    where
+        R: OutputOutcome,
+    {
+        fedimint_core::task::timeout(timeout, async move {
+            let outcome: SerdeOutputOutcome = self
+                .inner
+                .request_current_consensus(
+                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                    ApiRequestErased::new(outpoint),
+                )
+                .await
+                .map_err(OutputOutcomeError::Federation)?;
+
+            deserialize_outcome(outcome, module_decoder)
+        })
+        .await
+        .map_err(|_| OutputOutcomeError::Timeout(timeout))?
+    }
+}
+
 /// The API for the global (non-module) endpoints
 #[apply(async_trait_maybe_send!)]
-pub trait GlobalFederationApi {
+pub trait IGlobalFederationApi: IRawFederationApi {
     async fn submit_transaction(
         &self,
         tx: Transaction,
@@ -416,15 +441,6 @@ pub trait GlobalFederationApi {
     async fn session_count(&self) -> FederationResult<u64>;
 
     async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId>;
-
-    async fn await_output_outcome<R>(
-        &self,
-        outpoint: OutPoint,
-        timeout: Duration,
-        module_decoder: &Decoder,
-    ) -> OutputOutcomeResult<R>
-    where
-        R: OutputOutcome;
 
     /// Fetch client configuration info only if verified against a federation id
     async fn download_client_config(&self, info: &InviteCode) -> FederationResult<ClientConfig>;
@@ -467,11 +483,116 @@ where
     })
 }
 
-#[apply(async_trait_maybe_send!)]
-impl<T: ?Sized> GlobalFederationApi for T
+/// [`IGlobalFederationApi`] wrapping some `T: IRawFederationApi` and adding
+/// a tiny bit of caching.
+#[derive(Debug)]
+pub struct GlobalFederationApiWithCache<T> {
+    inner: T,
+    /// Small LRU used as [`IGlobalFederationApi::await_block`] cache.
+    ///
+    /// This is mostly to avoid multiple client module recovery processes
+    /// re-requesting same blocks and putting burden on the federation.
+    ///
+    /// The LRU can be be fairly small, as if the modules are
+    /// (near-)bottlenecked on fetching blocks they will naturally
+    /// synchronize, or split into a handful of groups. And if they are not,
+    /// no LRU here is going to help them.
+    #[allow(clippy::type_complexity)]
+    await_block_lru: Arc<
+        tokio::sync::Mutex<lru::LruCache<u64, Arc<tokio::sync::Mutex<Option<SessionOutcome>>>>>,
+    >,
+}
+
+impl<T> GlobalFederationApiWithCache<T> {
+    pub fn new(inner: T) -> GlobalFederationApiWithCache<T> {
+        Self {
+            inner,
+            await_block_lru: Arc::new(tokio::sync::Mutex::new(lru::LruCache::new(
+                NonZeroUsize::new(32).expect("is non-zero"),
+            ))),
+        }
+    }
+}
+
+impl<T> GlobalFederationApiWithCache<T>
 where
-    T: IGlobalFederationApi + MaybeSend + MaybeSync + 'static,
+    T: IRawFederationApi + MaybeSend + MaybeSync + 'static,
 {
+    async fn await_block_raw(
+        &self,
+        block_index: u64,
+        decoders: &ModuleDecoderRegistry,
+    ) -> anyhow::Result<SessionOutcome> {
+        debug!(block_index, "Fetching block's outcome from Federation");
+        self.request_current_consensus::<SerdeModuleEncoding<SessionOutcome>>(
+            AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
+            ApiRequestErased::new(block_index),
+        )
+        .await?
+        .try_into_inner(decoders)
+        .map_err(|e| anyhow!(e.to_string()))
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<T> IRawFederationApi for GlobalFederationApiWithCache<T>
+where
+    T: IRawFederationApi + MaybeSend + MaybeSync + 'static,
+{
+    fn all_peers(&self) -> &BTreeSet<PeerId> {
+        self.inner.all_peers()
+    }
+
+    fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
+        self.inner.with_module(id)
+    }
+
+    /// Make request to a specific federation peer by `peer_id`
+    async fn request_raw(
+        &self,
+        peer_id: PeerId,
+        method: &str,
+        params: &[Value],
+    ) -> result::Result<Value, JsonRpcClientError> {
+        self.inner.request_raw(peer_id, method, params).await
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<T> IGlobalFederationApi for GlobalFederationApiWithCache<T>
+where
+    T: IRawFederationApi + MaybeSend + MaybeSync + 'static,
+{
+    async fn await_block(
+        &self,
+        block_index: u64,
+        decoders: &ModuleDecoderRegistry,
+    ) -> anyhow::Result<SessionOutcome> {
+        let mut lru_lock = self.await_block_lru.lock().await;
+
+        let block_entry_arc = lru_lock
+            .get_or_insert(block_index, || Arc::new(tokio::sync::Mutex::new(None)))
+            .clone();
+
+        // we drop the lru lock so requests for other `block_index` can work in parallel
+        drop(lru_lock);
+
+        // but multiple request for the same `block_index` will serialize on the
+        // per-index lock, avoiding doing the same work
+        let mut block_lock = block_entry_arc.lock().await;
+
+        if let Some(cached_res) = block_lock.clone() {
+            debug!(block_index, "Using a cached await_block response");
+            return Ok(cached_res);
+        }
+
+        let block = self.await_block_raw(block_index, decoders).await?;
+
+        *block_lock = Some(block.clone());
+
+        Ok(block)
+    }
+
     /// Submit a transaction for inclusion
     async fn submit_transaction(
         &self,
@@ -482,20 +603,6 @@ where
             ApiRequestErased::new(&SerdeTransaction::from(&tx)),
         )
         .await
-    }
-
-    async fn await_block(
-        &self,
-        block_index: u64,
-        decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<SessionOutcome> {
-        self.request_current_consensus::<SerdeModuleEncoding<SessionOutcome>>(
-            AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
-            ApiRequestErased::new(block_index),
-        )
-        .await?
-        .try_into_inner(decoders)
-        .map_err(|e| anyhow!(e.to_string()))
     }
 
     async fn session_count(&self) -> FederationResult<u64> {
@@ -512,31 +619,6 @@ where
             ApiRequestErased::new(txid),
         )
         .await
-    }
-
-    // TODO should become part of the API
-    async fn await_output_outcome<R>(
-        &self,
-        outpoint: OutPoint,
-        timeout: Duration,
-        module_decoder: &Decoder,
-    ) -> OutputOutcomeResult<R>
-    where
-        R: OutputOutcome,
-    {
-        fedimint_core::task::timeout(timeout, async move {
-            let outcome: SerdeOutputOutcome = self
-                .request_current_consensus(
-                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
-                    ApiRequestErased::new(outpoint),
-                )
-                .await
-                .map_err(OutputOutcomeError::Federation)?;
-
-            deserialize_outcome(outcome, module_decoder)
-        })
-        .await
-        .map_err(|_| OutputOutcomeError::Timeout(timeout))?
     }
 
     async fn download_client_config(
@@ -806,15 +888,13 @@ impl<'de> Deserialize<'de> for InviteCode {
     }
 }
 
-impl<C: JsonRpcClient + Debug + 'static> IGlobalFederationApi for WsFederationApi<C> {}
-
 impl<C: JsonRpcClient + Debug + 'static> IModuleFederationApi for WsFederationApi<C> {}
 
 /// Implementation of API calls over websockets
 ///
 /// Can function as either the global or module API
 #[apply(async_trait_maybe_send!)]
-impl<C: JsonRpcClient + Debug + 'static> IFederationApi for WsFederationApi<C> {
+impl<C: JsonRpcClient + Debug + 'static> IRawFederationApi for WsFederationApi<C> {
     fn all_peers(&self) -> &BTreeSet<PeerId> {
         &self.peer_ids
     }

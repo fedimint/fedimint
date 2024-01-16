@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls;
 
 use crate::api::{
-    DynGlobalApi, FederationApiExt, FederationResult, ServerStatus, StatusResponse, WsFederationApi,
+    DynGlobalApi, FederationApiExt, FederationResult, GlobalFederationApiWithCache, ServerStatus,
+    StatusResponse, WsFederationApi,
 };
 use crate::config::ServerModuleConfigGenParamsRegistry;
 use crate::endpoint_constants::{
@@ -35,7 +36,11 @@ impl WsAdminClient {
         // multiple peers so errors can be attributed. The admin client has no use for
         // them.
         Self {
-            inner: WsFederationApi::new(vec![(PeerId(0), url.clone())]).into(),
+            inner: GlobalFederationApiWithCache::new(WsFederationApi::new(vec![(
+                PeerId(0),
+                url.clone(),
+            )]))
+            .into(),
             url,
         }
     }

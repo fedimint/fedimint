@@ -3,7 +3,6 @@ use std::time::Duration;
 use bitcoin::Txid;
 use fedimint_client::sm::{State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
