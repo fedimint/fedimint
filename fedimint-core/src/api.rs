@@ -81,18 +81,23 @@ pub enum PeerError {
 impl PeerError {
     pub fn is_retryable(&self) -> bool {
         match self {
-            PeerError::ResponseDeserialization(_) => false,
+            PeerError::ResponseDeserialization(_) => true,
             PeerError::InvalidPeerId { peer_id: _ } => false,
             PeerError::Rpc(rpc_e) => match rpc_e {
-                // TODO: Does this cover all retryable cases?
                 JsonRpcClientError::Transport(_) => true,
                 JsonRpcClientError::MaxSlotsExceeded => true,
                 JsonRpcClientError::RequestTimeout => true,
                 JsonRpcClientError::RestartNeeded(_) => true,
-                JsonRpcClientError::Call(e) => e.code() == 404,
-                _ => false,
+                JsonRpcClientError::Call(_) => true,
+                JsonRpcClientError::ParseError(_) => true,
+                JsonRpcClientError::InvalidSubscriptionId => true,
+                JsonRpcClientError::InvalidRequestId(_) => true,
+                JsonRpcClientError::Custom(_) => true,
+                JsonRpcClientError::HttpNotImplemented => true,
+                JsonRpcClientError::EmptyBatchRequest(_) => true,
+                JsonRpcClientError::RegisterMethod(_) => true,
             },
-            PeerError::InvalidResponse(_) => false,
+            PeerError::InvalidResponse(_) => true,
         }
     }
 }
