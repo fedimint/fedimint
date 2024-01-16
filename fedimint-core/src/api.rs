@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::{Cursor, Read};
+use std::num::NonZeroUsize;
 use std::ops::Add;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -36,6 +37,7 @@ use jsonrpsee_core::client::{ClientT, Error as JsonRpcClientError};
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 #[cfg(not(target_family = "wasm"))]
 use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -410,6 +412,22 @@ where
     })
 }
 
+lazy_static! {
+    /// Small LRU used as `GlobalFederatinApi::await_block` cache.
+    ///
+    /// This is mostly to avoid multiple client module recovery processes
+    /// re-requesting same blocks and putting burden on the federation.
+    ///
+    /// The LRU can be be fairly small, as if the modules are (near-)bottlenecked
+    /// on fetching blocks they will naturally synchronize, or split into
+    /// a handful of groups. And if they are not, no LRU here is going to help
+    /// them.
+    static ref API_AWAIT_BLOCK_LRU: tokio::sync::Mutex<lru::LruCache<u64, Arc<tokio::sync::Mutex<Option<SessionOutcome>>>>> =
+        tokio::sync::Mutex::new(lru::LruCache::new(
+            NonZeroUsize::new(32).expect("is non-zero")
+        ));
+}
+
 #[apply(async_trait_maybe_send!)]
 impl<T: ?Sized> GlobalFederationApi for T
 where
@@ -432,13 +450,36 @@ where
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<SessionOutcome> {
-        self.request_current_consensus::<SerdeModuleEncoding<SessionOutcome>>(
-            AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
-            ApiRequestErased::new(block_index),
-        )
-        .await?
-        .try_into_inner(decoders)
-        .map_err(|e| anyhow!(e.to_string()))
+        let mut lru_lock = API_AWAIT_BLOCK_LRU.lock().await;
+
+        let block_entry_arc = lru_lock
+            .get_or_insert(block_index, || Arc::new(tokio::sync::Mutex::new(None)))
+            .clone();
+
+        // we drop the lru lock so requests for other `block_index` can work in parallel
+        drop(lru_lock);
+
+        // but multiple request for the same `block_index` will serialize on the
+        // per-index lock, avoiding doing the same work
+        let mut block_lock = block_entry_arc.lock().await;
+
+        if let Some(cached_res) = block_lock.clone() {
+            debug!(block_index, "Using a cached await_block response");
+            return Ok(cached_res);
+        }
+
+        let block = self
+            .request_current_consensus::<SerdeModuleEncoding<SessionOutcome>>(
+                AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
+                ApiRequestErased::new(block_index),
+            )
+            .await?
+            .try_into_inner(decoders)
+            .map_err(|e| anyhow!(e.to_string()))?;
+
+        *block_lock = Some(block.clone());
+
+        Ok(block)
     }
 
     async fn session_count(&self) -> FederationResult<u64> {

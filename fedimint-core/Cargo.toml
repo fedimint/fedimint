@@ -24,6 +24,8 @@ bech32 = "0.9.1"
 itertools = "0.10.5"
 jsonrpsee-types = { version = "0.21.0" }
 jsonrpsee-core = { version = "0.21.0", features = [ "client" ] }
+lazy_static = "1.4.0"
+lru = "0.12.1"
 serde = { version = "1.0.149", features = [ "derive" ] }
 serde_json = "1.0.91"
 strum = "0.24"
