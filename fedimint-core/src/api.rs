@@ -412,6 +412,7 @@ where
     })
 }
 
+#[cfg(not(target_family = "wasm"))]
 lazy_static! {
     /// Small LRU used as `GlobalFederatinApi::await_block` cache.
     ///
@@ -445,6 +446,7 @@ where
         .await
     }
 
+    #[cfg(not(target_family = "wasm"))]
     async fn await_block(
         &self,
         block_index: u64,
@@ -480,6 +482,21 @@ where
         *block_lock = Some(block.clone());
 
         Ok(block)
+    }
+
+    #[cfg(target_family = "wasm")]
+    async fn await_block(
+        &self,
+        block_index: u64,
+        decoders: &ModuleDecoderRegistry,
+    ) -> anyhow::Result<SessionOutcome> {
+        self.request_current_consensus::<SerdeModuleEncoding<SessionOutcome>>(
+            AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
+            ApiRequestErased::new(block_index),
+        )
+        .await?
+        .try_into_inner(decoders)
+        .map_err(|e| anyhow!(e.to_string()))
     }
 
     async fn session_count(&self) -> FederationResult<u64> {
