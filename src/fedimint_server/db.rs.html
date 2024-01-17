@@ -424,7 +424,7 @@
     /// in future code versions. This function should not be updated when
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
-    </span><span class="kw">async fn </span>create_db_with_v0_data(<span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
+    </span><span class="kw">async fn </span>create_server_db_with_v0_data(<span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
         <span class="kw">let </span>accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(<span class="kw-2">&amp;</span>BYTE_32).unwrap());
 
         <span class="kw">let </span>(sk, <span class="kw">_</span>) = secp256k1::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
@@ -483,12 +483,12 @@
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
-    </span><span class="kw">async fn </span>prepare_db_migration_snapshots() -&gt; anyhow::Result&lt;()&gt; {
+    </span><span class="kw">async fn </span>prepare_server_db_migration_snapshots() -&gt; anyhow::Result&lt;()&gt; {
         prepare_db_migration_snapshot(
-            <span class="string">&quot;global-v0&quot;</span>,
+            <span class="string">&quot;fedimint-server-v0&quot;</span>,
             |dbtx| {
                 Box::pin(<span class="kw">async move </span>{
-                    create_db_with_v0_data(dbtx).<span class="kw">await</span>;
+                    create_server_db_with_v0_data(dbtx).<span class="kw">await</span>;
                 })
             },
             ModuleDecoderRegistry::from_iter([(
@@ -503,7 +503,7 @@
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_migrations() -&gt; anyhow::Result&lt;()&gt; {
         validate_migrations(
-            <span class="string">&quot;global&quot;</span>,
+            <span class="string">&quot;fedimint-server&quot;</span>,
             |db| <span class="kw">async move </span>{
                 apply_migrations(
                     <span class="kw-2">&amp;</span>db,
