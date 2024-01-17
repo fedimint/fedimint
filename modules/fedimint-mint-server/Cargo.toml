@@ -37,11 +37,9 @@ tbs = { package = "fedimint-tbs", version = "0.3.0-alpha", path = "../../crypto/
 thiserror = "1.0.39"
 threshold_crypto = { workspace = true }
 tracing ="0.1.37"
-impl-tools = "0.8.0"
 fedimint-server = { version = "0.3.0-alpha", path = "../../fedimint-server" }
 
 [dev-dependencies]
-fedimint-testing = { path = "../../fedimint-testing" }
 rand = "0.8"
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 tokio = {version = "1.26.0", features = [ "full" ] }

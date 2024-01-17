@@ -36,13 +36,13 @@ final-check: lint
 check-wasm:
   nix develop .#crossWasm -c cargo check --target wasm32-unknown-unknown --package fedimint-client
 
-# regenerate migration snapshots
-# ex: `just prepare_db_migration_snapshots fedimint-server`
-# ex: `just prepare_db_migration_snapshots fedimint-mint-server`
-# ex: `just prepare_db_migration_snapshots fedimint-ln-server`
-# ex: `just prepare_db_migration_snapshots fedimint-wallet-server`
-prepare_db_migration_snapshots +extra_args:
-  env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo test ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -p {{extra_args}} prepare_db_migration_snapshots
+# regenerate server db migration snapshots
+# ex: `just prepare_server_db_migration_snapshots fedimint-server`
+# ex: `just prepare_server_db_migration_snapshots fedimint-mint-tests`
+# ex: `just prepare_server_db_migration_snapshots fedimint-ln-tests`
+# ex: `just prepare_server_db_migration_snapshots fedimint-wallet-tests`
+prepare_server_db_migration_snapshots +extra_args:
+  env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo test ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -p {{extra_args}} prepare_server_db_migration_snapshots
 
 # start mprocs with a dev federation setup. Default: 4 nodes, add `-n 1` argument to start only 1 node
 mprocs *PARAMS:

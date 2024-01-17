@@ -131,7 +131,7 @@ mod fedimint_migration_tests {
     /// in future code versions. This function should not be updated when
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
-    async fn create_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
+    async fn create_server_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
         let accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(&BYTE_32).unwrap());
 
         let (sk, _) = secp256k1::generate_keypair(&mut OsRng);
@@ -190,12 +190,12 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn prepare_db_migration_snapshots() -> anyhow::Result<()> {
+    async fn prepare_server_db_migration_snapshots() -> anyhow::Result<()> {
         prepare_db_migration_snapshot(
-            "global-v0",
+            "fedimint-server-v0",
             |dbtx| {
                 Box::pin(async move {
-                    create_db_with_v0_data(dbtx).await;
+                    create_server_db_with_v0_data(dbtx).await;
                 })
             },
             ModuleDecoderRegistry::from_iter([(
@@ -210,7 +210,7 @@ mod fedimint_migration_tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_migrations() -> anyhow::Result<()> {
         validate_migrations(
-            "global",
+            "fedimint-server",
             |db| async move {
                 apply_migrations(
                     &db,

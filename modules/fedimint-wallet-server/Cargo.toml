@@ -39,6 +39,5 @@ validator = { version = "0.16", features = ["derive"] }
 fedimint-server = { version = "0.3.0-alpha", path = "../../fedimint-server" }
 
 [dev-dependencies]
-fedimint-testing = { path = "../../fedimint-testing" }
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 tokio = { version = "1.26.0", features = ["full"] }
