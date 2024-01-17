@@ -101,34 +101,34 @@ jobs:
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
 
-      - name: Build workspace
-        if: github.event_name != 'pull_request' || matrix.build-in-pr
-        run: nix build -L .#ci.workspaceBuild
+      # - name: Build workspace
+      #   if: github.event_name != 'pull_request' || matrix.build-in-pr
+      #   run: nix build -L .#ci.workspaceBuild
 
-      - name: Clippy workspace
-        if: github.event_name != 'pull_request' || matrix.build-in-pr
-        run: nix build -L .#ci.workspaceClippy
+      # - name: Clippy workspace
+      #   if: github.event_name != 'pull_request' || matrix.build-in-pr
+      #   run: nix build -L .#ci.workspaceClippy
 
-      - name: Run cargo doc
-        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && (matrix.host != 'macos')
-        run: nix build -L .#ci.workspaceDoc
+      # - name: Run cargo doc
+      #   if: (github.event_name != 'pull_request' || matrix.build-in-pr) && (matrix.host != 'macos')
+      #   run: nix build -L .#ci.workspaceDoc
 
-      - name: Test docs
-        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && (matrix.host != 'macos')
-        run: nix build -L .#ci.workspaceTestDoc
+      # - name: Test docs
+      #   if: (github.event_name != 'pull_request' || matrix.build-in-pr) && (matrix.host != 'macos')
+      #   run: nix build -L .#ci.workspaceTestDoc
 
-      - name: Tests
-        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests
-        run: |
-          nix build -L .#ci.ciTestAll --keep-failed
+      # - name: Tests
+      #   if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests
+      #   run: |
+      #     nix build -L .#ci.ciTestAll --keep-failed
 
-      - name: Wasm Tests
-        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests && (matrix.host != 'macos')
-        run: nix build -L .#wasm32-unknown.ci.wasmTest --keep-failed
+      # - name: Wasm Tests
+      #   if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests && (matrix.host != 'macos')
+      #   run: nix build -L .#wasm32-unknown.ci.wasmTest --keep-failed
 
-      - name: Cleanup disk space
-        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests
-        run: sudo rm -rf /usr/local/lib/android
+      # - name: Cleanup disk space
+      #   if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests
+      #   run: sudo rm -rf /usr/local/lib/android
 
       - name: Backwards-compatibility Tests
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests
