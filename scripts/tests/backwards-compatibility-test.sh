@@ -70,6 +70,8 @@ for fed_version in "${versions[@]}"; do
       >&2 echo "fed version: $fed_version"
       >&2 echo "client version: $client_version"
       >&2 echo "gateway version: $gateway_version"
+      >&2 df -h
+      >&2 nix run nixpkgs#du-dust /
 
       # continue running against other versions if there's a failure
       set +e
@@ -83,6 +85,8 @@ for fed_version in "${versions[@]}"; do
       >&2 echo "fed version: $fed_version"
       >&2 echo "client version: $client_version"
       >&2 echo "gateway version: $gateway_version"
+      >&2 df -h
+      >&2 nix run nixpkgs#du-dust /
     done
   done
 done
