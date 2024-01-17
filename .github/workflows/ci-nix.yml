@@ -126,6 +126,9 @@ jobs:
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests && (matrix.host != 'macos')
         run: nix build -L .#wasm32-unknown.ci.wasmTest --keep-failed
 
+      - name: Cleanup disk space
+        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests
+        run: sudo rm -rf /usr/local/lib/android
 
       - name: Backwards-compatibility Tests
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests
