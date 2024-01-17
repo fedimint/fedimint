@@ -81,6 +81,10 @@ for fed_version in "${versions[@]}"; do
       test_results="$test_results$fed_version,$client_version,$gateway_version,$exit_code\n"
       [[ "$exit_code" -gt 0 ]] && has_failure=true
 
+      # cleanup devimint
+      tmpdir=$(dirname "$(mktemp -u)")
+      rm -rf "$tmpdir"/devimint-*
+
       >&2 echo "========== Finished backwards-compatibility run ==========="
       >&2 echo "fed version: $fed_version"
       >&2 echo "client version: $client_version"
