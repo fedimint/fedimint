@@ -1763,6 +1763,17 @@ impl ClientBuilder {
         Ok(client)
     }
 
+    /// Join a new Federation
+    ///
+    /// **Warning**: Calling `join` with a `root_secret` key that was used
+    /// previous to `join` a Federation will lead to all sorts of malfunctions
+    /// including likely loss of funds.
+    ///
+    /// This should be generally called only if the `root_secret` key is known
+    /// not to have been used before (e.g. just randomly generated). For keys
+    /// that might have been previous used (e.g. provided by the user),
+    /// it's safer to call [`Self::recover`] which will attempt to recover
+    /// client module states for the Federation.
     pub async fn join(
         self,
         root_secret: DerivableSecret,
@@ -1773,6 +1784,16 @@ impl ClientBuilder {
             .await
     }
 
+    /// Join a (possibly) previous joined Federation
+    ///
+    /// Unlike [`Self::join`], `recover` will run client module recovery for
+    /// each client module attempting to recover any previous module state.
+    ///
+    /// Recovery process takes time during which each recovering client module
+    /// will not be available for use.
+    ///
+    /// Calling `recovery` with a `root_secret` that was not actually previous
+    /// used in a given Federation is safe.
     pub async fn recover(
         self,
         root_secret: DerivableSecret,
