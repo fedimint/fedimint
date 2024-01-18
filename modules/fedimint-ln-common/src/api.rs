@@ -39,7 +39,7 @@ pub trait LnFederationApi {
     /// Await fedration consensus on a lightning module [`ContractAccount`]
     async fn wait_contract(&self, contract: ContractId) -> FederationResult<ContractAccount>;
     /// Fetch [`OutgoingContractAccount`] for a given contract ID
-    async fn get_outgoing_contract(
+    async fn fetch_outgoing_contract(
         &self,
         id: ContractId,
     ) -> FederationResult<OutgoingContractAccount>;
@@ -68,7 +68,7 @@ pub trait LnFederationApi {
     /// Check whether [`IncomingContractOffer`] exists
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool>;
     /// Fetch [`IncomingContractAccount`] for a given contract ID
-    async fn get_incoming_contract(
+    async fn fetch_incoming_contract(
         &self,
         id: ContractId,
     ) -> FederationResult<IncomingContractAccount>;
@@ -204,7 +204,7 @@ where
             .is_some())
     }
 
-    async fn get_incoming_contract(
+    async fn fetch_incoming_contract(
         &self,
         id: ContractId,
     ) -> FederationResult<IncomingContractAccount> {
@@ -220,7 +220,7 @@ where
         }
     }
 
-    async fn get_outgoing_contract(
+    async fn fetch_outgoing_contract(
         &self,
         id: ContractId,
     ) -> FederationResult<OutgoingContractAccount> {

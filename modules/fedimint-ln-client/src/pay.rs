@@ -182,7 +182,7 @@ impl LightningPayCreatedOutgoingLnContract {
         let contract = loop {
             match global_context
                 .module_api()
-                .get_outgoing_contract(contract_id)
+                .fetch_outgoing_contract(contract_id)
                 .await
             {
                 Ok(contract) => {
