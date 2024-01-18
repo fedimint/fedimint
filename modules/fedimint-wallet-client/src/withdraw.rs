@@ -87,7 +87,8 @@ async fn await_withdraw_processed(
                     .map(|outcome| outcome.0)
                     .map_err(|e| e.to_string())
             }
-            Err(OutputOutcomeError::Federation(e)) if e.is_retryable() => {
+            Err(OutputOutcomeError::Federation(e)) => {
+                e.report_if_important();
                 debug!(
                     "Awaiting output outcome failed, retrying in {}s",
                     RETRY_DELAY.as_secs_f64()

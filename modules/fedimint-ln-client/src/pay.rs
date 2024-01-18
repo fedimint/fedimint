@@ -5,7 +5,7 @@ use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
+use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -166,15 +166,16 @@ impl LightningPayCreatedOutgoingLnContract {
                 .await
             {
                 Ok(_) => break,
-                Err(OutputOutcomeError::Federation(e)) if e.is_retryable() => {
+                Err(e) if e.is_rejected() => {
+                    return Err(GatewayPayError::OutgoingContractError);
+                }
+                Err(e) => {
+                    e.report_if_important();
                     debug!(
                         "Awaiting output outcome failed, retrying in {}s",
                         RETRY_DELAY.as_secs_f64()
                     );
                     sleep(RETRY_DELAY).await;
-                }
-                Err(_) => {
-                    return Err(GatewayPayError::OutgoingContractError);
                 }
             }
         }
@@ -188,15 +189,13 @@ impl LightningPayCreatedOutgoingLnContract {
                 Ok(contract) => {
                     break contract;
                 }
-                Err(e) if e.is_retryable() => {
+                Err(e) => {
+                    e.report_if_important();
                     debug!(
                         "Fetching contract failed, retrying in {}s",
                         RETRY_DELAY.as_secs_f64()
                     );
                     sleep(RETRY_DELAY).await;
-                }
-                Err(_) => {
-                    return Err(GatewayPayError::OutgoingContractError);
                 }
             }
         };

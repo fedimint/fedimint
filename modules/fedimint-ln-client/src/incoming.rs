@@ -14,7 +14,7 @@ use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
+use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
@@ -169,21 +169,19 @@ impl FundingOfferState {
                 )
                 .await
             {
-                Err(OutputOutcomeError::Timeout(_)) => {
-                    info!("Temporarily funding timeout for outpoint: {out_point:?}, will retry again in {sleep}s");
-                }
                 Ok(_) => {
                     debug!("Funding success for outpoint: {out_point:?}");
                     return Ok(());
                 }
-                Err(OutputOutcomeError::Federation(e)) if e.is_retryable() => {
-                    debug!("Awaiting output outcome failed, retrying in {sleep}s",);
-                }
-                Err(e) => {
+                Err(e) if e.is_rejected() => {
                     warn!("Funding failed for outpoint: {out_point:?}: {e:?}");
                     return Err(IncomingSmError::FailedToFundContract {
                         error_message: e.to_string(),
                     });
+                }
+                Err(e) => {
+                    e.report_if_important();
+                    debug!(error = %e, "Awaiting output outcome failed, retrying in {sleep}s",);
                 }
             }
             // give some time for other things to run

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use fedimint_client::sm::{DynState, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
+use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -115,17 +115,15 @@ async fn await_dummy_output_outcome(
             Ok(_) => {
                 return Ok(());
             }
-            Err(OutputOutcomeError::Federation(e)) if e.is_retryable() => {
-                debug!(
-                    "Awaiting output outcome failed, retrying in {}s",
-                    RETRY_DELAY.as_secs_f64()
-                );
-                sleep(RETRY_DELAY).await;
-            }
-            Err(_) => {
+            Err(e) if e.is_rejected() => {
                 return Err(DummyError::DummyInternalError);
             }
+            Err(e) => {
+                e.report_if_important();
+                debug!(error = %e, "Awaiting output outcome failed, retrying");
+            }
         }
+        sleep(RETRY_DELAY).await;
     }
 }
 

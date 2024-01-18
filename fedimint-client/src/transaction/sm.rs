@@ -8,7 +8,6 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::TransactionId;
-use tracing::warn;
 
 use crate::sm::{Context, DynContext, OperationState, State, StateTransition};
 use crate::{DynGlobalClientContext, DynState};
@@ -139,11 +138,7 @@ async fn trigger_created_rejected(
                 }
             }
             Err(error) => {
-                if !error.is_retryable() {
-                    warn!(target: LOG_TARGET, ?error, "Federation returned non-retryable error");
-
-                    return Err(error.to_string());
-                }
+                error.report_if_important();
             }
         }
 
@@ -158,13 +153,7 @@ async fn trigger_created_accepted(
     loop {
         match context.api().await_transaction(txid).await {
             Ok(..) => return Ok(()),
-            Err(error) => {
-                if !error.is_retryable() {
-                    warn!(target: LOG_TARGET, ?error, "Federation returned non-retryable error");
-
-                    return Err(error.to_string());
-                }
-            }
+            Err(error) => error.report_if_important(),
         }
 
         sleep(RETRY_INTERVAL).await;
