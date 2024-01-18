@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -22,43 +23,59 @@ use crate::contracts::outgoing::OutgoingContractAccount;
 use crate::contracts::{ContractId, DecryptedPreimageStatus, FundedContract, Preimage};
 use crate::{ContractAccount, LightningGateway, LightningGatewayAnnouncement};
 
+/// Trait defining all JSON-RPC commands that can be made to lightning module
+/// RPC server
 #[apply(async_trait_maybe_send!)]
 pub trait LnFederationApi {
+    /// Fetch consensus block height of lightning module
     async fn fetch_consensus_block_count(&self) -> FederationResult<Option<u64>>;
+    /// Fetch a lightning module [`ContractAccount`] by ID
     async fn fetch_contract(
         &self,
         contract: ContractId,
     ) -> FederationResult<Option<ContractAccount>>;
+    /// Await fedration consensus on a lightning module [`ContractAccount`]
     async fn wait_contract(&self, contract: ContractId) -> FederationResult<ContractAccount>;
+    /// Wait for a consensus block height to be reached
     async fn wait_block_height(&self, block_height: u64) -> FederationResult<()>;
+    /// Wait for the lightning gateway to successfully user client escrow
+    /// contract for failed outgoing payment
     async fn wait_outgoing_contract_cancelled(
         &self,
         contract: ContractId,
     ) -> FederationResult<ContractAccount>;
+    /// Check whether a threshold-decrypted preimage has been decrypted, is
+    /// being decrypted, or hasn't started decryption yet.
     async fn get_decrypted_preimage_status(
         &self,
         contract: ContractId,
     ) -> FederationResult<(IncomingContractAccount, DecryptedPreimageStatus)>;
+    /// Waits for preimage decryption to complete
     async fn wait_preimage_decrypted(
         &self,
         contract: ContractId,
     ) -> FederationResult<(IncomingContractAccount, Option<Preimage>)>;
+    /// Fetch an [`IncomingContractOffer`]
     async fn fetch_offer(
         &self,
         payment_hash: Sha256Hash,
     ) -> FederationResult<IncomingContractOffer>;
+    /// Fetch set of all lightning gateways who have registered with any
+    /// guardian in the federation
     async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGatewayAnnouncement>>;
+    /// Register a lightning gateway with each guardian in the federation
     async fn register_gateway(
         &self,
         gateway: &LightningGatewayAnnouncement,
     ) -> FederationResult<()>;
+    /// Check whether [`IncomingContractOffer`] exists
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool>;
-
+    /// Fetch [`IncomingContractAccount`] for a given contract ID
     async fn get_incoming_contract(
         &self,
         id: ContractId,
     ) -> FederationResult<IncomingContractAccount>;
-
+    /// Fetch [`OutgoingContractAccount`] for a given contract ID
     async fn get_outgoing_contract(
         &self,
         id: ContractId,

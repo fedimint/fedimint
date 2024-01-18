@@ -9,6 +9,7 @@
 
 extern crate core;
 
+/// JSON-RPC API client for lightning module
 pub mod api;
 pub mod config;
 pub mod contracts;
