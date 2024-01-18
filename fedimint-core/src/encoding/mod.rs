@@ -1088,7 +1088,7 @@ mod tests {
 
         match decode_res {
             Ok(_) => panic!("Should return error"),
-            Err(e) => assert!(e.to_string().contains("invalid enum variant")),
+            Err(e) => assert!(e.to_string().contains("Invalid enum variant")),
         }
     }
 
