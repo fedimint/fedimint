@@ -205,9 +205,7 @@ impl MintOutputStatesCreated {
             {
                 Ok(outcome) => return Ok(outcome),
                 Err(error) => {
-                    if !error.is_retryable() {
-                        return Err(error.to_string());
-                    }
+                    error.report_if_important();
 
                     trace!(
                         "Awaiting outcome to become ready failed, retrying in {}s: {error}",

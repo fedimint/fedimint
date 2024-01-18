@@ -39,7 +39,7 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use tracing::{debug, error, instrument, trace};
+use tracing::{debug, error, instrument, trace, warn};
 
 use crate::backup::ClientBackupSnapshot;
 use crate::core::backup::SignedBackupRequest;
@@ -79,25 +79,44 @@ pub enum PeerError {
 }
 
 impl PeerError {
-    pub fn is_retryable(&self) -> bool {
-        match self {
-            PeerError::ResponseDeserialization(_) => false,
-            PeerError::InvalidPeerId { peer_id: _ } => false,
+    /// Report errors that are worth reporting
+    ///
+    /// The goal here is to avoid spamming logs with errors that happen commonly
+    /// for all sorts of expected reasons, while printing ones that suggest
+    /// there's a problem.
+    pub fn report_if_important(&self, peer_id: PeerId) {
+        let important = match self {
+            PeerError::ResponseDeserialization(_) => true,
+            PeerError::InvalidPeerId { peer_id: _ } => true,
             PeerError::Rpc(rpc_e) => match rpc_e {
                 // TODO: Does this cover all retryable cases?
-                JsonRpcClientError::Transport(_) => true,
+                JsonRpcClientError::Transport(_) => false,
                 JsonRpcClientError::MaxSlotsExceeded => true,
-                JsonRpcClientError::RequestTimeout => true,
+                JsonRpcClientError::RequestTimeout => false,
                 JsonRpcClientError::RestartNeeded(_) => true,
                 JsonRpcClientError::Call(_) => true,
-                _ => false,
+                JsonRpcClientError::ParseError(_) => true,
+                JsonRpcClientError::InvalidSubscriptionId => true,
+                JsonRpcClientError::InvalidRequestId(_) => true,
+                JsonRpcClientError::Custom(_) => true,
+                JsonRpcClientError::HttpNotImplemented => true,
+                JsonRpcClientError::EmptyBatchRequest(_) => true,
+                JsonRpcClientError::RegisterMethod(_) => true,
             },
-            PeerError::InvalidResponse(_) => false,
+            PeerError::InvalidResponse(_) => true,
+        };
+
+        trace!(target: LOG_CLIENT_NET_API, error = %self, "PeerError");
+
+        if important {
+            warn!(target: LOG_CLIENT_NET_API, error = %self, %peer_id, "Unusual PeerError")
         }
     }
 }
 
 /// An API request error when calling an entire federation
+///
+/// Generally all Federation errors are retriable.
 #[derive(Debug, Error)]
 pub struct FederationError {
     general: Option<anyhow::Error>,
@@ -132,8 +151,14 @@ impl FederationError {
         }
     }
 
-    pub fn is_retryable(&self) -> bool {
-        self.peers.iter().any(|(_, e)| e.is_retryable())
+    /// Report any errors
+    pub fn report_if_important(&self) {
+        if let Some(error) = self.general.as_ref() {
+            warn!(target: LOG_CLIENT_NET_API, %error, "General FederationError");
+        }
+        for (peer_id, e) in &self.peers {
+            e.report_if_important(*peer_id)
+        }
     }
 }
 
@@ -155,6 +180,38 @@ pub enum OutputOutcomeError {
     Timeout(Duration),
 }
 
+impl OutputOutcomeError {
+    pub fn report_if_important(&self) {
+        let important = match self {
+            OutputOutcomeError::ResponseDeserialization(_) => true,
+            OutputOutcomeError::Federation(e) => {
+                e.report_if_important();
+                return;
+            }
+            OutputOutcomeError::Core(_) => true,
+            OutputOutcomeError::Rejected(_) => false,
+            OutputOutcomeError::InvalidVout {
+                out_idx: _,
+                outputs_num: _,
+            } => true,
+            OutputOutcomeError::Timeout(_) => false,
+        };
+
+        trace!(target: LOG_CLIENT_NET_API, error = %self, "OutputOutcomeError");
+
+        if important {
+            warn!(target: LOG_CLIENT_NET_API, error = %self, "Uncommon OutputOutcomeError");
+        }
+    }
+
+    /// Was the transaction rejected (which is final)
+    pub fn is_rejected(&self) -> bool {
+        matches!(
+            self,
+            OutputOutcomeError::Rejected(_) | OutputOutcomeError::InvalidVout { .. }
+        )
+    }
+}
 /// An API (module or global) that can query a federation
 #[apply(async_trait_maybe_send!)]
 pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
