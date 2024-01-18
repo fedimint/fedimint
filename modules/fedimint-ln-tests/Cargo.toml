@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-ln-tests"
-version = "0.2.2-rc1"
+version = "0.2.2-rc2"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-ln-tests contains integration tests for the lightning module"
