@@ -29,6 +29,8 @@ use crate::{ContractAccount, LightningGateway, LightningGatewayAnnouncement};
 pub trait LnFederationApi {
     /// Fetch consensus block height of lightning module
     async fn fetch_consensus_block_count(&self) -> FederationResult<Option<u64>>;
+    /// Wait for a consensus block height to be reached
+    async fn wait_block_height(&self, block_height: u64) -> FederationResult<()>;
     /// Fetch a lightning module [`ContractAccount`] by ID
     async fn fetch_contract(
         &self,
@@ -36,8 +38,11 @@ pub trait LnFederationApi {
     ) -> FederationResult<Option<ContractAccount>>;
     /// Await fedration consensus on a lightning module [`ContractAccount`]
     async fn wait_contract(&self, contract: ContractId) -> FederationResult<ContractAccount>;
-    /// Wait for a consensus block height to be reached
-    async fn wait_block_height(&self, block_height: u64) -> FederationResult<()>;
+    /// Fetch [`OutgoingContractAccount`] for a given contract ID
+    async fn get_outgoing_contract(
+        &self,
+        id: ContractId,
+    ) -> FederationResult<OutgoingContractAccount>;
     /// Wait for the lightning gateway to successfully user client escrow
     /// contract for failed outgoing payment
     async fn wait_outgoing_contract_cancelled(
@@ -60,6 +65,13 @@ pub trait LnFederationApi {
         &self,
         payment_hash: Sha256Hash,
     ) -> FederationResult<IncomingContractOffer>;
+    /// Check whether [`IncomingContractOffer`] exists
+    async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool>;
+    /// Fetch [`IncomingContractAccount`] for a given contract ID
+    async fn get_incoming_contract(
+        &self,
+        id: ContractId,
+    ) -> FederationResult<IncomingContractAccount>;
     /// Fetch set of all lightning gateways who have registered with any
     /// guardian in the federation
     async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGatewayAnnouncement>>;
@@ -68,18 +80,6 @@ pub trait LnFederationApi {
         &self,
         gateway: &LightningGatewayAnnouncement,
     ) -> FederationResult<()>;
-    /// Check whether [`IncomingContractOffer`] exists
-    async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool>;
-    /// Fetch [`IncomingContractAccount`] for a given contract ID
-    async fn get_incoming_contract(
-        &self,
-        id: ContractId,
-    ) -> FederationResult<IncomingContractAccount>;
-    /// Fetch [`OutgoingContractAccount`] for a given contract ID
-    async fn get_outgoing_contract(
-        &self,
-        id: ContractId,
-    ) -> FederationResult<OutgoingContractAccount>;
 }
 
 #[apply(async_trait_maybe_send!)]
