@@ -214,10 +214,28 @@
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::sm::{State, StateTransition};
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+
+<span class="kw">use </span>fedimint_client::sm::{State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_ln_client::incoming::IncomingSmStates;
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>futures::StreamExt;
@@ -390,28 +408,40 @@
         common: GatewayCompleteCommon,
         outcome: HtlcOutcome,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), CompleteHtlcError&gt; {
-        <span class="kw">let </span>htlc = <span class="kw">match </span>outcome {
-            HtlcOutcome::Success(preimage) =&gt; InterceptHtlcResponse {
-                action: <span class="prelude-val">Some</span>(Action::Settle(Settle {
-                    preimage: preimage.<span class="number">0</span>.to_vec(),
-                })),
-                incoming_chan_id: common.incoming_chan_id,
-                htlc_id: common.htlc_id,
-            },
-            HtlcOutcome::Failure(reason) =&gt; InterceptHtlcResponse {
-                action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason })),
-                incoming_chan_id: common.incoming_chan_id,
-                htlc_id: common.htlc_id,
-            },
-        };
+        <span class="comment">// Wait until the lightning node is online to complete the HTLC
+        </span><span class="kw">loop </span>{
+            <span class="kw">let </span>htlc_outcome = outcome.clone();
+            <span class="kw">let </span>lightning_context = context.gateway.get_lightning_context().<span class="kw">await</span>;
+            <span class="kw">match </span>lightning_context {
+                <span class="prelude-val">Ok</span>(lightning_context) =&gt; {
+                    <span class="kw">let </span>htlc = <span class="kw">match </span>htlc_outcome {
+                        HtlcOutcome::Success(preimage) =&gt; InterceptHtlcResponse {
+                            action: <span class="prelude-val">Some</span>(Action::Settle(Settle {
+                                preimage: preimage.<span class="number">0</span>.to_vec(),
+                            })),
+                            incoming_chan_id: common.incoming_chan_id,
+                            htlc_id: common.htlc_id,
+                        },
+                        HtlcOutcome::Failure(reason) =&gt; InterceptHtlcResponse {
+                            action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason })),
+                            incoming_chan_id: common.incoming_chan_id,
+                            htlc_id: common.htlc_id,
+                        },
+                    };
 
-        <span class="comment">// TODO: Can we retry this instead of failing?
-        </span>context
-            .lnrpc
-            .complete_htlc(htlc)
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| CompleteHtlcError::FailedToCompleteHtlc)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(())
+                    lightning_context
+                        .lnrpc
+                        .complete_htlc(htlc)
+                        .<span class="kw">await
+                        </span>.map_err(|<span class="kw">_</span>| CompleteHtlcError::FailedToCompleteHtlc)<span class="question-mark">?</span>;
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">warn!</span>(<span class="string">&quot;Trying to complete HTLC but got {e}, will keep retrying...&quot;</span>);
+                    sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
+                }
+            }
+        }
     }
 
     <span class="kw">async fn </span>transition_success(

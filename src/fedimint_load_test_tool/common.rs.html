@@ -547,7 +547,7 @@
     } <span class="kw">else </span>{
         fedimint_core::db::mem_impl::MemDatabase::new().into()
     };
-    <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(fedimint_client::DatabaseSource::Fresh(db));
+    <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db);
     client_builder.with_module(MintClientInit);
     client_builder.with_module(LightningClientInit);
     client_builder.with_module(WalletClientInit::default());

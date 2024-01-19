@@ -876,6 +876,19 @@
 <a href="#876" id="876">876</a>
 <a href="#877" id="877">877</a>
 <a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -901,10 +914,10 @@
 
 <span class="kw">use super</span>::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
 <span class="kw">use </span><span class="kw">crate</span>::db::PreimageAuthentication;
-<span class="kw">use </span><span class="kw">crate</span>::fetch_lightning_node_info;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{PayInvoiceRequest, PayInvoiceResponse};
 <span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::LightningRpcError;
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientModule;
+<span class="kw">use </span><span class="kw">crate</span>::GatewayState;
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
 </span><span class="doccomment">/// State machine that executes the Lightning payment on behalf of
@@ -1249,9 +1262,16 @@
                 .amount()
                 .expect(<span class="string">&quot;We already checked that an amount was supplied&quot;</span>);
 
+        <span class="kw">let </span>lightning_context = <span class="kw">match </span>context.gateway.get_lightning_context().<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(lightning_context) =&gt; lightning_context,
+            <span class="prelude-val">Err</span>(error) =&gt; {
+                <span class="kw">return </span><span class="self">Self</span>::gateway_pay_cancel_contract(error, contract, common);
+            }
+        };
+
         <span class="kw">let </span>payment_result = <span class="kw">match </span>buy_preimage.payment_data {
             PaymentData::Invoice(invoice) =&gt; {
-                context
+                lightning_context
                     .lnrpc
                     .pay(PayInvoiceRequest {
                         invoice: invoice.to_string(),
@@ -1262,7 +1282,7 @@
                     .<span class="kw">await
             </span>}
             PaymentData::PrunedInvoice(invoice) =&gt; {
-                context
+                lightning_context
                     .lnrpc
                     .pay_private(invoice, buy_preimage.max_delay, max_fee)
                     .<span class="kw">await
@@ -1283,23 +1303,29 @@
                     )),
                 }
             }
-            <span class="prelude-val">Err</span>(error) =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;Failed to buy preimage with {error} for contract {contract:?}&quot;</span>);
-                <span class="kw">let </span>outgoing_error = OutgoingPaymentError {
-                    contract_id: contract.contract.contract_id(),
-                    contract: <span class="prelude-val">Some</span>(contract.clone()),
-                    error_type: OutgoingPaymentErrorType::LightningPayError {
-                        lightning_error: error,
-                    },
-                };
-                GatewayPayStateMachine {
-                    common,
-                    state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
-                        contract,
-                        error: outgoing_error,
-                    })),
-                }
-            }
+            <span class="prelude-val">Err</span>(error) =&gt; <span class="self">Self</span>::gateway_pay_cancel_contract(error, contract, common),
+        }
+    }
+
+    <span class="kw">fn </span>gateway_pay_cancel_contract(
+        error: LightningRpcError,
+        contract: OutgoingContractAccount,
+        common: GatewayPayCommon,
+    ) -&gt; GatewayPayStateMachine {
+        <span class="macro">warn!</span>(<span class="string">&quot;Failed to buy preimage with {error} for contract {contract:?}&quot;</span>);
+        <span class="kw">let </span>outgoing_error = OutgoingPaymentError {
+            contract_id: contract.contract.contract_id(),
+            contract: <span class="prelude-val">Some</span>(contract.clone()),
+            error_type: OutgoingPaymentErrorType::LightningPayError {
+                lightning_error: error,
+            },
+        };
+        GatewayPayStateMachine {
+            common,
+            state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
+                contract,
+                error: outgoing_error,
+            })),
         }
     }
 
@@ -1379,7 +1405,7 @@
         preimage_auth: sha256::Hash,
         contract: OutgoingContractAccount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), OutgoingPaymentError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = context.gateway_db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = context.gateway.gateway_db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(secret_hash) = dbtx
             .get_value(<span class="kw-2">&amp;</span>PreimageAuthentication { payment_hash })
             .<span class="kw">await
@@ -1469,24 +1495,23 @@
         <span class="kw">let </span>rhints = payment_data.route_hints();
         <span class="kw">match </span>rhints.first().and_then(|rh| rh.<span class="number">0</span>.last()) {
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
-            <span class="prelude-val">Some</span>(hop) =&gt; {
-                <span class="kw">let </span>node_info = fetch_lightning_node_info(context.lnrpc.clone())
-                    .<span class="kw">await
-                    </span>.ok()<span class="question-mark">?</span>;
+            <span class="prelude-val">Some</span>(hop) =&gt; <span class="kw">match </span>context.gateway.state.read().<span class="kw">await</span>.clone() {
+                GatewayState::Running { lightning_context } =&gt; {
+                    <span class="kw">if </span>hop.src_node_id != lightning_context.lightning_public_key {
+                        <span class="kw">return </span><span class="prelude-val">None</span>;
+                    }
 
-                <span class="kw">if </span>hop.src_node_id != node_info.<span class="number">0 </span>{
-                    <span class="kw">return </span><span class="prelude-val">None</span>;
-                }
-
-                <span class="kw">let </span>scid_to_feds = context.all_scids.read().<span class="kw">await</span>;
-                <span class="kw">match </span>scid_to_feds.get(<span class="kw-2">&amp;</span>hop.short_channel_id).cloned() {
-                    <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
-                    <span class="prelude-val">Some</span>(federation_id) =&gt; {
-                        <span class="kw">let </span>clients = context.all_clients.read().<span class="kw">await</span>;
-                        clients.get(<span class="kw-2">&amp;</span>federation_id).cloned()
+                    <span class="kw">let </span>scid_to_feds = context.gateway.scid_to_federation.read().<span class="kw">await</span>;
+                    <span class="kw">match </span>scid_to_feds.get(<span class="kw-2">&amp;</span>hop.short_channel_id).cloned() {
+                        <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
+                        <span class="prelude-val">Some</span>(federation_id) =&gt; {
+                            <span class="kw">let </span>clients = context.gateway.clients.read().<span class="kw">await</span>;
+                            clients.get(<span class="kw-2">&amp;</span>federation_id).cloned()
+                        }
                     }
                 }
-            }
+                <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+            },
         }
     }
 }
@@ -1590,7 +1615,8 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, OutgoingPaymentError&gt; {
         <span class="macro">debug!</span>(<span class="string">&quot;Waiting preimage for contract {contract:?}&quot;</span>);
         <span class="kw">let </span>client = context
-            .all_clients
+            .gateway
+            .clients
             .read()
             .<span class="kw">await
             </span>.get(<span class="kw-2">&amp;</span>federation_id)

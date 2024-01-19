@@ -737,31 +737,6 @@
 <a href="#737" id="737">737</a>
 <a href="#738" id="738">738</a>
 <a href="#739" id="739">739</a>
-<a href="#740" id="740">740</a>
-<a href="#741" id="741">741</a>
-<a href="#742" id="742">742</a>
-<a href="#743" id="743">743</a>
-<a href="#744" id="744">744</a>
-<a href="#745" id="745">745</a>
-<a href="#746" id="746">746</a>
-<a href="#747" id="747">747</a>
-<a href="#748" id="748">748</a>
-<a href="#749" id="749">749</a>
-<a href="#750" id="750">750</a>
-<a href="#751" id="751">751</a>
-<a href="#752" id="752">752</a>
-<a href="#753" id="753">753</a>
-<a href="#754" id="754">754</a>
-<a href="#755" id="755">755</a>
-<a href="#756" id="756">756</a>
-<a href="#757" id="757">757</a>
-<a href="#758" id="758">758</a>
-<a href="#759" id="759">759</a>
-<a href="#760" id="760">760</a>
-<a href="#761" id="761">761</a>
-<a href="#762" id="762">762</a>
-<a href="#763" id="763">763</a>
-<a href="#764" id="764">764</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -783,10 +758,9 @@
 <span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{AutocommitError, DatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion, TransactionItemAmount};
-<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
@@ -803,7 +777,7 @@
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::RoutingFees;
-<span class="kw">use </span>secp256k1::{KeyPair, PublicKey, Secp256k1};
+<span class="kw">use </span>secp256k1::{KeyPair, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, info, warn};
@@ -814,11 +788,10 @@
     OutgoingPaymentError,
 };
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::InterceptHtlcRequest;
-<span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::ILnRpcClient;
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::complete::{
     GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState,
 };
-<span class="kw">use crate</span>::{FederationToClientMap, ScidToFederationMap};
+<span class="kw">use crate</span>::{Gateway, LightningContext};
 
 <span class="kw">pub const </span>GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(<span class="number">600</span>);
 <span class="kw">pub const </span>INITIAL_REGISTER_BACKOFF_DURATION: Duration = Duration::from_secs(<span class="number">15</span>);
@@ -874,14 +847,9 @@
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>GatewayClientInit {
-    <span class="kw">pub </span>lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
-    <span class="kw">pub </span>all_clients: FederationToClientMap,
-    <span class="kw">pub </span>all_scids: ScidToFederationMap,
-    <span class="kw">pub </span>node_pub_key: secp256k1::PublicKey,
-    <span class="kw">pub </span>lightning_alias: String,
     <span class="kw">pub </span>timelock_delta: u64,
     <span class="kw">pub </span>mint_channel_id: u64,
-    <span class="kw">pub </span>gateway_db: Database,
+    <span class="kw">pub </span>gateway: Gateway,
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -908,9 +876,6 @@
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
         <span class="prelude-val">Ok</span>(GatewayClientModule {
-            lnrpc: <span class="self">self</span>.lnrpc.clone(),
-            all_clients: <span class="self">self</span>.all_clients.clone(),
-            all_scids: <span class="self">self</span>.all_scids.clone(),
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
             redeem_key: args
@@ -918,27 +883,22 @@
                 .child_key(ChildId(<span class="number">0</span>))
                 .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::new()),
             module_api: args.module_api().clone(),
-            node_pub_key: <span class="self">self</span>.node_pub_key,
-            lightning_alias: <span class="self">self</span>.lightning_alias.clone(),
             timelock_delta: <span class="self">self</span>.timelock_delta,
             mint_channel_id: <span class="self">self</span>.mint_channel_id,
-            gateway_db: <span class="self">self</span>.gateway_db.clone(),
             client_ctx: args.context(),
+            gateway: <span class="self">self</span>.gateway.clone(),
         })
     }
 }
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>GatewayClientContext {
-    lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
-    all_clients: FederationToClientMap,
-    all_scids: ScidToFederationMap,
     redeem_key: bitcoin::KeyPair,
     timelock_delta: u64,
     secp: secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
     <span class="kw">pub </span>ln_decoder: Decoder,
     notifier: ModuleNotifier&lt;DynGlobalClientContext, GatewayClientStateMachines&gt;,
-    gateway_db: Database,
+    gateway: Gateway,
 }
 
 <span class="kw">impl </span>Context <span class="kw">for </span>GatewayClientContext {}
@@ -958,19 +918,14 @@
 /// see [`fedimint_ln_client::LightningClientModule`]
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>GatewayClientModule {
-    lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
     cfg: LightningClientConfig,
-    all_clients: FederationToClientMap,
-    all_scids: ScidToFederationMap,
     <span class="kw">pub </span>notifier: ModuleNotifier&lt;DynGlobalClientContext, GatewayClientStateMachines&gt;,
     <span class="kw">pub </span>redeem_key: KeyPair,
-    node_pub_key: PublicKey,
-    lightning_alias: String,
     timelock_delta: u64,
     mint_channel_id: u64,
     module_api: DynModuleApi,
-    gateway_db: Database,
     client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
+    gateway: Gateway,
 }
 
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>GatewayClientModule {
@@ -982,15 +937,12 @@
 
     <span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::ModuleStateMachineContext {
         <span class="self">Self</span>::ModuleStateMachineContext {
-            lnrpc: <span class="self">self</span>.lnrpc.clone(),
-            all_clients: <span class="self">self</span>.all_clients.clone(),
-            all_scids: <span class="self">self</span>.all_scids.clone(),
             redeem_key: <span class="self">self</span>.redeem_key,
             timelock_delta: <span class="self">self</span>.timelock_delta,
             secp: secp256k1_zkp::Secp256k1::new(),
             ln_decoder: <span class="self">self</span>.decoder(),
             notifier: <span class="self">self</span>.notifier.clone(),
-            gateway_db: <span class="self">self</span>.gateway_db.clone(),
+            gateway: <span class="self">self</span>.gateway.clone(),
         }
     }
 
@@ -1033,21 +985,20 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         route_hints: Vec&lt;RouteHint&gt;,
         ttl: Duration,
-        api: SafeUrl,
-        gateway_id: secp256k1::PublicKey,
         fees: RoutingFees,
+        lightning_context: LightningContext,
     ) -&gt; LightningGatewayAnnouncement {
         LightningGatewayAnnouncement {
             info: LightningGateway {
                 mint_channel_id: <span class="self">self</span>.mint_channel_id,
                 gateway_redeem_key: <span class="self">self</span>.redeem_key.public_key(),
-                node_pub_key: <span class="self">self</span>.node_pub_key,
-                lightning_alias: <span class="self">self</span>.lightning_alias.clone(),
-                api,
+                node_pub_key: lightning_context.lightning_public_key,
+                lightning_alias: lightning_context.lightning_alias,
+                api: <span class="self">self</span>.gateway.gateway_parameters.api_addr.clone(),
                 route_hints,
                 fees,
-                gateway_id,
-                supports_private_payments: <span class="self">self</span>.lnrpc.supports_private_payments(),
+                gateway_id: <span class="self">self</span>.gateway.gateway_id,
+                supports_private_payments: lightning_context.lnrpc.supports_private_payments(),
             },
             ttl,
             vetted: <span class="bool-val">false</span>,
@@ -1151,19 +1102,17 @@
     <span class="doccomment">/// Register gateway with federation
     </span><span class="kw">pub async fn </span>register_with_federation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_api: SafeUrl,
         route_hints: Vec&lt;RouteHint&gt;,
         time_to_live: Duration,
-        gateway_id: secp256k1::PublicKey,
         fees: RoutingFees,
+        lightning_context: LightningContext,
     ) -&gt; anyhow::Result&lt;()&gt; {
         {
             <span class="kw">let </span>registration_info = <span class="self">self</span>.to_gateway_registration_info(
                 route_hints,
                 time_to_live,
-                gateway_api,
-                gateway_id,
                 fees,
+                lightning_context,
             );
 
             <span class="kw">let </span>federation_id = <span class="self">self</span>.client_ctx.get_config().global.federation_id();
@@ -1280,13 +1229,14 @@
         pay_invoice_payload: PayInvoicePayload,
     ) -&gt; anyhow::Result&lt;OperationId&gt; {
         <span class="kw">let </span>payload = pay_invoice_payload.clone();
+        <span class="kw">let </span>lightning_context = <span class="self">self</span>.gateway.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">if </span><span class="macro">matches!</span>(
             pay_invoice_payload.payment_data,
             PaymentData::PrunedInvoice { .. }
         ) {
             <span class="macro">ensure!</span>(
-                <span class="self">self</span>.lnrpc.supports_private_payments(),
+                lightning_context.lnrpc.supports_private_payments(),
                 <span class="string">&quot;Private payments are not supported by the lightning node&quot;
             </span>);
         }

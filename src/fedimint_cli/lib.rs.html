@@ -880,8 +880,6 @@
 <a href="#880" id="880">880</a>
 <a href="#881" id="881">881</a>
 <a href="#882" id="882">882</a>
-<a href="#883" id="883">883</a>
-<a href="#884" id="884">884</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
@@ -905,9 +903,7 @@
 <span class="kw">use </span>fedimint_client::backup::Metadata;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 <span class="kw">use </span>fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
-<span class="kw">use </span>fedimint_client::{
-    get_invite_code_from_db, Client, ClientArc, ClientBuilder, DatabaseSource, FederationInfo,
-};
+<span class="kw">use </span>fedimint_client::{get_invite_code_from_db, Client, ClientArc, ClientBuilder, FederationInfo};
 <span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
 <span class="kw">use </span>fedimint_core::api::{
     FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, InviteCode,
@@ -1401,7 +1397,7 @@ Examples:
 
     <span class="kw">async fn </span>make_client_builder(<span class="kw-2">&amp;</span><span class="self">self</span>, cli: <span class="kw-2">&amp;</span>Opts) -&gt; CliResult&lt;ClientBuilder&gt; {
         <span class="kw">let </span>db = cli.load_rocks_db().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(DatabaseSource::Fresh(db));
+        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db);
         client_builder.with_module_inits(<span class="self">self</span>.module_inits.clone());
         client_builder.with_primary_module(<span class="number">1</span>);
 

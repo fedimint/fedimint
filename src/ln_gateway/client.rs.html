@@ -127,33 +127,9 @@
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
-<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
@@ -168,9 +144,8 @@
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
-<span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::ILnRpcClient;
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientInit;
-<span class="kw">use crate</span>::{FederationToClientMap, GatewayError, <span class="prelude-ty">Result</span>, ScidToFederationMap};
+<span class="kw">use crate</span>::{Gateway, GatewayError, <span class="prelude-ty">Result</span>};
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>GatewayClientBuilder {
@@ -198,13 +173,7 @@
     </span><span class="kw">pub async fn </span>build(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: FederationConfig,
-        node_pub_key: secp256k1::PublicKey,
-        lightning_alias: String,
-        lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
-        all_clients: FederationToClientMap,
-        all_scids: ScidToFederationMap,
-        old_client: <span class="prelude-ty">Option</span>&lt;fedimint_client::ClientArc&gt;,
-        gateway_db: Database,
+        gateway: Gateway,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientArc&gt; {
         <span class="kw">let </span>FederationConfig {
             invite_code,
@@ -216,30 +185,19 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>registry = <span class="self">self</span>.registry.clone();
         registry.attach(GatewayClientInit {
-            lnrpc,
-            all_clients,
-            all_scids,
-            node_pub_key,
-            lightning_alias,
             timelock_delta,
             mint_channel_id,
-            gateway_db,
+            gateway,
         });
 
-        <span class="kw">let </span>db_source = <span class="kw">if let </span><span class="prelude-val">Some</span>(old_client) = old_client {
-            fedimint_client::DatabaseSource::Reuse(old_client)
-        } <span class="kw">else </span>{
-            <span class="kw">let </span>db_path = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">&quot;{federation_id}.db&quot;</span>));
+        <span class="kw">let </span>db_path = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">&quot;{federation_id}.db&quot;</span>));
 
-            <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
-                GatewayError::DatabaseError(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Error opening rocksdb: {e:?}&quot;</span>))
-            })<span class="question-mark">?</span>;
-            <span class="kw">let </span>db = Database::new(rocksdb, ModuleDecoderRegistry::default());
+        <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
+            GatewayError::DatabaseError(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Error opening rocksdb: {e:?}&quot;</span>))
+        })<span class="question-mark">?</span>;
+        <span class="kw">let </span>db = Database::new(rocksdb, ModuleDecoderRegistry::default());
 
-            fedimint_client::DatabaseSource::Fresh(db)
-        };
-
-        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db_source);
+        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db);
         client_builder.with_module_inits(registry);
         client_builder.with_primary_module(<span class="self">self</span>.primary_module);
 
@@ -288,18 +246,14 @@
             </span>.map_err(GatewayError::DatabaseError)
     }
 
-    <span class="kw">pub async fn </span>load_configs(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;FederationConfig&gt;&gt; {
-        <span class="prelude-val">Ok</span>(dbtx
-            .find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefix)
+    <span class="kw">pub async fn </span>load_configs(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Vec&lt;FederationConfig&gt; {
+        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefix)
             .<span class="kw">await
             </span>.collect::&lt;BTreeMap&lt;FederationIdKey, FederationConfig&gt;&gt;()
             .<span class="kw">await
             </span>.values()
             .cloned()
-            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;())
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
     }
 }
 </code></pre></div></section></main></body></html>

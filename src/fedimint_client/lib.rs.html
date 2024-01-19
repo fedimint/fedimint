@@ -1761,24 +1761,6 @@
 <a href="#1761" id="1761">1761</a>
 <a href="#1762" id="1762">1762</a>
 <a href="#1763" id="1763">1763</a>
-<a href="#1764" id="1764">1764</a>
-<a href="#1765" id="1765">1765</a>
-<a href="#1766" id="1766">1766</a>
-<a href="#1767" id="1767">1767</a>
-<a href="#1768" id="1768">1768</a>
-<a href="#1769" id="1769">1769</a>
-<a href="#1770" id="1770">1770</a>
-<a href="#1771" id="1771">1771</a>
-<a href="#1772" id="1772">1772</a>
-<a href="#1773" id="1773">1773</a>
-<a href="#1774" id="1774">1774</a>
-<a href="#1775" id="1775">1775</a>
-<a href="#1776" id="1776">1776</a>
-<a href="#1777" id="1777">1777</a>
-<a href="#1778" id="1778">1778</a>
-<a href="#1779" id="1779">1779</a>
-<a href="#1780" id="1780">1780</a>
-<a href="#1781" id="1781">1781</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2413,7 +2395,7 @@
 <span class="kw">impl </span>Client {
     <span class="doccomment">/// Initialize a client builder that can be configured to create a new
     /// client.
-    </span><span class="kw">pub fn </span>builder(db: DatabaseSource) -&gt; ClientBuilder {
+    </span><span class="kw">pub fn </span>builder(db: Database) -&gt; ClientBuilder {
         ClientBuilder::new(db)
     }
 
@@ -3224,30 +3206,12 @@
 <span class="kw">pub struct </span>ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
-    db: DatabaseSource,
+    db: Database,
     stopped: bool,
 }
 
-<span class="kw">pub enum </span>DatabaseSource {
-    Fresh(Database),
-    <span class="attr">#[deprecated(
-        note = <span class="string">&quot;DatabaseSource::Reuse was a workound and is deprecated now. See https://github.com/fedimint/fedimint/pull/3781#issuecomment-1835319259&quot;
-    </span>)]
-    </span>Reuse(ClientArc),
-}
-
-<span class="kw">impl </span>AsRef&lt;Database&gt; <span class="kw">for </span>DatabaseSource {
-    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
-        <span class="kw">match </span><span class="self">self </span>{
-            DatabaseSource::Fresh(db) =&gt; db,
-            <span class="attr">#[allow(deprecated)]
-            </span>DatabaseSource::Reuse(client) =&gt; client.db(),
-        }
-    }
-}
-
 <span class="kw">impl </span>ClientBuilder {
-    <span class="kw">fn </span>new(db: DatabaseSource) -&gt; <span class="self">Self </span>{
+    <span class="kw">fn </span>new(db: Database) -&gt; <span class="self">Self </span>{
         ClientBuilder {
             module_inits: Default::default(),
             primary_module_instance: Default::default(),
@@ -3287,11 +3251,11 @@
     }
 
     <span class="kw">pub fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
-        <span class="self">self</span>.db.as_ref()
+        <span class="kw-2">&amp;</span><span class="self">self</span>.db
     }
 
     <span class="kw">pub async fn </span>load_existing_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-        <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="self">self</span>.db.as_ref()).<span class="kw">await else </span>{
+        <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await else </span>{
             <span class="macro">bail!</span>(<span class="string">&quot;Client database not initialized&quot;</span>)
         };
 
@@ -3304,13 +3268,13 @@
         config: ClientConfig,
         invite_code: InviteCode,
     ) -&gt; anyhow::Result&lt;ClientArc&gt; {
-        <span class="kw">if </span>Client::is_initialized(<span class="self">self</span>.db.as_ref()).<span class="kw">await </span>{
+        <span class="kw">if </span>Client::is_initialized(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await </span>{
             <span class="macro">bail!</span>(<span class="string">&quot;Client database already initialized&quot;</span>)
         }
 
         {
             <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">&quot;Initializing client database&quot;</span>);
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.as_ref().begin_transaction().<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
             <span class="comment">// Save config to DB
             </span>dbtx.insert_new_entry(
                 <span class="kw-2">&amp;</span>ClientConfigKey {
@@ -3348,7 +3312,7 @@
     }
 
     <span class="kw">pub async fn </span>open(<span class="self">self</span>, root_secret: DerivableSecret) -&gt; anyhow::Result&lt;ClientArc&gt; {
-        <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="self">self</span>.db.as_ref()).<span class="kw">await else </span>{
+        <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await else </span>{
             <span class="macro">bail!</span>(<span class="string">&quot;Client database not initialized&quot;</span>)
         };
         <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
@@ -3378,7 +3342,7 @@
             ModuleKind::from_static_str(<span class="string">&quot;tx_submission&quot;</span>),
             tx_submission_sm_decoder(),
         );
-        <span class="kw">let </span>db = <span class="self">self</span>.db.as_ref().to_owned().with_decoders(decoders.clone());
+        <span class="kw">let </span>db = <span class="self">self</span>.db.with_decoders(decoders.clone());
 
         <span class="kw">let </span>config = config.clone().redecode_raw(<span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
