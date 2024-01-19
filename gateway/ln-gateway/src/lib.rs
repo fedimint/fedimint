@@ -1,7 +1,6 @@
 pub mod client;
 pub mod db;
-pub mod lnd;
-pub mod lnrpc_client;
+pub mod lightning;
 pub mod rpc;
 pub mod state_machine;
 pub mod types;
@@ -25,7 +24,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Network, Txid};
 use bitcoin_hashes::hex::ToHex;
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use client::GatewayClientBuilder;
 use db::{
     DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey,
@@ -57,15 +56,14 @@ use fedimint_wallet_client::{
 use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::Action;
 use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
+use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 use lightning_invoice::RoutingFees;
-use lnrpc_client::{ILnRpcClient, LightningBuilder, LightningRpcError, RouteHtlcStream};
 use rand::rngs::OsRng;
 use rpc::{
     FederationConnectionInfo, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
     SetConfigurationPayload,
 };
 use secp256k1::PublicKey;
-use serde::{Deserialize, Serialize};
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
 use strum::IntoEnumIterator;
@@ -75,7 +73,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::db::{FederationConfig, FederationIdKeyPrefix};
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
-use crate::lnrpc_client::GatewayLightningBuilder;
+use crate::lightning::cln::RouteHtlcStream;
+use crate::lightning::GatewayLightningBuilder;
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
@@ -1384,29 +1383,6 @@ async fn wait_for_new_password(
             })
         })
         .await;
-}
-
-#[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]
-pub enum LightningMode {
-    #[clap(name = "lnd")]
-    Lnd {
-        /// LND RPC address
-        #[arg(long = "lnd-rpc-host", env = "FM_LND_RPC_ADDR")]
-        lnd_rpc_addr: String,
-
-        /// LND TLS cert file path
-        #[arg(long = "lnd-tls-cert", env = "FM_LND_TLS_CERT")]
-        lnd_tls_cert: String,
-
-        /// LND macaroon file path
-        #[arg(long = "lnd-macaroon", env = "FM_LND_MACAROON")]
-        lnd_macaroon: String,
-    },
-    #[clap(name = "cln")]
-    Cln {
-        #[arg(long = "cln-extension-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
-        cln_extension_addr: SafeUrl,
-    },
 }
 
 #[derive(Debug, Error)]

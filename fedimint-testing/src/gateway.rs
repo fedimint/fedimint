@@ -17,7 +17,7 @@ use fedimint_logging::LOG_TEST;
 use futures::executor::block_on;
 use lightning_invoice::RoutingFees;
 use ln_gateway::client::GatewayClientBuilder;
-use ln_gateway::lnrpc_client::{ILnRpcClient, LightningBuilder};
+use ln_gateway::lightning::{ILnRpcClient, LightningBuilder};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{ConnectFedPayload, FederationConnectionInfo};
 use ln_gateway::{Gateway, GatewayState};
