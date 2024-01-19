@@ -747,11 +747,11 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
 }
 
 /// Things that a `distributed_gen` config can send between peers
-// TODO: Needs to be modularized in case modules want to send new message types for DKG
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum DkgPeerMsg {
     PublicKey(secp256k1::PublicKey),
     DistributedGen(SupportedDkgMessage),
+    Module(Vec<u8>),
     // Dkg completed on our side
     Done,
 }
@@ -772,6 +772,8 @@ pub enum DkgError {
     ModuleNotFound(ModuleKind),
     #[error("Params for modules were not found {0:?}")]
     ParamsNotFound(BTreeSet<ModuleKind>),
+    #[error("Failed to decode module message {0:?}")]
+    ModuleDecodeError(ModuleKind),
 }
 
 /// Supported (by Fedimint's code) `DkgMessage<T>` types
