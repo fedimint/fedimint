@@ -157,7 +157,8 @@ mod fedimint_migration_tests {
     use bitcoin_hashes::Hash;
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
     use fedimint_core::db::{
-        apply_migrations, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+        apply_migrations, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
+        IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
@@ -189,6 +190,9 @@ mod fedimint_migration_tests {
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
     async fn create_server_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
+        dbtx.insert_new_entry(&DatabaseVersionKey, &DatabaseVersion(0))
+            .await;
+
         let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
         let nonce_key = NonceKey(Nonce(pk));
         dbtx.insert_new_entry(&nonce_key, &()).await;
