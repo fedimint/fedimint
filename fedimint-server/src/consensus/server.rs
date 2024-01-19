@@ -40,7 +40,8 @@ use crate::config::ServerConfig;
 use crate::consensus::process_transaction_with_dbtx;
 use crate::db::{
     get_global_database_migrations, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey,
-    AlephUnitsPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
+    AlephUnitsPrefix, SignedSessionOutcomeCountKey, SignedSessionOutcomeKey,
+    GLOBAL_DATABASE_VERSION,
 };
 use crate::fedimint_core::encoding::Encodable;
 use crate::net::api::{ConsensusApi, ExpiringCache};
@@ -541,6 +542,15 @@ impl ConsensusServer {
             panic!("We tried to overwrite a signed session outcome");
         }
 
+        // Update cached session count
+        let previous_session_count = self.get_finished_session_count().await;
+        assert_eq!(
+            previous_session_count, session_index,
+            "Session count and session index diverged"
+        );
+        dbtx.insert_entry(&SignedSessionOutcomeCountKey, &(previous_session_count + 1))
+            .await;
+
         dbtx.commit_tx_result()
             .await
             .expect("This is the only place where we write to this key");
@@ -729,10 +739,9 @@ impl ConsensusServer {
 }
 
 pub(crate) async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_>) -> u64 {
-    dbtx.find_by_prefix(&SignedSessionOutcomePrefix)
+    dbtx.get_value(&SignedSessionOutcomeCountKey)
         .await
-        .count()
-        .await as u64
+        .unwrap_or(0)
 }
 
 async fn submit_module_consensus_items(
