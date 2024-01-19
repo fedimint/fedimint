@@ -180,9 +180,9 @@ impl CompleteHtlcState {
         // Wait until the lightning node is online to complete the HTLC
         loop {
             let htlc_outcome = outcome.clone();
-            match context
-                .gateway
-                .execute_with_lightning_connection(|lnrpc, _, _, _| async move {
+            let lightning_context = context.gateway.get_lightning_context().await;
+            match lightning_context {
+                Ok(lightning_context) => {
                     let htlc = match htlc_outcome {
                         HtlcOutcome::Success(preimage) => InterceptHtlcResponse {
                             action: Some(Action::Settle(Settle {
@@ -198,23 +198,19 @@ impl CompleteHtlcState {
                         },
                     };
 
-                    lnrpc
+                    lightning_context
+                        .lnrpc
                         .complete_htlc(htlc)
                         .await
                         .map_err(|_| CompleteHtlcError::FailedToCompleteHtlc)?;
-                    Ok(())
-                })
-                .await
-            {
-                Ok(_) => break,
-                Err(_) => {
-                    warn!("Trying to complete HTLC but the lightning node is not connected");
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!("Trying to complete HTLC but got {e}, will keep retrying...");
                     sleep(Duration::from_secs(5)).await;
                 }
             }
         }
-
-        Ok(())
     }
 
     async fn transition_success(

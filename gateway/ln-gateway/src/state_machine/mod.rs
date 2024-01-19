@@ -38,7 +38,7 @@ use fedimint_ln_common::{
 };
 use futures::StreamExt;
 use lightning_invoice::RoutingFees;
-use secp256k1::{KeyPair, PublicKey, Secp256k1};
+use secp256k1::{KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, info, warn};
@@ -52,7 +52,7 @@ use crate::gateway_lnrpc::InterceptHtlcRequest;
 use crate::state_machine::complete::{
     GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState,
 };
-use crate::Gateway;
+use crate::{Gateway, LightningContext};
 
 pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 pub const INITIAL_REGISTER_BACKOFF_DURATION: Duration = Duration::from_secs(15);
@@ -247,21 +247,19 @@ impl GatewayClientModule {
         route_hints: Vec<RouteHint>,
         ttl: Duration,
         fees: RoutingFees,
-        node_pub_key: PublicKey,
-        lightning_alias: String,
-        supports_private_payments: bool,
+        lightning_context: LightningContext,
     ) -> LightningGatewayAnnouncement {
         LightningGatewayAnnouncement {
             info: LightningGateway {
                 mint_channel_id: self.mint_channel_id,
                 gateway_redeem_key: self.redeem_key.public_key(),
-                node_pub_key,
-                lightning_alias,
+                node_pub_key: lightning_context.lightning_public_key,
+                lightning_alias: lightning_context.lightning_alias,
                 api: self.gateway.gateway_parameters.api_addr.clone(),
                 route_hints,
                 fees,
                 gateway_id: self.gateway.gateway_id,
-                supports_private_payments,
+                supports_private_payments: lightning_context.lnrpc.supports_private_payments(),
             },
             ttl,
             vetted: false,
@@ -368,18 +366,14 @@ impl GatewayClientModule {
         route_hints: Vec<RouteHint>,
         time_to_live: Duration,
         fees: RoutingFees,
-        node_pub_key: PublicKey,
-        lightning_alias: String,
-        supports_private_payments: bool,
+        lightning_context: LightningContext,
     ) -> anyhow::Result<()> {
         {
             let registration_info = self.to_gateway_registration_info(
                 route_hints,
                 time_to_live,
                 fees,
-                node_pub_key,
-                lightning_alias,
-                supports_private_payments,
+                lightning_context,
             );
 
             let federation_id = self.client_ctx.get_config().global.federation_id();
@@ -496,21 +490,17 @@ impl GatewayClientModule {
         pay_invoice_payload: PayInvoicePayload,
     ) -> anyhow::Result<OperationId> {
         let payload = pay_invoice_payload.clone();
+        let lightning_context = self.gateway.get_lightning_context().await?;
 
-        self.gateway
-            .execute_with_lightning_connection(|lnrpc, _, _, _| async move {
-                if matches!(
-                    pay_invoice_payload.payment_data,
-                    PaymentData::PrunedInvoice { .. }
-                ) {
-                    ensure!(
-                        lnrpc.supports_private_payments(),
-                        "Private payments are not supported by the lightning node"
-                    );
-                }
-                Ok(())
-            })
-            .await?;
+        if matches!(
+            pay_invoice_payload.payment_data,
+            PaymentData::PrunedInvoice { .. }
+        ) {
+            ensure!(
+                lightning_context.lnrpc.supports_private_payments(),
+                "Private payments are not supported by the lightning node"
+            );
+        }
 
         self.client_ctx
             .module_autocommit(

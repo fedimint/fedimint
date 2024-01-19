@@ -371,35 +371,32 @@ impl GatewayPayInvoice {
                 .amount()
                 .expect("We already checked that an amount was supplied");
 
-        let payment_result = context
-            .gateway
-            .execute_with_lightning_connection(|lnrpc, _, _, _| async move {
-                Ok(match &buy_preimage.payment_data {
-                    PaymentData::Invoice(invoice) => {
-                        lnrpc
-                            .pay(PayInvoiceRequest {
-                                invoice: invoice.to_string(),
-                                max_delay,
-                                max_fee_msat: max_fee.msats,
-                                payment_hash: payment_data.payment_hash().to_vec(),
-                            })
-                            .await
-                    }
-                    PaymentData::PrunedInvoice(invoice) => {
-                        lnrpc
-                            .pay_private(invoice.clone(), buy_preimage.max_delay, max_fee)
-                            .await
-                    }
-                })
-            })
-            .await
-            .map_err(|_| LightningRpcError::FailedToConnect);
+        let lightning_context = match context.gateway.get_lightning_context().await {
+            Ok(lightning_context) => lightning_context,
+            Err(error) => {
+                return Self::gateway_pay_cancel_contract(error, contract, common);
+            }
+        };
 
-        if let Err(error) = payment_result {
-            return Self::gateway_pay_cancel_contract(error, contract, common);
-        }
-
-        let payment_result = payment_result.expect("Already checked for error");
+        let payment_result = match buy_preimage.payment_data {
+            PaymentData::Invoice(invoice) => {
+                lightning_context
+                    .lnrpc
+                    .pay(PayInvoiceRequest {
+                        invoice: invoice.to_string(),
+                        max_delay,
+                        max_fee_msat: max_fee.msats,
+                        payment_hash: payment_data.payment_hash().to_vec(),
+                    })
+                    .await
+            }
+            PaymentData::PrunedInvoice(invoice) => {
+                lightning_context
+                    .lnrpc
+                    .pay_private(invoice, buy_preimage.max_delay, max_fee)
+                    .await
+            }
+        };
 
         match payment_result {
             Ok(PayInvoiceResponse { preimage, .. }) => {
@@ -608,12 +605,8 @@ impl GatewayPayInvoice {
         match rhints.first().and_then(|rh| rh.0.last()) {
             None => None,
             Some(hop) => match context.gateway.state.read().await.clone() {
-                GatewayState::Running {
-                    lnrpc: _,
-                    lightning_public_key,
-                    ..
-                } => {
-                    if hop.src_node_id != lightning_public_key {
+                GatewayState::Running { lightning_context } => {
+                    if hop.src_node_id != lightning_context.lightning_public_key {
                         return None;
                     }
 
