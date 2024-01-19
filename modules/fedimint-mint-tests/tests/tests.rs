@@ -164,6 +164,7 @@ mod fedimint_migration_tests {
     use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
     use fedimint_core::time::now;
     use fedimint_core::{Amount, OutPoint, ServerModule, TransactionId};
+    use fedimint_logging::TracingSetup;
     use fedimint_mint_common::db::{
         DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix,
         MintAuditItemKey, MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix,
@@ -254,7 +255,9 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_migrations() {
+    async fn test_migrations() -> anyhow::Result<()> {
+        TracingSetup::default().init()?;
+
         validate_migrations(
             "mint-server",
             |db| async move {
@@ -334,7 +337,5 @@ mod fedimint_migration_tests {
             )]),
         )
         .await
-        .context("Migration validation")
-        .unwrap();
     }
 }

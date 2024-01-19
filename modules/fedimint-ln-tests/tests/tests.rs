@@ -514,6 +514,7 @@ mod fedimint_migration_tests {
         LightningOutputOutcomeV0,
     };
     use fedimint_ln_server::Lightning;
+    use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
         prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_33, BYTE_8, STRING_64,
     };
@@ -672,6 +673,8 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_migrations() -> anyhow::Result<()> {
+        TracingSetup::default().init()?;
+
         validate_migrations(
             "lightning-server",
             |db| async move {

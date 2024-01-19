@@ -1835,6 +1835,7 @@ pub async fn apply_migrations(
 
         while current_db_version < target_db_version {
             if let Some(migration) = migrations.get(&current_db_version) {
+                info!(target: LOG_DB, "Migrating module {kind} from {current_db_version} to {target_db_version}");
                 migration(&mut dbtx.to_ref_nc()).await?;
             } else {
                 panic!("Missing migration for version {current_db_version}");

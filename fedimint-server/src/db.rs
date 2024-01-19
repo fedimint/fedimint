@@ -147,6 +147,7 @@ mod fedimint_migration_tests {
     use fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
     use fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
     use fedimint_dummy_server::Dummy;
+    use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{prepare_db_migration_snapshot, validate_migrations, BYTE_32};
     use futures::StreamExt;
     use rand::rngs::OsRng;
@@ -167,6 +168,9 @@ mod fedimint_migration_tests {
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
     async fn create_server_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
+        dbtx.insert_new_entry(&DatabaseVersionKey, &DatabaseVersion(0))
+            .await;
+
         let accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(&BYTE_32).unwrap());
 
         dbtx.insert_new_entry(&DatabaseVersionKey, &DatabaseVersion(0))
@@ -247,6 +251,8 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_migrations() -> anyhow::Result<()> {
+        TracingSetup::default().init()?;
+
         validate_migrations(
             "fedimint-server",
             |db| async move {
