@@ -3,7 +3,7 @@ use std::time::Duration;
 use bitcoin::Txid;
 use fedimint_client::sm::{State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
+use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
@@ -87,7 +87,11 @@ async fn await_withdraw_processed(
                     .map(|outcome| outcome.0)
                     .map_err(|e| e.to_string())
             }
-            Err(OutputOutcomeError::Federation(e)) => {
+            Err(e) => {
+                if e.is_rejected() {
+                    return Err(e.to_string());
+                }
+
                 e.report_if_important();
                 debug!(
                     "Awaiting output outcome failed, retrying in {}s",
@@ -95,7 +99,6 @@ async fn await_withdraw_processed(
                 );
                 sleep(RETRY_DELAY).await;
             }
-            Err(e) => return Err(e.to_string()),
         }
     }
 }
