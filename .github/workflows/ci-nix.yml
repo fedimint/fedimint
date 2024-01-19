@@ -349,7 +349,7 @@ jobs:
             bins: ""
             deb: fedimint
           - flake-output: fedimint-pkgs
-            bins: fedimintd,fedimint-cli
+            bins: fedimintd,fedimint-cli,fedimint-dbtool
             deb: fedimint
           - flake-output: gateway-pkgs
             bins: gateway-cli,gatewayd
