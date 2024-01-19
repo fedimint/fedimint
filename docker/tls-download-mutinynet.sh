@@ -4,7 +4,9 @@
 # Important: This version uses TLS certificates, so you must have a domain under your control that you can change the DNS records for
 # You can download this script and run it with: curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/tls-download-mutinynet.sh | bash
 
-DOCKER_COMPOSE_FILE=https://raw.githubusercontent.com/fedimint/fedimint/master/docker/full-tls-mutinynet/docker-compose.yaml
+FEDIMINT_VERSION="0.2.1"
+
+DOCKER_COMPOSE_FILE=https://raw.githubusercontent.com/fedimint/fedimint/master/docker/${FEDIMINT_VERSION}/full-tls-mutinynet/docker-compose.yaml
 
 DOCKER_COMPOSE=docker-compose
 if docker compose version|grep 'Docker Compose' >& /dev/null; then
