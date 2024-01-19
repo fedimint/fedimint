@@ -18,6 +18,7 @@ use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::db as ConsensusRange;
+use fedimint_server::db::DbKeyPrefix;
 use futures::StreamExt;
 use ln_gateway::Gateway;
 use strum::IntoEnumIterator;
@@ -292,6 +293,16 @@ impl DatabaseDump {
                         Vec<u8>,
                         consensus,
                         "Aleph Units"
+                    );
+                }
+                DbKeyPrefix::SignedSessionOutcomeCount => {
+                    push_db_pair_items_no_serde!(
+                        dbtx,
+                        ConsensusRange::SignedSessionOutcomeCountKey,
+                        ConsensusRange::SignedSessionOutcomeCountKey,
+                        u64,
+                        consensus,
+                        "Signed Session Count"
                     );
                 }
                 // Module is a global prefix for all module data

@@ -36,7 +36,6 @@ use fedimint_core::session_outcome::{SessionOutcome, SignedSessionOutcome};
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
 use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
-use futures::StreamExt;
 use jsonrpsee::RpcModule;
 use secp256k1_zkp::SECP256K1;
 use tokio::sync::RwLock;
@@ -45,8 +44,8 @@ use tracing::{debug, info};
 use super::peers::PeerStatusChannels;
 use crate::config::ServerConfig;
 use crate::consensus::process_transaction_with_dbtx;
-use crate::consensus::server::LatestContributionByPeer;
-use crate::db::{AcceptedTransactionKey, SignedSessionOutcomeKey, SignedSessionOutcomePrefix};
+use crate::consensus::server::{get_finished_session_count_static, LatestContributionByPeer};
+use crate::db::{AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::fedimint_core::encoding::Encodable;
 use crate::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
 
@@ -166,13 +165,7 @@ impl ConsensusApi {
     }
 
     pub async fn session_count(&self) -> u64 {
-        self.db
-            .begin_transaction()
-            .await
-            .find_by_prefix(&SignedSessionOutcomePrefix)
-            .await
-            .count()
-            .await as u64
+        get_finished_session_count_static(&mut self.db.begin_transaction_nc().await).await
     }
 
     pub async fn await_signed_session_outcome(&self, index: u64) -> SignedSessionOutcome {

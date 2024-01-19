@@ -40,7 +40,8 @@ use crate::config::ServerConfig;
 use crate::consensus::process_transaction_with_dbtx;
 use crate::db::{
     get_global_database_migrations, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey,
-    AlephUnitsPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
+    AlephUnitsPrefix, SignedSessionOutcomeCountKey, SignedSessionOutcomeKey,
+    GLOBAL_DATABASE_VERSION,
 };
 use crate::fedimint_core::encoding::Encodable;
 use crate::net::api::{ConsensusApi, ExpiringCache};
@@ -221,14 +222,7 @@ impl ConsensusServer {
         assert_eq!(self.cfg.consensus.broadcast_public_keys.len(), 1);
 
         while !task_handle.is_shutting_down() {
-            let session_index = self
-                .db
-                .begin_transaction()
-                .await
-                .find_by_prefix(&SignedSessionOutcomePrefix)
-                .await
-                .count()
-                .await as u64;
+            let session_index = self.get_finished_session_count().await;
 
             let mut item_index = self.build_session_outcome().await.items.len() as u64;
 
@@ -288,14 +282,7 @@ impl ConsensusServer {
         self.confirm_server_config_consensus_hash().await?;
 
         while !task_handle.is_shutting_down() {
-            let session_index = self
-                .db
-                .begin_transaction()
-                .await
-                .find_by_prefix(&SignedSessionOutcomePrefix)
-                .await
-                .count()
-                .await as u64;
+            let session_index = self.get_finished_session_count().await;
 
             self.run_session(session_index).await?;
 
@@ -555,6 +542,15 @@ impl ConsensusServer {
             panic!("We tried to overwrite a signed session outcome");
         }
 
+        // Update cached session count
+        let previous_session_count = self.get_finished_session_count().await;
+        assert_eq!(
+            previous_session_count, session_index,
+            "Session count and session index diverged"
+        );
+        dbtx.insert_entry(&SignedSessionOutcomeCountKey, &(previous_session_count + 1))
+            .await;
+
         dbtx.commit_tx_result()
             .await
             .expect("This is the only place where we write to this key");
@@ -734,6 +730,18 @@ impl ConsensusServer {
             }
         }
     }
+
+    /// Returns the number of sessions already saved in the database. This count
+    /// **does not** include the currently running session.
+    async fn get_finished_session_count(&self) -> u64 {
+        get_finished_session_count_static(&mut self.db.begin_transaction_nc().await).await
+    }
+}
+
+pub(crate) async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+    dbtx.get_value(&SignedSessionOutcomeCountKey)
+        .await
+        .unwrap_or(0)
 }
 
 async fn submit_module_consensus_items(
