@@ -699,6 +699,7 @@
 <a href="#699" id="699">699</a>
 <a href="#700" id="700">700</a>
 <a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -735,6 +736,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::error;
+<span class="kw">pub use </span>{bitcoin, lightning_invoice};
 
 <span class="kw">use </span><span class="kw">crate</span>::contracts::incoming::OfferId;
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{Contract, ContractId, ContractOutcome, Preimage, PreimageDecryptionShare};
