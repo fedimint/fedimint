@@ -3,6 +3,7 @@ name = "fedimint-bip39"
 version = "0.3.0-alpha"
 edition = "2021"
 license = "MIT"
+readme = "../README.md"
 description = "Allows using bip39 mnemonic phrases to generate fedimint client keys"
 repository = "https://github.com/fedimint/fedimint"
 

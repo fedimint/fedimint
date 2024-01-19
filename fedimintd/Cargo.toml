@@ -5,6 +5,7 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimintd is the main consensus code for processing transactions and REST API"
 license = "MIT"
+readme = "../README.md"
 repository = "https://github.com/fedimint/fedimint"
 
 [package.metadata.docs.rs]

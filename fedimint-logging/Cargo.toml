@@ -5,6 +5,7 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "contains some utilities for logging and tracing"
 license = "MIT"
+readme = "../README.md"
 repository = "https://github.com/fedimint/fedimint"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
