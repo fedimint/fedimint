@@ -3,6 +3,7 @@ name = "fedimint-wasm-tests"
 version = "0.0.0"
 edition = "2021"
 license = "MIT"
+description = "Wasm tests for the fedimint."
 publish = false
 
 [lib]
