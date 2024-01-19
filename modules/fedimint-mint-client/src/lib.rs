@@ -499,7 +499,7 @@ impl MintClientInit {
 
                         for (out_point, amount, issuance_request) in finalized.unconfirmed_notes {
                             let client_ctx = dbtx.client_ctx();
-                            dbtx.add_state_machines_inactive(
+                            dbtx.add_state_machines(
                                 client_ctx
                                     .map_dyn(vec![MintClientStateMachines::Output(
                                         MintOutputStateMachine {

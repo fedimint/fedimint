@@ -146,17 +146,6 @@ where
             .await
     }
 
-    pub async fn add_state_machines_inactive(
-        &mut self,
-        dyn_states: Vec<DynState<DynGlobalClientContext>>,
-    ) -> AddStateMachinesResult {
-        self.client
-            .client
-            .get()
-            .add_state_machines_inactive(self.dbtx, dyn_states)
-            .await
-    }
-
     pub fn decoders(&self) -> ModuleDecoderRegistry {
         self.client.client.get().decoders().clone()
     }

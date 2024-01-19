@@ -838,16 +838,6 @@ impl Client {
         self.executor.add_state_machines_dbtx(dbtx, states).await
     }
 
-    pub async fn add_state_machines_inactive(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        states: Vec<DynState<DynGlobalClientContext>>,
-    ) -> AddStateMachinesResult {
-        self.executor
-            .add_state_machines_inactive_dbtx(dbtx, states)
-            .await
-    }
-
     // TODO: implement as part of [`OperationLog`]
     pub async fn get_active_operations(&self) -> HashSet<OperationId> {
         let active_states = self.executor.get_active_states().await;
