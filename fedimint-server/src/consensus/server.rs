@@ -397,7 +397,7 @@ impl ConsensusServer {
                 Network::new(self.connections.clone()),
                 self.keychain.clone(),
                 Spawner::new(),
-                aleph_bft_types::Terminator::create_root(terminator_receiver, "Terminator"),
+                aleph_bft::Terminator::create_root(terminator_receiver, "Terminator"),
             ),
         )
         .expect("some handle on non-wasm");

@@ -1,5 +1,6 @@
 use std::io::Cursor;
 
+use async_trait::async_trait;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 
 use crate::db::AlephUnitsKey;
@@ -40,40 +41,26 @@ pub async fn load_session(db: Database) -> (Cursor<Vec<u8>>, UnitSaver) {
 pub struct UnitSaver {
     db: Database,
     units_index: u64,
-    buffer: Vec<u8>,
 }
 
 impl UnitSaver {
     fn new(db: Database, units_index: u64) -> Self {
-        Self {
-            db,
-            units_index,
-            buffer: vec![],
-        }
+        Self { db, units_index }
     }
 }
 
-impl std::io::Write for UnitSaver {
-    fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
-        self.buffer.extend_from_slice(buffer);
-        Ok(buffer.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        futures::executor::block_on(async {
-            let mut dbtx = self.db.begin_transaction().await;
-
-            dbtx.insert_new_entry(&AlephUnitsKey(self.units_index), &self.buffer)
-                .await;
-
-            dbtx.commit_tx_result()
-                .await
-                .expect("This is the only place where we write to this key");
-        });
-
-        self.buffer.clear();
+#[async_trait]
+impl aleph_bft::UnitWriter for UnitSaver {
+    async fn write(&mut self, data: &[u8]) -> std::io::Result<()> {
         self.units_index += 1;
+        let mut dbtx = self.db.begin_transaction().await;
 
+        dbtx.insert_new_entry(&AlephUnitsKey(self.units_index), &data.to_owned())
+            .await;
+
+        dbtx.commit_tx_result()
+            .await
+            .expect("This is the only place where we write to this key");
         Ok(())
     }
 }
