@@ -388,7 +388,7 @@
           legacyPackages = craneMultiBuild;
 
           packages = {
-            inherit (craneMultiBuild) gatewayd gateway-cli fedimint-cli fedimintd fedimint-load-test-tool;
+            inherit (craneMultiBuild) gatewayd fedimint-dbtool gateway-cli fedimint-cli fedimintd fedimint-load-test-tool;
             inherit (craneMultiBuild) client-pkgs gateway-pkgs fedimint-pkgs devimint;
           };
 
