@@ -291,17 +291,76 @@
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
-<span class="kw">use </span>fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
+<span class="kw">use </span>fedimint_core::db::{
+    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationMap,
+    MODULE_GLOBAL_PREFIX,
+};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
+<span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 
-<span class="kw">pub const </span>GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">0</span>);
+<span class="kw">pub const </span>GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">1</span>);
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -310,6 +369,7 @@
     AcceptedTransaction = <span class="number">0x02</span>,
     SignedSessionOutcome = <span class="number">0x04</span>,
     AlephUnits = <span class="number">0x05</span>,
+    SignedSessionOutcomeCount = <span class="number">0x06</span>,
     Module = MODULE_GLOBAL_PREFIX,
 }
 
@@ -367,6 +427,17 @@
     query_prefix = SignedSessionOutcomePrefix
 );
 
+<span class="doccomment">/// Database entry that caches the current number of [`SignedSessionOutcome`]s
+/// in the database.
+</span><span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>SignedSessionOutcomeCountKey;
+
+<span class="macro">impl_db_record!</span>(
+    key = SignedSessionOutcomeCountKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::SignedSessionOutcomeCount,
+);
+
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>AlephUnitsKey(<span class="kw">pub </span>u64);
 
@@ -382,7 +453,25 @@
 <span class="macro">impl_db_lookup!</span>(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
 <span class="kw">pub fn </span>get_global_database_migrations() -&gt; MigrationMap {
-    MigrationMap::new()
+    <span class="kw">let </span><span class="kw-2">mut </span>mm = MigrationMap::new();
+    mm.insert(DatabaseVersion(<span class="number">0</span>), |dbtx| migrate_to_v1(dbtx).boxed());
+    mm
+}
+
+<span class="doccomment">/// Adds a database key that contains the current session count so that we don&#39;t
+/// have to scan the entire session history every time just to count the
+/// entries.
+</span><span class="kw">async fn </span>migrate_to_v1(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    <span class="kw">use </span>futures::StreamExt;
+
+    <span class="kw">let </span>session_count = dbtx
+        .find_by_prefix(<span class="kw-2">&amp;</span>SignedSessionOutcomePrefix)
+        .<span class="kw">await
+        </span>.count()
+        .<span class="kw">await as </span>u64;
+    dbtx.insert_new_entry(<span class="kw-2">&amp;</span>SignedSessionOutcomeCountKey, <span class="kw-2">&amp;</span>session_count)
+        .<span class="kw">await</span>;
+    <span class="prelude-val">Ok</span>(())
 }
 
 <span class="attr">#[cfg(test)]
@@ -395,7 +484,8 @@
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
     <span class="kw">use </span>fedimint_core::db::{
-        apply_migrations, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+        apply_migrations, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
+        IDatabaseTransactionOpsCoreTyped,
     };
     <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -411,7 +501,7 @@
     <span class="kw">use </span>secp256k1_zkp::Message;
     <span class="kw">use </span>strum::IntoEnumIterator;
 
-    <span class="kw">use </span><span class="kw">super</span>::AcceptedTransactionKey;
+    <span class="kw">use super</span>::{AcceptedTransactionKey, SignedSessionOutcomeCountKey};
     <span class="kw">use </span><span class="kw">crate</span>::db::{
         get_global_database_migrations, AcceptedItem, AcceptedItemKey, AcceptedItemPrefix,
         AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix,
@@ -426,6 +516,9 @@
     /// that creates a new database backup that can be tested.
     </span><span class="kw">async fn </span>create_server_db_with_v0_data(<span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
         <span class="kw">let </span>accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(<span class="kw-2">&amp;</span>BYTE_32).unwrap());
+
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>DatabaseVersionKey, <span class="kw-2">&amp;</span>DatabaseVersion(<span class="number">0</span>))
+            .<span class="kw">await</span>;
 
         <span class="kw">let </span>(sk, <span class="kw">_</span>) = secp256k1::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
@@ -567,6 +660,23 @@
                             <span class="macro">ensure!</span>(
                                 num_aleph_units &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any AlephUnits&quot;
+                            </span>);
+                        }
+                        DbKeyPrefix::SignedSessionOutcomeCount =&gt; {
+                            <span class="kw">let </span>session_outcome_count = dbtx
+                                .get_value(<span class="kw-2">&amp;</span>SignedSessionOutcomeCountKey)
+                                .<span class="kw">await
+                                </span>.expect(<span class="string">&quot;Count key should have been created&quot;</span>);
+
+                            <span class="kw">let </span>real_session_outcome_count =
+                                dbtx.find_by_prefix(<span class="kw-2">&amp;</span>SignedSessionOutcomePrefix)
+                                    .<span class="kw">await
+                                    </span>.count()
+                                    .<span class="kw">await as </span>u64;
+
+                            <span class="macro">assert_eq!</span>(
+                                session_outcome_count, real_session_outcome_count,
+                                <span class="string">&quot;Session outcome count cash is inconsistent&quot;
                             </span>);
                         }
                         <span class="comment">// Module prefix is reserved for modules, no migration testing is needed

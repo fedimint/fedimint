@@ -2788,6 +2788,7 @@
 <a href="#2788" id="2788">2788</a>
 <a href="#2789" id="2789">2789</a>
 <a href="#2790" id="2790">2790</a>
+<a href="#2791" id="2791">2791</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -4613,6 +4614,7 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
     <span class="kw">let </span>disk_version = dbtx.get_value(<span class="kw-2">&amp;</span>DatabaseVersionKey).<span class="kw">await</span>;
+
     <span class="kw">let </span>db_version = <span class="kw">if let </span><span class="prelude-val">Some</span>(disk_version) = disk_version {
         <span class="kw">let </span><span class="kw-2">mut </span>current_db_version = disk_version;
 

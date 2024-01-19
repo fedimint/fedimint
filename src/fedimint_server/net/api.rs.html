@@ -539,13 +539,6 @@
 <a href="#539" id="539">539</a>
 <a href="#540" id="540">540</a>
 <a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a>
-<a href="#543" id="543">543</a>
-<a href="#544" id="544">544</a>
-<a href="#545" id="545">545</a>
-<a href="#546" id="546">546</a>
-<a href="#547" id="547">547</a>
-<a href="#548" id="548">548</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -584,7 +577,6 @@
 <span class="kw">use </span>fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
 <span class="kw">use </span>fedimint_core::{OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
-<span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>jsonrpsee::RpcModule;
 <span class="kw">use </span>secp256k1_zkp::SECP256K1;
 <span class="kw">use </span>tokio::sync::RwLock;
@@ -593,8 +585,8 @@
 <span class="kw">use </span><span class="kw">super</span>::peers::PeerStatusChannels;
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::process_transaction_with_dbtx;
-<span class="kw">use </span><span class="kw">crate</span>::consensus::server::LatestContributionByPeer;
-<span class="kw">use </span><span class="kw">crate</span>::db::{AcceptedTransactionKey, SignedSessionOutcomeKey, SignedSessionOutcomePrefix};
+<span class="kw">use </span><span class="kw">crate</span>::consensus::server::{get_finished_session_count_static, LatestContributionByPeer};
+<span class="kw">use </span><span class="kw">crate</span>::db::{AcceptedTransactionKey, SignedSessionOutcomeKey};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use crate</span>::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
 
@@ -714,14 +706,8 @@
     }
 
     <span class="kw">pub async fn </span>session_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
-        <span class="self">self</span>.db
-            .begin_transaction()
-            .<span class="kw">await
-            </span>.find_by_prefix(<span class="kw-2">&amp;</span>SignedSessionOutcomePrefix)
-            .<span class="kw">await
-            </span>.count()
-            .<span class="kw">await as </span>u64
-    }
+        get_finished_session_count_static(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>).<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>await_signed_session_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, index: u64) -&gt; SignedSessionOutcome {
         <span class="self">self</span>.db
