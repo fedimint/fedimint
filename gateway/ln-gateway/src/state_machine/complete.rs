@@ -1,7 +1,10 @@
+use std::time::Duration;
+
 use fedimint_client::sm::{State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::task::sleep;
 use fedimint_ln_client::incoming::IncomingSmStates;
 use fedimint_ln_common::contracts::Preimage;
 use futures::StreamExt;
@@ -174,28 +177,40 @@ impl CompleteHtlcState {
         common: GatewayCompleteCommon,
         outcome: HtlcOutcome,
     ) -> Result<(), CompleteHtlcError> {
-        let htlc = match outcome {
-            HtlcOutcome::Success(preimage) => InterceptHtlcResponse {
-                action: Some(Action::Settle(Settle {
-                    preimage: preimage.0.to_vec(),
-                })),
-                incoming_chan_id: common.incoming_chan_id,
-                htlc_id: common.htlc_id,
-            },
-            HtlcOutcome::Failure(reason) => InterceptHtlcResponse {
-                action: Some(Action::Cancel(Cancel { reason })),
-                incoming_chan_id: common.incoming_chan_id,
-                htlc_id: common.htlc_id,
-            },
-        };
+        // Wait until the lightning node is online to complete the HTLC
+        loop {
+            let htlc_outcome = outcome.clone();
+            let lightning_context = context.gateway.get_lightning_context().await;
+            match lightning_context {
+                Ok(lightning_context) => {
+                    let htlc = match htlc_outcome {
+                        HtlcOutcome::Success(preimage) => InterceptHtlcResponse {
+                            action: Some(Action::Settle(Settle {
+                                preimage: preimage.0.to_vec(),
+                            })),
+                            incoming_chan_id: common.incoming_chan_id,
+                            htlc_id: common.htlc_id,
+                        },
+                        HtlcOutcome::Failure(reason) => InterceptHtlcResponse {
+                            action: Some(Action::Cancel(Cancel { reason })),
+                            incoming_chan_id: common.incoming_chan_id,
+                            htlc_id: common.htlc_id,
+                        },
+                    };
 
-        // TODO: Can we retry this instead of failing?
-        context
-            .lnrpc
-            .complete_htlc(htlc)
-            .await
-            .map_err(|_| CompleteHtlcError::FailedToCompleteHtlc)?;
-        Ok(())
+                    lightning_context
+                        .lnrpc
+                        .complete_htlc(htlc)
+                        .await
+                        .map_err(|_| CompleteHtlcError::FailedToCompleteHtlc)?;
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!("Trying to complete HTLC but got {e}, will keep retrying...");
+                    sleep(Duration::from_secs(5)).await;
+                }
+            }
+        }
     }
 
     async fn transition_success(

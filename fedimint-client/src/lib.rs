@@ -632,7 +632,7 @@ pub struct Client {
 impl Client {
     /// Initialize a client builder that can be configured to create a new
     /// client.
-    pub fn builder(db: DatabaseSource) -> ClientBuilder {
+    pub fn builder(db: Database) -> ClientBuilder {
         ClientBuilder::new(db)
     }
 
@@ -1443,30 +1443,12 @@ impl FederationInfo {
 pub struct ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
-    db: DatabaseSource,
+    db: Database,
     stopped: bool,
 }
 
-pub enum DatabaseSource {
-    Fresh(Database),
-    #[deprecated(
-        note = "DatabaseSource::Reuse was a workound and is deprecated now. See https://github.com/fedimint/fedimint/pull/3781#issuecomment-1835319259"
-    )]
-    Reuse(ClientArc),
-}
-
-impl AsRef<Database> for DatabaseSource {
-    fn as_ref(&self) -> &Database {
-        match self {
-            DatabaseSource::Fresh(db) => db,
-            #[allow(deprecated)]
-            DatabaseSource::Reuse(client) => client.db(),
-        }
-    }
-}
-
 impl ClientBuilder {
-    fn new(db: DatabaseSource) -> Self {
+    fn new(db: Database) -> Self {
         ClientBuilder {
             module_inits: Default::default(),
             primary_module_instance: Default::default(),
@@ -1506,11 +1488,11 @@ impl ClientBuilder {
     }
 
     pub fn db(&self) -> &Database {
-        self.db.as_ref()
+        &self.db
     }
 
     pub async fn load_existing_config(&self) -> anyhow::Result<ClientConfig> {
-        let Some(config) = Client::get_config_from_db(self.db.as_ref()).await else {
+        let Some(config) = Client::get_config_from_db(&self.db).await else {
             bail!("Client database not initialized")
         };
 
@@ -1523,13 +1505,13 @@ impl ClientBuilder {
         config: ClientConfig,
         invite_code: InviteCode,
     ) -> anyhow::Result<ClientArc> {
-        if Client::is_initialized(self.db.as_ref()).await {
+        if Client::is_initialized(&self.db).await {
             bail!("Client database already initialized")
         }
 
         {
             debug!(target: LOG_CLIENT, "Initializing client database");
-            let mut dbtx = self.db.as_ref().begin_transaction().await;
+            let mut dbtx = self.db.begin_transaction().await;
             // Save config to DB
             dbtx.insert_new_entry(
                 &ClientConfigKey {
@@ -1567,7 +1549,7 @@ impl ClientBuilder {
     }
 
     pub async fn open(self, root_secret: DerivableSecret) -> anyhow::Result<ClientArc> {
-        let Some(config) = Client::get_config_from_db(self.db.as_ref()).await else {
+        let Some(config) = Client::get_config_from_db(&self.db).await else {
             bail!("Client database not initialized")
         };
         let stopped = self.stopped;
@@ -1597,7 +1579,7 @@ impl ClientBuilder {
             ModuleKind::from_static_str("tx_submission"),
             tx_submission_sm_decoder(),
         );
-        let db = self.db.as_ref().to_owned().with_decoders(decoders.clone());
+        let db = self.db.with_decoders(decoders.clone());
 
         let config = config.clone().redecode_raw(&decoders)?;
 

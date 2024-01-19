@@ -53,9 +53,7 @@ impl FederationTest {
 
     pub async fn new_client_with_config(&self, client_config: ClientConfig) -> ClientArc {
         info!(target: LOG_TEST, "Setting new client with config");
-        let mut client_builder = Client::builder(fedimint_client::DatabaseSource::Fresh(
-            MemDatabase::new().into(),
-        ));
+        let mut client_builder = Client::builder(MemDatabase::new().into());
         client_builder.with_module_inits(self.client_init.clone());
         client_builder.with_primary_module(self.primary_client);
         let client_secret = Client::load_or_generate_client_secret(client_builder.db())

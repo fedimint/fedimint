@@ -14,7 +14,7 @@ use fedimint_client::ClientArc;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::task::sleep;
-use fedimint_core::util::{NextOrPending, SafeUrl};
+use fedimint_core::util::NextOrPending;
 use fedimint_core::{msats, sats, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
@@ -40,13 +40,15 @@ use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::{GatewayTest, LightningNodeType, DEFAULT_GATEWAY_PASSWORD};
 use fedimint_testing::ln::LightningTest;
 use futures::Future;
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use ln_gateway::gateway_lnrpc::GetNodeInfoResponse;
 use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcResult};
-use ln_gateway::rpc::{BalancePayload, ConnectFedPayload, SetConfigurationPayload};
+use ln_gateway::rpc::{
+    BalancePayload, ConnectFedPayload, LeaveFedPayload, SetConfigurationPayload,
+};
 use ln_gateway::state_machine::{
     GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates, GatewayExtReceiveStates,
-    GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
+    GatewayMeta, Htlc,
 };
 use ln_gateway::utils::retry;
 use ln_gateway::{GatewayState, DEFAULT_FEES, DEFAULT_NETWORK};
@@ -696,44 +698,40 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
         .new_gateway(node, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
         .await;
     gateway_test.connect_fed(&fed).await;
-    let gateway = gateway_test.remove_client(&fed).await;
 
-    let mut fake_api = SafeUrl::from_str("http://127.0.0.1:8175").unwrap();
-    let fake_route_hints = Vec::new();
-    // Register with the federation with a low TTL to verify it will re-register
-    gateway
-        .get_first_module::<GatewayClientModule>()
-        .register_with_federation(
-            fake_api.clone(),
-            fake_route_hints.clone(),
-            GW_ANNOUNCEMENT_TTL,
-            gateway_test.get_gateway_id(),
-            DEFAULT_FEES,
-        )
-        .await?;
+    let routing_fees = RoutingFees {
+        base_msat: 0,
+        proportional_millionths: 0,
+    };
     let lightning_module = user_client.get_first_module::<LightningClientModule>();
     let gateways = lightning_module.fetch_registered_gateways().await?;
+    assert!(!gateways.is_empty());
     assert!(gateways
         .into_iter()
-        .any(|gateway| gateway.info.api == fake_api));
+        .any(|gateway| gateway.info.fees == routing_fees));
 
-    // Update the URI for the gateway then re-register
-    fake_api = SafeUrl::from_str("http://127.0.0.1:8176").unwrap();
+    // Leave the federation
+    let rpc_client = gateway_test
+        .get_rpc()
+        .await
+        .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
+    verify_rpc(
+        || {
+            rpc_client.leave_federation(LeaveFedPayload {
+                federation_id: fed.id(),
+            })
+        },
+        StatusCode::OK,
+    )
+    .await;
 
-    gateway
-        .get_first_module::<GatewayClientModule>()
-        .register_with_federation(
-            fake_api.clone(),
-            fake_route_hints,
-            GW_ANNOUNCEMENT_TTL,
-            gateway_test.get_gateway_id(),
-            DEFAULT_FEES,
-        )
-        .await?;
+    // Reconnect the federation and verify that the gateway has registered.
     let gateways = lightning_module.fetch_registered_gateways().await?;
+    gateway_test.connect_fed(&fed).await;
+    assert!(!gateways.is_empty());
     assert!(gateways
         .into_iter()
-        .any(|gateway| gateway.info.api == fake_api));
+        .any(|gateway| gateway.info.fees == routing_fees));
 
     Ok(())
 }
@@ -928,6 +926,42 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
             }
         }
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_cannot_connect_same_federation() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+
+    let fed = fixtures.new_fed().await;
+    let lnd = fixtures.lnd().await;
+    let gateway = fixtures
+        .new_gateway(lnd, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
+        .await;
+    let rpc_client = gateway
+        .get_rpc()
+        .await
+        .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
+
+    // Verify that we can't join a federation yet because the configuration is not
+    // set
+    let join_payload = ConnectFedPayload {
+        invite_code: fed.invite_code().to_string(),
+    };
+
+    verify_rpc(
+        || rpc_client.connect_federation(join_payload.clone()),
+        StatusCode::OK,
+    )
+    .await;
+
+    // Try to connect the same federation
+    verify_rpc(
+        || rpc_client.connect_federation(join_payload.clone()),
+        StatusCode::INTERNAL_SERVER_ERROR,
+    )
+    .await;
 
     Ok(())
 }
