@@ -221,14 +221,7 @@ impl ConsensusServer {
         assert_eq!(self.cfg.consensus.broadcast_public_keys.len(), 1);
 
         while !task_handle.is_shutting_down() {
-            let session_index = self
-                .db
-                .begin_transaction()
-                .await
-                .find_by_prefix(&SignedSessionOutcomePrefix)
-                .await
-                .count()
-                .await as u64;
+            let session_index = self.get_finished_session_count().await;
 
             let mut item_index = self.build_session_outcome().await.items.len() as u64;
 
@@ -288,14 +281,7 @@ impl ConsensusServer {
         self.confirm_server_config_consensus_hash().await?;
 
         while !task_handle.is_shutting_down() {
-            let session_index = self
-                .db
-                .begin_transaction()
-                .await
-                .find_by_prefix(&SignedSessionOutcomePrefix)
-                .await
-                .count()
-                .await as u64;
+            let session_index = self.get_finished_session_count().await;
 
             self.run_session(session_index).await?;
 
@@ -734,6 +720,19 @@ impl ConsensusServer {
             }
         }
     }
+
+    /// Returns the number of sessions already saved in the database. This count
+    /// **does not** include the currently running session.
+    async fn get_finished_session_count(&self) -> u64 {
+        get_finished_session_count_static(&mut self.db.begin_transaction_nc().await).await
+    }
+}
+
+pub(crate) async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+    dbtx.find_by_prefix(&SignedSessionOutcomePrefix)
+        .await
+        .count()
+        .await as u64
 }
 
 async fn submit_module_consensus_items(
