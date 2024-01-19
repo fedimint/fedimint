@@ -34,6 +34,7 @@ use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
+pub use {bitcoin, lightning_invoice};
 
 use crate::contracts::incoming::OfferId;
 use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, PreimageDecryptionShare};
