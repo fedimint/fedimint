@@ -52,7 +52,6 @@ impl UnitSaver {
 #[async_trait]
 impl aleph_bft::UnitWriter for UnitSaver {
     async fn write(&mut self, data: &[u8]) -> std::io::Result<()> {
-        self.units_index += 1;
         let mut dbtx = self.db.begin_transaction().await;
 
         dbtx.insert_new_entry(&AlephUnitsKey(self.units_index), &data.to_owned())
@@ -61,6 +60,7 @@ impl aleph_bft::UnitWriter for UnitSaver {
         dbtx.commit_tx_result()
             .await
             .expect("This is the only place where we write to this key");
+        self.units_index += 1;
         Ok(())
     }
 }
