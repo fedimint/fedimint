@@ -1,7 +1,9 @@
+pub mod alby;
 pub mod cln;
 pub mod lnd;
 
 use std::fmt::Debug;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -14,6 +16,7 @@ use fedimint_ln_common::PrunedInvoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use self::alby::GatewayAlbyClient;
 use self::cln::{NetworkLnRpcClient, RouteHtlcStream};
 use self::lnd::GatewayLndClient;
 use crate::gateway_lnrpc::{
@@ -118,6 +121,13 @@ pub enum LightningMode {
         #[arg(long = "cln-extension-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
         cln_extension_addr: SafeUrl,
     },
+    #[clap(name = "alby")]
+    Alby {
+        #[arg(long = "bind-addr", env = "FM_GATEWAY_WEBSERVER_BIND_ADDR")]
+        bind_addr: SocketAddr,
+        #[arg(long = "api-key", env = "FM_GATEWAY_LIGHTNING_API_KEY")]
+        api_key: String,
+    },
 }
 
 #[async_trait]
@@ -144,6 +154,29 @@ impl LightningBuilder for GatewayLightningBuilder {
             } => Box::new(
                 GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, None).await,
             ),
+            LightningMode::Alby { bind_addr, api_key } => {
+                let outcomes = Arc::new(Mutex::new(BTreeMap::new()));
+                Box::new(GatewayAlbyClient::new(bind_addr, api_key, outcomes).await)
+            }
         }
+    }
+}
+
+pub async fn send_htlc_to_webhook(
+    outcomes: &Arc<Mutex<BTreeMap<u64, Sender<InterceptHtlcResponse>>>>,
+    htlc: InterceptHtlcResponse,
+) -> Result<(), LightningRpcError> {
+    let htlc_id = htlc.htlc_id;
+    if let Some(sender) = outcomes.lock().await.remove(&htlc_id) {
+        sender
+            .send(htlc)
+            .map_err(|_| LightningRpcError::FailedToCompleteHtlc {
+                failure_reason: "Failed to send back to webhook".to_string(),
+            })?;
+        Ok(())
+    } else {
+        Err(LightningRpcError::FailedToCompleteHtlc {
+            failure_reason: format!("Could not find sender for HTLC {}", htlc_id),
+        })
     }
 }
