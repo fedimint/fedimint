@@ -8,10 +8,7 @@ use fedimint_core::util::SafeUrl;
 use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls;
 
-use crate::api::{
-    DynGlobalApi, FederationApiExt, FederationResult, GlobalFederationApiWithCache, ServerStatus,
-    StatusResponse, WsFederationApi,
-};
+use crate::api::{DynGlobalApi, FederationApiExt, FederationResult, ServerStatus, StatusResponse};
 use crate::config::ServerModuleConfigGenParamsRegistry;
 use crate::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
@@ -36,11 +33,7 @@ impl WsAdminClient {
         // multiple peers so errors can be attributed. The admin client has no use for
         // them.
         Self {
-            inner: GlobalFederationApiWithCache::new(WsFederationApi::new(vec![(
-                PeerId(0),
-                url.clone(),
-            )]))
-            .into(),
+            inner: DynGlobalApi::from_endpoints(vec![(PeerId(0), url.clone())]),
             url,
         }
     }

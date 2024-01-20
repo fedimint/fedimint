@@ -398,6 +398,18 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 }
 
 impl DynGlobalApi {
+    pub fn from_endpoints(peers: Vec<(PeerId, SafeUrl)>) -> Self {
+        GlobalFederationApiWithCache::new(WsFederationApi::new(peers)).into()
+    }
+
+    pub fn from_config(config: &ClientConfig) -> Self {
+        GlobalFederationApiWithCache::new(WsFederationApi::from_config(config)).into()
+    }
+
+    pub fn from_invite_code(invite_code: &[InviteCode]) -> Self {
+        GlobalFederationApiWithCache::new(WsFederationApi::from_invite_code(invite_code)).into()
+    }
+
     pub async fn await_output_outcome<R>(
         &self,
         outpoint: OutPoint,
@@ -486,7 +498,7 @@ where
 /// [`IGlobalFederationApi`] wrapping some `T: IRawFederationApi` and adding
 /// a tiny bit of caching.
 #[derive(Debug)]
-pub struct GlobalFederationApiWithCache<T> {
+struct GlobalFederationApiWithCache<T> {
     inner: T,
     /// Small LRU used as [`IGlobalFederationApi::await_block`] cache.
     ///

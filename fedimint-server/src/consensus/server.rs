@@ -5,9 +5,7 @@ use std::time::Duration;
 use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
 use async_channel::{Receiver, Sender};
-use fedimint_core::api::{
-    FederationApiExt, GlobalFederationApiWithCache, IGlobalFederationApi, WsFederationApi,
-};
+use fedimint_core::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::{
     apply_migrations, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -298,8 +296,7 @@ impl ConsensusServer {
 
     async fn confirm_server_config_consensus_hash(&self) -> anyhow::Result<()> {
         let our_hash = self.cfg.consensus.consensus_hash();
-        let federation_api =
-            GlobalFederationApiWithCache::new(WsFederationApi::new(self.api_endpoints.clone()));
+        let federation_api = DynGlobalApi::from_endpoints(self.api_endpoints.clone());
 
         info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
 
