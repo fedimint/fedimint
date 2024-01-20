@@ -9,7 +9,7 @@ use tracing::{error, instrument};
 
 use crate::gateway_lnrpc::intercept_htlc_response::Action;
 use crate::gateway_lnrpc::{InterceptHtlcRequest, InterceptHtlcResponse};
-use crate::lightning::alby::GatewayAlbyClient;
+use crate::lightning::coinos::GatewayCoinosClient;
 use crate::lightning::LightningRpcError;
 use crate::GatewayError;
 
@@ -17,7 +17,7 @@ pub async fn run_webhook_server(
     bind_addr: SocketAddr,
     task_group: &mut TaskGroup,
     htlc_stream_sender: tokio::sync::mpsc::Sender<Result<InterceptHtlcRequest, tonic::Status>>,
-    client: GatewayAlbyClient,
+    client: GatewayCoinosClient,
 ) -> axum::response::Result<()> {
     let app = Router::new()
         .route("/handle_htlc", post(handle_htlc))
@@ -131,7 +131,7 @@ async fn handle_htlc(
     Extension(htlc_stream_sender): Extension<
         tokio::sync::mpsc::Sender<Result<InterceptHtlcRequest, tonic::Status>>,
     >,
-    Extension(client): Extension<GatewayAlbyClient>,
+    Extension(client): Extension<GatewayCoinosClient>,
     params: Json<WebhookHandleHtlcParams>,
 ) -> Result<Json<WebhookHandleHtlcResponse>, GatewayError> {
     let htlc = params.htlc.clone();

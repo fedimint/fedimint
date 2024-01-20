@@ -1,5 +1,5 @@
-pub mod alby;
 pub mod cln;
+pub mod coinos;
 pub mod lnd;
 
 use std::collections::BTreeMap;
@@ -19,8 +19,8 @@ use thiserror::Error;
 use tokio::sync::oneshot::Sender;
 use tokio::sync::Mutex;
 
-use self::alby::GatewayAlbyClient;
 use self::cln::{NetworkLnRpcClient, RouteHtlcStream};
+use self::coinos::GatewayCoinosClient;
 use self::lnd::GatewayLndClient;
 use crate::gateway_lnrpc::{
     EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
@@ -47,6 +47,12 @@ pub enum LightningRpcError {
     FailedToOpenChannel { failure_reason: String },
     #[error("Failed to get Invoice: {failure_reason}")]
     FailedToGetInvoice { failure_reason: String },
+}
+
+pub trait GatewayApiClient: Debug + Send + Sync + Clone + Sized {
+    fn bind_addr(&self) -> &SocketAddr;
+    fn api_key(&self) -> &String;
+    fn outcomes(&self) -> &Arc<Mutex<BTreeMap<u64, Sender<InterceptHtlcResponse>>>>;
 }
 
 #[async_trait]
@@ -124,8 +130,8 @@ pub enum LightningMode {
         #[arg(long = "cln-extension-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
         cln_extension_addr: SafeUrl,
     },
-    #[clap(name = "alby")]
-    Alby {
+    #[clap(name = "coinos")]
+    Coinos {
         #[arg(long = "bind-addr", env = "FM_GATEWAY_WEBSERVER_BIND_ADDR")]
         bind_addr: SocketAddr,
         #[arg(long = "api-key", env = "FM_GATEWAY_LIGHTNING_API_KEY")]
@@ -157,9 +163,9 @@ impl LightningBuilder for GatewayLightningBuilder {
             } => Box::new(
                 GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, None).await,
             ),
-            LightningMode::Alby { bind_addr, api_key } => {
+            LightningMode::Coinos { bind_addr, api_key } => {
                 let outcomes = Arc::new(Mutex::new(BTreeMap::new()));
-                Box::new(GatewayAlbyClient::new(bind_addr, api_key, outcomes).await)
+                Box::new(GatewayCoinosClient::new(bind_addr, api_key, outcomes).await)
             }
         }
     }

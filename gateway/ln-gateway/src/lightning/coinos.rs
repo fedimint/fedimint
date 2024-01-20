@@ -1,14 +1,13 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use fedimint_ln_common::PrunedInvoice;
-use secp256k1::PublicKey;
+use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::oneshot::Sender;
@@ -23,31 +22,54 @@ use crate::gateway_lnrpc::{
 };
 use crate::rpc::rpc_webhook_server::run_webhook_server;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct AlbyPayResponse {
-    amount: u64,
-    description: String,
-    destination: String,
-    fee: u64,
-    payment_hash: Vec<u8>,
-    payment_preimage: Vec<u8>,
-    payment_request: String,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CoinosInvoiceResponse {
+    pub amount: u64,
+    pub created: u64,
+    pub currency: String,
+    pub hash: Bolt11Invoice,
+    pub id: String,
+    pub rate: f64,
+    pub pending: u64,
+    pub received: u64,
+    pub text: String,
+    pub tip: Option<String>,
+    pub r#type: String,
+    pub uid: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CoinosPayResponse {
+    pub id: String,
+    pub amount: i64,
+    pub fee: u64,
+    pub hash: String,
+    pub ourfee: u64,
+    pub iid: Option<String>,
+    pub uid: String,
+    pub confirmed: bool,
+    pub rate: f64,
+    pub currency: String,
+    pub r#type: String,
+    pub r#ref: String,
+    pub tip: Option<String>,
+    pub created: u64,
 }
 
 #[derive(Clone)]
-pub struct GatewayAlbyClient {
+pub struct GatewayCoinosClient {
     bind_addr: SocketAddr,
     api_key: String,
     pub outcomes: Arc<Mutex<BTreeMap<u64, Sender<InterceptHtlcResponse>>>>,
 }
 
-impl GatewayAlbyClient {
+impl GatewayCoinosClient {
     pub async fn new(
         bind_addr: SocketAddr,
         api_key: String,
         outcomes: Arc<Mutex<BTreeMap<u64, Sender<InterceptHtlcResponse>>>>,
     ) -> Self {
-        info!("Gateway configured to connect to Alby at \n address: {bind_addr:?}");
+        info!("Gateway configured to connect to Coinos at \n address: {bind_addr:?}");
         Self {
             api_key,
             bind_addr,
@@ -56,37 +78,54 @@ impl GatewayAlbyClient {
     }
 }
 
-impl fmt::Debug for GatewayAlbyClient {
+impl fmt::Debug for GatewayCoinosClient {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "AlbyClient")
+        write!(f, "CoinosClient")
     }
 }
 
 #[async_trait]
-impl ILnRpcClient for GatewayAlbyClient {
+impl ILnRpcClient for GatewayCoinosClient {
     /// Returns the public key of the lightning node to use in route hint
-    ///
-    /// What should we do here with Alby?
-    /// - Is the pubkey always the same?
-    /// - Could change to optional: If Custodial API, hardcode the pubkey for
-    ///   the node
+    /// Coinos always uses the same pubkey, so we can get it by querying
+    /// for an invoice and then parsing the pubkey and network
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
-        let mainnet = "mainnet";
-        let alias = "getalby.com";
-        let pub_key = PublicKey::from_str(
-            "030a58b8653d32b99200a2334cfe913e51dc7d155aa0116c176657a4f1722677a3",
-        )
-        .unwrap();
-        let pub_key = pub_key.serialize().to_vec();
+        let endpoint = "https://coinos.io/api/invoice";
+        let alias = "Coinos";
+
+        let client = reqwest::Client::new();
+        let req = json!({
+            "invoice": {
+                "amount": 1000,
+                "type": "lightning"
+            }
+        });
+        let response = client
+            .post(endpoint)
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| LightningRpcError::FailedToGetInvoice {
+                failure_reason: format!("Failed to get invoice: {:?}", e),
+            })?;
+
+        let invoice_response = response.json::<CoinosInvoiceResponse>().await.unwrap();
+        let pub_key = invoice_response.hash.payee_pub_key().ok_or_else(|| {
+            LightningRpcError::FailedToGetInvoice {
+                failure_reason: "Failed to get pubkey from invoice".to_string(),
+            }
+        })?;
 
         return Ok(GetNodeInfoResponse {
-            pub_key,
+            pub_key: pub_key.serialize().to_vec(),
             alias: alias.to_string(),
-            network: mainnet.to_string(),
+            network: invoice_response.hash.network().to_string(),
         });
     }
 
-    /// We can probably just use the Alby node pubkey here?
+    /// We can probably just use the Coinos node pubkey here?
     /// SCID is the short channel ID mapping to the federation
     async fn routehints(
         &self,
@@ -95,33 +134,36 @@ impl ILnRpcClient for GatewayAlbyClient {
         todo!()
     }
 
-    /// Pay an invoice using the alby api
-    /// Pay needs to be idempotent, this is why we need lookup payment,
-    /// would need to do something similar with Alby
+    /// Pay an invoice using the Coinos Api
     async fn pay(
         &self,
         request: PayInvoiceRequest,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
+        let endpoint = "https://coinos.io/api/payments";
         let client = reqwest::Client::new();
-        let endpoint = "https://api.getalby.com/payments/bolt11";
-
         let req = json!({
-            "invoice": request.invoice,
+            "payreq": request.invoice,
         });
-
         let response = client
             .post(endpoint)
+            .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&req)
             .send()
             .await
-            .unwrap();
+            .map_err(|e| LightningRpcError::FailedPayment {
+                failure_reason: format!("Failed to pay invoice: {:?}", e),
+            })?;
 
-        let response = response.json::<AlbyPayResponse>().await.unwrap();
+        let _pay_response = response.json::<CoinosPayResponse>().await.map_err(|e| {
+            LightningRpcError::FailedPayment {
+                failure_reason: format!("Failed to parse invoice: {:?}", e),
+            }
+        })?;
+        // TODO: We need the preimage back from a successful payment
+        // let preimage = pay_response.preimage;
 
-        Ok(PayInvoiceResponse {
-            preimage: response.payment_preimage,
-        })
+        Ok(PayInvoiceResponse { preimage: vec![] })
     }
 
     // FIXME: deduplicate implementation with pay
