@@ -346,6 +346,12 @@
 <a href="#346" id="346">346</a>
 <a href="#347" id="347">347</a>
 <a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
@@ -495,6 +501,7 @@
     <span class="kw">use </span>fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
     <span class="kw">use </span>fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
     <span class="kw">use </span>fedimint_dummy_server::Dummy;
+    <span class="kw">use </span>fedimint_logging::TracingSetup;
     <span class="kw">use </span>fedimint_testing::db::{prepare_db_migration_snapshot, validate_migrations, BYTE_32};
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>rand::rngs::OsRng;
@@ -515,6 +522,9 @@
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
     </span><span class="kw">async fn </span>create_server_db_with_v0_data(<span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>DatabaseVersionKey, <span class="kw-2">&amp;</span>DatabaseVersion(<span class="number">0</span>))
+            .<span class="kw">await</span>;
+
         <span class="kw">let </span>accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(<span class="kw-2">&amp;</span>BYTE_32).unwrap());
 
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>DatabaseVersionKey, <span class="kw-2">&amp;</span>DatabaseVersion(<span class="number">0</span>))
@@ -595,6 +605,8 @@
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_migrations() -&gt; anyhow::Result&lt;()&gt; {
+        TracingSetup::default().init()<span class="question-mark">?</span>;
+
         validate_migrations(
             <span class="string">&quot;fedimint-server&quot;</span>,
             |db| <span class="kw">async move </span>{

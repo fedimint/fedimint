@@ -2789,6 +2789,7 @@
 <a href="#2789" id="2789">2789</a>
 <a href="#2790" id="2790">2790</a>
 <a href="#2791" id="2791">2791</a>
+<a href="#2792" id="2792">2792</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -4626,6 +4627,7 @@
 
         <span class="kw">while </span>current_db_version &lt; target_db_version {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(migration) = migrations.get(<span class="kw-2">&amp;</span>current_db_version) {
+                <span class="macro">info!</span>(target: LOG_DB, <span class="string">&quot;Migrating module {kind} from {current_db_version} to {target_db_version}&quot;</span>);
                 migration(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc()).<span class="kw">await</span><span class="question-mark">?</span>;
             } <span class="kw">else </span>{
                 <span class="macro">panic!</span>(<span class="string">&quot;Missing migration for version {current_db_version}&quot;</span>);
