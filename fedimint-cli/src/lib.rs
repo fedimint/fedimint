@@ -325,7 +325,7 @@ async fn load_or_generate_mnemonic(db: &Database) -> Result<Mnemonic, CliError> 
 #[derive(Subcommand, Clone)]
 #[allow(clippy::large_enum_variant)]
 enum Command {
-    /// Print the latest git commit hash this bin. was build with
+    /// Print the latest Git commit hash this bin. was built with.
     VersionHash,
 
     #[clap(flatten)]
@@ -697,8 +697,11 @@ impl FedimintCli {
                 peer_id,
                 password: auth,
             }) => {
-                let params: Value = serde_json::from_str(&params)
-                    .map_err_cli_msg(CliErrorKind::InvalidValue, "Invalid JSON-RPC parameters")?;
+                //Parse params to JSON.
+                //If fails, convert to JSON string.
+                let params = serde_json::from_str::<Value>(&params)
+                    .unwrap_or_else(|_| serde_json::Value::String(params));
+
                 let mut params = ApiRequestErased::new(params);
                 if let Some(auth) = auth {
                     params = params.with_auth(ApiAuth(auth))
