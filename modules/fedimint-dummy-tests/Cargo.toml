@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-dummy-tests"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-dummy is a dummy example fedimint module."

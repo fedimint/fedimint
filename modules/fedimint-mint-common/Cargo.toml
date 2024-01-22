@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-mint-common"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-mint is a chaumian ecash mint module."
@@ -22,14 +22,14 @@ bincode = "1.3.1"
 bitcoin_hashes = "0.11.0"
 futures = "0.3"
 itertools = "0.10.5"
-fedimint-core = { version = "0.2.2-rc2", path = "../../fedimint-core" }
+fedimint-core = { version = "0.2.2-rc3", path = "../../fedimint-core" }
 rand = "0.8"
 secp256k1 = "0.24.2"
 secp256k1-zkp = "0.7.0"
 serde = { version = "1.0.149", features = [ "derive" ] }
 strum = "0.24"
 strum_macros = "0.24"
-tbs = { package = "fedimint-tbs", version = "0.2.2-rc2", path = "../../crypto/tbs" }
+tbs = { package = "fedimint-tbs", version = "0.2.2-rc3", path = "../../crypto/tbs" }
 thiserror = "1.0.39"
 threshold_crypto = { workspace = true }
 tracing ="0.1.37"
