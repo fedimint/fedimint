@@ -90,7 +90,7 @@ impl PeerError {
                 JsonRpcError::MaxSlotsExceeded => true,
                 JsonRpcError::RequestTimeout => true,
                 JsonRpcError::RestartNeeded(_) => true,
-                JsonRpcError::Call(e) => e.code() == 404,
+                JsonRpcError::Call(_) => true,
                 _ => false,
             },
             PeerError::InvalidResponse(_) => false,
