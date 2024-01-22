@@ -1340,7 +1340,7 @@
                 JsonRpcClientError::MaxSlotsExceeded =&gt; <span class="bool-val">true</span>,
                 JsonRpcClientError::RequestTimeout =&gt; <span class="bool-val">true</span>,
                 JsonRpcClientError::RestartNeeded(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-                JsonRpcClientError::Call(e) =&gt; e.code() == <span class="number">404</span>,
+                JsonRpcClientError::Call(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
                 <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
             },
             PeerError::InvalidResponse(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
