@@ -58,6 +58,13 @@ pub mod backup;
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable)]
 pub struct OperationId(pub [u8; 32]);
 
+/// Special default `OperationId` value, should be used only for operations
+/// which does not require/produces an `OperationId`.
+///
+/// Example: The default value is used on the federation API bootstrapping, and
+/// for the default client that has not been prior created by an operation.
+pub const DEFAULT_OPERATION_ID: [u8; 32] = [0; 32];
+
 impl OperationId {
     /// Generate random [`OperationId`]
     pub fn new_random() -> Self {
@@ -136,7 +143,7 @@ pub const MODULE_INSTANCE_ID_GLOBAL: u16 = u16::MAX;
 
 // Note: needs to be in alphabetical order of ModuleKind of each module,
 // as this is the ordering we currently hardcoded.
-// Should be used only for pre-modularization code we still have  left
+// Should be used only for pre-modularization code we still have left
 pub const LEGACY_HARDCODED_INSTANCE_ID_LN: ModuleInstanceId = 0;
 pub const LEGACY_HARDCODED_INSTANCE_ID_MINT: ModuleInstanceId = 1;
 pub const LEGACY_HARDCODED_INSTANCE_ID_WALLET: ModuleInstanceId = 2;
