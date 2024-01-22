@@ -7,7 +7,7 @@ use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
-    LeaveFedPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    LeaveFedPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 use serde::Serialize;
 
@@ -99,7 +99,7 @@ async fn main() -> anyhow::Result<()> {
     TracingSetup::default().init()?;
 
     let cli = Cli::parse();
-    let versioned_api = cli.address.join("v1")?;
+    let versioned_api = cli.address.join(V1_API_ENDPOINT)?;
     let client = || GatewayRpcClient::new(versioned_api, cli.rpcpassword);
 
     match cli.command {

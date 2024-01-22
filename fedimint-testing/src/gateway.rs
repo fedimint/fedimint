@@ -19,7 +19,7 @@ use lightning_invoice::RoutingFees;
 use ln_gateway::client::GatewayClientBuilder;
 use ln_gateway::lnrpc_client::{ILnRpcClient, LightningBuilder};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::{ConnectFedPayload, FederationConnectionInfo};
+use ln_gateway::rpc::{ConnectFedPayload, FederationConnectionInfo, V1_API_ENDPOINT};
 use ln_gateway::{Gateway, GatewayState};
 use secp256k1::PublicKey;
 use tempfile::TempDir;
@@ -91,7 +91,7 @@ impl GatewayTest {
     ) -> Self {
         let listen: SocketAddr = format!("127.0.0.1:{base_port}").parse().unwrap();
         let address: SafeUrl = format!("http://{listen}").parse().unwrap();
-        let versioned_api = address.join("v1").unwrap();
+        let versioned_api = address.join(V1_API_ENDPOINT).unwrap();
 
         let (path, _config_dir) = test_dir(&format!("gateway-{}", rand::random::<u64>()));
 
@@ -165,6 +165,12 @@ impl GatewayTest {
         }
     }
 
+    /// Waits for the webserver to be ready.
+    ///
+    /// This function is used to ensure that the webserver is fully initialized
+    /// and ready to accept incoming requests. It is designed to be used in
+    /// a concurrent environment where the webserver might be initialized in a
+    /// separate thread or task.
     pub async fn wait_for_webserver(
         versioned_api: SafeUrl,
         password: Option<String>,

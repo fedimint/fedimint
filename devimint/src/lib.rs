@@ -4,6 +4,7 @@ use std::ops::ControlFlow;
 use anyhow::{Context, Result};
 use federation::Federation;
 use fedimint_logging::LOG_DEVIMINT;
+use ln_gateway::rpc::V1_API_ENDPOINT;
 use tracing::info;
 
 pub mod util;
@@ -45,7 +46,7 @@ impl Gatewayd {
             LightningNode::Cln(_) => process_mgr.globals.FM_PORT_GW_CLN,
             LightningNode::Lnd(_) => process_mgr.globals.FM_PORT_GW_LND,
         };
-        let addr = format!("http://127.0.0.1:{port}/v1");
+        let addr = format!("http://127.0.0.1:{port}/{V1_API_ENDPOINT}");
         let gateway_env: HashMap<String, String> = HashMap::from_iter([
             (
                 "FM_GATEWAY_DATA_DIR".to_owned(),

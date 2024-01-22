@@ -62,7 +62,7 @@ use lnrpc_client::{ILnRpcClient, LightningBuilder, LightningRpcError, RouteHtlcS
 use rand::rngs::OsRng;
 use rpc::{
     FederationConnectionInfo, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    SetConfigurationPayload,
+    SetConfigurationPayload, V1_API_ENDPOINT,
 };
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
@@ -152,7 +152,7 @@ pub struct GatewayOpts {
 
 impl GatewayOpts {
     fn to_gateway_parameters(&self) -> anyhow::Result<GatewayParameters> {
-        let versioned_api = self.api_addr.join("v1").map_err(|e| {
+        let versioned_api = self.api_addr.join(V1_API_ENDPOINT).map_err(|e| {
             anyhow::anyhow!(
                 "Failed to version gateway API address: {api_addr:?}, error: {e:?}",
                 api_addr = self.api_addr,
@@ -293,9 +293,9 @@ impl Gateway {
         num_route_hints: u32,
         gateway_db: Database,
     ) -> anyhow::Result<Gateway> {
-        let versioned_api = api_addr.join("v1").map_err(|e| {
-            anyhow::anyhow!("Failed to version gateway API address: {api_addr:?}, error: {e:?}")
-        })?;
+        let versioned_api = api_addr
+            .join(V1_API_ENDPOINT)
+            .expect("Failed to version gateway API address");
         Ok(Gateway {
             lightning_builder,
             gateway_parameters: GatewayParameters {

@@ -14,7 +14,7 @@ use tracing::{error, instrument};
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, LeaveFedPayload,
-    RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 use crate::db::GatewayConfiguration;
 use crate::rpc::ConfigPayload;
@@ -26,11 +26,11 @@ pub async fn run_webserver(
     gateway: Gateway,
     task_group: &mut TaskGroup,
 ) -> axum::response::Result<()> {
-    let routes = v1_routes(config, gateway.clone());
+    let v1_routes = v1_routes(config, gateway.clone());
     let api_v1 = Router::new()
-        .nest("/v1", routes.clone())
+        .nest(&format!("/{V1_API_ENDPOINT}"), v1_routes.clone())
         // Backwards compatibility: Continue supporting gateway APIs without versioning
-        .merge(routes);
+        .merge(v1_routes);
 
     let handle = task_group.make_handle();
     let shutdown_rx = handle.make_shutdown_rx().await;

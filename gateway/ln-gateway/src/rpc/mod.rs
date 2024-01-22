@@ -20,6 +20,8 @@ use tokio::sync::oneshot;
 
 use crate::{Gateway, Result};
 
+pub const V1_API_ENDPOINT: &str = "v1";
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {
     pub invite_code: String,
