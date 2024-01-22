@@ -67,6 +67,13 @@ pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
 pub type FederationResult<T> = Result<T, FederationError>;
 pub type SerdeOutputOutcome = SerdeModuleEncoding<DynOutputOutcome>;
 
+/// An API request response when calling a single federation peer
+#[derive(Debug)]
+pub struct PeerResponse<R> {
+    pub peer: PeerId,
+    pub result: JsonRpcResult<R>,
+}
+
 /// An API request error when calling a single federation peer
 #[derive(Debug, Error)]
 pub enum PeerError {
@@ -226,9 +233,10 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
     /// API call to the federation would be inconvenient.
     fn all_peers(&self) -> &BTreeSet<PeerId>;
 
+    /// Create a new API with [`ModuleInstanceId`] as `module_id` field
     fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi;
 
-    /// Make request to a specific federation peer by `peer_id`
+    /// Make request to a specific federation peer by [`PeerId`]
     async fn request_raw(
         &self,
         peer_id: PeerId,
@@ -710,23 +718,6 @@ where
     }
 }
 
-/// Mint API client that will try to run queries against all `peers` expecting
-/// equal results from at least `min_eq_results` of them. Peers that return
-/// differing results are returned as a peer faults list.
-#[derive(Debug, Clone)]
-pub struct WsFederationApi<C = WsClient> {
-    peer_ids: BTreeSet<PeerId>,
-    peers: Arc<Vec<FederationPeer<C>>>,
-    module_id: Option<ModuleInstanceId>,
-}
-
-#[derive(Debug)]
-struct FederationPeer<C> {
-    url: SafeUrl,
-    peer_id: PeerId,
-    client: RwLock<Option<C>>,
-}
-
 /// Information required for client to construct [`WsFederationApi`] instance
 ///
 /// Can be used to download the configs and bootstrap a client.
@@ -737,6 +728,26 @@ struct FederationPeer<C> {
 ///   * At least one Federation ID is present
 #[derive(Clone, Debug, Eq, PartialEq, Encodable)]
 pub struct InviteCode(Vec<InviteCodeData>);
+
+/// Data that can be encoded in the invite code. Currently we always just use
+/// one `Api` and one `FederationId` variant in an invite code, but more can be
+/// added in the future while still keeping the invite code readable for older
+/// clients, which will just ignore the new fields.
+#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable)]
+enum InviteCodeData {
+    /// API endpoint of one of the guardians
+    Api {
+        /// URL to reach an API that we can download configs from
+        url: SafeUrl,
+        /// Peer id of the host from the Url
+        peer: PeerId,
+    },
+    /// Authentication id for the federation
+    FederationId(FederationId),
+    /// Unknown invite code fields to be defined in the future
+    #[encodable_default]
+    Default { variant: u64, bytes: Vec<u8> },
+}
 
 impl Decodable for InviteCode {
     fn consensus_decode<R: Read>(
@@ -775,7 +786,7 @@ impl InviteCode {
         ])
     }
 
-    /// Returns the API URL of one of the guardians.
+    /// Returns the API `SafeUrl` of one of the guardians.
     pub fn url(&self) -> SafeUrl {
         self.0
             .iter()
@@ -786,8 +797,8 @@ impl InviteCode {
             .expect("Ensured by constructor")
     }
 
-    /// Returns the id of the guardian from which we got the API URL, see
-    /// [`InviteCode::url`].
+    /// Returns the `PeerId` of the guardian from which we got the API
+    /// `SafeUrl`, see [`InviteCode::url`].
     pub fn peer(&self) -> PeerId {
         self.0
             .iter()
@@ -798,8 +809,8 @@ impl InviteCode {
             .expect("Ensured by constructor")
     }
 
-    /// Returns the federation's ID that can be used to authenticate the config
-    /// downloaded from the API.
+    /// Returns the `FederationId` that can be used to authenticate the
+    /// configuration downloaded from the API.
     pub fn federation_id(&self) -> FederationId {
         self.0
             .iter()
@@ -811,28 +822,8 @@ impl InviteCode {
     }
 }
 
-/// Data that can be encoded in the invite code. Currently we always just use
-/// one `Api` and one `FederationId` variant in an invite code, but more can be
-/// added in the future while still keeping the invite code readable for older
-/// clients, which will just ignore the new fields.
-#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable)]
-enum InviteCodeData {
-    /// API endpoint of one of the guardians
-    Api {
-        /// URL to reach an API that we can download configs from
-        url: SafeUrl,
-        /// Peer id of the host from the Url
-        peer: PeerId,
-    },
-    /// Authentication id for the federation
-    FederationId(FederationId),
-    /// Unknown invite code fields to be defined in the future
-    #[encodable_default]
-    Default { variant: u64, bytes: Vec<u8> },
-}
-
 /// We can represent client invite code as a bech32 string for compactness and
-/// error-checking
+/// error-checking.
 ///
 /// Human readable part (HRP) includes the version
 /// ```txt
@@ -889,9 +880,26 @@ impl<'de> Deserialize<'de> for InviteCode {
     }
 }
 
+/// Federation API client that will try to run queries against all `peers`
+/// expecting equal results from at least `min_eq_results` of them. Peers that
+/// return differing results are returned as a peer faults list.
+#[derive(Debug, Clone)]
+pub struct WsFederationApi<C = WsClient> {
+    peer_ids: BTreeSet<PeerId>,
+    peers: Arc<Vec<FederationPeer<C>>>,
+    module_id: Option<ModuleInstanceId>,
+}
+
+#[derive(Debug)]
+struct FederationPeer<C> {
+    url: SafeUrl,
+    peer_id: PeerId,
+    client: RwLock<Option<C>>,
+}
+
 impl<C: JsonRpcClient + Debug + 'static> IModuleFederationApi for WsFederationApi<C> {}
 
-/// Implementation of API calls over websockets
+/// Implementation of API calls over WebSockets
 ///
 /// Can function as either the global or module API
 #[apply(async_trait_maybe_send!)]
@@ -931,8 +939,12 @@ impl<C: JsonRpcClient + Debug + 'static> IRawFederationApi for WsFederationApi<C
 
 #[apply(async_trait_maybe_send!)]
 pub trait JsonRpcClient: ClientT + Sized + MaybeSend + MaybeSync {
-    async fn connect(url: &SafeUrl) -> result::Result<Self, JsonRpcClientError>;
+    /// Checks if the current implementation of [`ClientT`] is connected.
     fn is_connected(&self) -> bool;
+
+    /// Bootstraps a new JSON-RPC connection with the current implementation of
+    /// [`ClientT`].
+    async fn connect(url: &SafeUrl) -> result::Result<Self, JsonRpcClientError>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -1019,11 +1031,7 @@ impl<C> WsFederationApi<C> {
     }
 }
 
-#[derive(Debug)]
-pub struct PeerResponse<R> {
-    pub peer: PeerId,
-    pub result: JsonRpcResult<R>,
-}
+impl<C: JsonRpcClient> WsFederationApi<C> {}
 
 impl<C: JsonRpcClient> FederationPeer<C> {
     #[instrument(level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
@@ -1036,7 +1044,7 @@ impl<C: JsonRpcClient> FederationPeer<C> {
             _ => {}
         };
 
-        debug!("web socket not connected, reconnecting");
+        debug!("WebSocket not connected, reconnecting");
 
         drop(rclient);
         let mut wclient = self.client.write().await;
@@ -1079,8 +1087,6 @@ impl<C: JsonRpcClient> FederationPeer<C> {
         })
     }
 }
-
-impl<C: JsonRpcClient> WsFederationApi<C> {}
 
 /// The status of a server, including how it views its peers
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
