@@ -41,6 +41,7 @@ check-wasm:
 # ex: `just prepare_server_db_migration_snapshots fedimint-mint-tests`
 # ex: `just prepare_server_db_migration_snapshots fedimint-ln-tests`
 # ex: `just prepare_server_db_migration_snapshots fedimint-wallet-tests`
+# ex: `just prepare_server_db_migration_snapshots fedimint-dummy-tests`
 prepare_server_db_migration_snapshots +extra_args:
   env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo test ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -p {{extra_args}} prepare_server_db_migration_snapshots
 

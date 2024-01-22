@@ -35,7 +35,7 @@ use crate::db::{
     DummyOutcomePrefix,
 };
 
-mod db;
+pub mod db;
 
 /// Generates the module
 #[derive(Debug, Clone)]

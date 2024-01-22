@@ -602,6 +602,7 @@ mod fedimint_migration_tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
     use fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, ServerModule, TransactionId};
+    use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
         prepare_db_migration_snapshot, validate_migrations, BYTE_20, BYTE_32, BYTE_33,
     };
@@ -800,6 +801,8 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_migrations() -> anyhow::Result<()> {
+        TracingSetup::default().init()?;
+
         validate_migrations(
             "wallet-server",
             |db| async move {

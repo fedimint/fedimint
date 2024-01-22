@@ -1590,8 +1590,11 @@ dependencies = [
  "fedimint-server",
  "fedimint-testing",
  "fedimint-threshold-crypto",
+ "futures",
  "rand",
  "secp256k1 0.24.3",
+ "strum",
+ "strum_macros",
  "tokio",
  "tracing",
 ]
