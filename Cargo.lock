@@ -36,9 +36,9 @@ checksum = "e8fd72866655d1904d6b0997d0b07ba561047d070fbe29de039031c641b61217"
 
 [[package]]
 name = "ahash"
-version = "0.7.6"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcb51a0695d8f838b1ee009b3fbf66bda078cd64590202a864a8f3e8c4315c47"
+checksum = "5a824f2aa7e75a0c98c5a504fceb80649e9c35265d44525b5f94de4771a395cd"
 dependencies = [
  "getrandom",
  "once_cell",
@@ -47,13 +47,14 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.8.3"
+version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c99f64d1e06488f620f932677e24bc6e2897582980441ae90a671415bd7ec2f"
+checksum = "77c3a9648d43b9cd48db467b3f87fdd6e146bcc88ab0180006cef2179fe11d01"
 dependencies = [
  "cfg-if",
  "once_cell",
  "version_check",
+ "zerocopy",
 ]
 
 [[package]]
@@ -429,7 +430,7 @@ version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15adb2017ab6437b6704a779ab8bbefe857612f5af9d84b677a1767f965e099"
 dependencies = [
- "ahash 0.7.6",
+ "ahash 0.7.7",
  "async-trait",
  "bdk-macros",
  "bip39",
@@ -1020,7 +1021,7 @@ dependencies = [
 
 [[package]]
 name = "devimint"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "axum",
@@ -1235,7 +1236,7 @@ checksum = "6999dc1837253364c2ebb0704ba97994bd874e8f195d665c50b7548f6ea92764"
 
 [[package]]
 name = "fedimint-aead"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "argon2",
@@ -1246,7 +1247,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-bip39"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "bip39",
  "fedimint-client",
@@ -1256,7 +1257,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-bitcoind"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1276,14 +1277,14 @@ dependencies = [
 
 [[package]]
 name = "fedimint-build"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "fedimint-cli"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1324,7 +1325,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-client"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -1372,7 +1373,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-core"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -1425,7 +1426,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dbtool"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "bitcoin_hashes 0.11.0",
@@ -1457,7 +1458,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-derive"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "itertools 0.11.0",
  "proc-macro2",
@@ -1467,7 +1468,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-derive-secret"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "fedimint-core",
@@ -1479,7 +1480,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-client"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1500,7 +1501,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-common"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1520,7 +1521,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-server"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1541,7 +1542,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-tests"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "fedimint-client",
@@ -1561,7 +1562,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gateway-cli"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1606,7 +1607,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-hkdf"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "bitcoin_hashes 0.11.0",
 ]
@@ -1640,7 +1641,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-client"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -1674,7 +1675,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-common"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -1705,7 +1706,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-gateway"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -1760,7 +1761,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-server"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -1796,7 +1797,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-tests"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -1821,7 +1822,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-load-test-tool"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "base64 0.20.0",
@@ -1851,7 +1852,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-logging"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "console-subscriber",
@@ -1864,7 +1865,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-metrics"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "axum",
@@ -1877,7 +1878,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-client"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -1913,7 +1914,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-common"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1937,7 +1938,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-server"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -1970,7 +1971,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-tests"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "fedimint-client",
@@ -1990,7 +1991,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-portalloc"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2004,7 +2005,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-recoverytool"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "bitcoin 0.29.2",
@@ -2031,7 +2032,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-rocksdb"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2046,7 +2047,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-server"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "aleph-bft",
  "aleph-bft-types",
@@ -2095,7 +2096,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-tbs"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "bincode",
  "bitcoin_hashes 0.11.0",
@@ -2111,7 +2112,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-testing"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2190,7 +2191,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-client"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -2221,7 +2222,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-common"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2247,7 +2248,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-server"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2277,7 +2278,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-tests"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2325,7 +2326,7 @@ dependencies = [
 
 [[package]]
 name = "fedimintd"
-version = "0.2.2-rc2"
+version = "0.2.2-rc3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2727,7 +2728,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c6201b9ff9fd90a5a3bac2e56a830d0caa509576f0e503818ee82c181b3437a"
 dependencies = [
- "ahash 0.8.3",
+ "ahash 0.8.7",
  "allocator-api2",
 ]
 
@@ -4635,9 +4636,9 @@ dependencies = [
 
 [[package]]
 name = "shlex"
-version = "1.2.0"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7cee0529a6d40f580e7a5e6c495c8fbfe21b7b52795ed4bb5e62cdf92bc6380"
+checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
 name = "signal-hook-registry"
@@ -5712,6 +5713,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e17bb3549cc1321ae1296b9cdc2698e2b6cb1992adfa19a8c72e5b7a738f44cd"
 dependencies = [
  "time",
+]
+
+[[package]]
+name = "zerocopy"
+version = "0.7.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74d4d3961e53fa4c9a25a8637fc2bfaf2595b3d3ae34875568a5cf64787716be"
+dependencies = [
+ "zerocopy-derive",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.7.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ce1b18ccd8e73a9321186f97e46f9f04b778851177567b1975109d26a08d2a6"
+dependencies = [
+ "proc-macro2",
+ "quote 1.0.33",
+ "syn 2.0.31",
 ]
 
 [[package]]

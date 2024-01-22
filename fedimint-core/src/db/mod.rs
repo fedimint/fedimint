@@ -1820,6 +1820,7 @@ pub async fn apply_migrations(
 ) -> Result<(), anyhow::Error> {
     let mut dbtx = db.begin_transaction().await;
     let disk_version = dbtx.get_value(&DatabaseVersionKey).await;
+
     let db_version = if let Some(disk_version) = disk_version {
         let mut current_db_version = disk_version;
 

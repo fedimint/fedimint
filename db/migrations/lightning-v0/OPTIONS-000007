@@ -5,7 +5,7 @@
 #
 
 [Version]
-  rocksdb_version=7.10.2
+  rocksdb_version=8.3.2
   options_file_version=1.1
 
 [DBOptions]
@@ -92,7 +92,8 @@
   
 
 [CFOptions "default"]
-  compression_opts={max_dict_buffer_bytes=0;enabled=false;max_dict_bytes=0;parallel_threads=1;zstd_max_train_bytes=0;level=32767;use_zstd_dict_trainer=true;strategy=0;window_bits=-14;}
+  compression_opts={max_dict_buffer_bytes=0;enabled=false;max_dict_bytes=0;max_compressed_bytes_per_kb=896;parallel_threads=1;zstd_max_train_bytes=0;level=32767;use_zstd_dict_trainer=true;strategy=0;window_bits=-14;}
+  block_protection_bytes_per_key=0
   memtable_protection_bytes_per_key=0
   target_file_size_multiplier=1
   report_bg_io_stats=false
@@ -101,7 +102,7 @@
   max_successive_merges=0
   max_write_buffer_number=2
   prefix_extractor=nullptr
-  bottommost_compression_opts={max_dict_buffer_bytes=0;enabled=false;max_dict_bytes=0;parallel_threads=1;zstd_max_train_bytes=0;level=32767;use_zstd_dict_trainer=true;strategy=0;window_bits=-14;}
+  bottommost_compression_opts={max_dict_buffer_bytes=0;enabled=false;max_dict_bytes=0;max_compressed_bytes_per_kb=896;parallel_threads=1;zstd_max_train_bytes=0;level=32767;use_zstd_dict_trainer=true;strategy=0;window_bits=-14;}
   paranoid_file_checks=false
   blob_garbage_collection_force_threshold=1.000000
   enable_blob_files=false
@@ -125,7 +126,7 @@
   memtable_whole_key_filtering=false
   max_bytes_for_level_base=268435456
   last_level_temperature=kUnknown
-  compaction_options_fifo={allow_compaction=false;age_for_warm=0;max_table_files_size=1073741824;}
+  compaction_options_fifo={file_temperature_age_thresholds=;allow_compaction=false;age_for_warm=0;max_table_files_size=1073741824;}
   max_bytes_for_level_multiplier=10.000000
   max_bytes_for_level_multiplier_additional=1:1:1:1:1:1:1
   max_sequential_skip_in_iterations=8
@@ -140,6 +141,7 @@
   enable_blob_garbage_collection=false
   experimental_mempurge_threshold=0.000000
   bottommost_compression=kDisableCompressionOption
+  persist_user_defined_timestamps=true
   min_write_buffer_number_to_merge=1
   preserve_internal_time_seconds=0
   preclude_last_level_data_seconds=0

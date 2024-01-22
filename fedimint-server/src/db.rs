@@ -1,14 +1,18 @@
 use std::fmt::Debug;
 
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
+use fedimint_core::db::{
+    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationMap,
+    MODULE_GLOBAL_PREFIX,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
+use futures::FutureExt;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
-pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
+pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -17,6 +21,7 @@ pub enum DbKeyPrefix {
     AcceptedTransaction = 0x02,
     SignedSessionOutcome = 0x04,
     AlephUnits = 0x05,
+    SignedSessionOutcomeCount = 0x06,
     Module = MODULE_GLOBAL_PREFIX,
 }
 
@@ -74,6 +79,17 @@ impl_db_lookup!(
     query_prefix = SignedSessionOutcomePrefix
 );
 
+/// Database entry that caches the current number of [`SignedSessionOutcome`]s
+/// in the database.
+#[derive(Debug, Encodable, Decodable)]
+pub struct SignedSessionOutcomeCountKey;
+
+impl_db_record!(
+    key = SignedSessionOutcomeCountKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::SignedSessionOutcomeCount,
+);
+
 #[derive(Debug, Encodable, Decodable)]
 pub struct AlephUnitsKey(pub u64);
 
@@ -89,7 +105,25 @@ impl_db_record!(
 impl_db_lookup!(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
 pub fn get_global_database_migrations() -> MigrationMap {
-    MigrationMap::new()
+    let mut mm = MigrationMap::new();
+    mm.insert(DatabaseVersion(0), |dbtx| migrate_to_v1(dbtx).boxed());
+    mm
+}
+
+/// Adds a database key that contains the current session count so that we don't
+/// have to scan the entire session history every time just to count the
+/// entries.
+async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow::Error> {
+    use futures::StreamExt;
+
+    let session_count = dbtx
+        .find_by_prefix(&SignedSessionOutcomePrefix)
+        .await
+        .count()
+        .await as u64;
+    dbtx.insert_new_entry(&SignedSessionOutcomeCountKey, &session_count)
+        .await;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -102,7 +136,8 @@ mod fedimint_migration_tests {
     use bitcoin_hashes::Hash;
     use fedimint_core::core::{DynInput, DynOutput};
     use fedimint_core::db::{
-        apply_migrations, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+        apply_migrations, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
+        IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::epoch::ConsensusItem;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -118,7 +153,7 @@ mod fedimint_migration_tests {
     use secp256k1_zkp::Message;
     use strum::IntoEnumIterator;
 
-    use super::AcceptedTransactionKey;
+    use super::{AcceptedTransactionKey, SignedSessionOutcomeCountKey};
     use crate::db::{
         get_global_database_migrations, AcceptedItem, AcceptedItemKey, AcceptedItemPrefix,
         AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix,
@@ -133,6 +168,9 @@ mod fedimint_migration_tests {
     /// that creates a new database backup that can be tested.
     async fn create_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
         let accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(&BYTE_32).unwrap());
+
+        dbtx.insert_new_entry(&DatabaseVersionKey, &DatabaseVersion(0))
+            .await;
 
         let (sk, _) = secp256k1::generate_keypair(&mut OsRng);
         let secp = secp256k1::Secp256k1::new();
@@ -274,6 +312,23 @@ mod fedimint_migration_tests {
                             ensure!(
                                 num_aleph_units > 0,
                                 "validate_migrations was not able to read any AlephUnits"
+                            );
+                        }
+                        DbKeyPrefix::SignedSessionOutcomeCount => {
+                            let session_outcome_count = dbtx
+                                .get_value(&SignedSessionOutcomeCountKey)
+                                .await
+                                .expect("Count key should have been created");
+
+                            let real_session_outcome_count =
+                                dbtx.find_by_prefix(&SignedSessionOutcomePrefix)
+                                    .await
+                                    .count()
+                                    .await as u64;
+
+                            assert_eq!(
+                                session_outcome_count, real_session_outcome_count,
+                                "Session outcome count cash is inconsistent"
                             );
                         }
                         // Module prefix is reserved for modules, no migration testing is needed
