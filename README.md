@@ -21,7 +21,7 @@
 
 [Fedimint](https://fedimint.org) is a module based system for building federated applications. It is designed to be a trust-minimized, censorship-resistant, and private alternative to centralized applications.
 
-> **Fedimint is alpha software released under an [MIT License](https://github.com/fedimint/fedimint/blob/master/LICENSE) and recently cut its [0.1 release](https://github.com/fedimint/fedimint/releases/latest). We recommend you run Fedimint on testnets like mutinynet, or on mainnet with small amounts of money.**
+> **Fedimint is alpha software released under an [MIT License](https://github.com/fedimint/fedimint/blob/master/LICENSE) and recently cut its [0.2 release](https://github.com/fedimint/fedimint/releases/latest). We recommend you run Fedimint on testnets like mutinynet, or on mainnet with small amounts of money.**
 
 Fedimint ships with 3 default modules: [Bitcoin](https://github.com/bitcoin/bitcoin), [Lightning](https://github.com/lightning/bolts), and [Chaumian Ecash](https://en.wikipedia.org/wiki/Ecash), for out-of-the-box best practices for private and trust-minimized payments. [You can write custom modules](https://github.com/fedimint/fedimint-custom-modules-example) that define further consensus items and transaction types leveraging the payments modules to build your own federated applications.
 
@@ -31,18 +31,13 @@ The Fedimint Developer Discord is the best place to get help and ask questions. 
 
 It's easy to set up and run your own federations. Fedimint is designed to be [Byzantine Fault Tolerant](https://en.wikipedia.org/wiki/Byzantine_fault) so is resilient to `m` malicious nodes in a federation of `3m + 1` nodes. If you run a federation of 4 guardians you are resilient to 1 malicious guardian, if you run a federation of 7 guardians you are resilient to 2 guardians, etc.
 
-[Fedimint's 0.1 release](https://github.com/fedimint/fedimint/releases/tag/v0.1.3) can also be run with smaller configurations (1/1, 2/2, 2/3) for testing and development.
+[Fedimint's 0.2 release](https://github.com/fedimint/fedimint/releases/latest) can also be run in "solo mode" with a single guardian. This is useful for testing and development, but is not recommended for production use.
 
 To do lightning payments, Fedimint requires a [Lightning Gateway](https://github.com/fedimint/fedimint/blob/master/docs/gateway.md): a user of the federation that accepts ecash in exchange for sending/receiving lightning payments. The Lightning Gateway is not a guardian and acts as an untrusted economic actor serving the federation.
 
 ### Running Fedimint on Mutinynet
 
-The easiest way to run Fedimint on the Mutinynet testnet is with Clovyr, a decentralized application platform. Click the Launch buttons below to spin up a Fedimint guardian or Lightning Gateway in a couple minutes. Clovyr handles hosting, DNS, and configuration for you.
-
-- [Launch Fedimint Guardian](https://clovyr.app/apps/fedimint-guardian)
-- [Launch Lightning Gateway](https://clovyr.app/apps/fedimint-gateway)
-
-To run Fedimint on your own hardware or another cloud provider, or to run Fedimint on a different network like mainnet, see the [Fedimint Setup Guide](./docs/setup-docs.md).
+See the [Fedimint Mutinynet Setup Guide](./docs/setup-docs.md). You can modify the configuration options to deploy it on 
 
 ## For Developers
 
@@ -63,7 +58,7 @@ We are actively looking for developers to help build Fedimint and associated ope
 
 ## Spinning up the Fedimint Developer Environment
 
-Fedimint is a Rust project and uses the [Nix package manager](https://nixos.org/) to manage dependencies and build the project. You can spin up a Clovyr developer environment (in-browser VSCode with preconfigured Nix, Rust, and Fedimint) through [Clovyr Instant](https://clovyr.app/instant/code-fedimint) or you can install Nix and clone the Fedimint repo to get started.
+Fedimint is a Rust project and uses the [Nix package manager](https://nixos.org/) to manage dependencies and build the project.
 
 ### Local Development
 
