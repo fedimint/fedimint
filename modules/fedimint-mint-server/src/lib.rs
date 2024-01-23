@@ -36,16 +36,19 @@ use fedimint_mint_common::{
     MintCommonInit, MintConsensusItem, MintInput, MintInputError, MintModuleTypes, MintOutput,
     MintOutputError, MintOutputOutcome, DEFAULT_MAX_NOTES_PER_DENOMINATION,
 };
-use fedimint_server::config::distributedgen::{scalar, PeerHandleOps};
+use fedimint_server::config::distributedgen::{evaluate_polynomial_g2, scalar, PeerHandleOps};
 use futures::StreamExt;
 use itertools::Itertools;
+use rand::rngs::OsRng;
 use secp256k1_zkp::SECP256K1;
 use strum::IntoEnumIterator;
 use tbs::{
-    dealer_keygen, sign_blinded_msg, Aggregatable, AggregatePublicKey, PublicKeyShare,
+    aggregate_public_key_shares, sign_blinded_msg, AggregatePublicKey, PublicKeyShare,
     SecretKeyShare,
 };
+use threshold_crypto::ff::Field;
 use threshold_crypto::group::Curve;
+use threshold_crypto::{G2Projective, Scalar};
 use tracing::{debug, info};
 
 lazy_static! {
@@ -265,8 +268,10 @@ impl ServerModuleInit for MintInit {
                         let pks = amounts_keys
                             .iter()
                             .map(|(amount, (pks, _))| {
-                                let pks = PublicKeyShare(pks.evaluate(scalar(peer)).to_affine());
-                                (*amount, pks)
+                                (
+                                    *amount,
+                                    PublicKeyShare(evaluate_polynomial_g2(pks, &scalar(peer))),
+                                )
                             })
                             .collect::<Tiered<_>>();
 
@@ -313,6 +318,9 @@ impl ServerModuleInit for MintInit {
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<MintClientConfig> {
         let config = MintConfigConsensus::from_erased(config)?;
+        // TODO: the aggregate pks should become part of the MintConfigConsensus as they
+        // can be obtained by evaluating the polynomial returned by the DKG at
+        // zero
         let pub_keys = TieredMultiZip::new(
             config
                 .peer_tbs_pks
@@ -321,13 +329,12 @@ impl ServerModuleInit for MintInit {
                 .collect(),
         )
         .map(|(amt, keys)| {
-            // TODO: avoid this through better aggregation API allowing references or
-            let agg_key = keys
-                .into_iter()
-                .copied()
-                .collect::<Vec<_>>()
-                .aggregate(config.peer_tbs_pks.threshold());
-            (amt, agg_key)
+            let keys = (1_u64..)
+                .zip(keys.into_iter().cloned())
+                .take(config.peer_tbs_pks.threshold())
+                .collect();
+
+            (amt, aggregate_public_key_shares(&keys))
         });
 
         Ok(MintClientConfig {
@@ -338,6 +345,37 @@ impl ServerModuleInit for MintInit {
         })
     }
 }
+
+fn dealer_keygen(
+    threshold: usize,
+    keys: usize,
+) -> (AggregatePublicKey, Vec<PublicKeyShare>, Vec<SecretKeyShare>) {
+    let mut rng = OsRng; // FIXME: pass rng
+    let poly: Vec<Scalar> = (0..threshold).map(|_| Scalar::random(&mut rng)).collect();
+
+    let apk = (G2Projective::generator() * eval_polynomial(&poly, &Scalar::zero())).to_affine();
+
+    let sks: Vec<SecretKeyShare> = (0..keys)
+        .map(|idx| SecretKeyShare(eval_polynomial(&poly, &Scalar::from(idx as u64 + 1))))
+        .collect();
+
+    let pks = sks
+        .iter()
+        .map(|sk| PublicKeyShare((G2Projective::generator() * sk.0).to_affine()))
+        .collect();
+
+    (AggregatePublicKey(apk), pks, sks)
+}
+
+fn eval_polynomial(coefficients: &[Scalar], x: &Scalar) -> Scalar {
+    coefficients
+        .iter()
+        .cloned()
+        .rev()
+        .reduce(|acc, coefficient| acc * x + coefficient)
+        .expect("We have at least one coefficient")
+}
+
 /// Federated mint member mint
 #[derive(Debug)]
 pub struct Mint {
@@ -608,6 +646,9 @@ impl Mint {
                 .collect()
         );
 
+        // TODO: the aggregate pks should become part of the MintConfigConsensus as they
+        // can be obtained by evaluating the polynomial returned by the DKG at
+        // zero
         let aggregate_pub_keys = TieredMultiZip::new(
             cfg.consensus
                 .peer_tbs_pks
@@ -616,9 +657,12 @@ impl Mint {
                 .collect(),
         )
         .map(|(amt, keys)| {
-            // TODO: avoid this through better aggregation API allowing references or
-            let keys = keys.into_iter().copied().collect::<Vec<_>>();
-            (amt, keys.aggregate(cfg.consensus.peer_tbs_pks.threshold()))
+            let keys = (1_u64..)
+                .zip(keys.into_iter().cloned())
+                .take(cfg.consensus.peer_tbs_pks.threshold())
+                .collect();
+
+            (amt, aggregate_public_key_shares(&keys))
         })
         .collect();
 
@@ -714,9 +758,8 @@ mod test {
         let blinding_key = tbs::BlindingKey::random();
         let blind_msg = blind_message(message, blinding_key);
 
-        let bsig_shares = server_cfgs
-            .iter()
-            .map(|cfg| {
+        let bsig_shares = (1_u64..)
+            .zip(server_cfgs.iter().map(|cfg| {
                 let sks = *cfg
                     .to_typed::<MintConfig>()
                     .unwrap()
@@ -725,14 +768,11 @@ mod test {
                     .get(denomination)
                     .expect("Mint cannot issue a note of this denomination");
                 tbs::sign_blinded_msg(blind_msg, sks)
-            })
-            .enumerate()
-            .collect::<Vec<_>>();
+            }))
+            .take(server_cfgs.len() - ((server_cfgs.len() - 1) / 3))
+            .collect();
 
-        let blind_signature = tbs::combine_valid_shares(
-            bsig_shares,
-            server_cfgs.len() - ((server_cfgs.len() - 1) / 3),
-        );
+        let blind_signature = tbs::aggregate_signature_shares(&bsig_shares);
         let signature = tbs::unblind_signature(blinding_key, blind_signature);
 
         (note_key, Note { nonce, signature })

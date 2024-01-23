@@ -175,12 +175,11 @@ mod fedimint_migration_tests {
     use fedimint_testing::db::{
         prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8,
     };
+    use ff::Field;
     use futures::StreamExt;
     use rand::rngs::OsRng;
     use strum::IntoEnumIterator;
-    use tbs::{
-        blind_message, sign_blinded_msg, BlindingKey, FromRandom, Message, Scalar, SecretKeyShare,
-    };
+    use tbs::{blind_message, sign_blinded_msg, BlindingKey, Message, Scalar, SecretKeyShare};
 
     use crate::MintInit;
 
@@ -206,7 +205,7 @@ mod fedimint_migration_tests {
         let blinding_key = BlindingKey::random();
         let message = Message::from_bytes(&BYTE_8);
         let blinded_message = blind_message(message, blinding_key);
-        let secret_key_share = SecretKeyShare(Scalar::from_random(&mut OsRng));
+        let secret_key_share = SecretKeyShare(Scalar::random(&mut OsRng));
         let blind_signature_share = sign_blinded_msg(blinded_message, secret_key_share);
         dbtx.insert_new_entry(
             &MintOutputOutcomeKey(out_point),
