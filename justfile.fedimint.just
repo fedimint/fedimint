@@ -47,6 +47,7 @@ prepare_server_db_migration_snapshots +extra_args:
 
 # regenerate client db migration snapshots
 # ex: `just prepare_client_db_migration_snapshots fedimint-dummy-tests`
+# ex: `just prepare_client_db_migration_snapshots fedimint-ln-tests`
 prepare_client_db_migration_snapshots +extra_args:
   env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo test ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -p {{extra_args}} prepare_client_db_migration_snapshots
 

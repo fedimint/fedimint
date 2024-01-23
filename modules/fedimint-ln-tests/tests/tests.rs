@@ -481,10 +481,13 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
 #[cfg(test)]
 mod fedimint_migration_tests {
     use std::str::FromStr;
+    use std::time::SystemTime;
 
     use anyhow::{ensure, Context};
-    use bitcoin_hashes::Hash;
-    use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
+    use bitcoin_hashes::{sha256, Hash};
+    use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_client::module::ClientModule;
+    use fedimint_core::core::{OperationId, LEGACY_HARDCODED_INSTANCE_ID_LN};
     use fedimint_core::db::{
         apply_migrations, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
         IDatabaseTransactionOpsCoreTyped,
@@ -493,7 +496,14 @@ mod fedimint_migration_tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
     use fedimint_core::util::SafeUrl;
-    use fedimint_core::{OutPoint, PeerId, ServerModule, TransactionId};
+    use fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
+    use fedimint_ln_client::db::{
+        MetaOverrides, MetaOverridesKey, MetaOverridesPrefix, PaymentResult, PaymentResultKey,
+        PaymentResultPrefix,
+    };
+    use fedimint_ln_client::{
+        LightningClientInit, LightningClientModule, OutgoingLightningPayment,
+    };
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer, OfferId,
     };
@@ -509,6 +519,7 @@ mod fedimint_migration_tests {
         LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
         ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
     };
+    use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
     use fedimint_ln_common::{
         ContractAccount, LightningCommonInit, LightningGateway, LightningGatewayRegistration,
         LightningOutputOutcomeV0,
@@ -525,6 +536,7 @@ mod fedimint_migration_tests {
     use rand::rngs::OsRng;
     use strum::IntoEnumIterator;
     use threshold_crypto::G1Projective;
+    use tracing::info;
 
     use crate::LightningInit;
 
@@ -649,6 +661,69 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(
             &LightningAuditItemKey::from_funded_contract(&outgoing_contract),
             &amount,
+        )
+        .await;
+    }
+
+    async fn create_client_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
+        dbtx.insert_new_entry(&DatabaseVersionKey, &DatabaseVersion(0))
+            .await;
+
+        // Generate fake private/public key
+        let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
+        dbtx.insert_new_entry(
+            &fedimint_ln_client::db::LightningGatewayKey,
+            &LightningGatewayRegistration {
+                info: LightningGateway {
+                    mint_channel_id: 2,
+                    gateway_redeem_key: pk.clone(),
+                    node_pub_key: pk.clone(),
+                    lightning_alias: "MyLightningNode".to_string(),
+                    api: SafeUrl::from_str("http://mylightningnode.com")
+                        .expect("SafeUrl parsing should not fail"),
+                    route_hints: vec![RouteHint(vec![RouteHintHop {
+                        src_node_id: pk,
+                        short_channel_id: 3,
+                        base_msat: 20,
+                        proportional_millionths: 3000,
+                        cltv_expiry_delta: 8,
+                        htlc_minimum_msat: Some(10),
+                        htlc_maximum_msat: Some(1000),
+                    }])],
+                    fees: RoutingFees {
+                        base_msat: 10,
+                        proportional_millionths: 1000,
+                    },
+                    gateway_id: pk.clone(),
+                    supports_private_payments: false,
+                },
+                vetted: true,
+                valid_until: SystemTime::now(),
+            },
+        )
+        .await;
+
+        dbtx.insert_new_entry(
+            &PaymentResultKey {
+                payment_hash: sha256::Hash::hash(&BYTE_8),
+            },
+            &PaymentResult {
+                index: 0,
+                completed_payment: Some(OutgoingLightningPayment {
+                    payment_type: fedimint_ln_client::PayType::Lightning(OperationId(BYTE_32)),
+                    contract_id: sha256::Hash::hash(&BYTE_8).into(),
+                    fee: Amount::from_sats(1000),
+                }),
+            },
+        )
+        .await;
+
+        dbtx.insert_new_entry(
+            &MetaOverridesKey,
+            &MetaOverrides {
+                value: "META OVERRIDE".to_string(),
+                fetched_at: SystemTime::now(),
+            },
         )
         .await;
     }
@@ -812,6 +887,94 @@ mod fedimint_migration_tests {
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
                 LightningCommonInit::KIND,
                 <Lightning as ServerModule>::decoder(),
+            )]),
+        )
+        .await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn prepare_client_db_migration_snapshots() -> anyhow::Result<()> {
+        prepare_db_migration_snapshot(
+            "lightning-client-v0",
+            |dbtx| Box::pin(async move { create_client_db_with_v0_data(dbtx).await }),
+            ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_LN,
+                LightningCommonInit::KIND,
+                <LightningClientModule as ClientModule>::decoder(),
+            )]),
+        )
+        .await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_client_migrations() -> anyhow::Result<()> {
+        TracingSetup::default().init()?;
+
+        validate_migrations(
+            "lightning-client",
+            |db| async move {
+                let module = DynClientModuleInit::from(LightningClientInit);
+                apply_migrations(
+                    &db,
+                    LightningCommonInit::KIND.to_string(),
+                    module.database_version(),
+                    module.get_database_migrations(),
+                )
+                .await
+                .context("Error applying migrations to client database")?;
+
+                let mut dbtx = db.begin_transaction().await;
+
+                for prefix in fedimint_ln_client::db::DbKeyPrefix::iter() {
+                    match prefix {
+                        fedimint_ln_client::db::DbKeyPrefix::LightningGateway => {
+                            let gateways = dbtx
+                                .find_by_prefix(&fedimint_ln_client::db::LightningGatewayKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_gateways = gateways.len();
+                            ensure!(
+                                num_gateways > 0,
+                                "validate_migrations was not able to read any LightningGateways"
+                            );
+                            info!("Validated LightningGateways");
+                        }
+                        fedimint_ln_client::db::DbKeyPrefix::PaymentResult => {
+                            let payment_results = dbtx
+                                .find_by_prefix(&PaymentResultPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_payment_results = payment_results.len();
+                            ensure!(
+                                num_payment_results > 0,
+                                "validate_migrations was not able to read any PaymentResults"
+                            );
+                            info!("Validated PaymentResults");
+                        }
+                        fedimint_ln_client::db::DbKeyPrefix::MetaOverrides => {
+                            let meta_overrides = dbtx
+                                .find_by_prefix(&MetaOverridesPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_meta_overrides = meta_overrides.len();
+                            ensure!(
+                                num_meta_overrides > 0,
+                                "validate_migrations was not able to read any MetaOverrides"
+                            );
+                            info!("Validated MetaOverrides");
+                        }
+                    }
+                }
+
+                Ok(())
+            },
+            ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_LN,
+                LightningCommonInit::KIND,
+                <LightningClientModule as ClientModule>::decoder(),
             )]),
         )
         .await
