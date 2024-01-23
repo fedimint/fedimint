@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["interpolate_zero"],"struct":["Poly"]};

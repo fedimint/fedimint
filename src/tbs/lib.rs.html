@@ -267,159 +267,66 @@
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a>
-<a href="#272" id="272">272</a>
-<a href="#273" id="273">273</a>
-<a href="#274" id="274">274</a>
-<a href="#275" id="275">275</a>
-<a href="#276" id="276">276</a>
-<a href="#277" id="277">277</a>
-<a href="#278" id="278">278</a>
-<a href="#279" id="279">279</a>
-<a href="#280" id="280">280</a>
-<a href="#281" id="281">281</a>
-<a href="#282" id="282">282</a>
-<a href="#283" id="283">283</a>
-<a href="#284" id="284">284</a>
-<a href="#285" id="285">285</a>
-<a href="#286" id="286">286</a>
-<a href="#287" id="287">287</a>
-<a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Threshold Blind Signatures
 //!
 //! This library implements an ad-hoc threshold blind signature scheme based on
 //! BLS signatures using the (unrelated) BLS12-381 curve.
 
-</span><span class="kw">use </span>std::hash::Hasher;
+</span><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bls12_381::{pairing, G1Affine, G1Projective, G2Affine, G2Projective};
 <span class="kw">pub use </span>bls12_381::{G1Affine <span class="kw">as </span>MessagePoint, G2Affine <span class="kw">as </span>PubKeyPoint, Scalar};
 <span class="kw">use </span>ff::Field;
-<span class="kw">use </span>group::Curve;
+<span class="kw">use </span>group::{Curve, Group};
 <span class="kw">use </span>rand::rngs::OsRng;
-<span class="kw">use </span>rand::RngCore;
+<span class="kw">use </span>rand::SeedableRng;
+<span class="kw">use </span>rand_chacha::ChaChaRng;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>sha3::digest::generic_array::typenum::U32;
 <span class="kw">use </span>sha3::Digest;
 
-<span class="kw">use </span><span class="kw">crate</span>::hash::{hash_bytes_to_curve, hash_to_curve};
-<span class="kw">use </span><span class="kw">crate</span>::poly::Poly;
-
-<span class="kw">pub mod </span>hash;
-<span class="kw">pub mod </span>poly;
 <span class="kw">pub mod </span>serde_impl;
 
-<span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>PublicKeyShare(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g2&quot;</span>)] </span><span class="kw">pub </span>G2Affine);
+<span class="kw">const </span>HASH_TAG: <span class="kw-2">&amp;</span>[u8] = <span class="string">b&quot;TBS_BLS12-381_&quot;</span>;
 
-<span class="attr">#[allow(clippy::derived_hash_with_manual_eq)]
-</span><span class="kw">impl </span>std::hash::Hash <span class="kw">for </span>PublicKeyShare {
-    <span class="kw">fn </span>hash&lt;H: Hasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
-        <span class="comment">// As per &lt;https://rust-lang.github.io/rust-clippy/master/index.html#/derived_hash_with_manual_eq&gt;
-        // k1 == k2 ⇒ hash(k1) == hash(k2)
-        // must hold, and all infinities are equal, so must hash to the same value.
-        </span><span class="kw">if </span>bool::from(<span class="self">self</span>.<span class="number">0</span>.is_identity()) {
-            <span class="number">0</span>.hash(state)
-        } <span class="kw">else </span>{
-            <span class="comment">// TODO: This is not ideal, `Hash` impls should be as fast as possible.
-            // Would be better to hash in the `x` and `y`
-            </span><span class="self">self</span>.<span class="number">0</span>.to_compressed().hash(state)
-        }
-    }
+<span class="kw">fn </span>hash_bytes_to_g1(data: <span class="kw-2">&amp;</span>[u8]) -&gt; G1Projective {
+    <span class="kw">let </span><span class="kw-2">mut </span>hash_engine = sha3::Sha3_256::new();
+
+    hash_engine.update(HASH_TAG);
+    hash_engine.update(data);
+
+    <span class="kw">let </span><span class="kw-2">mut </span>prng = ChaChaRng::from_seed(hash_engine.finalize().into());
+
+    G1Projective::random(<span class="kw-2">&amp;mut </span>prng)
 }
 
 <span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>SecretKeyShare(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::scalar&quot;</span>)] </span><span class="kw">pub </span>Scalar);
 
 <span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>PublicKeyShare(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g2&quot;</span>)] </span><span class="kw">pub </span>G2Affine);
+
+<span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>AggregatePublicKey(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g2&quot;</span>)] </span><span class="kw">pub </span>G2Affine);
+
+<span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>Message(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
 
 <span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>BlindingKey(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::scalar&quot;</span>)] </span><span class="kw">pub </span>Scalar);
 
-<span class="attr">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>BlindedMessage(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
 
-<span class="attr">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>BlindedSignatureShare(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
 
-<span class="attr">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>BlindedSignature(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
 
-<span class="attr">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>Signature(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
 
-<span class="attr">#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>Message(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g1&quot;</span>)] </span><span class="kw">pub </span>G1Affine);
-
-<span class="kw">pub trait </span>FromRandom {
-    <span class="kw">fn </span>from_random(rng: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>RngCore) -&gt; <span class="self">Self</span>;
-}
-
-<span class="kw">impl </span>FromRandom <span class="kw">for </span>Scalar {
-    <span class="kw">fn </span>from_random(rng: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>RngCore) -&gt; <span class="self">Self </span>{
-        Field::random(rng)
-    }
-}
-
-<span class="kw">impl </span>Message {
-    <span class="kw">pub fn </span>from_bytes(msg: <span class="kw-2">&amp;</span>[u8]) -&gt; Message {
-        Message(hash_bytes_to_curve::&lt;G1Projective&gt;(msg).to_affine())
-    }
-
-    <span class="doccomment">/// **IMPORTANT**: `from_bytes` includes a tag in the hash, this doesn&#39;t
-    </span><span class="kw">pub fn </span>from_hash(hash: <span class="kw">impl </span>Digest&lt;OutputSize = U32&gt;) -&gt; Message {
-        Message(hash_to_curve::&lt;G1Projective, <span class="kw">_</span>&gt;(hash).to_affine())
-    }
-}
-
-<span class="attr">#[allow(clippy::derived_hash_with_manual_eq)]
-</span><span class="kw">impl </span>std::hash::Hash <span class="kw">for </span>AggregatePublicKey {
-    <span class="kw">fn </span>hash&lt;H: Hasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
-        <span class="kw">let </span>serialized = <span class="self">self</span>.<span class="number">0</span>.to_compressed();
-        state.write(<span class="kw-2">&amp;</span>serialized);
-    }
-}
-
-<span class="macro">macro_rules! </span>point_impl {
+<span class="macro">macro_rules! </span>point_hash_impl {
     (<span class="macro-nonterminal">$</span><span class="kw">type</span>:<span class="macro-nonterminal">ty</span>) =&gt; {
         <span class="kw">impl </span>std::hash::Hash <span class="kw">for </span><span class="macro-nonterminal">$</span><span class="kw">type </span>{
             <span class="kw">fn </span><span class="macro-nonterminal">hash</span>&lt;H: std::hash::Hasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
@@ -427,28 +334,16 @@
                 state.write(<span class="kw-2">&amp;</span>serialized);
             }
         }
-
-        <span class="kw">impl </span><span class="macro-nonterminal">$</span><span class="kw">type </span>{
-            <span class="kw">pub fn </span><span class="macro-nonterminal">encode_compressed</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; [u8; <span class="number">48</span>] {
-                <span class="self">self</span>.<span class="number">0</span>.to_compressed()
-            }
-        }
-
-        <span class="kw">impl </span>PartialEq <span class="kw">for </span><span class="macro-nonterminal">$</span><span class="kw">type </span>{
-            <span class="kw">fn </span><span class="macro-nonterminal">eq</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$</span><span class="kw">type</span>) -&gt; <span class="macro-nonterminal">bool </span>{
-                <span class="self">self</span>.<span class="number">0 </span>== other.<span class="number">0
-            </span>}
-        }
-
-        <span class="kw">impl </span>Eq <span class="kw">for </span><span class="macro-nonterminal">$</span><span class="kw">type </span>{}
     };
 }
 
-<span class="macro">point_impl!</span>(<span class="macro-nonterminal">BlindedMessage</span>);
-<span class="macro">point_impl!</span>(Message);
-<span class="macro">point_impl!</span>(Signature);
-<span class="macro">point_impl!</span>(BlindedSignature);
-<span class="macro">point_impl!</span>(BlindedSignatureShare);
+<span class="macro">point_hash_impl!</span>(PublicKeyShare);
+<span class="macro">point_hash_impl!</span>(AggregatePublicKey);
+<span class="macro">point_hash_impl!</span>(Message);
+<span class="macro">point_hash_impl!</span>(BlindedMessage);
+<span class="macro">point_hash_impl!</span>(BlindedSignatureShare);
+<span class="macro">point_hash_impl!</span>(BlindedSignature);
+<span class="macro">point_hash_impl!</span>(Signature);
 
 <span class="kw">impl </span>SecretKeyShare {
     <span class="kw">pub fn </span>to_pub_key_share(<span class="self">self</span>) -&gt; PublicKeyShare {
@@ -463,29 +358,10 @@
     }
 }
 
-<span class="doccomment">/// * `threshold`: how many signature shares are needed to produce a signature
-/// * `keys`: how many keys to generate
-</span><span class="kw">pub fn </span>dealer_keygen(
-    threshold: usize,
-    keys: usize,
-) -&gt; (AggregatePublicKey, Vec&lt;PublicKeyShare&gt;, Vec&lt;SecretKeyShare&gt;) {
-    <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng; <span class="comment">// FIXME: pass rng
-    </span><span class="kw">let </span>poly = Poly::&lt;Scalar, Scalar&gt;::random(threshold - <span class="number">1</span>, <span class="kw-2">&amp;mut </span>rng);
-    <span class="kw">let </span>(pub_shares, sec_shares) = (<span class="number">1</span>..=keys)
-        .map(|idx| {
-            <span class="kw">let </span>sk = poly.evaluate(idx <span class="kw">as </span>u64);
-            <span class="kw">let </span>pk = G2Projective::generator() * sk;
-
-            (PublicKeyShare(pk.to_affine()), SecretKeyShare(sk))
-        })
-        .unzip();
-    <span class="kw">let </span>pub_key = G2Projective::generator() * poly.evaluate(<span class="number">0</span>);
-
-    (
-        AggregatePublicKey(pub_key.to_affine()),
-        pub_shares,
-        sec_shares,
-    )
+<span class="kw">impl </span>Message {
+    <span class="kw">pub fn </span>from_bytes(msg: <span class="kw-2">&amp;</span>[u8]) -&gt; Message {
+        Message(hash_bytes_to_g1(msg).to_affine())
+    }
 }
 
 <span class="kw">pub fn </span>blind_message(msg: Message, blinding_key: BlindingKey) -&gt; BlindedMessage {
@@ -499,40 +375,83 @@
     BlindedSignatureShare(sig.to_affine())
 }
 
-<span class="doccomment">/// Combines a sufficient amount of valid blinded signature shares to a blinded
-/// signature. The responsibility of verifying the supplied shares lies with the
-/// caller.
-///
-/// * `sig_shares`: an iterator yielding pairs of key indices and signature
-///   shares from said key
-/// * `threshold`: number of shares needed to combine a signature
-///
+<span class="kw">pub fn </span>verify_blind_share(
+    msg: BlindedMessage,
+    sig: BlindedSignatureShare,
+    pk: PublicKeyShare,
+) -&gt; bool {
+    pairing(<span class="kw-2">&amp;</span>msg.<span class="number">0</span>, <span class="kw-2">&amp;</span>pk.<span class="number">0</span>) == pairing(<span class="kw-2">&amp;</span>sig.<span class="number">0</span>, <span class="kw-2">&amp;</span>G2Affine::generator())
+}
+
+<span class="doccomment">/// Combines the exact threshold of valid blinded signature shares to a blinded
+/// signature. The responsibility of verifying the shares and supplying
+/// exactly the necessary threshold of shares lies with the caller.
 /// # Panics
-/// If the amount of shares supplied is less than the necessary amount
-</span><span class="kw">pub fn </span>combine_valid_shares&lt;I&gt;(sig_shares: I, threshold: usize) -&gt; BlindedSignature
-<span class="kw">where
-    </span>I: IntoIterator&lt;Item = (usize, BlindedSignatureShare)&gt;,
-    I::IntoIter: Clone + ExactSizeIterator,
-{
-    <span class="kw">let </span>points = sig_shares
-        .into_iter()
-        .take(threshold)
-        .map(|(idx, share)| {
-            <span class="kw">let </span>x = Scalar::from((idx <span class="kw">as </span>u64) + <span class="number">1</span>);
-            <span class="kw">let </span>y = share.<span class="number">0</span>.into();
-            (x, y)
+/// If shares is empty
+</span><span class="kw">pub fn </span>aggregate_signature_shares(
+    shares: <span class="kw-2">&amp;</span>BTreeMap&lt;u64, BlindedSignatureShare&gt;,
+) -&gt; BlindedSignature {
+    <span class="comment">// this is a special case for one-of-one federations
+    </span><span class="kw">if </span>shares.len() == <span class="number">1 </span>{
+        <span class="kw">return </span>BlindedSignature(
+            shares
+                .values()
+                .next()
+                .expect(<span class="string">&quot;We have at least one value&quot;</span>)
+                .<span class="number">0</span>,
+        );
+    }
+
+    BlindedSignature(
+        lagrange_multipliers(shares.keys().cloned().map(Scalar::from).collect())
+            .into_iter()
+            .zip(shares.values())
+            .map(|(lagrange_multiplier, share)| lagrange_multiplier * share.<span class="number">0</span>)
+            .reduce(|a, b| a + b)
+            .expect(<span class="string">&quot;We have at least one share&quot;</span>)
+            .to_affine(),
+    )
+}
+
+<span class="comment">// TODO: aggregating public key shares is hacky since we can obtain the
+// aggregated public by evaluating the dkg polynomial at zero - this function
+// should be removed, however it is currently needed in the mint module to
+// until we add the aggregated public key to the mint config.
+</span><span class="kw">pub fn </span>aggregate_public_key_shares(shares: <span class="kw-2">&amp;</span>BTreeMap&lt;u64, PublicKeyShare&gt;) -&gt; AggregatePublicKey {
+    <span class="comment">// this is a special case for one-of-one federations
+    </span><span class="kw">if </span>shares.len() == <span class="number">1 </span>{
+        <span class="kw">return </span>AggregatePublicKey(
+            shares
+                .values()
+                .next()
+                .expect(<span class="string">&quot;We have at least one value&quot;</span>)
+                .<span class="number">0</span>,
+        );
+    }
+
+    AggregatePublicKey(
+        lagrange_multipliers(shares.keys().cloned().map(Scalar::from).collect())
+            .into_iter()
+            .zip(shares.values())
+            .map(|(lagrange_multiplier, share)| lagrange_multiplier * share.<span class="number">0</span>)
+            .reduce(|a, b| a + b)
+            .expect(<span class="string">&quot;We have at least one share&quot;</span>)
+            .to_affine(),
+    )
+}
+
+<span class="kw">fn </span>lagrange_multipliers(scalars: Vec&lt;Scalar&gt;) -&gt; Vec&lt;Scalar&gt; {
+    scalars
+        .iter()
+        .map(|i| {
+            scalars
+                .iter()
+                .filter(|j| <span class="kw-2">*</span>j != i)
+                .map(|j| j * (j - i).invert().expect(<span class="string">&quot;We filtered the case j == i&quot;</span>))
+                .reduce(|a, b| a * b)
+                .expect(<span class="string">&quot;We have at least one share&quot;</span>)
         })
-        .collect::&lt;Vec&lt;(Scalar, G1Projective)&gt;&gt;();
-    <span class="kw">if </span>points.len() &lt; threshold {
-        <span class="macro">panic!</span>(<span class="string">&quot;Not enough signature shares&quot;</span>);
-    }
-
-    <span class="kw">if </span>points.len() == <span class="number">1 </span>{
-        <span class="kw">return </span>BlindedSignature(points.first().unwrap().<span class="number">1</span>.to_affine());
-    }
-
-    <span class="kw">let </span>bsig: G1Projective = poly::interpolate_zero(points.into_iter());
-    BlindedSignature(bsig.to_affine())
+        .collect()
 }
 
 <span class="kw">pub fn </span>unblind_signature(blinding_key: BlindingKey, blinded_sig: BlindedSignature) -&gt; Signature {
@@ -544,108 +463,77 @@
     pairing(<span class="kw-2">&amp;</span>msg.<span class="number">0</span>, <span class="kw-2">&amp;</span>pk.<span class="number">0</span>) == pairing(<span class="kw-2">&amp;</span>sig.<span class="number">0</span>, <span class="kw-2">&amp;</span>G2Affine::generator())
 }
 
-<span class="kw">pub fn </span>verify_blind_share(
-    msg: BlindedMessage,
-    sig: BlindedSignatureShare,
-    pk: PublicKeyShare,
-) -&gt; bool {
-    pairing(<span class="kw-2">&amp;</span>msg.<span class="number">0</span>, <span class="kw-2">&amp;</span>pk.<span class="number">0</span>) == pairing(<span class="kw-2">&amp;</span>sig.<span class="number">0</span>, <span class="kw-2">&amp;</span>G2Affine::generator())
-}
-
-<span class="kw">pub trait </span>Aggregatable {
-    <span class="kw">type </span>Aggregate;
-
-    <span class="kw">fn </span>aggregate(<span class="kw-2">&amp;</span><span class="self">self</span>, threshold: usize) -&gt; <span class="self">Self</span>::Aggregate;
-}
-
-<span class="kw">impl </span>Aggregatable <span class="kw">for </span>Vec&lt;PublicKeyShare&gt; {
-    <span class="kw">type </span>Aggregate = AggregatePublicKey;
-
-    <span class="kw">fn </span>aggregate(<span class="kw-2">&amp;</span><span class="self">self</span>, threshold: usize) -&gt; <span class="self">Self</span>::Aggregate {
-        <span class="kw">if </span><span class="self">self</span>.len() == <span class="number">1 </span>{
-            <span class="kw">return </span>AggregatePublicKey(<span class="self">self</span>.first().unwrap().<span class="number">0</span>);
-        }
-
-        <span class="kw">let </span>elements = <span class="self">self
-            </span>.iter()
-            .enumerate()
-            .map(|(idx, PublicKeyShare(pk))| (Scalar::from((idx + <span class="number">1</span>) <span class="kw">as </span>u64), pk.into()))
-            .take(threshold);
-        <span class="kw">let </span>pk: G2Projective = poly::interpolate_zero(elements);
-        AggregatePublicKey(pk.to_affine())
-    }
-}
-
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>std::collections::BTreeMap;
+
+    <span class="kw">use </span>bls12_381::{G2Projective, Scalar};
+    <span class="kw">use </span>ff::Field;
+    <span class="kw">use </span>group::Curve;
+    <span class="kw">use </span>rand::rngs::OsRng;
+
     <span class="kw">use crate</span>::{
-        blind_message, combine_valid_shares, dealer_keygen, sign_blinded_msg, unblind_signature,
-        verify, Aggregatable, BlindingKey, Message,
+        aggregate_signature_shares, blind_message, sign_blinded_msg, unblind_signature, verify,
+        verify_blind_share, AggregatePublicKey, BlindedSignatureShare, BlindingKey, Message,
+        PublicKeyShare, SecretKeyShare,
     };
 
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_keygen() {
-        <span class="kw">let </span>(pk, pks, _sks) = dealer_keygen(<span class="number">5</span>, <span class="number">15</span>);
-        <span class="macro">assert_eq!</span>(pks.len(), <span class="number">15</span>);
+    <span class="kw">fn </span>dealer_keygen(
+        threshold: usize,
+        keys: usize,
+    ) -&gt; (AggregatePublicKey, Vec&lt;PublicKeyShare&gt;, Vec&lt;SecretKeyShare&gt;) {
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
+        <span class="kw">let </span>poly: Vec&lt;Scalar&gt; = (<span class="number">0</span>..threshold).map(|<span class="kw">_</span>| Scalar::random(<span class="kw-2">&amp;mut </span>rng)).collect();
 
-        <span class="kw">let </span>pka = pks.aggregate(<span class="number">5</span>);
-        <span class="macro">assert_eq!</span>(pka, pk);
+        <span class="kw">let </span>apk = (G2Projective::generator() * eval_polynomial(<span class="kw-2">&amp;</span>poly, <span class="kw-2">&amp;</span>Scalar::zero())).to_affine();
+
+        <span class="kw">let </span>sks: Vec&lt;SecretKeyShare&gt; = (<span class="number">0</span>..keys)
+            .map(|idx| SecretKeyShare(eval_polynomial(<span class="kw-2">&amp;</span>poly, <span class="kw-2">&amp;</span>Scalar::from(idx <span class="kw">as </span>u64 + <span class="number">1</span>))))
+            .collect();
+
+        <span class="kw">let </span>pks = sks
+            .iter()
+            .map(|sk| PublicKeyShare((G2Projective::generator() * sk.<span class="number">0</span>).to_affine()))
+            .collect();
+
+        (AggregatePublicKey(apk), pks, sks)
+    }
+
+    <span class="kw">fn </span>eval_polynomial(coefficients: <span class="kw-2">&amp;</span>[Scalar], x: <span class="kw-2">&amp;</span>Scalar) -&gt; Scalar {
+        coefficients
+            .iter()
+            .cloned()
+            .rev()
+            .reduce(|acc, coefficient| acc * x + coefficient)
+            .expect(<span class="string">&quot;We have at least one coefficient&quot;</span>)
     }
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_roundtrip() {
-        <span class="kw">let </span>msg = Message::from_bytes(<span class="string">b&quot;Hello World!&quot;</span>);
-        <span class="kw">let </span>threshold = <span class="number">5</span>;
+        <span class="kw">let </span>(pk, pks, sks) = dealer_keygen(<span class="number">5</span>, <span class="number">15</span>);
 
+        <span class="kw">let </span>msg = Message::from_bytes(<span class="string">b&quot;Hello World!&quot;</span>);
         <span class="kw">let </span>bkey = BlindingKey::random();
         <span class="kw">let </span>bmsg = blind_message(msg, bkey);
 
-        <span class="kw">let </span>(pk, _pks, sks) = dealer_keygen(threshold, <span class="number">15</span>);
-
-        <span class="kw">let </span><span class="kw-2">mut </span>sigs = sks
+        <span class="kw">let </span>bsig_shares = sks
             .iter()
-            .enumerate()
-            .map(|(idx, sk)| (idx, sign_blinded_msg(bmsg, <span class="kw-2">*</span>sk)))
-            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            .map(|sk| sign_blinded_msg(bmsg, <span class="kw-2">*</span>sk))
+            .collect::&lt;Vec&lt;BlindedSignatureShare&gt;&gt;();
 
-        <span class="comment">// All sig shards available
-        </span><span class="kw">let </span>bsig = combine_valid_shares(sigs.clone(), threshold);
-        <span class="kw">let </span>sig = unblind_signature(bkey, bsig);
-        <span class="macro">assert!</span>(verify(msg, sig, pk));
-
-        <span class="comment">// Missing sig shards
-        </span><span class="kw">for _ in </span><span class="number">0</span>..<span class="number">5 </span>{
-            sigs.pop();
+        <span class="kw">for </span>(share, pk) <span class="kw">in </span>bsig_shares.iter().zip(pks) {
+            <span class="macro">assert!</span>(verify_blind_share(bmsg, <span class="kw-2">*</span>share, pk));
         }
-        <span class="kw">let </span>bsig = combine_valid_shares(sigs.clone(), threshold);
+
+        <span class="kw">let </span>bsig_shares = (<span class="number">1_u64</span>..)
+            .zip(bsig_shares)
+            .take(<span class="number">5</span>)
+            .collect::&lt;BTreeMap&lt;u64, BlindedSignatureShare&gt;&gt;();
+
+        <span class="kw">let </span>bsig = aggregate_signature_shares(<span class="kw-2">&amp;</span>bsig_shares);
         <span class="kw">let </span>sig = unblind_signature(bkey, bsig);
+
         <span class="macro">assert!</span>(verify(msg, sig, pk));
-
-        <span class="kw">let </span>new_order = [<span class="number">9</span>, <span class="number">5</span>, <span class="number">4</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">6</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">3</span>, <span class="number">2</span>];
-
-        <span class="kw">let </span>shuffle_sigs = new_order.iter().map(|idx| sigs[<span class="kw-2">*</span>idx]);
-        <span class="kw">let </span>bsig = combine_valid_shares(shuffle_sigs, threshold);
-        <span class="kw">let </span>sig = unblind_signature(bkey, bsig);
-        <span class="macro">assert!</span>(verify(msg, sig, pk));
-    }
-
-    <span class="attr">#[test]
-    #[should_panic(expected = <span class="string">&quot;Not enough signature shares&quot;</span>)]
-    </span><span class="kw">fn </span>test_insufficient_shares() {
-        <span class="kw">let </span>msg = Message::from_bytes(<span class="string">b&quot;Hello World!&quot;</span>);
-        <span class="kw">let </span>threshold = <span class="number">5</span>;
-
-        <span class="kw">let </span>bmsg = blind_message(msg, BlindingKey::random());
-
-        <span class="kw">let </span>(<span class="kw">_</span>, _pks, sks) = dealer_keygen(threshold, <span class="number">4</span>);
-
-        <span class="kw">let </span>sigs = sks
-            .iter()
-            .enumerate()
-            .map(|(idx, sk)| (idx, sign_blinded_msg(bmsg, <span class="kw-2">*</span>sk)));
-
-        <span class="comment">// Combining an insufficient number of signature shares should panic
-        </span>combine_valid_shares(sigs, threshold);
     }
 }
 </code></pre></div></section></main></body></html>

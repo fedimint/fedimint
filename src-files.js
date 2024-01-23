@@ -38,6 +38,6 @@ var srcIndex = JSON.parse('{\
 "hkdf":["",[],["lib.rs"]],\
 "ln_gateway":["",[["lightning",[],["cln.rs","lnd.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]],["state_machine",[],["complete.rs","mod.rs","pay.rs"]]],["client.rs","db.rs","lib.rs","types.rs","utils.rs"]],\
 "recoverytool":["",[],["main.rs"]],\
-"tbs":["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["hash.rs","lib.rs","poly.rs"]]\
+"tbs":["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["lib.rs"]]\
 }');
 createSrcSidebar();

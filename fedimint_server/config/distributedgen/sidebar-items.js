@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["DkgStep"],"fn":["scalar"],"struct":["Dkg","DkgKeys","DkgRunner","ThresholdKeys"],"trait":["PeerHandleOps"]};
+window.SIDEBAR_ITEMS = {"enum":["DkgStep"],"fn":["evaluate_polynomial_g2","evaluate_polynomial_scalar","random_scalar","random_scalar_coefficients","scalar"],"struct":["Dkg","DkgKeys","DkgRunner","ThresholdKeys"],"trait":["PeerHandleOps"]};

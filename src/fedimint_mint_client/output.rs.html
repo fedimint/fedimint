@@ -419,6 +419,8 @@
 <a href="#419" id="419">419</a>
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -441,8 +443,8 @@
 <span class="kw">use </span>secp256k1::{KeyPair, Secp256k1, Signing};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{
-    blind_message, combine_valid_shares, unblind_signature, AggregatePublicKey, BlindedSignature,
-    BlindingKey, PublicKeyShare,
+    aggregate_signature_shares, blind_message, unblind_signature, AggregatePublicKey,
+    BlindedSignature, BlindingKey, PublicKeyShare,
 };
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{error, trace};
@@ -659,14 +661,16 @@
             <span class="kw">match </span>mint_keys.tier(<span class="kw-2">&amp;</span>amount) {
                 <span class="prelude-val">Ok</span>(amount_key) =&gt; issuance_request
                     .finalize(
-                        combine_valid_shares(
-                            blind_signature_shares.iter().map(|(peer, share)| {
-                                <span class="kw">let </span>share = share.ensure_v0_ref().expect(
+                        aggregate_signature_shares(
+                            <span class="kw-2">&amp;</span>blind_signature_shares
+                                .iter()
+                                .map(|(peer, share)| {
+                                    <span class="kw">let </span>share = share.ensure_v0_ref().expect(
                                     <span class="string">&quot;We only process output outcome versions created by ourselves&quot;</span>,
                                 );
-                                (peer.to_usize(), share.<span class="number">0</span>)
-                            }),
-                            blind_signature_shares.len(),
+                                    (peer.to_usize() <span class="kw">as </span>u64 + <span class="number">1</span>, share.<span class="number">0</span>)
+                                })
+                                .collect(),
                         ),
                         <span class="kw-2">*</span>amount_key,
                     )
