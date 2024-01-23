@@ -162,6 +162,7 @@ impl Fedimintd {
         })
     }
 
+    /// Attach a server module to the Fedimintd instance
     pub fn with_module<T>(mut self, gen: T) -> Self
     where
         T: ServerModuleInit + 'static + Send + Sync,
@@ -170,6 +171,7 @@ impl Fedimintd {
         self
     }
 
+    /// Attach additional parameters for a server module to Fedimintd
     pub fn with_extra_module_inits_params<P>(
         mut self,
         id: ModuleInstanceId,
@@ -184,12 +186,14 @@ impl Fedimintd {
         self
     }
 
+    /// Attach default server modules to Fedimintd instance
     pub fn with_default_modules(self) -> Self {
         self.with_module(LightningInit)
             .with_module(MintInit)
             .with_module(WalletInit)
     }
 
+    /// Block thread and run a Fedimintd server
     pub async fn run(self) -> ! {
         let opts: ServerOpts = ServerOpts::parse();
         TracingSetup::default()
