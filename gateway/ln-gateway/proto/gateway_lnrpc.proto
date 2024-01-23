@@ -28,6 +28,12 @@ service GatewayLightning {
   rpc RouteHtlcs(EmptyRequest) returns (stream InterceptHtlcRequest) {}
 
   rpc CompleteHtlc(InterceptHtlcResponse) returns (EmptyResponse) {}
+
+  /*
+   * UpdateScids updates the short channel ids of the federations that the
+   * Lightning node forwards to the gateway
+   */
+  rpc UpdateScids(UpdateScidsRequest) returns (EmptyResponse) {}
 }
 
 message EmptyRequest {}
@@ -171,4 +177,9 @@ message GetRouteHintsResponse {
 
   // The route hints to the associated lightning node
   repeated RouteHint route_hints = 1;
+}
+
+message UpdateScidsRequest {
+  // The short channel ids of the associated lightning node
+  repeated uint64 scids = 1;
 }

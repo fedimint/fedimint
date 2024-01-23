@@ -513,7 +513,8 @@ impl Gateway {
                                             }
                                         }
 
-                                        info!("Successfully loaded Gateway clients.");
+                                        self.update_fed_scids(&ln_client).await;
+
                                         let lightning_context = LightningContext {
                                             lnrpc: ln_client,
                                             lightning_public_key,
@@ -556,6 +557,21 @@ impl Gateway {
             .await;
 
         Ok(())
+    }
+
+    /// Updates the registered federation SCIDs with the lightning node
+    async fn update_fed_scids(&self, ln_client: &Arc<dyn ILnRpcClient>) {
+        let scids = self
+            .scid_to_federation
+            .read()
+            .await
+            .keys()
+            .cloned()
+            .collect();
+
+        if let Err(e) = ln_client.update_scids(scids).await {
+            warn!("Failed to update fedimint scids: {e:?}. All HTLCs will be sent to gatewayd for inspection. Check for gateway/extension version mismatch.");
+        }
     }
 
     async fn handle_disconnect(&mut self, htlc_task_group: TaskGroup) {
@@ -892,7 +908,7 @@ impl Gateway {
                     route_hints,
                     GW_ANNOUNCEMENT_TTL,
                     gw_client_cfg.fees,
-                    lightning_context,
+                    lightning_context.clone(),
                 )
                 .await?;
             self.clients.write().await.insert(federation_id, client);
@@ -905,6 +921,8 @@ impl Gateway {
             self.client_builder
                 .save_config(gw_client_cfg.clone(), dbtx)
                 .await?;
+
+            self.update_fed_scids(&lightning_context.lnrpc).await;
 
             return Ok(federation_config);
         }
@@ -923,7 +941,24 @@ impl Gateway {
         .await;
         dbtx.commit_tx_result()
             .await
-            .map_err(GatewayError::DatabaseError)
+            .map_err(GatewayError::DatabaseError)?;
+
+        if let GatewayState::Running {
+            lightning_context, ..
+        } = self.state.read().await.clone()
+        {
+            let scids: Vec<u64> = self
+                .scid_to_federation
+                .read()
+                .await
+                .keys()
+                .cloned()
+                .collect();
+
+            lightning_context.lnrpc.update_scids(scids).await?;
+        }
+
+        Ok(())
     }
 
     pub async fn handle_backup_msg(

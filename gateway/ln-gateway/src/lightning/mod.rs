@@ -41,6 +41,8 @@ pub enum LightningRpcError {
     FailedToOpenChannel { failure_reason: String },
     #[error("Failed to get Invoice: {failure_reason}")]
     FailedToGetInvoice { failure_reason: String },
+    #[error("Failed to update scids: {failure_reason}")]
+    FailedToUpdateScids { failure_reason: String },
 }
 
 #[async_trait]
@@ -95,6 +97,11 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         &self,
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError>;
+
+    /// Updates the list of scids that the lightning node should monitor for
+    async fn update_scids(&self, _scids: Vec<u64>) -> Result<EmptyResponse, LightningRpcError> {
+        Ok(EmptyResponse {})
+    }
 }
 
 #[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]
