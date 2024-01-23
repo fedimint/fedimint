@@ -1,5 +1,6 @@
 pub mod rpc_client;
 pub mod rpc_server;
+pub mod rpc_webhook_server;
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;

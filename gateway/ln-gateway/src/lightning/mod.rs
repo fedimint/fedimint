@@ -1,7 +1,10 @@
 pub mod cln;
+pub mod coinos;
 pub mod lnd;
 
+use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -13,8 +16,11 @@ use fedimint_core::Amount;
 use fedimint_ln_common::PrunedInvoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::oneshot::Sender;
+use tokio::sync::Mutex;
 
 use self::cln::{NetworkLnRpcClient, RouteHtlcStream};
+use self::coinos::GatewayCoinosClient;
 use self::lnd::GatewayLndClient;
 use crate::gateway_lnrpc::{
     EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
@@ -41,6 +47,12 @@ pub enum LightningRpcError {
     FailedToOpenChannel { failure_reason: String },
     #[error("Failed to get Invoice: {failure_reason}")]
     FailedToGetInvoice { failure_reason: String },
+}
+
+pub trait GatewayApiClient: Debug + Send + Sync + Clone + Sized {
+    fn bind_addr(&self) -> &SocketAddr;
+    fn api_key(&self) -> &String;
+    fn outcomes(&self) -> &Arc<Mutex<BTreeMap<u64, Sender<InterceptHtlcResponse>>>>;
 }
 
 #[async_trait]
@@ -118,6 +130,13 @@ pub enum LightningMode {
         #[arg(long = "cln-extension-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
         cln_extension_addr: SafeUrl,
     },
+    #[clap(name = "coinos")]
+    Coinos {
+        #[arg(long = "bind-addr", env = "FM_GATEWAY_WEBSERVER_BIND_ADDR")]
+        bind_addr: SocketAddr,
+        #[arg(long = "api-key", env = "FM_GATEWAY_LIGHTNING_API_KEY")]
+        api_key: String,
+    },
 }
 
 #[async_trait]
@@ -144,6 +163,29 @@ impl LightningBuilder for GatewayLightningBuilder {
             } => Box::new(
                 GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, None).await,
             ),
+            LightningMode::Coinos { bind_addr, api_key } => {
+                let outcomes = Arc::new(Mutex::new(BTreeMap::new()));
+                Box::new(GatewayCoinosClient::new(bind_addr, api_key, outcomes).await)
+            }
         }
+    }
+}
+
+pub async fn send_htlc_to_webhook(
+    outcomes: &Arc<Mutex<BTreeMap<u64, Sender<InterceptHtlcResponse>>>>,
+    htlc: InterceptHtlcResponse,
+) -> Result<(), LightningRpcError> {
+    let htlc_id = htlc.htlc_id;
+    if let Some(sender) = outcomes.lock().await.remove(&htlc_id) {
+        sender
+            .send(htlc)
+            .map_err(|_| LightningRpcError::FailedToCompleteHtlc {
+                failure_reason: "Failed to send back to webhook".to_string(),
+            })?;
+        Ok(())
+    } else {
+        Err(LightningRpcError::FailedToCompleteHtlc {
+            failure_reason: format!("Could not find sender for HTLC {}", htlc_id),
+        })
     }
 }
