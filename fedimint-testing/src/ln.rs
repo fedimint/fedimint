@@ -238,4 +238,8 @@ impl ILnRpcClient for FakeLightningTest {
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {
         unimplemented!("FakeLightningTest does not support listing active channels")
     }
+
+    async fn update_scids(&self, _scids: Vec<u64>) -> Result<EmptyResponse, LightningRpcError> {
+        Ok(EmptyResponse {})
+    }
 }

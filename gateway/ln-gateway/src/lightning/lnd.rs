@@ -853,6 +853,12 @@ impl ILnRpcClient for GatewayLndClient {
             }),
         }
     }
+
+    /// LND does not support node side filtering.
+    /// requires running a separate daemon (similar to cln extension plugin)
+    async fn update_scids(&self, _scids: Vec<u64>) -> Result<EmptyResponse, LightningRpcError> {
+        Ok(EmptyResponse {})
+    }
 }
 
 fn route_hints_to_lnd(

@@ -57,6 +57,8 @@ pub enum LightningRpcError {
     FailedToListActiveChannels { failure_reason: String },
     #[error("Failed to wait for chain sync: {failure_reason}")]
     FailedToWaitForChainSync { failure_reason: String },
+    #[error("Failed to update scids: {failure_reason}")]
+    FailedToUpdateScids { failure_reason: String },
 }
 
 /// A trait that the gateway uses to interact with a lightning node. This allows
@@ -156,6 +158,11 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError>;
 
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
+
+    /// Updates the list of scids that the lightning node should monitor for
+    async fn update_scids(&self, _scids: Vec<u64>) -> Result<EmptyResponse, LightningRpcError> {
+        Ok(EmptyResponse {})
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

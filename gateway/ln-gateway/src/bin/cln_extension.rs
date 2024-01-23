@@ -1,5 +1,5 @@
 use std::array::TryFromSliceError;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -32,7 +32,7 @@ use ln_gateway::gateway_lnrpc::{
     CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse,
     GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest,
-    PayInvoiceRequest, PayInvoiceResponse,
+    PayInvoiceRequest, PayInvoiceResponse, UpdateScidsRequest,
 };
 use rand::rngs::OsRng;
 use rand::Rng;
@@ -838,6 +838,19 @@ impl GatewayLightning for ClnRpcService {
             channels,
         }))
     }
+
+    /// Updates the list of scids which to intercept and send to the gateway
+    async fn update_scids(
+        &self,
+        update_scids_request: tonic::Request<UpdateScidsRequest>,
+    ) -> Result<tonic::Response<EmptyResponse>, Status> {
+        let req_scids = update_scids_request.into_inner().scids;
+
+        let mut scids = self.interceptor.scids.lock().await;
+        *scids = req_scids.into_iter().collect::<BTreeSet<_>>();
+
+        Ok(tonic::Response::new(EmptyResponse {}))
+    }
 }
 
 #[derive(Debug, Error)]
@@ -879,6 +892,7 @@ type HtlcOutcomeSender = oneshot::Sender<serde_json::Value>;
 struct ClnHtlcInterceptor {
     outcomes: Arc<Mutex<BTreeMap<(u64, u64), HtlcOutcomeSender>>>,
     sender: Arc<Mutex<Option<HtlcInterceptionSender>>>,
+    pub scids: Arc<Mutex<BTreeSet<u64>>>,
 }
 
 impl ClnHtlcInterceptor {
@@ -886,6 +900,7 @@ impl ClnHtlcInterceptor {
         Self {
             outcomes: Arc::new(Mutex::new(BTreeMap::new())),
             sender: Arc::new(Mutex::new(None)),
+            scids: Arc::new(Mutex::new(BTreeSet::new())),
         }
     }
 
@@ -920,6 +935,14 @@ impl ClnHtlcInterceptor {
         };
 
         info!(?short_channel_id, "Intercepted htlc with SCID");
+
+        // Check if the HTLC is destined for a fedimint channel
+        if let Some(scid) = short_channel_id {
+            if !self.scids.lock().await.contains(&scid) {
+                // This is not a fedimint channel, DO NOT intercept
+                return serde_json::json!({ "result": "continue" });
+            }
+        }
 
         // Clone the sender to avoid holding the lock while sending the HTLC
         let sender = self.sender.lock().await.clone();

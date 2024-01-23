@@ -578,6 +578,7 @@ impl Gateway {
                                     }).await.expect("Failed to set gateway configuration");
                                     continue;
                                 }
+                                self_copy.update_fed_scids(&ln_client).await;
 
                                 info!("Successfully loaded Gateway clients.");
                                 let lightning_context = LightningContext {
@@ -615,6 +616,21 @@ impl Gateway {
                 sleep(Duration::from_secs(5)).await;
             }
         });
+    }
+
+    /// Updates the registered federation SCIDs with the lightning node
+    async fn update_fed_scids(&self, ln_client: &Arc<dyn ILnRpcClient>) {
+        let scids = self
+            .scid_to_federation
+            .read()
+            .await
+            .keys()
+            .cloned()
+            .collect();
+
+        if let Err(e) = ln_client.update_scids(scids).await {
+            warn!("Failed to update fedimint scids: {e:?}. All HTLCs will be sent to gatewayd for inspection. Check for gateway/extension version mismatch.");
+        }
     }
 
     /// Utility function for waiting for the task that is listening for
@@ -1046,7 +1062,7 @@ impl Gateway {
                     Vec::new(),
                     GW_ANNOUNCEMENT_TTL,
                     gw_client_cfg.fees,
-                    lightning_context,
+                    lightning_context.clone(),
                 )
                 .await?;
 
@@ -1115,6 +1131,22 @@ impl Gateway {
         dbtx.commit_tx_result()
             .await
             .map_err(GatewayError::DatabaseError)?;
+
+        if let GatewayState::Running {
+            lightning_context, ..
+        } = self.state.read().await.clone()
+        {
+            let scids: Vec<u64> = self
+                .scid_to_federation
+                .read()
+                .await
+                .keys()
+                .cloned()
+                .collect();
+
+            lightning_context.lnrpc.update_scids(scids).await?;
+        }
+
         Ok(federation_info)
     }
 
