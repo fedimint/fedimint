@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, format_err, Context as _};
 use common::broken_fed_key_pair;
-use db::DbKeyPrefix;
+use db::{migrate_to_v1, DbKeyPrefix, DummyClientFundsKeyV1};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
@@ -13,7 +13,9 @@ use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, KeyPair, OperationId};
-use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationMap,
+};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
@@ -25,15 +27,13 @@ use fedimint_dummy_common::{
     fed_key_pair, DummyCommonInit, DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome,
     KIND,
 };
-use futures::{pin_mut, StreamExt};
+use futures::{pin_mut, FutureExt, StreamExt};
 use secp256k1::{PublicKey, Secp256k1};
 use states::DummyStateMachine;
 use strum::IntoEnumIterator;
 
-use crate::db::DummyClientFundsKeyV0;
-
 pub mod api;
-mod db;
+pub mod db;
 pub mod states;
 
 #[derive(Debug)]
@@ -106,7 +106,7 @@ impl ClientModule for DummyClientModule {
             return Err(format_err!("Insufficient funds"));
         }
         let updated = funds - amount;
-        dbtx.insert_entry(&DummyClientFundsKeyV0, &updated).await;
+        dbtx.insert_entry(&DummyClientFundsKeyV1, &updated).await;
 
         // Construct input and state machine to track the tx
         Ok(vec![ClientInput {
@@ -296,7 +296,7 @@ impl DummyClientModule {
             return Err(format_err!("Wrong account id"));
         }
 
-        dbtx.insert_entry(&DummyClientFundsKeyV0, &new_balance)
+        dbtx.insert_entry(&DummyClientFundsKeyV1, &new_balance)
             .await;
         dbtx.commit_tx().await;
         Ok(())
@@ -309,7 +309,7 @@ impl DummyClientModule {
 }
 
 async fn get_funds(dbtx: &mut DatabaseTransaction<'_>) -> Amount {
-    let funds = dbtx.get_value(&DummyClientFundsKeyV0).await;
+    let funds = dbtx.get_value(&DummyClientFundsKeyV1).await;
     funds.unwrap_or(Amount::ZERO)
 }
 
@@ -334,7 +334,7 @@ impl ModuleInit for DummyClientInit {
         for table in filtered_prefixes {
             match table {
                 DbKeyPrefix::ClientFunds => {
-                    if let Some(funds) = dbtx.get_value(&DummyClientFundsKeyV0).await {
+                    if let Some(funds) = dbtx.get_value(&DummyClientFundsKeyV1).await {
                         items.insert("Dummy Funds".to_string(), Box::new(funds));
                     }
                 }
@@ -349,6 +349,13 @@ impl ModuleInit for DummyClientInit {
 #[apply(async_trait_maybe_send!)]
 impl ClientModuleInit for DummyClientInit {
     type Module = DummyClientModule;
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
+
+    fn get_database_migrations(&self) -> MigrationMap {
+        let mut migrations = MigrationMap::new();
+        migrations.insert(DatabaseVersion(0), move |dbtx| migrate_to_v1(dbtx).boxed());
+        migrations
+    }
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])

@@ -19,7 +19,7 @@ use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlo
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{AutocommitError, DatabaseTransaction};
+use fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion, TransactionItemAmount};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
@@ -129,6 +129,7 @@ impl ModuleInit for GatewayClientInit {
 #[apply(async_trait_maybe_send!)]
 impl ClientModuleInit for GatewayClientInit {
     type Module = GatewayClientModule;
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])

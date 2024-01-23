@@ -95,7 +95,8 @@ use fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
 };
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    apply_migrations, AutocommitError, Database, DatabaseTransaction,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1690,6 +1691,28 @@ impl ClientBuilder {
             !was_replaced,
             "Only one primary module can be given to the builder."
         )
+    }
+
+    pub async fn migrate_database(&self) -> anyhow::Result<()> {
+        let client_config = self.load_existing_config().await?;
+        for (module_id, module_cfg) in client_config.modules {
+            let kind = module_cfg.kind.clone();
+            let Some(init) = self.module_inits.get(&kind) else {
+                bail!("Detected configuration for unsupported module id: {module_id}, kind: {kind}")
+            };
+
+            let isolated_db = self.db().with_prefix_module_id(module_id);
+
+            apply_migrations(
+                &isolated_db,
+                kind.to_string(),
+                init.database_version(),
+                init.get_database_migrations(),
+            )
+            .await?;
+        }
+
+        Ok(())
     }
 
     pub fn db(&self) -> &Database {
