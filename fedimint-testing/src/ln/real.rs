@@ -19,10 +19,9 @@ use ln_gateway::gateway_lnrpc::{
     EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse,
 };
-use ln_gateway::lnd::GatewayLndClient;
-use ln_gateway::lnrpc_client::{
-    ILnRpcClient, LightningRpcError, NetworkLnRpcClient, RouteHtlcStream,
-};
+use ln_gateway::lightning::cln::{NetworkLnRpcClient, RouteHtlcStream};
+use ln_gateway::lightning::lnd::GatewayLndClient;
+use ln_gateway::lightning::{ILnRpcClient, LightningRpcError};
 use secp256k1::PublicKey;
 use tokio::sync::Mutex;
 use tonic_lnd::lnrpc::{GetInfoRequest, Invoice as LndInvoice, ListChannelsRequest};

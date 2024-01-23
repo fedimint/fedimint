@@ -24,7 +24,7 @@ use tracing::{debug, error, info, warn};
 use super::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
 use crate::db::PreimageAuthentication;
 use crate::gateway_lnrpc::{PayInvoiceRequest, PayInvoiceResponse};
-use crate::lnrpc_client::LightningRpcError;
+use crate::lightning::LightningRpcError;
 use crate::state_machine::GatewayClientModule;
 use crate::GatewayState;
 

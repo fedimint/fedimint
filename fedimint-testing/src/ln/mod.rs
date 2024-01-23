@@ -7,7 +7,7 @@ use fedimint_core::{Amount, BitcoinHash};
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
 };
-use ln_gateway::lnrpc_client::ILnRpcClient;
+use ln_gateway::lightning::ILnRpcClient;
 use rand::rngs::OsRng;
 use secp256k1_zkp::SecretKey;
 

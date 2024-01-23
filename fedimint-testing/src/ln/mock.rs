@@ -18,7 +18,8 @@ use ln_gateway::gateway_lnrpc::{
     self, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse,
 };
-use ln_gateway::lnrpc_client::{HtlcResult, ILnRpcClient, LightningRpcError, RouteHtlcStream};
+use ln_gateway::lightning::cln::{HtlcResult, RouteHtlcStream};
+use ln_gateway::lightning::{ILnRpcClient, LightningRpcError};
 use rand::rngs::OsRng;
 use tokio::sync::mpsc;
 use tracing::info;
