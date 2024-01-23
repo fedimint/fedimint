@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-mint-tests"
-version = "0.2.2-rc3"
+version = "0.2.2-rc4"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-mint-tests contains integration tests for the mint module"
