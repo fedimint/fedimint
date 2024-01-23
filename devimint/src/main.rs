@@ -416,19 +416,27 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .state();
     anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
 
-    // # Test the correct descriptor is used
-    let config = cmd!(client, "config").out_json().await?;
-    let guardian_count = config["global"]["api_endpoints"].as_object().unwrap().len();
-    let descriptor = config["modules"]["2"]["peg_in_descriptor"]
-        .as_str()
-        .unwrap()
-        .to_owned();
+    // fedimintd introduced wpkh for single guardian federations in v0.3.0 (9e35bdb)
+    // The code path is backwards-compatible, however this test will fail if we
+    // check against earlier fedimintd versions.
+    let fedimintd_version_res = cmd!(devimint::util::FedimintdCmd, "--version")
+        .out_string()
+        .await;
+    if devimint::util::is_min_version(0, 3, 0, fedimintd_version_res) {
+        // # Test the correct descriptor is used
+        let config = cmd!(client, "config").out_json().await?;
+        let guardian_count = config["global"]["api_endpoints"].as_object().unwrap().len();
+        let descriptor = config["modules"]["2"]["peg_in_descriptor"]
+            .as_str()
+            .unwrap()
+            .to_owned();
 
-    info!("Testing generated descriptor for {guardian_count} guardian federation");
-    if guardian_count == 1 {
-        assert!(descriptor.contains("wpkh("));
-    } else {
-        assert!(descriptor.contains("wsh(sortedmulti("));
+        info!("Testing generated descriptor for {guardian_count} guardian federation");
+        if guardian_count == 1 {
+            assert!(descriptor.contains("wpkh("));
+        } else {
+            assert!(descriptor.contains("wsh(sortedmulti("));
+        }
     }
 
     // # Client tests
