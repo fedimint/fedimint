@@ -1456,34 +1456,9 @@
 <a href="#1456" id="1456">1456</a>
 <a href="#1457" id="1457">1457</a>
 <a href="#1458" id="1458">1458</a>
-<a href="#1459" id="1459">1459</a>
-<a href="#1460" id="1460">1460</a>
-<a href="#1461" id="1461">1461</a>
-<a href="#1462" id="1462">1462</a>
-<a href="#1463" id="1463">1463</a>
-<a href="#1464" id="1464">1464</a>
-<a href="#1465" id="1465">1465</a>
-<a href="#1466" id="1466">1466</a>
-<a href="#1467" id="1467">1467</a>
-<a href="#1468" id="1468">1468</a>
-<a href="#1469" id="1469">1469</a>
-<a href="#1470" id="1470">1470</a>
-<a href="#1471" id="1471">1471</a>
-<a href="#1472" id="1472">1472</a>
-<a href="#1473" id="1473">1473</a>
-<a href="#1474" id="1474">1474</a>
-<a href="#1475" id="1475">1475</a>
-<a href="#1476" id="1476">1476</a>
-<a href="#1477" id="1477">1477</a>
-<a href="#1478" id="1478">1478</a>
-<a href="#1479" id="1479">1479</a>
-<a href="#1480" id="1480">1480</a>
-<a href="#1481" id="1481">1481</a>
-<a href="#1482" id="1482">1482</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
-<span class="kw">pub mod </span>lnd;
-<span class="kw">pub mod </span>lnrpc_client;
+<span class="kw">pub mod </span>lightning;
 <span class="kw">pub mod </span>rpc;
 <span class="kw">pub mod </span>state_machine;
 <span class="kw">pub mod </span>types;
@@ -1507,7 +1482,7 @@
 <span class="kw">use </span>axum::response::{IntoResponse, Response};
 <span class="kw">use </span>bitcoin::{Address, Network, Txid};
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
-<span class="kw">use </span>clap::{Parser, Subcommand};
+<span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>client::GatewayClientBuilder;
 <span class="kw">use </span>db::{
     DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey,
@@ -1539,15 +1514,14 @@
 <span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>gateway_lnrpc::intercept_htlc_response::Action;
 <span class="kw">use </span>gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
+<span class="kw">use </span>lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 <span class="kw">use </span>lightning_invoice::RoutingFees;
-<span class="kw">use </span>lnrpc_client::{ILnRpcClient, LightningBuilder, LightningRpcError, RouteHtlcStream};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rpc::{
     FederationConnectionInfo, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
     SetConfigurationPayload,
 };
 <span class="kw">use </span>secp256k1::PublicKey;
-<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
 <span class="kw">use </span>state_machine::GatewayClientModule;
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -1557,7 +1531,8 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{FederationConfig, FederationIdKeyPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::Forward;
-<span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::GatewayLightningBuilder;
+<span class="kw">use </span><span class="kw">crate</span>::lightning::cln::RouteHtlcStream;
+<span class="kw">use </span><span class="kw">crate</span>::lightning::GatewayLightningBuilder;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::run_webserver;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
@@ -2866,29 +2841,6 @@
             })
         })
         .<span class="kw">await</span>;
-}
-
-<span class="attr">#[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]
-</span><span class="kw">pub enum </span>LightningMode {
-    <span class="attr">#[clap(name = <span class="string">&quot;lnd&quot;</span>)]
-    </span>Lnd {
-        <span class="doccomment">/// LND RPC address
-        </span><span class="attr">#[arg(long = <span class="string">&quot;lnd-rpc-host&quot;</span>, env = <span class="string">&quot;FM_LND_RPC_ADDR&quot;</span>)]
-        </span>lnd_rpc_addr: String,
-
-        <span class="doccomment">/// LND TLS cert file path
-        </span><span class="attr">#[arg(long = <span class="string">&quot;lnd-tls-cert&quot;</span>, env = <span class="string">&quot;FM_LND_TLS_CERT&quot;</span>)]
-        </span>lnd_tls_cert: String,
-
-        <span class="doccomment">/// LND macaroon file path
-        </span><span class="attr">#[arg(long = <span class="string">&quot;lnd-macaroon&quot;</span>, env = <span class="string">&quot;FM_LND_MACAROON&quot;</span>)]
-        </span>lnd_macaroon: String,
-    },
-    <span class="attr">#[clap(name = <span class="string">&quot;cln&quot;</span>)]
-    </span>Cln {
-        <span class="attr">#[arg(long = <span class="string">&quot;cln-extension-addr&quot;</span>, env = <span class="string">&quot;FM_GATEWAY_LIGHTNING_ADDR&quot;</span>)]
-        </span>cln_extension_addr: SafeUrl,
-    },
 }
 
 <span class="attr">#[derive(Debug, Error)]

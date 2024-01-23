@@ -163,6 +163,7 @@
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -183,7 +184,8 @@
     <span class="self">self</span>, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse,
 };
-<span class="kw">use </span>ln_gateway::lnrpc_client::{HtlcResult, ILnRpcClient, LightningRpcError, RouteHtlcStream};
+<span class="kw">use </span>ln_gateway::lightning::cln::{HtlcResult, RouteHtlcStream};
+<span class="kw">use </span>ln_gateway::lightning::{ILnRpcClient, LightningRpcError};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tracing::info;
