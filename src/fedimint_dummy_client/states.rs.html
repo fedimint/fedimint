@@ -141,13 +141,11 @@
 <a href="#141" id="141">141</a>
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_client::sm::{DynState, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
+<span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -260,17 +258,15 @@
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
-            <span class="prelude-val">Err</span>(OutputOutcomeError::Federation(e)) <span class="kw">if </span>e.is_retryable() =&gt; {
-                <span class="macro">debug!</span>(
-                    <span class="string">&quot;Awaiting output outcome failed, retrying in {}s&quot;</span>,
-                    RETRY_DELAY.as_secs_f64()
-                );
-                sleep(RETRY_DELAY).<span class="kw">await</span>;
-            }
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+            <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_rejected() =&gt; {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(DummyError::DummyInternalError);
             }
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                e.report_if_important();
+                <span class="macro">debug!</span>(error = %e, <span class="string">&quot;Awaiting output outcome failed, retrying&quot;</span>);
+            }
         }
+        sleep(RETRY_DELAY).<span class="kw">await</span>;
     }
 }
 

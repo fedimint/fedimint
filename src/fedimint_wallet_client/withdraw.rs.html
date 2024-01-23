@@ -141,12 +141,16 @@
 <a href="#141" id="141">141</a>
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::Txid;
 <span class="kw">use </span>fedimint_client::sm::{State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
+<span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
@@ -230,14 +234,18 @@
                     .map(|outcome| outcome.<span class="number">0</span>)
                     .map_err(|e| e.to_string())
             }
-            <span class="prelude-val">Err</span>(OutputOutcomeError::Federation(e)) <span class="kw">if </span>e.is_retryable() =&gt; {
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="kw">if </span>e.is_rejected() {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(e.to_string());
+                }
+
+                e.report_if_important();
                 <span class="macro">debug!</span>(
                     <span class="string">&quot;Awaiting output outcome failed, retrying in {}s&quot;</span>,
                     RETRY_DELAY.as_secs_f64()
                 );
                 sleep(RETRY_DELAY).<span class="kw">await</span>;
             }
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e.to_string()),
         }
     }
 }

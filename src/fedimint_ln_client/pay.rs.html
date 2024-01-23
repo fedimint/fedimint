@@ -658,7 +658,6 @@
 <a href="#658" id="658">658</a>
 <a href="#659" id="659">659</a>
 <a href="#660" id="660">660</a>
-<a href="#661" id="661">661</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -666,7 +665,7 @@
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
+<span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -827,15 +826,16 @@
                 .<span class="kw">await
             </span>{
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break</span>,
-                <span class="prelude-val">Err</span>(OutputOutcomeError::Federation(e)) <span class="kw">if </span>e.is_retryable() =&gt; {
+                <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_rejected() =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayPayError::OutgoingContractError);
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    e.report_if_important();
                     <span class="macro">debug!</span>(
                         <span class="string">&quot;Awaiting output outcome failed, retrying in {}s&quot;</span>,
                         RETRY_DELAY.as_secs_f64()
                     );
                     sleep(RETRY_DELAY).<span class="kw">await</span>;
-                }
-                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayPayError::OutgoingContractError);
                 }
             }
         }
@@ -849,15 +849,13 @@
                 <span class="prelude-val">Ok</span>(contract) =&gt; {
                     <span class="kw">break </span>contract;
                 }
-                <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; {
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    e.report_if_important();
                     <span class="macro">debug!</span>(
                         <span class="string">&quot;Fetching contract failed, retrying in {}s&quot;</span>,
                         RETRY_DELAY.as_secs_f64()
                     );
                     sleep(RETRY_DELAY).<span class="kw">await</span>;
-                }
-                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayPayError::OutgoingContractError);
                 }
             }
         };
