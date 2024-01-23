@@ -327,6 +327,10 @@
                   if [ "$(ulimit -Sn)" -lt "1024" ]; then
                       >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 1024' to avoid problems running tests"
                   fi
+
+                  if [ -z "$(git config --global merge.ours.driver)" ]; then
+                      >&2 echo "⚠️  Recommended to run 'git config --global merge.ours.driver true' to enable better lock file handling. See https://blog.aspect.dev/easier-merges-on-lockfiles for more info"
+                  fi
                 '';
               };
             in
