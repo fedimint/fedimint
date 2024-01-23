@@ -504,7 +504,7 @@ impl GatewayLightning for ClnRpcService {
         Ok(tonic::Response::new(EmptyResponse {}))
     }
 
-    /// Updates the list of scids which to intercept and send to the gateway
+    /// Updates the list of scids to intercept and send to the gateway
     async fn update_scids(
         &self,
         update_scids_request: tonic::Request<UpdateScidsRequest>,
