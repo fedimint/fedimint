@@ -82,7 +82,7 @@ services:
       # Gateway webserver authentication password
       - FM_GATEWAY_PASSWORD=thereisnosecondbest
       # Configured gateway routing fees Format: <base_msat>,<proportional_millionths>
-      - FM_GATEWAY_FEES=0,0
+      - FM_GATEWAY_FEES=0,10000
       # LND RPC address
       - FM_LND_RPC_ADDR=https://lnd:10009
       # LND TLS cert file path
