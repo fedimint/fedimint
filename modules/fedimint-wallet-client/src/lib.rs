@@ -1,6 +1,6 @@
 pub mod api;
 
-mod client_db;
+pub mod client_db;
 mod deposit;
 mod withdraw;
 
