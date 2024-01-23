@@ -16,7 +16,7 @@ use fedimint_ln_common::{LightningClientContext, LightningInput};
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::LightningClientStateMachines;
 
@@ -219,13 +219,9 @@ impl LightningReceiveConfirmedInvoice {
                         debug!("Still waiting preimage decryption for contract {contract_id}");
                     }
                 }
-                // FIXME: should we filter for retryable errors here to not swallow implementation
-                // bugs? (there exist more places like this)
-                Err(error) if error.is_retryable() => {
-                    info!("External LN payment retryable error waiting for preimage decryption: {error:?}");
-                }
                 Err(error) => {
-                    warn!("External LN payment non-retryable error waiting for preimage decryption: {error:?}");
+                    error.report_if_important();
+                    info!("External LN payment retryable error waiting for preimage decryption: {error:?}");
                 }
             }
             sleep(RETRY_DELAY).await;
