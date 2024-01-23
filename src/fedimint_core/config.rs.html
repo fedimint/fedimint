@@ -938,6 +938,8 @@
 <a href="#938" id="938">938</a>
 <a href="#939" id="939">939</a>
 <a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1687,11 +1689,11 @@
 }
 
 <span class="doccomment">/// Things that a `distributed_gen` config can send between peers
-</span><span class="comment">// TODO: Needs to be modularized in case modules want to send new message types for DKG
 </span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
 </span><span class="kw">pub enum </span>DkgPeerMsg {
     PublicKey(secp256k1::PublicKey),
     DistributedGen(SupportedDkgMessage),
+    Module(Vec&lt;u8&gt;),
     <span class="comment">// Dkg completed on our side
     </span>Done,
 }
@@ -1712,6 +1714,8 @@
     </span>ModuleNotFound(ModuleKind),
     <span class="attr">#[error(<span class="string">&quot;Params for modules were not found {0:?}&quot;</span>)]
     </span>ParamsNotFound(BTreeSet&lt;ModuleKind&gt;),
+    <span class="attr">#[error(<span class="string">&quot;Failed to decode module message {0:?}&quot;</span>)]
+    </span>ModuleDecodeError(ModuleKind),
 }
 
 <span class="doccomment">/// Supported (by Fedimint&#39;s code) `DkgMessage&lt;T&gt;` types
