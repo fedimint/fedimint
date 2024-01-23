@@ -122,6 +122,14 @@ pub trait Decodable: Sized {
         let mut reader = std::io::Cursor::new(bytes);
         Decodable::consensus_decode(&mut reader, modules)
     }
+
+    fn consensus_decode_vec(
+        bytes: Vec<u8>,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let mut reader = std::io::Cursor::new(bytes);
+        Decodable::consensus_decode(&mut reader, modules)
+    }
 }
 
 impl Encodable for SafeUrl {
