@@ -158,6 +158,7 @@ mod fedimint_migration_tests {
     use anyhow::{ensure, Context};
     use bitcoin_hashes::Hash;
     use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
+    use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
     use fedimint_client::module::init::DynClientModuleInit;
     use fedimint_client::module::ClientModule;
     use fedimint_core::core::{OperationId, LEGACY_HARDCODED_INSTANCE_ID_MINT};
@@ -170,11 +171,11 @@ mod fedimint_migration_tests {
     use fedimint_core::time::now;
     use fedimint_core::{Amount, OutPoint, ServerModule, Tiered, TieredMulti, TransactionId};
     use fedimint_logging::TracingSetup;
-    use fedimint_mint_client::backup::recovery::MintRecoveryState;
+    use fedimint_mint_client::backup::recovery::{MintRecovery, MintRecoveryState};
     use fedimint_mint_client::backup::{EcashBackup, EcashBackupV0};
     use fedimint_mint_client::client_db::{
         CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
-        NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix, RestoreStateKey,
+        NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix, RecoveryStateKey,
     };
     use fedimint_mint_client::output::NoteIssuanceRequest;
     use fedimint_mint_client::{MintClientInit, MintClientModule, NoteIndex, SpendableNote};
@@ -302,10 +303,14 @@ mod fedimint_migration_tests {
         let backup = create_ecash_backup_v0(spendable_note, secret.clone());
 
         let mint_recovery_state =
-            MintRecoveryState::from_backup(1, backup, 10, tbs_pks, pub_key_shares, &secret);
+            MintRecoveryState::from_backup(backup, 10, tbs_pks, pub_key_shares, &secret);
 
-        dbtx.insert_new_entry(&RestoreStateKey, &mint_recovery_state)
-            .await;
+        MintRecovery::store_finalized(&mut dbtx, true).await;
+        dbtx.insert_new_entry(
+            &RecoveryStateKey,
+            &(mint_recovery_state, RecoveryFromHistoryCommon::new(0, 0, 0)),
+        )
+        .await;
     }
 
     fn create_ecash_backup_v0(note: SpendableNote, secret: DerivableSecret) -> EcashBackupV0 {
@@ -511,13 +516,21 @@ mod fedimint_migration_tests {
                             );
                             info!("Validated CancelledOOBSpendKey");
                         }
-                        fedimint_mint_client::client_db::DbKeyPrefix::RestoreState => {
-                            let restore_state = dbtx.get_value(&RestoreStateKey).await;
+                        fedimint_mint_client::client_db::DbKeyPrefix::RecoveryState => {
+                            let restore_state = dbtx.get_value(&RecoveryStateKey).await;
                             ensure!(
                                 restore_state.is_some(),
-                                "validate_migrations was not able to read any RestoreState"
+                                "validate_migrations was not able to read any RecoveryState"
                             );
-                            info!("Validated RestoreState");
+                            info!("Validated RecoveryState");
+                        }
+                        fedimint_mint_client::client_db::DbKeyPrefix::RecoveryFinalized => {
+                            let recovery_finalized = dbtx.get_value(&RecoveryStateKey).await;
+                            ensure!(
+                                recovery_finalized.is_some(),
+                                "validate_migrations was not able to read any RecoveryFinalized"
+                            );
+                            info!("Validated RecoveryFinalized");
                         }
                     }
                 }

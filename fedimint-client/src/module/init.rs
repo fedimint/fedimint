@@ -1,3 +1,5 @@
+pub mod recovery;
+
 use std::fmt::Debug;
 use std::marker;
 use std::sync::Arc;

@@ -1,3 +1,4 @@
+use fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, Amount};
@@ -14,7 +15,8 @@ pub enum DbKeyPrefix {
     Note = 0x20,
     NextECashNoteIndex = 0x2a,
     CancelledOOBSpend = 0x2b,
-    RestoreState = 0x2c,
+    RecoveryState = 0x2c,
+    RecoveryFinalized = 0x2d,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -56,12 +58,26 @@ impl_db_lookup!(
 );
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
-pub struct RestoreStateKey;
+pub struct RecoveryStateKey;
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct RestoreStateKeyPrefix;
 
 impl_db_record!(
-    key = RestoreStateKey,
-    value = MintRecoveryState,
-    db_prefix = DbKeyPrefix::RestoreState,
+    key = RecoveryStateKey,
+    value = (MintRecoveryState, RecoveryFromHistoryCommon),
+    db_prefix = DbKeyPrefix::RecoveryState,
+);
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+pub struct RecoveryFinalizedKey;
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct RecoveryFinalizedKeyPrefix;
+
+impl_db_record!(
+    key = RecoveryFinalizedKey,
+    value = bool,
+    db_prefix = DbKeyPrefix::RecoveryFinalized,
 );
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct CancelledOOBSpendKey(pub OperationId);
