@@ -1456,6 +1456,15 @@
 <a href="#1456" id="1456">1456</a>
 <a href="#1457" id="1457">1457</a>
 <a href="#1458" id="1458">1458</a>
+<a href="#1459" id="1459">1459</a>
+<a href="#1460" id="1460">1460</a>
+<a href="#1461" id="1461">1461</a>
+<a href="#1462" id="1462">1462</a>
+<a href="#1463" id="1463">1463</a>
+<a href="#1464" id="1464">1464</a>
+<a href="#1465" id="1465">1465</a>
+<a href="#1466" id="1466">1466</a>
+<a href="#1467" id="1467">1467</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lightning;
@@ -1519,7 +1528,7 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rpc::{
     FederationConnectionInfo, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    SetConfigurationPayload,
+    SetConfigurationPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
@@ -1608,15 +1617,21 @@
 }
 
 <span class="kw">impl </span>GatewayOpts {
-    <span class="kw">fn </span>to_gateway_parameters(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayParameters {
-        GatewayParameters {
+    <span class="kw">fn </span>to_gateway_parameters(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;GatewayParameters&gt; {
+        <span class="kw">let </span>versioned_api = <span class="self">self</span>.api_addr.join(V1_API_ENDPOINT).map_err(|e| {
+            <span class="macro">anyhow::anyhow!</span>(
+                <span class="string">&quot;Failed to version gateway API address: {api_addr:?}, error: {e:?}&quot;</span>,
+                api_addr = <span class="self">self</span>.api_addr,
+            )
+        })<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(GatewayParameters {
             listen: <span class="self">self</span>.listen,
-            api_addr: <span class="self">self</span>.api_addr.clone(),
+            versioned_api,
             password: <span class="self">self</span>.password.clone(),
             network: <span class="self">self</span>.network,
             num_route_hints: <span class="self">self</span>.num_route_hints,
             fees: <span class="self">self</span>.fees.clone(),
-        }
+        })
     }
 }
 
@@ -1629,7 +1644,7 @@
 </span><span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">struct </span>GatewayParameters {
     listen: SocketAddr,
-    api_addr: SafeUrl,
+    versioned_api: SafeUrl,
     password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     network: <span class="prelude-ty">Option</span>&lt;Network&gt;,
     num_route_hints: u32,
@@ -1744,11 +1759,14 @@
         num_route_hints: u32,
         gateway_db: Database,
     ) -&gt; anyhow::Result&lt;Gateway&gt; {
+        <span class="kw">let </span>versioned_api = api_addr
+            .join(V1_API_ENDPOINT)
+            .expect(<span class="string">&quot;Failed to version gateway API address&quot;</span>);
         <span class="prelude-val">Ok</span>(Gateway {
             lightning_builder,
             gateway_parameters: GatewayParameters {
                 listen,
-                api_addr,
+                versioned_api,
                 password: cli_password,
                 num_route_hints,
                 fees: <span class="prelude-val">Some</span>(GatewayFee(fees)),
@@ -1805,7 +1823,7 @@
                 lightning_mode: opts.mode.clone(),
             }),
             channel_id_generator: Arc::new(Mutex::new(INITIAL_SCID)),
-            gateway_parameters: opts.to_gateway_parameters(),
+            gateway_parameters: opts.to_gateway_parameters()<span class="question-mark">?</span>,
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
             gateway_id: <span class="self">Self</span>::get_gateway_id(gateway_db.clone()).<span class="kw">await</span>,

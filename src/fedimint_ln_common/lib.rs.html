@@ -700,6 +700,8 @@
 <a href="#700" id="700">700</a>
 <a href="#701" id="701">701</a>
 <a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -1046,7 +1048,9 @@
     </span><span class="kw">pub </span>gateway_redeem_key: secp256k1::PublicKey,
     <span class="kw">pub </span>node_pub_key: secp256k1::PublicKey,
     <span class="kw">pub </span>lightning_alias: String,
-    <span class="kw">pub </span>api: SafeUrl,
+    <span class="doccomment">/// URL to the gateway&#39;s versioned public API
+    /// (e.g. &lt;https://gateway.example.com/v1&gt;)
+    </span><span class="kw">pub </span>api: SafeUrl,
     <span class="doccomment">/// Route hints to reach the LN node of the gateway.
     ///
     /// These will be appended with the route hint of the recipient&#39;s virtual

@@ -196,6 +196,15 @@
 <a href="#196" id="196">196</a>
 <a href="#197" id="197">197</a>
 <a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::response::IntoResponse;
@@ -212,7 +221,7 @@
 
 <span class="kw">use super</span>::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, LeaveFedPayload,
-    RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::GatewayConfiguration;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::ConfigPayload;
@@ -224,9 +233,34 @@
     gateway: Gateway,
     task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
 ) -&gt; axum::response::Result&lt;()&gt; {
-    <span class="kw">let </span>(routes, admin_routes) = <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = config {
+    <span class="kw">let </span>v1_routes = v1_routes(config, gateway.clone());
+    <span class="kw">let </span>api_v1 = Router::new()
+        .nest(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/{V1_API_ENDPOINT}&quot;</span>), v1_routes.clone())
+        <span class="comment">// Backwards compatibility: Continue supporting gateway APIs without versioning
+        </span>.merge(v1_routes);
+
+    <span class="kw">let </span>handle = task_group.make_handle();
+    <span class="kw">let </span>shutdown_rx = handle.make_shutdown_rx().<span class="kw">await</span>;
+    <span class="kw">let </span>server = axum::Server::bind(<span class="kw-2">&amp;</span>bind_addr).serve(api_v1.into_make_service());
+    task_group
+        .spawn(<span class="string">&quot;Gateway Webserver&quot;</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
+            <span class="kw">let </span>graceful = server.with_graceful_shutdown(<span class="kw">async </span>{
+                shutdown_rx.<span class="kw">await</span>;
+            });
+
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = graceful.<span class="kw">await </span>{
+                <span class="macro">error!</span>(<span class="string">&quot;Error shutting down gatewayd webserver: {:?}&quot;</span>, e);
+            }
+        })
+        .<span class="kw">await</span>;
+
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">fn </span>v1_routes(config: <span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt;, gateway: Gateway) -&gt; Router {
+    <span class="kw">let </span>(public_routes, admin_routes) = <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = config {
         <span class="comment">// Public routes on gateway webserver
-        </span><span class="kw">let </span>routes = Router::new()
+        </span><span class="kw">let </span>public_routes = Router::new()
             .route(<span class="string">&quot;/pay_invoice&quot;</span>, post(pay_invoice))
             .route(<span class="string">&quot;/id&quot;</span>, get(get_gateway_id));
 
@@ -243,37 +277,21 @@
             .route(<span class="string">&quot;/restore&quot;</span>, post(restore))
             .route(<span class="string">&quot;/set_configuration&quot;</span>, post(set_configuration))
             .layer(ValidateRequestHeaderLayer::bearer(<span class="kw-2">&amp;</span>gateway_config.password));
-        (routes, admin_routes)
+        (public_routes, admin_routes)
     } <span class="kw">else </span>{
-        <span class="kw">let </span>routes = Router::new()
+        <span class="kw">let </span>public_routes = Router::new()
             .route(<span class="string">&quot;/set_configuration&quot;</span>, post(set_configuration))
             .route(<span class="string">&quot;/config&quot;</span>, get(configuration))
             .route(<span class="string">&quot;/info&quot;</span>, get(info));
-        (routes, Router::new())
+        <span class="kw">let </span>admin_routes = Router::new();
+        (public_routes, admin_routes)
     };
 
-    <span class="kw">let </span>app = Router::new()
-        .merge(routes)
+    Router::new()
+        .merge(public_routes)
         .merge(admin_routes)
-        .layer(Extension(gateway.clone()))
-        .layer(CorsLayer::permissive());
-
-    <span class="kw">let </span>handle = task_group.make_handle();
-    <span class="kw">let </span>shutdown_rx = handle.make_shutdown_rx().<span class="kw">await</span>;
-    <span class="kw">let </span>server = axum::Server::bind(<span class="kw-2">&amp;</span>bind_addr).serve(app.into_make_service());
-    task_group
-        .spawn(<span class="string">&quot;Gateway Webserver&quot;</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
-            <span class="kw">let </span>graceful = server.with_graceful_shutdown(<span class="kw">async </span>{
-                shutdown_rx.<span class="kw">await</span>;
-            });
-
-            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = graceful.<span class="kw">await </span>{
-                <span class="macro">error!</span>(<span class="string">&quot;Error shutting down gatewayd webserver: {:?}&quot;</span>, e);
-            }
-        })
-        .<span class="kw">await</span>;
-
-    <span class="prelude-val">Ok</span>(())
+        .layer(Extension(gateway))
+        .layer(CorsLayer::permissive())
 }
 
 <span class="doccomment">/// Display high-level information about the Gateway

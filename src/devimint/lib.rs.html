@@ -176,12 +176,14 @@
 <a href="#176" id="176">176</a>
 <a href="#177" id="177">177</a>
 <a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>federation::Federation;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
+<span class="kw">use </span>ln_gateway::rpc::V1_API_ENDPOINT;
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">pub mod </span>util;
@@ -223,7 +225,7 @@
             LightningNode::Cln(<span class="kw">_</span>) =&gt; process_mgr.globals.FM_PORT_GW_CLN,
             LightningNode::Lnd(<span class="kw">_</span>) =&gt; process_mgr.globals.FM_PORT_GW_LND,
         };
-        <span class="kw">let </span>addr = <span class="macro">format!</span>(<span class="string">&quot;http://127.0.0.1:{port}&quot;</span>);
+        <span class="kw">let </span>addr = <span class="macro">format!</span>(<span class="string">&quot;http://127.0.0.1:{port}/{V1_API_ENDPOINT}&quot;</span>);
         <span class="kw">let </span>gateway_env: HashMap&lt;String, String&gt; = HashMap::from_iter([
             (
                 <span class="string">&quot;FM_GATEWAY_DATA_DIR&quot;</span>.to_owned(),

@@ -218,6 +218,8 @@
 <a href="#218" id="218">218</a>
 <a href="#219" id="219">219</a>
 <a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
@@ -239,6 +241,8 @@
 <span class="kw">use </span>tokio::sync::oneshot;
 
 <span class="kw">use crate</span>::{Gateway, <span class="prelude-ty">Result</span>};
+
+<span class="kw">pub const </span>V1_API_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;v1&quot;</span>;
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>ConnectFedPayload {

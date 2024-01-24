@@ -253,6 +253,17 @@
 <a href="#253" id="253">253</a>
 <a href="#254" id="254">254</a>
 <a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
@@ -274,7 +285,7 @@
 <span class="kw">use </span>ln_gateway::client::GatewayClientBuilder;
 <span class="kw">use </span>ln_gateway::lightning::{ILnRpcClient, LightningBuilder};
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
-<span class="kw">use </span>ln_gateway::rpc::{ConnectFedPayload, FederationConnectionInfo};
+<span class="kw">use </span>ln_gateway::rpc::{ConnectFedPayload, FederationConnectionInfo, V1_API_ENDPOINT};
 <span class="kw">use </span>ln_gateway::{Gateway, GatewayState};
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>tempfile::TempDir;
@@ -291,7 +302,7 @@
 <span class="doccomment">/// Fixture for creating a gateway
 </span><span class="kw">pub struct </span>GatewayTest {
     <span class="doccomment">/// URL for the RPC
-    </span>api: SafeUrl,
+    </span>versioned_api: SafeUrl,
     <span class="doccomment">/// Handle of the running gateway
     </span><span class="kw">pub </span>gateway: Gateway,
     <span class="doccomment">/// Temporary dir that stores the gateway config
@@ -307,7 +318,7 @@
 <span class="kw">impl </span>GatewayTest {
     <span class="doccomment">/// RPC client for communicating with the gateway admin API
     </span><span class="kw">pub async fn </span>get_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayRpcClient {
-        GatewayRpcClient::new(<span class="self">self</span>.api.clone(), <span class="prelude-val">None</span>)
+        GatewayRpcClient::new(<span class="self">self</span>.versioned_api.clone(), <span class="prelude-val">None</span>)
     }
 
     <span class="doccomment">/// Removes a client from the gateway
@@ -346,6 +357,8 @@
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>listen: SocketAddr = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{base_port}&quot;</span>).parse().unwrap();
         <span class="kw">let </span>address: SafeUrl = <span class="macro">format!</span>(<span class="string">&quot;http://{listen}&quot;</span>).parse().unwrap();
+        <span class="kw">let </span>versioned_api = address.join(V1_API_ENDPOINT).unwrap();
+
         <span class="kw">let </span>(path, _config_dir) = test_dir(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;gateway-{}&quot;</span>, rand::random::&lt;u64&gt;()));
 
         <span class="comment">// Create federation client builder for the gateway
@@ -393,7 +406,7 @@
             .<span class="kw">await</span>;
 
         <span class="comment">// Wait for the gateway web server to be available
-        </span>GatewayTest::wait_for_webserver(address.clone(), cli_password)
+        </span>GatewayTest::wait_for_webserver(versioned_api.clone(), cli_password)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Gateway web server failed to start&quot;</span>);
 
@@ -409,7 +422,7 @@
         <span class="kw">let </span>info = lightning.info().<span class="kw">await</span>.unwrap();
 
         <span class="self">Self </span>{
-            api: address,
+            versioned_api,
             _config_dir,
             gateway,
             node_pub_key: PublicKey::from_slice(info.pub_key.as_slice()).unwrap(),
@@ -418,8 +431,17 @@
         }
     }
 
-    <span class="kw">pub async fn </span>wait_for_webserver(api: SafeUrl, password: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>rpc = GatewayRpcClient::new(api, password);
+    <span class="doccomment">/// Waits for the webserver to be ready.
+    ///
+    /// This function is used to ensure that the webserver is fully initialized
+    /// and ready to accept incoming requests. It is designed to be used in
+    /// a concurrent environment where the webserver might be initialized in a
+    /// separate thread or task.
+    </span><span class="kw">pub async fn </span>wait_for_webserver(
+        versioned_api: SafeUrl,
+        password: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>rpc = GatewayRpcClient::new(versioned_api, password);
         <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">30 </span>{
             <span class="kw">let </span>rpc_result = rpc.get_info().<span class="kw">await</span>;
             <span class="kw">if </span>rpc_result.is_ok() {

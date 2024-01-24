@@ -197,6 +197,7 @@
 <a href="#197" id="197">197</a>
 <a href="#198" id="198">198</a>
 <a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::config::FederationId;
@@ -206,7 +207,7 @@
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
-    LeaveFedPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    LeaveFedPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span>serde::Serialize;
 
@@ -298,7 +299,8 @@
     TracingSetup::default().init()<span class="question-mark">?</span>;
 
     <span class="kw">let </span>cli = Cli::parse();
-    <span class="kw">let </span>client = || GatewayRpcClient::new(cli.address, cli.rpcpassword);
+    <span class="kw">let </span>versioned_api = cli.address.join(V1_API_ENDPOINT)<span class="question-mark">?</span>;
+    <span class="kw">let </span>client = || GatewayRpcClient::new(versioned_api, cli.rpcpassword);
 
     <span class="kw">match </span>cli.command {
         Commands::VersionHash =&gt; {

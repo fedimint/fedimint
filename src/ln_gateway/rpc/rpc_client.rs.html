@@ -147,6 +147,7 @@
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::result::Result;
 
 <span class="kw">use </span>bitcoin::Address;
@@ -165,18 +166,19 @@
 };
 
 <span class="kw">pub struct </span>GatewayRpcClient {
-    <span class="comment">// Base URL to gateway web server
+    <span class="doccomment">/// Base URL to gateway web server
+    /// This should include an applicable API version, e.g. http://localhost:8080/v1
     </span>base_url: SafeUrl,
-    <span class="comment">// A request client
+    <span class="doccomment">/// A request client
     </span>client: reqwest::Client,
-    <span class="comment">// Password
+    <span class="doccomment">/// Optional gateway password
     </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
 <span class="kw">impl </span>GatewayRpcClient {
-    <span class="kw">pub fn </span>new(base_url: SafeUrl, password: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(versioned_api: SafeUrl, password: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            base_url,
+            base_url: versioned_api,
             client: reqwest::Client::new(),
             password,
         }
