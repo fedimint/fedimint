@@ -1,5 +1,6 @@
 use std::io::Cursor;
 
+use async_trait::async_trait;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 
 use crate::db::AlephUnitsKey;
@@ -34,46 +35,30 @@ pub async fn load_session(db: Database) -> (Cursor<Vec<u8>>, UnitSaver) {
 }
 
 /// The UnitSaver enables aleph bft to store its local directed acyclic graph of
-/// units on disk in order to recover from a mid session crash. By implementing
-/// std::io::Write we allow aleph bft to append bytes to its existing backup
-/// similar to a open file in append mode.
+/// units on disk in order to recover from a mid session crash.
 pub struct UnitSaver {
     db: Database,
     units_index: u64,
-    buffer: Vec<u8>,
 }
 
 impl UnitSaver {
     fn new(db: Database, units_index: u64) -> Self {
-        Self {
-            db,
-            units_index,
-            buffer: vec![],
-        }
+        Self { db, units_index }
     }
 }
 
-impl std::io::Write for UnitSaver {
-    fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
-        self.buffer.extend_from_slice(buffer);
-        Ok(buffer.len())
-    }
+#[async_trait]
+impl aleph_bft::BackupWriter for UnitSaver {
+    async fn append(&mut self, data: &[u8]) -> std::io::Result<()> {
+        let mut dbtx = self.db.begin_transaction().await;
 
-    fn flush(&mut self) -> std::io::Result<()> {
-        futures::executor::block_on(async {
-            let mut dbtx = self.db.begin_transaction().await;
+        dbtx.insert_new_entry(&AlephUnitsKey(self.units_index), &data.to_owned())
+            .await;
 
-            dbtx.insert_new_entry(&AlephUnitsKey(self.units_index), &self.buffer)
-                .await;
-
-            dbtx.commit_tx_result()
-                .await
-                .expect("This is the only place where we write to this key");
-        });
-
-        self.buffer.clear();
+        dbtx.commit_tx_result()
+            .await
+            .expect("This is the only place where we write to this key");
         self.units_index += 1;
-
         Ok(())
     }
 }
