@@ -77,7 +77,9 @@ for fed_version in "${versions[@]}"; do
       exit_code=$?
       set -e
       test_results="$test_results$fed_version,$client_version,$gateway_version,$exit_code\n"
-      [[ "$exit_code" -gt 0 ]] && has_failure=true
+      if [[ "$exit_code" -gt 0 ]]; then
+        has_failure=true
+      fi
 
       # cleanup devimint dir
       tmpdir=$(dirname "$(mktemp -u)")
@@ -93,5 +95,7 @@ done
 
 >&2 echo "Backwards-compatibility tests summary:"
 echo -e "$test_results" | >&2 column -t -s ','
-# CI requires explicitly exiting with an error or success code
-[[ "$has_failure" == "true" ]] && exit 1 || exit 0
+
+if [[ "$has_failure" == "true" ]]; then
+  exit 1
+fi
