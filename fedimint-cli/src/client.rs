@@ -62,6 +62,7 @@ pub enum ClientCmd {
     /// Prepare notes to send to a third party as a payment
     Spend {
         /// The amount of e-cash to spend
+        #[clap(long)]
         amount: Amount,
         /// If the exact amount cannot be represented, return e-cash of a higher
         /// value instead of failing
