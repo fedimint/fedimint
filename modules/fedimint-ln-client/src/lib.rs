@@ -65,7 +65,7 @@ use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use thiserror::Error;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use crate::db::{
     LightningGatewayKeyPrefix, MetaOverrides, MetaOverridesKey, MetaOverridesPrefix,
@@ -814,6 +814,16 @@ impl LightningClientModule {
         ))
     }
 
+    pub async fn select_active_gateway_opt(&self) -> Option<LightningGateway> {
+        match self.select_active_gateway().await {
+            Ok(gw) => Some(gw),
+            Err(e) => {
+                warn!(?e, "Could not select a gateway");
+                None
+            }
+        }
+    }
+
     /// The set active gateway, or a random one if none has been set
     pub async fn select_active_gateway(&self) -> anyhow::Result<LightningGateway> {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
@@ -1002,9 +1012,29 @@ impl LightningClientModule {
         Ok(gateways)
     }
 
-    /// Pays a LN invoice with our available funds
+    /// Pays a LN invoice with our available funds.
     pub async fn pay_bolt11_invoice<M: Serialize + MaybeSend + MaybeSync>(
         &self,
+        invoice: Bolt11Invoice,
+        extra_meta: M,
+    ) -> anyhow::Result<OutgoingLightningPayment> {
+        self.pay_bolt11_invoice_with_gateway(
+            self.select_active_gateway_opt().await,
+            invoice,
+            extra_meta,
+        )
+        .await
+    }
+
+    /// Pays a LN invoice with our available funds using the supplied `gateway`
+    /// if one was provided and the invoice is not an internal one. If none is
+    /// supplied only internal payments are possible.
+    ///
+    /// The `gateway` can be acquired by calling
+    /// [`LightningClientModule::select_active_gateway`].
+    pub async fn pay_bolt11_invoice_with_gateway<M: Serialize + MaybeSend + MaybeSync>(
+        &self,
+        maybe_gateway: Option<LightningGateway>,
         invoice: Bolt11Invoice,
         extra_meta: M,
     ) -> anyhow::Result<OutgoingLightningPayment> {
@@ -1061,12 +1091,12 @@ impl LightningClientModule {
                 .await?;
             (PayType::Internal(operation_id), output, contract_id)
         } else {
-            let active_gateway = self.select_active_gateway().await?;
+            let gateway = maybe_gateway.context("No LN gateway available")?;
             let (output, contract_id) = self
                 .create_outgoing_output(
                     operation_id,
                     invoice.clone(),
-                    active_gateway,
+                    gateway,
                     self.client_ctx.get_config().global.federation_id(),
                     rand::rngs::OsRng,
                 )
