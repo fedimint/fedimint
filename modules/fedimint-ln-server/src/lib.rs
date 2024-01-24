@@ -1138,7 +1138,7 @@ impl Lightning {
         self.delete_expired_gateways(dbtx).await;
 
         dbtx.insert_entry(
-            &LightningGatewayKey(gateway.info.node_pub_key),
+            &LightningGatewayKey(gateway.info.gateway_id),
             &gateway.anchor(),
         )
         .await;
