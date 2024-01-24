@@ -500,6 +500,66 @@
 <a href="#500" id="500">500</a>
 <a href="#501" id="501">501</a>
 <a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -514,6 +574,7 @@
 <span class="kw">use </span>std::io::Read;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::{cmp, marker};
 
 <span class="kw">use </span>anyhow::anyhow;
 <span class="kw">pub use </span>bitcoin::KeyPair;
@@ -692,12 +753,71 @@
 }
 
 <span class="doccomment">/// A type that has a `Dyn*`, type erased version of itself
+///
+/// Use [`IntoDynNever`] in places where a given type will never
+/// actually be created, but something is needed to appease the
+/// type system.
 </span><span class="kw">pub trait </span>IntoDynInstance {
     <span class="doccomment">/// The type erased version of the type implementing this trait
     </span><span class="kw">type </span>DynType: <span class="lifetime">&#39;static</span>;
 
     <span class="doccomment">/// Convert `self` into its type-erased equivalent
     </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType;
+}
+
+<span class="kw">enum </span>Never {}
+
+<span class="doccomment">/// Type that can be used as type-system placeholder for [`IntoDynInstance`]
+</span><span class="kw">pub struct </span>IntoDynNever&lt;T&gt; {
+    _phantom: marker::PhantomData&lt;T&gt;,
+    <span class="comment">// you can&#39;t make that
+    </span>_never: Never,
+}
+
+<span class="kw">impl</span>&lt;T&gt; cmp::PartialEq <span class="kw">for </span>IntoDynNever&lt;T&gt; {
+    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
+        <span class="macro">unreachable!</span>()
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; cmp::Eq <span class="kw">for </span>IntoDynNever&lt;T&gt; {}
+
+<span class="kw">impl</span>&lt;T&gt; fmt::Debug <span class="kw">for </span>IntoDynNever&lt;T&gt; {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
+        <span class="macro">unreachable!</span>()
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; Clone <span class="kw">for </span>IntoDynNever&lt;T&gt; {
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+        <span class="macro">unreachable!</span>()
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; Encodable <span class="kw">for </span>IntoDynNever&lt;T&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+        <span class="macro">unreachable!</span>()
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; Decodable <span class="kw">for </span>IntoDynNever&lt;T&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
+        <span class="kw">_</span>: <span class="kw-2">&amp;mut </span>R,
+        <span class="kw">_</span>: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="macro">unreachable!</span>()
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; IntoDynInstance <span class="kw">for </span>IntoDynNever&lt;T&gt;
+<span class="kw">where
+    </span>T: <span class="lifetime">&#39;static</span>,
+{
+    <span class="kw">type </span>DynType = T;
+
+    <span class="kw">fn </span>into_dyn(<span class="self">self</span>, _instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
+        <span class="macro">unreachable!</span>()
+    }
 }
 
 <span class="kw">type </span>DecodeFn = <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">fn</span>(

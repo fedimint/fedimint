@@ -493,7 +493,7 @@
         <span class="kw">const </span>NUM_REPEAT_TEST: usize = <span class="number">10</span>;
 
         <span class="kw">for _ in </span><span class="number">0</span>..NUM_REPEAT_TEST {
-            <span class="kw">let </span><span class="kw-2">mut </span>task_group = TaskGroup::new();
+            <span class="kw">let </span>task_group = TaskGroup::new();
             <span class="kw">let </span>task_handle = task_group.make_handle();
 
             <span class="kw">let </span>peer1 = PeerId::from(<span class="number">0</span>);

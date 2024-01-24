@@ -842,7 +842,7 @@
 
     <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
     </span><span class="kw">pub async fn </span>spawn&lt;Fut, R&gt;(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
         name: <span class="kw">impl </span>Into&lt;String&gt;,
         f: <span class="kw">impl </span>FnOnce(TaskHandle) -&gt; Fut + Send + <span class="lifetime">&#39;static</span>,
     ) -&gt; oneshot::Receiver&lt;R&gt;
@@ -880,7 +880,7 @@
 
     <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
     </span><span class="kw">pub async fn </span>spawn_local&lt;Fut&gt;(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
         name: <span class="kw">impl </span>Into&lt;String&gt;,
         f: <span class="kw">impl </span>FnOnce(TaskHandle) -&gt; Fut + <span class="lifetime">&#39;static</span>,
     ) <span class="kw">where
@@ -904,7 +904,7 @@
     <span class="comment">// TODO: Send vs lack of Send bound; do something about it
     </span><span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
     </span><span class="kw">pub async fn </span>spawn&lt;Fut, R&gt;(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
         name: <span class="kw">impl </span>Into&lt;String&gt;,
         f: <span class="kw">impl </span>FnOnce(TaskHandle) -&gt; Fut + <span class="lifetime">&#39;static</span>,
     ) -&gt; oneshot::Receiver&lt;R&gt;
@@ -1292,7 +1292,7 @@
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>shutdown_task_group_after() -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
+        <span class="kw">let </span>tg = TaskGroup::new();
         tg.spawn(<span class="string">&quot;shutdown waiter&quot;</span>, |handle| <span class="kw">async move </span>{
             handle.make_shutdown_rx().<span class="kw">await</span>.<span class="kw">await
         </span>})
@@ -1304,7 +1304,7 @@
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>shutdown_task_group_before() -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
+        <span class="kw">let </span>tg = TaskGroup::new();
         tg.spawn(<span class="string">&quot;shutdown waiter&quot;</span>, |handle| <span class="kw">async move </span>{
             sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
             handle.make_shutdown_rx().<span class="kw">await</span>.<span class="kw">await

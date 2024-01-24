@@ -70,6 +70,19 @@
 <a href="#70" id="70">70</a>
 <a href="#71" id="71">71</a>
 <a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, Amount};
@@ -77,6 +90,7 @@
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 
+<span class="kw">use </span><span class="kw">crate</span>::backup::recovery::MintRecoveryState;
 <span class="kw">use </span><span class="kw">crate</span>::SpendableNote;
 
 <span class="attr">#[repr(u8)]
@@ -85,6 +99,7 @@
     Note = <span class="number">0x20</span>,
     NextECashNoteIndex = <span class="number">0x2a</span>,
     CancelledOOBSpend = <span class="number">0x2b</span>,
+    RestoreState = <span class="number">0x2c</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -125,6 +140,17 @@
     query_prefix = NextECashNoteIndexKeyPrefix
 );
 
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>RestoreStateKey;
+
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>RestoreStateKeyPrefix;
+
+<span class="macro">impl_db_record!</span>(
+    key = RestoreStateKey,
+    value = MintRecoveryState,
+    db_prefix = DbKeyPrefix::RestoreState,
+);
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>CancelledOOBSpendKey(<span class="kw">pub </span>OperationId);
 

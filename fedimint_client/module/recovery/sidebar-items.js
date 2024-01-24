@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["NoModuleBackup"],"struct":["DynModuleBackup"],"trait":["IModuleBackup","ModuleBackup"]};
+window.SIDEBAR_ITEMS = {"enum":["NoModuleBackup"],"struct":["DynModuleBackup","RecoveryProgress"],"trait":["IModuleBackup","ModuleBackup"]};

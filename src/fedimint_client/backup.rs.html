@@ -308,38 +308,13 @@
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
 <a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a>
-<a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Reverse;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::{Cursor, Error, Read, Write};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>bitcoin::secp256k1;
-<span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::core::backup::{BackupRequest, SignedBackupRequest};
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -398,15 +373,15 @@
 }
 
 <span class="doccomment">/// Client state backup
-</span><span class="attr">#[derive(PartialEq, Eq, Debug)]
+</span><span class="attr">#[derive(PartialEq, Eq, Debug, Clone)]
 </span><span class="kw">pub struct </span>ClientBackup {
     <span class="doccomment">/// Session count taken right before taking the backup
-    </span>session_count: u64,
+    </span><span class="kw">pub </span>session_count: u64,
     <span class="doccomment">/// Application metadata
-    </span>metadata: Metadata,
+    </span><span class="kw">pub </span>metadata: Metadata,
     <span class="comment">// TODO: remove redundant ModuleInstanceId
     </span><span class="doccomment">/// Module specific-backup (if supported)
-    </span>modules: BTreeMap&lt;ModuleInstanceId, DynModuleBackup&gt;,
+    </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, DynModuleBackup&gt;,
 }
 
 <span class="kw">impl </span>ClientBackup {
@@ -559,55 +534,27 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Restore client state from backup if provided or from scratch.
-    ///
-    /// This will restore (or initialize restoration process) in all sub-modules
-    /// that support it.
-    </span><span class="kw">pub async fn </span>restore_from_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, backup: <span class="prelude-ty">Option</span>&lt;ClientBackup&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;Metadata&gt; {
-        <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY, <span class="string">&quot;Restoring from backup&quot;</span>);
-        <span class="kw">if </span>backup.is_none() {
-            <span class="macro">warn!</span>(
-                target: LOG_CLIENT_RECOVERY,
-                id=%<span class="self">self</span>.get_backup_id(),
-                <span class="string">&quot;Existing backup not provided. Will attempt to restore from scratch. This might take a long time.&quot;
-            </span>);
-        };
-
-        <span class="kw">let </span>metadata = backup
-            .as_ref()
-            .map(|b| b.metadata.clone())
-            .unwrap_or_else(Metadata::empty);
-
-        <span class="kw">for </span>(id, kind, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
-            <span class="kw">if </span>!module.supports_backup() {
-                <span class="kw">continue</span>;
-            }
-            <span class="kw">let </span>module_backup = backup.as_ref().and_then(|b| b.modules.get(<span class="kw-2">&amp;</span>id)).cloned();
-
-            <span class="macro">info!</span>(
-                target: LOG_CLIENT_RECOVERY,
-                module_kind = %kind,
-                module_id = id,
-                <span class="string">&quot;Starting recovery from backup for module&quot;
-            </span>);
-            module.restore(id, module_backup).<span class="kw">await</span><span class="question-mark">?</span>;
-        }
-
-        <span class="prelude-val">Ok</span>(metadata)
-    }
+    <span class="kw">pub async fn </span>download_backup_from_federation(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ClientBackup&gt;&gt; {
+        <span class="self">Self</span>::download_backup_from_federation_static(<span class="kw-2">&amp;</span><span class="self">self</span>.api, <span class="kw-2">&amp;</span><span class="self">self</span>.root_secret(), <span class="kw-2">&amp;</span><span class="self">self</span>.decoders)
+            .<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Download most recent valid backup found from the Federation
-    </span><span class="kw">pub async fn </span>download_backup_from_federation(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ClientBackup&gt;&gt; {
+    </span><span class="kw">pub async fn </span>download_backup_from_federation_static(
+        api: <span class="kw-2">&amp;</span>DynGlobalApi,
+        root_secret: <span class="kw-2">&amp;</span>DerivableSecret,
+        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ClientBackup&gt;&gt; {
         <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">&quot;Downloading backup from the federation&quot;</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>responses: Vec&lt;<span class="kw">_</span>&gt; = <span class="self">self
-            </span>.api
-            .download_backup(<span class="kw-2">&amp;</span><span class="self">self</span>.get_backup_id())
+        <span class="kw">let </span><span class="kw-2">mut </span>responses: Vec&lt;<span class="kw">_</span>&gt; = api
+            .download_backup(<span class="kw-2">&amp;</span>Client::get_backup_id_static(root_secret))
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_iter()
             .filter_map(|backup| {
-                <span class="kw">match </span>EncryptedClientBackup(backup.data)
-                    .decrypt_with(<span class="kw-2">&amp;</span><span class="self">self</span>.get_derived_backup_encryption_key(), <span class="self">self</span>.decoders())
-                {
+                <span class="kw">match </span>EncryptedClientBackup(backup.data).decrypt_with(
+                    <span class="kw-2">&amp;</span><span class="self">Self</span>::get_derived_backup_encryption_key_static(root_secret),
+                    decoders,
+                ) {
                     <span class="prelude-val">Ok</span>(valid) =&gt; <span class="prelude-val">Some</span>(valid),
                     <span class="prelude-val">Err</span>(e) =&gt; {
                         <span class="macro">warn!</span>(
@@ -637,6 +584,9 @@
         <span class="self">self</span>.get_derived_backup_signing_key().public_key()
     }
 
+    <span class="kw">pub fn </span>get_backup_id_static(root_secret: <span class="kw-2">&amp;</span>DerivableSecret) -&gt; secp256k1::PublicKey {
+        <span class="self">Self</span>::get_derived_backup_signing_key_static(root_secret).public_key()
+    }
     <span class="doccomment">/// Static version of [`Self::get_derived_backup_encryption_key`] for
     /// testing without creating whole `MintClient`
     </span><span class="kw">fn </span>get_derived_backup_encryption_key_static(

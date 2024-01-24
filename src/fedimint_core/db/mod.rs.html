@@ -2790,6 +2790,11 @@
 <a href="#2790" id="2790">2790</a>
 <a href="#2791" id="2791">2791</a>
 <a href="#2792" id="2792">2792</a>
+<a href="#2793" id="2793">2793</a>
+<a href="#2794" id="2794">2794</a>
+<a href="#2795" id="2795">2795</a>
+<a href="#2796" id="2796">2796</a>
+<a href="#2797" id="2797">2797</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -3220,14 +3225,19 @@
 
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.begin_transaction().<span class="kw">await</span>;
 
-            <span class="kw">let </span>val = tx_fn(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), PhantomData)
-                .<span class="kw">await
-                </span>.map_err(|err| AutocommitError::ClosureError {
-                    attempts: curr_attempts,
-                    error: err,
-                })<span class="question-mark">?</span>;
+            <span class="kw">let </span>tx_fn_res = tx_fn(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), PhantomData).<span class="kw">await</span>;
+            <span class="kw">let </span>val = <span class="kw">match </span>tx_fn_res {
+                <span class="prelude-val">Ok</span>(val) =&gt; val,
+                <span class="prelude-val">Err</span>(err) =&gt; {
+                    dbtx.ignore_uncommitted();
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(AutocommitError::ClosureError {
+                        attempts: curr_attempts,
+                        error: err,
+                    });
+                }
+            };
 
-            <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;autocmmit - commit_tx&quot;</span>);
+            <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;autocommit - commit_tx&quot;</span>);
 
             <span class="kw">match </span>dbtx.commit_tx_result().<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(()) =&gt; {

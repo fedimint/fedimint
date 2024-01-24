@@ -1591,7 +1591,7 @@
         <span class="self">self</span>.update_leader().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>self_clone = <span class="self">self</span>.clone();
-        <span class="kw">let </span><span class="kw-2">mut </span>sub_group = <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>;
+        <span class="kw">let </span>sub_group = <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>;
         sub_group
             .spawn(<span class="string">&quot;run dkg&quot;</span>, <span class="kw">move </span>|_handle| <span class="kw">async move </span>{
                 <span class="comment">// Followers wait for leader to signal readiness for DKG
@@ -1819,7 +1819,7 @@
         <span class="comment">// Followers wait for leader to signal that all peers have restarted setup
         // The leader will signal this by setting it&#39;s status to AwaitingPassword
         </span><span class="kw">let </span>self_clone = <span class="self">self</span>.clone();
-        <span class="kw">let </span><span class="kw-2">mut </span>sub_group = <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>;
+        <span class="kw">let </span>sub_group = <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>;
         sub_group
             .spawn(<span class="string">&quot;restart&quot;</span>, <span class="kw">move </span>|_handle| <span class="kw">async move </span>{
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = leader {

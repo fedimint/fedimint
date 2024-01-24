@@ -823,6 +823,10 @@
 <a href="#823" id="823">823</a>
 <a href="#824" id="824">824</a>
 <a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
@@ -830,14 +834,14 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::{ffi, marker, ops};
 
-<span class="kw">use </span>anyhow::{anyhow, bail};
+<span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>fedimint_core::api::DynGlobalApi;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::core::{
     Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
 };
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, PhantomBound};
-<span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
+<span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::{BoxFuture, BoxStream};
@@ -956,6 +960,10 @@
             .to_ref_with_prefix_module_id(<span class="self">self</span>.client.module_instance_id)
     }
 
+    <span class="kw">pub fn </span>client_ctx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientContext&lt;M&gt; {
+        <span class="self">self</span>.client
+    }
+
     <span class="kw">pub async fn </span>add_state_machines(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         dyn_states: Vec&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
@@ -966,6 +974,10 @@
             .add_state_machines(<span class="self">self</span>.dbtx, dyn_states)
             .<span class="kw">await
     </span>}
+
+    <span class="kw">pub fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
+        <span class="self">self</span>.client.client.get().decoders().clone()
+    }
 
     <span class="kw">pub async fn </span>add_operation_log_entry(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
@@ -1020,6 +1032,9 @@
     <span class="doccomment">/// Get a reference to a global Api handle
     </span><span class="kw">pub fn </span>global_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynGlobalApi {
         <span class="self">self</span>.client.get().api_clone()
+    }
+    <span class="kw">pub fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
+        <span class="self">self</span>.client.get().decoders().clone()
     }
 
     <span class="kw">pub fn </span>map_dyn&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;i</span>, <span class="lifetime">&#39;o</span>, I&gt;(
@@ -1103,6 +1118,30 @@
             )
             .<span class="kw">await
     </span>}
+
+    <span class="comment">// TODO: rename `module_autocommit` to something else and make this a default
+    </span><span class="kw">pub async fn </span>module_autocommit_2&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;dbtx</span>, F, T&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="self">self</span>,
+        tx_fn: F,
+        max_attempts: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+    ) -&gt; anyhow::Result&lt;T&gt;
+    <span class="kw">where
+        </span><span class="lifetime">&#39;s</span>: <span class="lifetime">&#39;dbtx</span>,
+        <span class="kw">for</span>&lt;<span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;o</span>&gt; F: Fn(
+                <span class="kw-2">&amp;</span><span class="lifetime">&#39;r </span><span class="kw-2">mut </span>ClientDbTxContext&lt;<span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;o</span>, M&gt;,
+                PhantomBound&lt;<span class="lifetime">&#39;dbtx</span>, <span class="lifetime">&#39;o</span>&gt;,
+            ) -&gt; BoxFuture&lt;<span class="lifetime">&#39;r</span>, anyhow::Result&lt;T&gt;&gt;
+            + MaybeSync,
+    {
+        <span class="self">self</span>.module_autocommit(tx_fn, max_attempts)
+            .<span class="kw">await
+            </span>.map_err(|e| <span class="kw">match </span>e {
+                AutocommitError::ClosureError { error, .. } =&gt; error,
+                AutocommitError::CommitFailed { last_error, .. } =&gt; {
+                    <span class="macro">panic!</span>(<span class="string">&quot;Commit to DB failed: {last_error}&quot;</span>)
+                }
+            })
+    }
 
     <span class="doccomment">/// See [`crate::Client::finalize_and_submit_transaction`]
     </span><span class="kw">pub async fn </span>finalize_and_submit_transaction&lt;F, Meta&gt;(
@@ -1285,10 +1324,6 @@
         <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Backup not supported&quot;</span>);
     }
 
-    <span class="kw">async fn </span>restore(<span class="kw-2">&amp;</span><span class="self">self</span>, _snapshot: <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Backup&gt;) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Backup not supported&quot;</span>);
-    }
-
     <span class="doccomment">/// Does this module support being a primary module
     ///
     /// If it does it must implement:
@@ -1450,12 +1485,6 @@
     <span class="kw">async fn </span>backup(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance_id: ModuleInstanceId)
         -&gt; anyhow::Result&lt;DynModuleBackup&gt;;
 
-    <span class="kw">async fn </span>restore(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_instance_id: ModuleInstanceId,
-        snapshot: <span class="prelude-ty">Option</span>&lt;DynModuleBackup&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt;;
-
     <span class="kw">fn </span>supports_being_primary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
 
     <span class="kw">async fn </span>create_sufficient_input(
@@ -1546,27 +1575,6 @@
             &lt;T <span class="kw">as </span>ClientModule&gt;::backup(<span class="self">self</span>).<span class="kw">await</span><span class="question-mark">?</span>,
         ))
     }
-
-    <span class="kw">async fn </span>restore(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_instance_id: ModuleInstanceId,
-        snapshot: <span class="prelude-ty">Option</span>&lt;DynModuleBackup&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>typed_snapshot = snapshot
-            .map(|snapshot| {
-                snapshot.as_any().downcast_ref().cloned().ok_or_else(|| {
-                    <span class="comment">// TODO: should the error be caught earlier?
-                    </span><span class="macro">anyhow!</span>(
-                        <span class="string">&quot;Snapshot is not for this module: expected instance {}, got instance {}&quot;</span>,
-                        module_instance_id,
-                        snapshot.module_instance_id()
-                    )
-                })
-            })
-            .transpose()<span class="question-mark">?</span>;
-
-        &lt;T <span class="kw">as </span>ClientModule&gt;::restore(<span class="self">self</span>, typed_snapshot).<span class="kw">await
-    </span>}
 
     <span class="kw">fn </span>supports_being_primary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         &lt;T <span class="kw">as </span>ClientModule&gt;::supports_being_primary(<span class="self">self</span>)

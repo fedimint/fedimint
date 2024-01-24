@@ -177,6 +177,17 @@
 <a href="#177" id="177">177</a>
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::anyhow;
@@ -255,10 +266,16 @@
         }
     }
 
+    <span class="doccomment">/// Is registry empty?
+    </span><span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.inner.is_empty()
+    }
+
     <span class="doccomment">/// Return an iterator over all module data
     </span><span class="kw">pub fn </span>iter_modules(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span>ModuleKind, <span class="kw-2">&amp;</span>M)&gt; {
         <span class="self">self</span>.inner.iter().map(|(id, (kind, m))| (<span class="kw-2">*</span>id, kind, m))
     }
+
     <span class="doccomment">/// Return an iterator over all module data
     </span><span class="kw">pub fn </span>iter_modules_mut(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
@@ -266,6 +283,11 @@
         <span class="self">self</span>.inner
             .iter_mut()
             .map(|(id, (kind, m))| (<span class="kw-2">*</span>id, <span class="kw-2">&amp;*</span>kind, m))
+    }
+
+    <span class="doccomment">/// Return an iterator over all module data
+    </span><span class="kw">pub fn </span>into_iter_modules(<span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, ModuleKind, M)&gt; {
+        <span class="self">self</span>.inner.into_iter().map(|(id, (kind, m))| (id, kind, m))
     }
 
     <span class="doccomment">/// Get module data by instance id

@@ -880,6 +880,15 @@
 <a href="#880" id="880">880</a>
 <a href="#881" id="881">881</a>
 <a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
@@ -900,8 +909,8 @@
 <span class="kw">use </span>db_locked::LockedBuilder;
 <span class="kw">use </span>fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 <span class="kw">use </span>fedimint_bip39::Bip39RootSecretStrategy;
-<span class="kw">use </span>fedimint_client::backup::Metadata;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
+<span class="kw">use </span>fedimint_client::module::ClientModule <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::{get_invite_code_from_db, Client, ClientArc, ClientBuilder, FederationInfo};
 <span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
@@ -1272,6 +1281,9 @@ Examples:
     <span class="doccomment">/// Wait for the fed to reach a consensus block count
     </span>WaitBlockCount { count: u64 },
 
+    <span class="doccomment">/// Wait for all state machines to complete
+    </span>WaitComplete,
+
     <span class="doccomment">/// Decode connection info into its JSON representation
     </span>DecodeInviteCode { invite_code: InviteCode },
 
@@ -1457,7 +1469,7 @@ Examples:
         cli: <span class="kw-2">&amp;</span>Opts,
         mnemonic: Mnemonic,
         invite_code: InviteCode,
-    ) -&gt; CliResult&lt;(ClientArc, Metadata)&gt; {
+    ) -&gt; CliResult&lt;ClientArc&gt; {
         <span class="kw">let </span>builder = <span class="self">self</span>.make_client_builder(cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>federation_info = FederationInfo::from_invite_code(invite_code.clone())
@@ -1529,19 +1541,17 @@ Examples:
                 <span class="kw">let </span>mnemonic = Mnemonic::from_str(<span class="kw-2">&amp;</span>mnemonic).map_err_cli_general()<span class="question-mark">?</span>;
                 <span class="kw">let </span>client = <span class="self">self</span>.client_recover(<span class="kw-2">&amp;</span>cli, mnemonic, invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="macro">info!</span>(<span class="string">&quot;Waiting for restore to complete&quot;</span>);
-                <span class="kw">let </span>restored_amount = client
-                    .<span class="number">0
-                    </span>.get_first_module::&lt;MintClientModule&gt;()
-                    .await_restore_finished()
+                <span class="comment">// TODO: until we implement recovery for other modules we can&#39;t really wait
+                // for more than this one
+                </span><span class="macro">debug!</span>(<span class="string">&quot;Waiting for mint module recovery to finish&quot;</span>);
+                client
+                    .wait_for_module_kind_recovery(MintClientModule::kind())
                     .<span class="kw">await
-                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
+                    </span>.map_err_cli_general()<span class="question-mark">?</span>;
 
-                <span class="macro">debug!</span>(<span class="string">&quot;Restore complete&quot;</span>);
+                <span class="macro">debug!</span>(<span class="string">&quot;Recovery complete&quot;</span>);
 
-                <span class="prelude-val">Ok</span>(CliOutput::Raw(
-                    serde_json::to_value(restored_amount.msats).unwrap(),
-                ))
+                <span class="prelude-val">Ok</span>(CliOutput::Raw(serde_json::to_value(()).unwrap()))
             }
             Command::Client(command) =&gt; {
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1623,6 +1633,14 @@ Examples:
                 .<span class="kw">await
                 </span>.map_err_cli_msg(CliErrorKind::Timeout, <span class="string">&quot;reached timeout&quot;</span>)<span class="question-mark">?
             </span>}
+            Command::Dev(DevCmd::WaitComplete) =&gt; {
+                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
+                client
+                    .wait_for_all_active_state_machines()
+                    .<span class="kw">await
+                    </span>.map_err_cli_general()<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(CliOutput::Raw(serde_json::Value::Null))
+            }
             Command::Dev(DevCmd::DecodeInviteCode { invite_code }) =&gt; {
                 <span class="prelude-val">Ok</span>(CliOutput::DecodeInviteCode {
                     url: invite_code.url(),

@@ -1791,6 +1791,72 @@
 <a href="#1791" id="1791">1791</a>
 <a href="#1792" id="1792">1792</a>
 <a href="#1793" id="1793">1793</a>
+<a href="#1794" id="1794">1794</a>
+<a href="#1795" id="1795">1795</a>
+<a href="#1796" id="1796">1796</a>
+<a href="#1797" id="1797">1797</a>
+<a href="#1798" id="1798">1798</a>
+<a href="#1799" id="1799">1799</a>
+<a href="#1800" id="1800">1800</a>
+<a href="#1801" id="1801">1801</a>
+<a href="#1802" id="1802">1802</a>
+<a href="#1803" id="1803">1803</a>
+<a href="#1804" id="1804">1804</a>
+<a href="#1805" id="1805">1805</a>
+<a href="#1806" id="1806">1806</a>
+<a href="#1807" id="1807">1807</a>
+<a href="#1808" id="1808">1808</a>
+<a href="#1809" id="1809">1809</a>
+<a href="#1810" id="1810">1810</a>
+<a href="#1811" id="1811">1811</a>
+<a href="#1812" id="1812">1812</a>
+<a href="#1813" id="1813">1813</a>
+<a href="#1814" id="1814">1814</a>
+<a href="#1815" id="1815">1815</a>
+<a href="#1816" id="1816">1816</a>
+<a href="#1817" id="1817">1817</a>
+<a href="#1818" id="1818">1818</a>
+<a href="#1819" id="1819">1819</a>
+<a href="#1820" id="1820">1820</a>
+<a href="#1821" id="1821">1821</a>
+<a href="#1822" id="1822">1822</a>
+<a href="#1823" id="1823">1823</a>
+<a href="#1824" id="1824">1824</a>
+<a href="#1825" id="1825">1825</a>
+<a href="#1826" id="1826">1826</a>
+<a href="#1827" id="1827">1827</a>
+<a href="#1828" id="1828">1828</a>
+<a href="#1829" id="1829">1829</a>
+<a href="#1830" id="1830">1830</a>
+<a href="#1831" id="1831">1831</a>
+<a href="#1832" id="1832">1832</a>
+<a href="#1833" id="1833">1833</a>
+<a href="#1834" id="1834">1834</a>
+<a href="#1835" id="1835">1835</a>
+<a href="#1836" id="1836">1836</a>
+<a href="#1837" id="1837">1837</a>
+<a href="#1838" id="1838">1838</a>
+<a href="#1839" id="1839">1839</a>
+<a href="#1840" id="1840">1840</a>
+<a href="#1841" id="1841">1841</a>
+<a href="#1842" id="1842">1842</a>
+<a href="#1843" id="1843">1843</a>
+<a href="#1844" id="1844">1844</a>
+<a href="#1845" id="1845">1845</a>
+<a href="#1846" id="1846">1846</a>
+<a href="#1847" id="1847">1847</a>
+<a href="#1848" id="1848">1848</a>
+<a href="#1849" id="1849">1849</a>
+<a href="#1850" id="1850">1850</a>
+<a href="#1851" id="1851">1851</a>
+<a href="#1852" id="1852">1852</a>
+<a href="#1853" id="1853">1853</a>
+<a href="#1854" id="1854">1854</a>
+<a href="#1855" id="1855">1855</a>
+<a href="#1856" id="1856">1856</a>
+<a href="#1857" id="1857">1857</a>
+<a href="#1858" id="1858">1858</a>
+<a href="#1859" id="1859">1859</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1813,11 +1879,13 @@
 
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context <span class="kw">as _</span>};
 <span class="kw">use </span>async_stream::stream;
-<span class="kw">use </span>backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 <span class="kw">use </span>bitcoin_hashes::{sha256, sha256t, Hash, HashEngine <span class="kw">as </span>BitcoinHashEngine};
 <span class="kw">use </span>client_db::DbKeyPrefix;
-<span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientDbTxContext, ClientModule, IClientModule};
+<span class="kw">use </span>fedimint_client::module::init::{
+    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
+};
+<span class="kw">use </span>fedimint_client::module::recovery::RecoveryProgress;
+<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
@@ -1840,6 +1908,7 @@
     TieredMulti, TieredSummary, TransactionId,
 };
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT_RECOVERY_MINT;
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_mint_common::config::MintClientConfig;
 <span class="kw">pub use </span>fedimint_mint_common::<span class="kw-2">*</span>;
@@ -1851,11 +1920,11 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, info, warn};
 
-<span class="kw">use </span><span class="kw">crate</span>::backup::recovery::MintRestoreInProgressState;
+<span class="kw">use </span><span class="kw">crate</span>::backup::recovery::MintRecoveryState;
 <span class="kw">use </span><span class="kw">crate</span>::backup::{EcashBackup, EcashBackupV0};
 <span class="kw">use </span><span class="kw">crate</span>::client_db::{
     CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
-    NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix,
+    NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix, RestoreStateKey,
 };
 <span class="kw">use </span><span class="kw">crate</span>::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
@@ -1867,8 +1936,6 @@
 };
 
 <span class="kw">const </span>MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
-
-<span class="kw">const </span>MINT_BACKUP_RESTORE_OPERATION_ID: OperationId = OperationId([<span class="number">0x01</span>; <span class="number">32</span>]);
 
 <span class="kw">pub const </span>LOG_TARGET: <span class="kw-2">&amp;</span>str = <span class="string">&quot;client::module::mint&quot;</span>;
 
@@ -2117,6 +2184,7 @@
                         <span class="string">&quot;CancelledOOBSpendKey&quot;
                     </span>);
                 }
+                DbKeyPrefix::RestoreState =&gt; {}
             }
         }
 
@@ -2134,6 +2202,11 @@
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
+        <span class="macro">assert!</span>(
+            <span class="self">Self</span>::load_recovery_state(args.db()).<span class="kw">await</span>.is_none(),
+            <span class="string">&quot;recovery state must be empty on mint init&quot;
+        </span>);
+
         <span class="prelude-val">Ok</span>(MintClientModule {
             federation_id: <span class="kw-2">*</span>args.federation_id(),
             cfg: args.cfg().clone(),
@@ -2142,6 +2215,182 @@
             notifier: args.notifier().clone(),
             client_ctx: args.context(),
         })
+    }
+
+    <span class="kw">async fn </span>recover(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        args: <span class="kw-2">&amp;</span>ClientModuleRecoverArgs&lt;<span class="self">Self</span>&gt;,
+        snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::Backup&gt;,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>snapshot_v0 = <span class="kw">match </span>snapshot {
+            <span class="prelude-val">Some</span>(EcashBackup::V0(snapshot_v0)) =&gt; <span class="prelude-val">Some</span>(snapshot_v0),
+            <span class="prelude-val">Some</span>(EcashBackup::Default { variant, .. }) =&gt; {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Unsupported backup variant: {variant}&quot;</span>))
+            }
+            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
+        };
+
+        <span class="self">Self</span>::recover_inner(args, snapshot_v0.cloned()).<span class="kw">await
+    </span>}
+}
+
+<span class="kw">impl </span>MintClientInit {
+    <span class="kw">async fn </span>load_recovery_state(db: <span class="kw-2">&amp;</span>Database) -&gt; <span class="prelude-ty">Option</span>&lt;MintRecoveryState&gt; {
+        db.begin_transaction_nc()
+            .<span class="kw">await
+            </span>.get_value(<span class="kw-2">&amp;</span>RestoreStateKey)
+            .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>recover_inner(
+        args: <span class="kw-2">&amp;</span>ClientModuleRecoverArgs&lt;<span class="self">Self</span>&gt;,
+        snapshot: <span class="prelude-ty">Option</span>&lt;EcashBackupV0&gt;,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>snapshot = snapshot.unwrap_or(EcashBackupV0::new_empty());
+        <span class="kw">let </span>client_ctx = args.context();
+        <span class="kw">let </span>config = args.cfg();
+        <span class="kw">let </span>db = args.db().clone();
+
+        <span class="kw">let </span>current_session_count = client_ctx.global_api().session_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>secret = args.module_root_secret().clone();
+
+        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="kw">if let </span><span class="prelude-val">Some</span>(state) = <span class="self">Self</span>::load_recovery_state(<span class="kw-2">&amp;</span>db).<span class="kw">await </span>{
+            state
+        } <span class="kw">else </span>{
+            MintRecoveryState::from_backup(
+                current_session_count,
+                snapshot,
+                <span class="number">30</span>,
+                config.tbs_pks.clone(),
+                config.peer_tbs_pks.clone(),
+                <span class="kw-2">&amp;</span>secret,
+            )
+        };
+
+        <span class="macro">debug!</span>(target: LOG_TARGET, <span class="string">&quot;Creating MintRestoreStateMachine&quot;</span>);
+
+        <span class="kw">while </span>!state.is_done() {
+            state = state
+                .make_progress(args.api().clone(), client_ctx.decoders(), secret.clone())
+                .<span class="kw">await</span>;
+
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>RestoreStateKey, <span class="kw-2">&amp;</span>state).<span class="kw">await</span>;
+            dbtx.commit_tx().<span class="kw">await</span>;
+            args.update_recovery_progress(RecoveryProgress {
+                complete: (state.next_epoch - state.start_epoch)
+                    .try_into()
+                    .unwrap_or(u32::MAX),
+                total: (state.end_epoch - state.start_epoch)
+                    .try_into()
+                    .unwrap_or(u32::MAX),
+            })
+            .<span class="kw">await
+        </span>}
+
+        <span class="self">Self</span>::finalize_state_restore(state, client_ctx).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">async fn </span>finalize_state_restore(
+        state: MintRecoveryState,
+        client_ctx: ClientContext&lt;MintClientModule&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+        <span class="macro">debug!</span>(
+            target: LOG_CLIENT_RECOVERY_MINT,
+            <span class="question-mark">?</span>state,
+            <span class="string">&quot;Finalizing restore&quot;
+        </span>);
+
+        <span class="kw">let </span>finalized = state.finalize();
+
+        <span class="kw">let </span>restored_amount = finalized
+            .unconfirmed_notes
+            .iter()
+            .map(|entry| entry.<span class="number">1</span>)
+            .sum::&lt;Amount&gt;()
+            + finalized.spendable_notes.total_amount();
+
+        <span class="macro">info!</span>(amount = %restored_amount, <span class="string">&quot;Finalizing mint recovery&quot;</span>);
+
+        <span class="kw">let </span>finalized = <span class="kw-2">&amp;</span>finalized;
+
+        client_ctx
+            .clone()
+            .module_autocommit_2(
+                <span class="kw">move </span>|dbtx, <span class="kw">_</span>| {
+                    Box::pin(<span class="kw">async move </span>{
+                        <span class="kw">let </span>finalized = finalized.clone();
+                        dbtx.module_dbtx().remove_entry(<span class="kw-2">&amp;</span>RestoreStateKey).<span class="kw">await</span>;
+
+                        <span class="macro">debug!</span>(
+                            target: LOG_CLIENT_RECOVERY_MINT,
+                            len = finalized.spendable_notes.count_items(),
+                            <span class="string">&quot;Restoring spendable notes&quot;
+                        </span>);
+                        <span class="kw">for </span>(amount, note) <span class="kw">in </span>finalized.spendable_notes {
+                            <span class="kw">let </span>key = NoteKey {
+                                amount,
+                                nonce: note.nonce(),
+                            };
+                            dbtx.module_dbtx().insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note).<span class="kw">await</span>;
+                        }
+
+                        <span class="kw">for </span>(amount, note_idx) <span class="kw">in </span>finalized.next_note_idx.iter() {
+                            <span class="macro">debug!</span>(
+                                target: LOG_CLIENT_RECOVERY_MINT,
+                                %amount,
+                                %note_idx,
+                                <span class="string">&quot;Restoring NextECashNodeIndex&quot;
+                            </span>);
+                            dbtx.module_dbtx()
+                                .insert_entry(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>note_idx.as_u64())
+                                .<span class="kw">await</span>;
+                        }
+
+                        <span class="macro">debug!</span>(
+                            target: LOG_CLIENT_RECOVERY_MINT,
+                            len = finalized.unconfirmed_notes.len(),
+                            <span class="string">&quot;Restoring unconfigured notes state machines&quot;
+                        </span>);
+
+                        <span class="kw">for </span>(out_point, amount, issuance_request) <span class="kw">in </span>finalized.unconfirmed_notes {
+                            <span class="kw">let </span>client_ctx = dbtx.client_ctx();
+                            dbtx.add_state_machines(
+                                client_ctx
+                                    .map_dyn(<span class="macro">vec!</span>[MintClientStateMachines::Output(
+                                        MintOutputStateMachine {
+                                            common: MintOutputCommon {
+                                                operation_id: OperationId::new_random(),
+                                                out_point,
+                                            },
+                                            state: <span class="kw">crate</span>::output::MintOutputStates::Created(
+                                                MintOutputStatesCreated {
+                                                    amount,
+                                                    issuance_request,
+                                                },
+                                            ),
+                                        },
+                                    )])
+                                    .collect(),
+                            )
+                            .<span class="kw">await</span><span class="question-mark">?</span>;
+                        }
+
+                        <span class="macro">debug!</span>(
+                            target: LOG_CLIENT_RECOVERY_MINT,
+                            <span class="string">&quot;Mint module recovery finalized&quot;
+                        </span>);
+
+                        <span class="prelude-val">Ok</span>(())
+                    })
+                },
+                <span class="prelude-val">None</span>,
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -2317,32 +2566,6 @@
             })
     }
 
-    <span class="kw">async fn </span>restore(<span class="kw-2">&amp;</span><span class="self">self</span>, snapshot: <span class="prelude-ty">Option</span>&lt;EcashBackup&gt;) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>snapshot_v0 = <span class="kw">match </span>snapshot {
-            <span class="prelude-val">Some</span>(EcashBackup::V0(snapshot_v0)) =&gt; <span class="prelude-val">Some</span>(snapshot_v0),
-            <span class="prelude-val">Some</span>(EcashBackup::Default { variant, .. }) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Unsupported backup variant: {variant}&quot;</span>))
-            }
-            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
-        };
-
-        <span class="self">self</span>.client_ctx
-            .module_autocommit(
-                <span class="kw">move </span>|dbtx_ctx, <span class="kw">_</span>| {
-                    <span class="kw">let </span>snapshot_inner = snapshot_v0.clone();
-                    Box::pin(<span class="kw">async move </span>{ <span class="self">self</span>.restore_inner(dbtx_ctx, snapshot_inner).<span class="kw">await </span>})
-                },
-                <span class="prelude-val">None</span>,
-            )
-            .<span class="kw">await
-            </span>.map_err(|e| <span class="kw">match </span>e {
-                AutocommitError::ClosureError { error, .. } =&gt; error,
-                AutocommitError::CommitFailed { last_error, .. } =&gt; {
-                    <span class="macro">anyhow!</span>(<span class="string">&quot;Commit to DB failed: {last_error}&quot;</span>)
-                }
-            })
-    }
-
     <span class="kw">fn </span>supports_being_primary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="bool-val">true
     </span>}
@@ -2397,13 +2620,6 @@
                         // output state
                         </span>MintClientStateMachines::OOB(MintOOBStateMachine {
                             state: MintOOBStates::Created(<span class="kw">_</span>),
-                            ..
-                        }) =&gt; <span class="prelude-val">Some</span>(()),
-                        <span class="comment">// We don&#39;t want to scare users, so we only trigger on success instead of
-                        // showing incremental progress. Ideally the balance isn&#39;t shown to them
-                        // during recovery anyway.
-                        </span>MintClientStateMachines::Restore(MintRestoreStateMachine {
-                            state: MintRestoreStates::Success(<span class="kw">_</span>),
                             ..
                         }) =&gt; <span class="prelude-val">Some</span>(()),
                         <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
@@ -2677,32 +2893,6 @@
         .next_or_pending()
         .<span class="kw">await
     </span>}
-
-    <span class="kw">pub async fn </span>await_restore_finished(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Amount&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>restore_stream = <span class="self">self
-            </span>.notifier
-            .subscribe(MINT_BACKUP_RESTORE_OPERATION_ID)
-            .<span class="kw">await</span>;
-        <span class="kw">while let </span><span class="prelude-val">Some</span>(restore_step) = restore_stream.next().<span class="kw">await </span>{
-            <span class="kw">match </span>restore_step {
-                MintClientStateMachines::Restore(MintRestoreStateMachine {
-                    state: MintRestoreStates::Success(amount),
-                    ..
-                }) =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(amount);
-                }
-                MintClientStateMachines::Restore(MintRestoreStateMachine {
-                    state: MintRestoreStates::Failed(error),
-                    ..
-                }) =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Restore failed: {}&quot;</span>, error.reason));
-                }
-                <span class="kw">_ </span>=&gt; {}
-            }
-        }
-
-        <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Restore stream closed without success or failure&quot;</span>))
-    }
 
     <span class="doccomment">/// Select notes with `requested_amount` using `notes_selector`.
     </span><span class="kw">async fn </span>select_notes(
@@ -3104,56 +3294,6 @@
 
         <span class="prelude-val">Ok</span>(operation)
     }
-
-    <span class="kw">async fn </span>restore_inner(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx_ctx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span><span class="kw-2">mut </span>ClientDbTxContext&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>, <span class="self">Self</span>&gt;,
-        maybe_snapshot: <span class="prelude-ty">Option</span>&lt;EcashBackupV0&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">if </span>!<span class="self">Self</span>::get_all_spendable_notes(<span class="kw-2">&amp;mut </span>dbtx_ctx.module_dbtx())
-            .<span class="kw">await
-            </span>.is_empty()
-        {
-            <span class="macro">warn!</span>(
-                target: LOG_TARGET,
-                <span class="string">&quot;Can not start recovery - existing spendable notes found&quot;
-            </span>);
-            <span class="macro">bail!</span>(<span class="string">&quot;Found existing spendable notes. Mint module recovery must be started on an empty state.&quot;</span>)
-        }
-
-        <span class="kw">if </span>!<span class="self">self</span>.client_ctx.get_own_active_states().<span class="kw">await</span>.is_empty() {
-            <span class="macro">warn!</span>(
-                target: LOG_TARGET,
-                <span class="string">&quot;Can not start recovery - existing state machines found&quot;
-            </span>);
-            <span class="macro">bail!</span>(<span class="string">&quot;Found existing active state machines. Mint module recovery must be started on an empty state.&quot;</span>)
-        }
-
-        <span class="kw">let </span>snapshot = maybe_snapshot.unwrap_or(EcashBackupV0::new_empty());
-
-        <span class="kw">let </span>current_session_count = <span class="self">self</span>.client_ctx.global_api().session_count().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>state = MintRestoreInProgressState::from_backup(
-            current_session_count,
-            snapshot,
-            <span class="number">30</span>,
-            <span class="self">self</span>.cfg.tbs_pks.clone(),
-            <span class="self">self</span>.cfg.peer_tbs_pks.clone(),
-            <span class="kw-2">&amp;</span><span class="self">self</span>.secret,
-        );
-
-        <span class="macro">debug!</span>(target: LOG_TARGET, <span class="string">&quot;Creating MintRestoreStateMachine&quot;</span>);
-
-        dbtx_ctx
-            .add_state_machines_dbtx(<span class="macro">vec!</span>[<span class="self">self</span>.client_ctx.make_dyn_state(
-                MintClientStateMachines::Restore(MintRestoreStateMachine {
-                    operation_id: MINT_BACKUP_RESTORE_OPERATION_ID,
-                    state: MintRestoreStates::InProgress(state),
-                }),
-            )])
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(())
-    }
 }
 
 <span class="kw">pub fn </span>spendable_notes_to_operation_id(
@@ -3319,7 +3459,6 @@
     Output(MintOutputStateMachine),
     Input(MintInputStateMachine),
     OOB(MintOOBStateMachine),
-    Restore(MintRestoreStateMachine),
 }
 
 <span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>MintClientStateMachines {
@@ -3358,12 +3497,6 @@
                     MintClientStateMachines::OOB
                 )
             }
-            MintClientStateMachines::Restore(restore_state) =&gt; {
-                <span class="macro">sm_enum_variant_translation!</span>(
-                    restore_state.transitions(context, global_context),
-                    MintClientStateMachines::Restore
-                )
-            }
         }
     }
 
@@ -3372,7 +3505,6 @@
             MintClientStateMachines::Output(issuance_state) =&gt; issuance_state.operation_id(),
             MintClientStateMachines::Input(redemption_state) =&gt; redemption_state.operation_id(),
             MintClientStateMachines::OOB(oob_state) =&gt; oob_state.operation_id(),
-            MintClientStateMachines::Restore(state) =&gt; state.operation_id(),
         }
     }
 }

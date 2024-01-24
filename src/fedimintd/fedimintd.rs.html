@@ -532,7 +532,7 @@
             .init()
             .unwrap();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>root_task_group = TaskGroup::new();
+        <span class="kw">let </span>root_task_group = TaskGroup::new();
         root_task_group.install_kill_handler();
 
         <span class="kw">let </span>timing_total_runtime = timing::TimeReporter::new(<span class="string">&quot;total-runtime&quot;</span>).info();

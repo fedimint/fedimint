@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["MintRestoreStates"],"struct":["CompressedBlindedMessage","EcashRecoveryFinalState","MintRestoreFailedState","MintRestoreInProgressState","MintRestoreStateMachine"]};
+window.SIDEBAR_ITEMS = {"struct":["CompressedBlindedMessage","EcashRecoveryFinalState","MintRecoveryState"]};
