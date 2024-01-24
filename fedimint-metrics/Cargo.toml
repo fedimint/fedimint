@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-metrics"
-version = "0.2.2-rc5"
+version = "0.2.2-rc6"
 edition = "2021"
 license = "MIT"
 description = "fedimint-metrics allows exporting prometheus metrics from Fedimint."
@@ -16,7 +16,7 @@ path = "./src/lib.rs"
 [dependencies]
 anyhow = { version = "1.0.71", features = ["backtrace"] }
 axum = "0.6.18"
-fedimint-core = { version = "0.2.2-rc5", path = "../fedimint-core" }
+fedimint-core = { version = "0.2.2-rc6", path = "../fedimint-core" }
 lazy_static = "1.4.0"
 prometheus = "0.13.3"
 tokio = "1"
