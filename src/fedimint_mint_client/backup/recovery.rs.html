@@ -420,29 +420,20 @@
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
 <a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a>
-<a href="#424" id="424">424</a>
-<a href="#425" id="425">425</a>
-<a href="#426" id="426">426</a>
-<a href="#427" id="427">427</a>
-<a href="#428" id="428">428</a>
-<a href="#429" id="429">429</a>
-<a href="#430" id="430">430</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::{<span class="self">self</span>, max};
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt;
 
-<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
-<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::session_outcome::SessionOutcome;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::{Amount, NumPeers, OutPoint, PeerId, Tiered, TieredMulti};
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_RECOVERY_MINT;
 <span class="kw">use </span>fedimint_mint_common::{MintInput, MintOutput, Nonce};
+<span class="kw">use </span>futures::{Stream, StreamExt <span class="kw">as _</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{AggregatePublicKey, BlindedMessage, PublicKeyShare};
 <span class="kw">use </span>threshold_crypto::G1Affine;
@@ -542,49 +533,42 @@
 <span class="kw">impl </span>MintRecoveryState {
     <span class="kw">pub async fn </span>make_progress&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">mut </span><span class="self">self</span>,
-        api: DynGlobalApi,
-        decoders: ModuleDecoderRegistry,
         secret: DerivableSecret,
+        block_stream: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>Stream&lt;Item = (u64, SessionOutcome)&gt; + Unpin),
     ) -&gt; <span class="self">Self </span>{
+        <span class="doccomment">/// the amount of blocks after which we save progress in the database
+        /// (return from this function)
+        </span><span class="kw">const </span>PROGRESS_SNAPSHOT_BLOCKS: u64 = <span class="number">10</span>;
         <span class="macro">assert_eq!</span>(secret.level(), <span class="number">2</span>);
 
-        <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY_MINT, <span class="string">&quot;Processing block {}&quot;</span>, <span class="self">self</span>.next_epoch);
+        <span class="kw">let </span>block_range = <span class="self">self</span>.next_epoch
+            ..cmp::min(
+                <span class="self">self</span>.next_epoch.wrapping_add(PROGRESS_SNAPSHOT_BLOCKS),
+                <span class="self">self</span>.end_epoch,
+            );
 
-        <span class="kw">for </span>accepted_item <span class="kw">in </span><span class="self">Self</span>::await_block(api, decoders, <span class="self">self</span>.next_epoch)
-            .<span class="kw">await
-            </span>.items
-        {
-            <span class="kw">if let </span>ConsensusItem::Transaction(transaction) = accepted_item.item {
-                <span class="self">self</span>.handle_transaction(<span class="kw-2">&amp;</span>transaction, <span class="kw-2">&amp;</span>secret);
-            }
-        }
+        <span class="macro">debug!</span>(
+            target: LOG_CLIENT_RECOVERY_MINT,
+            <span class="question-mark">?</span>block_range,
+            <span class="string">&quot;Processing blocks&quot;
+        </span>);
 
-        <span class="self">self</span>.next_epoch += <span class="number">1</span>;
+        <span class="kw">for _ in </span>block_range {
+            <span class="kw">let </span><span class="prelude-val">Some</span>((block_idx, block)) = block_stream.next().<span class="kw">await else </span>{
+                <span class="kw">break</span>;
+            };
 
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Fetch epochs in a given range and send them over `sender`
-    ///
-    /// Since WASM&#39;s `spawn` does not support join handles, we indicate
-    /// errors via `sender` itself.
-    ///
-    /// TODO: could be internal to recovery_loop?
-    </span><span class="kw">async fn </span>await_block&lt;<span class="lifetime">&#39;a</span>&gt;(
-        api: DynGlobalApi,
-        decoders: ModuleDecoderRegistry,
-        index: u64,
-    ) -&gt; SessionOutcome {
-        <span class="kw">loop </span>{
-            <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY_MINT, index, <span class="string">&quot;Awaiting block {index}&quot;</span>);
-            <span class="kw">match </span>api.await_block(index, <span class="kw-2">&amp;</span>decoders).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(block) =&gt; <span class="kw">return </span>block,
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">info!</span>(e = %e, index, <span class="string">&quot;Error trying to fetch signed block&quot;</span>);
+            <span class="macro">assert_eq!</span>(<span class="self">self</span>.next_epoch, block_idx);
+            <span class="kw">for </span>accepted_item <span class="kw">in </span>block.items {
+                <span class="kw">if let </span>ConsensusItem::Transaction(transaction) = accepted_item.item {
+                    <span class="self">self</span>.handle_transaction(<span class="kw-2">&amp;</span>transaction, <span class="kw-2">&amp;</span>secret);
                 }
             }
+
+            <span class="self">self</span>.next_epoch += <span class="number">1</span>;
         }
-    }
+        <span class="self">self
+    </span>}
 }
 
 <span class="kw">impl </span>MintRecoveryState {

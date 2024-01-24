@@ -1857,6 +1857,58 @@
 <a href="#1857" id="1857">1857</a>
 <a href="#1858" id="1858">1858</a>
 <a href="#1859" id="1859">1859</a>
+<a href="#1860" id="1860">1860</a>
+<a href="#1861" id="1861">1861</a>
+<a href="#1862" id="1862">1862</a>
+<a href="#1863" id="1863">1863</a>
+<a href="#1864" id="1864">1864</a>
+<a href="#1865" id="1865">1865</a>
+<a href="#1866" id="1866">1866</a>
+<a href="#1867" id="1867">1867</a>
+<a href="#1868" id="1868">1868</a>
+<a href="#1869" id="1869">1869</a>
+<a href="#1870" id="1870">1870</a>
+<a href="#1871" id="1871">1871</a>
+<a href="#1872" id="1872">1872</a>
+<a href="#1873" id="1873">1873</a>
+<a href="#1874" id="1874">1874</a>
+<a href="#1875" id="1875">1875</a>
+<a href="#1876" id="1876">1876</a>
+<a href="#1877" id="1877">1877</a>
+<a href="#1878" id="1878">1878</a>
+<a href="#1879" id="1879">1879</a>
+<a href="#1880" id="1880">1880</a>
+<a href="#1881" id="1881">1881</a>
+<a href="#1882" id="1882">1882</a>
+<a href="#1883" id="1883">1883</a>
+<a href="#1884" id="1884">1884</a>
+<a href="#1885" id="1885">1885</a>
+<a href="#1886" id="1886">1886</a>
+<a href="#1887" id="1887">1887</a>
+<a href="#1888" id="1888">1888</a>
+<a href="#1889" id="1889">1889</a>
+<a href="#1890" id="1890">1890</a>
+<a href="#1891" id="1891">1891</a>
+<a href="#1892" id="1892">1892</a>
+<a href="#1893" id="1893">1893</a>
+<a href="#1894" id="1894">1894</a>
+<a href="#1895" id="1895">1895</a>
+<a href="#1896" id="1896">1896</a>
+<a href="#1897" id="1897">1897</a>
+<a href="#1898" id="1898">1898</a>
+<a href="#1899" id="1899">1899</a>
+<a href="#1900" id="1900">1900</a>
+<a href="#1901" id="1901">1901</a>
+<a href="#1902" id="1902">1902</a>
+<a href="#1903" id="1903">1903</a>
+<a href="#1904" id="1904">1904</a>
+<a href="#1905" id="1905">1905</a>
+<a href="#1906" id="1906">1906</a>
+<a href="#1907" id="1907">1907</a>
+<a href="#1908" id="1908">1908</a>
+<a href="#1909" id="1909">1909</a>
+<a href="#1910" id="1910">1910</a>
+<a href="#1911" id="1911">1911</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1868,14 +1920,14 @@
 <span class="doccomment">/// State machines for mint outputs
 </span><span class="kw">mod </span>output;
 
-<span class="kw">use </span>std::cmp::Ordering;
+<span class="kw">use </span>std::cmp::{<span class="self">self</span>, Ordering};
 <span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::io::Read;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>std::{ffi, ops};
 
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context <span class="kw">as _</span>};
 <span class="kw">use </span>async_stream::stream;
@@ -1891,7 +1943,7 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
@@ -1902,6 +1954,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
+<span class="kw">use </span>fedimint_core::session_outcome::SessionOutcome;
 <span class="kw">use </span>fedimint_core::util::{BoxFuture, BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
@@ -1913,6 +1966,7 @@
 <span class="kw">use </span>fedimint_mint_common::config::MintClientConfig;
 <span class="kw">pub use </span>fedimint_mint_common::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::{pin_mut, StreamExt};
+<span class="kw">use </span>rand::{thread_rng, Rng};
 <span class="kw">use </span>secp256k1::{All, KeyPair, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -2269,10 +2323,14 @@
 
         <span class="macro">debug!</span>(target: LOG_TARGET, <span class="string">&quot;Creating MintRestoreStateMachine&quot;</span>);
 
+        <span class="kw">let </span><span class="kw-2">mut </span>block_stream = <span class="self">Self</span>::fetch_block_stream(
+            args.api().clone(),
+            client_ctx.decoders(),
+            state.next_epoch..state.end_epoch,
+        );
+
         <span class="kw">while </span>!state.is_done() {
-            state = state
-                .make_progress(args.api().clone(), client_ctx.decoders(), secret.clone())
-                .<span class="kw">await</span>;
+            state = state.make_progress(secret.clone(), <span class="kw-2">&amp;mut </span>block_stream).<span class="kw">await</span>;
 
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
@@ -2391,6 +2449,52 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Fetch epochs in a given range and send them over `sender`
+    ///
+    /// Since WASM&#39;s `spawn` does not support join handles, we indicate
+    /// errors via `sender` itself.
+    ///
+    /// TODO: could be internal to recovery_loop?
+    </span><span class="kw">fn </span>fetch_block_stream&lt;<span class="lifetime">&#39;a</span>&gt;(
+        api: DynGlobalApi,
+        decoders: ModuleDecoderRegistry,
+        epoch_range: ops::Range&lt;u64&gt;,
+    ) -&gt; <span class="kw">impl </span>futures::Stream&lt;Item = (u64, SessionOutcome)&gt; + <span class="lifetime">&#39;a </span>{
+        <span class="comment">// How many request for blocks to run in parallel (streaming).
+        </span><span class="kw">const </span>PARALLISM_LEVEL: usize = <span class="number">8</span>;
+
+        futures::stream::iter(epoch_range)
+            .map(<span class="kw">move </span>|block_idx| {
+                <span class="kw">let </span>api = api.clone();
+                <span class="kw">let </span>decoders = decoders.clone();
+                Box::pin(<span class="kw">async move </span>{
+                    <span class="macro">info!</span>(block_idx, <span class="string">&quot;Fetching epoch&quot;</span>);
+
+                    <span class="kw">let </span><span class="kw-2">mut </span>retry_sleep = Duration::from_millis(<span class="number">10</span>);
+                    <span class="kw">let </span>block = <span class="kw">loop </span>{
+                        <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY_MINT, block_idx, <span class="string">&quot;Awaiting signed block&quot;</span>);
+                        <span class="kw">match </span>api.await_block(block_idx, <span class="kw-2">&amp;</span>decoders).<span class="kw">await </span>{
+                            <span class="prelude-val">Ok</span>(block) =&gt; <span class="kw">break </span>block,
+                            <span class="prelude-val">Err</span>(e) =&gt; {
+                                <span class="macro">info!</span>(e = %e, block_idx, <span class="string">&quot;Error trying to fetch signed block&quot;</span>);
+                                <span class="comment">// We don&#39;t want PARALLISM_LEVEL tasks hammering Federation
+                                // with requests, so max sleep is significant
+                                </span><span class="kw">const </span>MAX_SLEEP: Duration = Duration::from_secs(<span class="number">120</span>);
+                                <span class="kw">if </span>retry_sleep &lt;= MAX_SLEEP {
+                                    retry_sleep = retry_sleep
+                                        + thread_rng().gen_range(Duration::ZERO..=retry_sleep);
+                                }
+                                fedimint_core::task::sleep(cmp::min(retry_sleep, MAX_SLEEP)).<span class="kw">await</span>;
+                            }
+                        }
+                    };
+
+                    (block_idx, block)
+                })
+            })
+            .buffered(PARALLISM_LEVEL)
     }
 }
 
