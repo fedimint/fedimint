@@ -2581,7 +2581,7 @@
         </span><span class="self">self</span>.delete_expired_gateways(dbtx).<span class="kw">await</span>;
 
         dbtx.insert_entry(
-            <span class="kw-2">&amp;</span>LightningGatewayKey(gateway.info.node_pub_key),
+            <span class="kw-2">&amp;</span>LightningGatewayKey(gateway.info.gateway_id),
             <span class="kw-2">&amp;</span>gateway.anchor(),
         )
         .<span class="kw">await</span>;
