@@ -255,7 +255,7 @@ impl GatewayClientModule {
                 gateway_redeem_key: self.redeem_key.public_key(),
                 node_pub_key: lightning_context.lightning_public_key,
                 lightning_alias: lightning_context.lightning_alias,
-                api: self.gateway.gateway_parameters.api_addr.clone(),
+                api: self.gateway.gateway_parameters.versioned_api.clone(),
                 route_hints,
                 fees,
                 gateway_id: self.gateway.gateway_id,

@@ -10,6 +10,7 @@ use clap::Parser;
 use cln_rpc::primitives::{Amount as ClnAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
 use fedimint_logging::TracingSetup;
+use ln_gateway::rpc::V1_API_ENDPOINT;
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 
@@ -147,7 +148,9 @@ async fn main() -> anyhow::Result<()> {
         )
         .route(
             "/gateway-api",
-            get(move || async move { format!("http://127.0.0.1:{}/", cmd.gw_lnd_port) }),
+            get(move || async move {
+                format!("http://127.0.0.1:{}/{V1_API_ENDPOINT}", cmd.gw_lnd_port)
+            }),
         )
         .layer(CorsLayer::permissive())
         .with_state(faucet);

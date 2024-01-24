@@ -14,7 +14,7 @@ use tracing::{error, instrument};
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, LeaveFedPayload,
-    RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 use crate::db::GatewayConfiguration;
 use crate::rpc::ConfigPayload;
@@ -26,9 +26,34 @@ pub async fn run_webserver(
     gateway: Gateway,
     task_group: &mut TaskGroup,
 ) -> axum::response::Result<()> {
-    let (routes, admin_routes) = if let Some(gateway_config) = config {
+    let v1_routes = v1_routes(config, gateway.clone());
+    let api_v1 = Router::new()
+        .nest(&format!("/{V1_API_ENDPOINT}"), v1_routes.clone())
+        // Backwards compatibility: Continue supporting gateway APIs without versioning
+        .merge(v1_routes);
+
+    let handle = task_group.make_handle();
+    let shutdown_rx = handle.make_shutdown_rx().await;
+    let server = axum::Server::bind(&bind_addr).serve(api_v1.into_make_service());
+    task_group
+        .spawn("Gateway Webserver", move |_| async move {
+            let graceful = server.with_graceful_shutdown(async {
+                shutdown_rx.await;
+            });
+
+            if let Err(e) = graceful.await {
+                error!("Error shutting down gatewayd webserver: {:?}", e);
+            }
+        })
+        .await;
+
+    Ok(())
+}
+
+fn v1_routes(config: Option<GatewayConfiguration>, gateway: Gateway) -> Router {
+    let (public_routes, admin_routes) = if let Some(gateway_config) = config {
         // Public routes on gateway webserver
-        let routes = Router::new()
+        let public_routes = Router::new()
             .route("/pay_invoice", post(pay_invoice))
             .route("/id", get(get_gateway_id));
 
@@ -45,37 +70,21 @@ pub async fn run_webserver(
             .route("/restore", post(restore))
             .route("/set_configuration", post(set_configuration))
             .layer(ValidateRequestHeaderLayer::bearer(&gateway_config.password));
-        (routes, admin_routes)
+        (public_routes, admin_routes)
     } else {
-        let routes = Router::new()
+        let public_routes = Router::new()
             .route("/set_configuration", post(set_configuration))
             .route("/config", get(configuration))
             .route("/info", get(info));
-        (routes, Router::new())
+        let admin_routes = Router::new();
+        (public_routes, admin_routes)
     };
 
-    let app = Router::new()
-        .merge(routes)
+    Router::new()
+        .merge(public_routes)
         .merge(admin_routes)
-        .layer(Extension(gateway.clone()))
-        .layer(CorsLayer::permissive());
-
-    let handle = task_group.make_handle();
-    let shutdown_rx = handle.make_shutdown_rx().await;
-    let server = axum::Server::bind(&bind_addr).serve(app.into_make_service());
-    task_group
-        .spawn("Gateway Webserver", move |_| async move {
-            let graceful = server.with_graceful_shutdown(async {
-                shutdown_rx.await;
-            });
-
-            if let Err(e) = graceful.await {
-                error!("Error shutting down gatewayd webserver: {:?}", e);
-            }
-        })
-        .await;
-
-    Ok(())
+        .layer(Extension(gateway))
+        .layer(CorsLayer::permissive())
 }
 
 /// Display high-level information about the Gateway

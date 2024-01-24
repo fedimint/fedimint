@@ -19,7 +19,7 @@ use lightning_invoice::RoutingFees;
 use ln_gateway::client::GatewayClientBuilder;
 use ln_gateway::lightning::{ILnRpcClient, LightningBuilder};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::{ConnectFedPayload, FederationConnectionInfo};
+use ln_gateway::rpc::{ConnectFedPayload, FederationConnectionInfo, V1_API_ENDPOINT};
 use ln_gateway::{Gateway, GatewayState};
 use secp256k1::PublicKey;
 use tempfile::TempDir;
@@ -36,7 +36,7 @@ pub const DEFAULT_GATEWAY_PASSWORD: &str = "thereisnosecondbest";
 /// Fixture for creating a gateway
 pub struct GatewayTest {
     /// URL for the RPC
-    api: SafeUrl,
+    versioned_api: SafeUrl,
     /// Handle of the running gateway
     pub gateway: Gateway,
     /// Temporary dir that stores the gateway config
@@ -52,7 +52,7 @@ pub struct GatewayTest {
 impl GatewayTest {
     /// RPC client for communicating with the gateway admin API
     pub async fn get_rpc(&self) -> GatewayRpcClient {
-        GatewayRpcClient::new(self.api.clone(), None)
+        GatewayRpcClient::new(self.versioned_api.clone(), None)
     }
 
     /// Removes a client from the gateway
@@ -91,6 +91,8 @@ impl GatewayTest {
     ) -> Self {
         let listen: SocketAddr = format!("127.0.0.1:{base_port}").parse().unwrap();
         let address: SafeUrl = format!("http://{listen}").parse().unwrap();
+        let versioned_api = address.join(V1_API_ENDPOINT).unwrap();
+
         let (path, _config_dir) = test_dir(&format!("gateway-{}", rand::random::<u64>()));
 
         // Create federation client builder for the gateway
@@ -138,7 +140,7 @@ impl GatewayTest {
             .await;
 
         // Wait for the gateway web server to be available
-        GatewayTest::wait_for_webserver(address.clone(), cli_password)
+        GatewayTest::wait_for_webserver(versioned_api.clone(), cli_password)
             .await
             .expect("Gateway web server failed to start");
 
@@ -154,7 +156,7 @@ impl GatewayTest {
         let info = lightning.info().await.unwrap();
 
         Self {
-            api: address,
+            versioned_api,
             _config_dir,
             gateway,
             node_pub_key: PublicKey::from_slice(info.pub_key.as_slice()).unwrap(),
@@ -163,8 +165,17 @@ impl GatewayTest {
         }
     }
 
-    pub async fn wait_for_webserver(api: SafeUrl, password: Option<String>) -> anyhow::Result<()> {
-        let rpc = GatewayRpcClient::new(api, password);
+    /// Waits for the webserver to be ready.
+    ///
+    /// This function is used to ensure that the webserver is fully initialized
+    /// and ready to accept incoming requests. It is designed to be used in
+    /// a concurrent environment where the webserver might be initialized in a
+    /// separate thread or task.
+    pub async fn wait_for_webserver(
+        versioned_api: SafeUrl,
+        password: Option<String>,
+    ) -> anyhow::Result<()> {
+        let rpc = GatewayRpcClient::new(versioned_api, password);
         for _ in 0..30 {
             let rpc_result = rpc.get_info().await;
             if rpc_result.is_ok() {

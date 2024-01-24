@@ -61,7 +61,7 @@ use lightning_invoice::RoutingFees;
 use rand::rngs::OsRng;
 use rpc::{
     FederationConnectionInfo, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    SetConfigurationPayload,
+    SetConfigurationPayload, V1_API_ENDPOINT,
 };
 use secp256k1::PublicKey;
 use state_machine::pay::OutgoingPaymentError;
@@ -150,15 +150,21 @@ pub struct GatewayOpts {
 }
 
 impl GatewayOpts {
-    fn to_gateway_parameters(&self) -> GatewayParameters {
-        GatewayParameters {
+    fn to_gateway_parameters(&self) -> anyhow::Result<GatewayParameters> {
+        let versioned_api = self.api_addr.join(V1_API_ENDPOINT).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to version gateway API address: {api_addr:?}, error: {e:?}",
+                api_addr = self.api_addr,
+            )
+        })?;
+        Ok(GatewayParameters {
             listen: self.listen,
-            api_addr: self.api_addr.clone(),
+            versioned_api,
             password: self.password.clone(),
             network: self.network,
             num_route_hints: self.num_route_hints,
             fees: self.fees.clone(),
-        }
+        })
     }
 }
 
@@ -171,7 +177,7 @@ impl GatewayOpts {
 #[derive(Clone, Debug)]
 struct GatewayParameters {
     listen: SocketAddr,
-    api_addr: SafeUrl,
+    versioned_api: SafeUrl,
     password: Option<String>,
     network: Option<Network>,
     num_route_hints: u32,
@@ -286,11 +292,14 @@ impl Gateway {
         num_route_hints: u32,
         gateway_db: Database,
     ) -> anyhow::Result<Gateway> {
+        let versioned_api = api_addr
+            .join(V1_API_ENDPOINT)
+            .expect("Failed to version gateway API address");
         Ok(Gateway {
             lightning_builder,
             gateway_parameters: GatewayParameters {
                 listen,
-                api_addr,
+                versioned_api,
                 password: cli_password,
                 num_route_hints,
                 fees: Some(GatewayFee(fees)),
@@ -347,7 +356,7 @@ impl Gateway {
                 lightning_mode: opts.mode.clone(),
             }),
             channel_id_generator: Arc::new(Mutex::new(INITIAL_SCID)),
-            gateway_parameters: opts.to_gateway_parameters(),
+            gateway_parameters: opts.to_gateway_parameters()?,
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
             gateway_id: Self::get_gateway_id(gateway_db.clone()).await,
