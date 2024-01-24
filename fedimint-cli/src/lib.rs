@@ -699,8 +699,14 @@ impl FedimintCli {
             }) => {
                 //Parse params to JSON.
                 //If fails, convert to JSON string.
-                let params = serde_json::from_str::<Value>(&params)
-                    .unwrap_or_else(|_| serde_json::Value::String(params));
+                let params = serde_json::from_str::<Value>(&params).unwrap_or_else(|err| {
+                    debug!(
+                        "Failed to serialize params:{}. Converting it to JSON string",
+                        err
+                    );
+
+                    serde_json::Value::String(params)
+                });
 
                 let mut params = ApiRequestErased::new(params);
                 if let Some(auth) = auth {
