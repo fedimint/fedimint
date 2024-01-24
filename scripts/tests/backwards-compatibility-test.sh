@@ -52,6 +52,7 @@ function use_gateway_binaries_for_version() {
 }
 
 test_results="fed_version,client_version,gateway_version,exit_code\n"
+has_failure=false
 versions+=("current")
 for fed_version in "${versions[@]}"; do
   for client_version in "${versions[@]}"; do
@@ -78,6 +79,9 @@ for fed_version in "${versions[@]}"; do
       exit_code=$?
       set -e
       test_results="$test_results$fed_version,$client_version,$gateway_version,$exit_code\n"
+      if [[ "$exit_code" -gt 0 ]]; then
+        has_failure=true
+      fi
 
       # cleanup devimint
       tmpdir=$(dirname "$(mktemp -u)")
@@ -95,3 +99,7 @@ done
 
 >&2 echo "Backwards-compatibility tests summary:"
 echo -e "$test_results" | >&2 column -t -s ','
+
+if [[ "$has_failure" == "true" ]]; then
+  exit 1
+fi
