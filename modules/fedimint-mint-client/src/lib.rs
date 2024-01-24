@@ -20,11 +20,13 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure, Context as _};
 use async_stream::stream;
-use backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
 use client_db::DbKeyPrefix;
-use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-use fedimint_client::module::{ClientContext, ClientDbTxContext, ClientModule, IClientModule};
+use fedimint_client::module::init::{
+    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
+};
+use fedimint_client::module::recovery::RecoveryProgress;
+use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
@@ -47,6 +49,7 @@ use fedimint_core::{
     TieredMulti, TieredSummary, TransactionId,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
+use fedimint_logging::LOG_CLIENT_RECOVERY_MINT;
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::MintClientConfig;
 pub use fedimint_mint_common::*;
@@ -58,11 +61,11 @@ use tbs::AggregatePublicKey;
 use thiserror::Error;
 use tracing::{debug, info, warn};
 
-use crate::backup::recovery::MintRestoreInProgressState;
+use crate::backup::recovery::MintRecoveryState;
 use crate::backup::{EcashBackup, EcashBackupV0};
 use crate::client_db::{
     CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
-    NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix,
+    NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix, RestoreStateKey,
 };
 use crate::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
@@ -74,8 +77,6 @@ use crate::output::{
 };
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
-
-const MINT_BACKUP_RESTORE_OPERATION_ID: OperationId = OperationId([0x01; 32]);
 
 pub const LOG_TARGET: &str = "client::module::mint";
 
@@ -324,6 +325,7 @@ impl ModuleInit for MintClientInit {
                         "CancelledOOBSpendKey"
                     );
                 }
+                DbKeyPrefix::RestoreState => {}
             }
         }
 
@@ -341,6 +343,11 @@ impl ClientModuleInit for MintClientInit {
     }
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+        assert!(
+            Self::load_recovery_state(args.db()).await.is_none(),
+            "recovery state must be empty on mint init"
+        );
+
         Ok(MintClientModule {
             federation_id: *args.federation_id(),
             cfg: args.cfg().clone(),
@@ -349,6 +356,182 @@ impl ClientModuleInit for MintClientInit {
             notifier: args.notifier().clone(),
             client_ctx: args.context(),
         })
+    }
+
+    async fn recover(
+        &self,
+        args: &ClientModuleRecoverArgs<Self>,
+        snapshot: Option<&<Self::Module as ClientModule>::Backup>,
+    ) -> anyhow::Result<()> {
+        let snapshot_v0 = match snapshot {
+            Some(EcashBackup::V0(snapshot_v0)) => Some(snapshot_v0),
+            Some(EcashBackup::Default { variant, .. }) => {
+                return Err(anyhow!("Unsupported backup variant: {variant}"))
+            }
+            None => None,
+        };
+
+        Self::recover_inner(args, snapshot_v0.cloned()).await
+    }
+}
+
+impl MintClientInit {
+    async fn load_recovery_state(db: &Database) -> Option<MintRecoveryState> {
+        db.begin_transaction_nc()
+            .await
+            .get_value(&RestoreStateKey)
+            .await
+    }
+
+    async fn recover_inner(
+        args: &ClientModuleRecoverArgs<Self>,
+        snapshot: Option<EcashBackupV0>,
+    ) -> anyhow::Result<()> {
+        let snapshot = snapshot.unwrap_or(EcashBackupV0::new_empty());
+        let client_ctx = args.context();
+        let config = args.cfg();
+        let db = args.db().clone();
+
+        let current_session_count = client_ctx.global_api().session_count().await?;
+        let secret = args.module_root_secret().clone();
+
+        let mut state = if let Some(state) = Self::load_recovery_state(&db).await {
+            state
+        } else {
+            MintRecoveryState::from_backup(
+                current_session_count,
+                snapshot,
+                30,
+                config.tbs_pks.clone(),
+                config.peer_tbs_pks.clone(),
+                &secret,
+            )
+        };
+
+        debug!(target: LOG_TARGET, "Creating MintRestoreStateMachine");
+
+        while !state.is_done() {
+            state = state
+                .make_progress(args.api().clone(), client_ctx.decoders(), secret.clone())
+                .await;
+
+            let mut dbtx = db.begin_transaction().await;
+
+            dbtx.insert_entry(&RestoreStateKey, &state).await;
+            dbtx.commit_tx().await;
+            args.update_recovery_progress(RecoveryProgress {
+                complete: (state.next_epoch - state.start_epoch)
+                    .try_into()
+                    .unwrap_or(u32::MAX),
+                total: (state.end_epoch - state.start_epoch)
+                    .try_into()
+                    .unwrap_or(u32::MAX),
+            })
+            .await
+        }
+
+        Self::finalize_state_restore(state, client_ctx).await?;
+
+        Ok(())
+    }
+
+    async fn finalize_state_restore(
+        state: MintRecoveryState,
+        client_ctx: ClientContext<MintClientModule>,
+    ) -> Result<(), anyhow::Error> {
+        debug!(
+            target: LOG_CLIENT_RECOVERY_MINT,
+            ?state,
+            "Finalizing restore"
+        );
+
+        let finalized = state.finalize();
+
+        let restored_amount = finalized
+            .unconfirmed_notes
+            .iter()
+            .map(|entry| entry.1)
+            .sum::<Amount>()
+            + finalized.spendable_notes.total_amount();
+
+        info!(amount = %restored_amount, "Finalizing mint recovery");
+
+        let finalized = &finalized;
+
+        client_ctx
+            .clone()
+            .module_autocommit_2(
+                move |dbtx, _| {
+                    Box::pin(async move {
+                        let finalized = finalized.clone();
+                        dbtx.module_dbtx().remove_entry(&RestoreStateKey).await;
+
+                        debug!(
+                            target: LOG_CLIENT_RECOVERY_MINT,
+                            len = finalized.spendable_notes.count_items(),
+                            "Restoring spendable notes"
+                        );
+                        for (amount, note) in finalized.spendable_notes {
+                            let key = NoteKey {
+                                amount,
+                                nonce: note.nonce(),
+                            };
+                            dbtx.module_dbtx().insert_new_entry(&key, &note).await;
+                        }
+
+                        for (amount, note_idx) in finalized.next_note_idx.iter() {
+                            debug!(
+                                target: LOG_CLIENT_RECOVERY_MINT,
+                                %amount,
+                                %note_idx,
+                                "Restoring NextECashNodeIndex"
+                            );
+                            dbtx.module_dbtx()
+                                .insert_entry(&NextECashNoteIndexKey(amount), &note_idx.as_u64())
+                                .await;
+                        }
+
+                        debug!(
+                            target: LOG_CLIENT_RECOVERY_MINT,
+                            len = finalized.unconfirmed_notes.len(),
+                            "Restoring unconfigured notes state machines"
+                        );
+
+                        for (out_point, amount, issuance_request) in finalized.unconfirmed_notes {
+                            let client_ctx = dbtx.client_ctx();
+                            dbtx.add_state_machines(
+                                client_ctx
+                                    .map_dyn(vec![MintClientStateMachines::Output(
+                                        MintOutputStateMachine {
+                                            common: MintOutputCommon {
+                                                operation_id: OperationId::new_random(),
+                                                out_point,
+                                            },
+                                            state: crate::output::MintOutputStates::Created(
+                                                MintOutputStatesCreated {
+                                                    amount,
+                                                    issuance_request,
+                                                },
+                                            ),
+                                        },
+                                    )])
+                                    .collect(),
+                            )
+                            .await?;
+                        }
+
+                        debug!(
+                            target: LOG_CLIENT_RECOVERY_MINT,
+                            "Mint module recovery finalized"
+                        );
+
+                        Ok(())
+                    })
+                },
+                None,
+            )
+            .await?;
+        Ok(())
     }
 }
 
@@ -524,32 +707,6 @@ impl ClientModule for MintClientModule {
             })
     }
 
-    async fn restore(&self, snapshot: Option<EcashBackup>) -> anyhow::Result<()> {
-        let snapshot_v0 = match snapshot {
-            Some(EcashBackup::V0(snapshot_v0)) => Some(snapshot_v0),
-            Some(EcashBackup::Default { variant, .. }) => {
-                return Err(anyhow!("Unsupported backup variant: {variant}"))
-            }
-            None => None,
-        };
-
-        self.client_ctx
-            .module_autocommit(
-                move |dbtx_ctx, _| {
-                    let snapshot_inner = snapshot_v0.clone();
-                    Box::pin(async move { self.restore_inner(dbtx_ctx, snapshot_inner).await })
-                },
-                None,
-            )
-            .await
-            .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    anyhow!("Commit to DB failed: {last_error}")
-                }
-            })
-    }
-
     fn supports_being_primary(&self) -> bool {
         true
     }
@@ -604,13 +761,6 @@ impl ClientModule for MintClientModule {
                         // output state
                         MintClientStateMachines::OOB(MintOOBStateMachine {
                             state: MintOOBStates::Created(_),
-                            ..
-                        }) => Some(()),
-                        // We don't want to scare users, so we only trigger on success instead of
-                        // showing incremental progress. Ideally the balance isn't shown to them
-                        // during recovery anyway.
-                        MintClientStateMachines::Restore(MintRestoreStateMachine {
-                            state: MintRestoreStates::Success(_),
                             ..
                         }) => Some(()),
                         _ => None,
@@ -883,32 +1033,6 @@ impl MintClientModule {
         )
         .next_or_pending()
         .await
-    }
-
-    pub async fn await_restore_finished(&self) -> anyhow::Result<Amount> {
-        let mut restore_stream = self
-            .notifier
-            .subscribe(MINT_BACKUP_RESTORE_OPERATION_ID)
-            .await;
-        while let Some(restore_step) = restore_stream.next().await {
-            match restore_step {
-                MintClientStateMachines::Restore(MintRestoreStateMachine {
-                    state: MintRestoreStates::Success(amount),
-                    ..
-                }) => {
-                    return Ok(amount);
-                }
-                MintClientStateMachines::Restore(MintRestoreStateMachine {
-                    state: MintRestoreStates::Failed(error),
-                    ..
-                }) => {
-                    return Err(anyhow!("Restore failed: {}", error.reason));
-                }
-                _ => {}
-            }
-        }
-
-        Err(anyhow!("Restore stream closed without success or failure"))
     }
 
     /// Select notes with `requested_amount` using `notes_selector`.
@@ -1311,56 +1435,6 @@ impl MintClientModule {
 
         Ok(operation)
     }
-
-    async fn restore_inner(
-        &self,
-        dbtx_ctx: &'_ mut ClientDbTxContext<'_, '_, Self>,
-        maybe_snapshot: Option<EcashBackupV0>,
-    ) -> anyhow::Result<()> {
-        if !Self::get_all_spendable_notes(&mut dbtx_ctx.module_dbtx())
-            .await
-            .is_empty()
-        {
-            warn!(
-                target: LOG_TARGET,
-                "Can not start recovery - existing spendable notes found"
-            );
-            bail!("Found existing spendable notes. Mint module recovery must be started on an empty state.")
-        }
-
-        if !self.client_ctx.get_own_active_states().await.is_empty() {
-            warn!(
-                target: LOG_TARGET,
-                "Can not start recovery - existing state machines found"
-            );
-            bail!("Found existing active state machines. Mint module recovery must be started on an empty state.")
-        }
-
-        let snapshot = maybe_snapshot.unwrap_or(EcashBackupV0::new_empty());
-
-        let current_session_count = self.client_ctx.global_api().session_count().await?;
-        let state = MintRestoreInProgressState::from_backup(
-            current_session_count,
-            snapshot,
-            30,
-            self.cfg.tbs_pks.clone(),
-            self.cfg.peer_tbs_pks.clone(),
-            &self.secret,
-        );
-
-        debug!(target: LOG_TARGET, "Creating MintRestoreStateMachine");
-
-        dbtx_ctx
-            .add_state_machines_dbtx(vec![self.client_ctx.make_dyn_state(
-                MintClientStateMachines::Restore(MintRestoreStateMachine {
-                    operation_id: MINT_BACKUP_RESTORE_OPERATION_ID,
-                    state: MintRestoreStates::InProgress(state),
-                }),
-            )])
-            .await?;
-
-        Ok(())
-    }
 }
 
 pub fn spendable_notes_to_operation_id(
@@ -1526,7 +1600,6 @@ pub enum MintClientStateMachines {
     Output(MintOutputStateMachine),
     Input(MintInputStateMachine),
     OOB(MintOOBStateMachine),
-    Restore(MintRestoreStateMachine),
 }
 
 impl IntoDynInstance for MintClientStateMachines {
@@ -1565,12 +1638,6 @@ impl State for MintClientStateMachines {
                     MintClientStateMachines::OOB
                 )
             }
-            MintClientStateMachines::Restore(restore_state) => {
-                sm_enum_variant_translation!(
-                    restore_state.transitions(context, global_context),
-                    MintClientStateMachines::Restore
-                )
-            }
         }
     }
 
@@ -1579,7 +1646,6 @@ impl State for MintClientStateMachines {
             MintClientStateMachines::Output(issuance_state) => issuance_state.operation_id(),
             MintClientStateMachines::Input(redemption_state) => redemption_state.operation_id(),
             MintClientStateMachines::OOB(oob_state) => oob_state.operation_id(),
-            MintClientStateMachines::Restore(state) => state.operation_id(),
         }
     }
 }

@@ -197,7 +197,7 @@ impl Fedimintd {
             .init()
             .unwrap();
 
-        let mut root_task_group = TaskGroup::new();
+        let root_task_group = TaskGroup::new();
         root_task_group.install_kill_handler();
 
         let timing_total_runtime = timing::TimeReporter::new("total-runtime").info();

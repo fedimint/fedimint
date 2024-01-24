@@ -170,7 +170,7 @@ impl TaskGroup {
 
     #[cfg(not(target_family = "wasm"))]
     pub async fn spawn<Fut, R>(
-        &mut self,
+        &self,
         name: impl Into<String>,
         f: impl FnOnce(TaskHandle) -> Fut + Send + 'static,
     ) -> oneshot::Receiver<R>
@@ -208,7 +208,7 @@ impl TaskGroup {
 
     #[cfg(not(target_family = "wasm"))]
     pub async fn spawn_local<Fut>(
-        &mut self,
+        &self,
         name: impl Into<String>,
         f: impl FnOnce(TaskHandle) -> Fut + 'static,
     ) where
@@ -232,7 +232,7 @@ impl TaskGroup {
     // TODO: Send vs lack of Send bound; do something about it
     #[cfg(target_family = "wasm")]
     pub async fn spawn<Fut, R>(
-        &mut self,
+        &self,
         name: impl Into<String>,
         f: impl FnOnce(TaskHandle) -> Fut + 'static,
     ) -> oneshot::Receiver<R>
@@ -620,7 +620,7 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn shutdown_task_group_after() -> anyhow::Result<()> {
-        let mut tg = TaskGroup::new();
+        let tg = TaskGroup::new();
         tg.spawn("shutdown waiter", |handle| async move {
             handle.make_shutdown_rx().await.await
         })
@@ -632,7 +632,7 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn shutdown_task_group_before() -> anyhow::Result<()> {
-        let mut tg = TaskGroup::new();
+        let tg = TaskGroup::new();
         tg.spawn("shutdown waiter", |handle| async move {
             sleep(Duration::from_millis(10)).await;
             handle.make_shutdown_rx().await.await

@@ -18,8 +18,8 @@ use clap::{CommandFactory, Parser, Subcommand};
 use db_locked::LockedBuilder;
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_bip39::Bip39RootSecretStrategy;
-use fedimint_client::backup::Metadata;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
+use fedimint_client::module::ClientModule as _;
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 use fedimint_client::{get_invite_code_from_db, Client, ClientArc, ClientBuilder, FederationInfo};
 use fedimint_core::admin_client::WsAdminClient;
@@ -390,6 +390,9 @@ Examples:
     /// Wait for the fed to reach a consensus block count
     WaitBlockCount { count: u64 },
 
+    /// Wait for all state machines to complete
+    WaitComplete,
+
     /// Decode connection info into its JSON representation
     DecodeInviteCode { invite_code: InviteCode },
 
@@ -575,7 +578,7 @@ impl FedimintCli {
         cli: &Opts,
         mnemonic: Mnemonic,
         invite_code: InviteCode,
-    ) -> CliResult<(ClientArc, Metadata)> {
+    ) -> CliResult<ClientArc> {
         let builder = self.make_client_builder(cli).await?;
 
         let federation_info = FederationInfo::from_invite_code(invite_code.clone())
@@ -647,19 +650,17 @@ impl FedimintCli {
                 let mnemonic = Mnemonic::from_str(&mnemonic).map_err_cli_general()?;
                 let client = self.client_recover(&cli, mnemonic, invite_code).await?;
 
-                info!("Waiting for restore to complete");
-                let restored_amount = client
-                    .0
-                    .get_first_module::<MintClientModule>()
-                    .await_restore_finished()
+                // TODO: until we implement recovery for other modules we can't really wait
+                // for more than this one
+                debug!("Waiting for mint module recovery to finish");
+                client
+                    .wait_for_module_kind_recovery(MintClientModule::kind())
                     .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
+                    .map_err_cli_general()?;
 
-                debug!("Restore complete");
+                debug!("Recovery complete");
 
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(restored_amount.msats).unwrap(),
-                ))
+                Ok(CliOutput::Raw(serde_json::to_value(()).unwrap()))
             }
             Command::Client(command) => {
                 let client = self.client_open(&cli).await?;
@@ -740,6 +741,14 @@ impl FedimintCli {
                 })
                 .await
                 .map_err_cli_msg(CliErrorKind::Timeout, "reached timeout")?
+            }
+            Command::Dev(DevCmd::WaitComplete) => {
+                let client = self.client_open(&cli).await?;
+                client
+                    .wait_for_all_active_state_machines()
+                    .await
+                    .map_err_cli_general()?;
+                Ok(CliOutput::Raw(serde_json::Value::Null))
             }
             Command::Dev(DevCmd::DecodeInviteCode { invite_code }) => {
                 Ok(CliOutput::DecodeInviteCode {

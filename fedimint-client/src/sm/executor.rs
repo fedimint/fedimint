@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
 use std::marker::PhantomData;
@@ -17,7 +17,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::spawn;
 use fedimint_core::util::BoxFuture;
 use fedimint_core::{maybe_add_send_sync, task};
-use futures::future::select_all;
+use futures::future::{self, select_all};
 use futures::stream::StreamExt;
 use tokio::select;
 use tokio::sync::{oneshot, Mutex};
@@ -63,6 +63,7 @@ struct ExecutorInner<GC> {
     db: Database,
     context: Mutex<Option<ContextGen<GC>>>,
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
+    valid_module_ids: BTreeSet<ModuleInstanceId>,
     notifier: Notifier<GC>,
     shutdown_executor: Mutex<Option<oneshot::Sender<oneshot::Sender<()>>>>,
 }
@@ -72,6 +73,7 @@ struct ExecutorInner<GC> {
 #[derive(Debug, Default)]
 pub struct ExecutorBuilder {
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
+    valid_module_ids: BTreeSet<ModuleInstanceId>,
 }
 
 impl<GC> Executor<GC>
@@ -129,8 +131,8 @@ where
         for state in states {
             if !self
                 .inner
-                .module_contexts
-                .contains_key(&state.module_instance_id())
+                .valid_module_ids
+                .contains(&state.module_instance_id())
             {
                 return Err(AddStateMachinesError::Other(anyhow!("Unknown module")));
             }
@@ -148,24 +150,26 @@ where
                 return Err(AddStateMachinesError::StateAlreadyExists);
             }
 
-            let context = {
-                let context_gen_guard = self.inner.context.lock().await;
-                let context_gen = context_gen_guard
-                    .as_ref()
-                    .expect("should be initialized at this point");
-                context_gen(state.module_instance_id(), state.operation_id())
-            };
+            // In case of recovery functions, the module itself is not yet initialized,
+            // so we can't check if the state is terminal. However the
+            // [`Self::get_transitions_for`] function will double check and
+            // deactivate any terminal states that would slip past this check.
+            if let Some(module_context) =
+                self.inner.module_contexts.get(&state.module_instance_id())
+            {
+                let context = {
+                    let context_gen_guard = self.inner.context.lock().await;
+                    let context_gen = context_gen_guard
+                        .as_ref()
+                        .expect("should be initialized at this point");
+                    context_gen(state.module_instance_id(), state.operation_id())
+                };
 
-            if state.is_terminal(
-                self.inner
-                    .module_contexts
-                    .get(&state.module_instance_id())
-                    .expect("No such module"),
-                &context,
-            ) {
-                return Err(AddStateMachinesError::Other(anyhow!(
-                    "State is already terminal, adding it to the executor doesn't make sense."
-                )));
+                if state.is_terminal(module_context, &context) {
+                    return Err(AddStateMachinesError::Other(anyhow!(
+                        "State is already terminal, adding it to the executor doesn't make sense."
+                    )));
+                }
             }
 
             dbtx.insert_entry(
@@ -342,7 +346,7 @@ where
         }
     }
 
-    fn get_transition_for(
+    async fn get_transition_for(
         &self,
         state: DynState<GC>,
         meta: ActiveState,
@@ -372,6 +376,27 @@ where
             })
             .collect::<Vec<_>>();
         if transitions.is_empty() {
+            // In certain cases a terminal (no transitions) state could get here due to
+            // module bug. Inactivate it to prevent accumulation of such states.
+            // See [`Self::add_state_machines_dbtx`].
+            warn!(module_id = module_instance, "A terminal state where only active states are expected. Please report this bug upstream.");
+            self.db
+                .autocommit::<_, _, anyhow::Error>(
+                    |dbtx, _| {
+                        Box::pin(async {
+                            let k = InactiveStateKey::from_state(state.clone());
+                            let v = ActiveState::new().into_inactive();
+                            dbtx.remove_entry(&ActiveStateKey::from_state(state.clone()))
+                                .await;
+                            dbtx.insert_entry(&k, &v).await;
+                            Ok(())
+                        })
+                    },
+                    None,
+                )
+                .await
+                .expect("Autocommit here can't fail");
+
             None
         } else {
             Some(Box::pin(async move {
@@ -397,10 +422,16 @@ where
         }
         trace!("Active states: {:?}", active_states);
 
-        let mut transitions = active_states
-            .into_iter()
-            .flat_map(|(state, meta)| self.get_transition_for(state, meta, global_context_gen))
-            .collect::<Vec<_>>();
+        let mut transitions = Vec::new();
+        for (state, meta) in active_states {
+            match self
+                .get_transition_for(state, meta, global_context_gen)
+                .await
+            {
+                None => {}
+                Some(t) => transitions.push(t),
+            }
+        }
 
         loop {
             if active_state_count == 0 {
@@ -522,11 +553,10 @@ where
                         dyn_state,
                         active_state,
                     } => {
-                        if let Some(transition) = self.get_transition_for(
-                            dyn_state.clone(),
-                            active_state,
-                            global_context_gen,
-                        ) {
+                        if let Some(transition) = self
+                            .get_transition_for(dyn_state.clone(), active_state, global_context_gen)
+                            .await
+                        {
                             active_state_count += 1;
                             transitions.push(transition);
                         }
@@ -549,6 +579,13 @@ where
             .await
             .find_by_prefix(&ActiveStateKeyPrefix::<GC>::new())
             .await
+            // ignore states from modules that are not initialized yet
+            .filter(|(state, _)| {
+                future::ready(
+                    self.module_contexts
+                        .contains_key(&state.state.module_instance_id()),
+                )
+            })
             .map(|(state, meta)| (state.state, meta))
             .collect::<Vec<_>>()
             .await
@@ -560,6 +597,13 @@ where
             .await
             .find_by_prefix(&InactiveStateKeyPrefix::new())
             .await
+            // ignore states from modules that are not initialized yet
+            .filter(|(state, _)| {
+                future::ready(
+                    self.module_contexts
+                        .contains_key(&state.state.module_instance_id()),
+                )
+            })
             .map(|(state, meta)| (state.state, meta))
             .collect::<Vec<_>>()
             .await
@@ -619,6 +663,8 @@ impl ExecutorBuilder {
     /// Allow executor being built to run state machines associated with the
     /// supplied module
     pub fn with_module_dyn(&mut self, context: DynContext) {
+        self.valid_module_ids.insert(context.module_instance_id());
+
         if self
             .module_contexts
             .insert(context.module_instance_id(), context)
@@ -626,6 +672,13 @@ impl ExecutorBuilder {
         {
             panic!("Tried to add two modules with the same instance id!");
         }
+    }
+
+    /// Allow executor to build state machines associated with the module id,
+    /// for which the module itself might not be available yet (otherwise it
+    /// would be registered with `[Self::with_module_dyn]`).
+    pub fn with_valid_module_id(&mut self, module_id: ModuleInstanceId) {
+        self.valid_module_ids.insert(module_id);
     }
 
     /// Build [`Executor`] and spawn background task in `tasks` executing active
@@ -639,6 +692,7 @@ impl ExecutorBuilder {
             db,
             context: Mutex::new(None),
             module_contexts: self.module_contexts,
+            valid_module_ids: self.valid_module_ids,
             notifier,
             shutdown_executor: Default::default(),
         });

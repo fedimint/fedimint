@@ -1114,7 +1114,7 @@ async fn cli_tests_backup_and_restore(fed: &Federation, reference_client: &Clien
     {
         let client = Client::create("restore-without-backup").await?;
 
-        let post_balance = cmd!(
+        let _ = cmd!(
             client,
             "restore",
             "--mnemonic",
@@ -1123,11 +1123,11 @@ async fn cli_tests_backup_and_restore(fed: &Federation, reference_client: &Clien
             fed.invite_code()?
         )
         .out_json()
-        .await?
-        .as_u64()
-        .unwrap();
+        .await?;
 
+        let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
         let post_notes = cmd!(client, "info").out_json().await?;
+        let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
 
         debug!(%post_notes, post_balance, "State after backup");
         assert_eq!(pre_balance, post_balance);
@@ -1149,6 +1149,7 @@ async fn cli_tests_backup_and_restore(fed: &Federation, reference_client: &Clien
         .out_json()
         .await?;
 
+        let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
         let post_notes = cmd!(client, "info").out_json().await?;
         let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
 

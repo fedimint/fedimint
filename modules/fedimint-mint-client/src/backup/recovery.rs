@@ -2,11 +2,8 @@ use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use fedimint_client::sm::{State, StateTransition};
-use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
-use fedimint_core::core::{OperationId, LEGACY_HARDCODED_INSTANCE_ID_MINT};
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -22,21 +19,16 @@ use threshold_crypto::G1Affine;
 use tracing::{debug, info, trace, warn};
 
 use crate::backup::EcashBackupV0;
-use crate::client_db::{NextECashNoteIndexKey, NoteKey};
-use crate::output::{
-    MintOutputCommon, MintOutputStateMachine, MintOutputStatesCreated, NoteIssuanceRequest,
-};
-use crate::{
-    MintClientContext, MintClientModule, MintClientStateMachines, NoteIndex, SpendableNote,
-};
+use crate::output::NoteIssuanceRequest;
+use crate::{MintClientModule, NoteIndex, SpendableNote};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EcashRecoveryFinalState {
-    spendable_notes: TieredMulti<SpendableNote>,
+    pub spendable_notes: TieredMulti<SpendableNote>,
     /// Unsigned notes
-    unconfirmed_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)>,
+    pub unconfirmed_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)>,
     /// Note index to derive next note in a given amount tier
-    next_note_idx: Tiered<NoteIndex>,
+    pub next_note_idx: Tiered<NoteIndex>,
 }
 
 /// Newtype over [`BlindedMessage`] to enable `Ord`
@@ -68,10 +60,10 @@ impl From<CompressedBlindedMessage> for BlindedMessage {
 /// valid consensus items from the epoch history between time taken (or even
 /// somewhat before it) and present time.
 #[derive(Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
-pub(crate) struct MintRestoreInProgressState {
-    start_epoch: u64,
-    next_epoch: u64,
-    end_epoch: u64,
+pub struct MintRecoveryState {
+    pub start_epoch: u64,
+    pub next_epoch: u64,
+    pub end_epoch: u64,
     spendable_notes: BTreeMap<Nonce, (Amount, SpendableNote)>,
     /// Nonces that we track that are currently spendable.
     pending_outputs: BTreeMap<Nonce, (OutPoint, Amount, NoteIssuanceRequest)>,
@@ -104,7 +96,7 @@ pub(crate) struct MintRestoreInProgressState {
     gap_limit: u64,
 }
 
-impl fmt::Debug for MintRestoreInProgressState {
+impl fmt::Debug for MintRecoveryState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!(
             "MintRestoreInProgressState(start: {}, next: {}, end: {}, pending_outputs: {}, pending_nonces: {})",
@@ -117,130 +109,8 @@ impl fmt::Debug for MintRestoreInProgressState {
     }
 }
 
-impl MintRestoreInProgressState {
-    fn transitions(
-        &self,
-        operation_id: OperationId,
-        context: &MintClientContext,
-        global_context: &DynGlobalClientContext,
-    ) -> Vec<StateTransition<MintRestoreStateMachine>> {
-        let global_context = global_context.clone();
-        let global_context_2 = global_context.clone();
-        let secret = context.secret.clone();
-        let self_clone = self.clone();
-        vec![StateTransition::new(
-            async move {
-                self_clone
-                    .make_progress(
-                        global_context.api().clone(),
-                        global_context.decoders().clone(),
-                        secret,
-                    )
-                    .await
-                    .consensus_encode_to_hex()
-            },
-            move |dbtx, new_state_hex, old_state_machine: MintRestoreStateMachine| {
-                let new_state = MintRestoreInProgressState::consensus_decode_hex(
-                    &new_state_hex,
-                    &Default::default(),
-                )
-                .expect("Deserialization here can't fail");
-                let global_context = global_context_2.clone();
-                Box::pin(async move {
-                    if new_state.is_done() {
-                        debug!(
-                            target: LOG_CLIENT_RECOVERY_MINT,
-                            ?new_state,
-                            "Finalizing restore"
-                        );
-
-                        let finalized = new_state.finalize();
-
-                        let restored_amount = finalized
-                            .unconfirmed_notes
-                            .iter()
-                            .map(|entry| entry.1)
-                            .sum::<Amount>()
-                            + finalized.spendable_notes.total_amount();
-
-                        {
-                            let mut dbtx = dbtx.module_tx();
-
-                            debug!(
-                                target: LOG_CLIENT_RECOVERY_MINT,
-                                len = finalized.spendable_notes.count_items(),
-                                "Restoring spendable notes"
-                            );
-                            for (amount, note) in finalized.spendable_notes {
-                                let key = NoteKey {
-                                    amount,
-                                    nonce: note.nonce(),
-                                };
-                                dbtx.insert_new_entry(&key, &note).await;
-                            }
-
-                            for (amount, note_idx) in finalized.next_note_idx.iter() {
-                                debug!(
-                                    target: LOG_CLIENT_RECOVERY_MINT,
-                                    %amount,
-                                    %note_idx,
-                                    "Restoring NextECashNodeIndex"
-                                );
-                                dbtx.insert_entry(
-                                    &NextECashNoteIndexKey(amount),
-                                    &note_idx.as_u64(),
-                                )
-                                .await;
-                            }
-                        }
-
-                        debug!(
-                            target: LOG_CLIENT_RECOVERY_MINT,
-                            len = finalized.unconfirmed_notes.len(),
-                            "Restoring unconfigured notes state machines"
-                        );
-
-                        for (out_point, amount, issuance_request) in finalized.unconfirmed_notes {
-                            global_context
-                                .add_state_machine(
-                                    dbtx,
-                                    MintClientStateMachines::Output(MintOutputStateMachine {
-                                        common: MintOutputCommon {
-                                            operation_id,
-                                            out_point,
-                                        },
-                                        state: crate::output::MintOutputStates::Created(
-                                            MintOutputStatesCreated {
-                                                amount,
-                                                issuance_request,
-                                            },
-                                        ),
-                                    }),
-                                )
-                                .await
-                                .expect("Adding state machine can't fail")
-                        }
-
-                        MintRestoreStateMachine {
-                            operation_id: old_state_machine.operation_id,
-                            state: MintRestoreStates::Success(restored_amount),
-                        }
-                    } else {
-                        debug!(
-                            target: LOG_CLIENT_RECOVERY_MINT,
-                            "Saving restore progress checkpoint"
-                        );
-                        MintRestoreStateMachine {
-                            operation_id: old_state_machine.operation_id,
-                            state: MintRestoreStates::InProgress(new_state),
-                        }
-                    }
-                })
-            },
-        )]
-    }
-
-    async fn make_progress<'a>(
+impl MintRecoveryState {
+    pub async fn make_progress<'a>(
         mut self,
         api: DynGlobalApi,
         decoders: ModuleDecoderRegistry,
@@ -287,7 +157,7 @@ impl MintRestoreInProgressState {
     }
 }
 
-impl MintRestoreInProgressState {
+impl MintRecoveryState {
     pub fn from_backup(
         current_epoch_count: u64,
         backup: EcashBackupV0,
@@ -545,7 +415,7 @@ impl MintRestoreInProgressState {
         }
     }
 
-    fn finalize(self) -> EcashRecoveryFinalState {
+    pub fn finalize(self) -> EcashRecoveryFinalState {
         EcashRecoveryFinalState {
             spendable_notes: self.spendable_notes.into_values().collect(),
             unconfirmed_notes: self.pending_outputs.into_values().collect(),
@@ -557,57 +427,4 @@ impl MintRestoreInProgressState {
             ),
         }
     }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub(crate) struct MintRestoreFailedState {
-    pub reason: String,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintRestoreStateMachine {
-    pub(crate) operation_id: OperationId,
-    pub(crate) state: MintRestoreStates,
-}
-
-impl State for MintRestoreStateMachine {
-    type ModuleContext = MintClientContext;
-    type GlobalContext = DynGlobalClientContext;
-
-    fn transitions(
-        &self,
-        context: &Self::ModuleContext,
-        global_context: &Self::GlobalContext,
-    ) -> Vec<StateTransition<Self>> {
-        match &self.state {
-            MintRestoreStates::InProgress(state) => {
-                state.transitions(self.operation_id, context, global_context)
-            }
-            MintRestoreStates::Failed(_) => vec![],
-            MintRestoreStates::Success(_) => vec![],
-        }
-    }
-
-    fn operation_id(&self) -> OperationId {
-        self.operation_id
-    }
-}
-
-#[aquamarine::aquamarine]
-/// State machine managing e-cash that has been taken out of the wallet for
-/// out-of-band transmission.
-///
-/// ```mermaid
-/// graph LR
-///     Created -- User triggered refund --> RefundU["User Refund"]
-///     Created -- Timeout triggered refund --> RefundT["Timeout Refund"]
-/// ```
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub(crate) enum MintRestoreStates {
-    /// The restore has been started and is processing
-    InProgress(MintRestoreInProgressState),
-    /// Done
-    Success(Amount),
-    /// Something went wrong, and restore failed
-    Failed(MintRestoreFailedState),
 }
