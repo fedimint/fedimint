@@ -20,9 +20,10 @@ use fedimint_core::db::{
 use fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
-    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, STATUS_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
+    CLIENT_CONFIG_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT,
+    PENDING_ACCEPTED_ITEMS_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+    VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -32,10 +33,11 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::session_outcome::{SessionOutcome, SignedSessionOutcome};
+use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
 use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
+use futures::StreamExt;
 use jsonrpsee::RpcModule;
 use secp256k1_zkp::SECP256K1;
 use tokio::sync::RwLock;
@@ -45,7 +47,7 @@ use super::peers::PeerStatusChannels;
 use crate::config::ServerConfig;
 use crate::consensus::process_transaction_with_dbtx;
 use crate::consensus::server::{get_finished_session_count_static, LatestContributionByPeer};
-use crate::db::{AcceptedTransactionKey, SignedSessionOutcomeKey};
+use crate::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::fedimint_core::encoding::Encodable;
 use crate::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
 
@@ -173,6 +175,17 @@ impl ConsensusApi {
             .wait_key_check(&SignedSessionOutcomeKey(index), std::convert::identity)
             .await
             .0
+    }
+
+    pub async fn pending_accepted_items(&self) -> Vec<AcceptedItem> {
+        self.db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&AcceptedItemPrefix)
+            .await
+            .map(|entry| entry.1)
+            .collect()
+            .await
     }
 
     pub async fn get_federation_status(&self) -> ApiResult<FederationStatus> {
@@ -423,6 +436,12 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SignedSessionOutcome> {
                 Ok((&fedimint.await_signed_session_outcome(index).await).into())
+            }
+        },
+        api_endpoint! {
+            PENDING_ACCEPTED_ITEMS_ENDPOINT,
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> SerdeModuleEncoding<Vec<AcceptedItem>> {
+                Ok((&fedimint.pending_accepted_items().await).into())
             }
         },
         api_endpoint! {
