@@ -35,6 +35,7 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 pub const FM_EXTRA_DKG_META_VAR: &str = "FM_EXTRA_DKG_META";
 
 #[derive(Parser)]
+#[command(version)]
 pub struct ServerOpts {
     /// Path to folder containing federation config files
     #[arg(long = "data-dir", env = "FM_DATA_DIR")]

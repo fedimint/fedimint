@@ -21,6 +21,7 @@ use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::util::write_overwrite_async;
 use fedimint_logging::LOG_DEVIMINT;
 use ln_gateway::rpc::GatewayInfo;
+use semver::VersionReq;
 use serde_json::json;
 use tokio::fs;
 use tokio::net::TcpStream;
@@ -416,19 +417,25 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .state();
     anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
 
-    // # Test the correct descriptor is used
-    let config = cmd!(client, "config").out_json().await?;
-    let guardian_count = config["global"]["api_endpoints"].as_object().unwrap().len();
-    let descriptor = config["modules"]["2"]["peg_in_descriptor"]
-        .as_str()
-        .unwrap()
-        .to_owned();
+    // fedimintd introduced wpkh for single guardian federations in v0.3.0 (9e35bdb)
+    // The code path is backwards-compatible, however this test will fail if we
+    // check against earlier fedimintd versions.
+    let fedimintd_version = devimint::util::FedimintdCmd::version_or_default().await;
+    if VersionReq::parse(">=0.3.0")?.matches(&fedimintd_version) {
+        // # Test the correct descriptor is used
+        let config = cmd!(client, "config").out_json().await?;
+        let guardian_count = config["global"]["api_endpoints"].as_object().unwrap().len();
+        let descriptor = config["modules"]["2"]["peg_in_descriptor"]
+            .as_str()
+            .unwrap()
+            .to_owned();
 
-    info!("Testing generated descriptor for {guardian_count} guardian federation");
-    if guardian_count == 1 {
-        assert!(descriptor.contains("wpkh("));
-    } else {
-        assert!(descriptor.contains("wsh(sortedmulti("));
+        info!("Testing generated descriptor for {guardian_count} guardian federation");
+        if guardian_count == 1 {
+            assert!(descriptor.contains("wpkh("));
+        } else {
+            assert!(descriptor.contains("wsh(sortedmulti("));
+        }
     }
 
     // # Client tests

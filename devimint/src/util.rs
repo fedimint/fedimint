@@ -10,11 +10,16 @@ use anyhow::{bail, format_err, Context, Result};
 use fedimint_core::task::{self, block_in_place};
 use fedimint_logging::LOG_DEVIMINT;
 use futures::executor::block_on;
+use semver::Version;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
 use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
+
+// If a binary doesn't provide a clap version, default to the first stable
+// release (v0.2.1)
+const DEFAULT_VERSION: Version = Version::new(0, 2, 1);
 
 pub fn parse_map(s: &str) -> Result<BTreeMap<String, String>> {
     let mut map = BTreeMap::new();
@@ -418,4 +423,50 @@ impl GatewayLndCli {
     pub async fn cmd(self) -> Command {
         get_command_for_alias("FM_GWCLI_LND", "gateway-lnd")
     }
+}
+
+pub struct FedimintdCmd;
+impl FedimintdCmd {
+    pub async fn cmd(self) -> Command {
+        get_command_for_alias("FM_FEDIMINTD_BASE_EXECUTABLE", "fedimintd")
+    }
+
+    /// Returns the fedimintd version from clap or default min version if the
+    /// binary doesn't support a version flag
+    pub async fn version_or_default() -> Version {
+        match cmd!(FedimintdCmd, "--version").out_string().await {
+            Ok(version) => parse_clap_version(&version),
+            Err(_) => DEFAULT_VERSION,
+        }
+    }
+}
+
+/// Parses a version string returned from clap
+/// ex: fedimintd 0.3.0-alpha -> 0.3.0-alpha
+fn parse_clap_version(res: &str) -> Version {
+    match res.split(' ').collect::<Vec<&str>>().as_slice() {
+        [_binary, version] => Version::parse(version).unwrap_or(DEFAULT_VERSION),
+        _ => DEFAULT_VERSION,
+    }
+}
+
+#[test]
+fn test_parse_clap_version() -> Result<()> {
+    let version_str = "fedimintd 0.3.0-alpha";
+    let expected_version = Version::parse("0.3.0-alpha")?;
+    assert_eq!(expected_version, parse_clap_version(version_str));
+
+    let version_str = "fedimintd 0.3.12";
+    let expected_version = Version::parse("0.3.12")?;
+    assert_eq!(expected_version, parse_clap_version(version_str));
+
+    let version_str = "fedimint-cli 2.12.2-rc22";
+    let expected_version = Version::parse("2.12.2-rc22")?;
+    assert_eq!(expected_version, parse_clap_version(version_str));
+
+    let version_str = "bad version";
+    let expected_version = DEFAULT_VERSION;
+    assert_eq!(expected_version, parse_clap_version(version_str));
+
+    Ok(())
 }
