@@ -782,6 +782,11 @@
 <a href="#782" id="782">782</a>
 <a href="#783" id="783">783</a>
 <a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -1008,7 +1013,7 @@
         <span class="kw">while </span>!task_handle.is_shutting_down() {
             <span class="kw">let </span>session_index = <span class="self">self</span>.get_finished_session_count().<span class="kw">await</span>;
 
-            <span class="kw">let </span><span class="kw-2">mut </span>item_index = <span class="self">self</span>.build_session_outcome().<span class="kw">await</span>.items.len() <span class="kw">as </span>u64;
+            <span class="kw">let </span><span class="kw-2">mut </span>item_index = <span class="self">self</span>.pending_accepted_items().<span class="kw">await</span>.len() <span class="kw">as </span>u64;
 
             <span class="kw">let </span>session_start_time = std::time::Instant::now();
 
@@ -1032,7 +1037,10 @@
                 }
             }
 
-            <span class="kw">let </span>session_outcome = <span class="self">self</span>.build_session_outcome().<span class="kw">await</span>;
+            <span class="kw">let </span>session_outcome = SessionOutcome {
+                items: <span class="self">self</span>.pending_accepted_items().<span class="kw">await</span>,
+            };
+
             <span class="kw">let </span>header = session_outcome.header(session_index);
             <span class="kw">let </span>signature = <span class="self">self</span>.keychain.sign(<span class="kw-2">&amp;</span>header);
             <span class="kw">let </span>signatures = BTreeMap::from_iter([(<span class="self">self</span>.cfg.local.identity, signature)]);
@@ -1227,11 +1235,11 @@
                     }
                 },
                 signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(session_index) =&gt; {
-                    <span class="kw">let </span>partial_session_outcome = <span class="self">self</span>.build_session_outcome().<span class="kw">await</span>.items;
+                    <span class="kw">let </span>pending_accepted_items = <span class="self">self</span>.pending_accepted_items().<span class="kw">await</span>;
 
-                    <span class="kw">let </span>(processed, unprocessed) = signed_session_outcome.session_outcome.items.split_at(partial_session_outcome.len());
+                    <span class="kw">let </span>(processed, unprocessed) = signed_session_outcome.session_outcome.items.split_at(pending_accepted_items.len());
 
-                    <span class="macro">assert!</span>(processed.iter().eq(partial_session_outcome.iter()));
+                    <span class="macro">assert!</span>(processed.iter().eq(pending_accepted_items.iter()));
 
                     <span class="kw">for </span>accepted_item <span class="kw">in </span>unprocessed {
                         <span class="kw">let </span>result = <span class="self">self</span>.process_consensus_item(
@@ -1251,7 +1259,10 @@
             }
         }
 
-        <span class="kw">let </span>session_outcome = <span class="self">self</span>.build_session_outcome().<span class="kw">await</span>;
+        <span class="kw">let </span>session_outcome = SessionOutcome {
+            items: <span class="self">self</span>.pending_accepted_items().<span class="kw">await</span>,
+        };
+
         <span class="kw">let </span>header = session_outcome.header(session_index);
 
         <span class="comment">// we send our own signature to the data provider to be broadcasted
@@ -1268,6 +1279,8 @@
                         <span class="kw">if </span><span class="self">self</span>.keychain.verify(<span class="kw-2">&amp;</span>header, <span class="kw-2">&amp;</span>signature, to_node_index(peer)){
                             <span class="comment">// since the signature is valid the node index can be converted to a peer id
                             </span>signatures.insert(peer, signature);
+                        } <span class="kw">else </span>{
+                            <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Received invalid signature from peer {peer}&quot;</span>);
                         }
                     }
                 }
@@ -1290,19 +1303,16 @@
         <span class="self">self</span>.modules.decoder_registry()
     }
 
-    <span class="kw">pub async fn </span>build_session_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SessionOutcome {
-        <span class="kw">let </span>items = <span class="self">self
-            </span>.db
-            .begin_transaction()
+    <span class="kw">pub async fn </span>pending_accepted_items(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;AcceptedItem&gt; {
+        <span class="self">self</span>.db
+            .begin_transaction_nc()
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>AcceptedItemPrefix)
             .<span class="kw">await
             </span>.map(|entry| entry.<span class="number">1</span>)
             .collect()
-            .<span class="kw">await</span>;
-
-        SessionOutcome { items }
-    }
+            .<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>complete_session(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
