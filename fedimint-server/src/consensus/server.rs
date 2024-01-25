@@ -224,7 +224,7 @@ impl ConsensusServer {
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
 
-            let mut item_index = self.build_session_outcome().await.items.len() as u64;
+            let mut item_index = self.pending_accepted_items().await.len() as u64;
 
             let session_start_time = std::time::Instant::now();
 
@@ -248,7 +248,10 @@ impl ConsensusServer {
                 }
             }
 
-            let session_outcome = self.build_session_outcome().await;
+            let session_outcome = SessionOutcome {
+                items: self.pending_accepted_items().await,
+            };
+
             let header = session_outcome.header(session_index);
             let signature = self.keychain.sign(&header);
             let signatures = BTreeMap::from_iter([(self.cfg.local.identity, signature)]);
@@ -443,11 +446,11 @@ impl ConsensusServer {
                     }
                 },
                 signed_session_outcome = self.request_signed_session_outcome(session_index) => {
-                    let partial_session_outcome = self.build_session_outcome().await.items;
+                    let pending_accepted_items = self.pending_accepted_items().await;
 
-                    let (processed, unprocessed) = signed_session_outcome.session_outcome.items.split_at(partial_session_outcome.len());
+                    let (processed, unprocessed) = signed_session_outcome.session_outcome.items.split_at(pending_accepted_items.len());
 
-                    assert!(processed.iter().eq(partial_session_outcome.iter()));
+                    assert!(processed.iter().eq(pending_accepted_items.iter()));
 
                     for accepted_item in unprocessed {
                         let result = self.process_consensus_item(
@@ -467,7 +470,10 @@ impl ConsensusServer {
             }
         }
 
-        let session_outcome = self.build_session_outcome().await;
+        let session_outcome = SessionOutcome {
+            items: self.pending_accepted_items().await,
+        };
+
         let header = session_outcome.header(session_index);
 
         // we send our own signature to the data provider to be broadcasted
@@ -508,18 +514,15 @@ impl ConsensusServer {
         self.modules.decoder_registry()
     }
 
-    pub async fn build_session_outcome(&self) -> SessionOutcome {
-        let items = self
-            .db
+    pub async fn pending_accepted_items(&self) -> Vec<AcceptedItem> {
+        self.db
             .begin_transaction_nc()
             .await
             .find_by_prefix(&AcceptedItemPrefix)
             .await
             .map(|entry| entry.1)
             .collect()
-            .await;
-
-        SessionOutcome { items }
+            .await
     }
 
     pub async fn complete_session(
