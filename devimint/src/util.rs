@@ -6,16 +6,20 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{env, unreachable};
 
-use anyhow::{anyhow, bail, format_err, Context, Result};
+use anyhow::{bail, format_err, Context, Result};
 use fedimint_core::task::{self, block_in_place};
 use fedimint_logging::LOG_DEVIMINT;
 use futures::executor::block_on;
-use regex::Regex;
+use semver::Version;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
 use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
+
+// If a binary doesn't provide a clap version, default to the first stable
+// release (v0.2.1)
+const DEFAULT_VERSION: Version = Version::new(0, 2, 1);
 
 pub fn parse_map(s: &str) -> Result<BTreeMap<String, String>> {
     let mut map = BTreeMap::new();
@@ -426,147 +430,43 @@ impl FedimintdCmd {
     pub async fn cmd(self) -> Command {
         get_command_for_alias("FM_FEDIMINTD_BASE_EXECUTABLE", "fedimintd")
     }
-}
 
-/// Representation of a cargo package version
-#[derive(Debug, PartialEq, Eq)]
-struct CrateVersion {
-    major: u32,
-    minor: u32,
-    patch: u32,
-}
-
-impl PartialOrd for CrateVersion {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for CrateVersion {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if self.major != other.major {
-            self.major.cmp(&other.major)
-        } else if self.minor != other.minor {
-            self.minor.cmp(&other.minor)
-        } else {
-            self.patch.cmp(&other.patch)
+    /// Returns the fedimintd version from clap or default min version if the
+    /// binary doesn't support a version flag
+    pub async fn version_or_default() -> Version {
+        match cmd!(FedimintdCmd, "--version").out_string().await {
+            Ok(version) => parse_clap_version(&version),
+            Err(_) => DEFAULT_VERSION,
         }
     }
 }
 
-/// Parses a crate version string returned from clap
-/// ex: fedimintd 0.3.0-alpha -> 0.3.0
-fn parse_crate_version(version: &str) -> Result<CrateVersion> {
-    // from semver.org's recommended regex
-    // https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string
-    let semver_pattern =
-        Regex::new(r"(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)")?;
-
-    let captured = semver_pattern
-        .captures(version)
-        .ok_or(anyhow!("Not a valid version string"))?;
-
-    Ok(CrateVersion {
-        major: captured["major"].parse()?,
-        minor: captured["minor"].parse()?,
-        patch: captured["patch"].parse()?,
-    })
-}
-
-/// Returns true if the provided version string is greater than or equal to the
-/// min version provided. If there's an error parsing the version, returns
-/// false.
-pub fn is_min_version(
-    min_major: u32,
-    min_minor: u32,
-    min_patch: u32,
-    version_res: Result<String, anyhow::Error>,
-) -> bool {
-    let min_crate_version = CrateVersion {
-        major: min_major,
-        minor: min_minor,
-        patch: min_patch,
-    };
-    version_res
-        .is_ok_and(|version| parse_crate_version(&version).is_ok_and(|v| min_crate_version <= v))
+/// Parses a version string returned from clap
+/// ex: fedimintd 0.3.0-alpha -> 0.3.0-alpha
+fn parse_clap_version(res: &str) -> Version {
+    match res.split(' ').collect::<Vec<&str>>().as_slice() {
+        [_binary, version] => Version::parse(version).unwrap_or(DEFAULT_VERSION),
+        _ => DEFAULT_VERSION,
+    }
 }
 
 #[test]
-fn test_parse_crate_versions() -> Result<()> {
+fn test_parse_clap_version() -> Result<()> {
     let version_str = "fedimintd 0.3.0-alpha";
-    let expected_version = CrateVersion {
-        major: 0,
-        minor: 3,
-        patch: 0,
-    };
-    assert_eq!(expected_version, parse_crate_version(version_str)?);
+    let expected_version = Version::parse("0.3.0-alpha")?;
+    assert_eq!(expected_version, parse_clap_version(version_str));
 
     let version_str = "fedimintd 0.3.12";
-    let expected_version = CrateVersion {
-        major: 0,
-        minor: 3,
-        patch: 12,
-    };
-    assert_eq!(expected_version, parse_crate_version(version_str)?);
+    let expected_version = Version::parse("0.3.12")?;
+    assert_eq!(expected_version, parse_clap_version(version_str));
 
     let version_str = "fedimint-cli 2.12.2-rc22";
-    let expected_version = CrateVersion {
-        major: 2,
-        minor: 12,
-        patch: 2,
-    };
-    assert_eq!(expected_version, parse_crate_version(version_str)?);
+    let expected_version = Version::parse("2.12.2-rc22")?;
+    assert_eq!(expected_version, parse_clap_version(version_str));
 
     let version_str = "bad version";
-    assert_matches::assert_matches!(parse_crate_version(version_str), Err(_));
-
-    Ok(())
-}
-
-#[test]
-fn test_is_min_version() -> Result<()> {
-    // patch equal
-    let version_res = Ok("fedimintd 0.3.1".to_string());
-    assert!(is_min_version(0, 3, 1, version_res));
-
-    // patch lower
-    let version_res = Ok("fedimintd 0.3.1".to_string());
-    assert!(is_min_version(0, 3, 0, version_res));
-
-    // patch greater
-    let version_res = Ok("fedimintd 0.3.1".to_string());
-    assert!(!is_min_version(0, 3, 2, version_res));
-
-    // minor equal
-    let version_res = Ok("gateway-cli 1.3.1".to_string());
-    assert!(is_min_version(1, 3, 0, version_res));
-
-    // minor lower
-    let version_res = Ok("gateway-cli 1.3.1".to_string());
-    assert!(is_min_version(1, 2, 0, version_res));
-
-    // minor greater
-    let version_res = Ok("gateway-cli 1.3.1".to_string());
-    assert!(!is_min_version(1, 4, 0, version_res));
-
-    // major equal
-    let version_res = Ok("gatewayd 3.2.1".to_string());
-    assert!(is_min_version(3, 0, 0, version_res));
-
-    // major lower
-    let version_res = Ok("gatewayd 3.2.1".to_string());
-    assert!(is_min_version(2, 0, 0, version_res));
-
-    // major greater
-    let version_res = Ok("gatewayd 3.2.1".to_string());
-    assert!(!is_min_version(4, 0, 0, version_res));
-
-    // error cases
-    let version_res = Err(anyhow!(""));
-    assert!(!is_min_version(0, 2, 3, version_res));
-
-    let version_res = Ok("bad version".to_string());
-    assert!(!is_min_version(0, 2, 3, version_res));
+    let expected_version = DEFAULT_VERSION;
+    assert_eq!(expected_version, parse_clap_version(version_str));
 
     Ok(())
 }

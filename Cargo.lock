@@ -1048,7 +1048,6 @@ name = "devimint"
 version = "0.3.0-alpha"
 dependencies = [
  "anyhow",
- "assert_matches",
  "axum",
  "bitcoincore-rpc",
  "clap",
@@ -1070,7 +1069,7 @@ dependencies = [
  "futures",
  "nix",
  "rand",
- "regex",
+ "semver",
  "serde",
  "serde_json",
  "tokio",
