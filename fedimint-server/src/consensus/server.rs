@@ -484,6 +484,8 @@ impl ConsensusServer {
                         if self.keychain.verify(&header, &signature, to_node_index(peer)){
                             // since the signature is valid the node index can be converted to a peer id
                             signatures.insert(peer, signature);
+                        } else {
+                            warn!(target: LOG_CONSENSUS, "Received invalid signature from peer {peer}");
                         }
                     }
                 }
