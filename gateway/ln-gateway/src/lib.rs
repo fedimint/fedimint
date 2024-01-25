@@ -60,8 +60,8 @@ use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError
 use lightning_invoice::RoutingFees;
 use rand::rngs::OsRng;
 use rpc::{
-    FederationConnectionInfo, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    SetConfigurationPayload, V1_API_ENDPOINT,
+    FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, SetConfigurationPayload,
+    V1_API_ENDPOINT,
 };
 use secp256k1::PublicKey;
 use state_machine::pay::OutgoingPaymentError;
@@ -832,7 +832,7 @@ impl Gateway {
     async fn handle_connect_federation(
         &mut self,
         payload: ConnectFedPayload,
-    ) -> Result<FederationConnectionInfo> {
+    ) -> Result<FederationInfo> {
         if let GatewayState::Running { lightning_context } = self.state.read().await.clone() {
             let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
                 GatewayError::InvalidMetadata(format!("Invalid federation member string {e:?}"))
@@ -887,12 +887,9 @@ impl Gateway {
                 .build(gw_client_cfg.clone(), self.clone())
                 .await?;
 
-            let federation_config = FederationConnectionInfo {
-                federation_id,
-                config: client.get_config().clone(),
-            };
+            let federation_info = self.make_federation_info(&client, federation_id).await;
 
-            self.check_federation_network(&federation_config, gateway_config.network)
+            self.check_federation_network(&federation_info, gateway_config.network)
                 .await?;
 
             client
@@ -915,7 +912,7 @@ impl Gateway {
                 .save_config(gw_client_cfg.clone(), dbtx)
                 .await?;
 
-            return Ok(federation_config);
+            return Ok(federation_info);
         }
 
         Err(GatewayError::Disconnected)
@@ -1308,16 +1305,18 @@ impl Gateway {
         federation_id: FederationId,
     ) -> FederationInfo {
         let balance_msat = client.get_balance().await;
+        let config = client.get_config().clone();
 
         FederationInfo {
             federation_id,
             balance_msat,
+            config,
         }
     }
 
     async fn check_federation_network(
         &self,
-        info: &FederationConnectionInfo,
+        info: &FederationInfo,
         network: Network,
     ) -> Result<()> {
         let cfg = info

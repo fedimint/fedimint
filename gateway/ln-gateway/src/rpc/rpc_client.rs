@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use super::{
     BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
-    FederationConnectionInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, RestorePayload,
+    FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, RestorePayload,
     SetConfigurationPayload, WithdrawPayload,
 };
 
@@ -43,6 +43,12 @@ impl GatewayRpcClient {
         self.call_get(url).await
     }
 
+    // FIXME: deprecated >= 0.3.0
+    pub async fn get_info_legacy(&self) -> GatewayRpcResult<GatewayInfo> {
+        let url = self.base_url.join("/info").expect("invalid base url");
+        self.call_post(url, ()).await
+    }
+
     pub async fn get_config(&self, payload: ConfigPayload) -> GatewayRpcResult<GatewayFedConfig> {
         let url = self.base_url.join("/config").expect("invalid base url");
         self.call_post(url, payload).await
@@ -69,7 +75,7 @@ impl GatewayRpcClient {
     pub async fn connect_federation(
         &self,
         payload: ConnectFedPayload,
-    ) -> GatewayRpcResult<FederationConnectionInfo> {
+    ) -> GatewayRpcResult<FederationInfo> {
         let url = self
             .base_url
             .join("/connect-fed")
