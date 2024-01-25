@@ -11,6 +11,7 @@ pub const SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT: &str = "server_config_consensus
 pub const SESSION_COUNT_ENDPOINT: &str = "session_count";
 pub const AWAIT_SESSION_OUTCOME_ENDPOINT: &str = "await_session_outcome";
 pub const AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT: &str = "await_signed_session_outcome";
+pub const PENDING_ACCEPTED_ITEMS_ENDPOINT: &str = "pending_accepted_items";
 pub const CONFIG_GEN_PEERS_ENDPOINT: &str = "config_gen_peers";
 pub const CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT: &str = "consensus_config_gen_params";
 pub const DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT: &str = "default_config_gen_params";

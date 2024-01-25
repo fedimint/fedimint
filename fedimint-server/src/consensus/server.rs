@@ -511,7 +511,7 @@ impl ConsensusServer {
     pub async fn build_session_outcome(&self) -> SessionOutcome {
         let items = self
             .db
-            .begin_transaction()
+            .begin_transaction_nc()
             .await
             .find_by_prefix(&AcceptedItemPrefix)
             .await
