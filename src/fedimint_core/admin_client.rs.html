@@ -293,8 +293,6 @@
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a>
 <a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -305,9 +303,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio_rustls::rustls;
 
-<span class="kw">use </span><span class="kw">crate</span>::api::{
-    DynGlobalApi, FederationApiExt, FederationResult, ServerStatus, StatusResponse, WsFederationApi,
-};
+<span class="kw">use </span><span class="kw">crate</span>::api::{DynGlobalApi, FederationApiExt, FederationResult, ServerStatus, StatusResponse};
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerModuleConfigGenParamsRegistry;
 <span class="kw">use </span><span class="kw">crate</span>::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
@@ -332,7 +328,7 @@
         // multiple peers so errors can be attributed. The admin client has no use for
         // them.
         </span><span class="self">Self </span>{
-            inner: WsFederationApi::new(<span class="macro">vec!</span>[(PeerId(<span class="number">0</span>), url.clone())]).into(),
+            inner: DynGlobalApi::from_endpoints(<span class="macro">vec!</span>[(PeerId(<span class="number">0</span>), url.clone())]),
             url,
         }
     }

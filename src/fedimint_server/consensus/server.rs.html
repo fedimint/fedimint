@@ -794,7 +794,7 @@
 <span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>async_channel::{Receiver, Sender};
-<span class="kw">use </span>fedimint_core::api::{FederationApiExt, GlobalFederationApi, WsFederationApi};
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::db::{
     apply_migrations, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -1088,7 +1088,7 @@
 
     <span class="kw">async fn </span>confirm_server_config_consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>our_hash = <span class="self">self</span>.cfg.consensus.consensus_hash();
-        <span class="kw">let </span>federation_api = WsFederationApi::new(<span class="self">self</span>.api_endpoints.clone());
+        <span class="kw">let </span>federation_api = DynGlobalApi::from_endpoints(<span class="self">self</span>.api_endpoints.clone());
 
         <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Waiting for peers config {our_hash}&quot;</span>);
 

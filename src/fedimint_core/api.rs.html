@@ -1306,10 +1306,92 @@
 <a href="#1306" id="1306">1306</a>
 <a href="#1307" id="1307">1307</a>
 <a href="#1308" id="1308">1308</a>
+<a href="#1309" id="1309">1309</a>
+<a href="#1310" id="1310">1310</a>
+<a href="#1311" id="1311">1311</a>
+<a href="#1312" id="1312">1312</a>
+<a href="#1313" id="1313">1313</a>
+<a href="#1314" id="1314">1314</a>
+<a href="#1315" id="1315">1315</a>
+<a href="#1316" id="1316">1316</a>
+<a href="#1317" id="1317">1317</a>
+<a href="#1318" id="1318">1318</a>
+<a href="#1319" id="1319">1319</a>
+<a href="#1320" id="1320">1320</a>
+<a href="#1321" id="1321">1321</a>
+<a href="#1322" id="1322">1322</a>
+<a href="#1323" id="1323">1323</a>
+<a href="#1324" id="1324">1324</a>
+<a href="#1325" id="1325">1325</a>
+<a href="#1326" id="1326">1326</a>
+<a href="#1327" id="1327">1327</a>
+<a href="#1328" id="1328">1328</a>
+<a href="#1329" id="1329">1329</a>
+<a href="#1330" id="1330">1330</a>
+<a href="#1331" id="1331">1331</a>
+<a href="#1332" id="1332">1332</a>
+<a href="#1333" id="1333">1333</a>
+<a href="#1334" id="1334">1334</a>
+<a href="#1335" id="1335">1335</a>
+<a href="#1336" id="1336">1336</a>
+<a href="#1337" id="1337">1337</a>
+<a href="#1338" id="1338">1338</a>
+<a href="#1339" id="1339">1339</a>
+<a href="#1340" id="1340">1340</a>
+<a href="#1341" id="1341">1341</a>
+<a href="#1342" id="1342">1342</a>
+<a href="#1343" id="1343">1343</a>
+<a href="#1344" id="1344">1344</a>
+<a href="#1345" id="1345">1345</a>
+<a href="#1346" id="1346">1346</a>
+<a href="#1347" id="1347">1347</a>
+<a href="#1348" id="1348">1348</a>
+<a href="#1349" id="1349">1349</a>
+<a href="#1350" id="1350">1350</a>
+<a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
+<a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
+<a href="#1357" id="1357">1357</a>
+<a href="#1358" id="1358">1358</a>
+<a href="#1359" id="1359">1359</a>
+<a href="#1360" id="1360">1360</a>
+<a href="#1361" id="1361">1361</a>
+<a href="#1362" id="1362">1362</a>
+<a href="#1363" id="1363">1363</a>
+<a href="#1364" id="1364">1364</a>
+<a href="#1365" id="1365">1365</a>
+<a href="#1366" id="1366">1366</a>
+<a href="#1367" id="1367">1367</a>
+<a href="#1368" id="1368">1368</a>
+<a href="#1369" id="1369">1369</a>
+<a href="#1370" id="1370">1370</a>
+<a href="#1371" id="1371">1371</a>
+<a href="#1372" id="1372">1372</a>
+<a href="#1373" id="1373">1373</a>
+<a href="#1374" id="1374">1374</a>
+<a href="#1375" id="1375">1375</a>
+<a href="#1376" id="1376">1376</a>
+<a href="#1377" id="1377">1377</a>
+<a href="#1378" id="1378">1378</a>
+<a href="#1379" id="1379">1379</a>
+<a href="#1380" id="1380">1380</a>
+<a href="#1381" id="1381">1381</a>
+<a href="#1382" id="1382">1382</a>
+<a href="#1383" id="1383">1383</a>
+<a href="#1384" id="1384">1384</a>
+<a href="#1385" id="1385">1385</a>
+<a href="#1386" id="1386">1386</a>
+<a href="#1387" id="1387">1387</a>
+<a href="#1388" id="1388">1388</a>
+<a href="#1389" id="1389">1389</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
 <span class="kw">use </span>std::io::{Cursor, Read};
+<span class="kw">use </span>std::num::NonZeroUsize;
 <span class="kw">use </span>std::ops::Add;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::str::FromStr;
@@ -1347,6 +1429,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>tokio::sync::OnceCell;
 <span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::ClientBackupSnapshot;
@@ -1522,7 +1605,7 @@
 }
 <span class="doccomment">/// An API (module or global) that can query a federation
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>IFederationApi: Debug + MaybeSend + MaybeSync {
+</span><span class="kw">pub trait </span>IRawFederationApi: Debug + MaybeSend + MaybeSync {
     <span class="doccomment">/// List of all federation peers for the purpose of iterating each peer
     /// in the federation.
     ///
@@ -1553,9 +1636,9 @@
 }
 
 <span class="doccomment">/// An extension trait allowing to making federation-wide API call on top
-/// [`IFederationApi`].
+/// [`IRawFederationApi`].
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>FederationApiExt: IFederationApi {
+</span><span class="kw">pub trait </span>FederationApiExt: IRawFederationApi {
     <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
     </span><span class="kw">async fn </span>request_with_strategy&lt;PeerRet: serde::de::DeserializeOwned, FedRet: Debug&gt;(
@@ -1683,18 +1766,15 @@
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; FederationApiExt <span class="kw">for </span>T <span class="kw">where </span>T: IFederationApi {}
+</span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; FederationApiExt <span class="kw">for </span>T <span class="kw">where </span>T: IRawFederationApi {}
 
 <span class="doccomment">/// Trait marker for the module (non-global) endpoints
-</span><span class="kw">pub trait </span>IModuleFederationApi: IFederationApi {}
+</span><span class="kw">pub trait </span>IModuleFederationApi: IRawFederationApi {}
 
 <span class="macro">dyn_newtype_define! </span>{
     <span class="attr">#[derive(Clone)]
     </span><span class="kw">pub </span>DynModuleApi(Arc&lt;IModuleFederationApi&gt;)
 }
-
-<span class="doccomment">/// Trait marker for the global (non-module) endpoints
-</span><span class="kw">pub trait </span>IGlobalFederationApi: IFederationApi {}
 
 <span class="macro">dyn_newtype_define! </span>{
     <span class="attr">#[derive(Clone)]
@@ -1707,9 +1787,48 @@
     }
 }
 
+<span class="kw">impl </span>DynGlobalApi {
+    <span class="kw">pub fn </span>from_endpoints(peers: Vec&lt;(PeerId, SafeUrl)&gt;) -&gt; <span class="self">Self </span>{
+        GlobalFederationApiWithCache::new(WsFederationApi::new(peers)).into()
+    }
+
+    <span class="kw">pub fn </span>from_config(config: <span class="kw-2">&amp;</span>ClientConfig) -&gt; <span class="self">Self </span>{
+        GlobalFederationApiWithCache::new(WsFederationApi::from_config(config)).into()
+    }
+
+    <span class="kw">pub fn </span>from_invite_code(invite_code: <span class="kw-2">&amp;</span>[InviteCode]) -&gt; <span class="self">Self </span>{
+        GlobalFederationApiWithCache::new(WsFederationApi::from_invite_code(invite_code)).into()
+    }
+
+    <span class="kw">pub async fn </span>await_output_outcome&lt;R&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        outpoint: OutPoint,
+        timeout: Duration,
+        module_decoder: <span class="kw-2">&amp;</span>Decoder,
+    ) -&gt; OutputOutcomeResult&lt;R&gt;
+    <span class="kw">where
+        </span>R: OutputOutcome,
+    {
+        fedimint_core::task::timeout(timeout, <span class="kw">async move </span>{
+            <span class="kw">let </span>outcome: SerdeOutputOutcome = <span class="self">self
+                </span>.inner
+                .request_current_consensus(
+                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                    ApiRequestErased::new(outpoint),
+                )
+                .<span class="kw">await
+                </span>.map_err(OutputOutcomeError::Federation)<span class="question-mark">?</span>;
+
+            deserialize_outcome(outcome, module_decoder)
+        })
+        .<span class="kw">await
+        </span>.map_err(|<span class="kw">_</span>| OutputOutcomeError::Timeout(timeout))<span class="question-mark">?
+    </span>}
+}
+
 <span class="doccomment">/// The API for the global (non-module) endpoints
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>GlobalFederationApi {
+</span><span class="kw">pub trait </span>IGlobalFederationApi: IRawFederationApi {
     <span class="kw">async fn </span>submit_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         tx: Transaction,
@@ -1724,15 +1843,6 @@
     <span class="kw">async fn </span>session_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;
 
     <span class="kw">async fn </span>await_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; FederationResult&lt;TransactionId&gt;;
-
-    <span class="kw">async fn </span>await_output_outcome&lt;R&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        outpoint: OutPoint,
-        timeout: Duration,
-        module_decoder: <span class="kw-2">&amp;</span>Decoder,
-    ) -&gt; OutputOutcomeResult&lt;R&gt;
-    <span class="kw">where
-        </span>R: OutputOutcome;
 
     <span class="doccomment">/// Fetch client configuration info only if verified against a federation id
     </span><span class="kw">async fn </span>download_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, info: <span class="kw-2">&amp;</span>InviteCode) -&gt; FederationResult&lt;ClientConfig&gt;;
@@ -1775,11 +1885,104 @@
     })
 }
 
-<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; GlobalFederationApi <span class="kw">for </span>T
+<span class="doccomment">/// [`IGlobalFederationApi`] wrapping some `T: IRawFederationApi` and adding
+/// a tiny bit of caching.
+</span><span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>GlobalFederationApiWithCache&lt;T&gt; {
+    inner: T,
+    <span class="doccomment">/// Small LRU used as [`IGlobalFederationApi::await_block`] cache.
+    ///
+    /// This is mostly to avoid multiple client module recovery processes
+    /// re-requesting same blocks and putting burden on the federation.
+    ///
+    /// The LRU can be be fairly small, as if the modules are
+    /// (near-)bottlenecked on fetching blocks they will naturally
+    /// synchronize, or split into a handful of groups. And if they are not,
+    /// no LRU here is going to help them.
+    </span><span class="attr">#[allow(clippy::type_complexity)]
+    </span>await_block_lru: Arc&lt;tokio::sync::Mutex&lt;lru::LruCache&lt;u64, Arc&lt;OnceCell&lt;SessionOutcome&gt;&gt;&gt;&gt;&gt;,
+}
+
+<span class="kw">impl</span>&lt;T&gt; GlobalFederationApiWithCache&lt;T&gt; {
+    <span class="kw">pub fn </span>new(inner: T) -&gt; GlobalFederationApiWithCache&lt;T&gt; {
+        <span class="self">Self </span>{
+            inner,
+            await_block_lru: Arc::new(tokio::sync::Mutex::new(lru::LruCache::new(
+                NonZeroUsize::new(<span class="number">32</span>).expect(<span class="string">&quot;is non-zero&quot;</span>),
+            ))),
+        }
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; GlobalFederationApiWithCache&lt;T&gt;
 <span class="kw">where
-    </span>T: IGlobalFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+    </span>T: IRawFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
 {
+    <span class="kw">async fn </span>await_block_raw(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        block_index: u64,
+        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; anyhow::Result&lt;SessionOutcome&gt; {
+        <span class="macro">debug!</span>(block_index, <span class="string">&quot;Fetching block&#39;s outcome from Federation&quot;</span>);
+        <span class="self">self</span>.request_current_consensus::&lt;SerdeModuleEncoding&lt;SessionOutcome&gt;&gt;(
+            AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
+            ApiRequestErased::new(block_index),
+        )
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.try_into_inner(decoders)
+        .map_err(|e| <span class="macro">anyhow!</span>(e.to_string()))
+    }
+}
+
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl</span>&lt;T&gt; IRawFederationApi <span class="kw">for </span>GlobalFederationApiWithCache&lt;T&gt;
+<span class="kw">where
+    </span>T: IRawFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+{
+    <span class="kw">fn </span>all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
+        <span class="self">self</span>.inner.all_peers()
+    }
+
+    <span class="kw">fn </span>with_module(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; DynModuleApi {
+        <span class="self">self</span>.inner.with_module(id)
+    }
+
+    <span class="doccomment">/// Make request to a specific federation peer by `peer_id`
+    </span><span class="kw">async fn </span>request_raw(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        peer_id: PeerId,
+        method: <span class="kw-2">&amp;</span>str,
+        params: <span class="kw-2">&amp;</span>[Value],
+    ) -&gt; result::Result&lt;Value, JsonRpcClientError&gt; {
+        <span class="self">self</span>.inner.request_raw(peer_id, method, params).<span class="kw">await
+    </span>}
+}
+
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl</span>&lt;T&gt; IGlobalFederationApi <span class="kw">for </span>GlobalFederationApiWithCache&lt;T&gt;
+<span class="kw">where
+    </span>T: IRawFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+{
+    <span class="kw">async fn </span>await_block(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        block_index: u64,
+        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; anyhow::Result&lt;SessionOutcome&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>lru_lock = <span class="self">self</span>.await_block_lru.lock().<span class="kw">await</span>;
+
+        <span class="kw">let </span>block_entry_arc = lru_lock
+            .get_or_insert(block_index, || Arc::new(OnceCell::new()))
+            .clone();
+
+        <span class="comment">// we drop the lru lock so requests for other `block_index` can work in parallel
+        </span>drop(lru_lock);
+
+        block_entry_arc
+            .get_or_try_init(|| <span class="self">self</span>.await_block_raw(block_index, decoders))
+            .<span class="kw">await
+            </span>.cloned()
+    }
+
     <span class="doccomment">/// Submit a transaction for inclusion
     </span><span class="kw">async fn </span>submit_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1791,20 +1994,6 @@
         )
         .<span class="kw">await
     </span>}
-
-    <span class="kw">async fn </span>await_block(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        block_index: u64,
-        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; anyhow::Result&lt;SessionOutcome&gt; {
-        <span class="self">self</span>.request_current_consensus::&lt;SerdeModuleEncoding&lt;SessionOutcome&gt;&gt;(
-            AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
-            ApiRequestErased::new(block_index),
-        )
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.try_into_inner(decoders)
-        .map_err(|e| <span class="macro">anyhow!</span>(e.to_string()))
-    }
 
     <span class="kw">async fn </span>session_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
         <span class="self">self</span>.request_current_consensus(
@@ -1820,31 +2009,6 @@
             ApiRequestErased::new(txid),
         )
         .<span class="kw">await
-    </span>}
-
-    <span class="comment">// TODO should become part of the API
-    </span><span class="kw">async fn </span>await_output_outcome&lt;R&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        outpoint: OutPoint,
-        timeout: Duration,
-        module_decoder: <span class="kw-2">&amp;</span>Decoder,
-    ) -&gt; OutputOutcomeResult&lt;R&gt;
-    <span class="kw">where
-        </span>R: OutputOutcome,
-    {
-        fedimint_core::task::timeout(timeout, <span class="kw">async move </span>{
-            <span class="kw">let </span>outcome: SerdeOutputOutcome = <span class="self">self
-                </span>.request_current_consensus(
-                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
-                    ApiRequestErased::new(outpoint),
-                )
-                .<span class="kw">await
-                </span>.map_err(OutputOutcomeError::Federation)<span class="question-mark">?</span>;
-
-            deserialize_outcome(outcome, module_decoder)
-        })
-        .<span class="kw">await
-        </span>.map_err(|<span class="kw">_</span>| OutputOutcomeError::Timeout(timeout))<span class="question-mark">?
     </span>}
 
     <span class="kw">async fn </span>download_client_config(
@@ -2114,15 +2278,13 @@
     }
 }
 
-<span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + <span class="lifetime">&#39;static</span>&gt; IGlobalFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {}
-
 <span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + <span class="lifetime">&#39;static</span>&gt; IModuleFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {}
 
 <span class="doccomment">/// Implementation of API calls over websockets
 ///
 /// Can function as either the global or module API
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + <span class="lifetime">&#39;static</span>&gt; IFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
+</span><span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + <span class="lifetime">&#39;static</span>&gt; IRawFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
     <span class="kw">fn </span>all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
         <span class="kw-2">&amp;</span><span class="self">self</span>.peer_ids
     }

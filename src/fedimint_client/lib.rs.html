@@ -2184,8 +2184,6 @@
 <a href="#2184" id="2184">2184</a>
 <a href="#2185" id="2185">2185</a>
 <a href="#2186" id="2186">2186</a>
-<a href="#2187" id="2187">2187</a>
-<a href="#2188" id="2188">2188</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2272,8 +2270,7 @@
     EncodedClientSecretKey, InitMode,
 };
 <span class="kw">use </span>fedimint_core::api::{
-    ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,
-    InviteCode, WsFederationApi,
+    ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi, InviteCode,
 };
 <span class="kw">use </span>fedimint_core::config::{
     ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
@@ -2379,7 +2376,7 @@
     <span class="doccomment">/// Returns a reference to the client&#39;s federation API client. The provided
     /// interface [`IGlobalFederationApi`] typically does not provide the
     /// necessary functionality, for this extension traits like
-    /// [`fedimint_core::api::GlobalFederationApi`] have to be used.
+    /// [`fedimint_core::api::IGlobalFederationApi`] have to be used.
     </span><span class="comment">// TODO: Could be removed in favor of client() except for testing
     </span><span class="kw">fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynGlobalApi;
 
@@ -3825,7 +3822,7 @@
 
     <span class="doccomment">/// Creates an API client for the federation
     </span><span class="kw">pub fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynGlobalApi {
-        DynGlobalApi::from(WsFederationApi::from_config(<span class="kw-2">&amp;</span><span class="self">self</span>.config))
+        DynGlobalApi::from_config(<span class="kw-2">&amp;</span><span class="self">self</span>.config)
     }
 
     <span class="kw">pub fn </span>federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
@@ -3978,7 +3975,7 @@
         config: ClientConfig,
         invite_code: InviteCode,
     ) -&gt; anyhow::Result&lt;ClientArc&gt; {
-        <span class="kw">let </span>api = DynGlobalApi::from(WsFederationApi::from_config(<span class="kw-2">&amp;</span>config));
+        <span class="kw">let </span>api = DynGlobalApi::from_config(<span class="kw-2">&amp;</span>config);
         <span class="kw">let </span>snapshot = Client::download_backup_from_federation_static(
             <span class="kw-2">&amp;</span>api,
             <span class="kw-2">&amp;</span><span class="self">Self</span>::federation_root_secret(<span class="kw-2">&amp;</span>root_secret, <span class="kw-2">&amp;</span>config),
@@ -4022,7 +4019,7 @@
         <span class="kw">let </span>decoders = <span class="self">self</span>.decoders(<span class="kw-2">&amp;</span>config);
         <span class="kw">let </span>config = <span class="self">Self</span>::config_decoded(config, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
         <span class="kw">let </span>db = <span class="self">self</span>.db.with_decoders(decoders.clone());
-        <span class="kw">let </span>api = DynGlobalApi::from(WsFederationApi::from_config(<span class="kw-2">&amp;</span>config));
+        <span class="kw">let </span>api = DynGlobalApi::from_config(<span class="kw-2">&amp;</span>config);
 
         <span class="kw">let </span>init_state = <span class="self">Self</span>::load_init_state(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
 
@@ -4315,8 +4312,7 @@
     max_retries: usize,
 ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
     <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">&quot;Download client config&quot;</span>);
-    <span class="kw">let </span>api = Arc::new(WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]))
-        <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>IGlobalFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>&gt;;
+    <span class="kw">let </span>api = DynGlobalApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]);
     <span class="kw">let </span><span class="kw-2">mut </span>num_retries = <span class="number">0</span>;
     <span class="kw">let </span>wait_millis = <span class="number">500</span>;
     <span class="kw">loop </span>{

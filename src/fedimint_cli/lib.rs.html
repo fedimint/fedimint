@@ -888,7 +888,6 @@
 <a href="#888" id="888">888</a>
 <a href="#889" id="889">889</a>
 <a href="#890" id="890">890</a>
-<a href="#891" id="891">891</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
@@ -915,8 +914,7 @@
 <span class="kw">use </span>fedimint_client::{get_invite_code_from_db, Client, ClientArc, ClientBuilder, FederationInfo};
 <span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
 <span class="kw">use </span>fedimint_core::api::{
-    FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, InviteCode,
-    WsFederationApi,
+    FederationApiExt, FederationError, IRawFederationApi, InviteCode, WsFederationApi,
 };
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::core::OperationId;

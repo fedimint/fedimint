@@ -1297,11 +1297,9 @@
 <a href="#1297" id="1297">1297</a>
 <a href="#1298" id="1298">1298</a>
 <a href="#1299" id="1299">1299</a>
-<a href="#1300" id="1300">1300</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
-<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::vec;
 
@@ -1314,7 +1312,7 @@
 <span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>devimint::util::{GatewayClnCli, GatewayLndCli};
 <span class="kw">use </span>fedimint_client::ClientArc;
-<span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, InviteCode};
 <span class="kw">use </span>fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::task::spawn;
@@ -2328,7 +2326,7 @@
     users: u16,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">&#39;static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
-    <span class="kw">let </span>api = Arc::new(WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]));
+    <span class="kw">let </span>api = DynGlobalApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]);
 
     <span class="prelude-val">Ok</span>((<span class="number">0</span>..users)
         .map(|<span class="kw">_</span>| {
@@ -2357,7 +2355,7 @@
     limit_endpoints: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">&#39;static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
-    <span class="kw">let </span>api = Arc::new(WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]));
+    <span class="kw">let </span>api = DynGlobalApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]);
     <span class="kw">let </span><span class="kw-2">mut </span>cfg = api.download_client_config(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">if let </span><span class="prelude-val">Some</span>(limit_endpoints) = limit_endpoints {
