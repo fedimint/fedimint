@@ -190,6 +190,19 @@ impl ClientConfig {
     pub fn federation_id(&self) -> FederationId {
         self.global.federation_id()
     }
+
+    /// Get the value of a given meta field
+    pub fn meta<V: serde::de::DeserializeOwned>(
+        &self,
+        key: &str,
+    ) -> Result<Option<V>, anyhow::Error> {
+        let Some(str_value) = self.global.meta.get(key) else {
+            return Ok(None);
+        };
+        serde_json::from_str(str_value)
+            .map(Some)
+            .context(format!("Decoding meta field '{key}' failed"))
+    }
 }
 
 /// The federation id is a copy of the authentication threshold public key of

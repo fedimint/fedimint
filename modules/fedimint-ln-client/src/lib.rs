@@ -22,11 +22,9 @@ use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext, FederationInfo};
+use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::api::DynModuleApi;
-use fedimint_core::config::{
-    ClientConfig, FederationId, META_OVERRIDE_URL_KEY, META_VETTED_GATEWAYS_KEY,
-};
+use fedimint_core::config::{FederationId, META_OVERRIDE_URL_KEY, META_VETTED_GATEWAYS_KEY};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -887,21 +885,25 @@ impl LightningClientModule {
         Ok(())
     }
 
-    async fn fetch_meta_overrides(&self, config: ClientConfig) -> anyhow::Result<String> {
-        let federation_id = config.global.federation_id();
-        let override_src = match FederationInfo::from_config(config)
-            .await?
-            .meta::<String>(META_OVERRIDE_URL_KEY)?
-        {
-            Some(override_src) => override_src,
-            None => {
-                debug!("No meta override source configured");
-                return Ok("".into());
-            }
-        };
+    /// Fetches the metadata overrides for a given federation
+    ///
+    /// # Arguments
+    ///
+    /// * `federation_id` - A `FederationId` for which we want to fetch meta
+    ///   overrides.
+    /// * `override_src` - A configured `URL` from which meta overrides are
+    ///   requested.
+    ///
+    /// Valid meta overrides fetched from this source are cached in the client
+    /// database for up to `META_OVERRIDE_CACHE_DURATION`
+    async fn fetch_meta_overrides(
+        &self,
+        federation_id: FederationId,
+        override_src: String,
+    ) -> anyhow::Result<BTreeMap<String, String>> {
         debug!("Fetching meta overrides from {override_src}");
 
-        if let Some(meta) = self
+        if let Some(cache) = self
             .client_ctx
             .module_db()
             .begin_transaction()
@@ -909,9 +911,15 @@ impl LightningClientModule {
             .get_value(&MetaOverridesKey {})
             .await
         {
-            if meta.fetched_at.elapsed().unwrap() < META_OVERRIDE_CACHE_DURATION {
+            if cache.fetched_at.elapsed().unwrap() < META_OVERRIDE_CACHE_DURATION {
                 debug!("Using cached meta overrides");
-                return Ok(meta.value);
+                match serde_json::from_str(&cache.value) {
+                    Ok(meta) => return Ok(meta),
+                    Err(e) => {
+                        error!("Error parsing cached meta overrides: {}", e);
+                        debug!("Meta override cache returned invalid json: {}", cache.value);
+                    }
+                }
             }
             debug!("Cached meta overrides are stale");
         };
@@ -923,7 +931,7 @@ impl LightningClientModule {
             .context("Meta override request failed")?;
         debug!("Meta override source returned status: {response:?}");
 
-        let federation_meta = match response.status() {
+        let meta_value = match response.status() {
             reqwest::StatusCode::OK => {
                 let txt = response.text().await.context(format!(
                     "Meta override source returned invalid body: {override_src}"
@@ -936,13 +944,13 @@ impl LightningClientModule {
                 }
 
                 match m.get(&federation_id.to_string()) {
-                    Some(meta) => {
+                    Some(meta_value) => {
                         debug!("Found meta overrides for federation: {federation_id}");
-                        meta.to_string()
+                        meta_value.clone()
                     }
                     None => {
                         debug!("No meta overrides found for federation: {federation_id}");
-                        return Ok("".into());
+                        return Ok(BTreeMap::new());
                     }
                 }
             }
@@ -952,11 +960,16 @@ impl LightningClientModule {
             ))?,
         };
 
+        let federation_meta: BTreeMap<String, String> = serde_json::from_value(meta_value.clone())
+            .context(format!(
+                "Meta override source returned invalid json: {meta_value}"
+            ))?;
+
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         dbtx.insert_entry(
             &MetaOverridesKey {},
             &MetaOverrides {
-                value: federation_meta.clone(),
+                value: meta_value.to_string(),
                 fetched_at: fedimint_core::time::now(),
             },
         )
@@ -966,53 +979,72 @@ impl LightningClientModule {
         Ok(federation_meta)
     }
 
-    /// Gateways actively registered with the fed
+    /// Fetches gateways registered with the fed and applies gateway vetting
+    /// from 'vetted_gateways` meta field if configured
     pub async fn fetch_registered_gateways(
         &self,
     ) -> anyhow::Result<Vec<LightningGatewayAnnouncement>> {
         let mut gateways = self.module_api.fetch_gateways().await?;
 
         if !gateways.is_empty() {
-            debug!("Fetching meta overrides from remote source/cache");
             let config = self.client_ctx.get_config().clone();
-            let federation_meta = match self.fetch_meta_overrides(config).await {
-                Ok(meta) => {
-                    if meta.is_empty() {
-                        debug!("No meta overrides found");
-                        return Ok(gateways);
+            let global_meta: BTreeMap<String, String> = config.global.meta.clone();
+            let federation_id = config.global.federation_id();
+
+            let meta = match config.meta::<String>(META_OVERRIDE_URL_KEY)? {
+                Some(override_src) => {
+                    match self.fetch_meta_overrides(federation_id, override_src).await {
+                        Ok(override_meta) => {
+                            if override_meta.contains_key(META_VETTED_GATEWAYS_KEY) {
+                                override_meta
+                            } else {
+                                global_meta
+                            }
+                        }
+                        Err(e) => {
+                            error!("Error fetching meta overrides: {}", e);
+                            global_meta
+                        }
                     }
-                    meta
                 }
-                Err(e) => {
-                    error!("Error fetching meta overrides: {}", e);
-                    return Ok(gateways);
+                None => {
+                    debug!("No meta override source configured");
+                    global_meta
                 }
             };
+
+            if meta.is_empty() {
+                debug!("No meta overrides found");
+                return Ok(gateways);
+            }
 
             debug!("Applying vetted meta field to registered gateways");
-            let meta: BTreeMap<String, serde_json::Value> = serde_json::from_str(&federation_meta)
-                .context(format!(
-                    "Meta override source returned invalid json: {}",
-                    federation_meta
-                ))?;
-            let vetted_gids = match meta
-                .get(META_VETTED_GATEWAYS_KEY)
-                .and_then(|vetted| serde_json::from_value::<Vec<String>>(vetted.clone()).ok())
-            {
+            match meta.get(META_VETTED_GATEWAYS_KEY).and_then(|vetted| {
+                debug!("Found vetted gateways meta field: {vetted:?}");
+                match serde_json::from_str::<Vec<String>>(vetted) {
+                    Ok(vetted) => Some(vetted),
+                    Err(e) => {
+                        error!("Error parsing vetted gateways meta field: {}", e);
+                        None
+                    }
+                }
+            }) {
                 Some(vetted) => {
                     debug!("Found the following vetted gateways: {:?}", vetted);
-                    vetted
+                    let vetted_gids = vetted
                         .into_iter()
                         .map(|pk| PublicKey::from_str(&pk).map_err(anyhow::Error::from))
-                        .collect::<Result<Vec<_>, _>>()?
-                }
-                None => Vec::new(),
-            };
-            debug!("Vetted gateways: {:?}", vetted_gids);
+                        .collect::<Result<Vec<_>, _>>()?;
 
-            for gateway in gateways.iter_mut() {
-                gateway.vetted = vetted_gids.contains(&gateway.info.gateway_id);
-            }
+                    debug!("Vetted gateways: {:?}", vetted_gids);
+                    for gateway in gateways.iter_mut() {
+                        gateway.vetted = vetted_gids.contains(&gateway.info.gateway_id);
+                    }
+                }
+                None => {
+                    debug!("No vetted gateways meta field found");
+                }
+            };
         }
 
         Ok(gateways)
