@@ -10,6 +10,7 @@ mod tbs;
 #[cfg(not(target_family = "wasm"))]
 mod tls;
 
+use std::any::TypeId;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
@@ -248,17 +249,99 @@ macro_rules! impl_encode_decode_tuple {
     );
 }
 
+/// Specialized version of Encodable for bytes
+pub fn consensus_encode_bytes<W: std::io::Write>(
+    bytes: &[u8],
+    writer: &mut W,
+) -> Result<usize, Error> {
+    let mut len = 0;
+    len += (bytes.len() as u64).consensus_encode(writer)?;
+    writer.write_all(bytes)?;
+    len += bytes.len();
+    Ok(len)
+}
+
+/// Specialized version of Encodable for static byte arrays
+pub fn consensus_encode_bytes_static<const N: usize, W: std::io::Write>(
+    bytes: &[u8; N],
+    writer: &mut W,
+) -> Result<usize, Error> {
+    writer.write_all(bytes)?;
+    Ok(bytes.len())
+}
+
+struct ReadBytesFromFiniteReaderOpts {
+    len: usize,
+    chunk_size: usize,
+}
+
+/// Read `opts.len` bytes from reader, where `opts.len` could potentially be
+/// malicious.
+///
+/// Adapted from <https://github.com/rust-bitcoin/rust-bitcoin/blob/e2b9555070d9357fb552e56085fb6fb3f0274560/bitcoin/src/consensus/encode.rs#L659>
+#[inline]
+fn read_bytes_from_finite_reader<D: Read + ?Sized>(
+    d: &mut D,
+    mut opts: ReadBytesFromFiniteReaderOpts,
+) -> Result<Vec<u8>, io::Error> {
+    let mut ret = vec![];
+
+    assert_ne!(opts.chunk_size, 0);
+
+    while opts.len > 0 {
+        let chunk_start = ret.len();
+        let chunk_size = core::cmp::min(opts.len, opts.chunk_size);
+        let chunk_end = chunk_start + chunk_size;
+        ret.resize(chunk_end, 0u8);
+        d.read_exact(&mut ret[chunk_start..chunk_end])?;
+        opts.len -= chunk_size;
+    }
+
+    Ok(ret)
+}
+
+/// Specialized version of Decodable for bytes
+pub fn consensus_decode_bytes<D: std::io::Read>(r: &mut D) -> Result<Vec<u8>, DecodeError> {
+    let len = u64::consensus_decode(r, &Default::default())?;
+
+    let len: usize =
+        usize::try_from(len).map_err(|_| DecodeError::from_str("size exceeds memory"))?;
+
+    let opts = ReadBytesFromFiniteReaderOpts {
+        len,
+        chunk_size: 64 * 1024,
+    };
+
+    read_bytes_from_finite_reader(r, opts).map_err(DecodeError::from_err)
+}
+
+/// Specialized version of Decodable for fixed-size byte arrays
+pub fn consensus_decode_bytes_static<const N: usize, D: std::io::Read>(
+    r: &mut D,
+) -> Result<[u8; N], DecodeError> {
+    let mut bytes = [0u8; N];
+    r.read_exact(bytes.as_mut_slice())
+        .map_err(DecodeError::from_err)?;
+    Ok(bytes)
+}
+
 impl_encode_decode_tuple!(T1, T2);
 impl_encode_decode_tuple!(T1, T2, T3);
 impl_encode_decode_tuple!(T1, T2, T3, T4);
 
 impl<T> Encodable for &[T]
 where
-    T: Encodable,
+    T: Encodable + 'static,
 {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        if TypeId::of::<T>() == TypeId::of::<u8>() {
+            // unsafe: we've just checked that T is `u8` so the transmute here is a no-op
+            return consensus_encode_bytes(unsafe { mem::transmute::<&[T], &[u8]>(self) }, writer);
+        }
+
         let mut len = 0;
         len += (self.len() as u64).consensus_encode(writer)?;
+
         for item in self.iter() {
             len += item.consensus_encode(writer)?;
         }
@@ -268,7 +351,7 @@ where
 
 impl<T> Encodable for Vec<T>
 where
-    T: Encodable,
+    T: Encodable + 'static,
 {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         (self as &[T]).consensus_encode(writer)
@@ -277,12 +360,16 @@ where
 
 impl<T> Decodable for Vec<T>
 where
-    T: Decodable,
+    T: Decodable + 'static,
 {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
+        if TypeId::of::<T>() == TypeId::of::<u8>() {
+            // unsafe: we've just checked that T is `u8` so the transmute here is a no-op
+            return Ok(unsafe { mem::transmute::<Vec<u8>, Vec<T>>(consensus_decode_bytes(d)?) });
+        }
         let len = u64::consensus_decode(d, modules)?;
 
         // `collect` under the hood uses `FromIter::from_iter`, which can potentially be
@@ -325,9 +412,17 @@ fn vec_decode_sanity() {
 
 impl<T, const SIZE: usize> Encodable for [T; SIZE]
 where
-    T: Encodable,
+    T: Encodable + 'static,
 {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        if TypeId::of::<T>() == TypeId::of::<u8>() {
+            // unsafe: we've just checked that T is `u8` so the transmute here is a no-op
+            return consensus_encode_bytes_static(
+                unsafe { mem::transmute::<&[T; SIZE], &[u8; SIZE]>(self) },
+                writer,
+            );
+        }
+
         let mut len = 0;
         for item in self.iter() {
             len += item.consensus_encode(writer)?;
@@ -336,14 +431,29 @@ where
     }
 }
 
+// From <https://github.com/rust-lang/rust/issues/61956>
+unsafe fn horribe_array_transmute_workaround<const N: usize, A, B>(mut arr: [A; N]) -> [B; N] {
+    let ptr = &mut arr as *mut _ as *mut [B; N];
+    let res = unsafe { ptr.read() };
+    core::mem::forget(arr);
+    res
+}
+
 impl<T, const SIZE: usize> Decodable for [T; SIZE]
 where
-    T: Decodable + Debug + Default + Copy,
+    T: Decodable + Debug + Default + Copy + 'static,
 {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
+        if TypeId::of::<T>() == TypeId::of::<u8>() {
+            // unsafe: we've just checked that T is `u8` so the transmute here is a no-op
+            return Ok(unsafe {
+                let arr = consensus_decode_bytes_static(d)?;
+                horribe_array_transmute_workaround::<SIZE, u8, T>(arr)
+            });
+        }
         // todo: impl without copy
         let mut data = [T::default(); SIZE];
         for item in data.iter_mut() {
