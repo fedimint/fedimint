@@ -4,7 +4,7 @@ use std::io::{Cursor, Error, Read, Write};
 
 use anyhow::Result;
 use bitcoin::secp256k1;
-use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
+use fedimint_core::api::DynGlobalApi;
 use fedimint_core::core::backup::{BackupRequest, SignedBackupRequest};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};

@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use fedimint_client::sm::{DynState, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};

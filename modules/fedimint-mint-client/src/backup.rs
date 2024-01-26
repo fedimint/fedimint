@@ -1,6 +1,5 @@
 use fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
 use fedimint_client::module::ClientDbTxContext;
-use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti};

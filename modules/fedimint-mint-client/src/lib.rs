@@ -32,7 +32,7 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
+use fedimint_core::api::DynGlobalApi;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
