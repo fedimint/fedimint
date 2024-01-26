@@ -170,6 +170,16 @@
 <a href="#170" id="170">170</a>
 <a href="#171" id="171">171</a>
 <a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
@@ -307,14 +317,24 @@
         FM_FAUCET_BIND_ADDR: String = <span class="macro">f!</span>(<span class="string">&quot;0.0.0.0:{FM_PORT_FAUCET}&quot;</span>);
 
         <span class="comment">// clients
-        </span>FM_LIGHTNING_CLI: String = <span class="macro">f!</span>(<span class="string">&quot;lightning-cli --network regtest --lightning-dir={}&quot;</span>, utf8(<span class="kw-2">&amp;</span>FM_CLN_DIR));
-        FM_LNCLI: String = <span class="macro">f!</span>(<span class="string">&quot;lncli -n regtest --lnddir={} --rpcserver=localhost:{FM_PORT_LND_RPC}&quot;</span>, utf8(<span class="kw-2">&amp;</span>FM_LND_DIR));
-        FM_BTC_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -datadir={}&quot;</span>, utf8(<span class="kw-2">&amp;</span>FM_BTC_DIR));
-        FM_MINT_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;fedimint-cli --data-dir {}&quot;</span>, utf8(<span class="kw-2">&amp;</span>FM_CLIENT_DIR));
+        </span>FM_LIGHTNING_CLI: String = <span class="macro">f!</span>(<span class="string">&quot;{lightning_cli} --network regtest --lightning-dir={lightning_dir}&quot;</span>,
+            lightning_cli = <span class="kw">crate</span>::util::get_lightning_cli_path().join(<span class="string">&quot; &quot;</span>),
+            lightning_dir = utf8(<span class="kw-2">&amp;</span>FM_CLN_DIR));
+        FM_LNCLI: String = <span class="macro">f!</span>(<span class="string">&quot;{lncli} -n regtest --lnddir={lnddir} --rpcserver=localhost:{FM_PORT_LND_RPC}&quot;</span>,
+            lncli = <span class="kw">crate</span>::util::get_lncli_path().join(<span class="string">&quot; &quot;</span>),
+            lnddir = utf8(<span class="kw-2">&amp;</span>FM_LND_DIR));
+        FM_BTC_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;{bitcoin_cli} -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -datadir={datadir}&quot;</span>,
+            bitcoin_cli = <span class="kw">crate</span>::util::get_bitcoin_cli_path().join(<span class="string">&quot; &quot;</span>),
+            datadir = utf8(<span class="kw-2">&amp;</span>FM_BTC_DIR));
+        FM_MINT_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;{fedimint_cli} --data-dir {datadir}&quot;</span>,
+            fedimint_cli = <span class="kw">crate</span>::util::get_fedimint_cli_path().join(<span class="string">&quot; &quot;</span>),
+            datadir = utf8(<span class="kw-2">&amp;</span>FM_CLIENT_DIR));
         FM_MINT_RPC_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;mint-rpc-client&quot;</span>);
-        FM_GWCLI_CLN: String = <span class="macro">f!</span>(<span class="string">&quot;gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_CLN}/&quot;</span>);
-        FM_GWCLI_LND: String = <span class="macro">f!</span>(<span class="string">&quot;gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/&quot;</span>);
-        FM_DB_TOOL: String = <span class="macro">f!</span>(<span class="string">&quot;fedimint-dbtool&quot;</span>);
+        FM_GWCLI_CLN: String = <span class="macro">f!</span>(<span class="string">&quot;{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_CLN}/&quot;</span>,
+            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">&quot; &quot;</span>),);
+        FM_GWCLI_LND: String = <span class="macro">f!</span>(<span class="string">&quot;{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/&quot;</span>,
+            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">&quot; &quot;</span>),);
+        FM_DB_TOOL: String = <span class="macro">f!</span>(<span class="string">&quot;{fedimint_dbtool}&quot;</span>, fedimint_dbtool = <span class="kw">crate</span>::util::get_fedimint_dbtool_cli_path().join(<span class="string">&quot; &quot;</span>));
 
         <span class="comment">// fedimint config variables
         </span>FM_TEST_BITCOIND_RPC: String = <span class="macro">f!</span>(<span class="string">&quot;http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}&quot;</span>);

@@ -240,7 +240,7 @@
         <span class="kw">let </span>process = process_mgr
             .spawn_daemon(
                 <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;gatewayd-{ln_name}&quot;</span>),
-                <span class="macro">cmd!</span>(<span class="string">&quot;gatewayd&quot;</span>, ln_name).envs(gateway_env),
+                <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::Gatewayd, ln_name).envs(gateway_env),
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -268,7 +268,7 @@
 
     <span class="kw">pub async fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
         <span class="macro">cmd!</span>(
-            <span class="string">&quot;gateway-cli&quot;</span>,
+            <span class="kw">crate</span>::util::get_gateway_cli_path(),
             <span class="string">&quot;--rpcpassword=theresnosecondbest&quot;</span>,
             <span class="string">&quot;-a&quot;</span>,
             <span class="kw-2">&amp;</span><span class="self">self</span>.addr
