@@ -40,6 +40,7 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
+use tokio::sync::OnceCell;
 use tracing::{debug, error, instrument, trace, warn};
 
 use crate::backup::ClientBackupSnapshot;
@@ -510,9 +511,7 @@ struct GlobalFederationApiWithCache<T> {
     /// synchronize, or split into a handful of groups. And if they are not,
     /// no LRU here is going to help them.
     #[allow(clippy::type_complexity)]
-    await_block_lru: Arc<
-        tokio::sync::Mutex<lru::LruCache<u64, Arc<tokio::sync::Mutex<Option<SessionOutcome>>>>>,
-    >,
+    await_block_lru: Arc<tokio::sync::Mutex<lru::LruCache<u64, Arc<OnceCell<SessionOutcome>>>>>,
 }
 
 impl<T> GlobalFederationApiWithCache<T> {
@@ -583,26 +582,16 @@ where
         let mut lru_lock = self.await_block_lru.lock().await;
 
         let block_entry_arc = lru_lock
-            .get_or_insert(block_index, || Arc::new(tokio::sync::Mutex::new(None)))
+            .get_or_insert(block_index, || Arc::new(OnceCell::new()))
             .clone();
 
         // we drop the lru lock so requests for other `block_index` can work in parallel
         drop(lru_lock);
 
-        // but multiple request for the same `block_index` will serialize on the
-        // per-index lock, avoiding doing the same work
-        let mut block_lock = block_entry_arc.lock().await;
-
-        if let Some(cached_res) = block_lock.clone() {
-            debug!(block_index, "Using a cached await_block response");
-            return Ok(cached_res);
-        }
-
-        let block = self.await_block_raw(block_index, decoders).await?;
-
-        *block_lock = Some(block.clone());
-
-        Ok(block)
+        block_entry_arc
+            .get_or_try_init(|| self.await_block_raw(block_index, decoders))
+            .await
+            .cloned()
     }
 
     /// Submit a transaction for inclusion
