@@ -367,6 +367,14 @@ impl ToCmdExt for &'_ str {
     }
 }
 
+impl ToCmdExt for Vec<String> {
+    type Fut = std::future::Ready<Command>;
+
+    fn cmd(self) -> Self::Fut {
+        std::future::ready(to_command(self))
+    }
+}
+
 pub trait JsonValueExt {
     fn to_typed<T: DeserializeOwned>(self) -> Result<T>;
 }
@@ -377,58 +385,126 @@ impl JsonValueExt for serde_json::Value {
     }
 }
 
-fn get_command_for_alias(alias: &str, default: &str) -> Command {
-    // try to use alias if set
-    let cli = std::env::var(alias)
-        .map(|s| s.split_whitespace().map(ToOwned::to_owned).collect())
-        .unwrap_or_else(|_| vec![default.into()]);
-    let mut cmd = tokio::process::Command::new(&cli[0]);
-    cmd.args(&cli[1..]);
-    Command {
-        cmd,
-        args_debug: cli,
-    }
+const GATEWAYD_FALLBACK: &str = "gatewayd";
+// To override gatewayd binary set:
+const ENV_FM_GATEWAYD_BASE_EXECUTABLE: &str = "FM_GATEWAYD_BASE_EXECUTABLE";
+
+const FEDIMINTD_FALLBACK: &str = "fedimintd";
+// To override fedimintd binary set:
+const ENV_FM_FEDIMINTD_BASE_EXECUTABLE: &str = "FM_FEDIMINTD_BASE_EXECUTABLE";
+
+const FEDIMINT_CLI_FALLBACK: &str = "fedimint-cli";
+// To override fedimint-cli binary set:
+const ENV_FM_FEDIMINT_CLI_BASE_EXECUTABLE: &str = "FM_FEDIMINT_CLI_BASE_EXECUTABLE";
+// To override fedimint-cli default command
+// (like "$FM_FEDIMINT_CLI_BASE_EXECUTABLE --data-dir /tmp/xxx ....")
+// set:
+const ENV_FM_MINT_CLIENT: &str = "FM_MINT_CLIENT";
+
+pub fn get_fedimint_cli_path() -> Vec<String> {
+    get_command_str_for_alias(
+        &[ENV_FM_FEDIMINT_CLI_BASE_EXECUTABLE],
+        &[FEDIMINT_CLI_FALLBACK],
+    )
 }
 
-pub struct FedimintCli;
-impl FedimintCli {
-    pub async fn cmd(self) -> Command {
-        get_command_for_alias("FM_MINT_CLIENT", "fedimint-cli")
-    }
+const GATEWAY_CLI_FALLBACK: &str = "gateway-cli";
+// To override gateway-cli binary set:
+const ENV_FM_GATEWAY_CLI_BASE_EXECUTABLE: &str = "FM_GATEWAY_CLI_BASE_EXECUTABLE";
+
+pub fn get_gateway_cli_path() -> Vec<String> {
+    get_command_str_for_alias(
+        &[ENV_FM_GATEWAY_CLI_BASE_EXECUTABLE],
+        &[GATEWAY_CLI_FALLBACK],
+    )
 }
 
-pub struct LnCli;
-impl LnCli {
-    pub async fn cmd(self) -> Command {
-        get_command_for_alias("FM_LNCLI", "lncli")
-    }
+const LOAD_TEST_TOOL_FALLBACK: &str = "fedimint-load-test-tool";
+// To override fedimint-load-test-tool binary set:
+const ENV_FM_LOAD_TEST_TOOL_BASE_EXECUTABLE: &str = "FM_LOAD_TEST_TOOL_BASE_EXECUTABLE";
+
+const LIGHTNING_CLI_FALLBACK: &str = "lightning-cli";
+// To override lightning-cli binary set:
+const ENV_FM_LIGHTNING_CLI_BASE_EXECUTABLE: &str = "FM_LIGHTNING_CLI_BASE_EXECUTABLE";
+// to override lightning-cli default command set:
+const ENV_FM_LIGHTNING_CLI: &str = "FM_LIGHTNING_CLI";
+
+pub fn get_lightning_cli_path() -> Vec<String> {
+    get_command_str_for_alias(
+        &[ENV_FM_LIGHTNING_CLI_BASE_EXECUTABLE],
+        &[LIGHTNING_CLI_FALLBACK],
+    )
 }
 
-pub struct ClnLightningCli;
-impl ClnLightningCli {
-    pub async fn cmd(self) -> Command {
-        get_command_for_alias("FM_LIGHTNING_CLI", "lightning-cli")
-    }
+const LNCLI_FALLBACK: &str = "lncli";
+// To override lncli binary set:
+const ENV_FM_LNCLI_BASE_EXECUTABLE: &str = "FM_LNCLI_BASE_EXECUTABLE";
+// to override lncli default command set:
+const ENV_FM_LNCLI: &str = "FM_LNCLI";
+
+pub fn get_lncli_path() -> Vec<String> {
+    get_command_str_for_alias(&[ENV_FM_LNCLI_BASE_EXECUTABLE], &[LNCLI_FALLBACK])
 }
 
-pub struct GatewayClnCli;
-impl GatewayClnCli {
-    pub async fn cmd(self) -> Command {
-        get_command_for_alias("FM_GWCLI_CLN", "gateway-cln")
-    }
+const BITCOIN_CLI_FALLBACK: &str = "bitcoin-cli";
+// To override bitcoin-cli binary set:
+const ENV_FM_BITCOIN_CLI_BASE_EXECUTABLE: &str = "FM_BITCOIN_CLI_BASE_EXECUTABLE";
+// to override bitcoin-cli default command set:
+const ENV_FM_BTC_CLIENT: &str = "FM_BTC_CLIENT";
+
+pub fn get_bitcoin_cli_path() -> Vec<String> {
+    get_command_str_for_alias(
+        &[ENV_FM_BITCOIN_CLI_BASE_EXECUTABLE],
+        &[BITCOIN_CLI_FALLBACK],
+    )
 }
 
-pub struct GatewayLndCli;
-impl GatewayLndCli {
-    pub async fn cmd(self) -> Command {
-        get_command_for_alias("FM_GWCLI_LND", "gateway-lnd")
-    }
+const BITCOIND_FALLBACK: &str = "bitcoind";
+// To override bitcoind binary set:
+const ENV_FM_BITCOIND_BASE_EXECUTABLE: &str = "FM_BITCOIND_BASE_EXECUTABLE";
+
+const LIGHTNINGD_FALLBACK: &str = "lightningd";
+// To override lightningd binary set:
+const ENV_FM_LIGHTNINGD_BASE_EXECUTABLE: &str = "FM_LIGHTNINGD_BASE_EXECUTABLE";
+
+const LND_FALLBACK: &str = "lnd";
+// To override lnd binary set:
+const ENV_FM_LND_BASE_EXECUTABLE: &str = "FM_LND_BASE_EXECUTABLE";
+
+const ELECTRS_FALLBACK: &str = "electrs";
+// To override electrs binary set:
+const ENV_FM_ELECTRS_BASE_EXECUTABLE: &str = "FM_ELECTRS_BASE_EXECUTABLE";
+
+const ESPLORA_FALLBACK: &str = "esplora";
+// To override esplora binary set:
+const ENV_FM_ESPLORA_BASE_EXECUTABLE: &str = "FM_ESPLORA_BASE_EXECUTABLE";
+
+const RECOVERYTOOL_FALLBACK: &str = "recoverytool";
+// To override esplora binary set:
+const ENV_FM_RECOVERYTOOL_BASE_EXECUTABLE: &str = "FM_RECOVERYTOOL_BASE_EXECUTABLE";
+
+const FAUCET_FALLBACK: &str = "faucet";
+// To override esplora binary set:
+const ENV_FM_FAUCET_BASE_EXECUTABLE: &str = "FM_FAUCET_BASE_EXECUTABLE";
+
+const FEDIMINT_DBTOOL_FALLBACK: &str = "fedimint-dbtool";
+// To override esplora binary set:
+const ENV_FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE: &str = "FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE";
+
+pub fn get_fedimint_dbtool_cli_path() -> Vec<String> {
+    get_command_str_for_alias(
+        &[ENV_FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE],
+        &[FEDIMINT_DBTOOL_FALLBACK],
+    )
 }
 
 pub struct FedimintdCmd;
 impl FedimintdCmd {
     pub async fn cmd(self) -> Command {
-        get_command_for_alias("FM_FEDIMINTD_BASE_EXECUTABLE", "fedimintd")
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_FEDIMINTD_BASE_EXECUTABLE],
+            &[FEDIMINTD_FALLBACK],
+        ))
     }
 
     /// Returns the fedimintd version from clap or default min version if the
@@ -438,6 +514,201 @@ impl FedimintdCmd {
             Ok(version) => parse_clap_version(&version),
             Err(_) => DEFAULT_VERSION,
         }
+    }
+}
+
+pub struct Gatewayd;
+impl Gatewayd {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_GATEWAYD_BASE_EXECUTABLE],
+            &[GATEWAYD_FALLBACK],
+        ))
+    }
+}
+
+pub struct FedimintCli;
+impl FedimintCli {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_MINT_CLIENT],
+            &get_fedimint_cli_path()
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+        ))
+    }
+}
+
+pub struct LoadTestTool;
+impl LoadTestTool {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_LOAD_TEST_TOOL_BASE_EXECUTABLE],
+            &[LOAD_TEST_TOOL_FALLBACK],
+        ))
+    }
+}
+
+pub struct GatewayCli;
+impl GatewayCli {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[],
+            &get_gateway_cli_path()
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+        ))
+    }
+}
+
+pub struct GatewayClnCli;
+impl GatewayClnCli {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &["FM_GWCLI_CLN"],
+            &["gateway-cln"],
+        ))
+    }
+}
+
+pub struct GatewayLndCli;
+impl GatewayLndCli {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &["FM_GWCLI_LND"],
+            &["gateway-lnd"],
+        ))
+    }
+}
+
+pub struct LnCli;
+impl LnCli {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_LNCLI],
+            &get_lncli_path()
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+        ))
+    }
+}
+
+pub struct ClnLightningCli;
+impl ClnLightningCli {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_LIGHTNING_CLI],
+            &get_lightning_cli_path()
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+        ))
+    }
+}
+
+pub struct BitcoinCli;
+impl BitcoinCli {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_BTC_CLIENT],
+            &get_bitcoin_cli_path()
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+        ))
+    }
+}
+
+pub struct Bitcoind;
+impl Bitcoind {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_BITCOIND_BASE_EXECUTABLE],
+            &[BITCOIND_FALLBACK],
+        ))
+    }
+}
+
+pub struct Lightningd;
+impl Lightningd {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_LIGHTNINGD_BASE_EXECUTABLE],
+            &[LIGHTNINGD_FALLBACK],
+        ))
+    }
+}
+
+pub struct Lnd;
+impl Lnd {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_LND_BASE_EXECUTABLE],
+            &[LND_FALLBACK],
+        ))
+    }
+}
+
+pub struct Electrs;
+impl Electrs {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_ELECTRS_BASE_EXECUTABLE],
+            &[ELECTRS_FALLBACK],
+        ))
+    }
+}
+
+pub struct Esplora;
+impl Esplora {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_ESPLORA_BASE_EXECUTABLE],
+            &[ESPLORA_FALLBACK],
+        ))
+    }
+}
+
+pub struct Recoverytool;
+impl Recoverytool {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_RECOVERYTOOL_BASE_EXECUTABLE],
+            &[RECOVERYTOOL_FALLBACK],
+        ))
+    }
+}
+
+pub struct Faucet;
+impl Faucet {
+    pub async fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[ENV_FM_FAUCET_BASE_EXECUTABLE],
+            &[FAUCET_FALLBACK],
+        ))
+    }
+}
+
+fn get_command_str_for_alias(aliases: &[&str], default: &[&str]) -> Vec<String> {
+    // try to use one of the aliases if set
+    for alias in aliases {
+        if let Ok(cmd) = std::env::var(alias) {
+            return cmd.split_whitespace().map(ToOwned::to_owned).collect();
+        }
+    }
+    // otherwise return the default value
+    default.iter().map(|s| s.to_string()).collect()
+}
+
+fn to_command(cli: Vec<String>) -> Command {
+    let mut cmd = tokio::process::Command::new(&cli[0]);
+    cmd.args(&cli[1..]);
+    Command {
+        cmd,
+        args_debug: cli,
     }
 }
 

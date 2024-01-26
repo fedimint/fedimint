@@ -74,17 +74,26 @@ function load_test_tool_test() {
 export -f load_test_tool_test
 
 function backend_test_bitcoind() {
-  fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind ./scripts/tests/backend-test.sh
+  # backend tests don't support different versions, so we skip for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind ./scripts/tests/backend-test.sh
+  fi
 }
 export -f backend_test_bitcoind
 
 function backend_test_electrs() {
-  fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=electrs ./scripts/tests/backend-test.sh
+  # backend tests don't support different versions, so we skip for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=electrs ./scripts/tests/backend-test.sh
+  fi
 }
 export -f backend_test_electrs
 
 function backend_test_esplora() {
-  fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/tests/backend-test.sh
+  # backend tests don't support different versions, so we skip for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/tests/backend-test.sh
+  fi
 }
 export -f backend_test_esplora
 

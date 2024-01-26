@@ -11,7 +11,7 @@ use bitcoincore_rpc::{bitcoin, RpcApi};
 use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use devimint::federation::{Client, Federation, Fedimintd};
-use devimint::util::{poll, ProcessManager};
+use devimint::util::{poll, LoadTestTool, ProcessManager};
 use devimint::{
     cmd, dev_fed, external_daemons, poll_eq, vars, DevFed, ExternalDaemons, Gatewayd,
     LightningNode, Lightningd, Lnd,
@@ -68,7 +68,36 @@ fn stats_for(mut v: Vec<Duration>) -> Stats {
     }
 }
 
+async fn log_binary_versions() -> Result<()> {
+    let fedimint_cli_version = cmd!(devimint::util::get_fedimint_cli_path(), "--version")
+        .out_string()
+        .await?;
+    info!(?fedimint_cli_version);
+    let fedimint_cli_version_hash = cmd!(devimint::util::get_fedimint_cli_path(), "version-hash")
+        .out_string()
+        .await?;
+    info!(?fedimint_cli_version_hash);
+    let gateway_cli_version = cmd!(devimint::util::get_gateway_cli_path(), "--version")
+        .out_string()
+        .await?;
+    info!(?gateway_cli_version);
+    let gateway_cli_version_hash = cmd!(devimint::util::get_gateway_cli_path(), "version-hash")
+        .out_string()
+        .await?;
+    info!(?gateway_cli_version_hash);
+    let fedimintd_version_hash = cmd!(devimint::util::FedimintdCmd, "version-hash")
+        .out_string()
+        .await?;
+    info!(?fedimintd_version_hash);
+    let gatewayd_version_hash = cmd!(devimint::util::Gatewayd, "version-hash")
+        .out_string()
+        .await?;
+    info!(?gatewayd_version_hash);
+    Ok(())
+}
+
 pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
+    log_binary_versions().await?;
     #[allow(unused_variables)]
     let DevFed {
         bitcoind,
@@ -257,6 +286,7 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
 }
 
 async fn cli_tests(dev_fed: DevFed) -> Result<()> {
+    log_binary_versions().await?;
     let data_dir = env::var("FM_DATA_DIR")?;
 
     #[allow(unused_variables)]
@@ -937,6 +967,7 @@ async fn finish_hold_invoice_payment(
 }
 
 async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
+    log_binary_versions().await?;
     let data_dir = env::var("FM_DATA_DIR")?;
     let load_test_temp = PathBuf::from(data_dir).join("load-test-temp");
     dev_fed
@@ -951,7 +982,7 @@ async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
 
 async fn run_standard_load_test(load_test_temp: &Path, invite_code: &str) -> anyhow::Result<()> {
     let output = cmd!(
-        "fedimint-load-test-tool",
+        LoadTestTool,
         "--archive-dir",
         load_test_temp.display(),
         "--users",
@@ -976,7 +1007,7 @@ async fn run_standard_load_test(load_test_temp: &Path, invite_code: &str) -> any
         "paid different number of invoices than expected"
     );
     let output = cmd!(
-        "fedimint-load-test-tool",
+        LoadTestTool,
         "--archive-dir",
         load_test_temp.display(),
         "--users",
@@ -1008,7 +1039,7 @@ async fn run_standard_load_test(load_test_temp: &Path, invite_code: &str) -> any
 async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> anyhow::Result<()> {
     info!("Testing ln-circular-load-test with 'two-gateways' strategy");
     let output = cmd!(
-        "fedimint-load-test-tool",
+        LoadTestTool,
         "--archive-dir",
         load_test_temp.display(),
         "--users",
@@ -1040,7 +1071,7 @@ async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> 
     info!("Testing ln-circular-load-test with 'partner-ping-pong' strategy");
     // Note invite code isn't required because we already have an archive dir
     let output = cmd!(
-        "fedimint-load-test-tool",
+        LoadTestTool,
         "--archive-dir",
         load_test_temp.display(),
         "--users",
@@ -1068,7 +1099,7 @@ async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> 
     info!("Testing ln-circular-load-test with 'self-payment' strategy");
     // Note invite code isn't required because we already have an archive dir
     let output = cmd!(
-        "fedimint-load-test-tool",
+        LoadTestTool,
         "--archive-dir",
         load_test_temp.display(),
         "--users",
@@ -1168,6 +1199,7 @@ async fn cli_tests_backup_and_restore(fed: &Federation, reference_client: &Clien
 }
 
 async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
+    log_binary_versions().await?;
     #[allow(unused_variables)]
     let DevFed {
         bitcoind,
@@ -1248,6 +1280,7 @@ async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManag
 }
 
 async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
+    log_binary_versions().await?;
     #[allow(unused_variables)]
     let DevFed {
         bitcoind,
@@ -1442,6 +1475,7 @@ async fn do_try_create_and_pay_invoice(
 }
 
 async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
+    log_binary_versions().await?;
     #[allow(unused_variables)]
     let DevFed {
         bitcoind,
@@ -1489,6 +1523,7 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
 }
 
 pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
+    log_binary_versions().await?;
     #[allow(unused_variables)]
     let DevFed {
         bitcoind,
@@ -1562,7 +1597,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     let now = fedimint_core::time::now();
     info!("Recovering using utxos method");
     let output = cmd!(
-        "recoverytool",
+        devimint::util::Recoverytool,
         "--readonly",
         "--cfg",
         "{data_dir}/fedimintd-0",
@@ -1622,7 +1657,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     info!("Recovering using epochs method");
     let outputs = loop {
         let output = cmd!(
-            "recoverytool",
+            devimint::util::Recoverytool,
             "--readonly",
             "--cfg",
             "{data_dir}/fedimintd-0",
@@ -1930,7 +1965,9 @@ async fn handle_command() -> Result<()> {
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
                         async {
-                            let faucet = process_mgr.spawn_daemon("faucet", cmd!("faucet")).await?;
+                            let faucet = process_mgr
+                                .spawn_daemon("faucet", cmd!(devimint::util::Faucet))
+                                .await?;
 
                             poll("waiting for faucet startup", None, || async {
                                 TcpStream::connect(format!(

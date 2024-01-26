@@ -135,14 +135,24 @@ declare_vars! {
         FM_FAUCET_BIND_ADDR: String = f!("0.0.0.0:{FM_PORT_FAUCET}");
 
         // clients
-        FM_LIGHTNING_CLI: String = f!("lightning-cli --network regtest --lightning-dir={}", utf8(&FM_CLN_DIR));
-        FM_LNCLI: String = f!("lncli -n regtest --lnddir={} --rpcserver=localhost:{FM_PORT_LND_RPC}", utf8(&FM_LND_DIR));
-        FM_BTC_CLIENT: String = f!("bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -datadir={}", utf8(&FM_BTC_DIR));
-        FM_MINT_CLIENT: String = f!("fedimint-cli --data-dir {}", utf8(&FM_CLIENT_DIR));
+        FM_LIGHTNING_CLI: String = f!("{lightning_cli} --network regtest --lightning-dir={lightning_dir}",
+            lightning_cli = crate::util::get_lightning_cli_path().join(" "),
+            lightning_dir = utf8(&FM_CLN_DIR));
+        FM_LNCLI: String = f!("{lncli} -n regtest --lnddir={lnddir} --rpcserver=localhost:{FM_PORT_LND_RPC}",
+            lncli = crate::util::get_lncli_path().join(" "),
+            lnddir = utf8(&FM_LND_DIR));
+        FM_BTC_CLIENT: String = f!("{bitcoin_cli} -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -datadir={datadir}",
+            bitcoin_cli = crate::util::get_bitcoin_cli_path().join(" "),
+            datadir = utf8(&FM_BTC_DIR));
+        FM_MINT_CLIENT: String = f!("{fedimint_cli} --data-dir {datadir}",
+            fedimint_cli = crate::util::get_fedimint_cli_path().join(" "),
+            datadir = utf8(&FM_CLIENT_DIR));
         FM_MINT_RPC_CLIENT: String = f!("mint-rpc-client");
-        FM_GWCLI_CLN: String = f!("gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_CLN}/");
-        FM_GWCLI_LND: String = f!("gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/");
-        FM_DB_TOOL: String = f!("fedimint-dbtool");
+        FM_GWCLI_CLN: String = f!("{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_CLN}/",
+            gateway_cli = crate::util::get_gateway_cli_path().join(" "),);
+        FM_GWCLI_LND: String = f!("{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/",
+            gateway_cli = crate::util::get_gateway_cli_path().join(" "),);
+        FM_DB_TOOL: String = f!("{fedimint_dbtool}", fedimint_dbtool = crate::util::get_fedimint_dbtool_cli_path().join(" "));
 
         // fedimint config variables
         FM_TEST_BITCOIND_RPC: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}");
