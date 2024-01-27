@@ -60,6 +60,13 @@ pub struct SignedSessionOutcome {
     pub signatures: std::collections::BTreeMap<PeerId, SchnorrSignature>,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+pub enum SessionStatus {
+    Initial,
+    Pending(Vec<AcceptedItem>),
+    Complete(SessionOutcome),
+}
+
 // TODO: remove this as soon as we bump bitcoin_hashes in fedimint_core to
 // 0.12.0
 pub fn consensus_hash_sha256<E: Encodable>(encodable: &E) -> sha256::Hash {
