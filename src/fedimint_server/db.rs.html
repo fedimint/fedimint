@@ -605,7 +605,7 @@
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_migrations() -&gt; anyhow::Result&lt;()&gt; {
-        TracingSetup::default().init()<span class="question-mark">?</span>;
+        <span class="kw">let _ </span>= TracingSetup::default().init();
 
         validate_migrations(
             <span class="string">&quot;fedimint-server&quot;</span>,
