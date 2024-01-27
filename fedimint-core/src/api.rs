@@ -49,15 +49,15 @@ use crate::core::{Decoder, OutputOutcome};
 use crate::encoding::DecodeError;
 use crate::endpoint_constants::{
     AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, RECOVER_ENDPOINT, SESSION_COUNT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
-    VERSION_ENDPOINT,
+    CLIENT_CONFIG_ENDPOINT, RECOVER_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use crate::query::{
     DiscoverApiVersionSet, FilterMap, QueryStep, QueryStrategy, ThresholdConsensus,
     UnionResponsesSingle,
 };
-use crate::session_outcome::SessionOutcome;
+use crate::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
 use crate::task;
 use crate::transaction::{SerdeTransaction, Transaction, TransactionError};
 use crate::util::SafeUrl;
@@ -451,6 +451,12 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<SessionOutcome>;
 
+    async fn get_session_status(
+        &self,
+        block_index: u64,
+        decoders: &ModuleDecoderRegistry,
+    ) -> anyhow::Result<SessionStatus>;
+
     async fn session_count(&self) -> FederationResult<u64>;
 
     async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId>;
@@ -510,14 +516,28 @@ struct GlobalFederationApiWithCache<T> {
     /// (near-)bottlenecked on fetching blocks they will naturally
     /// synchronize, or split into a handful of groups. And if they are not,
     /// no LRU here is going to help them.
-    await_block_lru: Arc<tokio::sync::Mutex<lru::LruCache<u64, Arc<OnceCell<SessionOutcome>>>>>,
+    await_session_lru: Arc<tokio::sync::Mutex<lru::LruCache<u64, Arc<OnceCell<SessionOutcome>>>>>,
+
+    /// Like [`Self::await_session_lru`], but for
+    /// [`IGlobalFederationApi::get_session_status`].
+    ///
+    /// In theory these two LRUs have the same content, but one is locked by
+    /// potentially long-blocking operation, while the other non-blocking one.
+    /// Given how tiny they are, it's not worth complicating things to unify
+    /// them.
+    #[allow(clippy::type_complexity)]
+    get_session_status_lru:
+        Arc<tokio::sync::Mutex<lru::LruCache<u64, Arc<OnceCell<SessionOutcome>>>>>,
 }
 
 impl<T> GlobalFederationApiWithCache<T> {
     pub fn new(inner: T) -> GlobalFederationApiWithCache<T> {
         Self {
             inner,
-            await_block_lru: Arc::new(tokio::sync::Mutex::new(lru::LruCache::new(
+            await_session_lru: Arc::new(tokio::sync::Mutex::new(lru::LruCache::new(
+                NonZeroUsize::new(32).expect("is non-zero"),
+            ))),
+            get_session_status_lru: Arc::new(tokio::sync::Mutex::new(lru::LruCache::new(
                 NonZeroUsize::new(32).expect("is non-zero"),
             ))),
         }
@@ -533,9 +553,24 @@ where
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<SessionOutcome> {
-        debug!(block_index, "Fetching block's outcome from Federation");
+        debug!(block_index, "Awaiting block's outcome from Federation");
         self.request_current_consensus::<SerdeModuleEncoding<SessionOutcome>>(
             AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
+            ApiRequestErased::new(block_index),
+        )
+        .await?
+        .try_into_inner(decoders)
+        .map_err(|e| anyhow!(e.to_string()))
+    }
+
+    async fn get_session_status_raw(
+        &self,
+        block_index: u64,
+        decoders: &ModuleDecoderRegistry,
+    ) -> anyhow::Result<SessionStatus> {
+        debug!(block_index, "Fetching block's outcome from Federation");
+        self.request_current_consensus::<SerdeModuleEncoding<SessionStatus>>(
+            SESSION_STATUS_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
         )
         .await?
@@ -575,22 +610,61 @@ where
 {
     async fn await_block(
         &self,
-        block_index: u64,
+        session_idx: u64,
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<SessionOutcome> {
-        let mut lru_lock = self.await_block_lru.lock().await;
+        let mut lru_lock = self.await_session_lru.lock().await;
 
-        let block_entry_arc = lru_lock
-            .get_or_insert(block_index, || Arc::new(OnceCell::new()))
+        let entry_arc = lru_lock
+            .get_or_insert(session_idx, || Arc::new(OnceCell::new()))
             .clone();
 
-        // we drop the lru lock so requests for other `block_index` can work in parallel
+        // we drop the lru lock so requests for other `session_idx` can work in parallel
         drop(lru_lock);
 
-        block_entry_arc
-            .get_or_try_init(|| self.await_block_raw(block_index, decoders))
+        entry_arc
+            .get_or_try_init(|| self.await_block_raw(session_idx, decoders))
             .await
             .cloned()
+    }
+
+    async fn get_session_status(
+        &self,
+        session_idx: u64,
+        decoders: &ModuleDecoderRegistry,
+    ) -> anyhow::Result<SessionStatus> {
+        let mut lru_lock = self.get_session_status_lru.lock().await;
+
+        let entry_arc = lru_lock
+            .get_or_insert(session_idx, || Arc::new(OnceCell::new()))
+            .clone();
+
+        // we drop the lru lock so requests for other `session_idx` can work in parallel
+        drop(lru_lock);
+
+        enum NoCacheErr {
+            Initial,
+            Pending(Vec<AcceptedItem>),
+            Err(anyhow::Error),
+        }
+        match entry_arc
+            .get_or_try_init(|| async {
+                match self.get_session_status_raw(session_idx, decoders).await {
+                    Err(e) => Err(NoCacheErr::Err(e)),
+                    Ok(SessionStatus::Initial) => Err(NoCacheErr::Initial),
+                    Ok(SessionStatus::Pending(s)) => Err(NoCacheErr::Pending(s)),
+                    // only status we can cache (hance outer Ok)
+                    Ok(SessionStatus::Complete(s)) => Ok(s),
+                }
+            })
+            .await
+            .cloned()
+        {
+            Ok(s) => Ok(SessionStatus::Complete(s)),
+            Err(NoCacheErr::Initial) => Ok(SessionStatus::Initial),
+            Err(NoCacheErr::Pending(s)) => Ok(SessionStatus::Pending(s)),
+            Err(NoCacheErr::Err(e)) => Err(e),
+        }
     }
 
     /// Submit a transaction for inclusion
