@@ -801,7 +801,7 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_migrations() -> anyhow::Result<()> {
-        TracingSetup::default().init()?;
+        let _ = TracingSetup::default().init();
 
         validate_migrations(
             "wallet-server",
