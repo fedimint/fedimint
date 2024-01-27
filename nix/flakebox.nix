@@ -398,8 +398,6 @@ rec {
       "fedimint-cli"
       "fedimint-dbtool"
     ];
-
-    defaultBin = "fedimintd";
   };
 
   gateway-pkgs = fedimintBuildPackageGroup {
