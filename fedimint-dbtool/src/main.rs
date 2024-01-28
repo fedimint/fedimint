@@ -58,6 +58,11 @@ enum DbCommand {
         #[arg(long, value_parser = hex_parser)]
         key: Bytes,
     },
+    /// Deletes all keys starting
+    DeletePrefix {
+        #[arg(long, value_parser = hex_parser)]
+        prefix: Bytes,
+    },
     /// Dump a subset of the specified database and serialize the retrieved data
     /// to JSON. Module and prefix are used to specify which subset of the
     /// database to dump. Password is used to decrypt the server's
@@ -178,6 +183,14 @@ async fn main() -> Result<()> {
             )
             .await?;
             dbdump.dump_database().await?;
+        }
+        DbCommand::DeletePrefix { prefix } => {
+            let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database)
+                .unwrap()
+                .into_database();
+            let mut dbtx = rocksdb.begin_transaction().await;
+            dbtx.raw_remove_by_prefix(&prefix).await?;
+            dbtx.commit_tx().await;
         }
     }
 
