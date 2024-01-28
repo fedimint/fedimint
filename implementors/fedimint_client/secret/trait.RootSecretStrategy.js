@@ -1,4 +1,4 @@
 (function() {var implementors = {
-"fedimint_bip39":[["impl&lt;const WORD_COUNT: <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.73.0/std/primitive.usize.html\">usize</a>&gt; RootSecretStrategy for <a class=\"struct\" href=\"fedimint_bip39/struct.Bip39RootSecretStrategy.html\" title=\"struct fedimint_bip39::Bip39RootSecretStrategy\">Bip39RootSecretStrategy</a>&lt;WORD_COUNT&gt;"]],
+"fedimint_bip39":[["impl&lt;const WORD_COUNT: <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.73.0/std/primitive.usize.html\">usize</a>&gt; <a class=\"trait\" href=\"fedimint_client/secret/trait.RootSecretStrategy.html\" title=\"trait fedimint_client::secret::RootSecretStrategy\">RootSecretStrategy</a> for <a class=\"struct\" href=\"fedimint_bip39/struct.Bip39RootSecretStrategy.html\" title=\"struct fedimint_bip39::Bip39RootSecretStrategy\">Bip39RootSecretStrategy</a>&lt;WORD_COUNT&gt;"]],
 "fedimint_client":[]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

@@ -183,6 +183,19 @@
 <a href="#183" id="183">183</a>
 <a href="#184" id="184">184</a>
 <a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">use </span>std::path::PathBuf;
 
@@ -242,6 +255,11 @@
     </span>Delete {
         <span class="attr">#[arg(long, value_parser = hex_parser)]
         </span>key: Bytes,
+    },
+    <span class="doccomment">/// Deletes all keys starting
+    </span>DeletePrefix {
+        <span class="attr">#[arg(long, value_parser = hex_parser)]
+        </span>prefix: Bytes,
     },
     <span class="doccomment">/// Dump a subset of the specified database and serialize the retrieved data
     /// to JSON. Module and prefix are used to specify which subset of the
@@ -363,6 +381,14 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
             dbdump.dump_database().<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+        DbCommand::DeletePrefix { prefix } =&gt; {
+            <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database)
+                .unwrap()
+                .into_database();
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = rocksdb.begin_transaction().<span class="kw">await</span>;
+            dbtx.raw_remove_by_prefix(<span class="kw-2">&amp;</span>prefix).<span class="kw">await</span><span class="question-mark">?</span>;
+            dbtx.commit_tx().<span class="kw">await</span>;
         }
     }
 
