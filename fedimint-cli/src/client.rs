@@ -10,7 +10,7 @@ use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use fedimint_client::backup::Metadata;
 use fedimint_client::ClientArc;
-use fedimint_core::config::FederationId;
+use fedimint_core::config::{ClientModuleConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::time::now;
@@ -161,15 +161,28 @@ pub enum ClientCmd {
     },
     /// Call a module subcommand
     Module {
+        #[clap(subcommand)]
+        command: Option<ModuleSubcommand>,
         /// Module selector (either module id or module kind)
         #[clap(long)]
-        module: ModuleSelector,
+        module: Option<ModuleSelector>,
         args: Vec<ffi::OsString>,
     },
     /// Returns the client config
     Config,
 }
 
+#[derive(Debug, Clone, Subcommand)]
+pub enum ModuleSubcommand {
+    /// List all modules
+    List,
+}
+
+#[derive(Serialize)]
+pub enum ModuleStatus {
+    Active,
+    UnsupportedByClient,
+}
 pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
     secp256k1::PublicKey::from_str(s)
 }
@@ -570,12 +583,50 @@ pub async fn handle_command(
         ClientCmd::DiscoverVersion => {
             Ok(json!({ "versions": client.discover_common_api_version().await? }))
         }
-        ClientCmd::Module { module, args } => {
-            let module_instance_id = match module {
-                ModuleSelector::Id(id) => id,
-                ModuleSelector::Kind(kind) => client
-                    .get_first_instance(&kind)
-                    .context("No module with this kind found")?,
+        ClientCmd::Module {
+            command,
+            module,
+            args,
+        } => {
+            // #[serde(rename_all = "snake_case")]
+            #[derive(Serialize)]
+            struct Data<'a> {
+                kind: &'a ModuleKind,
+                id: u16,
+                status: ModuleStatus,
+            }
+
+            if command.is_some() {
+                let module_list: Vec<Data> = client
+                    .get_config()
+                    .modules
+                    .iter()
+                    .map(|(id, ClientModuleConfig { kind, .. })| Data {
+                        kind,
+                        id: *id,
+                        status: ModuleStatus::Active,
+                    })
+                    // .chain(client.modules.iter_modules())    -> not working
+                    .collect();
+
+                return Ok(json!({
+                    "List": module_list,
+                }));
+            }
+
+            if module.is_none() {
+                return Err(anyhow::anyhow!("Module not specified"));
+            }
+
+            let module_instance_id = if let Some(module_selector) = module {
+                match module_selector {
+                    ModuleSelector::Id(id) => id,
+                    ModuleSelector::Kind(kind) => client
+                        .get_first_instance(&kind)
+                        .context("No module with this kind found")?,
+                }
+            } else {
+                1
             };
 
             client
@@ -584,6 +635,7 @@ pub async fn handle_command(
                 .handle_cli_command(&args)
                 .await
         }
+
         ClientCmd::Config => {
             let config = client.get_config_json();
             Ok(serde_json::to_value(config).expect("Client config is serializable"))
