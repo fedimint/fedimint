@@ -48,6 +48,7 @@ pub trait LightningTest: ILnRpcClient {
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
+            .basic_mpp()
             .amount_milli_satoshis(amount.msats)
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),

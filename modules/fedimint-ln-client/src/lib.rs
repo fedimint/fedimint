@@ -770,6 +770,7 @@ impl LightningClientModule {
             .payment_hash(payment_hash)
             .payment_secret(PaymentSecret(rng.gen()))
             .duration_since_epoch(duration_since_epoch)
+            .basic_mpp()
             .min_final_cltv_expiry_delta(18)
             .payee_pub_key(node_public_key)
             .expiry_time(Duration::from_secs(

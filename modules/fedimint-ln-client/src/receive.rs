@@ -416,6 +416,7 @@ mod tests {
             .duration_since_epoch(now_epoch)
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
+            .basic_mpp()
             .amount_milli_satoshis(1000)
             .expiry_time(expiry_time)
             .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &secret_key))?)
