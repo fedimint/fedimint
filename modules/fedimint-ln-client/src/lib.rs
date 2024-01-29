@@ -883,7 +883,7 @@ impl LightningClientModule {
 
         dbtx.insert_entry(&LightningGatewayKey, &gateway.anchor())
             .await;
-        dbtx.commit_tx().await;
+        dbtx.commit_tx_result().await?;
         Ok(())
     }
 
