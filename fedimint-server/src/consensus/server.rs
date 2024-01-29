@@ -734,10 +734,12 @@ impl ConsensusServer {
 }
 
 pub(crate) async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_>) -> u64 {
-    dbtx.find_by_prefix(&SignedSessionOutcomePrefix)
+    dbtx.find_by_prefix_sorted_descending(&SignedSessionOutcomePrefix)
         .await
-        .count()
-        .await as u64
+        .next()
+        .await
+        .map(|entry| (entry.0 .0) + 1)
+        .unwrap_or(0)
 }
 
 async fn submit_module_consensus_items(
