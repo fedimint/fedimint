@@ -47,6 +47,7 @@ prepare_server_db_migration_snapshots +extra_args:
 
 # regenerate client db migration snapshots
 # ex: `just prepare_client_db_migration_snapshots fedimint-dummy-tests`
+# ex: `just prepare_client_db_migration_snapshots fedimint-mint-tests`
 # ex: `just prepare_client_db_migration_snapshots fedimint-ln-tests`
 # ex: `just prepare_client_db_migration_snapshots fedimint-wallet-tests`
 prepare_client_db_migration_snapshots +extra_args:

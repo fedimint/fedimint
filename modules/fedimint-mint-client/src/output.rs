@@ -347,10 +347,7 @@ pub struct NoteIssuanceRequest {
 impl NoteIssuanceRequest {
     /// Generate a request session for a single note and returns it plus the
     /// corresponding blinded message
-    pub(crate) fn new<C>(
-        ctx: &Secp256k1<C>,
-        secret: DerivableSecret,
-    ) -> (NoteIssuanceRequest, BlindNonce)
+    pub fn new<C>(ctx: &Secp256k1<C>, secret: DerivableSecret) -> (NoteIssuanceRequest, BlindNonce)
     where
         C: Signing,
     {

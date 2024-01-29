@@ -2008,6 +2008,7 @@ dependencies = [
  "fedimint-server",
  "fedimint-tbs",
  "fedimint-testing",
+ "fedimint-threshold-crypto",
  "ff",
  "futures",
  "rand",

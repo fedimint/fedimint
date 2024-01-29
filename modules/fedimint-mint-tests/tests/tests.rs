@@ -153,9 +153,14 @@ async fn error_zero_value_oob_receive() -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod fedimint_migration_tests {
+    use std::collections::BTreeMap;
+
     use anyhow::{ensure, Context};
     use bitcoin_hashes::Hash;
-    use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
+    use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
+    use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_client::module::ClientModule;
+    use fedimint_core::core::{OperationId, LEGACY_HARDCODED_INSTANCE_ID_MINT};
     use fedimint_core::db::{
         apply_migrations, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
         IDatabaseTransactionOpsCoreTyped,
@@ -163,8 +168,16 @@ mod fedimint_migration_tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
     use fedimint_core::time::now;
-    use fedimint_core::{Amount, OutPoint, ServerModule, TransactionId};
+    use fedimint_core::{Amount, OutPoint, ServerModule, Tiered, TieredMulti, TransactionId};
     use fedimint_logging::TracingSetup;
+    use fedimint_mint_client::backup::recovery::MintRecoveryState;
+    use fedimint_mint_client::backup::{EcashBackup, EcashBackupV0};
+    use fedimint_mint_client::client_db::{
+        CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
+        NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix, RestoreStateKey,
+    };
+    use fedimint_mint_client::output::NoteIssuanceRequest;
+    use fedimint_mint_client::{MintClientInit, MintClientModule, NoteIndex, SpendableNote};
     use fedimint_mint_common::db::{
         DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix,
         MintAuditItemKey, MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix,
@@ -178,8 +191,14 @@ mod fedimint_migration_tests {
     use ff::Field;
     use futures::StreamExt;
     use rand::rngs::OsRng;
+    use secp256k1::KeyPair;
     use strum::IntoEnumIterator;
-    use tbs::{blind_message, sign_blinded_msg, BlindingKey, Message, Scalar, SecretKeyShare};
+    use tbs::{
+        blind_message, sign_blinded_msg, AggregatePublicKey, BlindingKey, Message, PublicKeyShare,
+        Scalar, SecretKeyShare, Signature,
+    };
+    use threshold_crypto::{G1Affine, G2Affine};
+    use tracing::info;
 
     use crate::MintInit;
 
@@ -233,6 +252,86 @@ mod fedimint_migration_tests {
             data: BYTE_32.to_vec(),
         };
         dbtx.insert_new_entry(&backup_key, &ecash_backup).await;
+    }
+
+    async fn create_client_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
+        dbtx.insert_new_entry(&DatabaseVersionKey, &DatabaseVersion(0))
+            .await;
+
+        let (_, pubkey) = secp256k1::generate_keypair(&mut OsRng);
+        let keypair = KeyPair::new_global(&mut OsRng);
+
+        let sig = Signature(G1Affine::generator());
+
+        let spendable_note = SpendableNote {
+            signature: sig,
+            spend_key: keypair,
+        };
+
+        dbtx.insert_new_entry(
+            &NoteKey {
+                amount: Amount::from_sats(1000),
+                nonce: Nonce(pubkey),
+            },
+            &spendable_note,
+        )
+        .await;
+
+        dbtx.insert_new_entry(&NextECashNoteIndexKey(Amount::from_sats(1000)), &3)
+            .await;
+
+        dbtx.insert_new_entry(&CancelledOOBSpendKey(OperationId(BYTE_32)), &())
+            .await;
+
+        let mut spendable_notes = BTreeMap::new();
+        spendable_notes.insert(Nonce(pubkey), (Amount::from_sats(1000), spendable_note));
+
+        let key_share = PublicKeyShare(G2Affine::generator());
+        let agg_pub_key = AggregatePublicKey(G2Affine::generator());
+        let secret = DerivableSecret::new_root(&BYTE_8, &BYTE_8)
+            .child_key(ChildId(0))
+            .child_key(ChildId(1));
+        let mut pub_key_shares = BTreeMap::new();
+        let mut keys = Tiered::default();
+        keys.insert(Amount::from_sats(1000), key_share);
+        pub_key_shares.insert(1.into(), keys);
+
+        let mut tbs_pks = Tiered::default();
+        tbs_pks.insert(Amount::from_sats(1000), agg_pub_key);
+
+        let backup = create_ecash_backup_v0(spendable_note, secret.clone());
+
+        let mint_recovery_state =
+            MintRecoveryState::from_backup(1, backup, 10, tbs_pks, pub_key_shares, &secret);
+
+        dbtx.insert_new_entry(&RestoreStateKey, &mint_recovery_state)
+            .await;
+    }
+
+    fn create_ecash_backup_v0(note: SpendableNote, secret: DerivableSecret) -> EcashBackupV0 {
+        let mut map = BTreeMap::new();
+        map.insert(Amount::from_sats(100), vec![note]);
+        let spendable_notes = TieredMulti::new(map);
+        let pending_note = (
+            OutPoint {
+                txid: TransactionId::from_slice(&BYTE_32).expect("TransactionId from slice failed"),
+                out_idx: 0,
+            },
+            Amount::from_sats(10000),
+            NoteIssuanceRequest::new(secp256k1::SECP256K1, secret).0,
+        );
+        let pending_notes = vec![pending_note];
+        let session_count = 0;
+        let mut next_note_idx = Tiered::default();
+        next_note_idx.insert(Amount::from_sats(1000), NoteIndex::from_u64(3));
+
+        let backup =
+            EcashBackup::new_v0(spendable_notes, pending_notes, session_count, next_note_idx);
+
+        match backup {
+            EcashBackup::V0(v0) => v0,
+            _ => panic!("Expected V0 ecash backup"),
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -333,6 +432,102 @@ mod fedimint_migration_tests {
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
                 MintCommonInit::KIND,
                 <Mint as ServerModule>::decoder(),
+            )]),
+        )
+        .await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn prepare_client_db_migration_snapshots() -> anyhow::Result<()> {
+        prepare_db_migration_snapshot(
+            "mint-client-v0",
+            |dbtx| Box::pin(async move { create_client_db_with_v0_data(dbtx).await }),
+            ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                MintCommonInit::KIND,
+                <MintClientModule as ClientModule>::decoder(),
+            )]),
+        )
+        .await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_client_migrations() -> anyhow::Result<()> {
+        TracingSetup::default().init()?;
+
+        validate_migrations(
+            "mint-client",
+            |db| async move {
+                let module = DynClientModuleInit::from(MintClientInit);
+                apply_migrations(
+                    &db,
+                    MintCommonInit::KIND.to_string(),
+                    module.database_version(),
+                    module.get_database_migrations(),
+                )
+                .await
+                .context("Error applying migrations to client database")?;
+
+                let mut dbtx = db.begin_transaction().await;
+
+                for prefix in fedimint_mint_client::client_db::DbKeyPrefix::iter() {
+                    match prefix {
+                        fedimint_mint_client::client_db::DbKeyPrefix::Note => {
+                            let notes = dbtx
+                                .find_by_prefix(&NoteKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_notes = notes.len();
+                            ensure!(
+                                num_notes > 0,
+                                "validate_migrations was not able to read any Notes"
+                            );
+                            info!("Validated Notes");
+                        }
+                        fedimint_mint_client::client_db::DbKeyPrefix::NextECashNoteIndex => {
+                            let next_index = dbtx
+                                .find_by_prefix(&NextECashNoteIndexKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_next_indices = next_index.len();
+                            ensure!(
+                                num_next_indices > 0,
+                                "validate_migrations was not able to read any NextECashNoteIndices"
+                            );
+                            info!("Validated NextECashNoteIndex");
+                        }
+                        fedimint_mint_client::client_db::DbKeyPrefix::CancelledOOBSpend => {
+                            let canceled_spend = dbtx
+                                .find_by_prefix(&CancelledOOBSpendKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_cancel_spends = canceled_spend.len();
+                            ensure!(
+                                num_cancel_spends > 0,
+                                "validate_migrations was not able to read any CancelledOOBSpendKeys"
+                            );
+                            info!("Validated CancelledOOBSpendKey");
+                        }
+                        fedimint_mint_client::client_db::DbKeyPrefix::RestoreState => {
+                            let restore_state = dbtx.get_value(&RestoreStateKey).await;
+                            ensure!(
+                                restore_state.is_some(),
+                                "validate_migrations was not able to read any RestoreState"
+                            );
+                            info!("Validated RestoreState");
+                        }
+                    }
+                }
+
+                Ok(())
+            },
+            ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                MintCommonInit::KIND,
+                <MintClientModule as ClientModule>::decoder(),
             )]),
         )
         .await

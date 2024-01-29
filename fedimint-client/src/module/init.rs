@@ -182,8 +182,14 @@ where
 pub trait ClientModuleInit: ModuleInit + Sized {
     type Module: ClientModule;
 
+    /// Represents the version of the database, used to determine
+    /// if a database migration is needed when the client is created.
     const DATABASE_VERSION: DatabaseVersion;
 
+    /// Returns a map of database migrations functions that are applied
+    /// to the database. The functions represent mappings between database
+    /// breaking changes and how to derive the new database structures from
+    /// the old ones.
     fn get_database_migrations(&self) -> MigrationMap {
         MigrationMap::new()
     }

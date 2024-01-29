@@ -23,7 +23,7 @@ pub enum EcashBackup {
 }
 
 impl EcashBackup {
-    pub(crate) fn new_v0(
+    pub fn new_v0(
         spendable_notes: TieredMulti<SpendableNote>,
         pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)>,
         session_count: u64,

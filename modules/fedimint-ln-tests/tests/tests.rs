@@ -671,35 +671,42 @@ mod fedimint_migration_tests {
 
         // Generate fake private/public key
         let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
+        let hop = RouteHintHop {
+            src_node_id: pk,
+            short_channel_id: 3,
+            base_msat: 20,
+            proportional_millionths: 3000,
+            cltv_expiry_delta: 8,
+            htlc_minimum_msat: Some(10),
+            htlc_maximum_msat: Some(1000),
+        };
+        let route_hints = vec![RouteHint(vec![hop])];
+
+        let gateway_info = LightningGateway {
+            mint_channel_id: 3,
+            gateway_redeem_key: pk,
+            node_pub_key: pk,
+            lightning_alias: "MyLightningNode".to_string(),
+            api: SafeUrl::from_str("http://mylightningnode.com")
+                .expect("SafeUrl parsing should not fail"),
+            route_hints,
+            fees: RoutingFees {
+                base_msat: 10,
+                proportional_millionths: 1000,
+            },
+            gateway_id: pk,
+            supports_private_payments: false,
+        };
+
+        let lightning_gateway_registration = LightningGatewayRegistration {
+            info: gateway_info,
+            vetted: false,
+            valid_until: SystemTime::now(),
+        };
+
         dbtx.insert_new_entry(
             &fedimint_ln_client::db::LightningGatewayKey,
-            &LightningGatewayRegistration {
-                info: LightningGateway {
-                    mint_channel_id: 2,
-                    gateway_redeem_key: pk.clone(),
-                    node_pub_key: pk.clone(),
-                    lightning_alias: "MyLightningNode".to_string(),
-                    api: SafeUrl::from_str("http://mylightningnode.com")
-                        .expect("SafeUrl parsing should not fail"),
-                    route_hints: vec![RouteHint(vec![RouteHintHop {
-                        src_node_id: pk,
-                        short_channel_id: 3,
-                        base_msat: 20,
-                        proportional_millionths: 3000,
-                        cltv_expiry_delta: 8,
-                        htlc_minimum_msat: Some(10),
-                        htlc_maximum_msat: Some(1000),
-                    }])],
-                    fees: RoutingFees {
-                        base_msat: 10,
-                        proportional_millionths: 1000,
-                    },
-                    gateway_id: pk.clone(),
-                    supports_private_payments: false,
-                },
-                vetted: true,
-                valid_until: SystemTime::now(),
-            },
+            &lightning_gateway_registration,
         )
         .await;
 

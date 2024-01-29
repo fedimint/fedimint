@@ -1,13 +1,13 @@
 // Backup and restore logic
-pub(crate) mod backup;
+pub mod backup;
 /// Database keys used throughout the mint client module
-mod client_db;
+pub mod client_db;
 /// State machines for mint inputs
 mod input;
 /// State machines for out-of-band transmitted e-cash notes
 mod oob;
 /// State machines for mint outputs
-mod output;
+pub mod output;
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -1707,7 +1707,7 @@ impl NoteIndex {
     // we can relax and convert to `From<u64>`
     // Actually used in tests RN, so cargo complains in non-test builds.
     #[allow(unused)]
-    fn from_u64(v: u64) -> Self {
+    pub fn from_u64(v: u64) -> Self {
         Self(v)
     }
 
