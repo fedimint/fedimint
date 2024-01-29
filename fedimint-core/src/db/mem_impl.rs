@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::sync::Mutex;
 
 use anyhow::Result;
 use bitcoin_hashes::hex::ToHex;
 use futures::{stream, StreamExt};
 use macro_rules_attribute::apply;
+use tokio::sync::Mutex;
 
 use super::{
     IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
@@ -17,11 +17,13 @@ use crate::db::PrefixStream;
 pub struct DatabaseInsertOperation {
     pub key: Vec<u8>,
     pub value: Vec<u8>,
+    pub old_value: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Default)]
 pub struct DatabaseDeleteOperation {
     pub key: Vec<u8>,
+    pub old_value: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
@@ -53,8 +55,8 @@ impl MemDatabase {
         Default::default()
     }
 
-    pub fn dump_db(&self) {
-        let data = self.data.lock().unwrap();
+    pub async fn dump_db(&self) {
+        let data = self.data.lock().await;
         let data_iter = data.iter();
         for (key, value) in data_iter {
             println!("{}: {}", key.to_hex(), value.to_hex());
@@ -66,7 +68,7 @@ impl MemDatabase {
 impl IRawDatabase for MemDatabase {
     type Transaction<'a> = MemTransaction<'a>;
     async fn begin_transaction<'a>(&'a self) -> MemTransaction<'a> {
-        let db_copy = self.data.lock().unwrap().clone();
+        let db_copy = self.data.lock().await.clone();
         let mut memtx = MemTransaction {
             operations: Vec::new(),
             tx_data: db_copy.clone(),
@@ -86,16 +88,16 @@ impl IRawDatabase for MemDatabase {
 #[apply(async_trait_maybe_send!)]
 impl<'a> IDatabaseTransactionOpsCore for MemTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
-        let val = self.raw_get_bytes(key).await;
         // Insert data from copy so we can read our own writes
-        self.tx_data.insert(key.to_vec(), value.to_owned());
+        let old_value = self.tx_data.insert(key.to_vec(), value.to_owned());
         self.operations
             .push(DatabaseOperation::Insert(DatabaseInsertOperation {
                 key: key.to_vec(),
                 value: value.to_owned(),
+                old_value: old_value.clone(),
             }));
         self.num_pending_operations += 1;
-        val
+        Ok(old_value)
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
@@ -104,13 +106,14 @@ impl<'a> IDatabaseTransactionOpsCore for MemTransaction<'a> {
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         // Remove data from copy so we can read our own writes
-        let ret = self.tx_data.remove(&key.to_vec());
+        let old_value = self.tx_data.remove(&key.to_vec());
         self.operations
             .push(DatabaseOperation::Delete(DatabaseDeleteOperation {
                 key: key.to_vec(),
+                old_value: old_value.clone(),
             }));
         self.num_pending_operations += 1;
-        Ok(ret)
+        Ok(old_value)
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
@@ -176,21 +179,25 @@ impl<'a> IDatabaseTransactionOps for MemTransaction<'a> {
 #[apply(async_trait_maybe_send!)]
 impl<'a> IRawDatabaseTransaction for MemTransaction<'a> {
     async fn commit_tx(self) -> Result<()> {
+        let mut data = self.db.data.lock().await;
+        let mut data_copy = data.clone();
         for op in self.operations {
             match op {
                 DatabaseOperation::Insert(insert_op) => {
-                    self.db
-                        .data
-                        .lock()
-                        .unwrap()
-                        .insert(insert_op.key, insert_op.value);
+                    anyhow::ensure!(
+                        data_copy.insert(insert_op.key, insert_op.value) == insert_op.old_value,
+                        "write-write conflict"
+                    );
                 }
                 DatabaseOperation::Delete(delete_op) => {
-                    self.db.data.lock().unwrap().remove(&delete_op.key);
+                    anyhow::ensure!(
+                        data_copy.remove(&delete_op.key) == delete_op.old_value,
+                        "write-write conflict"
+                    )
                 }
             }
         }
-
+        *data = data_copy;
         Ok(())
     }
 }
@@ -263,6 +270,11 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn test_dbtx_remove_by_prefix() {
         fedimint_core::db::verify_remove_by_prefix(database()).await;
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_expect_write_conflict() {
+        fedimint_core::db::expect_write_conflict(database()).await;
     }
 
     #[test_log::test(tokio::test)]
