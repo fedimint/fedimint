@@ -163,4 +163,8 @@ impl ILnRpcClient for FakeLightningTest {
     ) -> Result<EmptyResponse, LightningRpcError> {
         Ok(EmptyResponse {})
     }
+
+    async fn update_scids(&self, _scids: Vec<u64>) -> Result<EmptyResponse, LightningRpcError> {
+        Ok(EmptyResponse {})
+    }
 }

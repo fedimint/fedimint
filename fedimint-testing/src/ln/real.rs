@@ -141,6 +141,10 @@ impl ILnRpcClient for ClnLightningTest {
     ) -> Result<EmptyResponse, LightningRpcError> {
         self.lnrpc.complete_htlc(htlc).await
     }
+
+    async fn update_scids(&self, _scids: Vec<u64>) -> Result<EmptyResponse, LightningRpcError> {
+        Ok(EmptyResponse {})
+    }
 }
 
 impl ClnLightningTest {
@@ -298,6 +302,10 @@ impl ILnRpcClient for LndLightningTest {
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError> {
         self.lnrpc.complete_htlc(htlc).await
+    }
+
+    async fn update_scids(&self, _scids: Vec<u64>) -> Result<EmptyResponse, LightningRpcError> {
+        self.lnrpc.update_scids(_scids).await
     }
 }
 
@@ -727,6 +735,10 @@ impl ILnRpcClient for LdkLightningTest {
         _htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError> {
         unimplemented!("Unsupported: we dont currently support HTLC interception for LDK Node");
+    }
+
+    async fn update_scids(&self, _scids: Vec<u64>) -> Result<EmptyResponse, LightningRpcError> {
+        Ok(EmptyResponse {})
     }
 }
 
