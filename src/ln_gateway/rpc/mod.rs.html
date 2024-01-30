@@ -215,11 +215,6 @@
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
 <a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
@@ -289,17 +284,12 @@
     <span class="kw">pub </span>address: Address,
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-</span><span class="kw">pub struct </span>FederationConnectionInfo {
-    <span class="kw">pub </span>federation_id: FederationId,
-    <span class="kw">pub </span>config: ClientConfig,
-}
-
 <span class="doccomment">/// Information about one of the feds we are connected to
 </span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 </span><span class="kw">pub struct </span>FederationInfo {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>balance_msat: Amount,
+    <span class="kw">pub </span>config: ClientConfig,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -374,7 +364,7 @@
 <span class="macro">impl_gateway_request_trait!</span>(ConfigPayload, GatewayFedConfig, GatewayRequest::Config);
 <span class="macro">impl_gateway_request_trait!</span>(
     ConnectFedPayload,
-    FederationConnectionInfo,
+    FederationInfo,
     GatewayRequest::ConnectFederation
 );
 <span class="macro">impl_gateway_request_trait!</span>(PayInvoicePayload, Preimage, GatewayRequest::PayInvoice);

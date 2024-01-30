@@ -205,6 +205,23 @@
 <a href="#205" id="205">205</a>
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::response::IntoResponse;
@@ -220,8 +237,8 @@
 <span class="kw">use </span>tracing::{error, instrument};
 
 <span class="kw">use super</span>::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, LeaveFedPayload,
-    RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, InfoPayload,
+    LeaveFedPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::GatewayConfiguration;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::ConfigPayload;
@@ -266,6 +283,8 @@
 
         <span class="comment">// Authenticated, public routes used for gateway administration
         </span><span class="kw">let </span>admin_routes = Router::new()
+            <span class="comment">// FIXME: deprecated &gt;= 0.3.0
+            </span>.route(<span class="string">&quot;/info&quot;</span>, post(handle_post_info))
             .route(<span class="string">&quot;/info&quot;</span>, get(info))
             .route(<span class="string">&quot;/config&quot;</span>, post(configuration))
             .route(<span class="string">&quot;/balance&quot;</span>, post(balance))
@@ -282,6 +301,8 @@
         <span class="kw">let </span>public_routes = Router::new()
             .route(<span class="string">&quot;/set_configuration&quot;</span>, post(set_configuration))
             .route(<span class="string">&quot;/config&quot;</span>, get(configuration))
+            <span class="comment">// FIXME: deprecated &gt;= 0.3.0
+            </span>.route(<span class="string">&quot;/info&quot;</span>, post(handle_post_info))
             .route(<span class="string">&quot;/info&quot;</span>, get(info));
         <span class="kw">let </span>admin_routes = Router::new();
         (public_routes, admin_routes)
@@ -292,6 +313,19 @@
         .merge(admin_routes)
         .layer(Extension(gateway))
         .layer(CorsLayer::permissive())
+}
+
+<span class="doccomment">/// Display high-level information about the Gateway
+</span><span class="comment">// FIXME: deprecated &gt;= 0.3.0
+// This endpoint exists only to remain backwards-compatible with the original POST endpoint
+</span><span class="attr">#[debug_handler]
+#[instrument(skip_all, err)]
+</span><span class="kw">async fn </span>handle_post_info(
+    Extension(gateway): Extension&lt;Gateway&gt;,
+    Json(_payload): Json&lt;InfoPayload&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
+    <span class="kw">let </span>info = gateway.handle_get_info().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(info)))
 }
 
 <span class="doccomment">/// Display high-level information about the Gateway

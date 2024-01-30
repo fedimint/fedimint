@@ -148,6 +148,12 @@
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::result::Result;
 
 <span class="kw">use </span>bitcoin::Address;
@@ -161,7 +167,7 @@
 
 <span class="kw">use super</span>::{
     BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
-    FederationConnectionInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, RestorePayload,
+    FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, RestorePayload,
     SetConfigurationPayload, WithdrawPayload,
 };
 
@@ -193,6 +199,12 @@
         <span class="self">self</span>.call_get(url).<span class="kw">await
     </span>}
 
+    <span class="comment">// FIXME: deprecated &gt;= 0.3.0
+    </span><span class="kw">pub async fn </span>get_info_legacy(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayRpcResult&lt;GatewayInfo&gt; {
+        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/info&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
+        <span class="self">self</span>.call_post(url, ()).<span class="kw">await
+    </span>}
+
     <span class="kw">pub async fn </span>get_config(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: ConfigPayload) -&gt; GatewayRpcResult&lt;GatewayFedConfig&gt; {
         <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/config&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
@@ -219,7 +231,7 @@
     <span class="kw">pub async fn </span>connect_federation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: ConnectFedPayload,
-    ) -&gt; GatewayRpcResult&lt;FederationConnectionInfo&gt; {
+    ) -&gt; GatewayRpcResult&lt;FederationInfo&gt; {
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
             .join(<span class="string">&quot;/connect-fed&quot;</span>)

@@ -1464,7 +1464,6 @@
 <a href="#1464" id="1464">1464</a>
 <a href="#1465" id="1465">1465</a>
 <a href="#1466" id="1466">1466</a>
-<a href="#1467" id="1467">1467</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lightning;
@@ -1527,8 +1526,8 @@
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rpc::{
-    FederationConnectionInfo, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    SetConfigurationPayload, V1_API_ENDPOINT,
+    FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, SetConfigurationPayload,
+    V1_API_ENDPOINT,
 };
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
@@ -2299,7 +2298,7 @@
     <span class="kw">async fn </span>handle_connect_federation(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         payload: ConnectFedPayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationConnectionInfo&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationInfo&gt; {
         <span class="kw">if let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone() {
             <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>payload.invite_code).map_err(|e| {
                 GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">&quot;Invalid federation member string {e:?}&quot;</span>))
@@ -2354,12 +2353,9 @@
                 .build(gw_client_cfg.clone(), <span class="self">self</span>.clone())
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span>federation_config = FederationConnectionInfo {
-                federation_id,
-                config: client.get_config().clone(),
-            };
+            <span class="kw">let </span>federation_info = <span class="self">self</span>.make_federation_info(<span class="kw-2">&amp;</span>client, federation_id).<span class="kw">await</span>;
 
-            <span class="self">self</span>.check_federation_network(<span class="kw-2">&amp;</span>federation_config, gateway_config.network)
+            <span class="self">self</span>.check_federation_network(<span class="kw-2">&amp;</span>federation_info, gateway_config.network)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
             client
@@ -2382,7 +2378,7 @@
                 .save_config(gw_client_cfg.clone(), dbtx)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(federation_config);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(federation_info);
         }
 
         <span class="prelude-val">Err</span>(GatewayError::Disconnected)
@@ -2775,16 +2771,18 @@
         federation_id: FederationId,
     ) -&gt; FederationInfo {
         <span class="kw">let </span>balance_msat = client.get_balance().<span class="kw">await</span>;
+        <span class="kw">let </span>config = client.get_config().clone();
 
         FederationInfo {
             federation_id,
             balance_msat,
+            config,
         }
     }
 
     <span class="kw">async fn </span>check_federation_network(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        info: <span class="kw-2">&amp;</span>FederationConnectionInfo,
+        info: <span class="kw-2">&amp;</span>FederationInfo,
         network: Network,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>cfg = info

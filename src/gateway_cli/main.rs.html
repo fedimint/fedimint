@@ -198,6 +198,12 @@
 <a href="#198" id="198">198</a>
 <a href="#199" id="199">199</a>
 <a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::config::FederationId;
@@ -300,14 +306,20 @@
 
     <span class="kw">let </span>cli = Cli::parse();
     <span class="kw">let </span>versioned_api = cli.address.join(V1_API_ENDPOINT)<span class="question-mark">?</span>;
-    <span class="kw">let </span>client = || GatewayRpcClient::new(versioned_api, cli.rpcpassword);
+    <span class="kw">let </span>client = || GatewayRpcClient::new(versioned_api.clone(), cli.rpcpassword.clone());
 
     <span class="kw">match </span>cli.command {
         Commands::VersionHash =&gt; {
             <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>));
         }
         Commands::Info =&gt; {
-            <span class="kw">let </span>response = client().get_info().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="comment">// For backwards-compatibility, fallback to the original POST endpoint if the
+            // GET endpoint fails
+            // FIXME: deprecated &gt;= 0.3.0
+            </span><span class="kw">let </span>response = <span class="kw">match </span>client().get_info().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(res) =&gt; res,
+                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; client().get_info_legacy().<span class="kw">await</span><span class="question-mark">?</span>,
+            };
 
             print_response(response).<span class="kw">await</span>;
         }
