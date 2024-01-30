@@ -332,6 +332,12 @@ rec {
     buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/tests/latency-test.sh";
   };
 
+  latencyTestDegraded = craneLibTests.mkCargoDerivation {
+    pname = "${commonCliTestArgs.pname}-latency";
+    cargoArtifacts = workspaceBuild;
+    buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/tests/latency-test.sh --degraded";
+  };
+
   devimintCliTest = craneLibTests.mkCargoDerivation {
     pname = "${commonCliTestArgs.pname}-cli";
     cargoArtifacts = workspaceBuild;
