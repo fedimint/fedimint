@@ -593,7 +593,7 @@
 
 <span class="kw">impl</span>&lt;C&gt; Encodable <span class="kw">for </span>TieredMulti&lt;C&gt;
 <span class="kw">where
-    </span>C: Encodable,
+    </span>C: Encodable + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="self">self</span>.<span class="number">0</span>.consensus_encode(writer)
@@ -602,7 +602,7 @@
 
 <span class="kw">impl</span>&lt;C&gt; Decodable <span class="kw">for </span>TieredMulti&lt;C&gt;
 <span class="kw">where
-    </span>C: Decodable,
+    </span>C: Decodable + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
