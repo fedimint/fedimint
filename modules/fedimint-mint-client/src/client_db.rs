@@ -58,9 +58,6 @@ impl_db_lookup!(
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct RestoreStateKey;
 
-#[derive(Debug, Clone, Encodable, Decodable)]
-pub struct RestoreStateKeyPrefix;
-
 impl_db_record!(
     key = RestoreStateKey,
     value = MintRecoveryState,

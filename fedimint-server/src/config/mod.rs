@@ -210,7 +210,7 @@ impl ServerConfig {
     pub fn supported_api_versions() -> SupportedCoreApiVersions {
         SupportedCoreApiVersions {
             core_consensus: CORE_CONSENSUS_VERSION,
-            api: MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
+            api: MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 1 }])
                 .expect("not version conflicts"),
         }
     }

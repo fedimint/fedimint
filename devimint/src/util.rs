@@ -538,6 +538,15 @@ impl FedimintCli {
                 .collect::<Vec<_>>(),
         ))
     }
+
+    /// Returns the fedimintd version from clap or default min version if the
+    /// binary doesn't support a version flag
+    pub async fn version_or_default() -> Version {
+        match cmd!(FedimintCli, "--version").out_string().await {
+            Ok(version) => parse_clap_version(&version),
+            Err(_) => DEFAULT_VERSION,
+        }
+    }
 }
 
 pub struct LoadTestTool;

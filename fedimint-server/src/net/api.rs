@@ -1,4 +1,5 @@
 //! Implements the client API through which users interact with the federation
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -20,10 +21,9 @@ use fedimint_core::db::{
 use fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT,
-    PENDING_ACCEPTED_ITEMS_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
-    VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
+    CLIENT_CONFIG_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
+    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+    STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -33,7 +33,7 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
+use fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
 use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
@@ -177,15 +177,25 @@ impl ConsensusApi {
             .0
     }
 
-    pub async fn pending_accepted_items(&self) -> Vec<AcceptedItem> {
-        self.db
-            .begin_transaction_nc()
-            .await
-            .find_by_prefix(&AcceptedItemPrefix)
-            .await
-            .map(|entry| entry.1)
-            .collect()
-            .await
+    pub async fn session_status(&self, session_index: u64) -> SessionStatus {
+        let mut dbtx = self.db.begin_transaction_nc().await;
+
+        match session_index.cmp(&get_finished_session_count_static(&mut dbtx).await) {
+            Ordering::Greater => SessionStatus::Initial,
+            Ordering::Equal => SessionStatus::Pending(
+                dbtx.find_by_prefix(&AcceptedItemPrefix)
+                    .await
+                    .map(|entry| entry.1)
+                    .collect()
+                    .await,
+            ),
+            Ordering::Less => SessionStatus::Complete(
+                dbtx.get_value(&SignedSessionOutcomeKey(session_index))
+                    .await
+                    .expect("There are no gaps in session outcomes")
+                    .session_outcome,
+            ),
+        }
     }
 
     pub async fn get_federation_status(&self) -> ApiResult<FederationStatus> {
@@ -439,9 +449,9 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            PENDING_ACCEPTED_ITEMS_ENDPOINT,
-            async |fedimint: &ConsensusApi, _context, _v: ()| -> SerdeModuleEncoding<Vec<AcceptedItem>> {
-                Ok((&fedimint.pending_accepted_items().await).into())
+            SESSION_STATUS_ENDPOINT,
+            async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SessionStatus> {
+                Ok((&fedimint.session_status(index).await).into())
             }
         },
         api_endpoint! {

@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::debug;
 
-use crate::db::DummyClientFundsKeyV0;
+use crate::db::DummyClientFundsKeyV1;
 use crate::{get_funds, DummyClientContext};
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -84,7 +84,7 @@ impl State for DummyStateMachine {
 
 async fn add_funds(amount: Amount, mut dbtx: DatabaseTransaction<'_>) {
     let funds = get_funds(&mut dbtx).await + amount;
-    dbtx.insert_entry(&DummyClientFundsKeyV0, &funds).await;
+    dbtx.insert_entry(&DummyClientFundsKeyV1, &funds).await;
 }
 
 // TODO: Boiler-plate, should return OutputOutcome
