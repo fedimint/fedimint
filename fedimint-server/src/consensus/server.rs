@@ -428,16 +428,31 @@ impl ConsensusServer {
         while num_batches < batches_per_session_outcome {
             tokio::select! {
                 unit_data = unit_data_receiver.recv() => {
-                    if let (UnitData::Batch(bytes), peer) = unit_data? {
-                        if let Ok(items) = Vec::<ConsensusItem>::consensus_decode(&mut bytes.as_slice(), &self.decoders()){
+                    let (unit, peer) = match unit_data {
+                        Ok((unit, peer)) => (unit, peer),
+                        Err(err) => {
+                            warn!(target: LOG_CONSENSUS, item_index, "Unit receiving error");
+                            return Err(err.into());
+                        }
+                    };
+                    debug!(target: LOG_CONSENSUS, item_index, %peer, "Received data unit");
+                    if let UnitData::Batch(bytes) = unit {
+                        debug!(target: LOG_CONSENSUS, item_index, %peer, len = bytes.len(), "Received batch of bytes");
+                        let decode_res = Vec::<ConsensusItem>::consensus_decode(&mut bytes.as_slice(), &self.decoders())
+                            .map_err(|err| { warn!(target: LOG_CONSENSUS, %err, %peer, "Failed to decode a batch"); err }) ;
+                        if let Ok(items) = decode_res  {
                             for item in items {
-                                if self.process_consensus_item(
+                                let process_res = self.process_consensus_item(
                                     session_index,
                                     item_index,
                                     item.clone(),
                                     peer
-                                ).await
-                                .is_ok() {
+                                ).await.map_err(|err| {
+                                    warn!(target: LOG_CONSENSUS, %err, item_index, %peer, "Failed to process consensus item from a batch");
+                                    err
+                                });
+                                if process_res.is_ok() {
+                                    debug!(target: LOG_CONSENSUS, item_index, %peer, "Processed an item from a batch");
                                     item_index += 1;
                                 }
                             }
