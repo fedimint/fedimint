@@ -181,7 +181,7 @@ impl<C> Extend<(Amount, C)> for TieredMulti<C> {
 
 impl<C> Encodable for TieredMulti<C>
 where
-    C: Encodable,
+    C: Encodable + 'static,
 {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         self.0.consensus_encode(writer)
@@ -190,7 +190,7 @@ where
 
 impl<C> Decodable for TieredMulti<C>
 where
-    C: Decodable,
+    C: Decodable + 'static,
 {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
