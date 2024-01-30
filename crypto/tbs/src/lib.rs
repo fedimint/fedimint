@@ -185,6 +185,14 @@ fn lagrange_multipliers(scalars: Vec<Scalar>) -> Vec<Scalar> {
         .collect()
 }
 
+pub fn verify_blinded_signature(
+    msg: BlindedMessage,
+    sig: BlindedSignature,
+    pk: AggregatePublicKey,
+) -> bool {
+    pairing(&msg.0, &pk.0) == pairing(&sig.0, &G2Affine::generator())
+}
+
 pub fn unblind_signature(blinding_key: BlindingKey, blinded_sig: BlindedSignature) -> Signature {
     let sig = blinded_sig.0 * blinding_key.0.invert().unwrap();
     Signature(sig.to_affine())
