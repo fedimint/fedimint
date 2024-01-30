@@ -114,7 +114,7 @@ async fn info(Extension(gateway): Extension<Gateway>) -> Result<impl IntoRespons
 
 /// Display high-level information about the Gateway config
 #[debug_handler]
-#[instrument(skip_all, err)]
+#[instrument(skip_all, err, fields(?payload))]
 async fn configuration(
     Extension(gateway): Extension<Gateway>,
     Json(payload): Json<ConfigPayload>,
@@ -127,7 +127,7 @@ async fn configuration(
 
 /// Display gateway ecash note balance
 #[debug_handler]
-#[instrument(skip_all, err)]
+#[instrument(skip_all, err, fields(?payload))]
 async fn balance(
     Extension(gateway): Extension<Gateway>,
     Json(payload): Json<BalancePayload>,
@@ -138,7 +138,7 @@ async fn balance(
 
 /// Generate deposit address
 #[debug_handler]
-#[instrument(skip_all, err)]
+#[instrument(skip_all, err, fields(?payload))]
 async fn address(
     Extension(gateway): Extension<Gateway>,
     Json(payload): Json<DepositAddressPayload>,
@@ -149,7 +149,7 @@ async fn address(
 
 /// Withdraw from a gateway federation.
 #[debug_handler]
-#[instrument(skip_all, err)]
+#[instrument(skip_all, err, fields(?payload))]
 async fn withdraw(
     Extension(gateway): Extension<Gateway>,
     Json(payload): Json<WithdrawPayload>,
@@ -158,7 +158,7 @@ async fn withdraw(
     Ok(Json(json!(txid)))
 }
 
-#[instrument(skip_all, err)]
+#[instrument(skip_all, err, fields(?payload))]
 async fn pay_invoice(
     Extension(gateway): Extension<Gateway>,
     Json(payload): Json<PayInvoicePayload>,
@@ -168,7 +168,7 @@ async fn pay_invoice(
 }
 
 /// Connect a new federation
-#[instrument(skip_all, err)]
+#[instrument(skip_all, err, fields(?payload))]
 async fn connect_fed(
     Extension(mut gateway): Extension<Gateway>,
     Json(payload): Json<ConnectFedPayload>,
@@ -178,7 +178,7 @@ async fn connect_fed(
 }
 
 /// Leave a federation
-#[instrument(skip_all, err)]
+#[instrument(skip_all, err, fields(?payload))]
 async fn leave_fed(
     Extension(mut gateway): Extension<Gateway>,
     Json(payload): Json<LeaveFedPayload>,
@@ -188,7 +188,7 @@ async fn leave_fed(
 }
 
 /// Backup a gateway actor state
-#[instrument(skip_all, err)]
+#[instrument(skip_all, err, fields(?payload))]
 async fn backup(
     Extension(gateway): Extension<Gateway>,
     Json(payload): Json<BackupPayload>,
@@ -198,7 +198,7 @@ async fn backup(
 }
 
 // Restore a gateway actor state
-#[instrument(skip_all, err)]
+#[instrument(skip_all, err, fields(?payload))]
 async fn restore(
     Extension(gateway): Extension<Gateway>,
     Json(payload): Json<RestorePayload>,
@@ -207,7 +207,7 @@ async fn restore(
     Ok(())
 }
 
-#[instrument(skip_all, err)]
+#[instrument(skip_all, err, fields(?payload))]
 async fn set_configuration(
     Extension(gateway): Extension<Gateway>,
     Json(payload): Json<SetConfigurationPayload>,
