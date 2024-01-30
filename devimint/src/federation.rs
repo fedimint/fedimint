@@ -97,7 +97,7 @@ impl Client {
 
     /// Create a [`Client`] that starts with a state that is a copy of
     /// of another one.
-    async fn new_forked(&self, name: &str) -> Result<Client> {
+    pub async fn new_forked(&self, name: &str) -> Result<Client> {
         let new = Client::create(name).await?;
 
         cmd!(

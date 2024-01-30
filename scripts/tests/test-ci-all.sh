@@ -54,7 +54,10 @@ function gateway_reboot_test() {
 export -f gateway_reboot_test
 
 function latency_test() {
-  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh
+  # latency tests are not necessary for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh
+  fi
 }
 export -f latency_test
 
