@@ -741,6 +741,15 @@
 <a href="#741" id="741">741</a>
 <a href="#742" id="742">742</a>
 <a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -1280,6 +1289,15 @@
                 .map(String::as_str)
                 .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
         ))
+    }
+
+    <span class="doccomment">/// Returns the fedimintd version from clap or default min version if the
+    /// binary doesn&#39;t support a version flag
+    </span><span class="kw">pub async fn </span>version_or_default() -&gt; Version {
+        <span class="kw">match </span><span class="macro">cmd!</span>(FedimintCli, <span class="string">&quot;--version&quot;</span>).out_string().<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(version) =&gt; parse_clap_version(<span class="kw-2">&amp;</span>version),
+            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; DEFAULT_VERSION,
+        }
     }
 }
 

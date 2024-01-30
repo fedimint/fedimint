@@ -691,7 +691,7 @@
 
     <span class="doccomment">/// Create a [`Client`] that starts with a state that is a copy of
     /// of another one.
-    </span><span class="kw">async fn </span>new_forked(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
+    </span><span class="kw">pub async fn </span>new_forked(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
         <span class="kw">let </span>new = Client::create(name).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">cmd!</span>(
