@@ -658,7 +658,10 @@ impl ConfigGenState {
             .values()
             .cloned()
             .chain(self.our_peer_info().ok())
-            .sorted_by_key(|peer| peer.cert.clone())
+            // Since sort order here is arbitrary, try to sort by nick-names first for more natural
+            // 'name -> id' mapping, which is helpful when operating on 'peer-ids' (debugging etc.);
+            // Ties are OK (to_lowercase), not important in practice.
+            .sorted_by_cached_key(|peer| peer.name.to_lowercase())
             .enumerate()
             .map(|(i, peer)| (PeerId::from(i as u16), peer))
             .collect()
