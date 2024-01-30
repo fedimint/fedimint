@@ -2184,6 +2184,37 @@
 <a href="#2184" id="2184">2184</a>
 <a href="#2185" id="2185">2185</a>
 <a href="#2186" id="2186">2186</a>
+<a href="#2187" id="2187">2187</a>
+<a href="#2188" id="2188">2188</a>
+<a href="#2189" id="2189">2189</a>
+<a href="#2190" id="2190">2190</a>
+<a href="#2191" id="2191">2191</a>
+<a href="#2192" id="2192">2192</a>
+<a href="#2193" id="2193">2193</a>
+<a href="#2194" id="2194">2194</a>
+<a href="#2195" id="2195">2195</a>
+<a href="#2196" id="2196">2196</a>
+<a href="#2197" id="2197">2197</a>
+<a href="#2198" id="2198">2198</a>
+<a href="#2199" id="2199">2199</a>
+<a href="#2200" id="2200">2200</a>
+<a href="#2201" id="2201">2201</a>
+<a href="#2202" id="2202">2202</a>
+<a href="#2203" id="2203">2203</a>
+<a href="#2204" id="2204">2204</a>
+<a href="#2205" id="2205">2205</a>
+<a href="#2206" id="2206">2206</a>
+<a href="#2207" id="2207">2207</a>
+<a href="#2208" id="2208">2208</a>
+<a href="#2209" id="2209">2209</a>
+<a href="#2210" id="2210">2210</a>
+<a href="#2211" id="2211">2211</a>
+<a href="#2212" id="2212">2212</a>
+<a href="#2213" id="2213">2213</a>
+<a href="#2214" id="2214">2214</a>
+<a href="#2215" id="2215">2215</a>
+<a href="#2216" id="2216">2216</a>
+<a href="#2217" id="2217">2217</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2280,7 +2311,8 @@
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
 };
 <span class="kw">use </span>fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    apply_migrations, AutocommitError, Database, DatabaseTransaction,
+    IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -3877,6 +3909,32 @@
         </span>)
     }
 
+    <span class="kw">async fn </span>migrate_database(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="comment">// Only apply the client database migrations if the database has been
+        // initialized.
+        </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(client_config) = <span class="self">self</span>.load_existing_config().<span class="kw">await </span>{
+            <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span>client_config.modules {
+                <span class="kw">let </span>kind = module_cfg.kind.clone();
+                <span class="kw">let </span><span class="prelude-val">Some</span>(init) = <span class="self">self</span>.module_inits.get(<span class="kw-2">&amp;</span>kind) <span class="kw">else </span>{
+                    <span class="macro">warn!</span>(<span class="string">&quot;Detected configuration for unsupported module id: {module_id}, kind: {kind}&quot;</span>);
+                    <span class="kw">continue</span>;
+                };
+
+                <span class="kw">let </span>isolated_db = <span class="self">self</span>.db().with_prefix_module_id(module_id);
+
+                apply_migrations(
+                    <span class="kw-2">&amp;</span>isolated_db,
+                    kind.to_string(),
+                    init.database_version(),
+                    init.get_database_migrations(),
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            }
+        }
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
     <span class="kw">pub fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
         <span class="kw-2">&amp;</span><span class="self">self</span>.db
     }
@@ -4020,6 +4078,10 @@
         <span class="kw">let </span>config = <span class="self">Self</span>::config_decoded(config, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
         <span class="kw">let </span>db = <span class="self">self</span>.db.with_decoders(decoders.clone());
         <span class="kw">let </span>api = DynGlobalApi::from_config(<span class="kw-2">&amp;</span>config);
+
+        <span class="comment">// Migrate the database before interacting with it in case any on-disk data
+        // structures have changed.
+        </span><span class="self">self</span>.migrate_database().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>init_state = <span class="self">Self</span>::load_init_state(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
 

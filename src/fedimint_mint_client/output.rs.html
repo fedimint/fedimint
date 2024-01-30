@@ -416,9 +416,6 @@
 <a href="#416" id="416">416</a>
 <a href="#417" id="417">417</a>
 <a href="#418" id="418">418</a>
-<a href="#419" id="419">419</a>
-<a href="#420" id="420">420</a>
-<a href="#421" id="421">421</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -768,10 +765,7 @@
 <span class="kw">impl </span>NoteIssuanceRequest {
     <span class="doccomment">/// Generate a request session for a single note and returns it plus the
     /// corresponding blinded message
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new&lt;C&gt;(
-        ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
-        secret: DerivableSecret,
-    ) -&gt; (NoteIssuanceRequest, BlindNonce)
+    </span><span class="kw">pub fn </span>new&lt;C&gt;(ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;, secret: DerivableSecret) -&gt; (NoteIssuanceRequest, BlindNonce)
     <span class="kw">where
         </span>C: Signing,
     {

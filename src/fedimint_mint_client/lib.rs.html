@@ -1909,16 +1909,18 @@
 <a href="#1909" id="1909">1909</a>
 <a href="#1910" id="1910">1910</a>
 <a href="#1911" id="1911">1911</a>
+<a href="#1912" id="1912">1912</a>
+<a href="#1913" id="1913">1913</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
+</span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
-</span><span class="kw">mod </span>client_db;
+</span><span class="kw">pub mod </span>client_db;
 <span class="doccomment">/// State machines for mint inputs
 </span><span class="kw">mod </span>input;
 <span class="doccomment">/// State machines for out-of-band transmitted e-cash notes
 </span><span class="kw">mod </span>oob;
 <span class="doccomment">/// State machines for mint outputs
-</span><span class="kw">mod </span>output;
+</span><span class="kw">pub mod </span>output;
 
 <span class="kw">use </span>std::cmp::{<span class="self">self</span>, Ordering};
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -1947,7 +1949,8 @@
 <span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    AutocommitError, Database, DatabaseTransaction, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -2249,6 +2252,7 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>ClientModuleInit <span class="kw">for </span>MintClientInit {
     <span class="kw">type </span>Module = MintClientModule;
+    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">0</span>);
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}])
@@ -3668,7 +3672,7 @@
     // we can relax and convert to `From&lt;u64&gt;`
     // Actually used in tests RN, so cargo complains in non-test builds.
     </span><span class="attr">#[allow(unused)]
-    </span><span class="kw">fn </span>from_u64(v: u64) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>from_u64(v: u64) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(v)
     }
 

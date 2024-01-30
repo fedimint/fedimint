@@ -367,13 +367,20 @@
 <a href="#367" id="367">367</a>
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, format_err, Context <span class="kw">as _</span>};
 <span class="kw">use </span>common::broken_fed_key_pair;
-<span class="kw">use </span>db::DbKeyPrefix;
+<span class="kw">use </span>db::{migrate_to_v1, DbKeyPrefix, DummyClientFundsKeyV1};
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
@@ -381,7 +388,9 @@
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::{Decoder, KeyPair, OperationId};
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+<span class="kw">use </span>fedimint_core::db::{
+    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationMap,
+};
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
@@ -393,15 +402,13 @@
     fed_key_pair, DummyCommonInit, DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome,
     KIND,
 };
-<span class="kw">use </span>futures::{pin_mut, StreamExt};
+<span class="kw">use </span>futures::{pin_mut, FutureExt, StreamExt};
 <span class="kw">use </span>secp256k1::{PublicKey, Secp256k1};
 <span class="kw">use </span>states::DummyStateMachine;
 <span class="kw">use </span>strum::IntoEnumIterator;
 
-<span class="kw">use </span><span class="kw">crate</span>::db::DummyClientFundsKeyV0;
-
 <span class="kw">pub mod </span>api;
-<span class="kw">mod </span>db;
+<span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>states;
 
 <span class="attr">#[derive(Debug)]
@@ -474,7 +481,7 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">&quot;Insufficient funds&quot;</span>));
         }
         <span class="kw">let </span>updated = funds - amount;
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV0, <span class="kw-2">&amp;</span>updated).<span class="kw">await</span>;
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV1, <span class="kw-2">&amp;</span>updated).<span class="kw">await</span>;
 
         <span class="comment">// Construct input and state machine to track the tx
         </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[ClientInput {
@@ -664,7 +671,7 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">&quot;Wrong account id&quot;</span>));
         }
 
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV0, <span class="kw-2">&amp;</span>new_balance)
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV1, <span class="kw-2">&amp;</span>new_balance)
             .<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(())
@@ -677,7 +684,7 @@
 }
 
 <span class="kw">async fn </span>get_funds(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
-    <span class="kw">let </span>funds = dbtx.get_value(<span class="kw-2">&amp;</span>DummyClientFundsKeyV0).<span class="kw">await</span>;
+    <span class="kw">let </span>funds = dbtx.get_value(<span class="kw-2">&amp;</span>DummyClientFundsKeyV1).<span class="kw">await</span>;
     funds.unwrap_or(Amount::ZERO)
 }
 
@@ -702,7 +709,7 @@
         <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
             <span class="kw">match </span>table {
                 DbKeyPrefix::ClientFunds =&gt; {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(funds) = dbtx.get_value(<span class="kw-2">&amp;</span>DummyClientFundsKeyV0).<span class="kw">await </span>{
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(funds) = dbtx.get_value(<span class="kw-2">&amp;</span>DummyClientFundsKeyV1).<span class="kw">await </span>{
                         items.insert(<span class="string">&quot;Dummy Funds&quot;</span>.to_string(), Box::new(funds));
                     }
                 }
@@ -717,6 +724,13 @@
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>ClientModuleInit <span class="kw">for </span>DummyClientInit {
     <span class="kw">type </span>Module = DummyClientModule;
+    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">1</span>);
+
+    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
+        <span class="kw">let </span><span class="kw-2">mut </span>migrations = MigrationMap::new();
+        migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx| migrate_to_v1(dbtx).boxed());
+        migrations
+    }
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}])

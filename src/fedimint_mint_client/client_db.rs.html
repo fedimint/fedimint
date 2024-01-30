@@ -80,9 +80,6 @@
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, Amount};
@@ -142,9 +139,6 @@
 
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>RestoreStateKey;
-
-<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>RestoreStateKeyPrefix;
 
 <span class="macro">impl_db_record!</span>(
     key = RestoreStateKey,

@@ -154,7 +154,7 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::debug;
 
-<span class="kw">use </span><span class="kw">crate</span>::db::DummyClientFundsKeyV0;
+<span class="kw">use </span><span class="kw">crate</span>::db::DummyClientFundsKeyV1;
 <span class="kw">use crate</span>::{get_funds, DummyClientContext};
 
 <span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
@@ -226,7 +226,7 @@
 
 <span class="kw">async fn </span>add_funds(amount: Amount, <span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
     <span class="kw">let </span>funds = get_funds(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await </span>+ amount;
-    dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV0, <span class="kw-2">&amp;</span>funds).<span class="kw">await</span>;
+    dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV1, <span class="kw-2">&amp;</span>funds).<span class="kw">await</span>;
 }
 
 <span class="comment">// TODO: Boiler-plate, should return OutputOutcome

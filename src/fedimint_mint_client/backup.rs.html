@@ -139,7 +139,7 @@
 }
 
 <span class="kw">impl </span>EcashBackup {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new_v0(
+    <span class="kw">pub fn </span>new_v0(
         spendable_notes: TieredMulti&lt;SpendableNote&gt;,
         pending_notes: Vec&lt;(OutPoint, Amount, NoteIssuanceRequest)&gt;,
         session_count: u64,

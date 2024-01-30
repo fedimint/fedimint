@@ -1532,7 +1532,8 @@
 <a href="#1532" id="1532">1532</a>
 <a href="#1533" id="1533">1533</a>
 <a href="#1534" id="1534">1534</a>
-</pre></div><pre class="rust"><code><span class="kw">mod </span>db;
+<a href="#1535" id="1535">1535</a>
+</pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>receive;
@@ -1562,7 +1563,7 @@
     ClientConfig, FederationId, META_OVERRIDE_URL_KEY, META_VETTED_GATEWAYS_KEY,
 };
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
-<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -1831,6 +1832,7 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>ClientModuleInit <span class="kw">for </span>LightningClientInit {
     <span class="kw">type </span>Module = LightningClientModule;
+    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">0</span>);
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}])
