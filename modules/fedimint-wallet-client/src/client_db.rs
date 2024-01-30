@@ -15,7 +15,7 @@ impl std::fmt::Display for DbKeyPrefix {
 }
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
-pub(crate) struct NextPegInTweakIndexKey;
+pub struct NextPegInTweakIndexKey;
 
 impl_db_record!(
     key = NextPegInTweakIndexKey,

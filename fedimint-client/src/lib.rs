@@ -94,7 +94,8 @@ use fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
 };
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    apply_migrations, AutocommitError, Database, DatabaseTransaction,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1691,6 +1692,32 @@ impl ClientBuilder {
         )
     }
 
+    async fn migrate_database(&self) -> anyhow::Result<()> {
+        // Only apply the client database migrations if the database has been
+        // initialized.
+        if let Ok(client_config) = self.load_existing_config().await {
+            for (module_id, module_cfg) in client_config.modules {
+                let kind = module_cfg.kind.clone();
+                let Some(init) = self.module_inits.get(&kind) else {
+                    warn!("Detected configuration for unsupported module id: {module_id}, kind: {kind}");
+                    continue;
+                };
+
+                let isolated_db = self.db().with_prefix_module_id(module_id);
+
+                apply_migrations(
+                    &isolated_db,
+                    kind.to_string(),
+                    init.database_version(),
+                    init.get_database_migrations(),
+                )
+                .await?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn db(&self) -> &Database {
         &self.db
     }
@@ -1834,6 +1861,10 @@ impl ClientBuilder {
         let config = Self::config_decoded(config, &decoders)?;
         let db = self.db.with_decoders(decoders.clone());
         let api = DynGlobalApi::from_config(&config);
+
+        // Migrate the database before interacting with it in case any on-disk data
+        // structures have changed.
+        self.migrate_database().await?;
 
         let init_state = Self::load_init_state(&db).await;
 

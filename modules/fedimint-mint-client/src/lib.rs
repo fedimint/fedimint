@@ -1,13 +1,13 @@
 // Backup and restore logic
-pub(crate) mod backup;
+pub mod backup;
 /// Database keys used throughout the mint client module
-mod client_db;
+pub mod client_db;
 /// State machines for mint inputs
 mod input;
 /// State machines for out-of-band transmitted e-cash notes
 mod oob;
 /// State machines for mint outputs
-mod output;
+pub mod output;
 
 use std::cmp::{self, Ordering};
 use std::collections::BTreeMap;
@@ -36,7 +36,8 @@ use fedimint_core::api::DynGlobalApi;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    AutocommitError, Database, DatabaseTransaction, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -338,6 +339,7 @@ impl ModuleInit for MintClientInit {
 #[apply(async_trait_maybe_send!)]
 impl ClientModuleInit for MintClientInit {
     type Module = MintClientModule;
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
@@ -1757,7 +1759,7 @@ impl NoteIndex {
     // we can relax and convert to `From<u64>`
     // Actually used in tests RN, so cargo complains in non-test builds.
     #[allow(unused)]
-    fn from_u64(v: u64) -> Self {
+    pub fn from_u64(v: u64) -> Self {
         Self(v)
     }
 

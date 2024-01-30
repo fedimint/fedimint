@@ -5,7 +5,7 @@ use std::sync::Arc;
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::{ClientModuleConfig, FederationId, ModuleInitRegistry};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
-use fedimint_core::db::Database;
+use fedimint_core::db::{Database, DatabaseVersion, MigrationMap};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, IDynCommonModuleInit, ModuleInit, MultiApiVersion,
 };
@@ -182,6 +182,18 @@ where
 pub trait ClientModuleInit: ModuleInit + Sized {
     type Module: ClientModule;
 
+    /// Represents the version of the database, used to determine
+    /// if a database migration is needed when the client is created.
+    const DATABASE_VERSION: DatabaseVersion;
+
+    /// Returns a map of database migrations functions that are applied
+    /// to the database. The functions represent mappings between database
+    /// breaking changes and how to derive the new database structures from
+    /// the old ones.
+    fn get_database_migrations(&self) -> MigrationMap {
+        MigrationMap::new()
+    }
+
     /// Api versions of the corresponding server side module's API
     /// that this client module implementation can use.
     fn supported_api_versions(&self) -> MultiApiVersion;
@@ -212,6 +224,10 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
     fn decoder(&self) -> Decoder;
 
     fn module_kind(&self) -> ModuleKind;
+
+    fn database_version(&self) -> DatabaseVersion;
+
+    fn get_database_migrations(&self) -> MigrationMap;
 
     fn as_common(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static);
 
@@ -260,6 +276,14 @@ where
 
     fn module_kind(&self) -> ModuleKind {
         <Self as ModuleInit>::Common::KIND
+    }
+
+    fn database_version(&self) -> DatabaseVersion {
+        <Self as ClientModuleInit>::DATABASE_VERSION
+    }
+
+    fn get_database_migrations(&self) -> MigrationMap {
+        <Self as ClientModuleInit>::get_database_migrations(self)
     }
 
     fn as_common(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static) {

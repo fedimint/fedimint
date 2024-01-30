@@ -594,6 +594,8 @@ mod fedimint_migration_tests {
         Amount, BlockHash, PackedLockTime, Script, Sequence, Transaction, TxIn, TxOut, Txid,
         WPubkeyHash,
     };
+    use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_client::module::ClientModule;
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
     use fedimint_core::db::{
         apply_migrations, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
@@ -606,6 +608,8 @@ mod fedimint_migration_tests {
     use fedimint_testing::db::{
         prepare_db_migration_snapshot, validate_migrations, BYTE_20, BYTE_32, BYTE_33,
     };
+    use fedimint_wallet_client::client_db::NextPegInTweakIndexKey;
+    use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
     use fedimint_wallet_common::db::{
         BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
         FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction,
@@ -622,6 +626,7 @@ mod fedimint_migration_tests {
     use rand::rngs::OsRng;
     use secp256k1::Message;
     use strum::IntoEnumIterator;
+    use tracing::info;
 
     use crate::WalletInit;
 
@@ -781,6 +786,13 @@ mod fedimint_migration_tests {
         .await;
     }
 
+    async fn create_client_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
+        dbtx.insert_new_entry(&DatabaseVersionKey, &DatabaseVersion(0))
+            .await;
+
+        dbtx.insert_new_entry(&NextPegInTweakIndexKey, &2).await;
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn prepare_server_db_migration_snapshots() -> anyhow::Result<()> {
         prepare_db_migration_snapshot(
@@ -927,6 +939,63 @@ mod fedimint_migration_tests {
                         }
                     }
                 }
+                Ok(())
+            },
+            ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                WalletCommonInit::KIND,
+                <Wallet as ServerModule>::decoder(),
+            )]),
+        )
+        .await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn prepare_client_db_migration_snapshots() -> anyhow::Result<()> {
+        prepare_db_migration_snapshot(
+            "wallet-client-v0",
+            |dbtx| Box::pin(async move { create_client_db_with_v0_data(dbtx).await }),
+            ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                WalletCommonInit::KIND,
+                <WalletClientModule as ClientModule>::decoder(),
+            )]),
+        )
+        .await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_client_migrations() -> anyhow::Result<()> {
+        TracingSetup::default().init()?;
+
+        validate_migrations(
+            "wallet-client",
+            |db| async move {
+                let module = DynClientModuleInit::from(WalletClientInit::default());
+                apply_migrations(
+                    &db,
+                    WalletCommonInit::KIND.to_string(),
+                    module.database_version(),
+                    module.get_database_migrations(),
+                )
+                .await
+                .context("Error applying migrations to client database")?;
+
+                let mut dbtx = db.begin_transaction().await;
+
+                for prefix in fedimint_wallet_client::client_db::DbKeyPrefix::iter() {
+                    match prefix {
+                        fedimint_wallet_client::client_db::DbKeyPrefix::NextPegInTweakIndex => {
+                            let next_peg_in_tweak = dbtx.get_value(&NextPegInTweakIndexKey).await;
+                            ensure!(
+                                next_peg_in_tweak.is_some(),
+                                "validate_migrations was not able to read any peg in tweak index"
+                            );
+                            info!("Validated next peg in tweak index");
+                        }
+                    }
+                }
+
                 Ok(())
             },
             ModuleDecoderRegistry::from_iter([(
