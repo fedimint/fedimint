@@ -1825,8 +1825,16 @@ pub async fn apply_migrations(
     kind: String,
     target_db_version: DatabaseVersion,
     migrations: MigrationMap,
+    module_instance_id: Option<ModuleInstanceId>,
 ) -> Result<(), anyhow::Error> {
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = if let Some(module_instance_id) = module_instance_id {
+        db.begin_transaction()
+            .await
+            .with_prefix_module_id(module_instance_id)
+    } else {
+        db.begin_transaction().await
+    };
+
     let disk_version = dbtx.get_value(&DatabaseVersionKey).await;
 
     let db_version = if let Some(disk_version) = disk_version {
@@ -2474,6 +2482,7 @@ mod test_utils {
             "TestModule".to_string(),
             DatabaseVersion(1),
             migrations,
+            None,
         )
         .await
         .expect("Error applying migrations for TestModule");

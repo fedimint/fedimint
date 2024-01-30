@@ -203,6 +203,7 @@ mod fedimint_migration_tests {
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
         snapshot_db_migrations(
             "dummy-server-v0",
+            Some(DUMMY_INSTANCE_ID),
             |dbtx| {
                 Box::pin(async move {
                     create_server_db_with_v0_data(dbtx).await;
@@ -230,11 +231,15 @@ mod fedimint_migration_tests {
                     module.module_kind().to_string(),
                     module.database_version(),
                     module.get_database_migrations(),
+                    Some(DUMMY_INSTANCE_ID),
                 )
                 .await
                 .context("Error applying migrations to temp database")?;
 
-                let mut dbtx = db.begin_transaction().await;
+                let mut dbtx = db
+                    .begin_transaction()
+                    .await
+                    .with_prefix_module_id(DUMMY_INSTANCE_ID);
                 for prefix in DbKeyPrefix::iter() {
                     match prefix {
                         DbKeyPrefix::Funds => {
@@ -281,6 +286,7 @@ mod fedimint_migration_tests {
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
         snapshot_db_migrations(
             "dummy-client-v0",
+            Some(DUMMY_INSTANCE_ID),
             |dbtx| Box::pin(async move { create_client_db_with_v0_data(dbtx).await }),
             ModuleDecoderRegistry::from_iter([(
                 DUMMY_INSTANCE_ID,
@@ -304,11 +310,15 @@ mod fedimint_migration_tests {
                     DummyCommonInit::KIND.to_string(),
                     module.database_version(),
                     module.get_database_migrations(),
+                    Some(DUMMY_INSTANCE_ID),
                 )
                 .await
                 .context("Error applying migrations to client database")?;
 
-                let mut dbtx = db.begin_transaction().await;
+                let mut dbtx = db
+                    .begin_transaction()
+                    .await
+                    .with_prefix_module_id(DUMMY_INSTANCE_ID);
 
                 for prefix in fedimint_dummy_client::db::DbKeyPrefix::iter() {
                     match prefix {

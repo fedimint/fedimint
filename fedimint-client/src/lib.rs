@@ -1703,13 +1703,12 @@ impl ClientBuilder {
                     continue;
                 };
 
-                let isolated_db = self.db().with_prefix_module_id(module_id);
-
                 apply_migrations(
-                    &isolated_db,
+                    &self.db(),
                     kind.to_string(),
                     init.database_version(),
                     init.get_database_migrations(),
+                    Some(module_id),
                 )
                 .await?;
             }

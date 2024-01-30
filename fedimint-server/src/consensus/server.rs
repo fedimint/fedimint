@@ -109,6 +109,7 @@ impl ConsensusServer {
             "Global".to_string(),
             GLOBAL_DATABASE_VERSION,
             get_global_database_migrations(),
+            None,
         )
         .await?;
 
@@ -120,16 +121,16 @@ impl ConsensusServer {
             info!(target: LOG_CORE,
                 module_instance_id = *module_id, kind = %kind, "Init module");
 
-            let isolated_db = db.with_prefix_module_id(*module_id);
-
             apply_migrations(
-                &isolated_db,
+                &db,
                 init.module_kind().to_string(),
                 init.database_version(),
                 init.get_database_migrations(),
+                Some(*module_id),
             )
             .await?;
 
+            let isolated_db = db.with_prefix_module_id(*module_id);
             let module = init
                 .init(
                     cfg.get_module_config(*module_id)?,

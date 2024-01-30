@@ -201,6 +201,7 @@ mod fedimint_migration_tests {
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
         snapshot_db_migrations(
             "fedimint-server-v0",
+            None,
             |dbtx| {
                 Box::pin(async move {
                     create_server_db_with_v0_data(dbtx).await;
@@ -227,6 +228,7 @@ mod fedimint_migration_tests {
                     "Global".to_string(),
                     GLOBAL_DATABASE_VERSION,
                     get_global_database_migrations(),
+                    None,
                 )
                 .await
                 .context("Error applying migrations to temp database")?;

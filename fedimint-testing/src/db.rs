@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::{env, fs, io};
 
 use anyhow::{bail, format_err, Context};
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_rocksdb::RocksDb;
@@ -42,6 +43,7 @@ pub fn get_project_root() -> io::Result<PathBuf> {
 /// this function will do nothing.
 pub async fn snapshot_db_migrations<F>(
     snapshot_name: &str,
+    module_instance_id: Option<ModuleInstanceId>,
     prepare_fn: F,
     decoders: ModuleDecoderRegistry,
 ) -> anyhow::Result<()>
@@ -53,6 +55,7 @@ where
 
     async fn prepare<F>(
         snapshot_dir: PathBuf,
+        module_instance_id: Option<ModuleInstanceId>,
         prepare_fn: F,
         decoders: ModuleDecoderRegistry,
     ) -> anyhow::Result<()>
@@ -64,7 +67,13 @@ where
                 .with_context(|| format!("Preparing snapshot in {}", snapshot_dir.display()))?,
             decoders,
         );
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = if let Some(module_instance_id) = module_instance_id {
+            db.begin_transaction()
+                .await
+                .with_prefix_module_id(module_instance_id)
+        } else {
+            db.begin_transaction().await
+        };
         prepare_fn(dbtx.to_ref_nc()).await;
         dbtx.commit_tx().await;
         Ok(())
@@ -79,14 +88,14 @@ where
     ) {
         (Some("force"), true) => {
             tokio::fs::remove_dir_all(&snapshot_dir).await?;
-            prepare(snapshot_dir, prepare_fn, decoders).await?;
+            prepare(snapshot_dir, module_instance_id, prepare_fn, decoders).await?;
         }
         (Some(_), true) => {
             bail!("{ENV_VAR_NAME} set, but {} already exists already exists. Set to 'force' to overwrite.", snapshot_dir.display());
         }
         (Some(_), false) => {
             debug!(dir = %snapshot_dir.display(), "Snapshot dir does not exist. Creating.");
-            prepare(snapshot_dir, prepare_fn, decoders).await?;
+            prepare(snapshot_dir, module_instance_id, prepare_fn, decoders).await?;
         }
         (None, true) => {
             debug!(dir = %snapshot_dir.display(), "Snapshot dir already exist. Nothing to do.");

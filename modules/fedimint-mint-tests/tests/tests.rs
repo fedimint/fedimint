@@ -341,6 +341,7 @@ mod fedimint_migration_tests {
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
         snapshot_db_migrations(
             "mint-server-v0",
+            Some(LEGACY_HARDCODED_INSTANCE_ID_MINT),
             |dbtx| {
                 Box::pin(async move {
                     create_server_db_with_v0_data(dbtx).await;
@@ -368,6 +369,7 @@ mod fedimint_migration_tests {
                     module.module_kind().to_string(),
                     module.database_version(),
                     module.get_database_migrations(),
+                    Some(LEGACY_HARDCODED_INSTANCE_ID_MINT),
                 )
                 .await
                 .context("Error applying migrations to temp database")?;
@@ -375,7 +377,10 @@ mod fedimint_migration_tests {
                 // Verify that all of the data from the mint namespace can be read. If a
                 // database migration failed or was not properly supplied,
                 // the struct will fail to be read.
-                let mut dbtx = db.begin_transaction().await;
+                let mut dbtx = db
+                    .begin_transaction()
+                    .await
+                    .with_prefix_module_id(LEGACY_HARDCODED_INSTANCE_ID_MINT);
 
                 for prefix in DbKeyPrefix::iter() {
                     match prefix {
@@ -444,6 +449,7 @@ mod fedimint_migration_tests {
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
         snapshot_db_migrations(
             "mint-client-v0",
+            Some(LEGACY_HARDCODED_INSTANCE_ID_MINT),
             |dbtx| Box::pin(async move { create_client_db_with_v0_data(dbtx).await }),
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -467,11 +473,15 @@ mod fedimint_migration_tests {
                     MintCommonInit::KIND.to_string(),
                     module.database_version(),
                     module.get_database_migrations(),
+                    Some(LEGACY_HARDCODED_INSTANCE_ID_MINT),
                 )
                 .await
                 .context("Error applying migrations to client database")?;
 
-                let mut dbtx = db.begin_transaction().await;
+                let mut dbtx = db
+                    .begin_transaction()
+                    .await
+                    .with_prefix_module_id(LEGACY_HARDCODED_INSTANCE_ID_MINT);
 
                 for prefix in fedimint_mint_client::client_db::DbKeyPrefix::iter() {
                     match prefix {
