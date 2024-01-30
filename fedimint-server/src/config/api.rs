@@ -661,7 +661,15 @@ impl ConfigGenState {
             // Since sort order here is arbitrary, try to sort by nick-names first for more natural
             // 'name -> id' mapping, which is helpful when operating on 'peer-ids' (debugging etc.);
             // Ties are OK (to_lowercase), not important in practice.
-            .sorted_by_cached_key(|peer| peer.name.to_lowercase())
+            .sorted_by_cached_key(|peer| {
+                // in certain (very obscure) cases, it might be worthwhile to sort by urls, so
+                // just expose it as an env var; probably no need to document it too much
+                if std::env::var_os("FM_PEER_ID_SORT_BY_URL").is_some_and(|var| !var.is_empty()) {
+                    peer.api_url.to_string()
+                } else {
+                    peer.name.to_lowercase()
+                }
+            })
             .enumerate()
             .map(|(i, peer)| (PeerId::from(i as u16), peer))
             .collect()
