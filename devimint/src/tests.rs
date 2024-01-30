@@ -1781,11 +1781,11 @@ pub enum TestCmd {
 pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()> {
     match cmd {
         TestCmd::WasmTestSetup { exec } => {
-            let (process_mgr, task_group) = setup(common_args).await?;
+            let (process_mgr, task_group) = setup(&common_args).await?;
             let main = {
                 let task_group = task_group.clone();
                 async move {
-                    let dev_fed = dev_fed(&process_mgr).await?;
+                    let dev_fed = dev_fed(&process_mgr, common_args.degraded).await?;
                     let (_, _, faucet) = tokio::try_join!(
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
@@ -1818,38 +1818,38 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             cleanup_on_exit(main, task_group).await?;
         }
         TestCmd::LatencyTests => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (process_mgr, _) = setup(&common_args).await?;
+            let dev_fed = dev_fed(&process_mgr, common_args.degraded).await?;
             latency_tests(dev_fed).await?;
         }
         TestCmd::ReconnectTest => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (process_mgr, _) = setup(&common_args).await?;
+            let dev_fed = dev_fed(&process_mgr, common_args.degraded).await?;
             reconnect_test(dev_fed, &process_mgr).await?;
         }
         TestCmd::CliTests => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (process_mgr, _) = setup(&common_args).await?;
+            let dev_fed = dev_fed(&process_mgr, common_args.degraded).await?;
             cli_tests(dev_fed).await?;
         }
         TestCmd::LoadTestToolTest => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (process_mgr, _) = setup(&common_args).await?;
+            let dev_fed = dev_fed(&process_mgr, common_args.degraded).await?;
             cli_load_test_tool_test(dev_fed).await?;
         }
         TestCmd::LightningReconnectTest => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (process_mgr, _) = setup(&common_args).await?;
+            let dev_fed = dev_fed(&process_mgr, common_args.degraded).await?;
             lightning_gw_reconnect_test(dev_fed, &process_mgr).await?;
         }
         TestCmd::GatewayRebootTest => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (process_mgr, _) = setup(&common_args).await?;
+            let dev_fed = dev_fed(&process_mgr, common_args.degraded).await?;
             gw_reboot_test(dev_fed, &process_mgr).await?;
         }
         TestCmd::RecoverytoolTests => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (process_mgr, _) = setup(&common_args).await?;
+            let dev_fed = dev_fed(&process_mgr, common_args.degraded).await?;
             recoverytool_test(dev_fed).await?;
         }
     }

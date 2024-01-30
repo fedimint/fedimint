@@ -19,10 +19,10 @@ pub struct DevFed {
     pub esplora: Esplora,
 }
 
-pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
+pub async fn dev_fed(process_mgr: &ProcessManager, degraded: bool) -> Result<DevFed> {
     let start_time = fedimint_core::time::now();
     let bitcoind = Bitcoind::new(process_mgr).await?;
-    let ((cln, lnd, gw_cln, gw_lnd), electrs, esplora, fed) = tokio::try_join!(
+    let ((cln, lnd, gw_cln, gw_lnd), electrs, esplora, mut fed) = tokio::try_join!(
         async {
             let (cln, lnd) = tokio::try_join!(
                 Lightningd::new(process_mgr, bitcoind.clone()),
@@ -66,6 +66,13 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
         "starting dev federation took {:?}",
         start_time.elapsed()?
     );
+
+    // Terminate a server if degraded argument was passed
+    if degraded {
+        fed.terminate_server(fed.num_members() - 1).await?;
+        info!(target: LOG_DEVIMINT, "federation degraded ...");
+    }
+
     Ok(DevFed {
         bitcoind,
         cln,

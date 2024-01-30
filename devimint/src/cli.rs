@@ -25,6 +25,10 @@ pub struct CommonArgs {
     #[clap(long, env = "FM_LINK_TEST_DIR")]
     /// Create a link to the test dir under this path
     pub link_test_dir: Option<PathBuf>,
+
+    /// Run federation with 1/4 guardians offline
+    #[arg(long, env = "FM_DEVIMINT_DEGRADED")]
+    pub degraded: bool,
 }
 
 impl CommonArgs {
@@ -74,7 +78,7 @@ pub enum RpcCmd {
     Env,
 }
 
-pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
+pub async fn setup(arg: &CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
     let globals = vars::Global::new(&arg.mk_test_dir()?, arg.fed_size).await?;
 
     let log_file = fs::OpenOptions::new()
@@ -170,7 +174,7 @@ pub async fn write_ready_file<T>(global: &vars::Global, result: Result<T>) -> Re
 pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
     match cmd {
         Cmd::ExternalDaemons { exec } => {
-            let (process_mgr, task_group) = setup(common_args).await?;
+            let (process_mgr, task_group) = setup(&common_args).await?;
             let _daemons =
                 write_ready_file(&process_mgr.globals, external_daemons(&process_mgr).await)
                     .await?;
@@ -181,11 +185,11 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
             task_group.make_handle().make_shutdown_rx().await.await;
         }
         Cmd::DevFed { exec } => {
-            let (process_mgr, task_group) = setup(common_args).await?;
+            let (process_mgr, task_group) = setup(&common_args).await?;
             let main = {
                 let task_group = task_group.clone();
                 async move {
-                    let dev_fed = dev_fed(&process_mgr).await?;
+                    let dev_fed = dev_fed(&process_mgr, common_args.degraded).await?;
                     tokio::try_join!(
                         dev_fed
                             .fed
@@ -206,7 +210,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
         }
         Cmd::Rpc(rpc_cmd) => rpc_command(rpc_cmd, common_args).await?,
         Cmd::RunUi => {
-            let (process_mgr, task_group) = setup(common_args).await?;
+            let (process_mgr, task_group) = setup(&common_args).await?;
             let main = async move {
                 let result = run_ui(&process_mgr).await;
                 let daemons = write_ready_file(&process_mgr.globals, result).await?;

@@ -367,6 +367,10 @@ impl Federation {
         self.await_block_sync().await?;
         Ok(())
     }
+
+    pub fn num_members(&self) -> usize {
+        self.members.len()
+    }
 }
 
 #[derive(Clone)]
