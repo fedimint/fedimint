@@ -9,6 +9,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::util::Spanned;
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_common::api::LnFederationApi;
@@ -19,7 +20,7 @@ use futures::future;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio_stream::StreamExt;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, warn, Instrument};
 
 use super::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
 use crate::db::PreimageAuthentication;
@@ -263,13 +264,16 @@ impl GatewayPayInvoice {
             Self::check_swap_to_federation(context.clone(), payment_parameters.payment_data.clone())
                 .await
         {
-            Self::buy_preimage_via_direct_swap(
-                client,
-                payment_parameters.payment_data.clone(),
-                contract.clone(),
-                common.clone(),
-            )
-            .await
+            client
+                .with(|client| {
+                    Self::buy_preimage_via_direct_swap(
+                        client,
+                        payment_parameters.payment_data.clone(),
+                        contract.clone(),
+                        common.clone(),
+                    )
+                })
+                .await
         } else {
             Self::buy_preimage_over_lightning(
                 context,
@@ -600,7 +604,7 @@ impl GatewayPayInvoice {
     async fn check_swap_to_federation(
         context: GatewayClientContext,
         payment_data: PaymentData,
-    ) -> Option<ClientArc> {
+    ) -> Option<Spanned<ClientArc>> {
         let rhints = payment_data.route_hints();
         match rhints.first().and_then(|rh| rh.0.last()) {
             None => None,
@@ -738,53 +742,58 @@ impl GatewayPayWaitForSwapPreimage {
                 },
             })?;
 
-        let mut stream = client
-            .get_first_module::<GatewayClientModule>()
-            .gateway_subscribe_ln_receive(operation_id)
-            .await
-            .map_err(|e| {
-                let contract_id = contract.contract.contract_id();
-                warn!(
-                    ?contract_id,
-                    "Failed to subscribe to ln receive of direct swap: {e:?}"
-                );
-                OutgoingPaymentError {
-                    contract_id,
-                    contract: Some(contract.clone()),
-                    error_type: OutgoingPaymentErrorType::SwapFailed {
-                        swap_error: format!(
-                            "Failed to subscribe to ln receive of direct swap: {e}"
-                        ),
-                    },
-                }
-            })?
-            .into_stream();
+        async {
+            let mut stream = client
+                .value()
+                .get_first_module::<GatewayClientModule>()
+                .gateway_subscribe_ln_receive(operation_id)
+                .await
+                .map_err(|e| {
+                    let contract_id = contract.contract.contract_id();
+                    warn!(
+                        ?contract_id,
+                        "Failed to subscribe to ln receive of direct swap: {e:?}"
+                    );
+                    OutgoingPaymentError {
+                        contract_id,
+                        contract: Some(contract.clone()),
+                        error_type: OutgoingPaymentErrorType::SwapFailed {
+                            swap_error: format!(
+                                "Failed to subscribe to ln receive of direct swap: {e}"
+                            ),
+                        },
+                    }
+                })?
+                .into_stream();
 
-        loop {
-            debug!("Waiting next state of preimage buy for contract {contract:?}");
-            if let Some(state) = stream.next().await {
-                match state {
-                    GatewayExtReceiveStates::Funding => {
-                        debug!(?contract, "Funding");
-                        continue;
-                    }
-                    GatewayExtReceiveStates::Preimage(preimage) => {
-                        debug!(?contract, "Received preimage");
-                        return Ok(preimage);
-                    }
-                    other => {
-                        warn!(?contract, "Got state {other:?}");
-                        return Err(OutgoingPaymentError {
-                            contract_id: contract.contract.contract_id(),
-                            contract: Some(contract),
-                            error_type: OutgoingPaymentErrorType::SwapFailed {
-                                swap_error: "Failed to receive preimage".to_string(),
-                            },
-                        });
+            loop {
+                debug!("Waiting next state of preimage buy for contract {contract:?}");
+                if let Some(state) = stream.next().await {
+                    match state {
+                        GatewayExtReceiveStates::Funding => {
+                            debug!(?contract, "Funding");
+                            continue;
+                        }
+                        GatewayExtReceiveStates::Preimage(preimage) => {
+                            debug!(?contract, "Received preimage");
+                            return Ok(preimage);
+                        }
+                        other => {
+                            warn!(?contract, "Got state {other:?}");
+                            return Err(OutgoingPaymentError {
+                                contract_id: contract.contract.contract_id(),
+                                contract: Some(contract),
+                                error_type: OutgoingPaymentErrorType::SwapFailed {
+                                    swap_error: "Failed to receive preimage".to_string(),
+                                },
+                            });
+                        }
                     }
                 }
             }
         }
+        .instrument(client.span())
+        .await
     }
 
     async fn transition_claim_outgoing_contract(

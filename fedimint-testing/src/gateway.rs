@@ -57,11 +57,19 @@ impl GatewayTest {
 
     /// Removes a client from the gateway
     pub async fn remove_client(&self, fed: &FederationTest) -> ClientArc {
-        self.gateway.remove_client(fed.id()).await.unwrap()
+        self.gateway
+            .remove_client(fed.id())
+            .await
+            .unwrap()
+            .into_value()
     }
 
     pub async fn select_client(&self, federation_id: FederationId) -> ClientArc {
-        self.gateway.select_client(federation_id).await.unwrap()
+        self.gateway
+            .select_client(federation_id)
+            .await
+            .unwrap()
+            .into_value()
     }
 
     /// Connects to a new federation and stores the info

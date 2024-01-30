@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::fmt::Display;
 use std::net::SocketAddr;
+use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -42,7 +43,7 @@ use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::now;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{SafeUrl, Spanned};
 use fedimint_core::{push_db_pair_items, Amount, BitcoinAmountOrAll};
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
@@ -69,7 +70,7 @@ use state_machine::GatewayClientModule;
 use strum::IntoEnumIterator;
 use thiserror::Error;
 use tokio::sync::Mutex;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::db::{FederationConfig, FederationIdKeyPrefix};
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
@@ -218,7 +219,8 @@ impl Display for GatewayState {
 }
 
 pub type ScidToFederationMap = Arc<RwLock<BTreeMap<u64, FederationId>>>;
-pub type FederationToClientMap = Arc<RwLock<BTreeMap<FederationId, fedimint_client::ClientArc>>>;
+pub type FederationToClientMap =
+    Arc<RwLock<BTreeMap<FederationId, Spanned<fedimint_client::ClientArc>>>>;
 
 /// Represents an active connection to the lightning node.
 #[derive(Clone, Debug)]
@@ -598,20 +600,33 @@ impl Gateway {
                         // Just forward the HTLC if we do not have a client that
                         // corresponds to the federation id
                         if let Some(client) = client {
-                            let htlc = htlc_request.clone().try_into();
-                            if let Ok(htlc) = htlc {
-                                match client
-                                    .get_first_module::<GatewayClientModule>()
-                                    .gateway_handle_intercepted_htlc(htlc)
-                                    .await
-                                {
-                                    Ok(_) => continue,
-                                    Err(e) => {
-                                        info!("Got error intercepting HTLC: {e:?}, will retry...")
+                            let cf = client
+                                .borrow()
+                                .with(|client| async {
+                                    let htlc = htlc_request.clone().try_into();
+                                    if let Ok(htlc) = htlc {
+                                        match client
+                                            .get_first_module::<GatewayClientModule>()
+                                            .gateway_handle_intercepted_htlc(htlc)
+                                            .await
+                                        {
+                                            Ok(_) => {
+                                                return Some(ControlFlow::<(), ()>::Continue(()))
+                                            }
+                                            Err(e) => {
+                                                info!(
+                                                "Got error intercepting HTLC: {e:?}, will retry..."
+                                            )
+                                            }
+                                        }
+                                    } else {
+                                        info!("Got no HTLC result")
                                     }
-                                }
-                            } else {
-                                info!("Got no HTLC result")
+                                    None
+                                })
+                                .await;
+                            if let Some(ControlFlow::Continue(())) = cf {
+                                continue;
                             }
                         } else {
                             info!("Got no client result")
@@ -657,7 +672,12 @@ impl Gateway {
             )
             .await?;
             for (federation_id, client) in federation_clients {
-                federations.push(self.make_federation_info(&client, federation_id).await);
+                federations.push(
+                    client
+                        .borrow()
+                        .with(|client| self.make_federation_info(client, federation_id))
+                        .await,
+                );
             }
 
             return Ok(GatewayInfo {
@@ -693,11 +713,17 @@ impl Gateway {
             let mut federations = BTreeMap::new();
             if let Some(federation_id) = federation_id {
                 let client = self.select_client(federation_id).await?;
-                federations.insert(federation_id, client.get_config_json());
+                federations.insert(
+                    federation_id,
+                    client.borrow().with_sync(|client| client.get_config_json()),
+                );
             } else {
                 let federation_clients = self.clients.read().await.clone().into_iter();
                 for (federation_id, client) in federation_clients {
-                    federations.insert(federation_id, client.get_config_json());
+                    federations.insert(
+                        federation_id,
+                        client.borrow().with_sync(|client| client.get_config_json()),
+                    );
                 }
             }
             return Ok(GatewayFedConfig { federations });
@@ -708,9 +734,11 @@ impl Gateway {
     }
 
     pub async fn handle_balance_msg(&self, payload: BalancePayload) -> Result<Amount> {
+        // no need for instrument, it is done on api layer
         Ok(self
             .select_client(payload.federation_id)
             .await?
+            .value()
             .get_balance()
             .await)
     }
@@ -719,6 +747,7 @@ impl Gateway {
         let (_, address) = self
             .select_client(payload.federation_id)
             .await?
+            .value()
             .get_first_module::<WalletClientModule>()
             .get_deposit_address(now() + Duration::from_secs(86400 * 365), ())
             .await?;
@@ -732,14 +761,15 @@ impl Gateway {
             federation_id,
         } = payload;
         let client = self.select_client(federation_id).await?;
-        let wallet_module = client.get_first_module::<WalletClientModule>();
+        let wallet_module = client.value().get_first_module::<WalletClientModule>();
 
         // TODO: Fees should probably be passed in as a parameter
         let (amount, fees) = match amount {
             // If the amount is "all", then we need to subtract the fees from
             // the amount we are withdrawing
             BitcoinAmountOrAll::All => {
-                let balance = bitcoin::Amount::from_sat(client.get_balance().await.msats / 1000);
+                let balance =
+                    bitcoin::Amount::from_sat(client.value().get_balance().await.msats / 1000);
                 let fees = wallet_module
                     .get_withdraw_fees(address.clone(), balance)
                     .await?;
@@ -788,7 +818,7 @@ impl Gateway {
             debug!("Handling pay invoice message: {payload:?}");
             let client = self.select_client(payload.federation_id).await?;
             let contract_id = payload.contract_id;
-            let gateway_module = &client.get_first_module::<GatewayClientModule>();
+            let gateway_module = &client.value().get_first_module::<GatewayClientModule>();
             let operation_id = gateway_module.gateway_pay_bolt11_invoice(payload).await?;
             let mut updates = gateway_module
                 .gateway_subscribe_ln_pay(operation_id)
@@ -901,7 +931,15 @@ impl Gateway {
                     lightning_context,
                 )
                 .await?;
-            self.clients.write().await.insert(federation_id, client);
+            // no need to enter span earlier, because connect-fed has a span
+            self.clients.write().await.insert(
+                federation_id,
+                Spanned::new(
+                    info_span!("client", federation_id=%federation_id.clone()),
+                    async move { client },
+                )
+                .await,
+            );
             self.scid_to_federation
                 .write()
                 .await
@@ -1080,15 +1118,20 @@ impl Gateway {
                             .get_value(&FederationIdKey { id: *federation_id })
                             .await
                         {
-                            if let Err(e) = client
-                                .get_first_module::<GatewayClientModule>()
-                                .register_with_federation(
-                                    route_hints.clone(),
-                                    GW_ANNOUNCEMENT_TTL,
-                                    federation_config.fees,
-                                    lightning_context.clone(),
-                                )
-                                .await
+                            if let Err(e) = async {
+                                client
+                                    .value()
+                                    .get_first_module::<GatewayClientModule>()
+                                    .register_with_federation(
+                                        route_hints.clone(),
+                                        GW_ANNOUNCEMENT_TTL,
+                                        federation_config.fees,
+                                        lightning_context.clone(),
+                                    )
+                                    .await
+                            }
+                            .instrument(client.span())
+                            .await
                             {
                                 warn!("Error registering federation {federation_id}: {e:?}");
                             }
@@ -1145,7 +1188,7 @@ impl Gateway {
     pub async fn remove_client(
         &self,
         federation_id: FederationId,
-    ) -> Result<fedimint_client::ClientArc> {
+    ) -> Result<Spanned<fedimint_client::ClientArc>> {
         let client = self.clients.write().await.remove(&federation_id).ok_or(
             GatewayError::InvalidMetadata(format!("No federation with id {federation_id}")),
         )?;
@@ -1155,7 +1198,7 @@ impl Gateway {
     pub async fn select_client(
         &self,
         federation_id: FederationId,
-    ) -> Result<fedimint_client::ClientArc> {
+    ) -> Result<Spanned<fedimint_client::ClientArc>> {
         self.clients
             .read()
             .await
@@ -1175,10 +1218,11 @@ impl Gateway {
         for config in configs {
             let federation_id = config.invite_code.federation_id();
 
-            if let Ok(client) = self
-                .client_builder
-                .build(config.clone(), self.clone())
-                .await
+            if let Ok(client) = Spanned::try_new(
+                info_span!("client", federation_id  = %federation_id.clone()),
+                self.client_builder.build(config.clone(), self.clone()),
+            )
+            .await
             {
                 // Registering each client happens in the background, since we're loading
                 // the clients for the first time, just add them to
