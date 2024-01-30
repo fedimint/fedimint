@@ -303,17 +303,6 @@
 <a href="#303" id="303">303</a>
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::path::PathBuf;
 
@@ -334,7 +323,6 @@
 <span class="kw">use </span>fedimint_server::config::io::read_server_config;
 <span class="kw">use </span>fedimint_server::config::ServerConfig;
 <span class="kw">use </span>fedimint_server::db <span class="kw">as </span>ConsensusRange;
-<span class="kw">use </span>fedimint_server::db::DbKeyPrefix;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>ln_gateway::Gateway;
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -609,16 +597,6 @@
                         Vec&lt;u8&gt;,
                         consensus,
                         <span class="string">&quot;Aleph Units&quot;
-                    </span>);
-                }
-                DbKeyPrefix::SignedSessionOutcomeCount =&gt; {
-                    <span class="macro">push_db_pair_items_no_serde!</span>(
-                        dbtx,
-                        ConsensusRange::SignedSessionOutcomeCountKey,
-                        ConsensusRange::SignedSessionOutcomeCountKey,
-                        u64,
-                        consensus,
-                        <span class="string">&quot;Signed Session Count&quot;
                     </span>);
                 }
                 <span class="comment">// Module is a global prefix for all module data

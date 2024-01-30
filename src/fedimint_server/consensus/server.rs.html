@@ -780,13 +780,6 @@
 <a href="#780" id="780">780</a>
 <a href="#781" id="781">781</a>
 <a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a>
-<a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -829,8 +822,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::consensus::process_transaction_with_dbtx;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     get_global_database_migrations, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey,
-    AlephUnitsPrefix, SignedSessionOutcomeCountKey, SignedSessionOutcomeKey,
-    GLOBAL_DATABASE_VERSION,
+    AlephUnitsPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
 };
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache};
@@ -1336,15 +1328,6 @@
             <span class="macro">panic!</span>(<span class="string">&quot;We tried to overwrite a signed session outcome&quot;</span>);
         }
 
-        <span class="comment">// Update cached session count
-        </span><span class="kw">let </span>previous_session_count = <span class="self">self</span>.get_finished_session_count().<span class="kw">await</span>;
-        <span class="macro">assert_eq!</span>(
-            previous_session_count, session_index,
-            <span class="string">&quot;Session count and session index diverged&quot;
-        </span>);
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>SignedSessionOutcomeCountKey, <span class="kw-2">&amp;</span>(previous_session_count + <span class="number">1</span>))
-            .<span class="kw">await</span>;
-
         dbtx.commit_tx_result()
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;This is the only place where we write to this key&quot;</span>);
@@ -1533,9 +1516,12 @@
 }
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>get_finished_session_count_static(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; u64 {
-    dbtx.get_value(<span class="kw-2">&amp;</span>SignedSessionOutcomeCountKey)
+    dbtx.find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>SignedSessionOutcomePrefix)
         .<span class="kw">await
-        </span>.unwrap_or(<span class="number">0</span>)
+        </span>.next()
+        .<span class="kw">await
+        </span>.map(|entry| (entry.<span class="number">0 </span>.<span class="number">0</span>) + <span class="number">1</span>)
+        .unwrap_or(<span class="number">0</span>)
 }
 
 <span class="kw">async fn </span>submit_module_consensus_items(
