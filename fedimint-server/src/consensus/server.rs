@@ -732,7 +732,9 @@ impl ConsensusServer {
 
         loop {
             // we wait until we have stalled
+            info!(target: LOG_CONSENSUS, "### SLEEP START");
             sleep(Duration::from_secs(5)).await;
+            info!(target: LOG_CONSENSUS, "### SLEEP END");
 
             let result = federation_api
                 .request_with_strategy(
