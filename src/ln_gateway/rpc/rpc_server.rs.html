@@ -338,7 +338,7 @@
 
 <span class="doccomment">/// Display high-level information about the Gateway config
 </span><span class="attr">#[debug_handler]
-#[instrument(skip_all, err)]
+#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>configuration(
     Extension(gateway): Extension&lt;Gateway&gt;,
     Json(payload): Json&lt;ConfigPayload&gt;,
@@ -351,7 +351,7 @@
 
 <span class="doccomment">/// Display gateway ecash note balance
 </span><span class="attr">#[debug_handler]
-#[instrument(skip_all, err)]
+#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>balance(
     Extension(gateway): Extension&lt;Gateway&gt;,
     Json(payload): Json&lt;BalancePayload&gt;,
@@ -362,7 +362,7 @@
 
 <span class="doccomment">/// Generate deposit address
 </span><span class="attr">#[debug_handler]
-#[instrument(skip_all, err)]
+#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>address(
     Extension(gateway): Extension&lt;Gateway&gt;,
     Json(payload): Json&lt;DepositAddressPayload&gt;,
@@ -373,7 +373,7 @@
 
 <span class="doccomment">/// Withdraw from a gateway federation.
 </span><span class="attr">#[debug_handler]
-#[instrument(skip_all, err)]
+#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>withdraw(
     Extension(gateway): Extension&lt;Gateway&gt;,
     Json(payload): Json&lt;WithdrawPayload&gt;,
@@ -382,7 +382,7 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(txid)))
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>pay_invoice(
     Extension(gateway): Extension&lt;Gateway&gt;,
     Json(payload): Json&lt;PayInvoicePayload&gt;,
@@ -392,7 +392,7 @@
 }
 
 <span class="doccomment">/// Connect a new federation
-</span><span class="attr">#[instrument(skip_all, err)]
+</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>connect_fed(
     Extension(<span class="kw-2">mut </span>gateway): Extension&lt;Gateway&gt;,
     Json(payload): Json&lt;ConnectFedPayload&gt;,
@@ -402,7 +402,7 @@
 }
 
 <span class="doccomment">/// Leave a federation
-</span><span class="attr">#[instrument(skip_all, err)]
+</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>leave_fed(
     Extension(<span class="kw-2">mut </span>gateway): Extension&lt;Gateway&gt;,
     Json(payload): Json&lt;LeaveFedPayload&gt;,
@@ -412,7 +412,7 @@
 }
 
 <span class="doccomment">/// Backup a gateway actor state
-</span><span class="attr">#[instrument(skip_all, err)]
+</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>backup(
     Extension(gateway): Extension&lt;Gateway&gt;,
     Json(payload): Json&lt;BackupPayload&gt;,
@@ -422,7 +422,7 @@
 }
 
 <span class="comment">// Restore a gateway actor state
-</span><span class="attr">#[instrument(skip_all, err)]
+</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>restore(
     Extension(gateway): Extension&lt;Gateway&gt;,
     Json(payload): Json&lt;RestorePayload&gt;,
@@ -431,7 +431,7 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="attr">#[instrument(skip_all, err)]
+<span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>set_configuration(
     Extension(gateway): Extension&lt;Gateway&gt;,
     Json(payload): Json&lt;SetConfigurationPayload&gt;,

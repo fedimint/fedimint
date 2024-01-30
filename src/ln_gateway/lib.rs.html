@@ -1464,6 +1464,50 @@
 <a href="#1464" id="1464">1464</a>
 <a href="#1465" id="1465">1465</a>
 <a href="#1466" id="1466">1466</a>
+<a href="#1467" id="1467">1467</a>
+<a href="#1468" id="1468">1468</a>
+<a href="#1469" id="1469">1469</a>
+<a href="#1470" id="1470">1470</a>
+<a href="#1471" id="1471">1471</a>
+<a href="#1472" id="1472">1472</a>
+<a href="#1473" id="1473">1473</a>
+<a href="#1474" id="1474">1474</a>
+<a href="#1475" id="1475">1475</a>
+<a href="#1476" id="1476">1476</a>
+<a href="#1477" id="1477">1477</a>
+<a href="#1478" id="1478">1478</a>
+<a href="#1479" id="1479">1479</a>
+<a href="#1480" id="1480">1480</a>
+<a href="#1481" id="1481">1481</a>
+<a href="#1482" id="1482">1482</a>
+<a href="#1483" id="1483">1483</a>
+<a href="#1484" id="1484">1484</a>
+<a href="#1485" id="1485">1485</a>
+<a href="#1486" id="1486">1486</a>
+<a href="#1487" id="1487">1487</a>
+<a href="#1488" id="1488">1488</a>
+<a href="#1489" id="1489">1489</a>
+<a href="#1490" id="1490">1490</a>
+<a href="#1491" id="1491">1491</a>
+<a href="#1492" id="1492">1492</a>
+<a href="#1493" id="1493">1493</a>
+<a href="#1494" id="1494">1494</a>
+<a href="#1495" id="1495">1495</a>
+<a href="#1496" id="1496">1496</a>
+<a href="#1497" id="1497">1497</a>
+<a href="#1498" id="1498">1498</a>
+<a href="#1499" id="1499">1499</a>
+<a href="#1500" id="1500">1500</a>
+<a href="#1501" id="1501">1501</a>
+<a href="#1502" id="1502">1502</a>
+<a href="#1503" id="1503">1503</a>
+<a href="#1504" id="1504">1504</a>
+<a href="#1505" id="1505">1505</a>
+<a href="#1506" id="1506">1506</a>
+<a href="#1507" id="1507">1507</a>
+<a href="#1508" id="1508">1508</a>
+<a href="#1509" id="1509">1509</a>
+<a href="#1510" id="1510">1510</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lightning;
@@ -1481,6 +1525,7 @@
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::net::SocketAddr;
+<span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1508,7 +1553,7 @@
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 <span class="kw">use </span>fedimint_core::time::now;
-<span class="kw">use </span>fedimint_core::util::SafeUrl;
+<span class="kw">use </span>fedimint_core::util::{SafeUrl, Spanned};
 <span class="kw">use </span>fedimint_core::{push_db_pair_items, Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
@@ -1535,7 +1580,7 @@
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::sync::Mutex;
-<span class="kw">use </span>tracing::{debug, error, info, warn};
+<span class="kw">use </span>tracing::{debug, error, info, info_span, warn, Instrument};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{FederationConfig, FederationIdKeyPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::Forward;
@@ -1684,7 +1729,8 @@
 }
 
 <span class="kw">pub type </span>ScidToFederationMap = Arc&lt;RwLock&lt;BTreeMap&lt;u64, FederationId&gt;&gt;&gt;;
-<span class="kw">pub type </span>FederationToClientMap = Arc&lt;RwLock&lt;BTreeMap&lt;FederationId, fedimint_client::ClientArc&gt;&gt;&gt;;
+<span class="kw">pub type </span>FederationToClientMap =
+    Arc&lt;RwLock&lt;BTreeMap&lt;FederationId, Spanned&lt;fedimint_client::ClientArc&gt;&gt;&gt;&gt;;
 
 <span class="doccomment">/// Represents an active connection to the lightning node.
 </span><span class="attr">#[derive(Clone, Debug)]
@@ -2064,20 +2110,33 @@
                         <span class="comment">// Just forward the HTLC if we do not have a client that
                         // corresponds to the federation id
                         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(client) = client {
-                            <span class="kw">let </span>htlc = htlc_request.clone().try_into();
-                            <span class="kw">if let </span><span class="prelude-val">Ok</span>(htlc) = htlc {
-                                <span class="kw">match </span>client
-                                    .get_first_module::&lt;GatewayClientModule&gt;()
-                                    .gateway_handle_intercepted_htlc(htlc)
-                                    .<span class="kw">await
-                                </span>{
-                                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">continue</span>,
-                                    <span class="prelude-val">Err</span>(e) =&gt; {
-                                        <span class="macro">info!</span>(<span class="string">&quot;Got error intercepting HTLC: {e:?}, will retry...&quot;</span>)
+                            <span class="kw">let </span>cf = client
+                                .borrow()
+                                .with(|client| <span class="kw">async </span>{
+                                    <span class="kw">let </span>htlc = htlc_request.clone().try_into();
+                                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(htlc) = htlc {
+                                        <span class="kw">match </span>client
+                                            .get_first_module::&lt;GatewayClientModule&gt;()
+                                            .gateway_handle_intercepted_htlc(htlc)
+                                            .<span class="kw">await
+                                        </span>{
+                                            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                                                <span class="kw">return </span><span class="prelude-val">Some</span>(ControlFlow::&lt;(), ()&gt;::Continue(()))
+                                            }
+                                            <span class="prelude-val">Err</span>(e) =&gt; {
+                                                <span class="macro">info!</span>(
+                                                <span class="string">&quot;Got error intercepting HTLC: {e:?}, will retry...&quot;
+                                            </span>)
+                                            }
+                                        }
+                                    } <span class="kw">else </span>{
+                                        <span class="macro">info!</span>(<span class="string">&quot;Got no HTLC result&quot;</span>)
                                     }
-                                }
-                            } <span class="kw">else </span>{
-                                <span class="macro">info!</span>(<span class="string">&quot;Got no HTLC result&quot;</span>)
+                                    <span class="prelude-val">None
+                                </span>})
+                                .<span class="kw">await</span>;
+                            <span class="kw">if let </span><span class="prelude-val">Some</span>(ControlFlow::Continue(())) = cf {
+                                <span class="kw">continue</span>;
                             }
                         } <span class="kw">else </span>{
                             <span class="macro">info!</span>(<span class="string">&quot;Got no client result&quot;</span>)
@@ -2123,7 +2182,12 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">for </span>(federation_id, client) <span class="kw">in </span>federation_clients {
-                federations.push(<span class="self">self</span>.make_federation_info(<span class="kw-2">&amp;</span>client, federation_id).<span class="kw">await</span>);
+                federations.push(
+                    client
+                        .borrow()
+                        .with(|client| <span class="self">self</span>.make_federation_info(client, federation_id))
+                        .<span class="kw">await</span>,
+                );
             }
 
             <span class="kw">return </span><span class="prelude-val">Ok</span>(GatewayInfo {
@@ -2159,11 +2223,17 @@
             <span class="kw">let </span><span class="kw-2">mut </span>federations = BTreeMap::new();
             <span class="kw">if let </span><span class="prelude-val">Some</span>(federation_id) = federation_id {
                 <span class="kw">let </span>client = <span class="self">self</span>.select_client(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-                federations.insert(federation_id, client.get_config_json());
+                federations.insert(
+                    federation_id,
+                    client.borrow().with_sync(|client| client.get_config_json()),
+                );
             } <span class="kw">else </span>{
                 <span class="kw">let </span>federation_clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>.clone().into_iter();
                 <span class="kw">for </span>(federation_id, client) <span class="kw">in </span>federation_clients {
-                    federations.insert(federation_id, client.get_config_json());
+                    federations.insert(
+                        federation_id,
+                        client.borrow().with_sync(|client| client.get_config_json()),
+                    );
                 }
             }
             <span class="kw">return </span><span class="prelude-val">Ok</span>(GatewayFedConfig { federations });
@@ -2174,10 +2244,12 @@
     }
 
     <span class="kw">pub async fn </span>handle_balance_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: BalancePayload) -&gt; <span class="prelude-ty">Result</span>&lt;Amount&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self
+        <span class="comment">// no need for instrument, it is done on api layer
+        </span><span class="prelude-val">Ok</span>(<span class="self">self
             </span>.select_client(payload.federation_id)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.get_balance()
+            </span>.value()
+            .get_balance()
             .<span class="kw">await</span>)
     }
 
@@ -2185,7 +2257,8 @@
         <span class="kw">let </span>(<span class="kw">_</span>, address) = <span class="self">self
             </span>.select_client(payload.federation_id)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.get_first_module::&lt;WalletClientModule&gt;()
+            </span>.value()
+            .get_first_module::&lt;WalletClientModule&gt;()
             .get_deposit_address(now() + Duration::from_secs(<span class="number">86400 </span>* <span class="number">365</span>), ())
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(address)
@@ -2198,14 +2271,15 @@
             federation_id,
         } = payload;
         <span class="kw">let </span>client = <span class="self">self</span>.select_client(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>wallet_module = client.get_first_module::&lt;WalletClientModule&gt;();
+        <span class="kw">let </span>wallet_module = client.value().get_first_module::&lt;WalletClientModule&gt;();
 
         <span class="comment">// TODO: Fees should probably be passed in as a parameter
         </span><span class="kw">let </span>(amount, fees) = <span class="kw">match </span>amount {
             <span class="comment">// If the amount is &quot;all&quot;, then we need to subtract the fees from
             // the amount we are withdrawing
             </span>BitcoinAmountOrAll::All =&gt; {
-                <span class="kw">let </span>balance = bitcoin::Amount::from_sat(client.get_balance().<span class="kw">await</span>.msats / <span class="number">1000</span>);
+                <span class="kw">let </span>balance =
+                    bitcoin::Amount::from_sat(client.value().get_balance().<span class="kw">await</span>.msats / <span class="number">1000</span>);
                 <span class="kw">let </span>fees = wallet_module
                     .get_withdraw_fees(address.clone(), balance)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2254,7 +2328,7 @@
             <span class="macro">debug!</span>(<span class="string">&quot;Handling pay invoice message: {payload:?}&quot;</span>);
             <span class="kw">let </span>client = <span class="self">self</span>.select_client(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>contract_id = payload.contract_id;
-            <span class="kw">let </span>gateway_module = <span class="kw-2">&amp;</span>client.get_first_module::&lt;GatewayClientModule&gt;();
+            <span class="kw">let </span>gateway_module = <span class="kw-2">&amp;</span>client.value().get_first_module::&lt;GatewayClientModule&gt;();
             <span class="kw">let </span>operation_id = gateway_module.gateway_pay_bolt11_invoice(payload).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>updates = gateway_module
                 .gateway_subscribe_ln_pay(operation_id)
@@ -2367,7 +2441,15 @@
                     lightning_context,
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="self">self</span>.clients.write().<span class="kw">await</span>.insert(federation_id, client);
+            <span class="comment">// no need to enter span earlier, because connect-fed has a span
+            </span><span class="self">self</span>.clients.write().<span class="kw">await</span>.insert(
+                federation_id,
+                Spanned::new(
+                    <span class="macro">info_span!</span>(<span class="string">&quot;client&quot;</span>, federation_id=%federation_id.clone()),
+                    <span class="kw">async move </span>{ client },
+                )
+                .<span class="kw">await</span>,
+            );
             <span class="self">self</span>.scid_to_federation
                 .write()
                 .<span class="kw">await
@@ -2546,15 +2628,20 @@
                             .get_value(<span class="kw-2">&amp;</span>FederationIdKey { id: <span class="kw-2">*</span>federation_id })
                             .<span class="kw">await
                         </span>{
-                            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client
-                                .get_first_module::&lt;GatewayClientModule&gt;()
-                                .register_with_federation(
-                                    route_hints.clone(),
-                                    GW_ANNOUNCEMENT_TTL,
-                                    federation_config.fees,
-                                    lightning_context.clone(),
-                                )
-                                .<span class="kw">await
+                            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="kw">async </span>{
+                                client
+                                    .value()
+                                    .get_first_module::&lt;GatewayClientModule&gt;()
+                                    .register_with_federation(
+                                        route_hints.clone(),
+                                        GW_ANNOUNCEMENT_TTL,
+                                        federation_config.fees,
+                                        lightning_context.clone(),
+                                    )
+                                    .<span class="kw">await
+                            </span>}
+                            .instrument(client.span())
+                            .<span class="kw">await
                             </span>{
                                 <span class="macro">warn!</span>(<span class="string">&quot;Error registering federation {federation_id}: {e:?}&quot;</span>);
                             }
@@ -2611,7 +2698,7 @@
     <span class="kw">pub async fn </span>remove_client(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id: FederationId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientArc&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Spanned&lt;fedimint_client::ClientArc&gt;&gt; {
         <span class="kw">let </span>client = <span class="self">self</span>.clients.write().<span class="kw">await</span>.remove(<span class="kw-2">&amp;</span>federation_id).ok_or(
             GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">&quot;No federation with id {federation_id}&quot;</span>)),
         )<span class="question-mark">?</span>;
@@ -2621,7 +2708,7 @@
     <span class="kw">pub async fn </span>select_client(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id: FederationId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientArc&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Spanned&lt;fedimint_client::ClientArc&gt;&gt; {
         <span class="self">self</span>.clients
             .read()
             .<span class="kw">await
@@ -2641,10 +2728,11 @@
         <span class="kw">for </span>config <span class="kw">in </span>configs {
             <span class="kw">let </span>federation_id = config.invite_code.federation_id();
 
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(client) = <span class="self">self
-                </span>.client_builder
-                .build(config.clone(), <span class="self">self</span>.clone())
-                .<span class="kw">await
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(client) = Spanned::try_new(
+                <span class="macro">info_span!</span>(<span class="string">&quot;client&quot;</span>, federation_id  = %federation_id.clone()),
+                <span class="self">self</span>.client_builder.build(config.clone(), <span class="self">self</span>.clone()),
+            )
+            .<span class="kw">await
             </span>{
                 <span class="comment">// Registering each client happens in the background, since we&#39;re loading
                 // the clients for the first time, just add them to

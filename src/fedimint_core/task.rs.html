@@ -670,6 +670,9 @@
 <a href="#670" id="670">670</a>
 <a href="#671" id="671">671</a>
 <a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
 </pre></div><pre class="rust"><code><span class="attr">#![cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, allow(dead_code))]
 
 </span><span class="kw">use </span>std::collections::VecDeque;
@@ -850,9 +853,11 @@
         </span>Fut: Future&lt;Output = R&gt; + Send + <span class="lifetime">&#39;static</span>,
         R: Send + <span class="lifetime">&#39;static</span>,
     {
-        <span class="kw">use </span>tracing::debug;
+        <span class="kw">use </span>tracing::{debug, info_span, Instrument, Span};
 
         <span class="kw">let </span>name = name.into();
+        <span class="comment">// new child span of current span
+        </span><span class="kw">let </span>span = <span class="macro">info_span!</span>(parent: Span::current(),<span class="string">&quot;task&quot;</span>, name);
         <span class="kw">let </span><span class="kw-2">mut </span>guard = TaskPanicGuard {
             name: name.clone(),
             inner: <span class="self">self</span>.inner.clone(),
@@ -870,6 +875,7 @@
                 <span class="macro">debug!</span>(<span class="string">&quot;Finished task {name}&quot;</span>);
                 <span class="kw">let _ </span>= tx.send(r);
             }
+            .instrument(span)
         }) {
             <span class="self">self</span>.inner.join.lock().<span class="kw">await</span>.push_back((name, handle));
         }

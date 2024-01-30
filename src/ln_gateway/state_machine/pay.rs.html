@@ -889,6 +889,15 @@
 <a href="#889" id="889">889</a>
 <a href="#890" id="890">890</a>
 <a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -900,6 +909,7 @@
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::util::Spanned;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
@@ -910,7 +920,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio_stream::StreamExt;
-<span class="kw">use </span>tracing::{debug, error, info, warn};
+<span class="kw">use </span>tracing::{debug, error, info, warn, Instrument};
 
 <span class="kw">use super</span>::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
 <span class="kw">use </span><span class="kw">crate</span>::db::PreimageAuthentication;
@@ -1154,13 +1164,16 @@
             <span class="self">Self</span>::check_swap_to_federation(context.clone(), payment_parameters.payment_data.clone())
                 .<span class="kw">await
         </span>{
-            <span class="self">Self</span>::buy_preimage_via_direct_swap(
-                client,
-                payment_parameters.payment_data.clone(),
-                contract.clone(),
-                common.clone(),
-            )
-            .<span class="kw">await
+            client
+                .with(|client| {
+                    <span class="self">Self</span>::buy_preimage_via_direct_swap(
+                        client,
+                        payment_parameters.payment_data.clone(),
+                        contract.clone(),
+                        common.clone(),
+                    )
+                })
+                .<span class="kw">await
         </span>} <span class="kw">else </span>{
             <span class="self">Self</span>::buy_preimage_over_lightning(
                 context,
@@ -1491,7 +1504,7 @@
     </span><span class="kw">async fn </span>check_swap_to_federation(
         context: GatewayClientContext,
         payment_data: PaymentData,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;ClientArc&gt; {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientArc&gt;&gt; {
         <span class="kw">let </span>rhints = payment_data.route_hints();
         <span class="kw">match </span>rhints.first().and_then(|rh| rh.<span class="number">0</span>.last()) {
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
@@ -1629,54 +1642,59 @@
                 },
             })<span class="question-mark">?</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>stream = client
-            .get_first_module::&lt;GatewayClientModule&gt;()
-            .gateway_subscribe_ln_receive(operation_id)
-            .<span class="kw">await
-            </span>.map_err(|e| {
-                <span class="kw">let </span>contract_id = contract.contract.contract_id();
-                <span class="macro">warn!</span>(
-                    <span class="question-mark">?</span>contract_id,
-                    <span class="string">&quot;Failed to subscribe to ln receive of direct swap: {e:?}&quot;
-                </span>);
-                OutgoingPaymentError {
-                    contract_id,
-                    contract: <span class="prelude-val">Some</span>(contract.clone()),
-                    error_type: OutgoingPaymentErrorType::SwapFailed {
-                        swap_error: <span class="macro">format!</span>(
-                            <span class="string">&quot;Failed to subscribe to ln receive of direct swap: {e}&quot;
-                        </span>),
-                    },
-                }
-            })<span class="question-mark">?
-            </span>.into_stream();
+        <span class="kw">async </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>stream = client
+                .value()
+                .get_first_module::&lt;GatewayClientModule&gt;()
+                .gateway_subscribe_ln_receive(operation_id)
+                .<span class="kw">await
+                </span>.map_err(|e| {
+                    <span class="kw">let </span>contract_id = contract.contract.contract_id();
+                    <span class="macro">warn!</span>(
+                        <span class="question-mark">?</span>contract_id,
+                        <span class="string">&quot;Failed to subscribe to ln receive of direct swap: {e:?}&quot;
+                    </span>);
+                    OutgoingPaymentError {
+                        contract_id,
+                        contract: <span class="prelude-val">Some</span>(contract.clone()),
+                        error_type: OutgoingPaymentErrorType::SwapFailed {
+                            swap_error: <span class="macro">format!</span>(
+                                <span class="string">&quot;Failed to subscribe to ln receive of direct swap: {e}&quot;
+                            </span>),
+                        },
+                    }
+                })<span class="question-mark">?
+                </span>.into_stream();
 
-        <span class="kw">loop </span>{
-            <span class="macro">debug!</span>(<span class="string">&quot;Waiting next state of preimage buy for contract {contract:?}&quot;</span>);
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(state) = stream.next().<span class="kw">await </span>{
-                <span class="kw">match </span>state {
-                    GatewayExtReceiveStates::Funding =&gt; {
-                        <span class="macro">debug!</span>(<span class="question-mark">?</span>contract, <span class="string">&quot;Funding&quot;</span>);
-                        <span class="kw">continue</span>;
-                    }
-                    GatewayExtReceiveStates::Preimage(preimage) =&gt; {
-                        <span class="macro">debug!</span>(<span class="question-mark">?</span>contract, <span class="string">&quot;Received preimage&quot;</span>);
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage);
-                    }
-                    other =&gt; {
-                        <span class="macro">warn!</span>(<span class="question-mark">?</span>contract, <span class="string">&quot;Got state {other:?}&quot;</span>);
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingPaymentError {
-                            contract_id: contract.contract.contract_id(),
-                            contract: <span class="prelude-val">Some</span>(contract),
-                            error_type: OutgoingPaymentErrorType::SwapFailed {
-                                swap_error: <span class="string">&quot;Failed to receive preimage&quot;</span>.to_string(),
-                            },
-                        });
+            <span class="kw">loop </span>{
+                <span class="macro">debug!</span>(<span class="string">&quot;Waiting next state of preimage buy for contract {contract:?}&quot;</span>);
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(state) = stream.next().<span class="kw">await </span>{
+                    <span class="kw">match </span>state {
+                        GatewayExtReceiveStates::Funding =&gt; {
+                            <span class="macro">debug!</span>(<span class="question-mark">?</span>contract, <span class="string">&quot;Funding&quot;</span>);
+                            <span class="kw">continue</span>;
+                        }
+                        GatewayExtReceiveStates::Preimage(preimage) =&gt; {
+                            <span class="macro">debug!</span>(<span class="question-mark">?</span>contract, <span class="string">&quot;Received preimage&quot;</span>);
+                            <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage);
+                        }
+                        other =&gt; {
+                            <span class="macro">warn!</span>(<span class="question-mark">?</span>contract, <span class="string">&quot;Got state {other:?}&quot;</span>);
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingPaymentError {
+                                contract_id: contract.contract.contract_id(),
+                                contract: <span class="prelude-val">Some</span>(contract),
+                                error_type: OutgoingPaymentErrorType::SwapFailed {
+                                    swap_error: <span class="string">&quot;Failed to receive preimage&quot;</span>.to_string(),
+                                },
+                            });
+                        }
                     }
                 }
             }
         }
-    }
+        .instrument(client.span())
+        .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>transition_claim_outgoing_contract(
         common: GatewayPayCommon,
