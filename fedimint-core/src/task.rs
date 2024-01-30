@@ -178,9 +178,11 @@ impl TaskGroup {
         Fut: Future<Output = R> + Send + 'static,
         R: Send + 'static,
     {
-        use tracing::debug;
+        use tracing::{debug, info_span, Instrument, Span};
 
         let name = name.into();
+        // new child span of current span
+        let span = info_span!(parent: Span::current(),"task", name);
         let mut guard = TaskPanicGuard {
             name: name.clone(),
             inner: self.inner.clone(),
@@ -198,6 +200,7 @@ impl TaskGroup {
                 debug!("Finished task {name}");
                 let _ = tx.send(r);
             }
+            .instrument(span)
         }) {
             self.inner.join.lock().await.push_back((name, handle));
         }
