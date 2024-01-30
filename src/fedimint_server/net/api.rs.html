@@ -558,8 +558,19 @@
 <a href="#558" id="558">558</a>
 <a href="#559" id="559">559</a>
 <a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
-</span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+</span><span class="kw">use </span>std::cmp::Ordering;
+<span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, Instant};
@@ -580,10 +591,9 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT,
-    PENDING_ACCEPTED_ITEMS_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
-    VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
+    CLIENT_CONFIG_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
+    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+    STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::audit::{Audit, AuditSummary};
@@ -593,7 +603,7 @@
     SupportedApiVersionsSummary,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
-<span class="kw">use </span>fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
+<span class="kw">use </span>fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
 <span class="kw">use </span>fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
 <span class="kw">use </span>fedimint_core::{OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
@@ -737,16 +747,26 @@
             </span>.<span class="number">0
     </span>}
 
-    <span class="kw">pub async fn </span>pending_accepted_items(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;AcceptedItem&gt; {
-        <span class="self">self</span>.db
-            .begin_transaction_nc()
-            .<span class="kw">await
-            </span>.find_by_prefix(<span class="kw-2">&amp;</span>AcceptedItemPrefix)
-            .<span class="kw">await
-            </span>.map(|entry| entry.<span class="number">1</span>)
-            .collect()
-            .<span class="kw">await
-    </span>}
+    <span class="kw">pub async fn </span>session_status(<span class="kw-2">&amp;</span><span class="self">self</span>, session_index: u64) -&gt; SessionStatus {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>;
+
+        <span class="kw">match </span>session_index.cmp(<span class="kw-2">&amp;</span>get_finished_session_count_static(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>) {
+            Ordering::Greater =&gt; SessionStatus::Initial,
+            Ordering::Equal =&gt; SessionStatus::Pending(
+                dbtx.find_by_prefix(<span class="kw-2">&amp;</span>AcceptedItemPrefix)
+                    .<span class="kw">await
+                    </span>.map(|entry| entry.<span class="number">1</span>)
+                    .collect()
+                    .<span class="kw">await</span>,
+            ),
+            Ordering::Less =&gt; SessionStatus::Complete(
+                dbtx.get_value(<span class="kw-2">&amp;</span>SignedSessionOutcomeKey(session_index))
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;There are no gaps in session outcomes&quot;</span>)
+                    .session_outcome,
+            ),
+        }
+    }
 
     <span class="kw">pub async fn </span>get_federation_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;FederationStatus&gt; {
         <span class="kw">let </span>peers_connection_status = <span class="self">self</span>.peer_status_channels.get_all_status().<span class="kw">await</span>;
@@ -999,9 +1019,9 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            PENDING_ACCEPTED_ITEMS_ENDPOINT,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; SerdeModuleEncoding&lt;Vec&lt;AcceptedItem&gt;&gt; {
-                <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>fedimint.pending_accepted_items().<span class="kw">await</span>).into())
+            SESSION_STATUS_ENDPOINT,
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, index: u64| -&gt; SerdeModuleEncoding&lt;SessionStatus&gt; {
+                <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>fedimint.session_status(index).<span class="kw">await</span>).into())
             }
         },
         <span class="macro">api_endpoint! </span>{

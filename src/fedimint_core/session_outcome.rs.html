@@ -69,6 +69,13 @@
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
 <a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::hashes::{sha256, Hash};
 <span class="kw">use </span>parity_scale_codec::{Decode, Encode};
 
@@ -129,6 +136,13 @@
 </span><span class="kw">pub struct </span>SignedSessionOutcome {
     <span class="kw">pub </span>session_outcome: SessionOutcome,
     <span class="kw">pub </span>signatures: std::collections::BTreeMap&lt;PeerId, SchnorrSignature&gt;,
+}
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+</span><span class="kw">pub enum </span>SessionStatus {
+    Initial,
+    Pending(Vec&lt;AcceptedItem&gt;),
+    Complete(SessionOutcome),
 }
 
 <span class="comment">// TODO: remove this as soon as we bump bitcoin_hashes in fedimint_core to

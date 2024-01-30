@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["consensus_hash_sha256"],"struct":["AcceptedItem","SchnorrSignature","SessionOutcome","SignedSessionOutcome"]};
+window.SIDEBAR_ITEMS = {"enum":["SessionStatus"],"fn":["consensus_hash_sha256"],"struct":["AcceptedItem","SchnorrSignature","SessionOutcome","SignedSessionOutcome"]};
