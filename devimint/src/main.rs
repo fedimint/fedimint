@@ -451,7 +451,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // The code path is backwards-compatible, however this test will fail if we
     // check against earlier fedimintd versions.
     let fedimintd_version = devimint::util::FedimintdCmd::version_or_default().await;
-    if VersionReq::parse(">=0.3.0")?.matches(&fedimintd_version) {
+    if VersionReq::parse(">=0.3.0-alpha")?.matches(&fedimintd_version) {
         // # Test the correct descriptor is used
         let config = cmd!(client, "config").out_json().await?;
         let guardian_count = config["global"]["api_endpoints"].as_object().unwrap().len();
@@ -1127,6 +1127,10 @@ async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> 
 }
 
 async fn cli_tests_backup_and_restore(fed: &Federation, reference_client: &Client) -> Result<()> {
+    // fedimint-cli updated the interface for `restore` in v0.3.0 (3746d51)
+    // The code path is backwards-compatible, however we need to handle the two
+    // separate interfaces to test backwards-compatibility with old clients.
+    let fedimint_cli_version = devimint::util::FedimintCli::version_or_default().await;
     let secret = cmd!(reference_client, "print-secret").out_json().await?["secret"]
         .as_str()
         .map(ToOwned::to_owned)
@@ -1150,48 +1154,92 @@ async fn cli_tests_backup_and_restore(fed: &Federation, reference_client: &Clien
     // Testing restore in different setups would require multiple clients,
     // which is a larger refactor.
     {
-        let client = Client::create("restore-without-backup").await?;
+        let post_balance = if VersionReq::parse(">=0.3.0-alpha")?.matches(&fedimint_cli_version) {
+            let client = Client::create("restore-without-backup").await?;
+            let _ = cmd!(
+                client,
+                "restore",
+                "--mnemonic",
+                &secret,
+                "--invite-code",
+                fed.invite_code()?
+            )
+            .out_json()
+            .await?;
 
-        let _ = cmd!(
-            client,
-            "restore",
-            "--mnemonic",
-            &secret,
-            "--invite-code",
-            fed.invite_code()?
-        )
-        .out_json()
-        .await?;
+            // `wait-complete` was introduced in v0.3.0 (90f3082)
+            let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
+            let post_notes = cmd!(client, "info").out_json().await?;
+            let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
+            debug!(%post_notes, post_balance, "State after backup");
 
-        let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
-        let post_notes = cmd!(client, "info").out_json().await?;
-        let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
+            post_balance
+        } else {
+            let client = reference_client
+                .new_forked("restore-without-backup")
+                .await?;
+            let _ = cmd!(client, "wipe", "--force",).out_json().await?;
 
-        debug!(%post_notes, post_balance, "State after backup");
+            assert_eq!(
+                0,
+                cmd!(client, "info").out_json().await?["total_amount_msat"]
+                    .as_u64()
+                    .unwrap()
+            );
+
+            let post_balance = cmd!(client, "restore", &secret,)
+                .out_json()
+                .await?
+                .as_u64()
+                .unwrap();
+            let post_notes = cmd!(client, "info").out_json().await?;
+            debug!(%post_notes, post_balance, "State after backup");
+
+            post_balance
+        };
         assert_eq!(pre_balance, post_balance);
     }
 
     // with a backup
     {
-        let _ = cmd!(reference_client, "backup",).out_json().await?;
-        let client = Client::create("restore-with-backup").await?;
+        let post_balance = if VersionReq::parse(">=0.3.0-alpha")?.matches(&fedimint_cli_version) {
+            let _ = cmd!(reference_client, "backup",).out_json().await?;
+            let client = Client::create("restore-with-backup").await?;
 
-        let _ = cmd!(
-            client,
-            "restore",
-            "--mnemonic",
-            &secret,
-            "--invite-code",
-            fed.invite_code()?
-        )
-        .out_json()
-        .await?;
+            let _ = cmd!(
+                client,
+                "restore",
+                "--mnemonic",
+                &secret,
+                "--invite-code",
+                fed.invite_code()?
+            )
+            .out_json()
+            .await?;
 
-        let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
-        let post_notes = cmd!(client, "info").out_json().await?;
-        let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
+            let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
+            let post_notes = cmd!(client, "info").out_json().await?;
+            let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
+            debug!(%post_notes, post_balance, "State after backup");
 
-        debug!(%post_notes, post_balance, "State after backup");
+            post_balance
+        } else {
+            let client = reference_client.new_forked("restore-with-backup").await?;
+            let _ = cmd!(client, "backup",).out_json().await?;
+            let _ = cmd!(client, "wipe", "--force",).out_json().await?;
+            assert_eq!(
+                0,
+                cmd!(client, "info").out_json().await?["total_amount_msat"]
+                    .as_u64()
+                    .unwrap()
+            );
+            let _ = cmd!(client, "restore", &secret,).out_json().await?;
+            let post_notes = cmd!(client, "info").out_json().await?;
+            let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
+            debug!(%post_notes, post_balance, "State after backup");
+
+            post_balance
+        };
         assert_eq!(pre_balance, post_balance);
     }
 
