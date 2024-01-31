@@ -118,7 +118,7 @@ impl Client {
             .unwrap())
     }
 
-    pub async fn use_gateway(&self, gw: &super::Gatewayd) -> Result<()> {
+    pub async fn use_gateway(&self, gw: &super::gatewayd::Gatewayd) -> Result<()> {
         let gateway_id = gw.gateway_id().await?;
         cmd!(self, "switch-gateway", gateway_id.clone())
             .run()
@@ -256,7 +256,7 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn pegin_gateway(&self, amount: u64, gw: &super::Gatewayd) -> Result<()> {
+    pub async fn pegin_gateway(&self, amount: u64, gw: &super::gatewayd::Gatewayd) -> Result<()> {
         info!(amount, "Pegging-in gateway funds");
         let fed_id = self.federation_id().await;
         let pegin_addr = cmd!(gw, "address", "--federation-id={fed_id}")
@@ -408,7 +408,7 @@ pub async fn run_dkg(
     let auth_for = |peer: &PeerId| -> ApiAuth { params[peer].local.api_auth.clone() };
     for (peer_id, client) in &admin_clients {
         const MAX_RETRIES: usize = 20;
-        super::poll("trying-to-connect-to-peers", MAX_RETRIES, || async {
+        poll("trying-to-connect-to-peers", MAX_RETRIES, || async {
             client
                 .status()
                 .await
@@ -574,7 +574,7 @@ async fn set_config_gen_params(
 
 async fn wait_server_status(client: &WsAdminClient, expected_status: ServerStatus) -> Result<()> {
     const RETRIES: usize = 60;
-    super::poll("waiting-server-status", RETRIES, || async {
+    poll("waiting-server-status", RETRIES, || async {
         let server_status = client
             .status()
             .await
