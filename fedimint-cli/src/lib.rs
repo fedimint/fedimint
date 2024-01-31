@@ -30,7 +30,6 @@ use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
-use fedimint_core::query::ThresholdConsensus;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{task, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
@@ -720,11 +719,7 @@ impl FedimintCli {
                         .await
                         .map_err_cli_general()?,
                     None => ws_api
-                        .request_with_strategy(
-                            ThresholdConsensus::full_participation(ws_api.peers().len()),
-                            method,
-                            params,
-                        )
+                        .request_current_consensus(method, params)
                         .await
                         .map_err_cli_general()?,
                 };

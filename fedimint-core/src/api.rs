@@ -368,7 +368,7 @@ pub trait FederationApiExt: IRawFederationApi {
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         self.request_with_strategy(
-            ThresholdConsensus::overcome_evil(self.all_peers().total()),
+            ThresholdConsensus::new(self.all_peers().total()),
             method,
             params,
         )
