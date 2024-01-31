@@ -186,9 +186,7 @@ mod fedimint_migration_tests {
     };
     use fedimint_mint_common::{MintCommonInit, MintOutputOutcome, Nonce};
     use fedimint_mint_server::Mint;
-    use fedimint_testing::db::{
-        prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8,
-    };
+    use fedimint_testing::db::{snapshot_db_migrations, validate_migrations, BYTE_32, BYTE_8};
     use ff::Field;
     use futures::StreamExt;
     use rand::rngs::OsRng;
@@ -340,8 +338,8 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn prepare_server_db_migration_snapshots() -> anyhow::Result<()> {
-        prepare_db_migration_snapshot(
+    async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
+        snapshot_db_migrations(
             "mint-server-v0",
             |dbtx| {
                 Box::pin(async move {
@@ -358,7 +356,7 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_migrations() -> anyhow::Result<()> {
+    async fn test_server_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
 
         validate_migrations(
@@ -443,8 +441,8 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn prepare_client_db_migration_snapshots() -> anyhow::Result<()> {
-        prepare_db_migration_snapshot(
+    async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
+        snapshot_db_migrations(
             "mint-client-v0",
             |dbtx| Box::pin(async move { create_client_db_with_v0_data(dbtx).await }),
             ModuleDecoderRegistry::from_iter([(
@@ -457,7 +455,7 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_client_migrations() -> anyhow::Result<()> {
+    async fn test_client_db_migrations() -> anyhow::Result<()> {
         TracingSetup::default().init()?;
 
         validate_migrations(
