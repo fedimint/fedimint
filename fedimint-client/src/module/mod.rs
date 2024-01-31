@@ -208,6 +208,30 @@ where
         self.client.get().decoders().clone()
     }
 
+    pub fn input_from_dyn<'i>(
+        &self,
+        input: &'i DynInput,
+    ) -> Option<&'i <M::Common as ModuleCommon>::Input> {
+        (input.module_instance_id() == self.module_instance_id).then(|| {
+            input
+                .as_any()
+                .downcast_ref::<<M::Common as ModuleCommon>::Input>()
+                .expect("instance_id just checked")
+        })
+    }
+
+    pub fn output_from_dyn<'o>(
+        &self,
+        output: &'o DynOutput,
+    ) -> Option<&'o <M::Common as ModuleCommon>::Output> {
+        (output.module_instance_id() == self.module_instance_id).then(|| {
+            output
+                .as_any()
+                .downcast_ref::<<M::Common as ModuleCommon>::Output>()
+                .expect("instance_id just checked")
+        })
+    }
+
     pub fn map_dyn<'s, 'i, 'o, I>(
         &'s self,
         typed: impl IntoIterator<Item = I> + 'i,

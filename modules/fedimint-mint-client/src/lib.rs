@@ -9,30 +9,29 @@ mod oob;
 /// State machines for mint outputs
 pub mod output;
 
-use std::cmp::{self, Ordering};
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
+use std::ffi;
 use std::fmt::{Display, Formatter};
 use std::io::Read;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use std::{ffi, ops};
 
 use anyhow::{anyhow, bail, ensure, Context as _};
 use async_stream::stream;
+use backup::recovery::MintRecovery;
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
 use client_db::DbKeyPrefix;
 use fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
-use fedimint_client::module::recovery::RecoveryProgress;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::api::DynGlobalApi;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
@@ -44,19 +43,16 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-use fedimint_core::session_outcome::SessionOutcome;
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
     TieredMulti, TieredSummary, TransactionId,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use fedimint_logging::LOG_CLIENT_RECOVERY_MINT;
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::MintClientConfig;
 pub use fedimint_mint_common::*;
 use futures::{pin_mut, StreamExt};
-use rand::{thread_rng, Rng};
 use secp256k1::{All, KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -64,11 +60,10 @@ use tbs::AggregatePublicKey;
 use thiserror::Error;
 use tracing::{debug, info, warn};
 
-use crate::backup::recovery::MintRecoveryState;
-use crate::backup::{EcashBackup, EcashBackupV0};
+use crate::backup::EcashBackup;
 use crate::client_db::{
     CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
-    NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix, RestoreStateKey,
+    NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix,
 };
 use crate::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
@@ -328,7 +323,8 @@ impl ModuleInit for MintClientInit {
                         "CancelledOOBSpendKey"
                     );
                 }
-                DbKeyPrefix::RestoreState => {}
+                DbKeyPrefix::RecoveryState => {}
+                DbKeyPrefix::RecoveryFinalized => {}
             }
         }
 
@@ -347,11 +343,6 @@ impl ClientModuleInit for MintClientInit {
     }
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
-        assert!(
-            Self::load_recovery_state(args.db()).await.is_none(),
-            "recovery state must be empty on mint init"
-        );
-
         Ok(MintClientModule {
             federation_id: *args.federation_id(),
             cfg: args.cfg().clone(),
@@ -367,225 +358,7 @@ impl ClientModuleInit for MintClientInit {
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
     ) -> anyhow::Result<()> {
-        let snapshot_v0 = match snapshot {
-            Some(EcashBackup::V0(snapshot_v0)) => Some(snapshot_v0),
-            Some(EcashBackup::Default { variant, .. }) => {
-                return Err(anyhow!("Unsupported backup variant: {variant}"))
-            }
-            None => None,
-        };
-
-        Self::recover_inner(args, snapshot_v0.cloned()).await
-    }
-}
-
-impl MintClientInit {
-    async fn load_recovery_state(db: &Database) -> Option<MintRecoveryState> {
-        db.begin_transaction_nc()
-            .await
-            .get_value(&RestoreStateKey)
-            .await
-    }
-
-    async fn recover_inner(
-        args: &ClientModuleRecoverArgs<Self>,
-        snapshot: Option<EcashBackupV0>,
-    ) -> anyhow::Result<()> {
-        let snapshot = snapshot.unwrap_or(EcashBackupV0::new_empty());
-        let client_ctx = args.context();
-        let config = args.cfg();
-        let db = args.db().clone();
-
-        let current_session_count = client_ctx.global_api().session_count().await?;
-        let secret = args.module_root_secret().clone();
-
-        let mut state = if let Some(state) = Self::load_recovery_state(&db).await {
-            state
-        } else {
-            MintRecoveryState::from_backup(
-                current_session_count,
-                snapshot,
-                30,
-                config.tbs_pks.clone(),
-                config.peer_tbs_pks.clone(),
-                &secret,
-            )
-        };
-
-        debug!(target: LOG_TARGET, "Creating MintRestoreStateMachine");
-
-        let mut block_stream = Self::fetch_block_stream(
-            args.api().clone(),
-            client_ctx.decoders(),
-            state.next_epoch..state.end_epoch,
-        );
-
-        while !state.is_done() {
-            state = state.make_progress(secret.clone(), &mut block_stream).await;
-
-            let mut dbtx = db.begin_transaction().await;
-
-            dbtx.insert_entry(&RestoreStateKey, &state).await;
-            dbtx.commit_tx().await;
-            args.update_recovery_progress(RecoveryProgress {
-                complete: (state.next_epoch - state.start_epoch)
-                    .try_into()
-                    .unwrap_or(u32::MAX),
-                total: (state.end_epoch - state.start_epoch)
-                    .try_into()
-                    .unwrap_or(u32::MAX),
-            })
-            .await
-        }
-
-        Self::finalize_state_restore(state, client_ctx).await?;
-
-        Ok(())
-    }
-
-    async fn finalize_state_restore(
-        state: MintRecoveryState,
-        client_ctx: ClientContext<MintClientModule>,
-    ) -> Result<(), anyhow::Error> {
-        debug!(
-            target: LOG_CLIENT_RECOVERY_MINT,
-            ?state,
-            "Finalizing restore"
-        );
-
-        let finalized = state.finalize();
-
-        let restored_amount = finalized
-            .unconfirmed_notes
-            .iter()
-            .map(|entry| entry.1)
-            .sum::<Amount>()
-            + finalized.spendable_notes.total_amount();
-
-        info!(amount = %restored_amount, "Finalizing mint recovery");
-
-        let finalized = &finalized;
-
-        client_ctx
-            .clone()
-            .module_autocommit_2(
-                move |dbtx, _| {
-                    Box::pin(async move {
-                        let finalized = finalized.clone();
-                        dbtx.module_dbtx().remove_entry(&RestoreStateKey).await;
-
-                        debug!(
-                            target: LOG_CLIENT_RECOVERY_MINT,
-                            len = finalized.spendable_notes.count_items(),
-                            "Restoring spendable notes"
-                        );
-                        for (amount, note) in finalized.spendable_notes {
-                            let key = NoteKey {
-                                amount,
-                                nonce: note.nonce(),
-                            };
-                            dbtx.module_dbtx().insert_new_entry(&key, &note).await;
-                        }
-
-                        for (amount, note_idx) in finalized.next_note_idx.iter() {
-                            debug!(
-                                target: LOG_CLIENT_RECOVERY_MINT,
-                                %amount,
-                                %note_idx,
-                                "Restoring NextECashNodeIndex"
-                            );
-                            dbtx.module_dbtx()
-                                .insert_entry(&NextECashNoteIndexKey(amount), &note_idx.as_u64())
-                                .await;
-                        }
-
-                        debug!(
-                            target: LOG_CLIENT_RECOVERY_MINT,
-                            len = finalized.unconfirmed_notes.len(),
-                            "Restoring unconfigured notes state machines"
-                        );
-
-                        for (out_point, amount, issuance_request) in finalized.unconfirmed_notes {
-                            let client_ctx = dbtx.client_ctx();
-                            dbtx.add_state_machines(
-                                client_ctx
-                                    .map_dyn(vec![MintClientStateMachines::Output(
-                                        MintOutputStateMachine {
-                                            common: MintOutputCommon {
-                                                operation_id: OperationId::new_random(),
-                                                out_point,
-                                            },
-                                            state: crate::output::MintOutputStates::Created(
-                                                MintOutputStatesCreated {
-                                                    amount,
-                                                    issuance_request,
-                                                },
-                                            ),
-                                        },
-                                    )])
-                                    .collect(),
-                            )
-                            .await?;
-                        }
-
-                        debug!(
-                            target: LOG_CLIENT_RECOVERY_MINT,
-                            "Mint module recovery finalized"
-                        );
-
-                        Ok(())
-                    })
-                },
-                None,
-            )
-            .await?;
-        Ok(())
-    }
-
-    /// Fetch epochs in a given range and send them over `sender`
-    ///
-    /// Since WASM's `spawn` does not support join handles, we indicate
-    /// errors via `sender` itself.
-    ///
-    /// TODO: could be internal to recovery_loop?
-    fn fetch_block_stream<'a>(
-        api: DynGlobalApi,
-        decoders: ModuleDecoderRegistry,
-        epoch_range: ops::Range<u64>,
-    ) -> impl futures::Stream<Item = (u64, SessionOutcome)> + 'a {
-        // How many request for blocks to run in parallel (streaming).
-        const PARALLISM_LEVEL: usize = 8;
-
-        futures::stream::iter(epoch_range)
-            .map(move |block_idx| {
-                let api = api.clone();
-                let decoders = decoders.clone();
-                Box::pin(async move {
-                    info!(block_idx, "Fetching epoch");
-
-                    let mut retry_sleep = Duration::from_millis(10);
-                    let block = loop {
-                        info!(target: LOG_CLIENT_RECOVERY_MINT, block_idx, "Awaiting signed block");
-                        match api.await_block(block_idx, &decoders).await {
-                            Ok(block) => break block,
-                            Err(e) => {
-                                info!(e = %e, block_idx, "Error trying to fetch signed block");
-                                // We don't want PARALLISM_LEVEL tasks hammering Federation
-                                // with requests, so max sleep is significant
-                                const MAX_SLEEP: Duration = Duration::from_secs(120);
-                                if retry_sleep <= MAX_SLEEP {
-                                    retry_sleep = retry_sleep
-                                        + thread_rng().gen_range(Duration::ZERO..=retry_sleep);
-                                }
-                                fedimint_core::task::sleep(cmp::min(retry_sleep, MAX_SLEEP)).await;
-                            }
-                        }
-                    };
-
-                    (block_idx, block)
-                })
-            })
-            .buffered(PARALLISM_LEVEL)
+        args.recover_from_history::<MintRecovery>(snapshot).await
     }
 }
 

@@ -1,25 +1,215 @@
-use std::cmp::{self, max};
+use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
+use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
+use fedimint_client::module::init::ClientModuleRecoverArgs;
+use fedimint_client::module::{ClientContext, ClientDbTxContext};
+use fedimint_core::core::OperationId;
+use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::epoch::ConsensusItem;
-use fedimint_core::session_outcome::SessionOutcome;
-use fedimint_core::transaction::Transaction;
-use fedimint_core::{Amount, NumPeers, OutPoint, PeerId, Tiered, TieredMulti};
+use fedimint_core::{
+    apply, async_trait_maybe_send, Amount, NumPeers, OutPoint, PeerId, Tiered, TieredMulti,
+};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::LOG_CLIENT_RECOVERY_MINT;
 use fedimint_mint_common::{MintInput, MintOutput, Nonce};
-use futures::{Stream, StreamExt as _};
 use serde::{Deserialize, Serialize};
 use tbs::{AggregatePublicKey, BlindedMessage, PublicKeyShare};
 use threshold_crypto::G1Affine;
 use tracing::{debug, info, trace, warn};
 
+use super::EcashBackup;
 use crate::backup::EcashBackupV0;
-use crate::output::NoteIssuanceRequest;
-use crate::{MintClientModule, NoteIndex, SpendableNote};
+use crate::client_db::{NextECashNoteIndexKey, NoteKey, RecoveryFinalizedKey, RecoveryStateKey};
+use crate::output::{
+    MintOutputCommon, MintOutputStateMachine, MintOutputStatesCreated, NoteIssuanceRequest,
+};
+use crate::{MintClientInit, MintClientModule, MintClientStateMachines, NoteIndex, SpendableNote};
+
+#[derive(Clone, Debug)]
+pub struct MintRecovery {
+    state: MintRecoveryState,
+    secret: DerivableSecret,
+}
+
+#[apply(async_trait_maybe_send!)]
+impl RecoveryFromHistory for MintRecovery {
+    type Init = MintClientInit;
+
+    async fn new(
+        args: &ClientModuleRecoverArgs<Self::Init>,
+        snapshot: Option<&EcashBackup>,
+    ) -> anyhow::Result<(Self, u64)> {
+        let snapshot_v0 = match snapshot {
+            Some(EcashBackup::V0(snapshot_v0)) => Some(snapshot_v0),
+            Some(EcashBackup::Default { variant, .. }) => {
+                warn!(%variant, "Unsupported backup variant. Ignoring mint backup.");
+                None
+            }
+            None => None,
+        };
+
+        let config = args.cfg();
+
+        let secret = args.module_root_secret().clone();
+        let (snapshot, starting_session) = if let Some(snapshot) = snapshot_v0 {
+            (snapshot.clone(), snapshot.session_count)
+        } else {
+            (EcashBackupV0::new_empty(), 0)
+        };
+
+        Ok((
+            MintRecovery {
+                state: MintRecoveryState::from_backup(
+                    snapshot,
+                    30,
+                    config.tbs_pks.clone(),
+                    config.peer_tbs_pks.clone(),
+                    &secret,
+                ),
+                secret,
+            },
+            starting_session,
+        ))
+    }
+
+    async fn load_dbtx(
+        dbtx: &mut DatabaseTransaction<'_>,
+        args: &ClientModuleRecoverArgs<Self::Init>,
+    ) -> Option<(Self, RecoveryFromHistoryCommon)> {
+        dbtx.get_value(&RecoveryStateKey)
+            .await
+            .map(|(state, common)| {
+                (
+                    MintRecovery {
+                        state,
+                        secret: args.module_root_secret().clone(),
+                    },
+                    common,
+                )
+            })
+    }
+
+    async fn store_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        common: &RecoveryFromHistoryCommon,
+    ) {
+        dbtx.insert_entry(&RecoveryStateKey, &(self.state.clone(), common.clone()))
+            .await;
+    }
+
+    async fn delete_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) {
+        dbtx.remove_entry(&RecoveryStateKey).await;
+    }
+
+    async fn load_finalized(dbtx: &mut DatabaseTransaction<'_>) -> Option<bool> {
+        dbtx.get_value(&RecoveryFinalizedKey).await
+    }
+
+    async fn store_finalized(dbtx: &mut DatabaseTransaction<'_>, state: bool) {
+        dbtx.insert_entry(&RecoveryFinalizedKey, &state).await;
+    }
+
+    async fn handle_input(
+        &mut self,
+        _client_ctx: &ClientContext<MintClientModule>,
+        _idx: usize,
+        input: &MintInput,
+    ) -> anyhow::Result<()> {
+        self.state.handle_input(input);
+        Ok(())
+    }
+
+    async fn handle_output(
+        &mut self,
+        _client_ctx: &ClientContext<MintClientModule>,
+        out_point: OutPoint,
+        output: &MintOutput,
+    ) -> anyhow::Result<()> {
+        self.state.handle_output(out_point, output, &self.secret);
+        Ok(())
+    }
+
+    /// Handle session outcome, adjusting the current state
+    async fn finalize_dbtx(
+        &self,
+        dbtx: &mut ClientDbTxContext<'_, '_, MintClientModule>,
+    ) -> anyhow::Result<()> {
+        let finalized = self.state.clone().finalize();
+
+        let restored_amount = finalized
+            .unconfirmed_notes
+            .iter()
+            .map(|entry| entry.1)
+            .sum::<Amount>()
+            + finalized.spendable_notes.total_amount();
+
+        info!(amount = %restored_amount, "Finalizing mint recovery");
+
+        debug!(
+            target: LOG_CLIENT_RECOVERY_MINT,
+            len = finalized.spendable_notes.count_items(),
+            "Restoring spendable notes"
+        );
+        for (amount, note) in finalized.spendable_notes {
+            let key = NoteKey {
+                amount,
+                nonce: note.nonce(),
+            };
+            dbtx.module_dbtx().insert_new_entry(&key, &note).await;
+        }
+
+        for (amount, note_idx) in finalized.next_note_idx.iter() {
+            debug!(
+                target: LOG_CLIENT_RECOVERY_MINT,
+                %amount,
+                %note_idx,
+                "Restoring NextECashNodeIndex"
+            );
+            dbtx.module_dbtx()
+                .insert_entry(&NextECashNoteIndexKey(amount), &note_idx.as_u64())
+                .await;
+        }
+
+        debug!(
+            target: LOG_CLIENT_RECOVERY_MINT,
+            len = finalized.unconfirmed_notes.len(),
+            "Restoring unconfigured notes state machines"
+        );
+
+        for (out_point, amount, issuance_request) in finalized.unconfirmed_notes {
+            let client_ctx = dbtx.client_ctx();
+            dbtx.add_state_machines(
+                client_ctx
+                    .map_dyn(vec![MintClientStateMachines::Output(
+                        MintOutputStateMachine {
+                            common: MintOutputCommon {
+                                operation_id: OperationId::new_random(),
+                                out_point,
+                            },
+                            state: crate::output::MintOutputStates::Created(
+                                MintOutputStatesCreated {
+                                    amount,
+                                    issuance_request,
+                                },
+                            ),
+                        },
+                    )])
+                    .collect(),
+            )
+            .await?;
+        }
+
+        debug!(
+            target: LOG_CLIENT_RECOVERY_MINT,
+            "Mint module recovery finalized"
+        );
+
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct EcashRecoveryFinalState {
@@ -60,9 +250,6 @@ impl From<CompressedBlindedMessage> for BlindedMessage {
 /// somewhat before it) and present time.
 #[derive(Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 pub struct MintRecoveryState {
-    pub start_epoch: u64,
-    pub next_epoch: u64,
-    pub end_epoch: u64,
     spendable_notes: BTreeMap<Nonce, (Amount, SpendableNote)>,
     /// Nonces that we track that are currently spendable.
     pending_outputs: BTreeMap<Nonce, (OutPoint, Amount, NoteIssuanceRequest)>,
@@ -98,10 +285,7 @@ pub struct MintRecoveryState {
 impl fmt::Debug for MintRecoveryState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!(
-            "MintRestoreInProgressState(start: {}, next: {}, end: {}, pending_outputs: {}, pending_nonces: {})",
-            self.start_epoch,
-            self.next_epoch,
-            self.end_epoch,
+            "MintRestoreInProgressState(pending_outputs: {}, pending_nonces: {})",
             self.pending_outputs.len(),
             self.pending_nonces.len()
         ))
@@ -109,49 +293,7 @@ impl fmt::Debug for MintRecoveryState {
 }
 
 impl MintRecoveryState {
-    pub async fn make_progress<'a>(
-        mut self,
-        secret: DerivableSecret,
-        block_stream: &mut (impl Stream<Item = (u64, SessionOutcome)> + Unpin),
-    ) -> Self {
-        /// the amount of blocks after which we save progress in the database
-        /// (return from this function)
-        const PROGRESS_SNAPSHOT_BLOCKS: u64 = 10;
-        assert_eq!(secret.level(), 2);
-
-        let block_range = self.next_epoch
-            ..cmp::min(
-                self.next_epoch.wrapping_add(PROGRESS_SNAPSHOT_BLOCKS),
-                self.end_epoch,
-            );
-
-        debug!(
-            target: LOG_CLIENT_RECOVERY_MINT,
-            ?block_range,
-            "Processing blocks"
-        );
-
-        for _ in block_range {
-            let Some((block_idx, block)) = block_stream.next().await else {
-                break;
-            };
-
-            assert_eq!(self.next_epoch, block_idx);
-            for accepted_item in block.items {
-                if let ConsensusItem::Transaction(transaction) = accepted_item.item {
-                    self.handle_transaction(&transaction, &secret);
-                }
-            }
-
-            self.next_epoch += 1;
-        }
-        self
-    }
-}
-
-impl MintRecoveryState {
     pub fn from_backup(
-        current_epoch_count: u64,
         backup: EcashBackupV0,
         gap_limit: u64,
         tbs_pks: Tiered<AggregatePublicKey>,
@@ -160,9 +302,6 @@ impl MintRecoveryState {
     ) -> Self {
         let amount_tiers: Vec<_> = tbs_pks.tiers().copied().collect();
         let mut s = Self {
-            start_epoch: backup.session_count,
-            next_epoch: backup.session_count,
-            end_epoch: current_epoch_count + 1,
             spendable_notes: backup
                 .spendable_notes
                 .into_iter_items()
@@ -329,81 +468,6 @@ impl MintRecoveryState {
                     .0
         {
             self.add_next_pending_nonce_in_pending_pool(amount, secret);
-        }
-    }
-
-    pub fn is_done(&self) -> bool {
-        self.next_epoch == self.end_epoch
-    }
-
-    pub(crate) fn handle_transaction(
-        &mut self,
-        transaction: &Transaction,
-        secret: &DerivableSecret,
-    ) {
-        trace!(
-            target: LOG_CLIENT_RECOVERY_MINT,
-            ?transaction,
-            "found consensus item"
-        );
-
-        trace!(
-            target: LOG_CLIENT_RECOVERY_MINT,
-            tx_hash = %transaction.tx_hash(),
-            "found transaction"
-        );
-
-        debug!(
-            target: LOG_CLIENT_RECOVERY_MINT,
-            tx_hash = %transaction.tx_hash(),
-            input_num = transaction.inputs.len(),
-            output_num = transaction.outputs.len(),
-            "processing transaction"
-        );
-
-        for (idx, input) in transaction.inputs.iter().enumerate() {
-            debug!(
-                target: LOG_CLIENT_RECOVERY_MINT,
-                tx_hash = %transaction.tx_hash(),
-                idx,
-                module_id = input.module_instance_id(),
-                "found transaction input"
-            );
-
-            if input.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
-                let input = input
-                    .as_any()
-                    .downcast_ref::<MintInput>()
-                    .expect("mint key just checked");
-
-                self.handle_input(input);
-            }
-        }
-
-        for (out_idx, output) in transaction.outputs.iter().enumerate() {
-            debug!(
-                target: LOG_CLIENT_RECOVERY_MINT,
-                tx_hash = %transaction.tx_hash(),
-                idx = out_idx,
-                module_id = output.module_instance_id(),
-                "found transaction output"
-            );
-
-            if output.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
-                let output = output
-                    .as_any()
-                    .downcast_ref::<MintOutput>()
-                    .expect("mint key just checked");
-
-                self.handle_output(
-                    OutPoint {
-                        txid: transaction.tx_hash(),
-                        out_idx: out_idx as u64,
-                    },
-                    output,
-                    secret,
-                );
-            }
         }
     }
 
