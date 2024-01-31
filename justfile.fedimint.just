@@ -44,6 +44,11 @@ check-wasm:
 # ex: `just prepare_server_db_migration_snapshots fedimint-dummy-tests`
 prepare_server_db_migration_snapshots package *extra_args:
   env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo nextest run --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -E 'package({{package}})' prepare_server_db_migration_snapshots {{extra_args}}
+  just test_server_db_migrations {{package}} {{extra_args}}
+
+test_server_db_migrations package *extra_args:
+  env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo nextest run --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -E 'package({{package}})' test_migrations {{extra_args}}
+
 
 # regenerate client db migration snapshots
 # ex: `just prepare_client_db_migration_snapshots fedimint-dummy-tests`
@@ -52,6 +57,20 @@ prepare_server_db_migration_snapshots package *extra_args:
 # ex: `just prepare_client_db_migration_snapshots fedimint-wallet-tests`
 prepare_client_db_migration_snapshots package *extra_args:
   env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo nextest run --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -E 'package({{package}})' prepare_client_db_migration_snapshots {{extra_args}}
+  just test_client_db_migrations {{package}} {{extra_args}}
+
+test_client_db_migrations package *extra_args:
+  env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo nextest run --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -E 'package({{package}})' test_client_migrations {{extra_args}}
+
+test_db_migrations:
+  just test_client_db_migrations fedimint-dummy-tests
+  just test_client_db_migrations fedimint-mint-tests
+  just test_client_db_migrations fedimint-ln-tests
+  just test_client_db_migrations fedimint-wallet-tests
+  just test_server_db_migrations fedimint-dummy-tests
+  just test_server_db_migrations fedimint-mint-tests
+  just test_server_db_migrations fedimint-ln-tests
+  just test_server_db_migrations fedimint-wallet-tests
 
 # start mprocs with a dev federation setup. Default: 4 nodes, add `-n 1` argument to start only 1 node
 mprocs *PARAMS:
