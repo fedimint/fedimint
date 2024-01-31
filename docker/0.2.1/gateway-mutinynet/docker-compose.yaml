@@ -62,6 +62,16 @@ services:
       - bitcoind
     restart: always
 
+  bitcoind:
+    image: fedimint/mutinynet-bitcoind:master
+    command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
+    ports:
+      - 0.0.0.0:38333:38333
+    volumes:
+      - "bitcoin_datadir:/root/.bitcoin"
+    restart: always
+    platform: linux/amd64
+
   thunderhub_config_writer:
     image: alpine:latest
     command:
