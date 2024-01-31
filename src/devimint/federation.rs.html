@@ -712,7 +712,7 @@
             .unwrap())
     }
 
-    <span class="kw">pub async fn </span>use_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">pub async fn </span>use_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::gatewayd::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>gateway_id = gw.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;switch-gateway&quot;</span>, gateway_id.clone())
             .run()
@@ -850,7 +850,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>pegin_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">pub async fn </span>pegin_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::gatewayd::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">info!</span>(amount, <span class="string">&quot;Pegging-in gateway funds&quot;</span>);
         <span class="kw">let </span>fed_id = <span class="self">self</span>.federation_id().<span class="kw">await</span>;
         <span class="kw">let </span>pegin_addr = <span class="macro">cmd!</span>(gw, <span class="string">&quot;address&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
@@ -1002,7 +1002,7 @@
     <span class="kw">let </span>auth_for = |peer: <span class="kw-2">&amp;</span>PeerId| -&gt; ApiAuth { params[peer].local.api_auth.clone() };
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
         <span class="kw">const </span>MAX_RETRIES: usize = <span class="number">20</span>;
-        <span class="kw">super</span>::poll(<span class="string">&quot;trying-to-connect-to-peers&quot;</span>, MAX_RETRIES, || <span class="kw">async </span>{
+        poll(<span class="string">&quot;trying-to-connect-to-peers&quot;</span>, MAX_RETRIES, || <span class="kw">async </span>{
             client
                 .status()
                 .<span class="kw">await
@@ -1168,7 +1168,7 @@
 
 <span class="kw">async fn </span>wait_server_status(client: <span class="kw-2">&amp;</span>WsAdminClient, expected_status: ServerStatus) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="kw">const </span>RETRIES: usize = <span class="number">60</span>;
-    <span class="kw">super</span>::poll(<span class="string">&quot;waiting-server-status&quot;</span>, RETRIES, || <span class="kw">async </span>{
+    poll(<span class="string">&quot;waiting-server-status&quot;</span>, RETRIES, || <span class="kw">async </span>{
         <span class="kw">let </span>server_status = client
             .status()
             .<span class="kw">await

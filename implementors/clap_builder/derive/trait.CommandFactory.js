@@ -1,4 +1,5 @@
 (function() {var implementors = {
+"devimint":[["impl CommandFactory for <a class=\"struct\" href=\"devimint/cli/struct.CommonArgs.html\" title=\"struct devimint::cli::CommonArgs\">CommonArgs</a>"]],
 "faucet":[["impl CommandFactory for <a class=\"struct\" href=\"faucet/struct.Cmd.html\" title=\"struct faucet::Cmd\">Cmd</a>"]],
 "fedimint_cli":[["impl CommandFactory for <a class=\"struct\" href=\"fedimint_cli/struct.Opts.html\" title=\"struct fedimint_cli::Opts\">Opts</a>"]],
 "fedimint_dbtool":[["impl CommandFactory for <a class=\"struct\" href=\"fedimint_dbtool/struct.Options.html\" title=\"struct fedimint_dbtool::Options\">Options</a>"]],

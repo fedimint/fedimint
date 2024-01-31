@@ -1,5 +1,5 @@
 var srcIndex = JSON.parse('{\
-"devimint":["",[],["external.rs","federation.rs","lib.rs","util.rs","vars.rs"]],\
+"devimint":["",[],["cli.rs","devfed.rs","external.rs","federation.rs","gatewayd.rs","lib.rs","tests.rs","util.rs","vars.rs"]],\
 "faucet":["",[],["faucet.rs"]],\
 "fedimint_aead":["",[],["lib.rs"]],\
 "fedimint_bip39":["",[],["lib.rs"]],\
