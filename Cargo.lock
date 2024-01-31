@@ -1047,6 +1047,7 @@ dependencies = [
  "fedimint-tonic-lnd",
  "fedimint-wallet-client",
  "fedimintd",
+ "fs-lock",
  "futures",
  "nix",
  "rand",
