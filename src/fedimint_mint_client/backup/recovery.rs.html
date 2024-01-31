@@ -420,28 +420,282 @@
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
 <a href="#422" id="422">422</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::{<span class="self">self</span>, max};
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt;
 
-<span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
+<span class="kw">use </span>fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
+<span class="kw">use </span>fedimint_client::module::init::ClientModuleRecoverArgs;
+<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientDbTxContext};
+<span class="kw">use </span>fedimint_core::core::OperationId;
+<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
-<span class="kw">use </span>fedimint_core::session_outcome::SessionOutcome;
-<span class="kw">use </span>fedimint_core::transaction::Transaction;
-<span class="kw">use </span>fedimint_core::{Amount, NumPeers, OutPoint, PeerId, Tiered, TieredMulti};
+<span class="kw">use </span>fedimint_core::{
+    apply, async_trait_maybe_send, Amount, NumPeers, OutPoint, PeerId, Tiered, TieredMulti,
+};
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_RECOVERY_MINT;
 <span class="kw">use </span>fedimint_mint_common::{MintInput, MintOutput, Nonce};
-<span class="kw">use </span>futures::{Stream, StreamExt <span class="kw">as _</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{AggregatePublicKey, BlindedMessage, PublicKeyShare};
 <span class="kw">use </span>threshold_crypto::G1Affine;
 <span class="kw">use </span>tracing::{debug, info, trace, warn};
 
+<span class="kw">use </span><span class="kw">super</span>::EcashBackup;
 <span class="kw">use </span><span class="kw">crate</span>::backup::EcashBackupV0;
-<span class="kw">use </span><span class="kw">crate</span>::output::NoteIssuanceRequest;
-<span class="kw">use crate</span>::{MintClientModule, NoteIndex, SpendableNote};
+<span class="kw">use </span><span class="kw">crate</span>::client_db::{NextECashNoteIndexKey, NoteKey, RecoveryFinalizedKey, RecoveryStateKey};
+<span class="kw">use </span><span class="kw">crate</span>::output::{
+    MintOutputCommon, MintOutputStateMachine, MintOutputStatesCreated, NoteIssuanceRequest,
+};
+<span class="kw">use crate</span>::{MintClientInit, MintClientModule, MintClientStateMachines, NoteIndex, SpendableNote};
+
+<span class="attr">#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>MintRecovery {
+    state: MintRecoveryState,
+    secret: DerivableSecret,
+}
+
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl </span>RecoveryFromHistory <span class="kw">for </span>MintRecovery {
+    <span class="kw">type </span>Init = MintClientInit;
+
+    <span class="kw">async fn </span>new(
+        args: <span class="kw-2">&amp;</span>ClientModuleRecoverArgs&lt;<span class="self">Self</span>::Init&gt;,
+        snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>EcashBackup&gt;,
+    ) -&gt; anyhow::Result&lt;(<span class="self">Self</span>, u64)&gt; {
+        <span class="kw">let </span>snapshot_v0 = <span class="kw">match </span>snapshot {
+            <span class="prelude-val">Some</span>(EcashBackup::V0(snapshot_v0)) =&gt; <span class="prelude-val">Some</span>(snapshot_v0),
+            <span class="prelude-val">Some</span>(EcashBackup::Default { variant, .. }) =&gt; {
+                <span class="macro">warn!</span>(%variant, <span class="string">&quot;Unsupported backup variant. Ignoring mint backup.&quot;</span>);
+                <span class="prelude-val">None
+            </span>}
+            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
+        };
+
+        <span class="kw">let </span>config = args.cfg();
+
+        <span class="kw">let </span>secret = args.module_root_secret().clone();
+        <span class="kw">let </span>(snapshot, starting_session) = <span class="kw">if let </span><span class="prelude-val">Some</span>(snapshot) = snapshot_v0 {
+            (snapshot.clone(), snapshot.session_count)
+        } <span class="kw">else </span>{
+            (EcashBackupV0::new_empty(), <span class="number">0</span>)
+        };
+
+        <span class="prelude-val">Ok</span>((
+            MintRecovery {
+                state: MintRecoveryState::from_backup(
+                    snapshot,
+                    <span class="number">30</span>,
+                    config.tbs_pks.clone(),
+                    config.peer_tbs_pks.clone(),
+                    <span class="kw-2">&amp;</span>secret,
+                ),
+                secret,
+            },
+            starting_session,
+        ))
+    }
+
+    <span class="kw">async fn </span>load_dbtx(
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        args: <span class="kw-2">&amp;</span>ClientModuleRecoverArgs&lt;<span class="self">Self</span>::Init&gt;,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>, RecoveryFromHistoryCommon)&gt; {
+        dbtx.get_value(<span class="kw-2">&amp;</span>RecoveryStateKey)
+            .<span class="kw">await
+            </span>.map(|(state, common)| {
+                (
+                    MintRecovery {
+                        state,
+                        secret: args.module_root_secret().clone(),
+                    },
+                    common,
+                )
+            })
+    }
+
+    <span class="kw">async fn </span>store_dbtx(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        common: <span class="kw-2">&amp;</span>RecoveryFromHistoryCommon,
+    ) {
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>RecoveryStateKey, <span class="kw-2">&amp;</span>(<span class="self">self</span>.state.clone(), common.clone()))
+            .<span class="kw">await</span>;
+    }
+
+    <span class="kw">async fn </span>delete_dbtx(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
+        dbtx.remove_entry(<span class="kw-2">&amp;</span>RecoveryStateKey).<span class="kw">await</span>;
+    }
+
+    <span class="kw">async fn </span>load_finalized(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;bool&gt; {
+        dbtx.get_value(<span class="kw-2">&amp;</span>RecoveryFinalizedKey).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>store_finalized(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, state: bool) {
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>RecoveryFinalizedKey, <span class="kw-2">&amp;</span>state).<span class="kw">await</span>;
+    }
+
+    <span class="kw">async fn </span>handle_input(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        _client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;MintClientModule&gt;,
+        _idx: usize,
+        input: <span class="kw-2">&amp;</span>MintInput,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.state.handle_input(input);
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">async fn </span>handle_output(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        _client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;MintClientModule&gt;,
+        out_point: OutPoint,
+        output: <span class="kw-2">&amp;</span>MintOutput,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.state.handle_output(out_point, output, <span class="kw-2">&amp;</span><span class="self">self</span>.secret);
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Handle session outcome, adjusting the current state
+    </span><span class="kw">async fn </span>finalize_dbtx(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientDbTxContext&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>, MintClientModule&gt;,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>finalized = <span class="self">self</span>.state.clone().finalize();
+
+        <span class="kw">let </span>restored_amount = finalized
+            .unconfirmed_notes
+            .iter()
+            .map(|entry| entry.<span class="number">1</span>)
+            .sum::&lt;Amount&gt;()
+            + finalized.spendable_notes.total_amount();
+
+        <span class="macro">info!</span>(amount = %restored_amount, <span class="string">&quot;Finalizing mint recovery&quot;</span>);
+
+        <span class="macro">debug!</span>(
+            target: LOG_CLIENT_RECOVERY_MINT,
+            len = finalized.spendable_notes.count_items(),
+            <span class="string">&quot;Restoring spendable notes&quot;
+        </span>);
+        <span class="kw">for </span>(amount, note) <span class="kw">in </span>finalized.spendable_notes {
+            <span class="kw">let </span>key = NoteKey {
+                amount,
+                nonce: note.nonce(),
+            };
+            dbtx.module_dbtx().insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note).<span class="kw">await</span>;
+        }
+
+        <span class="kw">for </span>(amount, note_idx) <span class="kw">in </span>finalized.next_note_idx.iter() {
+            <span class="macro">debug!</span>(
+                target: LOG_CLIENT_RECOVERY_MINT,
+                %amount,
+                %note_idx,
+                <span class="string">&quot;Restoring NextECashNodeIndex&quot;
+            </span>);
+            dbtx.module_dbtx()
+                .insert_entry(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>note_idx.as_u64())
+                .<span class="kw">await</span>;
+        }
+
+        <span class="macro">debug!</span>(
+            target: LOG_CLIENT_RECOVERY_MINT,
+            len = finalized.unconfirmed_notes.len(),
+            <span class="string">&quot;Restoring unconfigured notes state machines&quot;
+        </span>);
+
+        <span class="kw">for </span>(out_point, amount, issuance_request) <span class="kw">in </span>finalized.unconfirmed_notes {
+            <span class="kw">let </span>client_ctx = dbtx.client_ctx();
+            dbtx.add_state_machines(
+                client_ctx
+                    .map_dyn(<span class="macro">vec!</span>[MintClientStateMachines::Output(
+                        MintOutputStateMachine {
+                            common: MintOutputCommon {
+                                operation_id: OperationId::new_random(),
+                                out_point,
+                            },
+                            state: <span class="kw">crate</span>::output::MintOutputStates::Created(
+                                MintOutputStatesCreated {
+                                    amount,
+                                    issuance_request,
+                                },
+                            ),
+                        },
+                    )])
+                    .collect(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+
+        <span class="macro">debug!</span>(
+            target: LOG_CLIENT_RECOVERY_MINT,
+            <span class="string">&quot;Mint module recovery finalized&quot;
+        </span>);
+
+        <span class="prelude-val">Ok</span>(())
+    }
+}
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>EcashRecoveryFinalState {
@@ -482,9 +736,6 @@
 /// somewhat before it) and present time.
 </span><span class="attr">#[derive(Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MintRecoveryState {
-    <span class="kw">pub </span>start_epoch: u64,
-    <span class="kw">pub </span>next_epoch: u64,
-    <span class="kw">pub </span>end_epoch: u64,
     spendable_notes: BTreeMap&lt;Nonce, (Amount, SpendableNote)&gt;,
     <span class="doccomment">/// Nonces that we track that are currently spendable.
     </span>pending_outputs: BTreeMap&lt;Nonce, (OutPoint, Amount, NoteIssuanceRequest)&gt;,
@@ -520,10 +771,7 @@
 <span class="kw">impl </span>fmt::Debug <span class="kw">for </span>MintRecoveryState {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
         f.write_fmt(<span class="macro">format_args!</span>(
-            <span class="string">&quot;MintRestoreInProgressState(start: {}, next: {}, end: {}, pending_outputs: {}, pending_nonces: {})&quot;</span>,
-            <span class="self">self</span>.start_epoch,
-            <span class="self">self</span>.next_epoch,
-            <span class="self">self</span>.end_epoch,
+            <span class="string">&quot;MintRestoreInProgressState(pending_outputs: {}, pending_nonces: {})&quot;</span>,
             <span class="self">self</span>.pending_outputs.len(),
             <span class="self">self</span>.pending_nonces.len()
         ))
@@ -531,49 +779,7 @@
 }
 
 <span class="kw">impl </span>MintRecoveryState {
-    <span class="kw">pub async fn </span>make_progress&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">mut </span><span class="self">self</span>,
-        secret: DerivableSecret,
-        block_stream: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>Stream&lt;Item = (u64, SessionOutcome)&gt; + Unpin),
-    ) -&gt; <span class="self">Self </span>{
-        <span class="doccomment">/// the amount of blocks after which we save progress in the database
-        /// (return from this function)
-        </span><span class="kw">const </span>PROGRESS_SNAPSHOT_BLOCKS: u64 = <span class="number">10</span>;
-        <span class="macro">assert_eq!</span>(secret.level(), <span class="number">2</span>);
-
-        <span class="kw">let </span>block_range = <span class="self">self</span>.next_epoch
-            ..cmp::min(
-                <span class="self">self</span>.next_epoch.wrapping_add(PROGRESS_SNAPSHOT_BLOCKS),
-                <span class="self">self</span>.end_epoch,
-            );
-
-        <span class="macro">debug!</span>(
-            target: LOG_CLIENT_RECOVERY_MINT,
-            <span class="question-mark">?</span>block_range,
-            <span class="string">&quot;Processing blocks&quot;
-        </span>);
-
-        <span class="kw">for _ in </span>block_range {
-            <span class="kw">let </span><span class="prelude-val">Some</span>((block_idx, block)) = block_stream.next().<span class="kw">await else </span>{
-                <span class="kw">break</span>;
-            };
-
-            <span class="macro">assert_eq!</span>(<span class="self">self</span>.next_epoch, block_idx);
-            <span class="kw">for </span>accepted_item <span class="kw">in </span>block.items {
-                <span class="kw">if let </span>ConsensusItem::Transaction(transaction) = accepted_item.item {
-                    <span class="self">self</span>.handle_transaction(<span class="kw-2">&amp;</span>transaction, <span class="kw-2">&amp;</span>secret);
-                }
-            }
-
-            <span class="self">self</span>.next_epoch += <span class="number">1</span>;
-        }
-        <span class="self">self
-    </span>}
-}
-
-<span class="kw">impl </span>MintRecoveryState {
     <span class="kw">pub fn </span>from_backup(
-        current_epoch_count: u64,
         backup: EcashBackupV0,
         gap_limit: u64,
         tbs_pks: Tiered&lt;AggregatePublicKey&gt;,
@@ -582,9 +788,6 @@
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>amount_tiers: Vec&lt;<span class="kw">_</span>&gt; = tbs_pks.tiers().copied().collect();
         <span class="kw">let </span><span class="kw-2">mut </span>s = <span class="self">Self </span>{
-            start_epoch: backup.session_count,
-            next_epoch: backup.session_count,
-            end_epoch: current_epoch_count + <span class="number">1</span>,
             spendable_notes: backup
                 .spendable_notes
                 .into_iter_items()
@@ -751,81 +954,6 @@
                     .<span class="number">0
         </span>{
             <span class="self">self</span>.add_next_pending_nonce_in_pending_pool(amount, secret);
-        }
-    }
-
-    <span class="kw">pub fn </span>is_done(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.next_epoch == <span class="self">self</span>.end_epoch
-    }
-
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>handle_transaction(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        transaction: <span class="kw-2">&amp;</span>Transaction,
-        secret: <span class="kw-2">&amp;</span>DerivableSecret,
-    ) {
-        <span class="macro">trace!</span>(
-            target: LOG_CLIENT_RECOVERY_MINT,
-            <span class="question-mark">?</span>transaction,
-            <span class="string">&quot;found consensus item&quot;
-        </span>);
-
-        <span class="macro">trace!</span>(
-            target: LOG_CLIENT_RECOVERY_MINT,
-            tx_hash = %transaction.tx_hash(),
-            <span class="string">&quot;found transaction&quot;
-        </span>);
-
-        <span class="macro">debug!</span>(
-            target: LOG_CLIENT_RECOVERY_MINT,
-            tx_hash = %transaction.tx_hash(),
-            input_num = transaction.inputs.len(),
-            output_num = transaction.outputs.len(),
-            <span class="string">&quot;processing transaction&quot;
-        </span>);
-
-        <span class="kw">for </span>(idx, input) <span class="kw">in </span>transaction.inputs.iter().enumerate() {
-            <span class="macro">debug!</span>(
-                target: LOG_CLIENT_RECOVERY_MINT,
-                tx_hash = %transaction.tx_hash(),
-                idx,
-                module_id = input.module_instance_id(),
-                <span class="string">&quot;found transaction input&quot;
-            </span>);
-
-            <span class="kw">if </span>input.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
-                <span class="kw">let </span>input = input
-                    .as_any()
-                    .downcast_ref::&lt;MintInput&gt;()
-                    .expect(<span class="string">&quot;mint key just checked&quot;</span>);
-
-                <span class="self">self</span>.handle_input(input);
-            }
-        }
-
-        <span class="kw">for </span>(out_idx, output) <span class="kw">in </span>transaction.outputs.iter().enumerate() {
-            <span class="macro">debug!</span>(
-                target: LOG_CLIENT_RECOVERY_MINT,
-                tx_hash = %transaction.tx_hash(),
-                idx = out_idx,
-                module_id = output.module_instance_id(),
-                <span class="string">&quot;found transaction output&quot;
-            </span>);
-
-            <span class="kw">if </span>output.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
-                <span class="kw">let </span>output = output
-                    .as_any()
-                    .downcast_ref::&lt;MintOutput&gt;()
-                    .expect(<span class="string">&quot;mint key just checked&quot;</span>);
-
-                <span class="self">self</span>.handle_output(
-                    OutPoint {
-                        txid: transaction.tx_hash(),
-                        out_idx: out_idx <span class="kw">as </span>u64,
-                    },
-                    output,
-                    secret,
-                );
-            }
         }
     }
 

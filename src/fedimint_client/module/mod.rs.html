@@ -827,6 +827,30 @@
 <a href="#827" id="827">827</a>
 <a href="#828" id="828">828</a>
 <a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
@@ -1035,6 +1059,30 @@
     }
     <span class="kw">pub fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
         <span class="self">self</span>.client.get().decoders().clone()
+    }
+
+    <span class="kw">pub fn </span>input_from_dyn&lt;<span class="lifetime">&#39;i</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;i </span>DynInput,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;i </span>&lt;M::Common <span class="kw">as </span>ModuleCommon&gt;::Input&gt; {
+        (input.module_instance_id() == <span class="self">self</span>.module_instance_id).then(|| {
+            input
+                .as_any()
+                .downcast_ref::&lt;&lt;M::Common <span class="kw">as </span>ModuleCommon&gt;::Input&gt;()
+                .expect(<span class="string">&quot;instance_id just checked&quot;</span>)
+        })
+    }
+
+    <span class="kw">pub fn </span>output_from_dyn&lt;<span class="lifetime">&#39;o</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;o </span>DynOutput,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;o </span>&lt;M::Common <span class="kw">as </span>ModuleCommon&gt;::Output&gt; {
+        (output.module_instance_id() == <span class="self">self</span>.module_instance_id).then(|| {
+            output
+                .as_any()
+                .downcast_ref::&lt;&lt;M::Common <span class="kw">as </span>ModuleCommon&gt;::Output&gt;()
+                .expect(<span class="string">&quot;instance_id just checked&quot;</span>)
+        })
     }
 
     <span class="kw">pub fn </span>map_dyn&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;i</span>, <span class="lifetime">&#39;o</span>, I&gt;(

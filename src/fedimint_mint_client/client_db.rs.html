@@ -80,7 +80,24 @@
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::core::OperationId;
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
+<span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, Amount};
 <span class="kw">use </span>fedimint_mint_common::Nonce;
@@ -96,7 +113,8 @@
     Note = <span class="number">0x20</span>,
     NextECashNoteIndex = <span class="number">0x2a</span>,
     CancelledOOBSpend = <span class="number">0x2b</span>,
-    RestoreState = <span class="number">0x2c</span>,
+    RecoveryState = <span class="number">0x2c</span>,
+    RecoveryFinalized = <span class="number">0x2d</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -138,12 +156,26 @@
 );
 
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>RestoreStateKey;
+</span><span class="kw">pub struct </span>RecoveryStateKey;
+
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>RestoreStateKeyPrefix;
 
 <span class="macro">impl_db_record!</span>(
-    key = RestoreStateKey,
-    value = MintRecoveryState,
-    db_prefix = DbKeyPrefix::RestoreState,
+    key = RecoveryStateKey,
+    value = (MintRecoveryState, RecoveryFromHistoryCommon),
+    db_prefix = DbKeyPrefix::RecoveryState,
+);
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>RecoveryFinalizedKey;
+
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>RecoveryFinalizedKeyPrefix;
+
+<span class="macro">impl_db_record!</span>(
+    key = RecoveryFinalizedKey,
+    value = bool,
+    db_prefix = DbKeyPrefix::RecoveryFinalized,
 );
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>CancelledOOBSpendKey(<span class="kw">pub </span>OperationId);

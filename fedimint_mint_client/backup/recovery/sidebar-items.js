@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["CompressedBlindedMessage","EcashRecoveryFinalState","MintRecoveryState"]};
+window.SIDEBAR_ITEMS = {"struct":["CompressedBlindedMessage","EcashRecoveryFinalState","MintRecovery","MintRecoveryState"]};
