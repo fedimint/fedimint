@@ -229,7 +229,7 @@
 /// `prepare_fn` which is expected to populate the database with the appropriate
 /// data for testing a migration. If the snapshot directory already exists,
 /// this function will do nothing.
-</span><span class="kw">pub async fn </span>prepare_db_migration_snapshot&lt;F&gt;(
+</span><span class="kw">pub async fn </span>snapshot_db_migrations&lt;F&gt;(
     snapshot_name: <span class="kw-2">&amp;</span>str,
     prepare_fn: F,
     decoders: ModuleDecoderRegistry,
