@@ -41,7 +41,7 @@ pub enum Commands {
         federation_id: FederationId,
     },
     /// Generate a new peg-in address, funds sent to it can later be claimed
-    Address {
+    DepositAddress {
         #[clap(long)]
         federation_id: FederationId,
     },
@@ -57,7 +57,7 @@ pub enum Commands {
         address: Address,
     },
     /// Register federation with the gateway
-    ConnectFed {
+    JoinFederation {
         /// InviteCode code to connect to the federation
         invite_code: String,
     },
@@ -130,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
 
             print_response(response).await;
         }
-        Commands::Address { federation_id } => {
+        Commands::DepositAddress { federation_id } => {
             let response = client()
                 .get_deposit_address(DepositAddressPayload { federation_id })
                 .await?;
@@ -152,7 +152,7 @@ async fn main() -> anyhow::Result<()> {
 
             print_response(response).await;
         }
-        Commands::ConnectFed { invite_code } => {
+        Commands::JoinFederation { invite_code } => {
             let response = client()
                 .connect_federation(ConnectFedPayload { invite_code })
                 .await?;
