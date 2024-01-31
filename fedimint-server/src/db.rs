@@ -114,7 +114,7 @@ mod fedimint_migration_tests {
     use fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
     use fedimint_dummy_server::Dummy;
     use fedimint_logging::TracingSetup;
-    use fedimint_testing::db::{prepare_db_migration_snapshot, validate_migrations, BYTE_32};
+    use fedimint_testing::db::{snapshot_db_migrations, validate_migrations, BYTE_32};
     use futures::StreamExt;
     use rand::rngs::OsRng;
     use secp256k1_zkp::Message;
@@ -198,8 +198,8 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn prepare_server_db_migration_snapshots() -> anyhow::Result<()> {
-        prepare_db_migration_snapshot(
+    async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
+        snapshot_db_migrations(
             "fedimint-server-v0",
             |dbtx| {
                 Box::pin(async move {
@@ -216,7 +216,7 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_migrations() -> anyhow::Result<()> {
+    async fn test_server_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
 
         validate_migrations(

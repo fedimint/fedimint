@@ -40,7 +40,7 @@ pub fn get_project_root() -> io::Result<PathBuf> {
 /// `prepare_fn` which is expected to populate the database with the appropriate
 /// data for testing a migration. If the snapshot directory already exists,
 /// this function will do nothing.
-pub async fn prepare_db_migration_snapshot<F>(
+pub async fn snapshot_db_migrations<F>(
     snapshot_name: &str,
     prepare_fn: F,
     decoders: ModuleDecoderRegistry,
