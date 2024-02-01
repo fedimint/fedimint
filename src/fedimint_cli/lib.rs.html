@@ -892,11 +892,6 @@
 <a href="#892" id="892">892</a>
 <a href="#893" id="893">893</a>
 <a href="#894" id="894">894</a>
-<a href="#895" id="895">895</a>
-<a href="#896" id="896">896</a>
-<a href="#897" id="897">897</a>
-<a href="#898" id="898">898</a>
-<a href="#899" id="899">899</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
@@ -929,7 +924,6 @@
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseValue};
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
-<span class="kw">use </span>fedimint_core::query::ThresholdConsensus;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{task, PeerId, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::LightningClientInit;
@@ -1619,11 +1613,7 @@ Examples:
                         .<span class="kw">await
                         </span>.map_err_cli_general()<span class="question-mark">?</span>,
                     <span class="prelude-val">None </span>=&gt; ws_api
-                        .request_with_strategy(
-                            ThresholdConsensus::full_participation(ws_api.peers().len()),
-                            method,
-                            params,
-                        )
+                        .request_current_consensus(method, params)
                         .<span class="kw">await
                         </span>.map_err_cli_general()<span class="question-mark">?</span>,
                 };

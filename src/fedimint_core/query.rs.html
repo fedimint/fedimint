@@ -664,18 +664,6 @@
 <a href="#664" id="664">664</a>
 <a href="#665" id="665">665</a>
 <a href="#666" id="666">666</a>
-<a href="#667" id="667">667</a>
-<a href="#668" id="668">668</a>
-<a href="#669" id="669">669</a>
-<a href="#670" id="670">670</a>
-<a href="#671" id="671">671</a>
-<a href="#672" id="672">672</a>
-<a href="#673" id="673">673</a>
-<a href="#674" id="674">674</a>
-<a href="#675" id="675">675</a>
-<a href="#676" id="676">676</a>
-<a href="#677" id="677">677</a>
-<a href="#678" id="678">678</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::mem;
@@ -895,7 +883,7 @@
     }
 }
 
-<span class="doccomment">/// Returns when a threshold of responses are equal
+<span class="doccomment">/// Returns when we obtain a threshold of identical responses
 </span><span class="kw">pub struct </span>ThresholdConsensus&lt;R&gt; {
     error_strategy: ErrorStrategy,
     responses: BTreeMap&lt;PeerId, R&gt;,
@@ -904,9 +892,7 @@
 }
 
 <span class="kw">impl</span>&lt;R&gt; ThresholdConsensus&lt;R&gt; {
-    <span class="comment">// Require that enough participants return the same message to ensure that we
-    // overcome the threshold for malicious nodes
-    </span><span class="kw">pub fn </span>overcome_evil(total_peers: usize) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(total_peers: usize) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>max_evil = (total_peers - <span class="number">1</span>) / <span class="number">3</span>;
         <span class="kw">let </span>threshold = total_peers - max_evil;
 
@@ -915,16 +901,6 @@
             responses: BTreeMap::new(),
             retry: BTreeSet::new(),
             threshold,
-        }
-    }
-
-    <span class="comment">// Require that all participants return the same message
-    </span><span class="kw">pub fn </span>full_participation(total_peers: usize) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            error_strategy: ErrorStrategy::new(<span class="number">1</span>),
-            responses: BTreeMap::new(),
-            retry: BTreeSet::new(),
-            threshold: total_peers,
         }
     }
 }
