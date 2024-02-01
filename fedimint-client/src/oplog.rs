@@ -353,6 +353,7 @@ mod tests {
 
     #[test]
     fn test_operation_log_entry_serde() {
+        panic!("Fiat CI?");
         let op_log = OperationLogEntry {
             operation_module_kind: "test".to_string(),
             meta: serde_json::to_value(()).unwrap(),
