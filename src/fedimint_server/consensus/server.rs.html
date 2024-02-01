@@ -780,6 +780,12 @@
 <a href="#780" id="780">780</a>
 <a href="#781" id="781">781</a>
 <a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -1105,29 +1111,30 @@
     }
 
     <span class="kw">pub async fn </span>run_session(<span class="kw-2">&amp;</span><span class="self">self</span>, session_index: u64) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="comment">// this constant needs to be 3000 or less to guarantee that the session
-        // can never reach MAX_ROUNDs.
-        </span><span class="kw">let </span>exponential_slowdown_offset: usize =
-            <span class="number">3 </span>* <span class="self">self</span>.cfg.consensus.broadcast_expected_rounds_per_session <span class="kw">as </span>usize;
-        <span class="kw">let </span>max_round = <span class="self">self</span>.cfg.consensus.broadcast_max_rounds_per_session;
-        <span class="kw">let </span>round_delay = <span class="self">self</span>.cfg.local.broadcast_round_delay_ms <span class="kw">as </span>f64;
-        <span class="kw">const </span>BASE: f64 = <span class="number">1.01</span>;
-
-        <span class="comment">// this is the minimum number of unit data that will be ordered before we reach
-        // the EXPONENTIAL_SLOWDOWN_OFFSET even if f peers do not attach unit data
-        </span><span class="kw">let </span>batches_per_session = exponential_slowdown_offset * <span class="self">self</span>.keychain.peer_count();
-
         <span class="comment">// In order to bound a sessions RAM consumption we need to bound its number of
         // units and therefore its number of rounds. Since we use a session to
         // create a threshold signature for the corresponding session outcome we have to
         // guarantee that an attacker cannot exhaust our memory by preventing the
         // creation of a threshold signature, thereby keeping the session open
-        // indefinitely. Hence we increase the delay between rounds exponentially
-        // such that MAX_ROUND would only be reached after roughly 350 years.
+        // indefinitely. Hence, we increase the delay between rounds exponentially
+        // such that max_round would only be reached after a minimum of 100 years.
         // In case of such an attack the broadcast stops ordering any items until the
         // attack subsides as not items are ordered while the signatures are collected.
-        </span><span class="kw">let </span><span class="kw-2">mut </span>delay_config = aleph_bft::default_delay_config();
-        delay_config.unit_creation_delay = std::sync::Arc::new(<span class="kw">move </span>|round_index| {
+        // The maximum RAM consumption of a peer is bound by:
+        //
+        // self.keychain.peer_count() * max_round * ALEPH_BFT_UNIT_BYTE_LIMIT
+
+        </span><span class="kw">const </span>BASE: f64 = <span class="number">1.005</span>;
+
+        <span class="kw">let </span>expected_rounds = <span class="number">3 </span>* <span class="self">self</span>.cfg.consensus.broadcast_expected_rounds_per_session <span class="kw">as </span>usize;
+        <span class="kw">let </span>max_round = <span class="number">3 </span>* <span class="self">self</span>.cfg.consensus.broadcast_max_rounds_per_session;
+        <span class="kw">let </span>round_delay = <span class="self">self</span>.cfg.local.broadcast_round_delay_ms <span class="kw">as </span>f64;
+
+        <span class="kw">let </span>exponential_slowdown_offset = <span class="number">3 </span>* expected_rounds;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>delay_config = aleph_bft::default_delay_config();
+
+        delay_config.unit_creation_delay = Arc::new(<span class="kw">move </span>|round_index| {
             <span class="kw">let </span>delay = <span class="kw">if </span>round_index == <span class="number">0 </span>{
                 <span class="number">0.0
             </span>} <span class="kw">else </span>{
@@ -1172,6 +1179,11 @@
             ),
         )
         .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
+
+        <span class="comment">// this is the minimum number of batches data that will be ordered before we
+        // reach the exponential_slowdown_offset since at least f + 1 batches are
+        // ordered every round
+        </span><span class="kw">let </span>batches_per_session = expected_rounds * <span class="self">self</span>.keychain.peer_count();
 
         <span class="kw">let </span>signed_session_outcome = <span class="self">self
             </span>.complete_signed_session_outcome(
