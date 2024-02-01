@@ -1,3 +1,3 @@
 (function() {var implementors = {
-"fedimint_mint_client":[["impl <a class=\"trait\" href=\"fedimint_client/module/init/recovery/trait.RecoveryFromHistory.html\" title=\"trait fedimint_client::module::init::recovery::RecoveryFromHistory\">RecoveryFromHistory</a> for <a class=\"struct\" href=\"fedimint_mint_client/backup/recovery/struct.MintRecovery.html\" title=\"struct fedimint_mint_client::backup::recovery::MintRecovery\">MintRecovery</a>"]]
+"fedimint_mint_client":[["impl RecoveryFromHistory for <a class=\"struct\" href=\"fedimint_mint_client/backup/recovery/struct.MintRecovery.html\" title=\"struct fedimint_mint_client::backup::recovery::MintRecovery\">MintRecovery</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
