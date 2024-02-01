@@ -1351,6 +1351,17 @@
 <a href="#1351" id="1351">1351</a>
 <a href="#1352" id="1352">1352</a>
 <a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
+<a href="#1357" id="1357">1357</a>
+<a href="#1358" id="1358">1358</a>
+<a href="#1359" id="1359">1359</a>
+<a href="#1360" id="1360">1360</a>
+<a href="#1361" id="1361">1361</a>
+<a href="#1362" id="1362">1362</a>
+<a href="#1363" id="1363">1363</a>
+<a href="#1364" id="1364">1364</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -2011,7 +2022,18 @@
             .values()
             .cloned()
             .chain(<span class="self">self</span>.our_peer_info().ok())
-            .sorted_by_key(|peer| peer.cert.clone())
+            <span class="comment">// Since sort order here is arbitrary, try to sort by nick-names first for more natural
+            // &#39;name -&gt; id&#39; mapping, which is helpful when operating on &#39;peer-ids&#39; (debugging etc.);
+            // Ties are OK (to_lowercase), not important in practice.
+            </span>.sorted_by_cached_key(|peer| {
+                <span class="comment">// in certain (very obscure) cases, it might be worthwhile to sort by urls, so
+                // just expose it as an env var; probably no need to document it too much
+                </span><span class="kw">if </span>std::env::var_os(<span class="string">&quot;FM_PEER_ID_SORT_BY_URL&quot;</span>).is_some_and(|var| !var.is_empty()) {
+                    peer.api_url.to_string()
+                } <span class="kw">else </span>{
+                    peer.name.to_lowercase()
+                }
+            })
             .enumerate()
             .map(|(i, peer)| (PeerId::from(i <span class="kw">as </span>u16), peer))
             .collect()
