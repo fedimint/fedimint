@@ -433,6 +433,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "bdk"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fc1fc1a92e0943bfbcd6eb7d32c1b2a79f2f1357eb1e2eee9d7f36d6d7ca44a"
+dependencies = [
+ "ahash 0.7.8",
+ "async-trait",
+ "bdk-macros",
+ "bip39",
+ "bitcoin 0.30.2",
+ "esplora-client 0.6.0",
+ "futures",
+ "getrandom",
+ "js-sys",
+ "log",
+ "miniscript 10.0.0",
+ "rand",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "bdk-macros"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -479,7 +503,7 @@ dependencies = [
  "lazy_static",
  "lazycell",
  "peeking_take_while",
- "prettyplease",
+ "prettyplease 0.2.16",
  "proc-macro2",
  "quote",
  "regex",
@@ -528,6 +552,7 @@ version = "0.30.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1945a5048598e4189e239d3f809b19bdad4845c4b2ba400d304d2dcf26d2c462"
 dependencies = [
+ "base64 0.13.1",
  "bech32",
  "bitcoin-private",
  "bitcoin_hashes 0.12.0",
@@ -535,6 +560,12 @@ dependencies = [
  "secp256k1 0.27.0",
  "serde",
 ]
+
+[[package]]
+name = "bitcoin-internals"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f9997f8650dd818369931b5672a18dbef95324d0513aa99aae758de8ce86e5b"
 
 [[package]]
 name = "bitcoin-private"
@@ -1202,6 +1233,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "esplora-client"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cb1f7f2489cce83bc3bd92784f9ba5271eeb6e729b975895fc541f78cbfcdca"
+dependencies = [
+ "bitcoin 0.30.2",
+ "bitcoin-internals",
+ "log",
+ "reqwest",
+ "serde",
+]
+
+[[package]]
 name = "event-listener"
 version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1638,7 +1682,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d38e0d2f0981cd917809d627416de48232499319863c8d032ac0a56cf204edfb"
 dependencies = [
- "bdk",
+ "bdk 0.28.2",
  "bip39",
  "bitcoin 0.29.2",
  "chrono",
@@ -1646,12 +1690,12 @@ dependencies = [
  "futures",
  "libc",
  "lightning 0.0.115",
- "lightning-background-processor",
+ "lightning-background-processor 0.0.115",
  "lightning-invoice 0.23.0",
- "lightning-net-tokio",
- "lightning-persister",
- "lightning-rapid-gossip-sync",
- "lightning-transaction-sync",
+ "lightning-net-tokio 0.0.115",
+ "lightning-persister 0.0.115",
+ "lightning-rapid-gossip-sync 0.0.115",
+ "lightning-transaction-sync 0.0.115",
  "rand",
  "reqwest",
  "rusqlite",
@@ -1760,6 +1804,7 @@ dependencies = [
  "fedimint-unknown-server",
  "fedimint-wallet-client",
  "futures",
+ "ldk-node",
  "lightning 0.0.118",
  "lightning-invoice 0.26.0",
  "prost 0.12.3",
@@ -2168,6 +2213,7 @@ dependencies = [
  "futures",
  "lazy_static",
  "lightning-invoice 0.26.0",
+ "lightning-invoice 0.29.0",
  "rand",
  "secp256k1 0.24.3",
  "secp256k1-zkp",
@@ -2850,6 +2896,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex-conservative"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30ed443af458ccb6d81c1e7e661545f94d3176752fb1df2f543b902a1e0f51e2"
+
+[[package]]
 name = "hex_fmt"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3377,6 +3429,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
+name = "ldk-node"
+version = "0.2.1"
+source = "git+https://github.com/tvolk131/ldk-node.git?branch=lightning_gateway_ldk_latest#3721cac17d187bface69538581ea14e0f277f3a4"
+dependencies = [
+ "async-trait",
+ "bdk 0.29.0",
+ "bip39",
+ "bitcoin 0.30.2",
+ "chrono",
+ "esplora-client 0.6.0",
+ "futures",
+ "libc",
+ "lightning 0.0.121",
+ "lightning-background-processor 0.0.121",
+ "lightning-invoice 0.29.0",
+ "lightning-net-tokio 0.0.121",
+ "lightning-persister 0.0.121",
+ "lightning-rapid-gossip-sync 0.0.121",
+ "lightning-transaction-sync 0.0.121",
+ "prost 0.11.9",
+ "rand",
+ "reqwest",
+ "rusqlite",
+ "tokio",
+ "vss-client",
+ "winapi",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.153"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3462,6 +3543,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lightning"
+version = "0.0.121"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b0c1f811ae288f86c6767055c55b5f7a721ca1e61bf1897a9ae2ec663e8aba1"
+dependencies = [
+ "bitcoin 0.30.2",
+ "hex-conservative",
+]
+
+[[package]]
 name = "lightning-background-processor"
 version = "0.0.115"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3469,7 +3560,18 @@ checksum = "721b05b9848a09d5b943915449b5ffb31e24708007763640cf9d79b124a17e19"
 dependencies = [
  "bitcoin 0.29.2",
  "lightning 0.0.115",
- "lightning-rapid-gossip-sync",
+ "lightning-rapid-gossip-sync 0.0.115",
+]
+
+[[package]]
+name = "lightning-background-processor"
+version = "0.0.121"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57d4711ad9cc33f30c2e8e876fcfd6255523fc250440abb8c374cd98e6c40e79"
+dependencies = [
+ "bitcoin 0.30.2",
+ "lightning 0.0.121",
+ "lightning-rapid-gossip-sync 0.0.121",
 ]
 
 [[package]]
@@ -3502,6 +3604,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "lightning-invoice"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b186aca4a605d4db3b85979922be287b9ebd5dedd8132963bb9dbeb8f7d2a04"
+dependencies = [
+ "bech32",
+ "bitcoin 0.30.2",
+ "lightning 0.0.121",
+ "num-traits",
+ "secp256k1 0.27.0",
+]
+
+[[package]]
 name = "lightning-net-tokio"
 version = "0.0.115"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3509,6 +3624,17 @@ checksum = "4561ec5d4df2dd410a8b80955791fcfb007ef9210395db6e914b9527397b868c"
 dependencies = [
  "bitcoin 0.29.2",
  "lightning 0.0.115",
+ "tokio",
+]
+
+[[package]]
+name = "lightning-net-tokio"
+version = "0.0.121"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4813cca14ed984924a6975895e80cde8673a0a105a1c7ddf3b0fb3d1ce59e6bf"
+dependencies = [
+ "bitcoin 0.30.2",
+ "lightning 0.0.121",
  "tokio",
 ]
 
@@ -3525,6 +3651,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "lightning-persister"
+version = "0.0.121"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a82a633e4d08b75e16dc131af2961254b7005c30ab29577e215080d2943c0511"
+dependencies = [
+ "bitcoin 0.30.2",
+ "lightning 0.0.121",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "lightning-rapid-gossip-sync"
 version = "0.0.115"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3532,6 +3669,16 @@ checksum = "dd84d74a9b3892db22a60ac11dfc12e76b257b3174db6743e818ecc24834f3be"
 dependencies = [
  "bitcoin 0.29.2",
  "lightning 0.0.115",
+]
+
+[[package]]
+name = "lightning-rapid-gossip-sync"
+version = "0.0.121"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "128d6c450cb698b46ecacc6645ebeb2b57d6f9458482635ab523863fa8378314"
+dependencies = [
+ "bitcoin 0.30.2",
+ "lightning 0.0.121",
 ]
 
 [[package]]
@@ -3546,6 +3693,19 @@ dependencies = [
  "futures",
  "lightning 0.0.115",
  "reqwest",
+]
+
+[[package]]
+name = "lightning-transaction-sync"
+version = "0.0.121"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0721b05c0230f11e1c96af68304103ad07e146b13b47f7fd9a12e69cacb610d"
+dependencies = [
+ "bdk-macros",
+ "bitcoin 0.30.2",
+ "esplora-client 0.6.0",
+ "futures",
+ "lightning 0.0.121",
 ]
 
 [[package]]
@@ -4056,6 +4216,16 @@ checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
 name = "prettyplease"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c8646e95016a7a6c4adea95bafa8a16baab64b583356217f2c85db4a39d9a86"
+dependencies = [
+ "proc-macro2",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "prettyplease"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a41cf62165e97c7f814d2221421dbb9afcbcdb0a88068e5ea206e19951c2cbb5"
@@ -4144,6 +4314,28 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
+version = "0.11.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "119533552c9a7ffacc21e099c24a0ac8bb19c2a2a3f363de84cd9b844feab270"
+dependencies = [
+ "bytes",
+ "heck",
+ "itertools 0.10.5",
+ "lazy_static",
+ "log",
+ "multimap",
+ "petgraph",
+ "prettyplease 0.1.25",
+ "prost 0.11.9",
+ "prost-types 0.11.9",
+ "regex",
+ "syn 1.0.109",
+ "tempfile",
+ "which",
+]
+
+[[package]]
+name = "prost-build"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c55e02e35260070b6f716a2423c2ff1c3bb1642ddca6f99e1f26d06268a0e2d2"
@@ -4155,7 +4347,7 @@ dependencies = [
  "multimap",
  "once_cell",
  "petgraph",
- "prettyplease",
+ "prettyplease 0.2.16",
  "prost 0.12.3",
  "prost-types 0.12.3",
  "regex",
@@ -4601,6 +4793,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25996b82292a7a57ed3508f052cfff8640d38d32018784acd714758b43da9c8f"
 dependencies = [
  "bitcoin_hashes 0.12.0",
+ "rand",
  "secp256k1-sys 0.8.1",
  "serde",
 ]
@@ -5248,9 +5441,9 @@ version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d021fc044c18582b9a2408cd0dd05b1596e3ecdb5c4df822bb0183545683889"
 dependencies = [
- "prettyplease",
+ "prettyplease 0.2.16",
  "proc-macro2",
- "prost-build",
+ "prost-build 0.12.3",
  "quote",
  "syn 2.0.50",
 ]
@@ -5556,6 +5749,19 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
+
+[[package]]
+name = "vss-client"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a62cbd331368125aeb93b67dd4a80826a4ee29a810d4c76d2c9d265c1522a3f2"
+dependencies = [
+ "prost 0.11.9",
+ "prost-build 0.11.9",
+ "rand",
+ "reqwest",
+ "tokio",
+]
 
 [[package]]
 name = "want"

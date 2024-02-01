@@ -52,6 +52,7 @@ use fedimint_core::{
     fedimint_build_code_version_env, push_db_pair_items, Amount, BitcoinAmountOrAll,
 };
 use fedimint_ln_client::pay::PayInvoicePayload;
+use fedimint_ln_client::receive::RegisterPaymentHashPayload;
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
@@ -64,7 +65,7 @@ use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::Action;
 use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
-use lightning_invoice::RoutingFees;
+use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::rngs::OsRng;
 use rpc::{
     FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, SetConfigurationPayload,
@@ -523,6 +524,7 @@ impl Gateway {
                         }
 
                         let mut htlc_task_group = tg.make_subgroup().await;
+                        // LDK client is created here
                         let lnrpc_route = self_copy.lightning_builder.build().await;
 
                         debug!("Will try to intercept HTLC stream...");
@@ -884,6 +886,19 @@ impl Gateway {
             return Err(GatewayError::UnexpectedState(
                 "Ran out of state updates while paying invoice".to_string(),
             ));
+        }
+
+        warn!("Gateway is not connected, cannot handle {payload:?}");
+        Err(GatewayError::Disconnected)
+    }
+
+    async fn handle_register_payment_hash_msg(
+        &self,
+        payload: RegisterPaymentHashPayload,
+    ) -> Result<Bolt11Invoice> {
+        if let GatewayState::Running { .. } = self.state.read().await.clone() {
+            // TODO: Implement this.
+            unimplemented!()
         }
 
         warn!("Gateway is not connected, cannot handle {payload:?}");

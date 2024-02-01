@@ -163,4 +163,15 @@ impl ILnRpcClient for FakeLightningTest {
     ) -> Result<EmptyResponse, LightningRpcError> {
         Ok(EmptyResponse {})
     }
+
+    async fn create_invoice_for_hash(
+        &self,
+        amount_msat: u64,
+        description: String,
+        expiry_secs: u64,
+        payment_hash: sha256::Hash,
+    ) -> Result<lightning_invoice29::Bolt11Invoice, LightningRpcError> {
+        // TODO: Implement this.
+        unimplemented!()
+    }
 }

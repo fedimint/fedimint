@@ -1648,6 +1648,9 @@ impl TransactionUpdates {
                     TxSubmissionStates::Rejected(txid, submit_error) if txid == await_txid => {
                         Some(Err(submit_error))
                     }
+                    // If we're using ldk protocol, we'd also want to check
+                    // whether we were able to contact the gateway and they
+                    // generated us an invoice. We'd return the invoice here.
                     _ => None,
                 })
             })

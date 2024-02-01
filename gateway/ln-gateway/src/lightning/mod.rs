@@ -1,16 +1,19 @@
 pub mod cln;
+pub mod ldk;
 pub mod lnd;
 
 use std::fmt::Debug;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bitcoin_hashes::sha256;
 use clap::Subcommand;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::Amount;
 use fedimint_ln_common::PrunedInvoice;
+use ldk_node::lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -43,6 +46,8 @@ pub enum LightningRpcError {
     FailedToOpenChannel { failure_reason: String },
     #[error("Failed to get Invoice: {failure_reason}")]
     FailedToGetInvoice { failure_reason: String },
+    #[error("Failed to create Invoice: {failure_reason}")]
+    FailedToCreateInvoice { failure_reason: String },
 }
 
 /// A trait that the gateway uses to interact with a lightning node. This allows
@@ -108,6 +113,14 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         &self,
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError>;
+
+    async fn create_invoice_for_hash(
+        &self,
+        amount_msat: u64,
+        description: String,
+        expiry_secs: u64,
+        payment_hash: sha256::Hash,
+    ) -> Result<Bolt11Invoice, LightningRpcError>;
 }
 
 #[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]
@@ -131,6 +144,8 @@ pub enum LightningMode {
         #[arg(long = "cln-extension-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
         cln_extension_addr: SafeUrl,
     },
+    #[clap(name = "ldk")]
+    Ldk,
 }
 
 #[async_trait]
@@ -157,6 +172,7 @@ impl LightningBuilder for GatewayLightningBuilder {
             } => Box::new(
                 GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, None).await,
             ),
+            LightningMode::Ldk => Box::new(ldk::GatewayLdkClient::new().await.unwrap()),
         }
     }
 }

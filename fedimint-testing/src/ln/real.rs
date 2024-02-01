@@ -30,7 +30,7 @@ use tracing::{error, info, warn};
 
 use crate::btc::BitcoinTest;
 use crate::gateway::LightningNodeType;
-use crate::ln::LightningTest;
+use crate::ln::{sha256, LightningTest};
 
 pub struct ClnLightningTest {
     rpc_cln: Arc<Mutex<ClnRpc>>,
@@ -140,6 +140,16 @@ impl ILnRpcClient for ClnLightningTest {
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError> {
         self.lnrpc.complete_htlc(htlc).await
+    }
+
+    async fn create_invoice_for_hash(
+        &self,
+        _amount_msat: u64,
+        _description: String,
+        _expiry_secs: u64,
+        _payment_hash: sha256::Hash,
+    ) -> Result<lightning_invoice29::Bolt11Invoice, LightningRpcError> {
+        unimplemented!("Unsupported: we dont currently support creating invoices for C-Lightning");
     }
 }
 
@@ -298,6 +308,16 @@ impl ILnRpcClient for LndLightningTest {
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError> {
         self.lnrpc.complete_htlc(htlc).await
+    }
+
+    async fn create_invoice_for_hash(
+        &self,
+        _amount_msat: u64,
+        _description: String,
+        _expiry_secs: u64,
+        _payment_hash: sha256::Hash,
+    ) -> Result<lightning_invoice29::Bolt11Invoice, LightningRpcError> {
+        unimplemented!("Unsupported: we dont currently support creating invoices for LND");
     }
 }
 
@@ -727,6 +747,16 @@ impl ILnRpcClient for LdkLightningTest {
         _htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError> {
         unimplemented!("Unsupported: we dont currently support HTLC interception for LDK Node");
+    }
+
+    async fn create_invoice_for_hash(
+        &self,
+        _amount_msat: u64,
+        _description: String,
+        _expiry_secs: u64,
+        _payment_hash: sha256::Hash,
+    ) -> Result<lightning_invoice29::Bolt11Invoice, LightningRpcError> {
+        unimplemented!("Unsupported: we dont currently support creating invoices for LDK Node");
     }
 }
 

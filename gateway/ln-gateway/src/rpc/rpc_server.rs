@@ -7,6 +7,7 @@ use axum_macros::debug_handler;
 use bitcoin_hashes::hex::ToHex;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::pay::PayInvoicePayload;
+use fedimint_ln_client::receive::RegisterPaymentHashPayload;
 use serde_json::json;
 use tower_http::cors::CorsLayer;
 use tower_http::validate_request::ValidateRequestHeaderLayer;
@@ -55,7 +56,8 @@ fn v1_routes(config: Option<GatewayConfiguration>, gateway: Gateway) -> Router {
         // Public routes on gateway webserver
         let public_routes = Router::new()
             .route("/pay_invoice", post(pay_invoice))
-            .route("/id", get(get_gateway_id));
+            .route("/id", get(get_gateway_id))
+            .route("/register_payment_hash", post(register_payment_hash));
 
         // Authenticated, public routes used for gateway administration
         let admin_routes = Router::new()
@@ -165,6 +167,15 @@ async fn pay_invoice(
 ) -> Result<impl IntoResponse, GatewayError> {
     let preimage = gateway.handle_pay_invoice_msg(payload).await?;
     Ok(Json(json!(preimage.0.to_hex())))
+}
+
+#[instrument(skip_all, err)]
+async fn register_payment_hash(
+    Extension(gateway): Extension<Gateway>,
+    Json(payload): Json<RegisterPaymentHashPayload>,
+) -> Result<impl IntoResponse, GatewayError> {
+    let invoice = gateway.handle_register_payment_hash_msg(payload).await?;
+    Ok(Json(json!(invoice)))
 }
 
 /// Connect a new federation

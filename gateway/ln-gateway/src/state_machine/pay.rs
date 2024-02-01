@@ -289,6 +289,7 @@ impl GatewayPayInvoice {
         }
     }
 
+    // Here's where we check that the contract exists.
     async fn await_get_payment_parameters(
         global_context: DynGlobalClientContext,
         context: GatewayClientContext,

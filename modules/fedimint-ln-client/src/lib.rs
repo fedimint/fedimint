@@ -4,6 +4,7 @@ pub mod pay;
 pub mod receive;
 
 use std::collections::BTreeMap;
+use std::io::Write;
 use std::iter::once;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -54,7 +55,8 @@ use fedimint_ln_common::{
 use futures::StreamExt;
 use incoming::IncomingSmError;
 use lightning_invoice::{
-    Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
+    Bolt11Invoice, Bolt11InvoiceDescription, Currency, InvoiceBuilder, PaymentSecret, RouteHint,
+    RouteHintHop, RoutingFees,
 };
 use rand::seq::IteratorRandom;
 use rand::{CryptoRng, Rng, RngCore};
@@ -193,12 +195,22 @@ async fn invoice_routes_back_to_federation(
     gateways: Vec<LightningGateway>,
 ) -> bool {
     gateways.into_iter().any(|gateway| {
-        invoice
+        let invoice_has_route_hint_that_tunnels_into_federation = invoice
             .route_hints()
             .first()
             .and_then(|rh| rh.0.last())
             .map(|hop| (hop.src_node_id, hop.short_channel_id))
-            == Some((gateway.node_pub_key, gateway.mint_channel_id))
+            == Some((gateway.node_pub_key, gateway.mint_channel_id));
+
+        // TODO: Just because the invoice was created by the gateway node doesn't mean
+        // it's a payment to the federation. Currently, if a gateway serves multiple
+        // federations, this method may return false positives.
+        let invoice_was_created_by_gateway_node = match invoice.payee_pub_key() {
+            Some(payee_pubkey) => payee_pubkey == &gateway.node_pub_key,
+            None => false,
+        };
+
+        invoice_has_route_hint_that_tunnels_into_federation || invoice_was_created_by_gateway_node
     })
 }
 
@@ -397,6 +409,24 @@ enum PayError {
     Refundable(u32, GatewayPayError),
     #[error("Lightning payment failed")]
     Failed(String),
+}
+
+fn matches_direct_description(
+    invoice_description: &Bolt11InvoiceDescription,
+    description: String,
+) -> bool {
+    match invoice_description {
+        Bolt11InvoiceDescription::Direct(d) => {
+            *d == &lightning_invoice::Description::new(description).unwrap()
+        }
+        Bolt11InvoiceDescription::Hash(h) => {
+            let mut hash_engine = sha256::HashEngine::default();
+            hash_engine.write_all(description.as_bytes()).unwrap();
+            hash_engine.flush().unwrap();
+            let hash = sha256::Hash::from_engine(hash_engine);
+            **h == lightning_invoice::Sha256(hash)
+        }
+    }
 }
 
 impl LightningClientModule {
@@ -700,16 +730,69 @@ impl LightningClientModule {
         }
     }
 
+    async fn register_payment_hash_with_gateway(
+        &self,
+        gateway: &LightningGateway,
+        payment_hash: sha256::Hash,
+        amount: Amount,
+        description: String,
+        expiry_time: Duration,
+    ) -> anyhow::Result<Bolt11Invoice> {
+        // TODO: Create `register_payment_hash` endpoint in gateway.
+        let response = reqwest::Client::new()
+            .post(
+                gateway
+                    .api
+                    .join("register_payment_hash")
+                    .expect("register_payment_hash contains no invalid characters for a URL")
+                    .as_str(),
+            )
+            .json(&payment_hash)
+            .send()
+            .await
+            .context("Failed to register payment hash with gateway")?;
+        if !response.status().is_success() {
+            bail!(
+                "Failed to register payment hash with gateway. Returned error code: {}",
+                response.status()
+            );
+        }
+
+        let invoice: Bolt11Invoice = response.json().await?;
+
+        // Validate that the invoice gateway created an invoice with the parameters we
+        // requested.
+        if invoice.amount_milli_satoshis() != Some(amount.msats) {
+            bail!(
+                "Gateway created invoice with incorrect amount: expected={}, got={}",
+                amount.msats,
+                invoice.amount_milli_satoshis().unwrap_or(0)
+            );
+        }
+        if !matches_direct_description(&invoice.description(), description) {
+            // TODO: Find a way to show the description and/or description hash in this
+            // error message.
+            bail!("Gateway created invoice with incorrect description");
+        }
+        if invoice.expiry_time() != expiry_time {
+            bail!(
+                "Gateway created invoice with incorrect expiry time: expected={}, got={}",
+                expiry_time.as_secs(),
+                invoice.expiry_time().as_secs()
+            );
+        }
+
+        Ok(invoice)
+    }
+
+    // Starts the state machine.
     #[allow(clippy::too_many_arguments)]
     async fn create_lightning_receive_output<'a>(
         &'a self,
         amount: Amount,
         description: String,
         mut rng: impl RngCore + CryptoRng + 'a,
-        expiry_time: Option<u64>,
-        src_node_id: secp256k1::PublicKey,
-        short_channel_id: u64,
-        route_hints: Vec<fedimint_ln_common::route_hints::RouteHint>,
+        expiry_time_or: Option<u64>,
         network: Network,
     ) -> anyhow::Result<(
         OperationId,
@@ -722,61 +805,102 @@ impl LightningClientModule {
         let preimage = sha256::Hash::hash(&preimage_key);
         let payment_hash = sha256::Hash::hash(&preimage);
 
-        // Temporary lightning node pubkey
-        let (node_secret_key, node_public_key) = self.secp.generate_keypair(&mut rng);
+        let expiry_time =
+            Duration::from_secs(expiry_time_or.unwrap_or(DEFAULT_INVOICE_EXPIRY_TIME.as_secs()));
 
-        // Route hint instructing payer how to route to gateway
-        let route_hint_last_hop = RouteHintHop {
-            src_node_id,
-            short_channel_id,
-            fees: RoutingFees {
-                base_msat: 0,
-                proportional_millionths: 0,
-            },
-            cltv_expiry_delta: 30,
-            htlc_minimum_msat: None,
-            htlc_maximum_msat: None,
+        let active_gateway_or = self.select_active_gateway().await;
+
+        let gateway_must_create_invoices = match &active_gateway_or {
+            Ok(gateway) => gateway.gateway_must_create_invoices,
+            // TODO: Do we want to assume that we're dealing with a normal,
+            // non-LDK gateway if we can't find the active gateway? It might
+            // make sense to change this to `true` since even if a gateway
+            // doesn't _require_ that it create invoices, it could support
+            // both methods, so defaulting to the more common method might
+            // be a good idea.
+            Err(_) => false,
         };
-        let mut final_route_hints = vec![RouteHint(vec![route_hint_last_hop.clone()])];
-        if !route_hints.is_empty() {
-            let mut two_hop_route_hints: Vec<RouteHint> = route_hints
-                .iter()
-                .map(|rh| {
-                    RouteHint(
-                        rh.to_ldk_route_hint()
-                            .0
-                            .iter()
-                            .cloned()
-                            .chain(once(route_hint_last_hop.clone()))
-                            .collect(),
-                    )
-                })
-                .collect();
-            final_route_hints.append(&mut two_hop_route_hints);
-        }
 
-        let duration_since_epoch = fedimint_core::time::duration_since_epoch();
+        let invoice = if gateway_must_create_invoices {
+            // Maybe retry a few times?
+            self.register_payment_hash_with_gateway(
+                &active_gateway_or?,
+                payment_hash,
+                amount,
+                description,
+                expiry_time,
+            )
+            .await?
+        } else {
+            let (src_node_id, short_channel_id, route_hints) = match active_gateway_or {
+                Ok(active_gateway) => (
+                    active_gateway.node_pub_key,
+                    active_gateway.mint_channel_id,
+                    active_gateway.route_hints,
+                ),
+                Err(_) => {
+                    let markers = self.client_ctx.get_internal_payment_markers()?;
+                    (markers.0, markers.1, vec![])
+                }
+            };
 
-        let mut invoice_builder = InvoiceBuilder::new(network.into())
-            .amount_milli_satoshis(amount.msats)
-            .description(description)
-            .payment_hash(payment_hash)
-            .payment_secret(PaymentSecret(rng.gen()))
-            .duration_since_epoch(duration_since_epoch)
-            .min_final_cltv_expiry_delta(18)
-            .payee_pub_key(node_public_key)
-            .expiry_time(Duration::from_secs(
-                expiry_time.unwrap_or(DEFAULT_INVOICE_EXPIRY_TIME.as_secs()),
-            ));
+            // Temporary lightning node pubkey
+            let (node_secret_key, node_public_key) = self.secp.generate_keypair(&mut rng);
 
-        for rh in final_route_hints {
-            invoice_builder = invoice_builder.private_route(rh);
-        }
+            // Route hint instructing payer how to route to gateway
+            let route_hint_last_hop = RouteHintHop {
+                src_node_id,
+                short_channel_id,
+                fees: RoutingFees {
+                    base_msat: 0,
+                    proportional_millionths: 0,
+                },
+                cltv_expiry_delta: 30,
+                htlc_minimum_msat: None,
+                htlc_maximum_msat: None,
+            };
+            let mut final_route_hints = vec![RouteHint(vec![route_hint_last_hop.clone()])];
+            if !route_hints.is_empty() {
+                let mut two_hop_route_hints: Vec<RouteHint> = route_hints
+                    .iter()
+                    .map(|rh| {
+                        RouteHint(
+                            rh.to_ldk_route_hint()
+                                .0
+                                .iter()
+                                .cloned()
+                                .chain(once(route_hint_last_hop.clone()))
+                                .collect(),
+                        )
+                    })
+                    .collect();
+                final_route_hints.append(&mut two_hop_route_hints);
+            }
 
-        let invoice = invoice_builder
-            .build_signed(|hash| self.secp.sign_ecdsa_recoverable(hash, &node_secret_key))?;
+            let duration_since_epoch = fedimint_core::time::duration_since_epoch();
 
-        let operation_id = OperationId(invoice.payment_hash().into_inner());
+            let mut invoice_builder = InvoiceBuilder::new(network.into())
+                .amount_milli_satoshis(amount.msats)
+                .description(description)
+                .payment_hash(payment_hash)
+                .payment_secret(PaymentSecret(rng.gen()))
+                .duration_since_epoch(duration_since_epoch)
+                .min_final_cltv_expiry_delta(18)
+                .payee_pub_key(node_public_key)
+                .expiry_time(expiry_time);
+
+            for rh in final_route_hints {
+                invoice_builder = invoice_builder.private_route(rh);
+            }
+
+            invoice_builder
+                .build_signed(|hash| self.secp.sign_ecdsa_recoverable(hash, &node_secret_key))?
+        };
+
+        // Since we're not generating an invoice if using an LDK gateway,
+        // let's validate that the invoice is what we asked it to be.
+
+        let operation_id = OperationId(payment_hash.into_inner());
 
         let sm_invoice = invoice.clone();
         let sm_gen = Arc::new(move |txid: TransactionId, _input_idx: u64| {
@@ -799,7 +923,7 @@ impl LightningClientModule {
                 PreimageKey(preimage_key),
                 &self.cfg.threshold_pub_key,
             ),
-            expiry_time,
+            expiry_time: expiry_time_or,
         });
 
         Ok((
@@ -1107,6 +1231,7 @@ impl LightningClientModule {
         )
         .await;
 
+        // TODO: Perform both async operations concurrently.
         let is_internal_payment = invoice_has_internal_payment_markers(
             &invoice,
             self.client_ctx.get_internal_payment_markers()?,
@@ -1331,28 +1456,12 @@ impl LightningClientModule {
         expiry_time: Option<u64>,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
-        let (src_node_id, short_channel_id, route_hints) = match self.select_active_gateway().await
-        {
-            Ok(active_gateway) => (
-                active_gateway.node_pub_key,
-                active_gateway.mint_channel_id,
-                active_gateway.route_hints,
-            ),
-            Err(_) => {
-                let markers = self.client_ctx.get_internal_payment_markers()?;
-                (markers.0, markers.1, vec![])
-            }
-        };
-
         let (operation_id, invoice, output, preimage) = self
             .create_lightning_receive_output(
                 amount,
                 description,
                 rand::rngs::OsRng,
                 expiry_time,
-                src_node_id,
-                short_channel_id,
-                route_hints,
                 self.cfg.network,
             )
             .await?;
@@ -1380,6 +1489,7 @@ impl LightningClientModule {
         self.client_ctx
             .transaction_updates(operation_id)
             .await
+            // We'll also need to wait until we've contacted the LDK gateway.
             .await_tx_accepted(txid)
             .await
             .map_err(|e| anyhow::anyhow!("Offer transaction was not accepted: {e:?}"))?;

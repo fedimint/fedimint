@@ -2,9 +2,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin::util::key::KeyPair;
+use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
@@ -18,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info};
 
+use crate::pay::PaymentData;
 use crate::LightningClientStateMachines;
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -131,6 +134,9 @@ impl LightningReceiveSubmittedOffer {
     ) -> Result<(), String> {
         // No network calls are done here, we just await other state machines, so no
         // retry logic is needed
+        // if (use_ldk_protocol) {
+        // } else {
+        // }
         global_context.await_tx_accepted(txid).await
     }
 
@@ -360,6 +366,12 @@ impl LightningReceiveFunded {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+pub struct RegisterPaymentHashPayload {
+    pub federation_id: FederationId,
+    pub payment_hash: sha256::Hash,
 }
 
 #[cfg(test)]

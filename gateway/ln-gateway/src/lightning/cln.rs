@@ -3,9 +3,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use bitcoin_hashes::sha256;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use futures::stream::BoxStream;
+use ldk_node::lightning_invoice::Bolt11Invoice;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tracing::info;
@@ -138,5 +140,16 @@ impl ILnRpcClient for NetworkLnRpcClient {
             }
         })?;
         Ok(res.into_inner())
+    }
+
+    async fn create_invoice_for_hash(
+        &self,
+        amount_msat: u64,
+        description: String,
+        expiry_secs: u64,
+        payment_hash: sha256::Hash,
+    ) -> Result<Bolt11Invoice, LightningRpcError> {
+        // TODO: Implement this.
+        unimplemented!()
     }
 }

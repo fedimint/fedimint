@@ -6,9 +6,11 @@ use std::time::Duration;
 use anyhow::ensure;
 use async_trait::async_trait;
 use bitcoin_hashes::hex::ToHex;
+use bitcoin_hashes::sha256;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::Amount;
 use fedimint_ln_common::PrunedInvoice;
+use ldk_node::lightning_invoice::Bolt11Invoice;
 use secp256k1::PublicKey;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -732,6 +734,17 @@ impl ILnRpcClient for GatewayLndClient {
         Err(LightningRpcError::FailedToCompleteHtlc {
             failure_reason: "Gatewayd has not started to route HTLCs".to_string(),
         })
+    }
+
+    async fn create_invoice_for_hash(
+        &self,
+        amount_msat: u64,
+        description: String,
+        expiry_secs: u64,
+        payment_hash: sha256::Hash,
+    ) -> Result<Bolt11Invoice, LightningRpcError> {
+        // TODO: Implement this.
+        unimplemented!()
     }
 }
 
