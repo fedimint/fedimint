@@ -170,6 +170,26 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
         anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
         ln_receives.push(start_time.elapsed());
     }
+
+    info!("Waiting for a new session");
+    let session_count = cmd!(fed, "dev", "api", "session_count").out_json().await?["value"]
+        .as_u64()
+        .context("session count must be integer")?
+        .to_owned();
+    let start = Instant::now();
+    poll("Waiting for a new session", 6, || async {
+        info!("Awaiting session outcome {session_count}");
+        match cmd!(fed, "dev", "api", "await_session_outcome", session_count)
+            .run()
+            .await
+        {
+            Err(e) => Err(ControlFlow::Continue(e)),
+            Ok(_) => Ok(()),
+        }
+    })
+    .await?;
+    let session_found_in = start.elapsed();
+
     let reissue_stats = stats_for(reissues);
     let ln_sends_stats = stats_for(ln_sends);
     let ln_receives_stats = stats_for(ln_receives);
@@ -177,7 +197,8 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
         "================= RESULTS ==================\n\
               REISSUE: {reissue_stats}\n\
               LN SEND: {ln_sends_stats}\n\
-              LN RECV: {ln_receives_stats}"
+              LN RECV: {ln_receives_stats}\n
+              SESSION: {session_found_in:?}",
     );
     // FIXME: should be smaller
     assert!(reissue_stats.median < Duration::from_secs(4));
@@ -1401,7 +1422,10 @@ enum Cmd {
     },
     /// `devfed` then checks the average latency of reissuing ecash, LN receive,
     /// and LN send
-    LatencyTests,
+    LatencyTests {
+        #[arg(long)]
+        degraded: bool,
+    },
     /// `devfed` then kills and restarts most of the Guardian nodes in a 4 node
     /// fedimint
     ReconnectTest,
@@ -1682,9 +1706,13 @@ async fn handle_command() -> Result<()> {
             };
             cleanup_on_exit(main, task_group).await?;
         }
-        Cmd::LatencyTests => {
+        Cmd::LatencyTests { degraded } => {
+            let fed_size = args.common.fed_size;
             let (process_mgr, _) = setup(args.common).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let mut dev_fed = dev_fed(&process_mgr).await?;
+            if degraded {
+                dev_fed.fed.terminate_server(fed_size - 1).await?;
+            }
             latency_tests(dev_fed).await?;
         }
         Cmd::ReconnectTest => {

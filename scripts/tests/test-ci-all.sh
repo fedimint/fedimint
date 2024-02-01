@@ -53,6 +53,11 @@ function latency_test() {
 }
 export -f latency_test
 
+function latency_test_degraded() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh --degraded
+}
+export -f latency_test_degraded
+
 function devimint_cli_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-cli-test.sh
 }
@@ -117,6 +122,7 @@ if parallel \
   backend_test_electrs \
   backend_test_esplora \
   latency_test \
+  latency_test_degraded \
   reconnect_test \
   lightning_reconnect_test \
   gateway_reboot_test \
