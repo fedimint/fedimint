@@ -1750,7 +1750,10 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
 pub enum TestCmd {
     /// `devfed` then checks the average latency of reissuing ecash, LN receive,
     /// and LN send
-    LatencyTests,
+    LatencyTests {
+        #[arg(long)]
+        degraded: bool,
+    },
     /// `devfed` then kills and restarts most of the Guardian nodes in a 4 node
     /// fedimint
     ReconnectTest,
@@ -1813,9 +1816,13 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             };
             cleanup_on_exit(main, task_group).await?;
         }
-        TestCmd::LatencyTests => {
+        TestCmd::LatencyTests { degraded } => {
+            let fed_size = common_args.fed_size;
             let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let mut dev_fed = dev_fed(&process_mgr).await?;
+            if degraded {
+                dev_fed.fed.terminate_server(fed_size - 1).await?;
+            }
             latency_tests(dev_fed).await?;
         }
         TestCmd::ReconnectTest => {
