@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # all versions to use for testing
-versions=("v0.2.1")
+versions=("v0.2.1" "releases/v0.2")
 >&2 echo "Running backwards-compatibility tests for versions: ${versions[*]}"
 
 # signal to downstream test scripts
