@@ -324,29 +324,30 @@ impl ConsensusServer {
     }
 
     pub async fn run_session(&self, session_index: u64) -> anyhow::Result<()> {
-        // this constant needs to be 3000 or less to guarantee that the session
-        // can never reach MAX_ROUNDs.
-        let exponential_slowdown_offset: usize =
-            3 * self.cfg.consensus.broadcast_expected_rounds_per_session as usize;
-        let max_round = self.cfg.consensus.broadcast_max_rounds_per_session;
-        let round_delay = self.cfg.local.broadcast_round_delay_ms as f64;
-        const BASE: f64 = 1.01;
-
-        // this is the minimum number of unit data that will be ordered before we reach
-        // the EXPONENTIAL_SLOWDOWN_OFFSET even if f peers do not attach unit data
-        let batches_per_session = exponential_slowdown_offset * self.keychain.peer_count();
-
         // In order to bound a sessions RAM consumption we need to bound its number of
         // units and therefore its number of rounds. Since we use a session to
         // create a threshold signature for the corresponding session outcome we have to
         // guarantee that an attacker cannot exhaust our memory by preventing the
         // creation of a threshold signature, thereby keeping the session open
-        // indefinitely. Hence we increase the delay between rounds exponentially
-        // such that MAX_ROUND would only be reached after roughly 350 years.
+        // indefinitely. Hence, we increase the delay between rounds exponentially
+        // such that max_round would only be reached after a minimum of 100 years.
         // In case of such an attack the broadcast stops ordering any items until the
         // attack subsides as not items are ordered while the signatures are collected.
+        // The maximum RAM consumption of a peer is bound by:
+        //
+        // self.keychain.peer_count() * max_round * ALEPH_BFT_UNIT_BYTE_LIMIT
+
+        const BASE: f64 = 1.005;
+
+        let expected_rounds = 3 * self.cfg.consensus.broadcast_expected_rounds_per_session as usize;
+        let max_round = 3 * self.cfg.consensus.broadcast_max_rounds_per_session;
+        let round_delay = self.cfg.local.broadcast_round_delay_ms as f64;
+
+        let exponential_slowdown_offset = 3 * expected_rounds;
+
         let mut delay_config = aleph_bft::default_delay_config();
-        delay_config.unit_creation_delay = std::sync::Arc::new(move |round_index| {
+
+        delay_config.unit_creation_delay = Arc::new(move |round_index| {
             let delay = if round_index == 0 {
                 0.0
             } else {
@@ -391,6 +392,11 @@ impl ConsensusServer {
             ),
         )
         .expect("some handle on non-wasm");
+
+        // this is the minimum number of batches data that will be ordered before we
+        // reach the exponential_slowdown_offset since at least f + 1 batches are
+        // ordered every round
+        let batches_per_session = expected_rounds * self.keychain.peer_count();
 
         let signed_session_outcome = self
             .complete_signed_session_outcome(
