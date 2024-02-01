@@ -147,10 +147,7 @@ function check_trailing_whitespace() {
       >&2 echo "Warning: no commits yet, checking against --root"
       rev="--root"
     fi
-    # Exclude db migration files
-    if git diff --check $rev | \
-        grep -v -E '^diff --git a/.*b/db/' |
-        grep -E '^-.*db/' ; then
+    if ! git diff --check $rev ; then
       >&2 echo "Trailing whitespace detected. Please remove them before committing."
       return 1
     fi
@@ -161,7 +158,7 @@ export -f check_trailing_whitespace
 function check_typos() {
     set -euo pipefail
 
-    if ! echo "$FLAKEBOX_GIT_LS_TEXT" | grep -v '^db/' | typos --file-list - --force-exclude ; then
+    if ! echo "$FLAKEBOX_GIT_LS_TEXT" | typos --file-list - --force-exclude ; then
       >&2 echo "Typos found: Valid new words can be added to '.typos.toml'"
       return 1
     fi
