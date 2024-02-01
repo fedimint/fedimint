@@ -217,7 +217,7 @@ impl<R: Eq + Clone + Debug, T> QueryStrategy<R, BTreeMap<PeerId, T>> for FilterM
     }
 }
 
-/// Returns when a threshold of responses are equal
+/// Returns when we obtain a threshold of identical responses
 pub struct ThresholdConsensus<R> {
     error_strategy: ErrorStrategy,
     responses: BTreeMap<PeerId, R>,
@@ -226,9 +226,7 @@ pub struct ThresholdConsensus<R> {
 }
 
 impl<R> ThresholdConsensus<R> {
-    // Require that enough participants return the same message to ensure that we
-    // overcome the threshold for malicious nodes
-    pub fn overcome_evil(total_peers: usize) -> Self {
+    pub fn new(total_peers: usize) -> Self {
         let max_evil = (total_peers - 1) / 3;
         let threshold = total_peers - max_evil;
 
@@ -237,16 +235,6 @@ impl<R> ThresholdConsensus<R> {
             responses: BTreeMap::new(),
             retry: BTreeSet::new(),
             threshold,
-        }
-    }
-
-    // Require that all participants return the same message
-    pub fn full_participation(total_peers: usize) -> Self {
-        Self {
-            error_strategy: ErrorStrategy::new(1),
-            responses: BTreeMap::new(),
-            retry: BTreeSet::new(),
-            threshold: total_peers,
         }
     }
 }
