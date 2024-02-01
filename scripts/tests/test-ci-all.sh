@@ -6,7 +6,7 @@ set -euo pipefail
 export LANG=C
 
 # run with 1 guardian offline
-export FM_DEVIMINT_DEGRADED=1
+export FM_DEVIMINT_DEGRADED=true
 
 if [ "$(ulimit -Sn)" -lt "10000" ]; then
   >&2 echo "⚠️  ulimit too small. Running 'ulimit -Sn 10000' to avoid problems running tests"

@@ -84,7 +84,9 @@ impl FederationTest {
             .federation_id()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
+        num_online: u16,
         num_peers: u16,
         base_port: u16,
         params: ServerModuleConfigGenParamsRegistry,
@@ -102,6 +104,9 @@ impl FederationTest {
 
         let mut task = TaskGroup::new();
         for (peer_id, config) in configs.clone() {
+            if (u16::from(peer_id)) >= num_online {
+                continue;
+            }
             let reliability = StreamReliability::INTEGRATION_TEST;
             let connections = network.connector(peer_id, reliability).into_dyn();
 
