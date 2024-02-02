@@ -1572,11 +1572,7 @@ pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     fed.start_server(process_mgr, 2).await?;
     fed.start_server(process_mgr, 3).await?;
 
-    poll("federation back online", None, || async {
-        fed.await_all_peers().await.map_err(ControlFlow::Continue)?;
-        Ok(())
-    })
-    .await?;
+    fed.await_all_peers().await?;
 
     info!(target: LOG_DEVIMINT, "fm success: reconnect-test");
     Ok(())

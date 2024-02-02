@@ -334,15 +334,19 @@ impl Federation {
     }
 
     pub async fn await_all_peers(&self) -> Result<()> {
-        cmd!(
-            self.client,
-            "dev",
-            "api",
-            "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count"
-        )
-        .run()
-        .await?;
-        Ok(())
+        poll("Waiting for all peers to be online", None, || async {
+            cmd!(
+                self.client,
+                "dev",
+                "api",
+                "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count"
+            )
+            .run()
+            .await
+            .map_err(ControlFlow::Continue)?;
+            Ok(())
+        })
+        .await
     }
 
     /// Mines enough blocks to finalize mempool transactions, then waits for
