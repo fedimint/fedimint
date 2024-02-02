@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-client"
-version = "0.2.2-rc7"
+version = "0.2.2-rc8"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-client provides a library for sending transactions to the federation."
@@ -25,10 +25,10 @@ async-stream = "0.3.5"
 async-trait = "0.1.73"
 bitcoin = "0.29.2"
 bitcoin_hashes = "0.11.0"
-fedimint-core  = { version = "0.2.2-rc7", path = "../fedimint-core/" }
-fedimint-derive-secret = { version = "0.2.2-rc7", path = "../crypto/derive-secret" }
-fedimint-aead = { version = "0.2.2-rc7", path = "../crypto/aead" }
-fedimint-logging = { version = "0.2.2-rc7", path = "../fedimint-logging" }
+fedimint-core  = { version = "0.2.2-rc8", path = "../fedimint-core/" }
+fedimint-derive-secret = { version = "0.2.2-rc8", path = "../crypto/derive-secret" }
+fedimint-aead = { version = "0.2.2-rc8", path = "../crypto/aead" }
+fedimint-logging = { version = "0.2.2-rc8", path = "../fedimint-logging" }
 futures = "0.3.26"
 itertools = "0.10.5"
 rand = "0.8.5"
@@ -48,4 +48,4 @@ ring = { version = "0.17.5", features = ["wasm32_unknown_unknown_js"] }
 tracing-test = "0.2.4"
 
 [build-dependencies]
-fedimint-build = { version = "0.2.2-rc7", path = "../fedimint-build" }
+fedimint-build = { version = "0.2.2-rc8", path = "../fedimint-build" }

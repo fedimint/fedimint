@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-wasm-tests"
-version = "0.2.2-rc7"
+version = "0.2.2-rc8"
 edition = "2021"
 license = "MIT"
 publish = false
