@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-aead"
-version = "0.2.2-rc7"
+version = "0.2.2-rc8"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "aead utilities on top of ring "
