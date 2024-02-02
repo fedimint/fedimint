@@ -12,6 +12,7 @@ macro_rules! declare_vars {
             $($env_name:ident : $env_ty:ty = $env_value:expr;)*
         }
     ) => {
+        #[derive(Clone)]
         pub struct $name {
             $(
                 #[allow(unused)]

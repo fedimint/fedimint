@@ -15,7 +15,7 @@ use crate::federation::Fedimintd;
 use crate::util::{poll, ProcessManager};
 use crate::{dev_fed, external_daemons, vars, ExternalDaemons};
 
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 pub struct CommonArgs {
     #[clap(short = 'd', long, env = "FM_TEST_DIR")]
     pub test_dir: Option<PathBuf>,

@@ -8,6 +8,7 @@ use crate::gatewayd::Gatewayd;
 use crate::util::ProcessManager;
 use crate::{cmd, open_channel, LightningNode};
 
+#[derive(Clone)]
 pub struct DevFed {
     pub bitcoind: Bitcoind,
     pub cln: Lightningd,
