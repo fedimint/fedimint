@@ -35,8 +35,8 @@ use crate::{poll_eq, vars};
 #[derive(Clone)]
 pub struct Federation {
     // client is only for internal use, use cli commands instead
-    members: BTreeMap<usize, Fedimintd>,
-    vars: BTreeMap<usize, vars::Fedimintd>,
+    pub members: BTreeMap<usize, Fedimintd>,
+    pub vars: BTreeMap<usize, vars::Fedimintd>,
     bitcoind: Bitcoind,
 
     /// Built in [`Client`]
