@@ -172,7 +172,11 @@ impl LightningBuilder for GatewayLightningBuilder {
             } => Box::new(
                 GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, None).await,
             ),
-            LightningMode::Ldk => Box::new(ldk::GatewayLdkClient::new().await.unwrap()),
+            LightningMode::Ldk => Box::new(
+                ldk::GatewayLdkClient::new(ldk_node::Network::Bitcoin)
+                    .await
+                    .unwrap(),
+            ),
         }
     }
 }
