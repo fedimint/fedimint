@@ -114,7 +114,7 @@ impl Decodable for OfferId {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct IncomingContractAccount {
     pub amount: Amount,
     pub contract: IncomingContract,

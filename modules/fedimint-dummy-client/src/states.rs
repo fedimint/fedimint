@@ -18,7 +18,7 @@ use crate::{get_funds, DummyClientContext};
 const RETRY_DELAY: Duration = Duration::from_secs(1);
 
 /// Tracks a transaction
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum DummyStateMachine {
     Input(Amount, TransactionId, OperationId),
     Output(Amount, TransactionId, OperationId),

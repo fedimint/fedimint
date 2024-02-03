@@ -33,7 +33,7 @@ const TRANSACTION_STATUS_FETCH_INTERVAL: Duration = Duration::from_secs(1);
 ///     AwaitingConfirmations -- "Retransmit seen tx (planned)" --> AwaitingConfirmations
 ///     Created -- "No transactions seen for [time]" --> Timeout["Timed out"]
 /// ```
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct DepositStateMachine {
     pub(crate) operation_id: OperationId,
     pub(crate) state: DepositStates,
@@ -303,7 +303,7 @@ async fn transition_btc_tx_confirmed(
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum DepositStates {
     Created(CreatedDepositState),
     WaitingForConfirmations(WaitingForConfirmationsDepositState),
@@ -311,13 +311,13 @@ pub enum DepositStates {
     TimedOut(TimedOutDepositState),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct CreatedDepositState {
     pub(crate) tweak_key: KeyPair,
     pub(crate) timeout_at: SystemTime,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct WaitingForConfirmationsDepositState {
     /// Key pair of which the public was used to tweak the federation's wallet
     /// descriptor. The secret key is later used to sign the fedimint claim
@@ -330,12 +330,12 @@ pub struct WaitingForConfirmationsDepositState {
     pub(crate) out_idx: u32,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct ClaimingDepositState {
     /// Fedimint transaction id in which the deposit is being claimed.
     pub(crate) transaction_id: TransactionId,
     pub(crate) change: Vec<OutPoint>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct TimedOutDepositState {}

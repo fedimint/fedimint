@@ -44,7 +44,7 @@ use crate::{set_payment_result, LightningClientContext, PayType};
 ///    DecryptingPreimage -- invalid preimage --> RefundSubmitted
 ///    DecryptingPreimage -- error decrypting preimage --> Failure
 /// ```
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum IncomingSmStates {
     FundingOffer(FundingOfferState),
     DecryptingPreimage(DecryptingPreimageState),
@@ -59,14 +59,14 @@ pub enum IncomingSmStates {
     Failure(String),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct IncomingSmCommon {
     pub operation_id: OperationId,
     pub contract_id: ContractId,
     pub payment_hash: sha256::Hash,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct IncomingStateMachine {
     pub common: IncomingSmCommon,
     pub state: IncomingSmStates,
@@ -96,7 +96,9 @@ impl State for IncomingStateMachine {
     }
 }
 
-#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+#[derive(
+    Error, Debug, Serialize, Deserialize, Encodable, Decodable, Hash, Clone, Eq, PartialEq,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum IncomingSmError {
     #[error("Violated fee policy. Offer amount {offer_amount} Payment amount: {payment_amount}")]
@@ -126,7 +128,7 @@ pub enum IncomingSmError {
     AmountError { invoice: Bolt11Invoice },
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct FundingOfferState {
     pub txid: TransactionId,
 }
@@ -211,7 +213,7 @@ impl FundingOfferState {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct DecryptingPreimageState {
     txid: TransactionId,
 }

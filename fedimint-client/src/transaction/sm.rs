@@ -43,7 +43,7 @@ impl IntoDynInstance for TxSubmissionContext {
 ///     Created -- tx is accepted by consensus --> Accepted
 ///     Created -- tx is rejected on submission --> Rejected
 /// ```
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum TxSubmissionStates {
     /// The transaction has been created and potentially already been submitted,
     /// but no rejection or acceptance happened so far

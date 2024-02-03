@@ -36,7 +36,7 @@ const RETRY_DELAY: Duration = Duration::from_secs(1);
 ///     Funded -- await claim tx acceptance --> Success
 ///     Funded -- await claim tx rejection --> Canceled
 /// ```
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum LightningReceiveStates {
     SubmittedOffer(LightningReceiveSubmittedOffer),
     Canceled(LightningReceiveError),
@@ -45,7 +45,7 @@ pub enum LightningReceiveStates {
     Success(Vec<OutPoint>),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct LightningReceiveStateMachine {
     pub operation_id: OperationId,
     pub state: LightningReceiveStates,
@@ -81,14 +81,16 @@ impl State for LightningReceiveStateMachine {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct LightningReceiveSubmittedOffer {
     pub offer_txid: TransactionId,
     pub invoice: Bolt11Invoice,
     pub payment_keypair: KeyPair,
 }
 
-#[derive(Error, Clone, Debug, Serialize, Deserialize, Encodable, Decodable, Eq, PartialEq)]
+#[derive(
+    Error, Clone, Debug, Serialize, Deserialize, Encodable, Decodable, Eq, PartialEq, Hash,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum LightningReceiveError {
     #[error("Offer transaction was rejected")]
@@ -154,7 +156,7 @@ impl LightningReceiveSubmittedOffer {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct LightningReceiveConfirmedInvoice {
     invoice: Bolt11Invoice,
     keypair: KeyPair,
@@ -304,7 +306,7 @@ async fn get_incoming_contract(
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct LightningReceiveFunded {
     txid: TransactionId,
     out_points: Vec<OutPoint>,
