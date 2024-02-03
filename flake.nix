@@ -2,15 +2,11 @@
   inputs = {
     nixpkgs = {
       url = "github:nixos/nixpkgs/nixos-23.11";
-      # We use nixpkgs as input of `flakebox`, as it locks things like
-      # toolchains, in versions that are actually tested in flakebox's CI to
-      # cross-compile things well. This also saves us download and Nix
-      # evaluation time.
-      follows = "flakebox/nixpkgs";
     };
     flake-utils.url = "github:numtide/flake-utils";
     flakebox = {
       url = "github:dpc/flakebox?rev=d7f57f94f2dca67dafd02b31b030b62f6fefecbc";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
     advisory-db = {
       url = "github:rustsec/advisory-db";
