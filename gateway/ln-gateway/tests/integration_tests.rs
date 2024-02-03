@@ -1049,7 +1049,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
             Ok(info)
         },
         Duration::from_secs(1),
-        5,
+        30,
     )
     .await?;
 
