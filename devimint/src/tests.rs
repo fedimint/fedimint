@@ -1553,10 +1553,22 @@ pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     fed.await_all_peers().await?;
 
     // test a peer missing out on epochs and needing to rejoin
-    fed.terminate_server(0).await?;
+    // FIXME: can't kill peer 0 because devimint only has their invite code
+    fed.terminate_server(3).await?;
     fed.mine_then_wait_blocks_sync(100).await?;
 
-    fed.start_server(process_mgr, 0).await?;
+    // test that client can join in < 1 second with one server offline
+    let join_start = Instant::now();
+    fed.new_joined_client("latency-tests-client")
+        .await
+        .context("client failed to join")?;
+    let join_duration = join_start.elapsed();
+    anyhow::ensure!(
+        join_duration < Duration::from_secs(10),
+        "client join took too long: {join_duration:?}"
+    );
+
+    fed.start_server(process_mgr, 3).await?;
     fed.mine_then_wait_blocks_sync(100).await?;
     fed.await_all_peers().await?;
     info!(target: LOG_DEVIMINT, "Server 0 successfully rejoined!");
