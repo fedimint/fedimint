@@ -55,7 +55,7 @@ pub mod backup;
 /// submitted the transaction's ID can be used as operation ID. If there is no
 /// transaction related to it, it should be generated randomly. Since it is a
 /// 256bit value collisions are impossible for all intents and purposes.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable, PartialOrd, Ord)]
 pub struct OperationId(pub [u8; 32]);
 
 impl OperationId {

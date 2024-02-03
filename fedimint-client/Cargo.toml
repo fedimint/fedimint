@@ -31,6 +31,7 @@ fedimint-derive-secret = { version = "0.3.0-alpha", path = "../crypto/derive-sec
 fedimint-aead = { version = "0.3.0-alpha", path = "../crypto/aead" }
 fedimint-logging = { version = "0.3.0-alpha", path = "../fedimint-logging" }
 futures = "0.3.26"
+futures-util = "0.3.30"
 itertools = "0.10.5"
 rand = "0.8.5"
 secp256k1-zkp = "0.7.0"

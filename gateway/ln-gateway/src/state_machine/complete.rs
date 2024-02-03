@@ -38,7 +38,7 @@ pub enum CompleteHtlcError {
 ///    CompleteHtlc -- successfully completed or canceled htlc --> HtlcFinished
 ///    CompleteHtlc -- failed to finish htlc --> Failure
 /// ```
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum GatewayCompleteStates {
     WaitForPreimage(WaitForPreimageState),
     CompleteHtlc(CompleteHtlcState),
@@ -46,14 +46,14 @@ pub enum GatewayCompleteStates {
     Failure,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct GatewayCompleteCommon {
     pub operation_id: OperationId,
     pub incoming_chan_id: u64,
     pub htlc_id: u64,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct GatewayCompleteStateMachine {
     pub common: GatewayCompleteCommon,
     pub state: GatewayCompleteStates,
@@ -83,7 +83,7 @@ impl State for GatewayCompleteStateMachine {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct WaitForPreimageState;
 
 impl WaitForPreimageState {
@@ -148,13 +148,13 @@ impl WaitForPreimageState {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum HtlcOutcome {
     Success(Preimage),
     Failure(String),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct CompleteHtlcState {
     outcome: HtlcOutcome,
 }

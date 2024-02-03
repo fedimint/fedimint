@@ -667,6 +667,7 @@ pub struct Client {
     modules: ClientModuleRegistry,
     module_inits: ClientModuleInitRegistry,
     executor: Executor,
+    sm_update_rx: tokio::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<DynState>>>,
     api: DynGlobalApi,
     root_secret: DerivableSecret,
     operation_log: OperationLog,
@@ -778,7 +779,16 @@ impl Client {
             "Starting fedimint client executor (version: {})",
             env!("FEDIMINT_BUILD_CODE_VERSION")
         );
-        self.executor.start_executor(self.context_gen()).await;
+        self.executor
+            .start_executor(
+                self.context_gen(),
+                self.sm_update_rx
+                    .lock()
+                    .await
+                    .take()
+                    .expect("sm_update_rx missing. Trying to start executor twice?"),
+            )
+            .await;
     }
 
     pub fn federation_id(&self) -> FederationId {
@@ -2065,7 +2075,7 @@ impl ClientBuilder {
             dbtx.commit_tx().await;
         }
 
-        let executor = {
+        let (executor, sm_update_rx) = {
             let mut executor_builder = Executor::builder();
             executor_builder
                 .with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
@@ -2099,6 +2109,7 @@ impl ClientBuilder {
             modules,
             module_inits: self.module_inits.clone(),
             executor,
+            sm_update_rx: tokio::sync::Mutex::new(Some(sm_update_rx)),
             api,
             secp_ctx: Secp256k1::new(),
             root_secret,

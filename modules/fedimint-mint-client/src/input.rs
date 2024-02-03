@@ -23,7 +23,7 @@ use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
 ///     Refund -- refund tx rejected --> Error
 ///     Refund -- refund tx accepted --> RS[Refund Success]
 /// ```
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum MintInputStates {
     Created(MintInputStateCreated),
     Refund(MintInputStateRefund),
@@ -32,14 +32,14 @@ pub enum MintInputStates {
     RefundSuccess(MintInputStateRefundSuccess),
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Copy, Clone, Eq, Hash, PartialEq, Decodable, Encodable)]
 pub struct MintInputCommon {
     pub(crate) operation_id: OperationId,
     pub(crate) txid: TransactionId,
     pub(crate) input_idx: u64,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintInputStateMachine {
     pub(crate) common: MintInputCommon,
     pub(crate) state: MintInputStates,
@@ -73,7 +73,7 @@ impl State for MintInputStateMachine {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintInputStateCreated {
     pub(crate) amount: Amount,
     pub(crate) spendable_note: SpendableNote,
@@ -158,7 +158,7 @@ impl MintInputStateCreated {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintInputStateRefund {
     refund_txid: TransactionId,
 }
@@ -218,15 +218,15 @@ impl MintInputStateRefund {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintInputStateSuccess {}
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintInputStateError {
     error: String,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintInputStateRefundSuccess {
     refund_txid: TransactionId,
 }

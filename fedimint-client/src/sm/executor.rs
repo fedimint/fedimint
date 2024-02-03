@@ -1,8 +1,8 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use anyhow::anyhow;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
@@ -12,14 +12,15 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::fmt_utils::AbbreviateJson;
+use fedimint_core::maybe_add_send_sync;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::spawn;
 use fedimint_core::util::BoxFuture;
-use fedimint_core::{maybe_add_send_sync, task};
+use fedimint_logging::LOG_CLIENT_REACTOR;
 use futures::future::{self, select_all};
-use futures::stream::StreamExt;
+use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::select;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::{debug, error, info, trace, warn, Instrument};
 
 use super::state::StateTransitionFunction;
@@ -30,10 +31,6 @@ use crate::{AddStateMachinesError, AddStateMachinesResult, DynGlobalClientContex
 
 /// After how many attempts a DB transaction is aborted with an error
 const MAX_DB_ATTEMPTS: Option<usize> = Some(100);
-
-/// Wait time till checking the DB for new state machines when there are no
-/// active ones
-const EXECUTOR_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 pub type ContextGen =
     Arc<maybe_add_send_sync!(dyn Fn(ModuleInstanceId, OperationId) -> DynGlobalClientContext)>;
@@ -64,6 +61,9 @@ struct ExecutorInner {
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
     valid_module_ids: BTreeSet<ModuleInstanceId>,
     notifier: Notifier,
+    /// Any time executor should notice state machine update (e.g. because it
+    /// was created), it's must be sent through this channel for it to notice.
+    sm_update_tx: mpsc::UnboundedSender<DynState>,
     shutdown_executor: Mutex<Option<oneshot::Sender<oneshot::Sender<()>>>>,
 }
 
@@ -174,7 +174,11 @@ impl Executor {
             )
             .await;
             let notify_sender = self.inner.notifier.sender();
-            dbtx.on_commit(move || notify_sender.notify(state));
+            let sm_updates_tx = self.inner.sm_update_tx.clone();
+            dbtx.on_commit(move || {
+                notify_sender.notify(state.clone());
+                let _ = sm_updates_tx.send(state);
+            });
         }
 
         Ok(())
@@ -237,7 +241,11 @@ impl Executor {
     ///
     /// ## Panics
     /// If called more than once.
-    pub async fn start_executor(&self, context_gen: ContextGen) {
+    pub async fn start_executor(
+        &self,
+        context_gen: ContextGen,
+        sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
+    ) {
         let replaced_old_context_gen = self
             .inner
             .context
@@ -266,8 +274,8 @@ impl Executor {
         );
 
         let task_runner_inner = self.inner.clone();
-        let _handle = spawn("client state machine", async move {
-            let executor_runner = task_runner_inner.run(context_gen);
+        let _handle = spawn("state machine executor", async move {
+            let executor_runner = task_runner_inner.run(context_gen, sm_update_rx);
             select! {
                 shutdown_happened_sender = shutdown_receiver => {
                     match shutdown_happened_sender {
@@ -317,35 +325,37 @@ impl Drop for ExecutorInner {
     }
 }
 
-type TransitionForActiveState = (
-    serde_json::Value,
-    DynState,
-    StateTransitionFunction<DynState>,
-    ActiveState,
-);
+struct TransitionForActiveState {
+    outcome: serde_json::Value,
+    state: DynState,
+    meta: ActiveState,
+    transition_fn: StateTransitionFunction<DynState>,
+}
 
 impl ExecutorInner {
-    async fn run(&self, global_context_gen: ContextGen) {
+    async fn run(
+        &self,
+        global_context_gen: ContextGen,
+        sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
+    ) {
         info!("Starting state machine executor task");
-        loop {
-            if let Err(err) = self
-                .execute_next_state_transitions(&global_context_gen)
-                .await
-            {
-                warn!(
-                    %err,
-                    "An unexpected error occurred during a state transition"
-                );
-            }
+        if let Err(err) = self
+            .run_state_machines_executor_inner(global_context_gen, sm_update_rx)
+            .await
+        {
+            warn!(
+                %err,
+                "An unexpected error occurred during a state transition"
+            );
         }
     }
 
     async fn get_transition_for(
         &self,
-        state: DynState,
+        state: &DynState,
         meta: ActiveState,
         global_context_gen: &ContextGen,
-    ) -> Option<BoxFuture<TransitionForActiveState>> {
+    ) -> Vec<BoxFuture<'static, TransitionForActiveState>> {
         let module_instance = state.module_instance_id();
         let context = &self
             .module_contexts
@@ -364,7 +374,12 @@ impl ExecutorInner {
                         trigger,
                         transition,
                     } = transition;
-                    (trigger.await, state, transition, meta)
+                    TransitionForActiveState {
+                        outcome: trigger.await,
+                        state,
+                        transition_fn: transition,
+                        meta,
+                    }
                 });
                 f
             })
@@ -390,181 +405,258 @@ impl ExecutorInner {
                 )
                 .await
                 .expect("Autocommit here can't fail");
-
-            None
-        } else {
-            Some(Box::pin(async move {
-                let (first_completed_result, _index, _unused_transitions) =
-                    select_all(transitions).await;
-                first_completed_result
-            }))
         }
+
+        transitions
     }
 
-    async fn execute_next_state_transitions(
+    async fn run_state_machines_executor_inner(
         &self,
-        global_context_gen: &ContextGen,
+        global_context_gen: ContextGen,
+        sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
     ) -> anyhow::Result<()> {
+        // Re-add the same future  receiving on the channel.
+        // Not very elegant, but can't figure out how to make it a quine
+        // and don't know anything more clever.
+        fn re_add_sm_update_receiver(
+            futures: &mut FuturesUnordered<BoxFuture<'static, ExecutorLoopEvent>>,
+            mut sm_update_rx: mpsc::UnboundedReceiver<DynState>,
+        ) {
+            futures.push(Box::pin(async {
+                if let Some(new) = sm_update_rx.recv().await {
+                    ExecutorLoopEvent::New {
+                        state: new,
+                        sm_update_rx,
+                    }
+                } else {
+                    ExecutorLoopEvent::Disconnected
+                }
+            }));
+        }
+
         let active_states = self.get_active_states().await;
-        // TODO: use DB prefix subscription instead of polling
-        let mut active_state_count = active_states.len();
-        if active_states.is_empty() {
-            // FIXME: what to do in this case? Probably best to subscribe to DB eventually
-            trace!("No state transitions available, waiting before re-trying");
-            task::sleep(EXECUTOR_POLL_INTERVAL).await;
-            return Ok(());
-        }
-        trace!("Active states: {:?}", active_states);
-
-        let mut transitions = Vec::new();
-        for (state, meta) in active_states {
-            match self
-                .get_transition_for(state, meta, global_context_gen)
-                .await
-            {
-                None => {}
-                Some(t) => transitions.push(t),
-            }
+        trace!(target: LOG_CLIENT_REACTOR, "Starting active states: {:?}", active_states);
+        for (state, _meta) in active_states {
+            self.sm_update_tx
+                .send(state)
+                .expect("Must be able to send operation_id to own opened channel");
         }
 
-        loop {
-            if active_state_count == 0 {
-                debug!(
-                    "No state transitions remaining, exiting execute_next_state_transitions loops"
-                );
-                return Ok(());
-            }
-            let num_states = active_state_count;
-            let num_transitions = transitions.len();
-            debug!(
-                num_states,
-                num_transitions, "Awaiting any state transition to become ready"
-            );
-            let new_state_added = async move {
-                loop {
-                    // Prioritize existing active states over new states
-                    fedimint_core::task::sleep(EXECUTOR_POLL_INTERVAL).await;
-                    let new_active_states_count = self.get_active_states().await.len();
-                    if new_active_states_count > active_state_count {
-                        return;
+        /// All futures in the executor resolve to this type, so the handling
+        /// code can tell them apart.
+        enum ExecutorLoopEvent {
+            /// Notivication about `DynState` arrived and should be handled,
+            /// usually added to the list of pending futures.
+            New {
+                state: DynState,
+                sm_update_rx: mpsc::UnboundedReceiver<DynState>,
+            },
+            /// One of trigger functions of a state machine finished and
+            /// returned transition function to run
+            Triggered(TransitionForActiveState),
+            /// Transition function and all the accounting around it are done
+            Completed {
+                state: DynState,
+                outcome: ActiveOrInactiveState,
+            },
+            /// New job receiver disconnected, that can only mean termination
+            Disconnected,
+        }
+
+        // Keeps track of things already running, so we can deduplicate, just
+        // in case.
+        let mut currently_running_sms = HashSet::<DynState>::new();
+        // All things happening in parallel go into here
+        let mut futures: FuturesUnordered<BoxFuture<'_, ExecutorLoopEvent>> =
+            FuturesUnordered::new();
+
+        re_add_sm_update_receiver(&mut futures, sm_update_rx);
+
+        // main reactor loop: wait for next thing that completed, react (possibly adding
+        // more things to `futures`)
+        while let Some(event) = futures.next().await {
+            match event {
+                ExecutorLoopEvent::New {
+                    state,
+                    sm_update_rx,
+                } => {
+                    re_add_sm_update_receiver(&mut futures, sm_update_rx);
+
+                    if currently_running_sms.contains(&state) {
+                        warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), "Received a state machine that is already running. Ignoring");
+                        continue;
                     }
+                    let Some(meta) = self.get_active_state(&state).await else {
+                        warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), "Couldn't look up received state machine. Ignoring.");
+                        continue;
+                    };
+
+                    let transitions = self
+                        .get_transition_for(&state, meta, &global_context_gen)
+                        .await;
+                    if transitions.is_empty() {
+                        warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), "Received an active state that doesn't produce any transitions. Ignoring.");
+                        continue;
+                    }
+
+                    currently_running_sms.insert(state.clone());
+                    futures.push(Box::pin(async move {
+                        let (first_completed_result, _index, _unused_transitions) =
+                            select_all(transitions).await;
+                        ExecutorLoopEvent::Triggered(first_completed_result)
+                    }));
+
+                    info!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), "Started new active state machine.");
                 }
-            };
-            let (completed_result, _index, remaining_transitions) = select! {
-                res = select_all(transitions) => res,
-                () = new_state_added => {
-                    debug!("New state added, re-starting state transitions");
-                    return Ok(());
-                }
-            };
-            transitions = remaining_transitions;
-            let (transition_outcome, state, transition_fn, meta) = completed_result;
-            let operation_id = state.operation_id();
-            // info level because spans only log when any event happens within a span.
-            let span = tracing::info_span!("state_machine_transition", %operation_id);
-            async {
-                info!("Executing state transition");
-                debug!(
-                    ?state,
-                    transition_outcome = ?AbbreviateJson(&transition_outcome),
-                );
+                ExecutorLoopEvent::Triggered(TransitionForActiveState {
+                    outcome,
+                    state,
+                    meta,
+                    transition_fn,
+                }) => {
+                    let span = tracing::info_span!(
+                        "state_machine_transition",
+                        operation_id = %state.operation_id()
+                    );
+                    // Perform the transition as another future, so transitions can happen in
+                    // parallel.
+                    // Database write conflicts might be happening quite often here,
+                    // but transaction functions are supposed to be idempotent anyway,
+                    // so it seems like a good stress-test in the worst case.
+                    futures.push({
+                        let sm_update_tx = self.sm_update_tx.clone();
+                        let db = self.db.clone();
+                        let notifier = self.notifier.clone();
+                        let module_contexts = self
+                                                .module_contexts.clone();
+                        let global_context_gen = global_context_gen.clone();
+                        Box::pin(
+                        async move {
+                            debug!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id() , "Executing state transition");
+                            debug!(
+                                ?state,
+                                outcome = ?AbbreviateJson(&outcome),
+                            );
 
-                let active_or_inactive_state = self
-                    .db
-                    .autocommit(
-                        |dbtx, _| {
-                            let state = state.clone();
-                            let transition_fn = transition_fn.clone();
-                            let transition_outcome = transition_outcome.clone();
-                            Box::pin(async move {
-                                let new_state = transition_fn(
-                                    &mut ClientSMDatabaseTransaction::new(
-                                        &mut dbtx.to_ref(),
-                                        state.module_instance_id(),
-                                    ),
-                                    transition_outcome,
-                                    state.clone(),
+                            let module_contexts = &module_contexts;
+                            let global_context_gen = &global_context_gen;
+
+                            let outcome =
+                                db
+                                .autocommit(
+                                    |dbtx, _| {
+                                        let state = state.clone();
+                                        let transition_fn = transition_fn.clone();
+                                        let transition_outcome = outcome.clone();
+                                                let sm_update_tx = sm_update_tx.clone();
+                                        Box::pin(async move {
+                                            let new_state = transition_fn(
+                                                &mut ClientSMDatabaseTransaction::new(
+                                                    &mut dbtx.to_ref(),
+                                                    state.module_instance_id(),
+                                                ),
+                                                transition_outcome,
+                                                state.clone(),
+                                            )
+                                            .await;
+                                            dbtx.remove_entry(&ActiveStateKey::from_state(
+                                                state.clone(),
+                                            ))
+                                            .await;
+                                            dbtx.insert_entry(
+                                                &InactiveStateKey::from_state(state.clone()),
+                                                &meta.into_inactive(),
+                                            )
+                                            .await;
+
+                                            let context = &
+                                                module_contexts
+                                                .get(&state.module_instance_id())
+                                                .expect("Unknown module");
+
+                                            let global_context = global_context_gen(
+                                                state.module_instance_id(),
+                                                state.operation_id(),
+                                            );
+                                            if new_state.is_terminal(context, &global_context) {
+                                                // TODO: log state machine id or something
+                                                debug!("State machine reached terminal state");
+                                                let k =
+                                                    InactiveStateKey::from_state(new_state.clone());
+                                                let v = ActiveState::new().into_inactive();
+                                                dbtx.insert_entry(&k, &v).await;
+                                                Ok(ActiveOrInactiveState::Inactive {
+                                                    dyn_state: new_state,
+                                                })
+                                            } else {
+                                                let k =
+                                                    ActiveStateKey::from_state(new_state.clone());
+                                                let v = ActiveState::new();
+                                                dbtx.insert_entry(&k, &v).await;
+                                                dbtx.on_commit(move || {
+                                                    let _ = sm_update_tx.send(state);
+                                                });
+                                                Ok(ActiveOrInactiveState::Active {
+                                                    dyn_state: new_state,
+                                                    meta: v,
+                                                })
+                                            }
+                                        })
+                                    },
+                                    None,
                                 )
-                                .await;
-                                dbtx.remove_entry(&ActiveStateKey::from_state(state.clone()))
-                                    .await;
-                                dbtx.insert_entry(
-                                    &InactiveStateKey::from_state(state.clone()),
-                                    &meta.into_inactive(),
-                                )
-                                .await;
+                                .await
+                                .map_err(|e| match e {
+                                    AutocommitError::CommitFailed {
+                                        last_error,
+                                        attempts,
+                                    } => last_error.context(format!(
+                                        "Failed to commit after {attempts} attempts"
+                                    )),
+                                    AutocommitError::ClosureError { error, .. } => error,
+                                }).expect("autocommit of transition fn should never fail");
 
-                                let context = &self
-                                    .module_contexts
-                                    .get(&state.module_instance_id())
-                                    .expect("Unknown module");
 
-                                let global_context = global_context_gen(
-                                    state.module_instance_id(),
-                                    state.operation_id(),
-                                );
-                                if new_state.is_terminal(context, &global_context) {
-                                    // TODO: log state machine id or something
-                                    debug!("State machine reached terminal state");
-                                    let k = InactiveStateKey::from_state(new_state.clone());
-                                    let v = ActiveState::new().into_inactive();
-                                    dbtx.insert_entry(&k, &v).await;
-                                    Ok(ActiveOrInactiveState::Inactive {
-                                        dyn_state: new_state,
-                                    })
-                                } else {
-                                    let k = ActiveStateKey::from_state(new_state.clone());
-                                    let v = ActiveState::new();
-                                    dbtx.insert_entry(&k, &v).await;
-                                    Ok(ActiveOrInactiveState::Active {
-                                        dyn_state: new_state,
-                                        active_state: v,
-                                    })
+                            match &outcome {
+                                ActiveOrInactiveState::Active {
+                                    dyn_state,
+                                    meta: _,
+                                } => {
+                                    sm_update_tx.send(dyn_state.clone()).expect("can't fail: we are the receiving end");
+                                    notifier.notify(dyn_state.clone());
                                 }
-                            })
-                        },
-                        Some(100),
-                    )
-                    .await
-                    .map_err(|e| match e {
-                        AutocommitError::CommitFailed {
-                            last_error,
-                            attempts,
-                        } => last_error
-                            .context(format!("Failed to commit after {attempts} attempts")),
-                        AutocommitError::ClosureError { error, .. } => error,
-                    })?;
-
-                // TODO: add a INFO version without all the details
-                debug!(
-                    outcome = ?active_or_inactive_state,
-                    "Finished executing state transition"
-                );
-
-                active_state_count -= 1;
-                match active_or_inactive_state {
-                    ActiveOrInactiveState::Active {
-                        dyn_state,
-                        active_state,
-                    } => {
-                        if let Some(transition) = self
-                            .get_transition_for(dyn_state.clone(), active_state, global_context_gen)
-                            .await
-                        {
-                            active_state_count += 1;
-                            transitions.push(transition);
+                                ActiveOrInactiveState::Inactive { dyn_state } => {
+                                    notifier.notify(dyn_state.clone());
+                                }
+                            }
+                            ExecutorLoopEvent::Completed { state, outcome }
                         }
-                        self.notifier.notify(dyn_state);
-                    }
-                    ActiveOrInactiveState::Inactive { dyn_state } => {
-                        self.notifier.notify(dyn_state);
-                    }
+                        .instrument(span),
+                    )});
                 }
-                anyhow::Ok(())
+                ExecutorLoopEvent::Completed { state, outcome } => {
+                    currently_running_sms.remove(&state);
+                    info!(
+                        target: LOG_CLIENT_REACTOR,
+                        operation_id = %state.operation_id(),
+                        outcome_active = outcome.is_active(),
+                        total = futures.len(),
+                        "State transition complete");
+                    trace!(
+                        target: LOG_CLIENT_REACTOR,
+                        ?outcome,
+                        operation_id = %state.operation_id(), total = futures.len(),
+                        "State transition complete");
+                }
+                ExecutorLoopEvent::Disconnected => {
+                    info!(target: LOG_CLIENT_REACTOR, "Disconnected. Terminating.");
+                    break;
+                }
             }
-            .instrument(span)
-            .await?
         }
+
+        trace!(target: LOG_CLIENT_REACTOR, "Terminated");
+        Ok(())
     }
 
     async fn get_active_states(&self) -> Vec<(DynState, ActiveState)> {
@@ -582,6 +674,21 @@ impl ExecutorInner {
             })
             .map(|(state, meta)| (state.state, meta))
             .collect::<Vec<_>>()
+            .await
+    }
+
+    async fn get_active_state(&self, state: &DynState) -> Option<ActiveState> {
+        // ignore states from modules that are not initialized yet
+        if !self
+            .module_contexts
+            .contains_key(&state.module_instance_id())
+        {
+            return None;
+        }
+        self.db
+            .begin_transaction()
+            .await
+            .get_value(&ActiveStateKey::from_state(state.clone()))
             .await
     }
 
@@ -678,7 +785,13 @@ impl ExecutorBuilder {
     /// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    pub async fn build(self, db: Database, notifier: Notifier) -> Executor {
+    pub async fn build(
+        self,
+        db: Database,
+        notifier: Notifier,
+    ) -> (Executor, mpsc::UnboundedReceiver<DynState>) {
+        let (sm_update_tx, sm_update_rx) = tokio::sync::mpsc::unbounded_channel();
+
         let inner = Arc::new(ExecutorInner {
             db,
             context: Mutex::new(None),
@@ -686,13 +799,14 @@ impl ExecutorBuilder {
             valid_module_ids: self.valid_module_ids,
             notifier,
             shutdown_executor: Default::default(),
+            sm_update_tx,
         });
 
         debug!(
             instances = ?inner.module_contexts.keys().copied().collect::<Vec<_>>(),
             "Initialized state machine executor with module instances"
         );
-        Executor { inner }
+        (Executor { inner }, sm_update_rx)
     }
 }
 
@@ -701,6 +815,7 @@ impl ExecutorBuilder {
 pub struct ActiveStateKey {
     // TODO: remove redundant operation id from state trait
     pub operation_id: OperationId,
+    // TODO: state being a key... seems ... risky?
     pub state: DynState,
 }
 
@@ -932,11 +1047,22 @@ impl ::fedimint_core::db::DatabaseLookup for InactiveStateKeyPrefix {
 enum ActiveOrInactiveState {
     Active {
         dyn_state: DynState,
-        active_state: ActiveState,
+        // TODO: remove?
+        #[allow(dead_code)]
+        meta: ActiveState,
     },
     Inactive {
         dyn_state: DynState,
     },
+}
+
+impl ActiveOrInactiveState {
+    fn is_active(&self) -> bool {
+        match self {
+            ActiveOrInactiveState::Active { .. } => true,
+            ActiveOrInactiveState::Inactive { .. } => false,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -960,7 +1086,7 @@ mod tests {
     use crate::sm::{Executor, Notifier, State, StateTransition};
     use crate::DynGlobalClientContext;
 
-    #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+    #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Hash)]
     enum MockStateMachine {
         Start,
         ReceivedNonNull(u64),
@@ -1076,11 +1202,14 @@ mod tests {
                 broadcast: broadcast.clone(),
             },
         );
-        let executor = executor_builder
+        let (executor, sm_update_rx) = executor_builder
             .build(db.clone(), Notifier::new(db.clone()))
             .await;
         executor
-            .start_executor(Arc::new(|_, _| DynGlobalClientContext::new_fake()))
+            .start_executor(
+                Arc::new(|_, _| DynGlobalClientContext::new_fake()),
+                sm_update_rx,
+            )
             .await;
 
         info!("Initialized test executor");

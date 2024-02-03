@@ -647,7 +647,7 @@ pub async fn ln_operation(
 ///
 /// This is a subset of the data from a [`lightning_invoice::Bolt11Invoice`]
 /// that does not contain the description, which increases privacy for the user.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 pub struct PrunedInvoice {
     pub amount: Amount,
     pub destination: secp256k1::PublicKey,

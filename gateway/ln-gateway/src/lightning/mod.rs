@@ -23,7 +23,9 @@ use crate::gateway_lnrpc::{
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
 
-#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+#[derive(
+    Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
+)]
 pub enum LightningRpcError {
     #[error("Failed to connect to Lightning node")]
     FailedToConnect,
