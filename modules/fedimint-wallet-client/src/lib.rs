@@ -209,7 +209,7 @@ pub struct WalletClientModule {
     cfg: WalletClientConfig,
     module_root_secret: DerivableSecret,
     module_api: DynModuleApi,
-    notifier: ModuleNotifier<DynGlobalClientContext, WalletClientStates>,
+    notifier: ModuleNotifier<WalletClientStates>,
     rpc: DynBitcoindRpc,
     secp: Secp256k1<All>,
     client_ctx: ClientContext<Self>,
@@ -689,7 +689,7 @@ pub enum WalletClientStates {
 }
 
 impl IntoDynInstance for WalletClientStates {
-    type DynType = DynState<DynGlobalClientContext>;
+    type DynType = DynState;
 
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
         DynState::from_typed(instance_id, self)
@@ -698,7 +698,6 @@ impl IntoDynInstance for WalletClientStates {
 
 impl State for WalletClientStates {
     type ModuleContext = WalletClientContext;
-    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,

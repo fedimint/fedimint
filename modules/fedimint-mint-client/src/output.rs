@@ -78,12 +78,11 @@ pub struct MintOutputStateMachine {
 
 impl State for MintOutputStateMachine {
     type ModuleContext = MintClientContext;
-    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,
         context: &Self::ModuleContext,
-        global_context: &Self::GlobalContext,
+        global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
             MintOutputStates::Created(created) => {

@@ -27,12 +27,11 @@ pub struct WithdrawStateMachine {
 
 impl State for WithdrawStateMachine {
     type ModuleContext = WalletClientContext;
-    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,
         context: &Self::ModuleContext,
-        global_context: &Self::GlobalContext,
+        global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
             WithdrawStates::Created(created) => {

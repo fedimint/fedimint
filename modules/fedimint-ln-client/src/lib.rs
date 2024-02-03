@@ -331,7 +331,7 @@ impl ClientModuleInit for LightningClientInit {
 #[derive(Debug)]
 pub struct LightningClientModule {
     pub cfg: LightningClientConfig,
-    notifier: ModuleNotifier<DynGlobalClientContext, LightningClientStateMachines>,
+    notifier: ModuleNotifier<LightningClientStateMachines>,
     redeem_key: KeyPair,
     secp: Secp256k1<All>,
     module_api: DynModuleApi,
@@ -1407,7 +1407,7 @@ pub enum LightningClientStateMachines {
 }
 
 impl IntoDynInstance for LightningClientStateMachines {
-    type DynType = DynState<DynGlobalClientContext>;
+    type DynType = DynState;
 
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
         DynState::from_typed(instance_id, self)
@@ -1416,7 +1416,6 @@ impl IntoDynInstance for LightningClientStateMachines {
 
 impl State for LightningClientStateMachines {
     type ModuleContext = LightningClientContext;
-    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,

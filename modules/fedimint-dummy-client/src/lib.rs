@@ -10,7 +10,6 @@ use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{Decoder, KeyPair, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationMap,
@@ -39,7 +38,7 @@ pub mod states;
 pub struct DummyClientModule {
     cfg: DummyClientConfig,
     key: KeyPair,
-    notifier: ModuleNotifier<DynGlobalClientContext, DummyStateMachine>,
+    notifier: ModuleNotifier<DummyStateMachine>,
     client_ctx: ClientContext<Self>,
     db: Database,
 }

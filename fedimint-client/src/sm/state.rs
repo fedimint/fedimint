@@ -12,7 +12,8 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxFuture;
 use fedimint_core::{maybe_add_send, maybe_add_send_sync, module_plugin_dyn_newtype_define};
 
-use crate::sm::{ClientSMDatabaseTransaction, GlobalContext};
+use crate::sm::ClientSMDatabaseTransaction;
+use crate::DynGlobalClientContext;
 
 /// Implementors act as state machines that can be executed
 pub trait State:
@@ -21,15 +22,12 @@ pub trait State:
     /// Additional resources made available in this module's state transitions
     type ModuleContext: Context;
 
-    /// Additional resources made available for all state transitions
-    type GlobalContext: GlobalContext;
-
     /// All possible transitions from the current state to other states. See
     /// [`StateTransition`] for details.
     fn transitions(
         &self,
         context: &Self::ModuleContext,
-        global_context: &Self::GlobalContext,
+        global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>>;
 
     // TODO: move out of this interface into wrapper struct (see OperationState)
@@ -39,24 +37,24 @@ pub trait State:
 }
 
 /// Object-safe version of [`State`]
-pub trait IState<GC>: Debug + DynEncodable + MaybeSend + MaybeSync {
+pub trait IState: Debug + DynEncodable + MaybeSend + MaybeSync {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any));
 
     /// All possible transitions from the state
     fn transitions(
         &self,
         context: &DynContext,
-        global_context: &GC,
-    ) -> Vec<StateTransition<DynState<GC>>>;
+        global_context: &DynGlobalClientContext,
+    ) -> Vec<StateTransition<DynState>>;
 
     /// Operation this state machine belongs to. See [`OperationId`] for
     /// details.
     fn operation_id(&self) -> OperationId;
 
     /// Clone state
-    fn clone(&self, module_instance_id: ModuleInstanceId) -> DynState<GC>;
+    fn clone(&self, module_instance_id: ModuleInstanceId) -> DynState;
 
-    fn erased_eq_no_instance_id(&self, other: &DynState<GC>) -> bool;
+    fn erased_eq_no_instance_id(&self, other: &DynState) -> bool;
 }
 
 /// Something that can be a [`DynContext`] for a state machine
@@ -165,10 +163,9 @@ impl<S> StateTransition<S> {
     }
 }
 
-impl<GC, T> IState<GC> for T
+impl<T> IState for T
 where
-    GC: GlobalContext,
-    T: State<GlobalContext = GC>,
+    T: State,
 {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any)) {
         self
@@ -177,8 +174,8 @@ where
     fn transitions(
         &self,
         context: &DynContext,
-        global_context: &GC,
-    ) -> Vec<StateTransition<DynState<GC>>> {
+        global_context: &DynGlobalClientContext,
+    ) -> Vec<StateTransition<DynState>> {
         <T as State>::transitions(
             self,
             context.as_any().downcast_ref().expect("Wrong module"),
@@ -188,7 +185,7 @@ where
         .map(|st| StateTransition {
             trigger: st.trigger,
             transition: Arc::new(
-                move |dbtx: &mut ClientSMDatabaseTransaction<'_, '_>, val, state: DynState<GC>| {
+                move |dbtx: &mut ClientSMDatabaseTransaction<'_, '_>, val, state: DynState| {
                     let transition = st.transition.clone();
                     Box::pin(async move {
                         let new_state = transition(
@@ -213,11 +210,11 @@ where
         <T as State>::operation_id(self)
     }
 
-    fn clone(&self, module_instance_id: ModuleInstanceId) -> DynState<GC> {
+    fn clone(&self, module_instance_id: ModuleInstanceId) -> DynState {
         DynState::from_typed(module_instance_id, <T as Clone>::clone(self))
     }
 
-    fn erased_eq_no_instance_id(&self, other: &DynState<GC>) -> bool {
+    fn erased_eq_no_instance_id(&self, other: &DynState) -> bool {
         let other: &T = other
             .as_any()
             .downcast_ref()
@@ -229,58 +226,58 @@ where
 
 /// A type-erased state of a state machine belonging to a module instance, see
 /// [`State`]
-pub struct DynState<GC>(
-    Box<maybe_add_send_sync!(dyn IState<GC> + 'static)>,
+pub struct DynState(
+    Box<maybe_add_send_sync!(dyn IState + 'static)>,
     ModuleInstanceId,
 );
 
-impl<GC> std::ops::Deref for DynState<GC> {
-    type Target = maybe_add_send_sync!(dyn IState<GC> + 'static);
+impl std::ops::Deref for DynState {
+    type Target = maybe_add_send_sync!(dyn IState + 'static);
 
     fn deref(&self) -> &<Self as std::ops::Deref>::Target {
         &*self.0
     }
 }
 
-impl<GC> DynState<GC> {
+impl DynState {
     pub fn module_instance_id(&self) -> ModuleInstanceId {
         self.1
     }
 
     pub fn from_typed<I>(module_instance_id: ModuleInstanceId, typed: I) -> Self
     where
-        I: IState<GC> + 'static,
+        I: IState + 'static,
     {
         Self(Box::new(typed), module_instance_id)
     }
 
     pub fn from_parts(
         module_instance_id: ::fedimint_core::core::ModuleInstanceId,
-        dynbox: Box<maybe_add_send_sync!(dyn IState<GC> + 'static)>,
+        dynbox: Box<maybe_add_send_sync!(dyn IState + 'static)>,
     ) -> Self {
         Self(dynbox, module_instance_id)
     }
 }
 
-impl<GC> std::fmt::Debug for DynState<GC> {
+impl std::fmt::Debug for DynState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(&self.0, f)
     }
 }
 
-impl<GC> std::ops::DerefMut for DynState<GC> {
+impl std::ops::DerefMut for DynState {
     fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
         &mut *self.0
     }
 }
 
-impl<GC> Clone for DynState<GC> {
+impl Clone for DynState {
     fn clone(&self) -> Self {
         self.0.clone(self.1)
     }
 }
 
-impl<GC> PartialEq for DynState<GC> {
+impl PartialEq for DynState {
     fn eq(&self, other: &Self) -> bool {
         if self.1 != other.1 {
             return false;
@@ -288,18 +285,15 @@ impl<GC> PartialEq for DynState<GC> {
         self.erased_eq_no_instance_id(other)
     }
 }
-impl<GC> Eq for DynState<GC> {}
+impl Eq for DynState {}
 
-impl<GC> Encodable for DynState<GC> {
+impl Encodable for DynState {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         self.1.consensus_encode(writer)?;
         self.0.consensus_encode_dyn(writer)
     }
 }
-impl<GC> Decodable for DynState<GC>
-where
-    GC: GlobalContext,
-{
+impl Decodable for DynState {
     fn consensus_decode<R: std::io::Read>(
         reader: &mut R,
         modules: &::fedimint_core::module::registry::ModuleDecoderRegistry,
@@ -309,9 +303,13 @@ where
     }
 }
 
-impl<GC> DynState<GC> {
+impl DynState {
     /// `true` if this state allows no further transitions
-    pub fn is_terminal(&self, context: &DynContext, global_context: &GC) -> bool {
+    pub fn is_terminal(
+        &self,
+        context: &DynContext,
+        global_context: &DynGlobalClientContext,
+    ) -> bool {
         self.transitions(context, global_context).is_empty()
     }
 }
@@ -329,12 +327,11 @@ where
     S: State,
 {
     type ModuleContext = S::ModuleContext;
-    type GlobalContext = S::GlobalContext;
 
     fn transitions(
         &self,
         context: &Self::ModuleContext,
-        global_context: &Self::GlobalContext,
+        global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         let transitions: Vec<StateTransition<OperationState<S>>> = self
             .state
@@ -378,7 +375,7 @@ impl<S> IntoDynInstance for OperationState<S>
 where
     S: State,
 {
-    type DynType = DynState<S::GlobalContext>;
+    type DynType = DynState;
 
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
         DynState::from_typed(instance_id, self)

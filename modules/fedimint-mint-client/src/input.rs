@@ -47,12 +47,11 @@ pub struct MintInputStateMachine {
 
 impl State for MintInputStateMachine {
     type ModuleContext = MintClientContext;
-    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,
         _context: &Self::ModuleContext,
-        global_context: &Self::GlobalContext,
+        global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
             MintInputStates::Created(created) => created.transitions(&self.common, global_context),

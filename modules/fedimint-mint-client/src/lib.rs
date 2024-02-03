@@ -393,7 +393,7 @@ pub struct MintClientModule {
     cfg: MintClientConfig,
     secret: DerivableSecret,
     secp: Secp256k1<All>,
-    notifier: ModuleNotifier<DynGlobalClientContext, MintClientStateMachines>,
+    notifier: ModuleNotifier<MintClientStateMachines>,
     client_ctx: ClientContext<Self>,
 }
 
@@ -1430,7 +1430,7 @@ pub enum MintClientStateMachines {
 }
 
 impl IntoDynInstance for MintClientStateMachines {
-    type DynType = DynState<DynGlobalClientContext>;
+    type DynType = DynState;
 
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
         DynState::from_typed(instance_id, self)
@@ -1439,7 +1439,6 @@ impl IntoDynInstance for MintClientStateMachines {
 
 impl State for MintClientStateMachines {
     type ModuleContext = MintClientContext;
-    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,

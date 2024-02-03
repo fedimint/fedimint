@@ -81,12 +81,10 @@ pub struct GatewayPayStateMachine {
 impl State for GatewayPayStateMachine {
     type ModuleContext = GatewayClientContext;
 
-    type GlobalContext = DynGlobalClientContext;
-
     fn transitions(
         &self,
         context: &Self::ModuleContext,
-        global_context: &Self::GlobalContext,
+        global_context: &DynGlobalClientContext,
     ) -> Vec<fedimint_client::sm::StateTransition<Self>> {
         match &self.state {
             GatewayPayStates::PayInvoice(gateway_pay_invoice) => gateway_pay_invoice.transitions(
