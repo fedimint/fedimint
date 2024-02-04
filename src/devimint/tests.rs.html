@@ -1851,10 +1851,6 @@
 <a href="#1851" id="1851">1851</a>
 <a href="#1852" id="1852">1852</a>
 <a href="#1853" id="1853">1853</a>
-<a href="#1854" id="1854">1854</a>
-<a href="#1855" id="1855">1855</a>
-<a href="#1856" id="1856">1856</a>
-<a href="#1857" id="1857">1857</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -3429,11 +3425,7 @@
     fed.start_server(process_mgr, <span class="number">2</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     fed.start_server(process_mgr, <span class="number">3</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    poll(<span class="string">&quot;federation back online&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
-        fed.await_all_peers().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(())
-    })
-    .<span class="kw">await</span><span class="question-mark">?</span>;
+    fed.await_all_peers().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;fm success: reconnect-test&quot;</span>);
     <span class="prelude-val">Ok</span>(())

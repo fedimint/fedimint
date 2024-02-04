@@ -592,6 +592,10 @@
 <a href="#592" id="592">592</a>
 <a href="#593" id="593">593</a>
 <a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
@@ -928,16 +932,20 @@
     }
 
     <span class="kw">pub async fn </span>await_all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">cmd!</span>(
-            <span class="self">self</span>.client,
-            <span class="string">&quot;dev&quot;</span>,
-            <span class="string">&quot;api&quot;</span>,
-            <span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count&quot;
-        </span>)
-        .run()
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(())
-    }
+        poll(<span class="string">&quot;Waiting for all peers to be online&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+            <span class="macro">cmd!</span>(
+                <span class="self">self</span>.client,
+                <span class="string">&quot;dev&quot;</span>,
+                <span class="string">&quot;api&quot;</span>,
+                <span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count&quot;
+            </span>)
+            .run()
+            .<span class="kw">await
+            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(())
+        })
+        .<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Mines enough blocks to finalize mempool transactions, then waits for
     /// federation to process finalized blocks.
