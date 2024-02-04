@@ -32,6 +32,7 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_core::api::InviteCode;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
@@ -43,7 +44,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending};
+use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
     TieredMulti, TieredSummary, TransactionId,
@@ -92,6 +93,14 @@ pub struct OOBNotes(Vec<OOBNotesData>);
 enum OOBNotesData {
     Notes(TieredMulti<SpendableNote>),
     FederationIdPrefix(FederationIdPrefix),
+    /// Invite code to join the federation by which the e-cash was issued
+    ///
+    /// Introduce in 0.3.0
+    Invite {
+        // This is a vec for future-proofness, in case we want to include multiple guardian APIs
+        peer_apis: Vec<(PeerId, SafeUrl)>,
+        federation_id: FederationId,
+    },
     #[encodable_default]
     Default {
         variant: u64,
@@ -110,11 +119,25 @@ impl OOBNotes {
         ])
     }
 
+    pub fn new_with_invite(notes: TieredMulti<SpendableNote>, invite: InviteCode) -> Self {
+        Self(vec![
+            // FIXME: once we can break compatibility with 0.2 we can remove the prefix in case an
+            // invite is present
+            OOBNotesData::FederationIdPrefix(invite.federation_id().to_prefix()),
+            OOBNotesData::Notes(notes),
+            OOBNotesData::Invite {
+                peer_apis: vec![(invite.peer(), invite.url())],
+                federation_id: invite.federation_id(),
+            },
+        ])
+    }
+
     pub fn federation_id_prefix(&self) -> FederationIdPrefix {
         self.0
             .iter()
             .find_map(|data| match data {
                 OOBNotesData::FederationIdPrefix(prefix) => Some(*prefix),
+                OOBNotesData::Invite { federation_id, .. } => Some(federation_id.to_prefix()),
                 _ => None,
             })
             .expect("Invariant violated: OOBNotes does not contain a FederationIdPrefix")
@@ -128,6 +151,23 @@ impl OOBNotes {
                 _ => None,
             })
             .expect("Invariant violated: OOBNotes does not contain any notes")
+    }
+
+    pub fn federation_invite(&self) -> Option<InviteCode> {
+        self.0.iter().find_map(|data| {
+            let OOBNotesData::Invite {
+                peer_apis,
+                federation_id,
+            } = data
+            else {
+                return None;
+            };
+            let (peer_id, api) = peer_apis
+                .first()
+                .cloned()
+                .expect("Decoding makes sure peer_apis isn't empty");
+            Some(InviteCode::new(api, peer_id, *federation_id))
+        })
     }
 }
 
@@ -148,13 +188,39 @@ impl Decodable for OOBNotes {
             ));
         }
 
-        if !inner
-            .iter()
-            .any(|data| matches!(data, OOBNotesData::FederationIdPrefix(_)))
-        {
-            return Err(DecodeError::from_str(
-                "No Federation ID provided in OOBNotes data",
-            ));
+        let maybe_federation_id_prefix = inner.iter().find_map(|data| match data {
+            OOBNotesData::FederationIdPrefix(prefix) => Some(*prefix),
+            _ => None,
+        });
+
+        let maybe_invite = inner.iter().find_map(|data| match data {
+            OOBNotesData::Invite {
+                federation_id,
+                peer_apis,
+            } => Some((federation_id, peer_apis)),
+            _ => None,
+        });
+
+        match (maybe_federation_id_prefix, maybe_invite) {
+            (Some(p), Some((ip, _))) => {
+                if p != ip.to_prefix() {
+                    return Err(DecodeError::from_str(
+                        "Inconsistent Federation ID provided in OOBNotes data",
+                    ));
+                }
+            }
+            (None, None) => {
+                return Err(DecodeError::from_str(
+                    "No Federation ID provided in OOBNotes data",
+                ));
+            }
+            _ => {}
+        }
+
+        if let Some((_, invite)) = maybe_invite {
+            if invite.is_empty() {
+                return Err(DecodeError::from_str("Invite didn't contain API endpoints"));
+            }
         }
 
         Ok(OOBNotes(inner))
@@ -1074,12 +1140,14 @@ impl MintClientModule {
         &self,
         min_amount: Amount,
         try_cancel_after: Duration,
+        include_invite: bool,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
         self.spend_notes_with_selector(
             &SelectNotesWithAtleastAmount,
             min_amount,
             try_cancel_after,
+            include_invite,
             extra_meta,
         )
         .await
@@ -1091,6 +1159,7 @@ impl MintClientModule {
         notes_selector: &impl NotesSelector<SpendableNote>,
         requested_amount: Amount,
         try_cancel_after: Duration,
+        include_invite: bool,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
         let federation_id_prefix = self.federation_id.to_prefix();
@@ -1110,7 +1179,12 @@ impl MintClientModule {
                                 try_cancel_after,
                             )
                             .await?;
-                        let oob_notes = OOBNotes::new(federation_id_prefix, notes);
+
+                        let oob_notes = if include_invite {
+                            OOBNotes::new_with_invite(notes, self.client_ctx.get_invite_code())
+                        } else {
+                            OOBNotes::new(federation_id_prefix, notes)
+                        };
 
                         dbtx.add_state_machines(self.client_ctx.map_dyn(states).collect())
                             .await?;
@@ -1569,11 +1643,17 @@ impl sha256t::Tag for OOBReissueTag {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Display;
+    use std::str::FromStr;
+
+    use bitcoin_hashes::Hash;
+    use fedimint_core::api::InviteCode;
     use fedimint_core::config::FederationId;
-    use fedimint_core::{Amount, Tiered, TieredMulti, TieredSummary};
+    use fedimint_core::encoding::Decodable;
+    use fedimint_core::{Amount, PeerId, Tiered, TieredMulti, TieredSummary};
     use itertools::Itertools;
 
-    use crate::{select_notes_from_stream, OOBNotes};
+    use crate::{select_notes_from_stream, OOBNotes, OOBNotesData, SpendableNote};
 
     #[test_log::test(tokio::test)]
     async fn select_notes_avg_test() {
@@ -1682,5 +1762,79 @@ mod tests {
         let res = oob_notes_string.parse::<OOBNotes>();
 
         assert!(res.is_err(), "An empty OOB notes string should not parse");
+    }
+
+    fn test_roundtrip_serialize_str<T, F>(data: T, assertions: F)
+    where
+        T: FromStr + Display,
+        <T as FromStr>::Err: std::fmt::Debug,
+        F: Fn(T),
+    {
+        let data_str = data.to_string();
+        assertions(data);
+        let data_parsed = data_str.parse().expect("Deserialization failed");
+        assertions(data_parsed);
+    }
+
+    #[test]
+    fn notes_encode_decode() {
+        let federation_id_1 = FederationId(bitcoin_hashes::sha256::Hash::from_inner([0x21; 32]));
+        let federation_id_prefix_1 = federation_id_1.to_prefix();
+        let federation_id_2 = FederationId(bitcoin_hashes::sha256::Hash::from_inner([0x42; 32]));
+        let federation_id_prefix_2 = federation_id_2.to_prefix();
+
+        let notes = vec![(
+            Amount::from_sats(1),
+            SpendableNote::consensus_decode_hex("a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd", &Default::default()).unwrap(),
+        )]
+        .into_iter()
+        .collect::<TieredMulti<_>>();
+
+        // Can decode inviteless notes
+        let notes_no_invite = OOBNotes::new(federation_id_prefix_1, notes.clone());
+        test_roundtrip_serialize_str(notes_no_invite, |oob_notes| {
+            assert_eq!(oob_notes.notes(), &notes);
+            assert_eq!(oob_notes.federation_id_prefix(), federation_id_prefix_1);
+            assert_eq!(oob_notes.federation_invite(), None);
+        });
+
+        // Can decode notes with invite
+        let invite = InviteCode::new(
+            "wss://foo.bar".parse().unwrap(),
+            PeerId::from(0),
+            federation_id_1,
+        );
+        let notes_invite = OOBNotes::new_with_invite(notes.clone(), invite.clone());
+        test_roundtrip_serialize_str(notes_invite, |oob_notes| {
+            assert_eq!(oob_notes.notes(), &notes);
+            assert_eq!(oob_notes.federation_id_prefix(), federation_id_prefix_1);
+            assert_eq!(oob_notes.federation_invite(), Some(invite.clone()));
+        });
+
+        // Can decode notes without federation id prefix, so we can optionally remove it
+        // in the future
+        let notes_no_prefix = OOBNotes(vec![
+            OOBNotesData::Notes(notes.clone()),
+            OOBNotesData::Invite {
+                peer_apis: vec![(PeerId::from(0), "wss://foo.bar".parse().unwrap())],
+                federation_id: federation_id_1,
+            },
+        ]);
+        test_roundtrip_serialize_str(notes_no_prefix, |oob_notes| {
+            assert_eq!(oob_notes.notes(), &notes);
+            assert_eq!(oob_notes.federation_id_prefix(), federation_id_prefix_1);
+        });
+
+        // Rejects notes with inconsistent federation id
+        let notes_inconsistent = OOBNotes(vec![
+            OOBNotesData::Notes(notes),
+            OOBNotesData::Invite {
+                peer_apis: vec![(PeerId::from(0), "wss://foo.bar".parse().unwrap())],
+                federation_id: federation_id_1,
+            },
+            OOBNotesData::FederationIdPrefix(federation_id_prefix_2),
+        ]);
+        let notes_inconsistent_str = notes_inconsistent.to_string();
+        assert!(notes_inconsistent_str.parse::<OOBNotes>().is_err());
     }
 }

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::{ffi, marker, ops};
 
 use anyhow::bail;
-use fedimint_core::api::DynGlobalApi;
+use fedimint_core::api::{DynGlobalApi, InviteCode};
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
@@ -432,6 +432,22 @@ where
 
     pub fn get_config(&self) -> ClientConfig {
         self.client.get().get_config().clone()
+    }
+
+    /// Returns an invite code for the federation that points to an arbitrary
+    /// guardian server for fetching the config
+    pub fn get_invite_code(&self) -> InviteCode {
+        let cfg = self.get_config().global;
+        let (any_guardian_id, any_guardian_url) = cfg
+            .api_endpoints
+            .iter()
+            .next()
+            .expect("A federation always has at least one guardian");
+        InviteCode::new(
+            any_guardian_url.url.clone(),
+            *any_guardian_id,
+            cfg.federation_id(),
+        )
     }
 
     pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
