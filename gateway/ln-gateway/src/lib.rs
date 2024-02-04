@@ -285,15 +285,6 @@ impl Gateway {
     }
 
     pub async fn new_with_default_modules() -> anyhow::Result<Gateway> {
-        let mut args = std::env::args();
-
-        if let Some(ref arg) = args.nth(1) {
-            if arg.as_str() == "version-hash" {
-                println!("{}", env!("FEDIMINT_BUILD_CODE_VERSION"));
-                std::process::exit(0);
-            }
-        }
-
         let opts = GatewayOpts::parse();
 
         // Gateway module will be attached when the federation clients are created
