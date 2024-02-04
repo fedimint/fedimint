@@ -30,7 +30,7 @@ use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{handle_version_hash_command, SafeUrl};
 use fedimint_core::{task, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{TracingSetup, LOG_CLIENT};
@@ -464,13 +464,7 @@ impl FedimintCli {
             "version_hash must have an expected length"
         );
 
-        let mut args = std::env::args();
-        if let Some(ref arg) = args.nth(1) {
-            if arg.as_str() == "version-hash" {
-                println!("{}", version_hash);
-                std::process::exit(0);
-            }
-        }
+        handle_version_hash_command(version_hash);
 
         let cli_args = Opts::parse();
         let base_level = if cli_args.verbose { "info" } else { "warn" };

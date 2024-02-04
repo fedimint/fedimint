@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use devimint::cli::CommonArgs;
-use fedimint_core::util::write_overwrite_async;
+use fedimint_core::util::{handle_version_hash_command, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
 use tracing::warn;
 
@@ -36,15 +36,7 @@ async fn handle_command() -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    pub const CODE_VERSION: &str = env!("FEDIMINT_BUILD_CODE_VERSION");
-
-    let mut args = std::env::args();
-    if let Some(ref arg) = args.nth(1) {
-        if arg.as_str() == "version-hash" {
-            println!("{CODE_VERSION}");
-            std::process::exit(0);
-        }
-    }
+    handle_version_hash_command(env!("FEDIMINT_BUILD_CODE_VERSION"));
     match handle_command().await {
         Ok(r) => Ok(r),
         Err(e) => {

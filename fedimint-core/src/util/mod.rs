@@ -293,6 +293,18 @@ impl<T> Spanned<T> {
     }
 }
 
+/// For CLIs, detects `version-hash` as a single argument, prints the provided
+/// version hash, then exits the process.
+pub fn handle_version_hash_command(version_hash: &str) {
+    let mut args = std::env::args();
+    if let Some(ref arg) = args.nth(1) {
+        if arg.as_str() == "version-hash" {
+            println!("{}", version_hash);
+            std::process::exit(0);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
