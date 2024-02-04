@@ -89,9 +89,21 @@ fn print_kv(key: &[u8], value: &[u8]) {
     println!("{} {}", key.to_hex(), value.to_hex());
 }
 
+fn handle_version_hash_command() {
+    let mut args = std::env::args();
+    if let Some(ref arg) = args.nth(1) {
+        if arg.as_str() == "version-hash" {
+            println!("{}", env!("FEDIMINT_BUILD_CODE_VERSION"));
+            std::process::exit(0);
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     TracingSetup::default().init()?;
+    handle_version_hash_command();
+
     let options: Options = Options::parse();
 
     match options.command {
