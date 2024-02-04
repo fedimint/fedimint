@@ -152,4 +152,8 @@ impl ILnRpcClient for NetworkLnRpcClient {
         // TODO: Implement this.
         unimplemented!()
     }
+
+    fn supports_htlc_interception(&self) -> bool {
+        true
+    }
 }

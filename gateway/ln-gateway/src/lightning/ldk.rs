@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::future::IntoFuture;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
@@ -42,8 +43,8 @@ impl std::fmt::Debug for GatewayLdkClient {
 
 #[derive(Debug)]
 struct LdkPreimageFetcher {
-    in_flight_requests:
-        Mutex<HashMap<PaymentHash, tokio::sync::oneshot::Sender<InterceptHtlcResponse>>>,
+    in_flight_htlc_txs: Mutex<HashMap<u64, tokio::sync::oneshot::Sender<InterceptHtlcResponse>>>,
+    htlc_id: Mutex<u64>,
     intercept_htlc_request_stream_tx: Mutex<tokio::sync::mpsc::Sender<HtlcResult>>,
 }
 
@@ -52,11 +53,18 @@ impl LdkPreimageFetcher {
         let (tx, rx) = tokio::sync::mpsc::channel(1000);
         (
             Self {
-                in_flight_requests: Mutex::new(HashMap::new()),
+                in_flight_htlc_txs: Mutex::new(HashMap::new()),
+                htlc_id: Mutex::new(0),
                 intercept_htlc_request_stream_tx: Mutex::new(tx),
             },
             Box::pin(ReceiverStream::new(rx)),
         )
+    }
+
+    pub async fn get_next_htlc_id(&self) -> u64 {
+        let mut htlc_id = self.htlc_id.lock().await;
+        *htlc_id += 1;
+        *htlc_id
     }
 }
 
@@ -66,11 +74,9 @@ impl UnknownPreimageFetcher for LdkPreimageFetcher {
         &self,
         payment_hash: PaymentHash,
     ) -> Result<ldk_node::lightning::ln::PaymentPreimage, ldk_node::NodeError> {
-        let (tx, rx) = tokio::sync::oneshot::channel::<InterceptHtlcResponse>();
-        self.in_flight_requests
-            .lock()
-            .await
-            .insert(payment_hash, tx);
+        let htlc_id = self.get_next_htlc_id().await;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.in_flight_htlc_txs.lock().await.insert(htlc_id, tx);
         self.intercept_htlc_request_stream_tx
             .lock()
             .await
@@ -82,7 +88,7 @@ impl UnknownPreimageFetcher for LdkPreimageFetcher {
                 incoming_expiry: 0,
                 short_channel_id: 0,
                 incoming_chan_id: 0,
-                htlc_id: 0,
+                htlc_id,
             }))
             .await
             .unwrap();
@@ -192,6 +198,7 @@ impl ILnRpcClient for GatewayLdkClient {
                     });
                 }
             }
+            tokio::time::sleep(Duration::from_millis(50)).await;
         }
     }
 
@@ -215,10 +222,24 @@ impl ILnRpcClient for GatewayLdkClient {
         &self,
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError> {
-        // TODO: Pass `htlc` to the correct in-flight request at
-        // `self.preimage_fetcher.in_flight_requests`. Currently we don't set
-        // the HTLC id so we can't match the request to the response.
-        panic!("GatewayLdkClient::complete_htlc() not implemented")
+        let rx = match self
+            .preimage_fetcher
+            .in_flight_htlc_txs
+            .lock()
+            .await
+            .remove(&htlc.htlc_id)
+        {
+            Some(rx) => rx,
+            None => {
+                return Err(LightningRpcError::FailedToCompleteHtlc {
+                    failure_reason: String::from("Invalid HTLC"),
+                });
+            }
+        };
+
+        rx.send(htlc).unwrap();
+
+        Ok(EmptyResponse {})
     }
 
     async fn create_invoice_for_hash(
@@ -237,5 +258,9 @@ impl ILnRpcClient for GatewayLdkClient {
                 PaymentHash(payment_hash.into_inner()),
             )
             .unwrap())
+    }
+
+    fn supports_htlc_interception(&self) -> bool {
+        false
     }
 }

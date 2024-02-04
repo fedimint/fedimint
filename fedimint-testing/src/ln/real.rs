@@ -151,6 +151,10 @@ impl ILnRpcClient for ClnLightningTest {
     ) -> Result<lightning_invoice29::Bolt11Invoice, LightningRpcError> {
         unimplemented!("Unsupported: we dont currently support creating invoices for C-Lightning");
     }
+
+    fn supports_htlc_interception(&self) -> bool {
+        true
+    }
 }
 
 impl ClnLightningTest {
@@ -318,6 +322,10 @@ impl ILnRpcClient for LndLightningTest {
         _payment_hash: sha256::Hash,
     ) -> Result<lightning_invoice29::Bolt11Invoice, LightningRpcError> {
         unimplemented!("Unsupported: we dont currently support creating invoices for LND");
+    }
+
+    fn supports_htlc_interception(&self) -> bool {
+        true
     }
 }
 
@@ -757,6 +765,10 @@ impl ILnRpcClient for LdkLightningTest {
         _payment_hash: sha256::Hash,
     ) -> Result<lightning_invoice29::Bolt11Invoice, LightningRpcError> {
         unimplemented!("Unsupported: we dont currently support creating invoices for LDK Node");
+    }
+
+    fn supports_htlc_interception(&self) -> bool {
+        false
     }
 }
 

@@ -746,6 +746,10 @@ impl ILnRpcClient for GatewayLndClient {
         // TODO: Implement this.
         unimplemented!()
     }
+
+    fn supports_htlc_interception(&self) -> bool {
+        true
+    }
 }
 
 fn route_hints_to_lnd(

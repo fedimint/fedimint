@@ -121,6 +121,20 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         expiry_secs: u64,
         payment_hash: sha256::Hash,
     ) -> Result<Bolt11Invoice, LightningRpcError>;
+
+    /// Returns true if the lightning gateway supports HTLC interception.
+    ///
+    /// If this returns true, then:
+    /// * Invoices must be created by Federation clients.
+    /// * [`ILnRpcClient::route_htlcs`] must stream intercepted HTLCs.
+    /// * [`ILnRpcClient::create_invoice_for_hash`] will not be called.
+    ///
+    /// If this returns false, then:
+    /// * Invoices must be created by calling
+    ///   [`ILnRpcClient::create_invoice_for_hash`].
+    /// * [`ILnRpcClient::route_htlcs`] must stream all incoming payments from
+    ///   invoices created by [`ILnRpcClient::create_invoice_for_hash`].
+    fn supports_htlc_interception(&self) -> bool;
 }
 
 #[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]
