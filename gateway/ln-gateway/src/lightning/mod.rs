@@ -43,6 +43,9 @@ pub enum LightningRpcError {
     FailedToGetInvoice { failure_reason: String },
 }
 
+/// A trait that the gateway uses to interact with a lightning node. This allows
+/// the gateway to be agnostic to the specific lightning node implementation
+/// being used.
 #[async_trait]
 pub trait ILnRpcClient: Debug + Send + Sync {
     /// Get the public key and alias of the lightning node
@@ -81,16 +84,24 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         false
     }
 
-    // Consumes the current lightning client because `route_htlcs` should only be
-    // called once per client. A stream of intercepted HTLCs and a `Arc<dyn
-    // ILnRpcClient> are returned to the caller. The caller can use this new
-    // client to interact with the lightning node, but since it is an `Arc` is
-    // cannot call `route_htlcs` again.
+    /// Consumes the current client and returns a stream of intercepted HTLCs
+    /// and a new client. `complete_htlc` must be called for all successfully
+    /// intercepted HTLCs sent to the returned stream.
+    ///
+    /// `route_htlcs` can only be called once for a given client, since the
+    /// returned stream grants exclusive routing decisions to the caller.
+    /// For this reason, `route_htlc` consumes the client and returns one
+    /// wrapped in an `Arc`. This lets the compiler enforce that `route_htlcs`
+    /// can only be called once for a given client, since the value inside
+    /// the `Arc` cannot be consumed.
     async fn route_htlcs<'a>(
         self: Box<Self>,
         task_group: &mut TaskGroup,
     ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError>;
 
+    /// Complete an HTLC that was intercepted by the gateway. Must be called for
+    /// all successfully intercepted HTLCs sent to the stream returned by
+    /// `route_htlcs`.
     async fn complete_htlc(
         &self,
         htlc: InterceptHtlcResponse,
