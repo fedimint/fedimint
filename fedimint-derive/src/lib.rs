@@ -278,8 +278,8 @@ fn derive_enum_decode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
         }
     } else {
         quote! {
-            _ => {
-                return Err(::fedimint_core::encoding::DecodeError::from_str("invalid enum variant"));
+            variant => {
+                return Err(::fedimint_core::encoding::DecodeError::new_custom(anyhow::anyhow!("Invalid enum variant {} while decoding {}", variant, stringify!(#ident))));
             }
         }
     };
