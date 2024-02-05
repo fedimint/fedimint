@@ -112,12 +112,13 @@ impl UnknownPreimageFetcher for LdkPreimageFetcher {
 }
 
 impl GatewayLdkClient {
-    pub async fn new(network: Network) -> Result<Self, BuildError> {
+    pub async fn new(storage_dir_path: String, network: Network) -> Result<Self, BuildError> {
         let (preimage_fetcher, route_htlc_stream) = LdkPreimageFetcher::new();
         let preimage_fetcher_arc = Arc::from(preimage_fetcher);
 
         let node = ldk_node::Builder::new()
             .set_unknown_preimage_fetcher(preimage_fetcher_arc.clone())
+            .set_storage_dir_path(storage_dir_path)
             .set_network(network)
             .build()
             .unwrap();

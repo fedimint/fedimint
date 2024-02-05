@@ -3,6 +3,7 @@ pub mod ldk;
 pub mod lnd;
 
 use std::fmt::Debug;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -159,7 +160,48 @@ pub enum LightningMode {
         cln_extension_addr: SafeUrl,
     },
     #[clap(name = "ldk")]
-    Ldk,
+    Ldk {
+        /// LDK storage directory path
+        #[arg(long = "ldk-storage-dir", env = "FM_LDK_STORAGE_DIR")]
+        storage_dir_path: String,
+
+        /// LDK network (detaults to mainnet if not provided)
+        #[arg(long = "ldk-network", env = "FM_LDK_NETWORK")]
+        network_or: Option<CliNetwork>,
+    },
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub enum CliNetwork {
+    Mainnet,
+    Testnet,
+    Signet,
+    Regtest,
+}
+
+impl FromStr for CliNetwork {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "mainnet" => Ok(CliNetwork::Mainnet),
+            "testnet" => Ok(CliNetwork::Testnet),
+            "signet" => Ok(CliNetwork::Signet),
+            "regtest" => Ok(CliNetwork::Regtest),
+            _ => Err(format!("Invalid network: {}", s)),
+        }
+    }
+}
+
+impl CliNetwork {
+    fn to_network(&self) -> ldk_node::Network {
+        match self {
+            CliNetwork::Mainnet => ldk_node::Network::Bitcoin,
+            CliNetwork::Testnet => ldk_node::Network::Testnet,
+            CliNetwork::Signet => ldk_node::Network::Signet,
+            CliNetwork::Regtest => ldk_node::Network::Regtest,
+        }
+    }
 }
 
 #[async_trait]
@@ -186,10 +228,16 @@ impl LightningBuilder for GatewayLightningBuilder {
             } => Box::new(
                 GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, None).await,
             ),
-            LightningMode::Ldk => Box::new(
-                ldk::GatewayLdkClient::new(ldk_node::Network::Bitcoin)
-                    .await
-                    .unwrap(),
+            LightningMode::Ldk {
+                storage_dir_path,
+                network_or,
+            } => Box::new(
+                ldk::GatewayLdkClient::new(
+                    storage_dir_path,
+                    network_or.unwrap_or(CliNetwork::Mainnet).to_network(),
+                )
+                .await
+                .unwrap(),
             ),
         }
     }
