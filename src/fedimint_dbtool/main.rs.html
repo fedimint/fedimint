@@ -196,6 +196,9 @@
 <a href="#196" id="196">196</a>
 <a href="#197" id="197">197</a>
 <a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">use </span>std::path::PathBuf;
 
@@ -207,6 +210,7 @@
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::db::{IDatabaseTransactionOpsCore, IRawDatabaseExt};
 <span class="kw">use </span>fedimint_core::module::DynServerModuleInit;
+<span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
 <span class="kw">use </span>fedimint_ln_client::LightningClientInit;
 <span class="kw">use </span>fedimint_ln_server::LightningInit;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
@@ -289,7 +293,9 @@
 
 <span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    handle_version_hash_command(<span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>));
     TracingSetup::default().init()<span class="question-mark">?</span>;
+
     <span class="kw">let </span>options: Options = Options::parse();
 
     <span class="kw">match </span>options.command {

@@ -22,7 +22,10 @@
 <a href="#22" id="22">22</a>
 <a href="#23" id="23">23</a>
 <a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>ln_gateway::Gateway;
 <span class="kw">use </span>tracing::info;
@@ -35,6 +38,7 @@
 /// remote Lightning node accessible through a `GatewayLightningServer`.
 </span><span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    handle_version_hash_command(<span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>));
     TracingSetup::default().init()<span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
     tg.install_kill_handler();

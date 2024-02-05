@@ -364,6 +364,18 @@
 <a href="#364" id="364">364</a>
 <a href="#365" id="365">365</a>
 <a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
 </pre></div><pre class="rust"><code><span class="doccomment">/// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 </span><span class="kw">pub mod </span>broadcaststream;
 
@@ -656,6 +668,18 @@
 
     <span class="kw">pub fn </span>into_value(<span class="self">self</span>) -&gt; T {
         <span class="self">self</span>.value
+    }
+}
+
+<span class="doccomment">/// For CLIs, detects `version-hash` as a single argument, prints the provided
+/// version hash, then exits the process.
+</span><span class="kw">pub fn </span>handle_version_hash_command(version_hash: <span class="kw-2">&amp;</span>str) {
+    <span class="kw">let </span><span class="kw-2">mut </span>args = std::env::args();
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>arg) = args.nth(<span class="number">1</span>) {
+        <span class="kw">if </span>arg.as_str() == <span class="string">&quot;version-hash&quot; </span>{
+            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, version_hash);
+            std::process::exit(<span class="number">0</span>);
+        }
     }
 }
 
