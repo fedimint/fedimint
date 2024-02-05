@@ -92,7 +92,9 @@ async fn await_withdraw_processed(
 
                 e.report_if_important();
                 debug!(
-                    "Awaiting output outcome failed, retrying in {}s",
+                    error = e.to_string(),
+                    operation_id = operation_id.to_string(),
+                    "Retrying in {}s",
                     RETRY_DELAY.as_secs_f64()
                 );
                 sleep(RETRY_DELAY).await;

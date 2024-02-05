@@ -169,8 +169,12 @@ impl LightningPayCreatedOutgoingLnContract {
                 }
                 Err(e) => {
                     e.report_if_important();
+
                     debug!(
-                        "Awaiting output outcome failed, retrying in {}s",
+                        error = e.to_string(),
+                        transaction_id = txid.to_string(),
+                        contract_id = contract_id.to_string(),
+                        "Retrying in {}s",
                         RETRY_DELAY.as_secs_f64()
                     );
                     sleep(RETRY_DELAY).await;
