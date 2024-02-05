@@ -13,6 +13,7 @@ use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
 use cln_rpc::primitives::ShortChannelId;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::util::handle_version_hash_command;
 use fedimint_core::Amount;
 use ln_gateway::gateway_lnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
@@ -44,14 +45,7 @@ pub struct ClnExtensionOpts {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let mut args = std::env::args();
-
-    if let Some(ref arg) = args.nth(1) {
-        if arg.as_str() == "version-hash" {
-            println!("{}", env!("FEDIMINT_BUILD_CODE_VERSION"));
-            return Ok(());
-        }
-    }
+    handle_version_hash_command(env!("FEDIMINT_BUILD_CODE_VERSION"));
 
     let (service, listen, plugin) = ClnRpcService::new()
         .await

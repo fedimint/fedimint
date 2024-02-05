@@ -15,7 +15,7 @@ use fedimint_core::db::Database;
 use fedimint_core::module::ServerModuleInit;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::timing;
-use fedimint_core::util::{write_overwrite, SafeUrl};
+use fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintInit;
@@ -145,13 +145,7 @@ impl Fedimintd {
             "version_hash must have an expected length"
         );
 
-        let mut args = std::env::args();
-        if let Some(ref arg) = args.nth(1) {
-            if arg.as_str() == "version-hash" {
-                println!("{}", version_hash);
-                std::process::exit(0);
-            }
-        }
+        handle_version_hash_command(version_hash);
 
         info!("Starting fedimintd (version_hash: {})", version_hash);
 

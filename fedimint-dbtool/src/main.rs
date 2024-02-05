@@ -9,6 +9,7 @@ use fedimint_client::module::init::{ClientModuleInitRegistry, DynClientModuleIni
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::{IDatabaseTransactionOpsCore, IRawDatabaseExt};
 use fedimint_core::module::DynServerModuleInit;
+use fedimint_core::util::handle_version_hash_command;
 use fedimint_ln_client::LightningClientInit;
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::TracingSetup;
@@ -91,7 +92,9 @@ fn print_kv(key: &[u8], value: &[u8]) {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    handle_version_hash_command(env!("FEDIMINT_BUILD_CODE_VERSION"));
     TracingSetup::default().init()?;
+
     let options: Options = Options::parse();
 
     match options.command {
