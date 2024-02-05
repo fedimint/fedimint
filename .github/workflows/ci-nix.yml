@@ -429,7 +429,7 @@ jobs:
       - name: Upload DEB packages
         uses: actions/upload-artifact@v4
         with:
-          name: "deb-bundle"
+          name: "${{ matrix.build.flake-output }}-deb-bundle"
           path: "debs/**.deb"
 
       - name: Release DEB packages
@@ -441,7 +441,7 @@ jobs:
       - name: Upload RPM packages
         uses: actions/upload-artifact@v4
         with:
-          name: "rpm-bundle"
+          name: "${{ matrix.build.flake-output }}-rpm-bundle"
           path: "rpms/**.rpm"
 
       - name: Release RPM packages
