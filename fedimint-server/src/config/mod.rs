@@ -31,6 +31,7 @@ use tracing::{error, info};
 
 use crate::config::api::ConfigGenParamsLocal;
 use crate::config::distributedgen::{DkgRunner, PeerHandleOps};
+use crate::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::NumPeers;
 use crate::multiplexed::PeerConnectionMultiplexer;
@@ -50,9 +51,6 @@ const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
 const DEFAULT_BROADCAST_EXPECTED_ROUNDS_PER_SESSION: u16 = 45 * 20;
 const DEFAULT_BROADCAST_ROUND_DELAY_MS: u16 = 50;
 const DEFAULT_BROADCAST_MAX_ROUNDS_PER_SESSION: u16 = 5000;
-
-/// The env var for maximum open connections the API can handle
-const ENV_MAX_CLIENT_CONNECTIONS: &str = "FM_MAX_CLIENT_CONNECTIONS";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// All the serializable configuration for the fedimint server
@@ -687,7 +685,7 @@ impl ConfigGenParams {
 
 // TODO: Remove once new config gen UI is written
 pub fn max_connections() -> u32 {
-    env::var(ENV_MAX_CLIENT_CONNECTIONS)
+    env::var(FM_MAX_CLIENT_CONNECTIONS_ENV)
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(DEFAULT_MAX_CLIENT_CONNECTIONS)

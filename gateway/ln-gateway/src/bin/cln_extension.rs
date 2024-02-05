@@ -14,7 +14,8 @@ use cln_rpc::model;
 use cln_rpc::primitives::ShortChannelId;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::handle_version_hash_command;
-use fedimint_core::Amount;
+use fedimint_core::{fedimint_build_code_version_env, Amount};
+use ln_gateway::envs::FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV;
 use ln_gateway::gateway_lnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
 };
@@ -39,13 +40,13 @@ const MAX_HTLC_PROCESSING_DURATION: Duration = Duration::MAX;
 #[derive(Parser)]
 pub struct ClnExtensionOpts {
     /// Gateway CLN extension service listen address
-    #[arg(long = "fm-gateway-listen", env = "FM_CLN_EXTENSION_LISTEN_ADDRESS")]
+    #[arg(long = "fm-gateway-listen", env = FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV)]
     pub fm_gateway_listen: SocketAddr,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    handle_version_hash_command(env!("FEDIMINT_BUILD_CODE_VERSION"));
+    handle_version_hash_command(fedimint_build_code_version_env!());
 
     let (service, listen, plugin) = ClnRpcService::new()
         .await

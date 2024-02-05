@@ -14,6 +14,8 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use tracing::debug;
 
+use crate::envs::FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV;
+
 /// Get the project root (relative to closest Cargo.lock file)
 /// ```rust
 /// match fedimint_testing::db::get_project_root() {
@@ -73,9 +75,8 @@ async fn create_snapshot<'a, F>(
 where
     F: Fn(Database) -> BoxFuture<'a, ()>,
 {
-    const ENV_VAR_NAME: &str = "FM_PREPARE_DB_MIGRATION_SNAPSHOTS";
     match (
-        std::env::var_os(ENV_VAR_NAME)
+        std::env::var_os(FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV)
             .map(|s| s.to_string_lossy().into_owned())
             .as_deref(),
         snapshot_dir.exists(),
@@ -86,7 +87,7 @@ where
             prepare_fn(db).await;
         }
         (Some(_), true) => {
-            bail!("{ENV_VAR_NAME} set, but {} already exists already exists. Set to 'force' to overwrite.", snapshot_dir.display());
+            bail!("{FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV} set, but {} already exists already exists. Set to 'force' to overwrite.", snapshot_dir.display());
         }
         (Some(_), false) => {
             debug!(dir = %snapshot_dir.display(), "Snapshot dir does not exist. Creating.");
@@ -98,7 +99,7 @@ where
         }
         (None, false) => {
             bail!(
-                "{ENV_VAR_NAME} not set, but {} doest not exist.",
+                "{FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV} not set, but {} doest not exist.",
                 snapshot_dir.display()
             );
         }

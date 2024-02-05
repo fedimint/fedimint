@@ -108,8 +108,8 @@ use fedimint_core::task::{sleep, MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
-    OutPoint, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
+    maybe_add_send, maybe_add_send_sync, Amount, OutPoint, TransactionId,
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
@@ -776,7 +776,7 @@ impl Client {
     pub async fn start_executor(self: &Arc<Self>) {
         debug!(
             "Starting fedimint client executor (version: {})",
-            env!("FEDIMINT_BUILD_CODE_VERSION")
+            fedimint_build_code_version_env!()
         );
         self.executor.start_executor(self.context_gen()).await;
     }

@@ -2,7 +2,7 @@ use bitcoin::Address;
 use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_core::config::FederationId;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::BitcoinAmountOrAll;
+use fedimint_core::{fedimint_build_code_version_env, BitcoinAmountOrAll};
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
@@ -104,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::VersionHash => {
-            println!("{}", env!("FEDIMINT_BUILD_CODE_VERSION"));
+            println!("{}", fedimint_build_code_version_env!());
         }
         Commands::Info => {
             // For backwards-compatibility, fallback to the original POST endpoint if the

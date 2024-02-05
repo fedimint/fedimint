@@ -35,6 +35,8 @@ use crate::consensus::server::ConsensusServer;
 use crate::net::api::{ConsensusApi, RpcHandlerCtx};
 use crate::net::connect::TlsTcpConnector;
 
+pub mod envs;
+
 pub mod atomic_broadcast;
 
 /// The actual implementation of consensus

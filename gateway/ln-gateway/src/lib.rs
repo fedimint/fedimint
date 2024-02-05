@@ -1,5 +1,6 @@
 pub mod client;
 pub mod db;
+pub mod envs;
 pub mod lightning;
 pub mod rpc;
 pub mod state_machine;
@@ -44,7 +45,9 @@ use fedimint_core::module::CommonModuleInit;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::now;
 use fedimint_core::util::{SafeUrl, Spanned};
-use fedimint_core::{push_db_pair_items, Amount, BitcoinAmountOrAll};
+use fedimint_core::{
+    fedimint_build_code_version_env, push_db_pair_items, Amount, BitcoinAmountOrAll,
+};
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
@@ -117,34 +120,34 @@ pub struct GatewayOpts {
     mode: LightningMode,
 
     /// Path to folder containing gateway config and data files
-    #[arg(long = "data-dir", env = "FM_GATEWAY_DATA_DIR")]
+    #[arg(long = "data-dir", env = envs::FM_GATEWAY_DATA_DIR_ENV)]
     pub data_dir: PathBuf,
 
     /// Gateway webserver listen address
-    #[arg(long = "listen", env = "FM_GATEWAY_LISTEN_ADDR")]
+    #[arg(long = "listen", env = envs::FM_GATEWAY_LISTEN_ADDR_ENV)]
     pub listen: SocketAddr,
 
     /// Public URL from which the webserver API is reachable
-    #[arg(long = "api-addr", env = "FM_GATEWAY_API_ADDR")]
+    #[arg(long = "api-addr", env = envs::FM_GATEWAY_API_ADDR_ENV)]
     pub api_addr: SafeUrl,
 
     /// Gateway webserver authentication password
-    #[arg(long = "password", env = "FM_GATEWAY_PASSWORD")]
+    #[arg(long = "password", env = envs::FM_GATEWAY_PASSWORD_ENV)]
     pub password: Option<String>,
 
     /// Bitcoin network this gateway will be running on
-    #[arg(long = "network", env = "FM_GATEWAY_NETWORK")]
+    #[arg(long = "network", env = envs::FM_GATEWAY_NETWORK_ENV)]
     pub network: Option<Network>,
 
     /// Configured gateway routing fees
     /// Format: <base_msat>,<proportional_millionths>
-    #[arg(long = "fees", env = "FM_GATEWAY_FEES")]
+    #[arg(long = "fees", env = envs::FM_GATEWAY_FEES_ENV)]
     pub fees: Option<GatewayFee>,
 
     /// Number of route hints to return in invoices
     #[arg(
         long = "num-route-hints",
-        env = "FM_NUMBER_OF_ROUTE_HINTS",
+        env = envs::FM_NUMBER_OF_ROUTE_HINTS_ENV,
         default_value_t = DEFAULT_NUM_ROUTE_HINTS
     )]
     pub num_route_hints: u32,
@@ -341,7 +344,7 @@ impl Gateway {
 
         info!(
             "Starting gatewayd (version: {})",
-            env!("FEDIMINT_BUILD_CODE_VERSION")
+            fedimint_build_code_version_env!()
         );
 
         Ok(Self {
@@ -673,7 +676,7 @@ impl Gateway {
 
             return Ok(GatewayInfo {
                 federations,
-                version_hash: env!("FEDIMINT_BUILD_CODE_VERSION").to_string(),
+                version_hash: fedimint_build_code_version_env!().to_string(),
                 lightning_pub_key: Some(lightning_context.lightning_public_key.to_hex()),
                 lightning_alias: Some(lightning_context.lightning_alias.clone()),
                 fees: Some(gateway_config.routing_fees),
@@ -686,7 +689,7 @@ impl Gateway {
 
         Ok(GatewayInfo {
             federations: vec![],
-            version_hash: env!("FEDIMINT_BUILD_CODE_VERSION").to_string(),
+            version_hash: fedimint_build_code_version_env!().to_string(),
             lightning_pub_key: None,
             lightning_alias: None,
             fees: None,
