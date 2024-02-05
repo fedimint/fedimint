@@ -128,6 +128,7 @@ pub struct LightningInit;
 #[apply(async_trait_maybe_send!)]
 impl ModuleInit for LightningInit {
     type Common = LightningCommonInit;
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     async fn dump_database(
         &self,
@@ -241,7 +242,6 @@ impl ModuleInit for LightningInit {
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleInit for LightningInit {
     type Params = LightningGenParams;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);

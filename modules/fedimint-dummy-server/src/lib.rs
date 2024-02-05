@@ -45,6 +45,14 @@ pub struct DummyInit;
 #[async_trait]
 impl ModuleInit for DummyInit {
     type Common = DummyCommonInit;
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
+
+    /// DB migrations to move from old to newer versions
+    fn get_database_migrations(&self) -> MigrationMap {
+        let mut migrations = MigrationMap::new();
+        migrations.insert(DatabaseVersion(0), move |dbtx| migrate_to_v1(dbtx).boxed());
+        migrations
+    }
 
     /// Dumps all database items for debugging
     async fn dump_database(
@@ -91,7 +99,6 @@ impl ModuleInit for DummyInit {
 #[async_trait]
 impl ServerModuleInit for DummyInit {
     type Params = DummyGenParams;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
     /// Returns the version of this module
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -105,13 +112,6 @@ impl ServerModuleInit for DummyInit {
     /// Initialize the module
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
         Ok(Dummy::new(args.cfg().to_typed()?).into())
-    }
-
-    /// DB migrations to move from old to newer versions
-    fn get_database_migrations(&self) -> MigrationMap {
-        let mut migrations = MigrationMap::new();
-        migrations.insert(DatabaseVersion(0), move |dbtx| migrate_to_v1(dbtx).boxed());
-        migrations
     }
 
     /// Generates configs for all peers in a trusted manner for testing

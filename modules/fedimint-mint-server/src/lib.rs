@@ -103,6 +103,7 @@ pub struct MintInit;
 #[apply(async_trait_maybe_send!)]
 impl ModuleInit for MintInit {
     type Common = MintCommonInit;
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     async fn dump_database(
         &self,
@@ -158,7 +159,6 @@ impl ModuleInit for MintInit {
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleInit for MintInit {
     type Params = MintGenParams;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);

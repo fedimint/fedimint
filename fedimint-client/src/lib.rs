@@ -1704,7 +1704,7 @@ impl ClientBuilder {
                 };
 
                 apply_migrations(
-                    &self.db(),
+                    self.db(),
                     kind.to_string(),
                     init.database_version(),
                     init.get_database_migrations(),

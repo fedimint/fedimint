@@ -398,6 +398,13 @@ pub trait IDynCommonModuleInit: Debug {
 
     fn to_dyn_common(&self) -> DynCommonModuleInit;
 
+    fn database_version(&self) -> DatabaseVersion;
+
+    /// Retrieves the `MigrationMap` from the module to be applied to the
+    /// database before the module is initialized. The `MigrationMap` is
+    /// indexed on the from version.
+    fn get_database_migrations(&self) -> MigrationMap;
+
     async fn dump_database(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -409,6 +416,21 @@ pub trait IDynCommonModuleInit: Debug {
 #[apply(async_trait_maybe_send!)]
 pub trait ModuleInit: Debug + Clone + Send + Sync + 'static {
     type Common: CommonModuleInit;
+
+    /// This represents the module's database version that the current code is
+    /// compatible with. It is important to increment this value whenever a
+    /// key or a value that is persisted to the database within the module
+    /// changes. It is also important to add the corresponding
+    /// migration function in `get_database_migrations` which should define how
+    /// to move from the previous database version to the current version.
+    const DATABASE_VERSION: DatabaseVersion;
+
+    /// Retrieves the `MigrationMap` from the module to be applied to the
+    /// database before the module is initialized. The `MigrationMap` is
+    /// indexed on the from version.
+    fn get_database_migrations(&self) -> MigrationMap {
+        MigrationMap::new()
+    }
 
     async fn dump_database(
         &self,
@@ -432,6 +454,14 @@ where
 
     fn to_dyn_common(&self) -> DynCommonModuleInit {
         DynCommonModuleInit::from_inner(Arc::new(self.clone()))
+    }
+
+    fn database_version(&self) -> DatabaseVersion {
+        <Self as ModuleInit>::DATABASE_VERSION
+    }
+
+    fn get_database_migrations(&self) -> MigrationMap {
+        <Self as ModuleInit>::get_database_migrations(self)
     }
 
     async fn dump_database(
@@ -458,8 +488,6 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
 
     fn supported_api_versions(&self) -> SupportedModuleApiVersions;
 
-    fn database_version(&self) -> DatabaseVersion;
-
     /// Initialize the [`DynServerModule`] instance from its config
     async fn init(
         &self,
@@ -468,11 +496,6 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         task_group: &mut TaskGroup,
         our_peer_id: PeerId,
     ) -> anyhow::Result<DynServerModule>;
-
-    /// Retrieves the `MigrationMap` from the module to be applied to the
-    /// database before the module is initialized. The `MigrationMap` is
-    /// indexed on the from version.
-    fn get_database_migrations(&self) -> MigrationMap;
 
     fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()>;
 
@@ -580,14 +603,6 @@ where
 pub trait ServerModuleInit: ModuleInit + Sized {
     type Params: ModuleInitParams;
 
-    /// This represents the module's database version that the current code is
-    /// compatible with. It is important to increment this value whenever a
-    /// key or a value that is persisted to the database within the module
-    /// changes. It is also important to add the corresponding
-    /// migration function in `get_database_migrations` which should define how
-    /// to move from the previous database version to the current version.
-    const DATABASE_VERSION: DatabaseVersion;
-
     /// Version of the module consensus supported by this implementation given a
     /// certain [`CoreConsensusVersion`].
     ///
@@ -610,13 +625,6 @@ pub trait ServerModuleInit: ModuleInit + Sized {
 
     /// Initialize the [`DynServerModule`] instance from its config
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule>;
-
-    /// Retrieves the `MigrationMap` from the module to be applied to the
-    /// database before the module is initialized. The `MigrationMap` is
-    /// indexed on the from version.
-    fn get_database_migrations(&self) -> MigrationMap {
-        MigrationMap::new()
-    }
 
     fn parse_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<Self::Params> {
         params.to_typed::<Self::Params>()
@@ -656,10 +664,6 @@ where
         <Self as ServerModuleInit>::supported_api_versions(self)
     }
 
-    fn database_version(&self) -> DatabaseVersion {
-        <Self as ServerModuleInit>::DATABASE_VERSION
-    }
-
     async fn init(
         &self,
         cfg: ServerModuleConfig,
@@ -678,10 +682,6 @@ where
             },
         )
         .await
-    }
-
-    fn get_database_migrations(&self) -> MigrationMap {
-        <Self as ServerModuleInit>::get_database_migrations(self)
     }
 
     fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()> {

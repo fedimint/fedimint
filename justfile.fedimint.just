@@ -37,11 +37,11 @@ check-wasm:
   nix develop .#crossWasm -c cargo check --target wasm32-unknown-unknown --package fedimint-client
 
 # regenerate server db migration snapshots
-# ex: `just prepare-server-db-migration-snapshots fedimint-server`
-# ex: `just prepare-server-db-migration-snapshots fedimint-mint-tests`
-# ex: `just prepare-server-db-migration-snapshots fedimint-ln-tests`
-# ex: `just prepare-server-db-migration-snapshots fedimint-wallet-tests`
-# ex: `just prepare-server-db-migration-snapshots fedimint-dummy-tests`
+# ex: `just snapshot-server-db-migrations fedimint-server`
+# ex: `just snapshot-server-db-migrations fedimint-mint-tests`
+# ex: `just snapshot-server-db-migrations fedimint-ln-tests`
+# ex: `just snapshot-server-db-migrations fedimint-wallet-tests`
+# ex: `just snapshot-server-db-migrations fedimint-dummy-tests`
 snapshot-server-db-migrations PACKAGE *EXTRA_ARGS:
   env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo nextest run --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -E 'package({{PACKAGE}})' snapshot_server_db_migrations {{EXTRA_ARGS}}
   just test-server-db-migrations {{PACKAGE}} {{EXTRA_ARGS}}
@@ -51,12 +51,12 @@ test-server-db-migrations PACKAGE *EXTRA_ARGS:
 
 
 # regenerate client db migration snapshots
-# ex: `just prepare_client_db_migration_snapshots fedimint-dummy-tests`
-# ex: `just prepare_client_db_migration_snapshots fedimint-mint-tests`
-# ex: `just prepare_client_db_migration_snapshots fedimint-ln-tests`
-# ex: `just prepare_client_db_migration_snapshots fedimint-wallet-tests`
+# ex: `just snapshot-client-db-migrations fedimint-dummy-tests`
+# ex: `just snapshot-client-db-migrations fedimint-mint-tests`
+# ex: `just snapshot-client-db-migrations fedimint-ln-tests`
+# ex: `just snapshot-client-db-migrations fedimint-wallet-tests`
 snapshot-client-db-migrations PACKAGE *EXTRA_ARGS:
-  env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo nextest run --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -E 'package({{PACKAGE}})' prepare_client_db_migrations {{EXTRA_ARGS}}
+  env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo nextest run --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -E 'package({{PACKAGE}})' snapshot_client_db_migrations {{EXTRA_ARGS}}
   just test-client-db-migrations {{PACKAGE}} {{EXTRA_ARGS}}
 
 test-client-db-migrations PACKAGE *EXTRA_ARGS:

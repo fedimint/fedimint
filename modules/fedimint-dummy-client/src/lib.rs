@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, format_err, Context as _};
 use common::broken_fed_key_pair;
-use db::{migrate_to_v1, DbKeyPrefix, DummyClientFundsKeyV1};
+use db::{migrate_to_v1, DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
@@ -319,6 +319,13 @@ pub struct DummyClientInit;
 #[apply(async_trait_maybe_send!)]
 impl ModuleInit for DummyClientInit {
     type Common = DummyCommonInit;
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
+
+    fn get_database_migrations(&self) -> MigrationMap {
+        let mut migrations = MigrationMap::new();
+        migrations.insert(DatabaseVersion(0), move |dbtx| migrate_to_v1(dbtx).boxed());
+        migrations
+    }
 
     async fn dump_database(
         &self,
@@ -337,6 +344,11 @@ impl ModuleInit for DummyClientInit {
                         items.insert("Dummy Funds".to_string(), Box::new(funds));
                     }
                 }
+                DbKeyPrefix::ClientName => {
+                    if let Some(name) = dbtx.get_value(&DummyClientNameKey).await {
+                        items.insert("Dummy Name".to_string(), Box::new(name));
+                    }
+                }
             }
         }
 
@@ -348,13 +360,6 @@ impl ModuleInit for DummyClientInit {
 #[apply(async_trait_maybe_send!)]
 impl ClientModuleInit for DummyClientInit {
     type Module = DummyClientModule;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
-
-    fn get_database_migrations(&self) -> MigrationMap {
-        let mut migrations = MigrationMap::new();
-        migrations.insert(DatabaseVersion(0), move |dbtx| migrate_to_v1(dbtx).boxed());
-        migrations
-    }
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
