@@ -244,18 +244,37 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
         .as_str()
         .map(ToOwned::to_owned)
         .unwrap();
-    let restore_client = Client::create("restore").await?;
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
     let start_time = Instant::now();
-    cmd!(
-        restore_client,
-        "restore",
-        "--mnemonic",
-        &backup_secret,
-        "--invite-code",
-        fed.invite_code()?
-    )
-    .run()
-    .await?;
+    if VersionReq::parse(">=0.3.0-alpha")?.matches(&fedimint_cli_version) {
+        let restore_client = Client::create("restore").await?;
+        cmd!(
+            restore_client,
+            "restore",
+            "--mnemonic",
+            &backup_secret,
+            "--invite-code",
+            fed.invite_code()?
+        )
+        .run()
+        .await?;
+    } else {
+        let client = client.new_forked("restore-without-backup").await?;
+        let _ = cmd!(client, "wipe", "--force",).out_json().await?;
+
+        assert_eq!(
+            0,
+            cmd!(client, "info").out_json().await?["total_amount_msat"]
+                .as_u64()
+                .unwrap()
+        );
+
+        let _post_balance = cmd!(client, "restore", &backup_secret)
+            .out_json()
+            .await?
+            .as_u64()
+            .unwrap();
+    }
     let restore_time = start_time.elapsed();
 
     println!(
