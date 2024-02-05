@@ -737,7 +737,6 @@
 <a href="#737" id="737">737</a>
 <a href="#738" id="738">738</a>
 <a href="#739" id="739">739</a>
-<a href="#740" id="740">740</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -899,7 +898,7 @@
     timelock_delta: u64,
     secp: secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
     <span class="kw">pub </span>ln_decoder: Decoder,
-    notifier: ModuleNotifier&lt;DynGlobalClientContext, GatewayClientStateMachines&gt;,
+    notifier: ModuleNotifier&lt;GatewayClientStateMachines&gt;,
     gateway: Gateway,
 }
 
@@ -921,7 +920,7 @@
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>GatewayClientModule {
     cfg: LightningClientConfig,
-    <span class="kw">pub </span>notifier: ModuleNotifier&lt;DynGlobalClientContext, GatewayClientStateMachines&gt;,
+    <span class="kw">pub </span>notifier: ModuleNotifier&lt;GatewayClientStateMachines&gt;,
     <span class="kw">pub </span>redeem_key: KeyPair,
     timelock_delta: u64,
     mint_channel_id: u64,
@@ -1372,7 +1371,7 @@
 }
 
 <span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>GatewayClientStateMachines {
-    <span class="kw">type </span>DynType = DynState&lt;DynGlobalClientContext&gt;;
+    <span class="kw">type </span>DynType = DynState;
 
     <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
         DynState::from_typed(instance_id, <span class="self">self</span>)
@@ -1381,12 +1380,11 @@
 
 <span class="kw">impl </span>State <span class="kw">for </span>GatewayClientStateMachines {
     <span class="kw">type </span>ModuleContext = GatewayClientContext;
-    <span class="kw">type </span>GlobalContext = DynGlobalClientContext;
 
     <span class="kw">fn </span>transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
-        global_context: <span class="kw-2">&amp;</span><span class="self">Self</span>::GlobalContext,
+        global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;fedimint_client::sm::StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="self">self </span>{
             GatewayClientStateMachines::Pay(pay_state) =&gt; {

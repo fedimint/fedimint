@@ -435,9 +435,6 @@
 <a href="#435" id="435">435</a>
 <a href="#436" id="436">436</a>
 <a href="#437" id="437">437</a>
-<a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -452,7 +449,8 @@
 <span class="kw">use </span>fedimint_core::util::BoxFuture;
 <span class="kw">use </span>fedimint_core::{maybe_add_send, maybe_add_send_sync, module_plugin_dyn_newtype_define};
 
-<span class="kw">use </span><span class="kw">crate</span>::sm::{ClientSMDatabaseTransaction, GlobalContext};
+<span class="kw">use </span><span class="kw">crate</span>::sm::ClientSMDatabaseTransaction;
+<span class="kw">use </span><span class="kw">crate</span>::DynGlobalClientContext;
 
 <span class="doccomment">/// Implementors act as state machines that can be executed
 </span><span class="kw">pub trait </span>State:
@@ -461,15 +459,12 @@
     <span class="doccomment">/// Additional resources made available in this module&#39;s state transitions
     </span><span class="kw">type </span>ModuleContext: Context;
 
-    <span class="doccomment">/// Additional resources made available for all state transitions
-    </span><span class="kw">type </span>GlobalContext: GlobalContext;
-
     <span class="doccomment">/// All possible transitions from the current state to other states. See
     /// [`StateTransition`] for details.
     </span><span class="kw">fn </span>transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
-        global_context: <span class="kw-2">&amp;</span><span class="self">Self</span>::GlobalContext,
+        global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt;;
 
     <span class="comment">// TODO: move out of this interface into wrapper struct (see OperationState)
@@ -479,24 +474,24 @@
 }
 
 <span class="doccomment">/// Object-safe version of [`State`]
-</span><span class="kw">pub trait </span>IState&lt;GC&gt;: Debug + DynEncodable + MaybeSend + MaybeSync {
+</span><span class="kw">pub trait </span>IState: Debug + DynEncodable + MaybeSend + MaybeSync {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Any));
 
     <span class="doccomment">/// All possible transitions from the state
     </span><span class="kw">fn </span>transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: <span class="kw-2">&amp;</span>DynContext,
-        global_context: <span class="kw-2">&amp;</span>GC,
-    ) -&gt; Vec&lt;StateTransition&lt;DynState&lt;GC&gt;&gt;&gt;;
+        global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
+    ) -&gt; Vec&lt;StateTransition&lt;DynState&gt;&gt;;
 
     <span class="doccomment">/// Operation this state machine belongs to. See [`OperationId`] for
     /// details.
     </span><span class="kw">fn </span>operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OperationId;
 
     <span class="doccomment">/// Clone state
-    </span><span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; DynState&lt;GC&gt;;
+    </span><span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; DynState;
 
-    <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>DynState&lt;GC&gt;) -&gt; bool;
+    <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>DynState) -&gt; bool;
 }
 
 <span class="doccomment">/// Something that can be a [`DynContext`] for a state machine
@@ -605,10 +600,9 @@
     }
 }
 
-<span class="kw">impl</span>&lt;GC, T&gt; IState&lt;GC&gt; <span class="kw">for </span>T
+<span class="kw">impl</span>&lt;T&gt; IState <span class="kw">for </span>T
 <span class="kw">where
-    </span>GC: GlobalContext,
-    T: State&lt;GlobalContext = GC&gt;,
+    </span>T: State,
 {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Any)) {
         <span class="self">self
@@ -617,8 +611,8 @@
     <span class="kw">fn </span>transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: <span class="kw-2">&amp;</span>DynContext,
-        global_context: <span class="kw-2">&amp;</span>GC,
-    ) -&gt; Vec&lt;StateTransition&lt;DynState&lt;GC&gt;&gt;&gt; {
+        global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
+    ) -&gt; Vec&lt;StateTransition&lt;DynState&gt;&gt; {
         &lt;T <span class="kw">as </span>State&gt;::transitions(
             <span class="self">self</span>,
             context.as_any().downcast_ref().expect(<span class="string">&quot;Wrong module&quot;</span>),
@@ -628,7 +622,7 @@
         .map(|st| StateTransition {
             trigger: st.trigger,
             transition: Arc::new(
-                <span class="kw">move </span>|dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;, val, state: DynState&lt;GC&gt;| {
+                <span class="kw">move </span>|dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;, val, state: DynState| {
                     <span class="kw">let </span>transition = st.transition.clone();
                     Box::pin(<span class="kw">async move </span>{
                         <span class="kw">let </span>new_state = transition(
@@ -653,11 +647,11 @@
         &lt;T <span class="kw">as </span>State&gt;::operation_id(<span class="self">self</span>)
     }
 
-    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; DynState&lt;GC&gt; {
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; DynState {
         DynState::from_typed(module_instance_id, &lt;T <span class="kw">as </span>Clone&gt;::clone(<span class="self">self</span>))
     }
 
-    <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>DynState&lt;GC&gt;) -&gt; bool {
+    <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>DynState) -&gt; bool {
         <span class="kw">let </span>other: <span class="kw-2">&amp;</span>T = other
             .as_any()
             .downcast_ref()
@@ -669,58 +663,58 @@
 
 <span class="doccomment">/// A type-erased state of a state machine belonging to a module instance, see
 /// [`State`]
-</span><span class="kw">pub struct </span>DynState&lt;GC&gt;(
-    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;GC&gt; + <span class="lifetime">&#39;static</span>)&gt;,
+</span><span class="kw">pub struct </span>DynState(
+    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>)&gt;,
     ModuleInstanceId,
 );
 
-<span class="kw">impl</span>&lt;GC&gt; std::ops::Deref <span class="kw">for </span>DynState&lt;GC&gt; {
-    <span class="kw">type </span>Target = <span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;GC&gt; + <span class="lifetime">&#39;static</span>);
+<span class="kw">impl </span>std::ops::Deref <span class="kw">for </span>DynState {
+    <span class="kw">type </span>Target = <span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>);
 
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
         <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="number">0
     </span>}
 }
 
-<span class="kw">impl</span>&lt;GC&gt; DynState&lt;GC&gt; {
+<span class="kw">impl </span>DynState {
     <span class="kw">pub fn </span>module_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleInstanceId {
         <span class="self">self</span>.<span class="number">1
     </span>}
 
     <span class="kw">pub fn </span>from_typed&lt;I&gt;(module_instance_id: ModuleInstanceId, typed: I) -&gt; <span class="self">Self
     </span><span class="kw">where
-        </span>I: IState&lt;GC&gt; + <span class="lifetime">&#39;static</span>,
+        </span>I: IState + <span class="lifetime">&#39;static</span>,
     {
         <span class="self">Self</span>(Box::new(typed), module_instance_id)
     }
 
     <span class="kw">pub fn </span>from_parts(
         module_instance_id: ::fedimint_core::core::ModuleInstanceId,
-        dynbox: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;GC&gt; + <span class="lifetime">&#39;static</span>)&gt;,
+        dynbox: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>)&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(dynbox, module_instance_id)
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; std::fmt::Debug <span class="kw">for </span>DynState&lt;GC&gt; {
+<span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>DynState {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
         std::fmt::Debug::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, f)
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; std::ops::DerefMut <span class="kw">for </span>DynState&lt;GC&gt; {
+<span class="kw">impl </span>std::ops::DerefMut <span class="kw">for </span>DynState {
     <span class="kw">fn </span>deref_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
         <span class="kw-2">&amp;mut *</span><span class="self">self</span>.<span class="number">0
     </span>}
 }
 
-<span class="kw">impl</span>&lt;GC&gt; Clone <span class="kw">for </span>DynState&lt;GC&gt; {
+<span class="kw">impl </span>Clone <span class="kw">for </span>DynState {
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.<span class="number">0</span>.clone(<span class="self">self</span>.<span class="number">1</span>)
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; PartialEq <span class="kw">for </span>DynState&lt;GC&gt; {
+<span class="kw">impl </span>PartialEq <span class="kw">for </span>DynState {
     <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
         <span class="kw">if </span><span class="self">self</span>.<span class="number">1 </span>!= other.<span class="number">1 </span>{
             <span class="kw">return </span><span class="bool-val">false</span>;
@@ -728,18 +722,15 @@
         <span class="self">self</span>.erased_eq_no_instance_id(other)
     }
 }
-<span class="kw">impl</span>&lt;GC&gt; Eq <span class="kw">for </span>DynState&lt;GC&gt; {}
+<span class="kw">impl </span>Eq <span class="kw">for </span>DynState {}
 
-<span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>DynState&lt;GC&gt; {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>DynState {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="self">self</span>.<span class="number">1</span>.consensus_encode(writer)<span class="question-mark">?</span>;
         <span class="self">self</span>.<span class="number">0</span>.consensus_encode_dyn(writer)
     }
 }
-<span class="kw">impl</span>&lt;GC&gt; Decodable <span class="kw">for </span>DynState&lt;GC&gt;
-<span class="kw">where
-    </span>GC: GlobalContext,
-{
+<span class="kw">impl </span>Decodable <span class="kw">for </span>DynState {
     <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
         reader: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry,
@@ -749,9 +740,13 @@
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; DynState&lt;GC&gt; {
+<span class="kw">impl </span>DynState {
     <span class="doccomment">/// `true` if this state allows no further transitions
-    </span><span class="kw">pub fn </span>is_terminal(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>DynContext, global_context: <span class="kw-2">&amp;</span>GC) -&gt; bool {
+    </span><span class="kw">pub fn </span>is_terminal(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        context: <span class="kw-2">&amp;</span>DynContext,
+        global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
+    ) -&gt; bool {
         <span class="self">self</span>.transitions(context, global_context).is_empty()
     }
 }
@@ -769,12 +764,11 @@
     </span>S: State,
 {
     <span class="kw">type </span>ModuleContext = S::ModuleContext;
-    <span class="kw">type </span>GlobalContext = S::GlobalContext;
 
     <span class="kw">fn </span>transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
-        global_context: <span class="kw-2">&amp;</span><span class="self">Self</span>::GlobalContext,
+        global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">let </span>transitions: Vec&lt;StateTransition&lt;OperationState&lt;S&gt;&gt;&gt; = <span class="self">self
             </span>.state
@@ -818,7 +812,7 @@
 <span class="kw">where
     </span>S: State,
 {
-    <span class="kw">type </span>DynType = DynState&lt;S::GlobalContext&gt;;
+    <span class="kw">type </span>DynType = DynState;
 
     <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
         DynState::from_typed(instance_id, <span class="self">self</span>)

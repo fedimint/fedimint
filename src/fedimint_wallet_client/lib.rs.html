@@ -727,7 +727,6 @@
 <a href="#727" id="727">727</a>
 <a href="#728" id="728">728</a>
 <a href="#729" id="729">729</a>
-<a href="#730" id="730">730</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">pub mod </span>client_db;
@@ -939,7 +938,7 @@
     cfg: WalletClientConfig,
     module_root_secret: DerivableSecret,
     module_api: DynModuleApi,
-    notifier: ModuleNotifier&lt;DynGlobalClientContext, WalletClientStates&gt;,
+    notifier: ModuleNotifier&lt;WalletClientStates&gt;,
     rpc: DynBitcoindRpc,
     secp: Secp256k1&lt;All&gt;,
     client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
@@ -1419,7 +1418,7 @@
 }
 
 <span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>WalletClientStates {
-    <span class="kw">type </span>DynType = DynState&lt;DynGlobalClientContext&gt;;
+    <span class="kw">type </span>DynType = DynState;
 
     <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
         DynState::from_typed(instance_id, <span class="self">self</span>)
@@ -1428,7 +1427,6 @@
 
 <span class="kw">impl </span>State <span class="kw">for </span>WalletClientStates {
     <span class="kw">type </span>ModuleContext = WalletClientContext;
-    <span class="kw">type </span>GlobalContext = DynGlobalClientContext;
 
     <span class="kw">fn </span>transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

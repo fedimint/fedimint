@@ -2215,6 +2215,42 @@
 <a href="#2215" id="2215">2215</a>
 <a href="#2216" id="2216">2216</a>
 <a href="#2217" id="2217">2217</a>
+<a href="#2218" id="2218">2218</a>
+<a href="#2219" id="2219">2219</a>
+<a href="#2220" id="2220">2220</a>
+<a href="#2221" id="2221">2221</a>
+<a href="#2222" id="2222">2222</a>
+<a href="#2223" id="2223">2223</a>
+<a href="#2224" id="2224">2224</a>
+<a href="#2225" id="2225">2225</a>
+<a href="#2226" id="2226">2226</a>
+<a href="#2227" id="2227">2227</a>
+<a href="#2228" id="2228">2228</a>
+<a href="#2229" id="2229">2229</a>
+<a href="#2230" id="2230">2230</a>
+<a href="#2231" id="2231">2231</a>
+<a href="#2232" id="2232">2232</a>
+<a href="#2233" id="2233">2233</a>
+<a href="#2234" id="2234">2234</a>
+<a href="#2235" id="2235">2235</a>
+<a href="#2236" id="2236">2236</a>
+<a href="#2237" id="2237">2237</a>
+<a href="#2238" id="2238">2238</a>
+<a href="#2239" id="2239">2239</a>
+<a href="#2240" id="2240">2240</a>
+<a href="#2241" id="2241">2241</a>
+<a href="#2242" id="2242">2242</a>
+<a href="#2243" id="2243">2243</a>
+<a href="#2244" id="2244">2244</a>
+<a href="#2245" id="2245">2245</a>
+<a href="#2246" id="2246">2246</a>
+<a href="#2247" id="2247">2247</a>
+<a href="#2248" id="2248">2248</a>
+<a href="#2249" id="2249">2249</a>
+<a href="#2250" id="2250">2250</a>
+<a href="#2251" id="2251">2251</a>
+<a href="#2252" id="2252">2252</a>
+<a href="#2253" id="2253">2253</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2241,8 +2277,9 @@
 //! interaction is required to drive them forward.
 //!
 //! ### State Machine Contexts
-//! State machines have access to both a [global context](sm::GlobalContext) as
-//! well as to a [module-specific context](module::ClientModule::context).
+//! State machines have access to both a [global
+//! context](`DynGlobalClientContext`) as well as to a [module-specific
+//! context](module::ClientModule::context).
 //!
 //! The global context provides access to the federation API and allows to claim
 //! module outputs (and transferring the value into the client&#39;s wallet), which
@@ -2353,8 +2390,7 @@
     ActiveOperationStateKeyPrefix, ContextGen, InactiveOperationStateKeyPrefix,
 };
 <span class="kw">use </span><span class="kw">crate</span>::sm::{
-    ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, IState, Notifier,
-    OperationState, State,
+    ClientSMDatabaseTransaction, DynState, Executor, IState, Notifier, OperationState, State,
 };
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
@@ -2379,12 +2415,12 @@
 
 <span class="kw">pub type </span>InstancelessDynClientInput = ClientInput&lt;
     Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IInput + <span class="lifetime">&#39;static</span>)&gt;,
-    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;DynGlobalClientContext&gt; + <span class="lifetime">&#39;static</span>)&gt;,
+    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>)&gt;,
 &gt;;
 
 <span class="kw">pub type </span>InstancelessDynClientOutput = ClientOutput&lt;
     Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IOutput + <span class="lifetime">&#39;static</span>)&gt;,
-    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;DynGlobalClientContext&gt; + <span class="lifetime">&#39;static</span>)&gt;,
+    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>)&gt;,
 &gt;;
 
 <span class="attr">#[derive(Debug, Error)]
@@ -2438,13 +2474,63 @@
     </span><span class="kw">async fn </span>add_state_machine_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
-        sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;DynGlobalClientContext&gt;)&gt;,
+        sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState)&gt;,
     ) -&gt; AddStateMachinesResult;
 
     <span class="kw">async fn </span>transaction_update_stream(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
     ) -&gt; BoxStream&lt;OperationState&lt;TxSubmissionStates&gt;&gt;;
+}
+
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl </span>IGlobalClientContext <span class="kw">for </span>() {
+    <span class="kw">fn </span>module_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynModuleApi {
+        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+    }
+
+    <span class="kw">fn </span>client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
+        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+    }
+
+    <span class="kw">fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynGlobalApi {
+        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+    }
+
+    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
+        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+    }
+
+    <span class="kw">async fn </span>claim_input_dyn(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        _input: InstancelessDynClientInput,
+    ) -&gt; (TransactionId, Vec&lt;OutPoint&gt;) {
+        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+    }
+
+    <span class="kw">async fn </span>fund_output_dyn(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        _output: InstancelessDynClientOutput,
+    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
+        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+    }
+
+    <span class="kw">async fn </span>add_state_machine_dyn(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        _sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState)&gt;,
+    ) -&gt; AddStateMachinesResult {
+        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+    }
+
+    <span class="kw">async fn </span>transaction_update_stream(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _operation_id: OperationId,
+    ) -&gt; BoxStream&lt;OperationState&lt;TxSubmissionStates&gt;&gt; {
+        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+    }
 }
 
 <span class="macro">dyn_newtype_define! </span>{
@@ -2455,6 +2541,10 @@
 }
 
 <span class="kw">impl </span>DynGlobalClientContext {
+    <span class="kw">pub fn </span>new_fake() -&gt; <span class="self">Self </span>{
+        DynGlobalClientContext::from(())
+    }
+
     <span class="kw">pub async fn </span>await_tx_accepted(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
@@ -2490,7 +2580,7 @@
     ) -&gt; (TransactionId, Vec&lt;OutPoint&gt;)
     <span class="kw">where
         </span>I: IInput + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-        S: IState&lt;DynGlobalClientContext&gt; + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        S: IState + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
     {
         <span class="self">self</span>.claim_input_dyn(
             dbtx,
@@ -2518,7 +2608,7 @@
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;
     <span class="kw">where
         </span>O: IOutput + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-        S: IState&lt;DynGlobalClientContext&gt; + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        S: IState + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
     {
         <span class="self">self</span>.fund_output_dyn(
             dbtx,
@@ -2539,17 +2629,15 @@
         sm: S,
     ) -&gt; AddStateMachinesResult
     <span class="kw">where
-        </span>S: State&lt;GlobalContext = DynGlobalClientContext&gt; + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        </span>S: State + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
     {
         <span class="self">self</span>.add_state_machine_dyn(dbtx, box_up_state(sm)).<span class="kw">await
     </span>}
 }
 
-<span class="kw">fn </span>states_to_instanceless_dyn&lt;
-    S: IState&lt;DynGlobalClientContext&gt; + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-&gt;(
+<span class="kw">fn </span>states_to_instanceless_dyn&lt;S: IState + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>&gt;(
     state_gen: StateGenerator&lt;S&gt;,
-) -&gt; StateGenerator&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;DynGlobalClientContext&gt; + <span class="lifetime">&#39;static</span>)&gt;&gt; {
+) -&gt; StateGenerator&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>)&gt;&gt; {
     Arc::new(<span class="kw">move </span>|txid, out_idx| {
         <span class="kw">let </span>states: Vec&lt;S&gt; = state_gen(txid, out_idx);
         states
@@ -2561,9 +2649,7 @@
 
 <span class="doccomment">/// Not sure why I couldn&#39;t just directly call `Box::new` ins
 /// [`states_to_instanceless_dyn`], but this fixed it.
-</span><span class="kw">fn </span>box_up_state(
-    state: <span class="kw">impl </span>IState&lt;DynGlobalClientContext&gt; + <span class="lifetime">&#39;static</span>,
-) -&gt; Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;DynGlobalClientContext&gt; + <span class="lifetime">&#39;static</span>)&gt; {
+</span><span class="kw">fn </span>box_up_state(state: <span class="kw">impl </span>IState + <span class="lifetime">&#39;static</span>) -&gt; Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>)&gt; {
     Box::new(state)
 }
 
@@ -2575,8 +2661,6 @@
         DynGlobalClientContext { inner }
     }
 }
-
-<span class="kw">impl </span>GlobalContext <span class="kw">for </span>DynGlobalClientContext {}
 
 <span class="comment">// TODO: impl `Debug` for `Client` and derive here
 </span><span class="kw">impl </span>Debug <span class="kw">for </span>Client {
@@ -2656,7 +2740,7 @@
     <span class="kw">async fn </span>add_state_machine_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
-        sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;DynGlobalClientContext&gt;)&gt;,
+        sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState)&gt;,
     ) -&gt; AddStateMachinesResult {
         <span class="kw">let </span>state = DynState::from_parts(<span class="self">self</span>.module_instance_id, sm);
 
@@ -2676,10 +2760,8 @@
 
 <span class="kw">fn </span>states_add_instance(
     module_instance_id: ModuleInstanceId,
-    state_gen: StateGenerator&lt;
-        Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;DynGlobalClientContext&gt; + <span class="lifetime">&#39;static</span>)&gt;,
-    &gt;,
-) -&gt; StateGenerator&lt;DynState&lt;DynGlobalClientContext&gt;&gt; {
+    state_gen: StateGenerator&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>)&gt;&gt;,
+) -&gt; StateGenerator&lt;DynState&gt; {
     Arc::new(<span class="kw">move </span>|txid, out_idx| {
         <span class="kw">let </span>states = state_gen(txid, out_idx);
         Iterator::collect(
@@ -2803,7 +2885,7 @@
 </span><span class="kw">const </span>SUPPORTED_CORE_API_VERSIONS: <span class="kw-2">&amp;</span>[fedimint_core::module::ApiVersion] =
     <span class="kw-2">&amp;</span>[ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}];
 
-<span class="kw">pub type </span>ModuleGlobalContextGen = ContextGen&lt;DynGlobalClientContext&gt;;
+<span class="kw">pub type </span>ModuleGlobalContextGen = ContextGen;
 
 <span class="doccomment">/// Resources particular to a module instance
 </span><span class="kw">pub struct </span>ClientModuleInstance&lt;<span class="lifetime">&#39;m</span>, M: ClientModule&gt; {
@@ -2837,7 +2919,7 @@
     primary_module_instance: ModuleInstanceId,
     modules: ClientModuleRegistry,
     module_inits: ClientModuleInitRegistry,
-    executor: Executor&lt;DynGlobalClientContext&gt;,
+    executor: Executor,
     api: DynGlobalApi,
     root_secret: DerivableSecret,
     operation_log: OperationLog,
@@ -3050,7 +3132,7 @@
     <span class="kw">pub async fn </span>add_state_machines(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        states: Vec&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
+        states: Vec&lt;DynState&gt;,
     ) -&gt; AddStateMachinesResult {
         <span class="self">self</span>.executor.add_state_machines_dbtx(dbtx, states).<span class="kw">await
     </span>}
@@ -3083,11 +3165,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         <span class="kw-2">mut </span>partial_transaction: TransactionBuilder,
-    ) -&gt; anyhow::Result&lt;(
-        Transaction,
-        Vec&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
-        Range&lt;u64&gt;,
-    )&gt; {
+    ) -&gt; anyhow::Result&lt;(Transaction, Vec&lt;DynState&gt;, Range&lt;u64&gt;)&gt; {
         <span class="kw">if let </span>TransactionBuilderBalance::Underfunded(missing_amount) =
             <span class="self">self</span>.transaction_builder_balance(<span class="kw-2">&amp;</span>partial_transaction)
         {
@@ -3263,20 +3341,14 @@
         operation_id: OperationId,
     ) -&gt; bool {
         <span class="kw">let </span>active_state_exists = dbtx
-            .find_by_prefix(<span class="kw-2">&amp;</span>ActiveOperationStateKeyPrefix::&lt;DynGlobalClientContext&gt; {
-                operation_id,
-                _pd: Default::default(),
-            })
+            .find_by_prefix(<span class="kw-2">&amp;</span>ActiveOperationStateKeyPrefix { operation_id })
             .<span class="kw">await
             </span>.next()
             .<span class="kw">await
             </span>.is_some();
 
         <span class="kw">let </span>inactive_state_exists = dbtx
-            .find_by_prefix(<span class="kw-2">&amp;</span>InactiveOperationStateKeyPrefix::&lt;DynGlobalClientContext&gt; {
-                operation_id,
-                _pd: Default::default(),
-            })
+            .find_by_prefix(<span class="kw-2">&amp;</span>InactiveOperationStateKeyPrefix { operation_id })
             .<span class="kw">await
             </span>.next()
             .<span class="kw">await
@@ -4248,7 +4320,7 @@
         }
 
         <span class="kw">let </span>executor = {
-            <span class="kw">let </span><span class="kw-2">mut </span>executor_builder = Executor::&lt;DynGlobalClientContext&gt;::builder();
+            <span class="kw">let </span><span class="kw-2">mut </span>executor_builder = Executor::builder();
             executor_builder
                 .with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
 

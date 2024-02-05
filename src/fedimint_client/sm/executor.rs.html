@@ -1139,54 +1139,9 @@
 <a href="#1139" id="1139">1139</a>
 <a href="#1140" id="1140">1140</a>
 <a href="#1141" id="1141">1141</a>
-<a href="#1142" id="1142">1142</a>
-<a href="#1143" id="1143">1143</a>
-<a href="#1144" id="1144">1144</a>
-<a href="#1145" id="1145">1145</a>
-<a href="#1146" id="1146">1146</a>
-<a href="#1147" id="1147">1147</a>
-<a href="#1148" id="1148">1148</a>
-<a href="#1149" id="1149">1149</a>
-<a href="#1150" id="1150">1150</a>
-<a href="#1151" id="1151">1151</a>
-<a href="#1152" id="1152">1152</a>
-<a href="#1153" id="1153">1153</a>
-<a href="#1154" id="1154">1154</a>
-<a href="#1155" id="1155">1155</a>
-<a href="#1156" id="1156">1156</a>
-<a href="#1157" id="1157">1157</a>
-<a href="#1158" id="1158">1158</a>
-<a href="#1159" id="1159">1159</a>
-<a href="#1160" id="1160">1160</a>
-<a href="#1161" id="1161">1161</a>
-<a href="#1162" id="1162">1162</a>
-<a href="#1163" id="1163">1163</a>
-<a href="#1164" id="1164">1164</a>
-<a href="#1165" id="1165">1165</a>
-<a href="#1166" id="1166">1166</a>
-<a href="#1167" id="1167">1167</a>
-<a href="#1168" id="1168">1168</a>
-<a href="#1169" id="1169">1169</a>
-<a href="#1170" id="1170">1170</a>
-<a href="#1171" id="1171">1171</a>
-<a href="#1172" id="1172">1172</a>
-<a href="#1173" id="1173">1173</a>
-<a href="#1174" id="1174">1174</a>
-<a href="#1175" id="1175">1175</a>
-<a href="#1176" id="1176">1176</a>
-<a href="#1177" id="1177">1177</a>
-<a href="#1178" id="1178">1178</a>
-<a href="#1179" id="1179">1179</a>
-<a href="#1180" id="1180">1180</a>
-<a href="#1181" id="1181">1181</a>
-<a href="#1182" id="1182">1182</a>
-<a href="#1183" id="1183">1183</a>
-<a href="#1184" id="1184">1184</a>
-<a href="#1185" id="1185">1185</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
-<span class="kw">use </span>std::marker::PhantomData;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
@@ -1211,8 +1166,8 @@
 <span class="kw">use </span><span class="kw">super</span>::state::StateTransitionFunction;
 <span class="kw">use </span><span class="kw">crate</span>::sm::notifier::Notifier;
 <span class="kw">use </span><span class="kw">crate</span>::sm::state::{DynContext, DynState};
-<span class="kw">use </span><span class="kw">crate</span>::sm::{ClientSMDatabaseTransaction, GlobalContext, State, StateTransition};
-<span class="kw">use crate</span>::{AddStateMachinesError, AddStateMachinesResult};
+<span class="kw">use </span><span class="kw">crate</span>::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+<span class="kw">use crate</span>::{AddStateMachinesError, AddStateMachinesResult, DynGlobalClientContext};
 
 <span class="doccomment">/// After how many attempts a DB transaction is aborted with an error
 </span><span class="kw">const </span>MAX_DB_ATTEMPTS: <span class="prelude-ty">Option</span>&lt;usize&gt; = <span class="prelude-val">Some</span>(<span class="number">100</span>);
@@ -1221,8 +1176,8 @@
 /// active ones
 </span><span class="kw">const </span>EXECUTOR_POLL_INTERVAL: Duration = Duration::from_secs(<span class="number">1</span>);
 
-<span class="kw">pub type </span>ContextGen&lt;GC&gt; =
-    Arc&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(ModuleInstanceId, OperationId) -&gt; GC + <span class="lifetime">&#39;static</span>)&gt;;
+<span class="kw">pub type </span>ContextGen =
+    Arc&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(ModuleInstanceId, OperationId) -&gt; DynGlobalClientContext)&gt;;
 
 <span class="doccomment">/// Prefixes for executor DB entries
 </span><span class="kw">enum </span>ExecutorDbPrefixes {
@@ -1240,16 +1195,16 @@
 /// machines a different [execution context](super::state::Context) depending on
 /// the owning module, making it very flexible.
 </span><span class="attr">#[derive(Clone, Debug)]
-</span><span class="kw">pub struct </span>Executor&lt;GC: GlobalContext&gt; {
-    inner: Arc&lt;ExecutorInner&lt;GC&gt;&gt;,
+</span><span class="kw">pub struct </span>Executor {
+    inner: Arc&lt;ExecutorInner&gt;,
 }
 
-<span class="kw">struct </span>ExecutorInner&lt;GC&gt; {
+<span class="kw">struct </span>ExecutorInner {
     db: Database,
-    context: Mutex&lt;<span class="prelude-ty">Option</span>&lt;ContextGen&lt;GC&gt;&gt;&gt;,
+    context: Mutex&lt;<span class="prelude-ty">Option</span>&lt;ContextGen&gt;&gt;,
     module_contexts: BTreeMap&lt;ModuleInstanceId, DynContext&gt;,
     valid_module_ids: BTreeSet&lt;ModuleInstanceId&gt;,
-    notifier: Notifier&lt;GC&gt;,
+    notifier: Notifier,
     shutdown_executor: Mutex&lt;<span class="prelude-ty">Option</span>&lt;oneshot::Sender&lt;oneshot::Sender&lt;()&gt;&gt;&gt;&gt;,
 }
 
@@ -1261,16 +1216,13 @@
     valid_module_ids: BTreeSet&lt;ModuleInstanceId&gt;,
 }
 
-<span class="kw">impl</span>&lt;GC&gt; Executor&lt;GC&gt;
-<span class="kw">where
-    </span>GC: GlobalContext,
-{
+<span class="kw">impl </span>Executor {
     <span class="doccomment">/// Creates an [`ExecutorBuilder`]
     </span><span class="kw">pub fn </span>builder() -&gt; ExecutorBuilder {
         ExecutorBuilder::default()
     }
 
-    <span class="kw">pub async fn </span>get_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(DynState&lt;GC&gt;, ActiveState)&gt; {
+    <span class="kw">pub async fn </span>get_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(DynState, ActiveState)&gt; {
         <span class="self">self</span>.inner.get_active_states().<span class="kw">await
     </span>}
 
@@ -1279,7 +1231,7 @@
     ///
     /// **Attention**: do not use before background task is started!
     </span><span class="comment">// TODO: remove warning once finality is an inherent state attribute
-    </span><span class="kw">pub async fn </span>add_state_machines(<span class="kw-2">&amp;</span><span class="self">self</span>, states: Vec&lt;DynState&lt;GC&gt;&gt;) -&gt; anyhow::Result&lt;()&gt; {
+    </span><span class="kw">pub async fn </span>add_state_machines(<span class="kw-2">&amp;</span><span class="self">self</span>, states: Vec&lt;DynState&gt;) -&gt; anyhow::Result&lt;()&gt; {
         <span class="self">self</span>.inner
             .db
             .autocommit(
@@ -1311,7 +1263,7 @@
     </span><span class="kw">pub async fn </span>add_state_machines_dbtx(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        states: Vec&lt;DynState&lt;GC&gt;&gt;,
+        states: Vec&lt;DynState&gt;,
     ) -&gt; AddStateMachinesResult {
         <span class="kw">for </span>state <span class="kw">in </span>states {
             <span class="kw">if </span>!<span class="self">self
@@ -1373,7 +1325,7 @@
     ///
     /// Check if state exists in the database as part of an actively running
     /// state machine.
-    </span><span class="kw">pub async fn </span>contains_active_state&lt;S: State&lt;GlobalContext = GC&gt;&gt;(
+    </span><span class="kw">pub async fn </span>contains_active_state&lt;S: State&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         instance: ModuleInstanceId,
         state: S,
@@ -1393,7 +1345,7 @@
     /// terminal it means the corresponding state machine finished its
     /// execution. If the state is non-terminal it means the state machine was
     /// in that state at some point but moved on since then.
-    </span><span class="kw">pub async fn </span>contains_inactive_state&lt;S: State&lt;GlobalContext = GC&gt;&gt;(
+    </span><span class="kw">pub async fn </span>contains_inactive_state&lt;S: State&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         instance: ModuleInstanceId,
         state: S,
@@ -1406,14 +1358,14 @@
             .any(|(s, <span class="kw">_</span>)| s == state)
     }
 
-    <span class="kw">pub async fn </span>await_inactive_state(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState&lt;GC&gt;) -&gt; InactiveState {
+    <span class="kw">pub async fn </span>await_inactive_state(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState) -&gt; InactiveState {
         <span class="self">self</span>.inner
             .db
             .wait_key_exists(<span class="kw-2">&amp;</span>InactiveStateKey::from_state(state))
             .<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>await_active_state(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState&lt;GC&gt;) -&gt; ActiveState {
+    <span class="kw">pub async fn </span>await_active_state(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState) -&gt; ActiveState {
         <span class="self">self</span>.inner
             .db
             .wait_key_exists(<span class="kw-2">&amp;</span>ActiveStateKey::from_state(state))
@@ -1426,7 +1378,7 @@
     ///
     /// ## Panics
     /// If called more than once.
-    </span><span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>, context_gen: ContextGen&lt;GC&gt;) {
+    </span><span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>, context_gen: ContextGen) {
         <span class="kw">let </span>replaced_old_context_gen = <span class="self">self
             </span>.inner
             .context
@@ -1495,28 +1447,26 @@
 
     <span class="doccomment">/// Returns a reference to the [`Notifier`] that can be used to subscribe to
     /// state transitions
-    </span><span class="kw">pub fn </span>notifier(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Notifier&lt;GC&gt; {
+    </span><span class="kw">pub fn </span>notifier(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Notifier {
         <span class="kw-2">&amp;</span><span class="self">self</span>.inner.notifier
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; Drop <span class="kw">for </span>ExecutorInner&lt;GC&gt; {
+<span class="kw">impl </span>Drop <span class="kw">for </span>ExecutorInner {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.stop_executor();
     }
 }
 
-<span class="kw">type </span>TransitionForActiveState&lt;GC&gt; = (
+<span class="kw">type </span>TransitionForActiveState = (
     serde_json::Value,
-    DynState&lt;GC&gt;,
-    StateTransitionFunction&lt;DynState&lt;GC&gt;&gt;,
+    DynState,
+    StateTransitionFunction&lt;DynState&gt;,
     ActiveState,
 );
-<span class="kw">impl</span>&lt;GC&gt; ExecutorInner&lt;GC&gt;
-<span class="kw">where
-    </span>GC: GlobalContext,
-{
-    <span class="kw">async fn </span>run(<span class="kw-2">&amp;</span><span class="self">self</span>, global_context_gen: ContextGen&lt;GC&gt;) {
+
+<span class="kw">impl </span>ExecutorInner {
+    <span class="kw">async fn </span>run(<span class="kw-2">&amp;</span><span class="self">self</span>, global_context_gen: ContextGen) {
         <span class="macro">info!</span>(<span class="string">&quot;Starting state machine executor task&quot;</span>);
         <span class="kw">loop </span>{
             <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self
@@ -1533,10 +1483,10 @@
 
     <span class="kw">async fn </span>get_transition_for(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        state: DynState&lt;GC&gt;,
+        state: DynState,
         meta: ActiveState,
-        global_context_gen: <span class="kw-2">&amp;</span>ContextGen&lt;GC&gt;,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;BoxFuture&lt;TransitionForActiveState&lt;GC&gt;&gt;&gt; {
+        global_context_gen: <span class="kw-2">&amp;</span>ContextGen,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;BoxFuture&lt;TransitionForActiveState&gt;&gt; {
         <span class="kw">let </span>module_instance = state.module_instance_id();
         <span class="kw">let </span>context = <span class="kw-2">&amp;</span><span class="self">self
             </span>.module_contexts
@@ -1550,7 +1500,7 @@
             .into_iter()
             .map(|transition| {
                 <span class="kw">let </span>state = state.clone();
-                <span class="kw">let </span>f: BoxFuture&lt;TransitionForActiveState&lt;GC&gt;&gt; = Box::pin(<span class="kw">async move </span>{
+                <span class="kw">let </span>f: BoxFuture&lt;TransitionForActiveState&gt; = Box::pin(<span class="kw">async move </span>{
                     <span class="kw">let </span>StateTransition {
                         trigger,
                         transition,
@@ -1594,7 +1544,7 @@
 
     <span class="kw">async fn </span>execute_next_state_transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        global_context_gen: <span class="kw-2">&amp;</span>ContextGen&lt;GC&gt;,
+        global_context_gen: <span class="kw-2">&amp;</span>ContextGen,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>active_states = <span class="self">self</span>.get_active_states().<span class="kw">await</span>;
         <span class="comment">// TODO: use DB prefix subscription instead of polling
@@ -1758,11 +1708,11 @@
         </span>}
     }
 
-    <span class="kw">async fn </span>get_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(DynState&lt;GC&gt;, ActiveState)&gt; {
+    <span class="kw">async fn </span>get_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(DynState, ActiveState)&gt; {
         <span class="self">self</span>.db
             .begin_transaction()
             .<span class="kw">await
-            </span>.find_by_prefix(<span class="kw-2">&amp;</span>ActiveStateKeyPrefix::&lt;GC&gt;::new())
+            </span>.find_by_prefix(<span class="kw-2">&amp;</span>ActiveStateKeyPrefix::new())
             .<span class="kw">await
             </span><span class="comment">// ignore states from modules that are not initialized yet
             </span>.filter(|(state, <span class="kw">_</span>)| {
@@ -1776,7 +1726,7 @@
             .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>get_inactive_states(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(DynState&lt;GC&gt;, InactiveState)&gt; {
+    <span class="kw">async fn </span>get_inactive_states(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(DynState, InactiveState)&gt; {
         <span class="self">self</span>.db
             .begin_transaction()
             .<span class="kw">await
@@ -1795,7 +1745,7 @@
     </span>}
 }
 
-<span class="kw">impl</span>&lt;GC&gt; ExecutorInner&lt;GC&gt; {
+<span class="kw">impl </span>ExecutorInner {
     <span class="doccomment">/// See [`Executor::stop_executor`].
     </span><span class="kw">fn </span>stop_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;oneshot::Receiver&lt;()&gt;&gt; {
         <span class="kw">let </span><span class="prelude-val">Some</span>(shutdown_sender) = <span class="self">self
@@ -1819,7 +1769,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;GC: GlobalContext&gt; Debug <span class="kw">for </span>ExecutorInner&lt;GC&gt; {
+<span class="kw">impl </span>Debug <span class="kw">for </span>ExecutorInner {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
         <span class="kw">let </span>(active, inactive) = futures::executor::block_on(<span class="kw">async </span>{
             <span class="kw">let </span>active_states = <span class="self">self</span>.get_active_states().<span class="kw">await</span>;
@@ -1869,10 +1819,7 @@
     <span class="doccomment">/// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    </span><span class="kw">pub async fn </span>build&lt;GC&gt;(<span class="self">self</span>, db: Database, notifier: Notifier&lt;GC&gt;) -&gt; Executor&lt;GC&gt;
-    <span class="kw">where
-        </span>GC: GlobalContext,
-    {
+    </span><span class="kw">pub async fn </span>build(<span class="self">self</span>, db: Database, notifier: Notifier) -&gt; Executor {
         <span class="kw">let </span>inner = Arc::new(ExecutorInner {
             db,
             context: Mutex::new(<span class="prelude-val">None</span>),
@@ -1892,14 +1839,14 @@
 
 <span class="doccomment">/// A state that is able to make progress eventually
 </span><span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>ActiveStateKey&lt;GC&gt; {
+</span><span class="kw">pub struct </span>ActiveStateKey {
     <span class="comment">// TODO: remove redundant operation id from state trait
     </span><span class="kw">pub </span>operation_id: OperationId,
-    <span class="kw">pub </span>state: DynState&lt;GC&gt;,
+    <span class="kw">pub </span>state: DynState,
 }
 
-<span class="kw">impl</span>&lt;GC&gt; ActiveStateKey&lt;GC&gt; {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_state(state: DynState&lt;GC&gt;) -&gt; ActiveStateKey&lt;GC&gt; {
+<span class="kw">impl </span>ActiveStateKey {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_state(state: DynState) -&gt; ActiveStateKey {
         ActiveStateKey {
             operation_id: state.operation_id(),
             state,
@@ -1907,7 +1854,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>ActiveStateKey&lt;GC&gt; {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>ActiveStateKey {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
         len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
@@ -1916,10 +1863,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; Decodable <span class="kw">for </span>ActiveStateKey&lt;GC&gt;
-<span class="kw">where
-    </span>GC: GlobalContext,
-{
+<span class="kw">impl </span>Decodable <span class="kw">for </span>ActiveStateKey {
     <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
         reader: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
@@ -1935,32 +1879,27 @@
 }
 
 <span class="attr">#[derive(Debug)]
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ActiveOperationStateKeyPrefix&lt;GC&gt; {
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ActiveOperationStateKeyPrefix {
     <span class="kw">pub </span>operation_id: OperationId,
-    <span class="kw">pub </span>_pd: PhantomData&lt;GC&gt;,
 }
 
-<span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>ActiveOperationStateKeyPrefix&lt;GC&gt; {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>ActiveOperationStateKeyPrefix {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="self">self</span>.operation_id.consensus_encode(writer)
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; ::fedimint_core::db::DatabaseLookup <span class="kw">for </span>ActiveOperationStateKeyPrefix&lt;GC&gt;
-<span class="kw">where
-    </span>GC: GlobalContext,
-{
-    <span class="kw">type </span>Record = ActiveStateKey&lt;GC&gt;;
+<span class="kw">impl </span>::fedimint_core::db::DatabaseLookup <span class="kw">for </span>ActiveOperationStateKeyPrefix {
+    <span class="kw">type </span>Record = ActiveStateKey;
 }
 
 <span class="attr">#[derive(Debug)]
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ActiveModuleOperationStateKeyPrefix&lt;GC&gt; {
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ActiveModuleOperationStateKeyPrefix {
     <span class="kw">pub </span>operation_id: OperationId,
     <span class="kw">pub </span>module_instance: ModuleInstanceId,
-    <span class="kw">pub </span>_pd: PhantomData&lt;GC&gt;,
 }
 
-<span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>ActiveModuleOperationStateKeyPrefix&lt;GC&gt; {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>ActiveModuleOperationStateKeyPrefix {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
         len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
@@ -1969,23 +1908,20 @@
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; ::fedimint_core::db::DatabaseLookup <span class="kw">for </span>ActiveModuleOperationStateKeyPrefix&lt;GC&gt;
-<span class="kw">where
-    </span>GC: GlobalContext,
-{
-    <span class="kw">type </span>Record = ActiveStateKey&lt;GC&gt;;
+<span class="kw">impl </span>::fedimint_core::db::DatabaseLookup <span class="kw">for </span>ActiveModuleOperationStateKeyPrefix {
+    <span class="kw">type </span>Record = ActiveStateKey;
 }
 
 <span class="attr">#[derive(Debug)]
-</span><span class="kw">struct </span>ActiveStateKeyPrefix&lt;GC&gt;(PhantomData&lt;GC&gt;);
+</span><span class="kw">struct </span>ActiveStateKeyPrefix;
 
-<span class="kw">impl</span>&lt;GC&gt; ActiveStateKeyPrefix&lt;GC&gt; {
+<span class="kw">impl </span>ActiveStateKeyPrefix {
     <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-        ActiveStateKeyPrefix(PhantomData)
+        ActiveStateKeyPrefix
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>ActiveStateKeyPrefix&lt;GC&gt; {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>ActiveStateKeyPrefix {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="prelude-val">Ok</span>(<span class="number">0</span>)
     }
@@ -1996,23 +1932,17 @@
     <span class="kw">pub </span>created_at: SystemTime,
 }
 
-<span class="kw">impl</span>&lt;GC&gt; ::fedimint_core::db::DatabaseRecord <span class="kw">for </span>ActiveStateKey&lt;GC&gt;
-<span class="kw">where
-    </span>GC: GlobalContext,
-{
+<span class="kw">impl </span>::fedimint_core::db::DatabaseRecord <span class="kw">for </span>ActiveStateKey {
     <span class="kw">const </span>DB_PREFIX: u8 = ExecutorDbPrefixes::ActiveStates <span class="kw">as </span>u8;
     <span class="kw">const </span>NOTIFY_ON_MODIFY: bool = <span class="bool-val">true</span>;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = ActiveState;
 }
 
-<span class="kw">impl</span>&lt;GC&gt; DatabaseKeyWithNotify <span class="kw">for </span>ActiveStateKey&lt;GC&gt; <span class="kw">where </span>GC: GlobalContext {}
+<span class="kw">impl </span>DatabaseKeyWithNotify <span class="kw">for </span>ActiveStateKey {}
 
-<span class="kw">impl</span>&lt;GC&gt; ::fedimint_core::db::DatabaseLookup <span class="kw">for </span>ActiveStateKeyPrefix&lt;GC&gt;
-<span class="kw">where
-    </span>GC: GlobalContext,
-{
-    <span class="kw">type </span>Record = ActiveStateKey&lt;GC&gt;;
+<span class="kw">impl </span>::fedimint_core::db::DatabaseLookup <span class="kw">for </span>ActiveStateKeyPrefix {
+    <span class="kw">type </span>Record = ActiveStateKey;
 }
 
 <span class="kw">impl </span>ActiveState {
@@ -2032,14 +1962,14 @@
 
 <span class="doccomment">/// A past or final state of a state machine
 </span><span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>InactiveStateKey&lt;GC&gt; {
+</span><span class="kw">pub struct </span>InactiveStateKey {
     <span class="comment">// TODO: remove redundant operation id from state trait
     </span><span class="kw">pub </span>operation_id: OperationId,
-    <span class="kw">pub </span>state: DynState&lt;GC&gt;,
+    <span class="kw">pub </span>state: DynState,
 }
 
-<span class="kw">impl</span>&lt;GC&gt; InactiveStateKey&lt;GC&gt; {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_state(state: DynState&lt;GC&gt;) -&gt; InactiveStateKey&lt;GC&gt; {
+<span class="kw">impl </span>InactiveStateKey {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_state(state: DynState) -&gt; InactiveStateKey {
         InactiveStateKey {
             operation_id: state.operation_id(),
             state,
@@ -2047,10 +1977,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>InactiveStateKey&lt;GC&gt;
-<span class="kw">where
-    </span>GC: GlobalContext,
-{
+<span class="kw">impl </span>Encodable <span class="kw">for </span>InactiveStateKey {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
         len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
@@ -2059,10 +1986,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; Decodable <span class="kw">for </span>InactiveStateKey&lt;GC&gt;
-<span class="kw">where
-    </span>GC: GlobalContext,
-{
+<span class="kw">impl </span>Decodable <span class="kw">for </span>InactiveStateKey {
     <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
         reader: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
@@ -2078,32 +2002,27 @@
 }
 
 <span class="attr">#[derive(Debug)]
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>InactiveOperationStateKeyPrefix&lt;GC&gt; {
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>InactiveOperationStateKeyPrefix {
     <span class="kw">pub </span>operation_id: OperationId,
-    <span class="kw">pub </span>_pd: PhantomData&lt;GC&gt;,
 }
 
-<span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>InactiveOperationStateKeyPrefix&lt;GC&gt; {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>InactiveOperationStateKeyPrefix {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="self">self</span>.operation_id.consensus_encode(writer)
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; ::fedimint_core::db::DatabaseLookup <span class="kw">for </span>InactiveOperationStateKeyPrefix&lt;GC&gt;
-<span class="kw">where
-    </span>GC: GlobalContext,
-{
-    <span class="kw">type </span>Record = InactiveStateKey&lt;GC&gt;;
+<span class="kw">impl </span>::fedimint_core::db::DatabaseLookup <span class="kw">for </span>InactiveOperationStateKeyPrefix {
+    <span class="kw">type </span>Record = InactiveStateKey;
 }
 
 <span class="attr">#[derive(Debug)]
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>InactiveModuleOperationStateKeyPrefix&lt;GC&gt; {
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>InactiveModuleOperationStateKeyPrefix {
     <span class="kw">pub </span>operation_id: OperationId,
     <span class="kw">pub </span>module_instance: ModuleInstanceId,
-    <span class="kw">pub </span>_pd: PhantomData&lt;GC&gt;,
 }
 
-<span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>InactiveModuleOperationStateKeyPrefix&lt;GC&gt; {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>InactiveModuleOperationStateKeyPrefix {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
         len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
@@ -2112,23 +2031,20 @@
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; ::fedimint_core::db::DatabaseLookup <span class="kw">for </span>InactiveModuleOperationStateKeyPrefix&lt;GC&gt;
-<span class="kw">where
-    </span>GC: GlobalContext,
-{
-    <span class="kw">type </span>Record = InactiveStateKey&lt;GC&gt;;
+<span class="kw">impl </span>::fedimint_core::db::DatabaseLookup <span class="kw">for </span>InactiveModuleOperationStateKeyPrefix {
+    <span class="kw">type </span>Record = InactiveStateKey;
 }
 
 <span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">struct </span>InactiveStateKeyPrefix&lt;GC&gt;(PhantomData&lt;GC&gt;);
+</span><span class="kw">struct </span>InactiveStateKeyPrefix;
 
-<span class="kw">impl</span>&lt;GC&gt; InactiveStateKeyPrefix&lt;GC&gt; {
+<span class="kw">impl </span>InactiveStateKeyPrefix {
     <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-        InactiveStateKeyPrefix(PhantomData)
+        InactiveStateKeyPrefix
     }
 }
 
-<span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>InactiveStateKeyPrefix&lt;GC&gt; {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>InactiveStateKeyPrefix {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="prelude-val">Ok</span>(<span class="number">0</span>)
     }
@@ -2140,33 +2056,27 @@
     <span class="kw">pub </span>exited_at: SystemTime,
 }
 
-<span class="kw">impl</span>&lt;GC&gt; ::fedimint_core::db::DatabaseRecord <span class="kw">for </span>InactiveStateKey&lt;GC&gt;
-<span class="kw">where
-    </span>GC: GlobalContext,
-{
+<span class="kw">impl </span>::fedimint_core::db::DatabaseRecord <span class="kw">for </span>InactiveStateKey {
     <span class="kw">const </span>DB_PREFIX: u8 = ExecutorDbPrefixes::InactiveStates <span class="kw">as </span>u8;
     <span class="kw">const </span>NOTIFY_ON_MODIFY: bool = <span class="bool-val">true</span>;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = InactiveState;
 }
 
-<span class="kw">impl</span>&lt;GC&gt; DatabaseKeyWithNotify <span class="kw">for </span>InactiveStateKey&lt;GC&gt; <span class="kw">where </span>GC: GlobalContext {}
+<span class="kw">impl </span>DatabaseKeyWithNotify <span class="kw">for </span>InactiveStateKey {}
 
-<span class="kw">impl</span>&lt;GC&gt; ::fedimint_core::db::DatabaseLookup <span class="kw">for </span>InactiveStateKeyPrefix&lt;GC&gt;
-<span class="kw">where
-    </span>GC: GlobalContext,
-{
-    <span class="kw">type </span>Record = InactiveStateKey&lt;GC&gt;;
+<span class="kw">impl </span>::fedimint_core::db::DatabaseLookup <span class="kw">for </span>InactiveStateKeyPrefix {
+    <span class="kw">type </span>Record = InactiveStateKey;
 }
 
 <span class="attr">#[derive(Debug)]
-</span><span class="kw">enum </span>ActiveOrInactiveState&lt;GC&gt; {
+</span><span class="kw">enum </span>ActiveOrInactiveState {
     Active {
-        dyn_state: DynState&lt;GC&gt;,
+        dyn_state: DynState,
         active_state: ActiveState,
     },
     Inactive {
-        dyn_state: DynState&lt;GC&gt;,
+        dyn_state: DynState,
     },
 }
 
@@ -2189,6 +2099,7 @@
 
     <span class="kw">use </span><span class="kw">crate</span>::sm::state::{Context, DynContext, DynState};
     <span class="kw">use </span><span class="kw">crate</span>::sm::{Executor, Notifier, State, StateTransition};
+    <span class="kw">use </span><span class="kw">crate</span>::DynGlobalClientContext;
 
     <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
     </span><span class="kw">enum </span>MockStateMachine {
@@ -2199,12 +2110,11 @@
 
     <span class="kw">impl </span>State <span class="kw">for </span>MockStateMachine {
         <span class="kw">type </span>ModuleContext = MockContext;
-        <span class="kw">type </span>GlobalContext = ();
 
         <span class="kw">fn </span>transitions(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
-            _global_context: <span class="kw-2">&amp;</span>(),
+            _global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
         ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
             <span class="kw">match </span><span class="self">self </span>{
                 MockStateMachine::Start =&gt; {
@@ -2267,7 +2177,7 @@
     }
 
     <span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>MockStateMachine {
-        <span class="kw">type </span>DynType = DynState&lt;()&gt;;
+        <span class="kw">type </span>DynType = DynState;
 
         <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
             DynState::from_typed(instance_id, <span class="self">self</span>)
@@ -2289,7 +2199,7 @@
 
     <span class="kw">impl </span>Context <span class="kw">for </span>MockContext {}
 
-    <span class="kw">async fn </span>get_executor() -&gt; (Executor&lt;()&gt;, Sender&lt;u64&gt;, Database) {
+    <span class="kw">async fn </span>get_executor() -&gt; (Executor, Sender&lt;u64&gt;, Database) {
         <span class="kw">let </span>(broadcast, <span class="kw">_</span>) = tokio::sync::broadcast::channel(<span class="number">10</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>decoder_builder = Decoder::builder();
@@ -2300,7 +2210,7 @@
             ModuleDecoderRegistry::new(<span class="macro">vec!</span>[(<span class="number">42</span>, ModuleKind::from_static_str(<span class="string">&quot;test&quot;</span>), decoder)]);
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), decoders);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>executor_builder = Executor::&lt;()&gt;::builder();
+        <span class="kw">let </span><span class="kw-2">mut </span>executor_builder = Executor::builder();
         executor_builder.with_module(
             <span class="number">42</span>,
             MockContext {
@@ -2310,7 +2220,9 @@
         <span class="kw">let </span>executor = executor_builder
             .build(db.clone(), Notifier::new(db.clone()))
             .<span class="kw">await</span>;
-        executor.start_executor(Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| ())).<span class="kw">await</span>;
+        executor
+            .start_executor(Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| DynGlobalClientContext::new_fake()))
+            .<span class="kw">await</span>;
 
         <span class="macro">info!</span>(<span class="string">&quot;Initialized test executor&quot;</span>);
         (executor, broadcast, db)

@@ -382,19 +382,6 @@
 <a href="#382" id="382">382</a>
 <a href="#383" id="383">383</a>
 <a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>recovery;
 
 <span class="kw">use </span>std::fmt::Debug;
@@ -418,7 +405,6 @@
 <span class="kw">use super</span>::{ClientContext, FinalClient};
 <span class="kw">use </span><span class="kw">crate</span>::module::{ClientModule, DynClientModule};
 <span class="kw">use </span><span class="kw">crate</span>::sm::{ModuleNotifier, Notifier};
-<span class="kw">use </span><span class="kw">crate</span>::DynGlobalClientContext;
 
 <span class="kw">pub type </span>ClientModuleInitRegistry = ModuleInitRegistry&lt;DynClientModuleInit&gt;;
 
@@ -431,10 +417,7 @@
     db: Database,
     api_version: ApiVersion,
     module_root_secret: DerivableSecret,
-    notifier: ModuleNotifier&lt;
-        DynGlobalClientContext,
-        &lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::States,
-    &gt;,
+    notifier: ModuleNotifier&lt;&lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
     api: DynGlobalApi,
     module_api: DynModuleApi,
     context: ClientContext&lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module&gt;,
@@ -466,10 +449,7 @@
 
     <span class="kw">pub fn </span>notifier(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-    ) -&gt; <span class="kw-2">&amp;</span>ModuleNotifier&lt;
-        DynGlobalClientContext,
-        &lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::States,
-    &gt; {
+    ) -&gt; <span class="kw-2">&amp;</span>ModuleNotifier&lt;&lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::States&gt; {
         <span class="kw-2">&amp;</span><span class="self">self</span>.notifier
     }
 
@@ -503,10 +483,7 @@
     db: Database,
     api_version: ApiVersion,
     module_root_secret: DerivableSecret,
-    notifier: ModuleNotifier&lt;
-        DynGlobalClientContext,
-        &lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::States,
-    &gt;,
+    notifier: ModuleNotifier&lt;&lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
     api: DynGlobalApi,
     module_api: DynModuleApi,
     context: ClientContext&lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module&gt;,
@@ -539,10 +516,7 @@
 
     <span class="kw">pub fn </span>notifier(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-    ) -&gt; <span class="kw-2">&amp;</span>ModuleNotifier&lt;
-        DynGlobalClientContext,
-        &lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::States,
-    &gt; {
+    ) -&gt; <span class="kw-2">&amp;</span>ModuleNotifier&lt;&lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::States&gt; {
         <span class="kw-2">&amp;</span><span class="self">self</span>.notifier
     }
 
@@ -643,7 +617,7 @@
         instance_id: ModuleInstanceId,
         api_version: ApiVersion,
         module_root_secret: DerivableSecret,
-        notifier: Notifier&lt;DynGlobalClientContext&gt;,
+        notifier: Notifier,
         api: DynGlobalApi,
         snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>DynModuleBackup&gt;,
         progress_tx: watch::Sender&lt;RecoveryProgress&gt;,
@@ -659,7 +633,7 @@
         instance_id: ModuleInstanceId,
         api_version: ApiVersion,
         module_root_secret: DerivableSecret,
-        notifier: Notifier&lt;DynGlobalClientContext&gt;,
+        notifier: Notifier,
         api: DynGlobalApi,
     ) -&gt; anyhow::Result&lt;DynClientModule&gt;;
 }
@@ -703,7 +677,7 @@
         api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         <span class="comment">// TODO: make dyn type for notifier
-        </span>notifier: Notifier&lt;DynGlobalClientContext&gt;,
+        </span>notifier: Notifier,
         api: DynGlobalApi,
         snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>DynModuleBackup&gt;,
         progress_tx: watch::Sender&lt;RecoveryProgress&gt;,
@@ -750,7 +724,7 @@
         api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         <span class="comment">// TODO: make dyn type for notifier
-        </span>notifier: Notifier&lt;DynGlobalClientContext&gt;,
+        </span>notifier: Notifier,
         api: DynGlobalApi,
     ) -&gt; anyhow::Result&lt;DynClientModule&gt; {
         <span class="kw">let </span>typed_cfg: <span class="kw-2">&amp;</span>&lt;&lt;T <span class="kw">as </span>fedimint_core::module::ModuleInit&gt;::Common <span class="kw">as </span>CommonModuleInit&gt;::ClientConfig = cfg.cast()<span class="question-mark">?</span>;
