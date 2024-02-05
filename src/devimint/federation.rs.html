@@ -596,6 +596,8 @@
 <a href="#596" id="596">596</a>
 <a href="#597" id="597">597</a>
 <a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
@@ -630,10 +632,11 @@
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, FedimintdCmd};
 <span class="kw">use crate</span>::{poll_eq, vars};
 
-<span class="kw">pub struct </span>Federation {
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>Federation {
     <span class="comment">// client is only for internal use, use cli commands instead
-    </span>members: BTreeMap&lt;usize, Fedimintd&gt;,
-    vars: BTreeMap&lt;usize, vars::Fedimintd&gt;,
+    </span><span class="kw">pub </span>members: BTreeMap&lt;usize, Fedimintd&gt;,
+    <span class="kw">pub </span>vars: BTreeMap&lt;usize, vars::Fedimintd&gt;,
     bitcoind: Bitcoind,
 
     <span class="doccomment">/// Built in [`Client`]
@@ -641,6 +644,7 @@
 }
 
 <span class="doccomment">/// `fedimint-cli` instance (basically path with client state: config + db)
+</span><span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Client {
     name: String,
 }

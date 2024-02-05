@@ -351,7 +351,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, ProcessManager};
 <span class="kw">use crate</span>::{dev_fed, external_daemons, vars, ExternalDaemons};
 
-<span class="attr">#[derive(Parser)]
+<span class="attr">#[derive(Parser, Clone)]
 </span><span class="kw">pub struct </span>CommonArgs {
     <span class="attr">#[clap(short = <span class="string">&#39;d&#39;</span>, long, env = <span class="string">&quot;FM_TEST_DIR&quot;</span>)]
     </span><span class="kw">pub </span>test_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,

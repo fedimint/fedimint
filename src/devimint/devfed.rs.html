@@ -77,6 +77,7 @@
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
 <a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>tracing::info;
@@ -87,7 +88,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::util::ProcessManager;
 <span class="kw">use crate</span>::{cmd, open_channel, LightningNode};
 
-<span class="kw">pub struct </span>DevFed {
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>DevFed {
     <span class="kw">pub </span>bitcoind: Bitcoind,
     <span class="kw">pub </span>cln: Lightningd,
     <span class="kw">pub </span>lnd: Lnd,
