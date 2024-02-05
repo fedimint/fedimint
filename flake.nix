@@ -5,7 +5,7 @@
     };
     flake-utils.url = "github:numtide/flake-utils";
     flakebox = {
-      url = "github:dpc/flakebox?rev=d7f57f94f2dca67dafd02b31b030b62f6fefecbc";
+      url = "github:dpc/flakebox?rev=db74cf9715c2e21c59f7a0bcb2002ae87ad5068a";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     advisory-db = {
@@ -132,7 +132,7 @@
               };
               # we have our own weird CI workflows
               github.ci.enable = false;
-              just.includePaths = [
+              just.importPaths = [
                 "justfile.fedimint.just"
               ];
               # we have a custom final check
