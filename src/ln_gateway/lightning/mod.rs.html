@@ -147,6 +147,17 @@
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>lnd;
 
@@ -192,7 +203,10 @@
     </span>FailedToGetInvoice { failure_reason: String },
 }
 
-<span class="attr">#[async_trait]
+<span class="doccomment">/// A trait that the gateway uses to interact with a lightning node. This allows
+/// the gateway to be agnostic to the specific lightning node implementation
+/// being used.
+</span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>ILnRpcClient: Debug + Send + Sync {
     <span class="doccomment">/// Get the public key and alias of the lightning node
     </span><span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt;;
@@ -230,17 +244,25 @@
         <span class="bool-val">false
     </span>}
 
-    <span class="comment">// Consumes the current lightning client because `route_htlcs` should only be
-    // called once per client. A stream of intercepted HTLCs and a `Arc&lt;dyn
-    // ILnRpcClient&gt; are returned to the caller. The caller can use this new
-    // client to interact with the lightning node, but since it is an `Arc` is
-    // cannot call `route_htlcs` again.
+    <span class="doccomment">/// Consumes the current client and returns a stream of intercepted HTLCs
+    /// and a new client. `complete_htlc` must be called for all successfully
+    /// intercepted HTLCs sent to the returned stream.
+    ///
+    /// `route_htlcs` can only be called once for a given client, since the
+    /// returned stream grants exclusive routing decisions to the caller.
+    /// For this reason, `route_htlc` consumes the client and returns one
+    /// wrapped in an `Arc`. This lets the compiler enforce that `route_htlcs`
+    /// can only be called once for a given client, since the value inside
+    /// the `Arc` cannot be consumed.
     </span><span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt;;
 
-    <span class="kw">async fn </span>complete_htlc(
+    <span class="doccomment">/// Complete an HTLC that was intercepted by the gateway. Must be called for
+    /// all successfully intercepted HTLCs sent to the stream returned by
+    /// `route_htlcs`.
+    </span><span class="kw">async fn </span>complete_htlc(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         htlc: InterceptHtlcResponse,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt;;
