@@ -159,7 +159,7 @@ pub struct GatewayClientContext {
     timelock_delta: u64,
     secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
     pub ln_decoder: Decoder,
-    notifier: ModuleNotifier<DynGlobalClientContext, GatewayClientStateMachines>,
+    notifier: ModuleNotifier<GatewayClientStateMachines>,
     gateway: Gateway,
 }
 
@@ -181,7 +181,7 @@ impl From<&GatewayClientContext> for LightningClientContext {
 #[derive(Debug)]
 pub struct GatewayClientModule {
     cfg: LightningClientConfig,
-    pub notifier: ModuleNotifier<DynGlobalClientContext, GatewayClientStateMachines>,
+    pub notifier: ModuleNotifier<GatewayClientStateMachines>,
     pub redeem_key: KeyPair,
     timelock_delta: u64,
     mint_channel_id: u64,
@@ -632,7 +632,7 @@ pub enum GatewayClientStateMachines {
 }
 
 impl IntoDynInstance for GatewayClientStateMachines {
-    type DynType = DynState<DynGlobalClientContext>;
+    type DynType = DynState;
 
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
         DynState::from_typed(instance_id, self)
@@ -641,12 +641,11 @@ impl IntoDynInstance for GatewayClientStateMachines {
 
 impl State for GatewayClientStateMachines {
     type ModuleContext = GatewayClientContext;
-    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,
         context: &Self::ModuleContext,
-        global_context: &Self::GlobalContext,
+        global_context: &DynGlobalClientContext,
     ) -> Vec<fedimint_client::sm::StateTransition<Self>> {
         match self {
             GatewayClientStateMachines::Pay(pay_state) => {

@@ -9,10 +9,9 @@ use secp256k1_zkp::Secp256k1;
 
 use crate::module::StateGenerator;
 use crate::sm::DynState;
-use crate::DynGlobalClientContext;
 
 #[derive(Clone)]
-pub struct ClientInput<I = DynInput, S = DynState<DynGlobalClientContext>> {
+pub struct ClientInput<I = DynInput, S = DynState> {
     pub input: I,
     pub keys: Vec<KeyPair>,
     pub state_machines: StateGenerator<S>,
@@ -21,7 +20,7 @@ pub struct ClientInput<I = DynInput, S = DynState<DynGlobalClientContext>> {
 impl<I, S> IntoDynInstance for ClientInput<I, S>
 where
     I: IntoDynInstance<DynType = DynInput> + 'static,
-    S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
+    S: IntoDynInstance<DynType = DynState> + 'static,
 {
     type DynType = ClientInput;
 
@@ -35,7 +34,7 @@ where
 }
 
 #[derive(Clone)]
-pub struct ClientOutput<O = DynOutput, S = DynState<DynGlobalClientContext>> {
+pub struct ClientOutput<O = DynOutput, S = DynState> {
     pub output: O,
     pub state_machines: StateGenerator<S>,
 }
@@ -43,7 +42,7 @@ pub struct ClientOutput<O = DynOutput, S = DynState<DynGlobalClientContext>> {
 impl<O, S> IntoDynInstance for ClientOutput<O, S>
 where
     O: IntoDynInstance<DynType = DynOutput> + 'static,
-    S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
+    S: IntoDynInstance<DynType = DynState> + 'static,
 {
     type DynType = ClientOutput;
 
@@ -96,7 +95,7 @@ impl TransactionBuilder {
         self,
         secp_ctx: &Secp256k1<C>,
         mut rng: R,
-    ) -> (Transaction, Vec<DynState<DynGlobalClientContext>>)
+    ) -> (Transaction, Vec<DynState>)
     where
         C: secp256k1_zkp::Signing + secp256k1_zkp::Verification,
     {
@@ -150,9 +149,9 @@ pub(crate) enum TransactionBuilderBalance {
 fn state_gen_to_dyn<S>(
     state_gen: StateGenerator<S>,
     module_instance: ModuleInstanceId,
-) -> StateGenerator<DynState<DynGlobalClientContext>>
+) -> StateGenerator<DynState>
 where
-    S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
+    S: IntoDynInstance<DynType = DynState> + 'static,
 {
     Arc::new(move |txid, index| {
         let states = state_gen(txid, index);

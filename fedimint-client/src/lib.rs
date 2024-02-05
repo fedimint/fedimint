@@ -24,8 +24,9 @@
 //! interaction is required to drive them forward.
 //!
 //! ### State Machine Contexts
-//! State machines have access to both a [global context](sm::GlobalContext) as
-//! well as to a [module-specific context](module::ClientModule::context).
+//! State machines have access to both a [global
+//! context](`DynGlobalClientContext`) as well as to a [module-specific
+//! context](module::ClientModule::context).
 //!
 //! The global context provides access to the federation API and allows to claim
 //! module outputs (and transferring the value into the client's wallet), which
@@ -136,8 +137,7 @@ use crate::sm::executor::{
     ActiveOperationStateKeyPrefix, ContextGen, InactiveOperationStateKeyPrefix,
 };
 use crate::sm::{
-    ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, IState, Notifier,
-    OperationState, State,
+    ClientSMDatabaseTransaction, DynState, Executor, IState, Notifier, OperationState, State,
 };
 use crate::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
@@ -162,12 +162,12 @@ pub mod transaction;
 
 pub type InstancelessDynClientInput = ClientInput<
     Box<maybe_add_send_sync!(dyn IInput + 'static)>,
-    Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)>,
+    Box<maybe_add_send_sync!(dyn IState + 'static)>,
 >;
 
 pub type InstancelessDynClientOutput = ClientOutput<
     Box<maybe_add_send_sync!(dyn IOutput + 'static)>,
-    Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)>,
+    Box<maybe_add_send_sync!(dyn IState + 'static)>,
 >;
 
 #[derive(Debug, Error)]
@@ -221,13 +221,63 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     async fn add_state_machine_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        sm: Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext>)>,
+        sm: Box<maybe_add_send_sync!(dyn IState)>,
     ) -> AddStateMachinesResult;
 
     async fn transaction_update_stream(
         &self,
         operation_id: OperationId,
     ) -> BoxStream<OperationState<TxSubmissionStates>>;
+}
+
+#[apply(async_trait_maybe_send!)]
+impl IGlobalClientContext for () {
+    fn module_api(&self) -> DynModuleApi {
+        unimplemented!("fake implementation, only for tests");
+    }
+
+    fn client_config(&self) -> &ClientConfig {
+        unimplemented!("fake implementation, only for tests");
+    }
+
+    fn api(&self) -> &DynGlobalApi {
+        unimplemented!("fake implementation, only for tests");
+    }
+
+    fn decoders(&self) -> &ModuleDecoderRegistry {
+        unimplemented!("fake implementation, only for tests");
+    }
+
+    async fn claim_input_dyn(
+        &self,
+        _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        _input: InstancelessDynClientInput,
+    ) -> (TransactionId, Vec<OutPoint>) {
+        unimplemented!("fake implementation, only for tests");
+    }
+
+    async fn fund_output_dyn(
+        &self,
+        _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        _output: InstancelessDynClientOutput,
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
+        unimplemented!("fake implementation, only for tests");
+    }
+
+    async fn add_state_machine_dyn(
+        &self,
+        _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        _sm: Box<maybe_add_send_sync!(dyn IState)>,
+    ) -> AddStateMachinesResult {
+        unimplemented!("fake implementation, only for tests");
+    }
+
+    async fn transaction_update_stream(
+        &self,
+        _operation_id: OperationId,
+    ) -> BoxStream<OperationState<TxSubmissionStates>> {
+        unimplemented!("fake implementation, only for tests");
+    }
 }
 
 dyn_newtype_define! {
@@ -238,6 +288,10 @@ dyn_newtype_define! {
 }
 
 impl DynGlobalClientContext {
+    pub fn new_fake() -> Self {
+        DynGlobalClientContext::from(())
+    }
+
     pub async fn await_tx_accepted(
         &self,
         operation_id: OperationId,
@@ -273,7 +327,7 @@ impl DynGlobalClientContext {
     ) -> (TransactionId, Vec<OutPoint>)
     where
         I: IInput + MaybeSend + MaybeSync + 'static,
-        S: IState<DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
+        S: IState + MaybeSend + MaybeSync + 'static,
     {
         self.claim_input_dyn(
             dbtx,
@@ -301,7 +355,7 @@ impl DynGlobalClientContext {
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
     where
         O: IOutput + MaybeSend + MaybeSync + 'static,
-        S: IState<DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
+        S: IState + MaybeSend + MaybeSync + 'static,
     {
         self.fund_output_dyn(
             dbtx,
@@ -322,17 +376,15 @@ impl DynGlobalClientContext {
         sm: S,
     ) -> AddStateMachinesResult
     where
-        S: State<GlobalContext = DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
+        S: State + MaybeSend + MaybeSync + 'static,
     {
         self.add_state_machine_dyn(dbtx, box_up_state(sm)).await
     }
 }
 
-fn states_to_instanceless_dyn<
-    S: IState<DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
->(
+fn states_to_instanceless_dyn<S: IState + MaybeSend + MaybeSync + 'static>(
     state_gen: StateGenerator<S>,
-) -> StateGenerator<Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)>> {
+) -> StateGenerator<Box<maybe_add_send_sync!(dyn IState + 'static)>> {
     Arc::new(move |txid, out_idx| {
         let states: Vec<S> = state_gen(txid, out_idx);
         states
@@ -344,9 +396,7 @@ fn states_to_instanceless_dyn<
 
 /// Not sure why I couldn't just directly call `Box::new` ins
 /// [`states_to_instanceless_dyn`], but this fixed it.
-fn box_up_state(
-    state: impl IState<DynGlobalClientContext> + 'static,
-) -> Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)> {
+fn box_up_state(state: impl IState + 'static) -> Box<maybe_add_send_sync!(dyn IState + 'static)> {
     Box::new(state)
 }
 
@@ -358,8 +408,6 @@ where
         DynGlobalClientContext { inner }
     }
 }
-
-impl GlobalContext for DynGlobalClientContext {}
 
 // TODO: impl `Debug` for `Client` and derive here
 impl Debug for Client {
@@ -439,7 +487,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
     async fn add_state_machine_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        sm: Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext>)>,
+        sm: Box<maybe_add_send_sync!(dyn IState)>,
     ) -> AddStateMachinesResult {
         let state = DynState::from_parts(self.module_instance_id, sm);
 
@@ -459,10 +507,8 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
 
 fn states_add_instance(
     module_instance_id: ModuleInstanceId,
-    state_gen: StateGenerator<
-        Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)>,
-    >,
-) -> StateGenerator<DynState<DynGlobalClientContext>> {
+    state_gen: StateGenerator<Box<maybe_add_send_sync!(dyn IState + 'static)>>,
+) -> StateGenerator<DynState> {
     Arc::new(move |txid, out_idx| {
         let states = state_gen(txid, out_idx);
         Iterator::collect(
@@ -586,7 +632,7 @@ impl Drop for ClientArc {
 const SUPPORTED_CORE_API_VERSIONS: &[fedimint_core::module::ApiVersion] =
     &[ApiVersion { major: 0, minor: 0 }];
 
-pub type ModuleGlobalContextGen = ContextGen<DynGlobalClientContext>;
+pub type ModuleGlobalContextGen = ContextGen;
 
 /// Resources particular to a module instance
 pub struct ClientModuleInstance<'m, M: ClientModule> {
@@ -620,7 +666,7 @@ pub struct Client {
     primary_module_instance: ModuleInstanceId,
     modules: ClientModuleRegistry,
     module_inits: ClientModuleInitRegistry,
-    executor: Executor<DynGlobalClientContext>,
+    executor: Executor,
     api: DynGlobalApi,
     root_secret: DerivableSecret,
     operation_log: OperationLog,
@@ -833,7 +879,7 @@ impl Client {
     pub async fn add_state_machines(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        states: Vec<DynState<DynGlobalClientContext>>,
+        states: Vec<DynState>,
     ) -> AddStateMachinesResult {
         self.executor.add_state_machines_dbtx(dbtx, states).await
     }
@@ -866,11 +912,7 @@ impl Client {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
-    ) -> anyhow::Result<(
-        Transaction,
-        Vec<DynState<DynGlobalClientContext>>,
-        Range<u64>,
-    )> {
+    ) -> anyhow::Result<(Transaction, Vec<DynState>, Range<u64>)> {
         if let TransactionBuilderBalance::Underfunded(missing_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
@@ -1046,20 +1088,14 @@ impl Client {
         operation_id: OperationId,
     ) -> bool {
         let active_state_exists = dbtx
-            .find_by_prefix(&ActiveOperationStateKeyPrefix::<DynGlobalClientContext> {
-                operation_id,
-                _pd: Default::default(),
-            })
+            .find_by_prefix(&ActiveOperationStateKeyPrefix { operation_id })
             .await
             .next()
             .await
             .is_some();
 
         let inactive_state_exists = dbtx
-            .find_by_prefix(&InactiveOperationStateKeyPrefix::<DynGlobalClientContext> {
-                operation_id,
-                _pd: Default::default(),
-            })
+            .find_by_prefix(&InactiveOperationStateKeyPrefix { operation_id })
             .await
             .next()
             .await
@@ -2031,7 +2067,7 @@ impl ClientBuilder {
         }
 
         let executor = {
-            let mut executor_builder = Executor::<DynGlobalClientContext>::builder();
+            let mut executor_builder = Executor::builder();
             executor_builder
                 .with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
 

@@ -26,10 +26,7 @@ use self::init::ClientModuleInit;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::sm::{self, ActiveState, Context, DynContext, DynState, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use crate::{
-    oplog, AddStateMachinesResult, ClientArc, ClientWeak, DynGlobalClientContext,
-    TransactionUpdates,
-};
+use crate::{oplog, AddStateMachinesResult, ClientArc, ClientWeak, TransactionUpdates};
 
 pub mod init;
 pub mod recovery;
@@ -137,7 +134,7 @@ where
 
     pub async fn add_state_machines(
         &mut self,
-        dyn_states: Vec<DynState<DynGlobalClientContext>>,
+        dyn_states: Vec<DynState>,
     ) -> AddStateMachinesResult {
         self.client
             .client
@@ -166,7 +163,7 @@ where
 
     pub async fn add_state_machines_dbtx(
         &mut self,
-        states: Vec<DynState<DynGlobalClientContext>>,
+        states: Vec<DynState>,
     ) -> AddStateMachinesResult {
         self.client
             .client
@@ -266,7 +263,7 @@ where
     pub fn make_client_output<O, S>(&self, output: ClientOutput<O, S>) -> ClientOutput
     where
         O: IntoDynInstance<DynType = DynOutput> + 'static,
-        S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
+        S: IntoDynInstance<DynType = DynState> + 'static,
     {
         self.make_dyn(output)
     }
@@ -275,14 +272,14 @@ where
     pub fn make_client_input<O, S>(&self, input: ClientInput<O, S>) -> ClientInput
     where
         O: IntoDynInstance<DynType = DynInput> + 'static,
-        S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
+        S: IntoDynInstance<DynType = DynState> + 'static,
     {
         self.make_dyn(input)
     }
 
-    pub fn make_dyn_state<GC, S>(&self, sm: S) -> DynState<GC>
+    pub fn make_dyn_state<S>(&self, sm: S) -> DynState
     where
-        S: sm::IState<GC> + 'static,
+        S: sm::IState + 'static,
     {
         DynState::from_typed(self.module_instance_id, sm)
     }
@@ -456,10 +453,8 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     type ModuleStateMachineContext: Context;
 
     /// All possible states this client can submit to the executor
-    type States: State<
-            GlobalContext = DynGlobalClientContext,
-            ModuleContext = Self::ModuleStateMachineContext,
-        > + IntoDynInstance<DynType = DynState<DynGlobalClientContext>>;
+    type States: State<ModuleContext = Self::ModuleStateMachineContext>
+        + IntoDynInstance<DynType = DynState>;
 
     fn decoder() -> Decoder {
         let mut decoder_builder = Self::Common::decoder_builder();

@@ -41,12 +41,11 @@ pub struct DepositStateMachine {
 
 impl State for DepositStateMachine {
     type ModuleContext = WalletClientContext;
-    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,
         context: &Self::ModuleContext,
-        global_context: &Self::GlobalContext,
+        global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
             DepositStates::Created(created_state) => {

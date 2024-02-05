@@ -60,7 +60,6 @@ pub enum TxSubmissionStates {
 
 impl State for TxSubmissionStates {
     type ModuleContext = TxSubmissionContext;
-    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,
@@ -115,7 +114,7 @@ impl State for TxSubmissionStates {
 }
 
 impl IntoDynInstance for TxSubmissionStates {
-    type DynType = DynState<DynGlobalClientContext>;
+    type DynType = DynState;
 
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
         DynState::from_typed(instance_id, self)

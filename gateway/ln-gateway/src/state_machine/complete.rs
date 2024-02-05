@@ -61,12 +61,11 @@ pub struct GatewayCompleteStateMachine {
 
 impl State for GatewayCompleteStateMachine {
     type ModuleContext = GatewayClientContext;
-    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,
         context: &Self::ModuleContext,
-        _global_context: &Self::GlobalContext,
+        _global_context: &DynGlobalClientContext,
     ) -> Vec<fedimint_client::sm::StateTransition<Self>> {
         match &self.state {
             GatewayCompleteStates::WaitForPreimage(state) => {

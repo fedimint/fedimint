@@ -29,12 +29,11 @@ pub enum DummyStateMachine {
 
 impl State for DummyStateMachine {
     type ModuleContext = DummyClientContext;
-    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,
         context: &Self::ModuleContext,
-        global_context: &Self::GlobalContext,
+        global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match self.clone() {
             DummyStateMachine::Input(amount, txid, id) => vec![StateTransition::new(
@@ -128,7 +127,7 @@ async fn await_dummy_output_outcome(
 
 // TODO: Boiler-plate
 impl IntoDynInstance for DummyStateMachine {
-    type DynType = DynState<DynGlobalClientContext>;
+    type DynType = DynState;
 
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
         DynState::from_typed(instance_id, self)

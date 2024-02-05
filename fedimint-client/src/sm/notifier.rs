@@ -11,7 +11,7 @@ use crate::sm::executor::{
     ActiveModuleOperationStateKeyPrefix, ActiveStateKey, InactiveModuleOperationStateKeyPrefix,
     InactiveStateKey,
 };
-use crate::sm::{ActiveState, DynState, GlobalContext, InactiveState, State};
+use crate::sm::{ActiveState, DynState, InactiveState, State};
 
 /// State transition notifier owned by the modularized client used to inform
 /// modules of state transitions.
@@ -20,14 +20,14 @@ use crate::sm::{ActiveState, DynState, GlobalContext, InactiveState, State};
 /// the operation the notifier loads all belonging past state transitions from
 /// the DB. State transitions may be reported multiple times and out of order.
 #[derive(Clone)]
-pub struct Notifier<GC> {
+pub struct Notifier {
     /// Broadcast channel used to send state transitions to all subscribers
-    broadcast: tokio::sync::broadcast::Sender<DynState<GC>>,
+    broadcast: tokio::sync::broadcast::Sender<DynState>,
     /// Database used to load all states that happened before subscribing
     db: Database,
 }
 
-impl<GC> Notifier<GC> {
+impl Notifier {
     pub fn new(db: Database) -> Self {
         let (sender, _receiver) = tokio::sync::broadcast::channel(10_000);
         Self {
@@ -37,7 +37,7 @@ impl<GC> Notifier<GC> {
     }
 
     /// Notify all subscribers of a state transition
-    pub fn notify(&self, state: DynState<GC>) {
+    pub fn notify(&self, state: DynState) {
         let queue_len = self.broadcast.len();
         trace!(?state, %queue_len, "Sending notification about state transition");
         // FIXME: use more robust notification mechanism
@@ -51,7 +51,7 @@ impl<GC> Notifier<GC> {
 
     /// Create a new notifier for a specific module instance that can only
     /// subscribe to the instance's state transitions
-    pub fn module_notifier<S>(&self, module_instance: ModuleInstanceId) -> ModuleNotifier<GC, S> {
+    pub fn module_notifier<S>(&self, module_instance: ModuleInstanceId) -> ModuleNotifier<S> {
         ModuleNotifier {
             broadcast: self.broadcast.clone(),
             module_instance,
@@ -62,7 +62,7 @@ impl<GC> Notifier<GC> {
 
     /// Create a [`NotifierSender`] handle that lets the owner trigger
     /// notifications without having to hold a full `Notifier`.
-    pub fn sender(&self) -> NotifierSender<GC> {
+    pub fn sender(&self) -> NotifierSender {
         NotifierSender {
             sender: self.broadcast.clone(),
         }
@@ -73,13 +73,13 @@ impl<GC> Notifier<GC> {
 /// entire [`Notifier`] but still need to trigger notifications. The main use
 /// case is triggering notifications when a DB transaction was committed
 /// successfully.
-pub struct NotifierSender<GC> {
-    sender: tokio::sync::broadcast::Sender<DynState<GC>>,
+pub struct NotifierSender {
+    sender: tokio::sync::broadcast::Sender<DynState>,
 }
 
-impl<GC> NotifierSender<GC> {
+impl NotifierSender {
     /// Notify all subscribers of a state transition
-    pub fn notify(&self, state: DynState<GC>) {
+    pub fn notify(&self, state: DynState) {
         let _res = self.sender.send(state);
     }
 }
@@ -87,8 +87,8 @@ impl<GC> NotifierSender<GC> {
 /// State transition notifier for a specific module instance that can only
 /// subscribe to transitions belonging to that module
 #[derive(Debug, Clone)]
-pub struct ModuleNotifier<GC, S> {
-    broadcast: tokio::sync::broadcast::Sender<DynState<GC>>,
+pub struct ModuleNotifier<S> {
+    broadcast: tokio::sync::broadcast::Sender<DynState>,
     module_instance: ModuleInstanceId,
     /// Database used to load all states that happened before subscribing, see
     /// [`Notifier`]
@@ -98,10 +98,9 @@ pub struct ModuleNotifier<GC, S> {
     _pd: PhantomData<S>,
 }
 
-impl<GC, S> ModuleNotifier<GC, S>
+impl<S> ModuleNotifier<S>
 where
-    GC: GlobalContext,
-    S: State<GlobalContext = GC>,
+    S: State,
 {
     // TODO: remove duplicates and order old transitions
     /// Subscribe to state transitions belonging to an operation and module
@@ -113,7 +112,7 @@ where
     /// loaded from the database are not returned in a specific order. There may
     /// also be duplications.
     pub async fn subscribe(&self, operation_id: OperationId) -> BoxStream<'static, S> {
-        let to_typed_state = |state: DynState<GC>| {
+        let to_typed_state = |state: DynState| {
             state
                 .as_any()
                 .downcast_ref::<S>()
@@ -141,10 +140,9 @@ where
                 .find_by_prefix(&ActiveModuleOperationStateKeyPrefix {
                     operation_id,
                     module_instance: self.module_instance,
-                    _pd: Default::default(),
                 })
                 .await
-                .map(|(key, val): (ActiveStateKey<GC>, ActiveState)| {
+                .map(|(key, val): (ActiveStateKey, ActiveState)| {
                     (to_typed_state(key.state), val.created_at)
                 })
                 .collect::<Vec<(S, _)>>()
@@ -154,10 +152,9 @@ where
                 .find_by_prefix(&InactiveModuleOperationStateKeyPrefix {
                     operation_id,
                     module_instance: self.module_instance,
-                    _pd: Default::default(),
                 })
                 .await
-                .map(|(key, val): (InactiveStateKey<GC>, InactiveState)| {
+                .map(|(key, val): (InactiveStateKey, InactiveState)| {
                     (to_typed_state(key.state), val.created_at)
                 })
                 .collect::<Vec<(S, _)>>()

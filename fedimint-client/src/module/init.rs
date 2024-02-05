@@ -21,7 +21,6 @@ use super::recovery::{DynModuleBackup, RecoveryProgress};
 use super::{ClientContext, FinalClient};
 use crate::module::{ClientModule, DynClientModule};
 use crate::sm::{ModuleNotifier, Notifier};
-use crate::DynGlobalClientContext;
 
 pub type ClientModuleInitRegistry = ModuleInitRegistry<DynClientModuleInit>;
 
@@ -34,10 +33,7 @@ where
     db: Database,
     api_version: ApiVersion,
     module_root_secret: DerivableSecret,
-    notifier: ModuleNotifier<
-        DynGlobalClientContext,
-        <<C as ClientModuleInit>::Module as ClientModule>::States,
-    >,
+    notifier: ModuleNotifier<<<C as ClientModuleInit>::Module as ClientModule>::States>,
     api: DynGlobalApi,
     module_api: DynModuleApi,
     context: ClientContext<<C as ClientModuleInit>::Module>,
@@ -69,10 +65,7 @@ where
 
     pub fn notifier(
         &self,
-    ) -> &ModuleNotifier<
-        DynGlobalClientContext,
-        <<C as ClientModuleInit>::Module as ClientModule>::States,
-    > {
+    ) -> &ModuleNotifier<<<C as ClientModuleInit>::Module as ClientModule>::States> {
         &self.notifier
     }
 
@@ -106,10 +99,7 @@ where
     db: Database,
     api_version: ApiVersion,
     module_root_secret: DerivableSecret,
-    notifier: ModuleNotifier<
-        DynGlobalClientContext,
-        <<C as ClientModuleInit>::Module as ClientModule>::States,
-    >,
+    notifier: ModuleNotifier<<<C as ClientModuleInit>::Module as ClientModule>::States>,
     api: DynGlobalApi,
     module_api: DynModuleApi,
     context: ClientContext<<C as ClientModuleInit>::Module>,
@@ -142,10 +132,7 @@ where
 
     pub fn notifier(
         &self,
-    ) -> &ModuleNotifier<
-        DynGlobalClientContext,
-        <<C as ClientModuleInit>::Module as ClientModule>::States,
-    > {
+    ) -> &ModuleNotifier<<<C as ClientModuleInit>::Module as ClientModule>::States> {
         &self.notifier
     }
 
@@ -246,7 +233,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
         instance_id: ModuleInstanceId,
         api_version: ApiVersion,
         module_root_secret: DerivableSecret,
-        notifier: Notifier<DynGlobalClientContext>,
+        notifier: Notifier,
         api: DynGlobalApi,
         snapshot: Option<&DynModuleBackup>,
         progress_tx: watch::Sender<RecoveryProgress>,
@@ -262,7 +249,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
         instance_id: ModuleInstanceId,
         api_version: ApiVersion,
         module_root_secret: DerivableSecret,
-        notifier: Notifier<DynGlobalClientContext>,
+        notifier: Notifier,
         api: DynGlobalApi,
     ) -> anyhow::Result<DynClientModule>;
 }
@@ -306,7 +293,7 @@ where
         api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         // TODO: make dyn type for notifier
-        notifier: Notifier<DynGlobalClientContext>,
+        notifier: Notifier,
         api: DynGlobalApi,
         snapshot: Option<&DynModuleBackup>,
         progress_tx: watch::Sender<RecoveryProgress>,
@@ -353,7 +340,7 @@ where
         api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         // TODO: make dyn type for notifier
-        notifier: Notifier<DynGlobalClientContext>,
+        notifier: Notifier,
         api: DynGlobalApi,
     ) -> anyhow::Result<DynClientModule> {
         let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;

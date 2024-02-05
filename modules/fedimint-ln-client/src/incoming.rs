@@ -74,12 +74,11 @@ pub struct IncomingStateMachine {
 
 impl State for IncomingStateMachine {
     type ModuleContext = LightningClientContext;
-    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,
         context: &Self::ModuleContext,
-        global_context: &Self::GlobalContext,
+        global_context: &DynGlobalClientContext,
     ) -> Vec<fedimint_client::sm::StateTransition<Self>> {
         match &self.state {
             IncomingSmStates::FundingOffer(state) => state.transitions(global_context, context),
