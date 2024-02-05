@@ -838,6 +838,7 @@ impl LightningClientModule {
             Some(active_gateway) => Ok(active_gateway.info),
             None => {
                 let gateways = self.fetch_registered_gateways().await?;
+                let num_gateways = gateways.len();
 
                 let vetted = gateways
                     .clone()
@@ -845,19 +846,21 @@ impl LightningClientModule {
                     .filter(|g| g.vetted)
                     .collect::<Vec<_>>();
                 if !vetted.is_empty() {
-                    debug!("Choosing a vetted gateway");
-                    vetted
+                    let chosen_gateway = vetted
                         .into_iter()
                         .map(|gw| gw.info)
                         .choose(&mut rand::thread_rng())
-                        .ok_or(anyhow::anyhow!("Could not choose a vetted gateway"))
+                        .expect("vetted is non-empty");
+                    debug!(gateway_id = %chosen_gateway.gateway_id, num_gateways, "Choosing a vetted gateway");
+                    Ok(chosen_gateway)
                 } else {
-                    debug!("Choosing a random gateway");
-                    gateways
+                    let chosen_gateway = gateways
                         .into_iter()
                         .map(|gw| gw.info)
                         .choose(&mut rand::thread_rng())
-                        .ok_or(anyhow::anyhow!("Could not choose a gateway"))
+                        .ok_or(anyhow::anyhow!("Could not choose a gateway"))?;
+                    debug!(gateway_id = %chosen_gateway.gateway_id, num_gateways, "Choosing a random gateway");
+                    Ok(chosen_gateway)
                 }
             }
         }
