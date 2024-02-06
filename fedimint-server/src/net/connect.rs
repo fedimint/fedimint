@@ -254,7 +254,7 @@ pub mod mock {
     use std::pin::Pin;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
 
     use anyhow::{anyhow, Error};
     use fedimint_core::task::{sleep, spawn};
@@ -339,6 +339,7 @@ pub mod mock {
     }
 
     struct UnreliabilityGenerator {
+        start: SystemTime,
         latency: LatencyInterval,
         failure_rate: FailureRate,
         sleep_future: Option<Pin<Box<tokio::time::Sleep>>>,
@@ -348,6 +349,7 @@ pub mod mock {
     impl UnreliabilityGenerator {
         fn new(latency: LatencyInterval, failure_rate: FailureRate) -> UnreliabilityGenerator {
             Self {
+                start: fedimint_core::time::now(),
                 latency,
                 failure_rate,
                 sleep_future: None,
@@ -371,8 +373,13 @@ pub mod mock {
                 }
                 std::task::Poll::Pending => return std::task::Poll::Pending,
             }
-            if self.failure_rate.random_fail() {
+            let duration = fedimint_core::time::now()
+                .duration_since(self.start)
+                .unwrap_or_default();
+            if self.failure_rate.random_fail(duration) {
                 tracing::debug!(
+                    duration_ms = %duration.as_millis(),
+                    successes = self.successes,
                     "Returning random error on unreliable stream after {} successes",
                     self.successes
                 );
@@ -545,17 +552,30 @@ pub mod mock {
     }
 
     #[derive(Debug, Copy, Clone)]
-    pub struct FailureRate(f64);
+    pub struct FailureRate {
+        /// Rate of failure
+        rate: f64,
+        /// Time it takes to reach it
+        rampup: Duration,
+    }
+
     impl FailureRate {
-        const MAX: FailureRate = FailureRate(1.0);
-        pub fn new(failure_rate: f64) -> Self {
+        const MAX: FailureRate = FailureRate {
+            rate: 1.0,
+            rampup: Duration::from_secs(1),
+        };
+        pub fn new(failure_rate: f64, rampup: Duration) -> Self {
             assert!((0.0..=1.0).contains(&failure_rate));
-            Self(failure_rate)
+            Self {
+                rate: failure_rate,
+                rampup,
+            }
         }
 
-        pub fn random_fail(&self) -> bool {
+        pub fn random_fail(&self, duration: Duration) -> bool {
             let mut rng = rand::thread_rng();
-            rng.gen_range(0.0..1.0) < self.0
+            let ratio = ((duration.as_micros() / self.rampup.as_micros()) as f64).clamp(0.001, 1.0);
+            rng.gen_range(0.0..1.0) < (self.rate * ratio)
         }
     }
 
@@ -576,7 +596,10 @@ pub mod mock {
 
     impl StreamReliability {
         pub const MILDLY_UNRELIABLE: StreamReliability = {
-            let failure_rate = FailureRate(0.1);
+            let failure_rate = FailureRate {
+                rate: 0.1,
+                rampup: Duration::from_secs(15),
+            };
             let latency = LatencyInterval {
                 min_millis: 1,
                 max_millis: 10,
@@ -604,12 +627,20 @@ pub mod mock {
                 min_millis: 1,
                 max_millis: 10,
             };
+            let base = FailureRate {
+                rate: failure_rate_base,
+                rampup: Duration::from_secs(30),
+            };
+            let double = FailureRate {
+                rate: failure_rate_base * 2.0,
+                rampup: Duration::from_secs(30),
+            };
             Self::RandomlyUnreliable {
                 // Try to make read_failure_rate = write_failure_rate + flush_failure_rate
-                read_failure_rate: FailureRate(failure_rate_base * 2.0),
-                write_failure_rate: FailureRate(failure_rate_base),
-                flush_failure_rate: FailureRate(failure_rate_base),
-                shutdown_failure_rate: FailureRate(failure_rate_base),
+                read_failure_rate: double,
+                write_failure_rate: base,
+                flush_failure_rate: base,
+                shutdown_failure_rate: base,
                 read_latency: latency,
                 write_latency: latency,
                 flush_latency: latency,
@@ -747,8 +778,8 @@ pub mod mock {
 
     #[tokio::test]
     async fn test_unreliable_components() {
-        assert!(!FailureRate::new(0f64).random_fail());
-        assert!(FailureRate::new(1f64).random_fail());
+        assert!(!FailureRate::new(0f64, Duration::from_secs(1)).random_fail(Duration::from_secs(2)));
+        assert!(FailureRate::new(1f64, Duration::from_secs(1)).random_fail(Duration::from_secs(2)));
 
         let good_interval = (0..=3).contains(
             &LatencyInterval::new(Duration::from_millis(0), Duration::from_millis(3))
