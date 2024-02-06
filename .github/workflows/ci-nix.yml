@@ -67,6 +67,46 @@ jobs:
       - name: Check `nix flake show`
         run: nix flake show .#
 
+  shell:
+    if: github.repository == 'fedimint/fedimint'
+    strategy:
+      matrix:
+        host:
+          - linux
+          - macos
+        include:
+          - host: linux
+            runs-on: buildjet-4vcpu-ubuntu-2004
+            build-in-pr: false
+            timeout: 30
+          - host: macos
+            runs-on: macos-14
+            build-in-pr: false
+            timeout: 30
+
+    name: "Dev Shell on ${{ matrix.host }}"
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: ${{ matrix.timeout }}
+
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
+
+      - uses: cachix/install-nix-action@v25
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
+        with:
+          nix_path: nixpkgs=channel:nixos-22.05
+      - uses: cachix/cachix-action@v14
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
+
+      - name: Build dev shell
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
+        run: nix develop -L -c true
+
   build:
     if: github.repository == 'fedimint/fedimint'
     strategy:
@@ -457,7 +497,7 @@ jobs:
     runs-on: ubuntu-22.04
     # note: we don't depend on `audit` because it will
     # be often broken, and we can't fix it immediately
-    needs: [ build, cross, ccov, containers, pkgs ]
+    needs: [ build, shell, cross, ccov, containers, pkgs ]
 
     steps:
     - name: Discord notifications on failure
