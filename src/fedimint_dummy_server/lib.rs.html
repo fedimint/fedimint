@@ -365,6 +365,14 @@
 </span><span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>DummyInit {
     <span class="kw">type </span>Common = DummyCommonInit;
+    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">1</span>);
+
+    <span class="doccomment">/// DB migrations to move from old to newer versions
+    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
+        <span class="kw">let </span><span class="kw-2">mut </span>migrations = MigrationMap::new();
+        migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx| migrate_to_v1(dbtx).boxed());
+        migrations
+    }
 
     <span class="doccomment">/// Dumps all database items for debugging
     </span><span class="kw">async fn </span>dump_database(
@@ -411,7 +419,6 @@
 </span><span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ServerModuleInit <span class="kw">for </span>DummyInit {
     <span class="kw">type </span>Params = DummyGenParams;
-    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">1</span>);
 
     <span class="doccomment">/// Returns the version of this module
     </span><span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, _core: CoreConsensusVersion) -&gt; <span class="kw-2">&amp;</span>[ModuleConsensusVersion] {
@@ -425,13 +432,6 @@
     <span class="doccomment">/// Initialize the module
     </span><span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ServerModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;DynServerModule&gt; {
         <span class="prelude-val">Ok</span>(Dummy::new(args.cfg().to_typed()<span class="question-mark">?</span>).into())
-    }
-
-    <span class="doccomment">/// DB migrations to move from old to newer versions
-    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
-        <span class="kw">let </span><span class="kw-2">mut </span>migrations = MigrationMap::new();
-        migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx| migrate_to_v1(dbtx).boxed());
-        migrations
     }
 
     <span class="doccomment">/// Generates configs for all peers in a trusted manner for testing

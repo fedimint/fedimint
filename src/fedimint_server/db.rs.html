@@ -293,14 +293,6 @@
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a>
 <a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
@@ -400,13 +392,12 @@
     <span class="kw">use </span>std::collections::BTreeMap;
     <span class="kw">use </span>std::str::FromStr;
 
-    <span class="kw">use </span>anyhow::{ensure, Context};
+    <span class="kw">use </span>anyhow::ensure;
     <span class="kw">use </span>bitcoin::{secp256k1, KeyPair};
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
     <span class="kw">use </span>fedimint_core::db::{
-        apply_migrations, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
-        IDatabaseTransactionOpsCoreTyped,
+        Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
     <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -416,18 +407,21 @@
     <span class="kw">use </span>fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
     <span class="kw">use </span>fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
     <span class="kw">use </span>fedimint_dummy_server::Dummy;
-    <span class="kw">use </span>fedimint_logging::TracingSetup;
-    <span class="kw">use </span>fedimint_testing::db::{snapshot_db_migrations, validate_migrations, BYTE_32};
+    <span class="kw">use </span>fedimint_logging::{TracingSetup, LOG_DB};
+    <span class="kw">use </span>fedimint_testing::db::{
+        snapshot_db_migrations_server, validate_migrations_server, BYTE_32, TEST_MODULE_INSTANCE_ID,
+    };
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>secp256k1_zkp::Message;
     <span class="kw">use </span>strum::IntoEnumIterator;
+    <span class="kw">use </span>tracing::info;
 
     <span class="kw">use </span><span class="kw">super</span>::AcceptedTransactionKey;
     <span class="kw">use </span><span class="kw">crate</span>::db::{
-        get_global_database_migrations, AcceptedItem, AcceptedItemKey, AcceptedItemPrefix,
-        AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix,
-        SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
+        AcceptedItem, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKeyPrefix,
+        AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix, SignedSessionOutcomeKey,
+        SignedSessionOutcomePrefix,
     };
 
     <span class="doccomment">/// Create a database with version 0 data. The database produced is not
@@ -436,14 +430,14 @@
     /// in future code versions. This function should not be updated when
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
-    </span><span class="kw">async fn </span>create_server_db_with_v0_data(<span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>DatabaseVersionKey, <span class="kw-2">&amp;</span>DatabaseVersion(<span class="number">0</span>))
+    </span><span class="kw">async fn </span>create_server_db_with_v0_data(db: Database) {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+
+        <span class="comment">// Will be migrated to `DatabaseVersionKey` during `apply_migrations`
+        </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span>DatabaseVersionKeyV0, <span class="kw-2">&amp;</span>DatabaseVersion(<span class="number">0</span>))
             .<span class="kw">await</span>;
 
         <span class="kw">let </span>accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(<span class="kw-2">&amp;</span>BYTE_32).unwrap());
-
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>DatabaseVersionKey, <span class="kw-2">&amp;</span>DatabaseVersion(<span class="number">0</span>))
-            .<span class="kw">await</span>;
 
         <span class="kw">let </span>(sk, <span class="kw">_</span>) = secp256k1::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
@@ -497,20 +491,19 @@
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>AlephUnitsKey(<span class="number">0</span>), <span class="kw-2">&amp;</span><span class="macro">vec!</span>[<span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>])
             .<span class="kw">await</span>;
 
-        <span class="kw">let </span>_consensus_items = <span class="macro">vec!</span>[ConsensusItem::Transaction(transaction)];
+        dbtx.commit_tx().<span class="kw">await</span>;
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>snapshot_server_db_migrations() -&gt; anyhow::Result&lt;()&gt; {
-        snapshot_db_migrations(
-            <span class="string">&quot;fedimint-server-v0&quot;</span>,
-            |dbtx| {
+        snapshot_db_migrations_server(
+            |db| {
                 Box::pin(<span class="kw">async move </span>{
-                    create_server_db_with_v0_data(dbtx).<span class="kw">await</span>;
+                    create_server_db_with_v0_data(db).<span class="kw">await</span>;
                 })
             },
             ModuleDecoderRegistry::from_iter([(
-                <span class="number">0</span>,
+                TEST_MODULE_INSTANCE_ID,
                 DummyCommonInit::KIND,
                 &lt;Dummy <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
@@ -522,22 +515,9 @@
     </span><span class="kw">async fn </span>test_server_db_migrations() -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let _ </span>= TracingSetup::default().init();
 
-        validate_migrations(
-            <span class="string">&quot;fedimint-server&quot;</span>,
+        validate_migrations_server(
             |db| <span class="kw">async move </span>{
-                apply_migrations(
-                    <span class="kw-2">&amp;</span>db,
-                    <span class="string">&quot;Global&quot;</span>.to_string(),
-                    GLOBAL_DATABASE_VERSION,
-                    get_global_database_migrations(),
-                )
-                .<span class="kw">await
-                </span>.context(<span class="string">&quot;Error applying migrations to temp database&quot;</span>)<span class="question-mark">?</span>;
-
-                <span class="comment">// Verify that all of the data from the global namespace can be read. If a
-                // database migration failed or was not properly supplied,
-                // the struct will fail to be read.
-                </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
                 <span class="kw">for </span>prefix <span class="kw">in </span>DbKeyPrefix::iter() {
                     <span class="kw">match </span>prefix {
@@ -552,6 +532,7 @@
                                 accepted_items &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any AcceptedItems&quot;
                             </span>);
+                            <span class="macro">info!</span>(target: LOG_DB, <span class="string">&quot;Validated AcceptedItems&quot;</span>);
                         }
                         DbKeyPrefix::AcceptedTransaction =&gt; {
                             <span class="kw">let </span>accepted_transactions = dbtx
@@ -564,6 +545,7 @@
                                 num_accepted_transactions &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any AcceptedTransactions&quot;
                             </span>);
+                            <span class="macro">info!</span>(target: LOG_DB, <span class="string">&quot;Validated AcceptedTransactions&quot;</span>);
                         }
                         DbKeyPrefix::SignedSessionOutcome =&gt; {
                             <span class="kw">let </span>signed_session_outcomes = dbtx
@@ -573,9 +555,10 @@
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_signed_session_outcomes = signed_session_outcomes.len();
                             <span class="macro">ensure!</span>(
-                                num_signed_session_outcomes &gt; <span class="number">0</span>,
-                                <span class="string">&quot;validate_migrations was not able to read any SignedSessionOutcomes&quot;
-                            </span>);
+                            num_signed_session_outcomes &gt; <span class="number">0</span>,
+                            <span class="string">&quot;validate_migrations was not able to read any SignedSessionOutcomes&quot;
+                        </span>);
+                            <span class="macro">info!</span>(target: LOG_DB, <span class="string">&quot;Validated SignedSessionOutcome&quot;</span>);
                         }
                         DbKeyPrefix::AlephUnits =&gt; {
                             <span class="kw">let </span>aleph_units = dbtx
@@ -588,6 +571,7 @@
                                 num_aleph_units &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any AlephUnits&quot;
                             </span>);
+                            <span class="macro">info!</span>(target: LOG_DB, <span class="string">&quot;Validated AlephUnits&quot;</span>);
                         }
                         <span class="comment">// Module prefix is reserved for modules, no migration testing is needed
                         </span>DbKeyPrefix::Module =&gt; {}
@@ -596,7 +580,7 @@
                 <span class="prelude-val">Ok</span>(())
             },
             ModuleDecoderRegistry::from_iter([(
-                <span class="number">0</span>,
+                TEST_MODULE_INSTANCE_ID,
                 DummyCommonInit::KIND,
                 &lt;Dummy <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),

@@ -2250,7 +2250,6 @@
 <a href="#2250" id="2250">2250</a>
 <a href="#2251" id="2251">2251</a>
 <a href="#2252" id="2252">2252</a>
-<a href="#2253" id="2253">2253</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3992,13 +3991,12 @@
                     <span class="kw">continue</span>;
                 };
 
-                <span class="kw">let </span>isolated_db = <span class="self">self</span>.db().with_prefix_module_id(module_id);
-
                 apply_migrations(
-                    <span class="kw-2">&amp;</span>isolated_db,
+                    <span class="self">self</span>.db(),
                     kind.to_string(),
                     init.database_version(),
                     init.get_database_migrations(),
+                    <span class="prelude-val">Some</span>(module_id),
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             }

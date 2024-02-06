@@ -440,6 +440,7 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span>db_version = dbtx.get_value(<span class="kw-2">&amp;</span>DatabaseVersionKey(<span class="kw-2">*</span>module_id)).<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>isolated_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="kw-2">*</span>module_id);
 
         <span class="kw">match </span>inits.get(kind) {
@@ -478,7 +479,6 @@
                     .<span class="kw">await
                     </span>.collect::&lt;BTreeMap&lt;String, <span class="kw">_</span>&gt;&gt;();
 
-                <span class="kw">let </span>db_version = isolated_dbtx.get_value(<span class="kw-2">&amp;</span>DatabaseVersionKey).<span class="kw">await</span>;
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(db_version) = db_version {
                     module_serialized.insert(<span class="string">&quot;Version&quot;</span>.to_string(), Box::new(db_version));
                 } <span class="kw">else </span>{

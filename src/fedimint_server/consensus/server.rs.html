@@ -786,6 +786,7 @@
 <a href="#786" id="786">786</a>
 <a href="#787" id="787">787</a>
 <a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -796,7 +797,8 @@
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::db::{
-    apply_migrations, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    apply_migrations, apply_migrations_server, Database, DatabaseTransaction,
+    IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
@@ -892,9 +894,9 @@
         <span class="comment">// Apply database migrations and build `ServerModuleRegistry`
         </span><span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
 
-        apply_migrations(
+        apply_migrations_server(
             <span class="kw-2">&amp;</span>db,
-            <span class="string">&quot;Global&quot;</span>.to_string(),
+            <span class="string">&quot;fedimint-server&quot;</span>.to_string(),
             GLOBAL_DATABASE_VERSION,
             get_global_database_migrations(),
         )
@@ -908,16 +910,16 @@
             <span class="macro">info!</span>(target: LOG_CORE,
                 module_instance_id = <span class="kw-2">*</span>module_id, kind = %kind, <span class="string">&quot;Init module&quot;</span>);
 
-            <span class="kw">let </span>isolated_db = db.with_prefix_module_id(<span class="kw-2">*</span>module_id);
-
             apply_migrations(
-                <span class="kw-2">&amp;</span>isolated_db,
+                <span class="kw-2">&amp;</span>db,
                 init.module_kind().to_string(),
                 init.database_version(),
                 init.get_database_migrations(),
+                <span class="prelude-val">Some</span>(<span class="kw-2">*</span>module_id),
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
+            <span class="kw">let </span>isolated_db = db.with_prefix_module_id(<span class="kw-2">*</span>module_id);
             <span class="kw">let </span>module = init
                 .init(
                     cfg.get_module_config(<span class="kw-2">*</span>module_id)<span class="question-mark">?</span>,

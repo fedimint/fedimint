@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["BYTE_20","BYTE_32","BYTE_33","BYTE_8","STRING_64"],"fn":["copy_directory","get_project_root","open_temp_db_and_copy","snapshot_db_migrations","validate_migrations"]};
+window.SIDEBAR_ITEMS = {"constant":["BYTE_20","BYTE_32","BYTE_33","BYTE_8","STRING_64","TEST_MODULE_INSTANCE_ID"],"fn":["copy_directory","create_snapshot","get_project_root","get_temp_database","open_snapshot_db","open_temp_db_and_copy","snapshot_db_migrations","snapshot_db_migrations_server","validate_migrations_module","validate_migrations_server"]};

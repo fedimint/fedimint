@@ -358,30 +358,6 @@
 <a href="#358" id="358">358</a>
 <a href="#359" id="359">359</a>
 <a href="#360" id="360">360</a>
-<a href="#361" id="361">361</a>
-<a href="#362" id="362">362</a>
-<a href="#363" id="363">363</a>
-<a href="#364" id="364">364</a>
-<a href="#365" id="365">365</a>
-<a href="#366" id="366">366</a>
-<a href="#367" id="367">367</a>
-<a href="#368" id="368">368</a>
-<a href="#369" id="369">369</a>
-<a href="#370" id="370">370</a>
-<a href="#371" id="371">371</a>
-<a href="#372" id="372">372</a>
-<a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>recovery;
 
 <span class="kw">use </span>std::fmt::Debug;
@@ -391,7 +367,7 @@
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi};
 <span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, FederationId, ModuleInitRegistry};
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseVersion, MigrationMap};
+<span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, IDynCommonModuleInit, ModuleInit, MultiApiVersion,
 };
@@ -555,18 +531,6 @@
 </span><span class="kw">pub trait </span>ClientModuleInit: ModuleInit + Sized {
     <span class="kw">type </span>Module: ClientModule;
 
-    <span class="doccomment">/// Represents the version of the database, used to determine
-    /// if a database migration is needed when the client is created.
-    </span><span class="kw">const </span>DATABASE_VERSION: DatabaseVersion;
-
-    <span class="doccomment">/// Returns a map of database migrations functions that are applied
-    /// to the database. The functions represent mappings between database
-    /// breaking changes and how to derive the new database structures from
-    /// the old ones.
-    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
-        MigrationMap::new()
-    }
-
     <span class="doccomment">/// Api versions of the corresponding server side module&#39;s API
     /// that this client module implementation can use.
     </span><span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion;
@@ -597,10 +561,6 @@
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder;
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
-
-    <span class="kw">fn </span>database_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseVersion;
-
-    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap;
 
     <span class="kw">fn </span>as_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">&#39;static</span>);
 
@@ -649,14 +609,6 @@
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
         &lt;<span class="self">Self </span><span class="kw">as </span>ModuleInit&gt;::Common::KIND
-    }
-
-    <span class="kw">fn </span>database_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseVersion {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModuleInit&gt;::DATABASE_VERSION
-    }
-
-    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModuleInit&gt;::get_database_migrations(<span class="self">self</span>)
     }
 
     <span class="kw">fn </span>as_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">&#39;static</span>) {
