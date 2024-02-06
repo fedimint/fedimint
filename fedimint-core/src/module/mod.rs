@@ -2,7 +2,7 @@ pub mod audit;
 pub mod registry;
 
 use std::collections::BTreeMap;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{self, Debug, Formatter};
 use std::io::Read;
 use std::marker::{self, PhantomData};
 use std::pin::Pin;
@@ -30,6 +30,7 @@ use crate::db::{
     DatabaseVersion, MigrationMap,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
+use crate::fmt_utils::AbbreviateHexBytes;
 use crate::module::audit::Audit;
 use crate::net::peers::MuxPeerConnections;
 use crate::server::DynServerModule;
@@ -846,11 +847,23 @@ pub trait ServerModule: Debug + Sized {
 /// interact with `serde`-based APIs (AlephBFT, jsonrpsee). It creates a wrapper
 /// that holds the data as serialized
 // bytes internally.
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct SerdeModuleEncoding<T: Encodable + Decodable>(
     #[serde(with = "::fedimint_core::encoding::as_hex")] Vec<u8>,
     #[serde(skip)] PhantomData<T>,
 );
+
+impl<T> fmt::Debug for SerdeModuleEncoding<T>
+where
+    T: Encodable + Decodable,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("SerdeModuleEncoding(")?;
+        fmt::Debug::fmt(&AbbreviateHexBytes(&self.0), f)?;
+        f.write_str(")")?;
+        Ok(())
+    }
+}
 
 impl<T: Encodable + Decodable> From<&T> for SerdeModuleEncoding<T> {
     fn from(value: &T) -> Self {
