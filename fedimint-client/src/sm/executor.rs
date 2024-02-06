@@ -64,6 +64,7 @@ struct ExecutorInner {
     /// Any time executor should notice state machine update (e.g. because it
     /// was created), it's must be sent through this channel for it to notice.
     sm_update_tx: mpsc::UnboundedSender<DynState>,
+    sm_update_rx: Mutex<Option<mpsc::UnboundedReceiver<DynState>>>,
     shutdown_executor: Mutex<Option<oneshot::Sender<oneshot::Sender<()>>>>,
 }
 
@@ -241,11 +242,7 @@ impl Executor {
     ///
     /// ## Panics
     /// If called more than once.
-    pub async fn start_executor(
-        &self,
-        context_gen: ContextGen,
-        sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
-    ) {
+    pub async fn start_executor(&self, context_gen: ContextGen) {
         let replaced_old_context_gen = self
             .inner
             .context
@@ -257,6 +254,13 @@ impl Executor {
             !replaced_old_context_gen,
             "start_executor was called previously"
         );
+        let sm_update_rx = self
+            .inner
+            .sm_update_rx
+            .lock()
+            .await
+            .take()
+            .expect("start_executor was called previously: no sm_update_rx available");
 
         let (shutdown_sender, shutdown_receiver) =
             tokio::sync::oneshot::channel::<tokio::sync::oneshot::Sender<()>>();
@@ -413,27 +417,8 @@ impl ExecutorInner {
     async fn run_state_machines_executor_inner(
         &self,
         global_context_gen: ContextGen,
-        sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
+        mut sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
     ) -> anyhow::Result<()> {
-        // Re-add the same future  receiving on the channel.
-        // Not very elegant, but can't figure out how to make it a quine
-        // and don't know anything more clever.
-        fn re_add_sm_update_receiver(
-            futures: &mut FuturesUnordered<BoxFuture<'static, ExecutorLoopEvent>>,
-            mut sm_update_rx: mpsc::UnboundedReceiver<DynState>,
-        ) {
-            futures.push(Box::pin(async {
-                if let Some(new) = sm_update_rx.recv().await {
-                    ExecutorLoopEvent::New {
-                        state: new,
-                        sm_update_rx,
-                    }
-                } else {
-                    ExecutorLoopEvent::Disconnected
-                }
-            }));
-        }
-
         let active_states = self.get_active_states().await;
         trace!(target: LOG_CLIENT_REACTOR, "Starting active states: {:?}", active_states);
         for (state, _meta) in active_states {
@@ -447,10 +432,7 @@ impl ExecutorInner {
         enum ExecutorLoopEvent {
             /// Notivication about `DynState` arrived and should be handled,
             /// usually added to the list of pending futures.
-            New {
-                state: DynState,
-                sm_update_rx: mpsc::UnboundedReceiver<DynState>,
-            },
+            New { state: DynState },
             /// One of trigger functions of a state machine finished and
             /// returned transition function to run
             Triggered(TransitionForActiveState),
@@ -470,18 +452,25 @@ impl ExecutorInner {
         let mut futures: FuturesUnordered<BoxFuture<'_, ExecutorLoopEvent>> =
             FuturesUnordered::new();
 
-        re_add_sm_update_receiver(&mut futures, sm_update_rx);
+        loop {
+            let event = tokio::select! {
+                new = sm_update_rx.recv() => {
+                    if let Some(new) = new {
+                        ExecutorLoopEvent::New {
+                            state: new,
+                        }
+                    } else {
+                        ExecutorLoopEvent::Disconnected
+                    }
+                },
 
-        // main reactor loop: wait for next thing that completed, react (possibly adding
-        // more things to `futures`)
-        while let Some(event) = futures.next().await {
+                event = futures.next(), if !futures.is_empty() => event.expect("we only .next() if there are pending futures"),
+            };
+
+            // main reactor loop: wait for next thing that completed, react (possibly adding
+            // more things to `futures`)
             match event {
-                ExecutorLoopEvent::New {
-                    state,
-                    sm_update_rx,
-                } => {
-                    re_add_sm_update_receiver(&mut futures, sm_update_rx);
-
+                ExecutorLoopEvent::New { state } => {
                     if currently_running_sms.contains(&state) {
                         warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), "Received a state machine that is already running. Ignoring");
                         continue;
@@ -785,11 +774,7 @@ impl ExecutorBuilder {
     /// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    pub async fn build(
-        self,
-        db: Database,
-        notifier: Notifier,
-    ) -> (Executor, mpsc::UnboundedReceiver<DynState>) {
+    pub async fn build(self, db: Database, notifier: Notifier) -> Executor {
         let (sm_update_tx, sm_update_rx) = tokio::sync::mpsc::unbounded_channel();
 
         let inner = Arc::new(ExecutorInner {
@@ -800,13 +785,14 @@ impl ExecutorBuilder {
             notifier,
             shutdown_executor: Default::default(),
             sm_update_tx,
+            sm_update_rx: Mutex::new(Some(sm_update_rx)),
         });
 
         debug!(
             instances = ?inner.module_contexts.keys().copied().collect::<Vec<_>>(),
             "Initialized state machine executor with module instances"
         );
-        (Executor { inner }, sm_update_rx)
+        Executor { inner }
     }
 }
 
@@ -1202,14 +1188,11 @@ mod tests {
                 broadcast: broadcast.clone(),
             },
         );
-        let (executor, sm_update_rx) = executor_builder
+        let executor = executor_builder
             .build(db.clone(), Notifier::new(db.clone()))
             .await;
         executor
-            .start_executor(
-                Arc::new(|_, _| DynGlobalClientContext::new_fake()),
-                sm_update_rx,
-            )
+            .start_executor(Arc::new(|_, _| DynGlobalClientContext::new_fake()))
             .await;
 
         info!("Initialized test executor");
