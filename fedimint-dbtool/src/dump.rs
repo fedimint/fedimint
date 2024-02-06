@@ -135,6 +135,7 @@ impl DatabaseDump {
             return Ok(());
         }
         let mut dbtx = self.read_only.begin_transaction().await;
+        let db_version = dbtx.get_value(&DatabaseVersionKey(*module_id)).await;
         let mut isolated_dbtx = dbtx.to_ref_with_prefix_module_id(*module_id);
 
         match inits.get(kind) {
@@ -173,7 +174,6 @@ impl DatabaseDump {
                     .await
                     .collect::<BTreeMap<String, _>>();
 
-                let db_version = isolated_dbtx.get_value(&DatabaseVersionKey).await;
                 if let Some(db_version) = db_version {
                     module_serialized.insert("Version".to_string(), Box::new(db_version));
                 } else {

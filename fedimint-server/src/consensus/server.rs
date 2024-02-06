@@ -8,7 +8,8 @@ use async_channel::{Receiver, Sender};
 use fedimint_core::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::{
-    apply_migrations, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    apply_migrations, apply_migrations_server, Database, DatabaseTransaction,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
@@ -104,9 +105,9 @@ impl ConsensusServer {
         // Apply database migrations and build `ServerModuleRegistry`
         let mut modules = BTreeMap::new();
 
-        apply_migrations(
+        apply_migrations_server(
             &db,
-            "Global".to_string(),
+            "fedimint-server".to_string(),
             GLOBAL_DATABASE_VERSION,
             get_global_database_migrations(),
         )
@@ -120,16 +121,16 @@ impl ConsensusServer {
             info!(target: LOG_CORE,
                 module_instance_id = *module_id, kind = %kind, "Init module");
 
-            let isolated_db = db.with_prefix_module_id(*module_id);
-
             apply_migrations(
-                &isolated_db,
+                &db,
                 init.module_kind().to_string(),
                 init.database_version(),
                 init.get_database_migrations(),
+                Some(*module_id),
             )
             .await?;
 
+            let isolated_db = db.with_prefix_module_id(*module_id);
             let module = init
                 .init(
                     cfg.get_module_config(*module_id)?,

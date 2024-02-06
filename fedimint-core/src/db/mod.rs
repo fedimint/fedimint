@@ -1689,11 +1689,21 @@ macro_rules! impl_db_lookup{
     };
 }
 
+/// Deprecated: Use `DatabaseVersionKey(ModuleInstanceId)` instead.
 #[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct DatabaseVersionKey;
+pub struct DatabaseVersionKeyV0;
 
-#[derive(Debug, Encodable, Decodable, Serialize, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct DatabaseVersionKey(pub ModuleInstanceId);
+
+#[derive(Debug, Encodable, Decodable, Serialize, Clone, PartialOrd, Ord, PartialEq, Eq, Copy)]
 pub struct DatabaseVersion(pub u64);
+
+impl_db_record!(
+    key = DatabaseVersionKeyV0,
+    value = DatabaseVersion,
+    db_prefix = DbKeyPrefix::DatabaseVersion
+);
 
 impl_db_record!(
     key = DatabaseVersionKey,
@@ -1812,6 +1822,17 @@ pub type MigrationMap = BTreeMap<
     ) -> Pin<Box<dyn futures::Future<Output = anyhow::Result<()>> + Send + 'r>>,
 >;
 
+/// Applies the database migrations to a non-isolated database. Intended only to
+/// be used for `fedimint-server`.
+pub async fn apply_migrations_server(
+    db: &Database,
+    kind: String,
+    target_db_version: DatabaseVersion,
+    migrations: MigrationMap,
+) -> Result<(), anyhow::Error> {
+    apply_migrations(db, kind, target_db_version, migrations, None).await
+}
+
 /// `apply_migrations` iterates from the on disk database version for the module
 /// up to `target_db_version` and executes all of the migrations that exist in
 /// the `MigrationMap`. Each migration in `MigrationMap` updates the database to
@@ -1825,9 +1846,24 @@ pub async fn apply_migrations(
     kind: String,
     target_db_version: DatabaseVersion,
     migrations: MigrationMap,
+    module_instance_id: Option<ModuleInstanceId>,
 ) -> Result<(), anyhow::Error> {
-    let mut dbtx = db.begin_transaction().await;
-    let disk_version = dbtx.get_value(&DatabaseVersionKey).await;
+    db.ensure_global()?;
+
+    let mut global_dbtx = db.begin_transaction().await;
+    migrate_database_version(
+        &mut global_dbtx.to_ref_nc(),
+        target_db_version,
+        module_instance_id,
+        kind.clone(),
+    )
+    .await?;
+
+    let module_instance_id_key = module_instance_id_or_global(module_instance_id);
+
+    let disk_version = global_dbtx
+        .get_value(&DatabaseVersionKey(module_instance_id_key))
+        .await;
 
     let db_version = if let Some(disk_version) = disk_version {
         let mut current_db_version = disk_version;
@@ -1841,26 +1877,115 @@ pub async fn apply_migrations(
         while current_db_version < target_db_version {
             if let Some(migration) = migrations.get(&current_db_version) {
                 info!(target: LOG_DB, "Migrating module {kind} from {current_db_version} to {target_db_version}");
-                migration(&mut dbtx.to_ref_nc()).await?;
+                if let Some(module_instance_id) = module_instance_id {
+                    migration(
+                        &mut global_dbtx
+                            .to_ref_with_prefix_module_id(module_instance_id)
+                            .into_nc(),
+                    )
+                    .await?;
+                } else {
+                    migration(&mut global_dbtx.to_ref_nc()).await?;
+                }
             } else {
                 panic!("Missing migration for version {current_db_version}");
             }
 
             current_db_version.increment();
-            dbtx.insert_entry(&DatabaseVersionKey, &current_db_version)
+            global_dbtx
+                .insert_entry(
+                    &DatabaseVersionKey(module_instance_id_key),
+                    &current_db_version,
+                )
                 .await;
         }
 
         current_db_version
     } else {
-        dbtx.insert_entry(&DatabaseVersionKey, &target_db_version)
-            .await;
         target_db_version
     };
 
-    dbtx.commit_tx_result().await?;
+    global_dbtx.commit_tx_result().await?;
     info!(target: LOG_DB, "{} module db version: {}", kind, db_version);
     Ok(())
+}
+
+/// Migrates the `DatabaseVersion` from inside the module's isolated database
+/// to the global namespace. Database migrations are driven from outside of the
+/// modules so the `DatabaseVersion` should also exist outside the modules.
+/// This also fixes the key prefix conflicts with 0x50.
+pub async fn migrate_database_version(
+    global_dbtx: &mut DatabaseTransaction<'_>,
+    target_db_version: DatabaseVersion,
+    module_instance_id: Option<ModuleInstanceId>,
+    kind: String,
+) -> Result<(), anyhow::Error> {
+    let key_module_instance_id = module_instance_id_or_global(module_instance_id);
+
+    // First check if the module has a `DatabaseVersion` written to
+    // `DatabaseVersionKey` If `DatabaseVersion` already exists, there is
+    // nothing to do.
+    if global_dbtx
+        .get_value(&DatabaseVersionKey(key_module_instance_id))
+        .await
+        .is_none()
+    {
+        // Read and remove the previous `DatabaseVersion`, which is in the module's
+        // isolated namespace (but not for fedimint-server)
+        let current_version_in_module = if let Some(module_instance_id) = module_instance_id {
+            remove_current_db_version_if_exists(
+                &mut global_dbtx
+                    .to_ref_with_prefix_module_id(module_instance_id)
+                    .into_nc(),
+                target_db_version,
+            )
+            .await
+        } else {
+            remove_current_db_version_if_exists(
+                &mut global_dbtx.to_ref().into_nc(),
+                target_db_version,
+            )
+            .await
+        };
+
+        // Write the previous `DatabaseVersion` to the new `DatabaseVersionKey`
+        info!(target: LOG_DB, "Migrating DatabaseVersionKeyV0 of {kind} to DatabaseVersionKey. Version: {current_version_in_module}");
+        global_dbtx
+            .insert_new_entry(
+                &DatabaseVersionKey(key_module_instance_id),
+                &current_version_in_module,
+            )
+            .await;
+    }
+
+    Ok(())
+}
+
+/// Removes `DatabaseVersion` from `DatabaseVersionKeyV0` if it exists.
+/// Otherwise return `target_db_version`
+async fn remove_current_db_version_if_exists(
+    version_dbtx: &mut DatabaseTransaction<'_>,
+    target_db_version: DatabaseVersion,
+) -> DatabaseVersion {
+    // Remove the previous `DatabaseVersion` in the isolated database. If it doesn't
+    // exist, just use the `target_db_version` from the module.
+    let current_version_in_module = version_dbtx.remove_entry(&DatabaseVersionKeyV0).await;
+    if let Some(database_version) = current_version_in_module {
+        database_version
+    } else {
+        target_db_version
+    }
+}
+
+/// Helper function to retrieve the `module_instance_id` for modules, otherwise
+/// return 0xff for the global namespace.
+fn module_instance_id_or_global(module_instance_id: Option<ModuleInstanceId>) -> ModuleInstanceId {
+    // Use 0xff for fedimint-server and the `module_instance_id` for each module
+    if let Some(module_instance_id) = module_instance_id {
+        module_instance_id
+    } else {
+        MODULE_GLOBAL_PREFIX.into()
+    }
 }
 
 #[allow(unused_imports)]
@@ -1871,11 +1996,13 @@ mod test_utils {
 
     use super::{
         apply_migrations, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
-        MigrationMap,
+        DatabaseVersionKeyV0, MigrationMap,
     };
     use crate::core::ModuleKind;
     use crate::db::mem_impl::MemDatabase;
-    use crate::db::{IDatabaseTransactionOps, IDatabaseTransactionOpsCoreTyped};
+    use crate::db::{
+        IDatabaseTransactionOps, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
+    };
     use crate::encoding::{Decodable, Encodable};
     use crate::module::registry::ModuleDecoderRegistry;
 
@@ -2459,7 +2586,8 @@ mod test_utils {
                 .await;
         }
 
-        dbtx.insert_new_entry(&DatabaseVersionKey, &DatabaseVersion(0))
+        // Will also be migrated to `DatabaseVersionKey`
+        dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
             .await;
         dbtx.commit_tx().await;
 
@@ -2474,12 +2602,20 @@ mod test_utils {
             "TestModule".to_string(),
             DatabaseVersion(1),
             migrations,
+            None,
         )
         .await
         .expect("Error applying migrations for TestModule");
 
         // Verify that the migrations completed successfully
         let mut dbtx = db.begin_transaction().await;
+
+        // Verify that the old `DatabaseVersion` under `DatabaseVersionKeyV0` migrated
+        // to `DatabaseVersionKey`
+        assert!(dbtx
+            .get_value(&DatabaseVersionKey(MODULE_GLOBAL_PREFIX.into()))
+            .await
+            .is_some());
 
         // Verify Dummy module migration
         let test_keys = dbtx

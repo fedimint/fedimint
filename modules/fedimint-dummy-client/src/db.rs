@@ -8,6 +8,9 @@ use tracing::warn;
 #[derive(Clone, Debug, EnumIter)]
 pub enum DbKeyPrefix {
     ClientFunds = 0x04,
+    // Used to verify that 0x50 key can be written to, which used to conflict with
+    // `DatabaseVersionKeyV0`
+    ClientName = 0x50,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -32,6 +35,15 @@ impl_db_record!(
     key = DummyClientFundsKeyV1,
     value = Amount,
     db_prefix = DbKeyPrefix::ClientFunds,
+);
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
+pub struct DummyClientNameKey;
+
+impl_db_record!(
+    key = DummyClientNameKey,
+    value = String,
+    db_prefix = DbKeyPrefix::ClientName,
 );
 
 pub async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {

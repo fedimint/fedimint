@@ -124,6 +124,7 @@ pub struct WalletInit;
 #[apply(async_trait_maybe_send!)]
 impl ModuleInit for WalletInit {
     type Common = WalletCommonInit;
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     async fn dump_database(
         &self,
@@ -226,7 +227,6 @@ impl ModuleInit for WalletInit {
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleInit for WalletInit {
     type Params = WalletGenParams;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);

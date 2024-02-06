@@ -141,32 +141,27 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
 }
 
 mod fedimint_migration_tests {
-    use anyhow::{ensure, Context};
-    use fedimint_client::module::init::DynClientModuleInit;
-    use fedimint_client::module::ClientModule;
-    use fedimint_core::core::ModuleInstanceId;
+    use anyhow::ensure;
     use fedimint_core::db::{
-        apply_migrations, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
-        IDatabaseTransactionOpsCoreTyped,
+        Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
-    use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
-    use fedimint_core::{Amount, BitcoinHash, OutPoint, ServerModule, TransactionId};
-    use fedimint_dummy_client::db::{DummyClientFundsKeyV0, DummyClientFundsKeyV1};
-    use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
-    use fedimint_dummy_common::{DummyCommonInit, DummyOutputOutcome};
+    use fedimint_core::module::DynCommonModuleInit;
+    use fedimint_core::{Amount, BitcoinHash, OutPoint, TransactionId};
+    use fedimint_dummy_client::db::{
+        DummyClientFundsKeyV0, DummyClientFundsKeyV1, DummyClientNameKey,
+    };
+    use fedimint_dummy_client::DummyClientInit;
+    use fedimint_dummy_common::DummyOutputOutcome;
     use fedimint_dummy_server::db::{
         DbKeyPrefix, DummyFundsKeyV0, DummyFundsPrefixV1, DummyOutcomeKey, DummyOutcomePrefix,
     };
-    use fedimint_dummy_server::{Dummy, DummyInit};
+    use fedimint_dummy_server::DummyInit;
     use fedimint_logging::TracingSetup;
-    use fedimint_testing::db::{snapshot_db_migrations, validate_migrations, BYTE_32};
+    use fedimint_testing::db::{snapshot_db_migrations, validate_migrations_module, BYTE_32};
     use futures::StreamExt;
     use rand::rngs::OsRng;
     use strum::IntoEnumIterator;
     use tracing::info;
-
-    const DUMMY_INSTANCE_ID: ModuleInstanceId = 3;
 
     /// Create a database with version 0 data. The database produced is not
     /// intended to be real data or semantically correct. It is only
@@ -174,8 +169,11 @@ mod fedimint_migration_tests {
     /// in future code versions. This function should not be updated when
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
-    async fn create_server_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
-        dbtx.insert_new_entry(&DatabaseVersionKey, &DatabaseVersion(0))
+    async fn create_server_db_with_v0_data(db: Database) {
+        let mut dbtx = db.begin_transaction().await;
+
+        // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
+        dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
             .await;
 
         // Write example v0 funds record to the database
@@ -189,31 +187,31 @@ mod fedimint_migration_tests {
             &DummyOutputOutcome(Amount::from_sats(1000), pk),
         )
         .await;
+
+        dbtx.commit_tx().await;
     }
 
-    async fn create_client_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
-        dbtx.insert_new_entry(&DatabaseVersionKey, &DatabaseVersion(0))
+    async fn create_client_db_with_v0_data(db: Database) {
+        let mut dbtx = db.begin_transaction().await;
+
+        // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
+        dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
             .await;
 
         // Write example v0 `ClientFunds`
         dbtx.insert_new_entry(&DummyClientFundsKeyV0, &()).await;
+
+        dbtx.commit_tx().await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
-        snapshot_db_migrations(
-            "dummy-server-v0",
-            |dbtx| {
-                Box::pin(async move {
-                    create_server_db_with_v0_data(dbtx).await;
-                })
-            },
-            ModuleDecoderRegistry::from_iter([(
-                DUMMY_INSTANCE_ID,
-                DummyCommonInit::KIND,
-                <Dummy as ServerModule>::decoder(),
-            )]),
-        )
+        let module = DynCommonModuleInit::from(DummyInit);
+        snapshot_db_migrations(module, "dummy-server-v0", |db| {
+            Box::pin(async move {
+                create_server_db_with_v0_data(db).await;
+            })
+        })
         .await
     }
 
@@ -221,73 +219,51 @@ mod fedimint_migration_tests {
     async fn test_server_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
 
-        validate_migrations(
-            "dummy-server",
-            |db| async move {
-                let module = DynServerModuleInit::from(DummyInit);
-                apply_migrations(
-                    &db,
-                    module.module_kind().to_string(),
-                    module.database_version(),
-                    module.get_database_migrations(),
-                )
-                .await
-                .context("Error applying migrations to temp database")?;
-
-                let mut dbtx = db.begin_transaction().await;
-                for prefix in DbKeyPrefix::iter() {
-                    match prefix {
-                        DbKeyPrefix::Funds => {
-                            let funds = dbtx
-                                .find_by_prefix(&DummyFundsPrefixV1)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_funds = funds.len();
-                            ensure!(
-                                num_funds > 0,
-                                "validate_migrations was not able to read any funds for version 0"
-                            );
-                            info!("Validated Funds");
-                        }
-                        DbKeyPrefix::Outcome => {
-                            let outcomes = dbtx
-                                .find_by_prefix(&DummyOutcomePrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_outcomes = outcomes.len();
-                            ensure!(
-                                num_outcomes > 0,
-                                "validate_migration was not able to read any outcomes for version 0"
-                            );
-                            info!("Validated Outcome");
-                        }
+        let module = DynCommonModuleInit::from(DummyInit);
+        validate_migrations_module(module, "dummy-server", |db| async move {
+            let mut dbtx = db.begin_transaction_nc().await;
+            for prefix in DbKeyPrefix::iter() {
+                match prefix {
+                    DbKeyPrefix::Funds => {
+                        let funds = dbtx
+                            .find_by_prefix(&DummyFundsPrefixV1)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_funds = funds.len();
+                        ensure!(
+                            num_funds > 0,
+                            "validate_migrations was not able to read any funds for version 0"
+                        );
+                        info!("Validated Funds");
+                    }
+                    DbKeyPrefix::Outcome => {
+                        let outcomes = dbtx
+                            .find_by_prefix(&DummyOutcomePrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_outcomes = outcomes.len();
+                        ensure!(
+                            num_outcomes > 0,
+                            "validate_migration was not able to read any outcomes for version 0"
+                        );
+                        info!("Validated Outcome");
                     }
                 }
+            }
 
-                Ok(())
-            },
-            ModuleDecoderRegistry::from_iter([(
-                DUMMY_INSTANCE_ID,
-                DummyCommonInit::KIND,
-                <Dummy as ServerModule>::decoder(),
-            )]),
-        )
+            Ok(())
+        })
         .await
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
-        snapshot_db_migrations(
-            "dummy-client-v0",
-            |dbtx| Box::pin(async move { create_client_db_with_v0_data(dbtx).await }),
-            ModuleDecoderRegistry::from_iter([(
-                DUMMY_INSTANCE_ID,
-                DummyCommonInit::KIND,
-                <DummyClientModule as ClientModule>::decoder(),
-            )]),
-        )
+        let module = DynCommonModuleInit::from(DummyClientInit);
+        snapshot_db_migrations(module, "dummy-client-v0", |db| {
+            Box::pin(async move { create_client_db_with_v0_data(db).await })
+        })
         .await
     }
 
@@ -295,42 +271,39 @@ mod fedimint_migration_tests {
     async fn test_client_db_migrations() -> anyhow::Result<()> {
         TracingSetup::default().init()?;
 
-        validate_migrations(
-            "dummy-client",
-            |db| async move {
-                let module = DynClientModuleInit::from(DummyClientInit);
-                apply_migrations(
-                    &db,
-                    DummyCommonInit::KIND.to_string(),
-                    module.database_version(),
-                    module.get_database_migrations(),
-                )
-                .await
-                .context("Error applying migrations to client database")?;
+        let module = DynCommonModuleInit::from(DummyClientInit);
 
-                let mut dbtx = db.begin_transaction().await;
+        validate_migrations_module(module, "dummy-client", |db| async move {
+            let mut dbtx = db.begin_transaction_nc().await;
 
-                for prefix in fedimint_dummy_client::db::DbKeyPrefix::iter() {
-                    match prefix {
-                        fedimint_dummy_client::db::DbKeyPrefix::ClientFunds => {
-                            let funds = dbtx.get_value(&DummyClientFundsKeyV1).await;
-                            ensure!(
-                                funds.is_some(),
-                                "validate_migrations was not able to read any client funds"
-                            );
-                            info!("Validated client funds");
-                        }
+            // After applying migrations, validate that `ClientName` cannot currently be
+            // read
+            ensure!(
+                dbtx.get_value(&DummyClientNameKey).await.is_none(),
+                "DatabaseVersion was not migrated successfully, since ClientName is not none"
+            );
+
+            for prefix in fedimint_dummy_client::db::DbKeyPrefix::iter() {
+                match prefix {
+                    fedimint_dummy_client::db::DbKeyPrefix::ClientFunds => {
+                        let funds = dbtx.get_value(&DummyClientFundsKeyV1).await;
+                        ensure!(
+                            funds.is_some(),
+                            "validate_migrations was not able to read any client funds"
+                        );
+                        info!("Validated client funds");
+                    }
+                    fedimint_dummy_client::db::DbKeyPrefix::ClientName => {
+                        // No need to validate re-reading of ClientName, it
+                        // is only used to validate that the
+                        // `DatabaseVersion` key
+                        // was migrated successfully.
                     }
                 }
+            }
 
-                Ok(())
-            },
-            ModuleDecoderRegistry::from_iter([(
-                DUMMY_INSTANCE_ID,
-                DummyCommonInit::KIND,
-                <DummyClientModule as ClientModule>::decoder(),
-            )]),
-        )
+            Ok(())
+        })
         .await
     }
 }

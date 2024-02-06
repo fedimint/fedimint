@@ -236,6 +236,7 @@ pub struct LightningClientInit;
 #[apply(async_trait_maybe_send!)]
 impl ModuleInit for LightningClientInit {
     type Common = LightningCommonInit;
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     async fn dump_database(
         &self,
@@ -297,7 +298,6 @@ pub enum LightningChildKeys {
 #[apply(async_trait_maybe_send!)]
 impl ClientModuleInit for LightningClientInit {
     type Module = LightningClientModule;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])

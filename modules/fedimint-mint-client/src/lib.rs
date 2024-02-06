@@ -345,6 +345,7 @@ pub struct MintClientInit;
 #[apply(async_trait_maybe_send!)]
 impl ModuleInit for MintClientInit {
     type Common = MintCommonInit;
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     async fn dump_database(
         &self,
@@ -401,7 +402,6 @@ impl ModuleInit for MintClientInit {
 #[apply(async_trait_maybe_send!)]
 impl ClientModuleInit for MintClientInit {
     type Module = MintClientModule;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
