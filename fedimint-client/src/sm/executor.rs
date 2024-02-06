@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::convert::Infallible;
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
 use std::sync::Arc;
@@ -532,7 +533,7 @@ impl ExecutorInner {
 
                             let outcome =
                                 db
-                                .autocommit(
+                                .autocommit::<'_, '_, _, _, Infallible>(
                                     |dbtx, _| {
                                         let state = state.clone();
                                         let transition_fn = transition_fn.clone();
@@ -595,15 +596,7 @@ impl ExecutorInner {
                                     None,
                                 )
                                 .await
-                                .map_err(|e| match e {
-                                    AutocommitError::CommitFailed {
-                                        last_error,
-                                        attempts,
-                                    } => last_error.context(format!(
-                                        "Failed to commit after {attempts} attempts"
-                                    )),
-                                    AutocommitError::ClosureError { error, .. } => error,
-                                }).expect("autocommit of transition fn should never fail");
+                                .expect("autocommit should keep trying to commit (max_attempt: None) and body doesn't return errors");
 
 
                             match &outcome {
