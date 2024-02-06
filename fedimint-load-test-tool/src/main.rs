@@ -287,8 +287,25 @@ impl std::fmt::Display for EventMetricComparison {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    fedimint_logging::TracingSetup::default().init()?;
     let opts = Opts::parse();
+    if let Some(ref archive_dir) = opts.archive_dir {
+        let log_file_path = archive_dir.join("load_test_tool.log");
+        tokio::fs::create_dir_all(&archive_dir).await?;
+        let log_file = tokio::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(true)
+            .open(log_file_path)
+            .await?
+            .into_std()
+            .await;
+
+        fedimint_logging::TracingSetup::default()
+            .with_file(Some(log_file))
+            .init()?;
+    } else {
+        fedimint_logging::TracingSetup::default().init()?;
+    }
     let (event_sender, event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let summary_handle = spawn("handle metrics summary", {
         let opts = opts.clone();
@@ -806,7 +823,12 @@ async fn do_ln_circular_test_user_task(
             }
         }
         LnCircularStrategy::PartnerPingPong => {
+            info!("running PartnerPingPong strategy");
+            info!("calling build_client");
             let (partner, _) = build_client(invite_code, None).await?;
+            info!("past build_client");
+            let ontime = still_ontime().await;
+            info!("still_ontime: {:?}", ontime);
             while still_ontime().await {
                 do_partner_ping_pong(&prefix, &client, &partner, invoice_amount, &event_sender)
                     .await?;
@@ -912,6 +934,7 @@ async fn do_partner_ping_pong(
     invoice_amount: Amount,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
+    info!("inside partner ping pong");
     // Ping (partner creates invoice, client pays)
     let (operation_id, invoice) =
         client_create_invoice(partner, invoice_amount, event_sender).await?;
@@ -993,6 +1016,7 @@ async fn wait_invoice_payment(
     Ok(())
 }
 
+// we're not sending this metric
 async fn client_create_invoice(
     client: &ClientArc,
     invoice_amount: Amount,

@@ -305,6 +305,10 @@ impl Federation {
             .as_u64()
             .unwrap())
     }
+
+    pub fn num_members(&self) -> usize {
+        self.members.len()
+    }
 }
 
 #[derive(Clone)]
