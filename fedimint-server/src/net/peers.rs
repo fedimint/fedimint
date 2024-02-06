@@ -415,6 +415,10 @@ where
             maybe_msg = self.outgoing.recv() => {
                 match maybe_msg {
                     Ok(msg) => {
+                        if self.our_id == PeerId::from(0) {
+
+                            debug!(target: LOG_NET_PEER, our_id = ?self.our_id, peer = ?self.peer_id, ?msg, "OUT");
+                        }
                         self.send_message_connected(connected, PeerMessage::Message(msg))
                             .await
                     },
@@ -446,6 +450,9 @@ where
                 PeerConnectionState::Connected(connected)
             },
             Some(message_res) = connected.connection.next() => {
+                if self.peer_id == PeerId::from(0) {
+                    debug!(target: LOG_NET_PEER, our_id = ?self.our_id, peer = ?self.peer_id, "IN");
+                }
                 match message_res {
                     Ok(peer_message) => {
                         if let PeerMessage::Message(msg) = peer_message {
