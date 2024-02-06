@@ -219,7 +219,7 @@ jobs:
           - wasm32-unknown
         include:
           - host: linux
-            runs-on: ubuntu-22.04
+            runs-on: buildjet-4vcpu-ubuntu-2204
             build-in-pr: true
             timeout: 20
           - host: macos
