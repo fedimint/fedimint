@@ -299,8 +299,6 @@ pub mod mock {
                     flush_failure_rate,
                     shutdown_failure_rate,
                     read_latency,
-                    write_latency,
-                    flush_latency,
                     shutdown_latency,
                 } => Self {
                     inner,
@@ -310,11 +308,11 @@ pub mod mock {
                         read_failure_rate,
                     )),
                     write_generator: Some(UnreliabilityGenerator::new(
-                        write_latency,
+                        LatencyInterval::ZERO,
                         write_failure_rate,
                     )),
                     flush_generator: Some(UnreliabilityGenerator::new(
-                        flush_latency,
+                        LatencyInterval::ZERO,
                         flush_failure_rate,
                     )),
                     shutdown_generator: Some(UnreliabilityGenerator::new(
@@ -567,9 +565,15 @@ pub mod mock {
             write_failure_rate: FailureRate,
             flush_failure_rate: FailureRate,
             shutdown_failure_rate: FailureRate,
+            // When modeling a link between two hosts it doesn't matter if you model
+            // read or write latency, because the latency of the message itself would be a
+            // sum of both. And generally in practice sending a message over
+            // tcp stream finishes near-instantly, while it's the reads that
+            // possibly block. So while we model the failure of writes (and flushes),
+            // we don't bother with the latency, in particular because our peer
+            // code is built to just pump outgoing messages from an in-memory channel
+            // and not do much else, hiding any latency from the rest of the system anyway.
             read_latency: LatencyInterval,
-            write_latency: LatencyInterval,
-            flush_latency: LatencyInterval,
             shutdown_latency: LatencyInterval,
         },
     }
@@ -587,8 +591,6 @@ pub mod mock {
                 flush_failure_rate: failure_rate,
                 shutdown_failure_rate: failure_rate,
                 read_latency: latency,
-                write_latency: latency,
-                flush_latency: latency,
                 shutdown_latency: latency,
             }
         };
@@ -611,8 +613,6 @@ pub mod mock {
                 flush_failure_rate: FailureRate(failure_rate_base),
                 shutdown_failure_rate: FailureRate(failure_rate_base),
                 read_latency: latency,
-                write_latency: latency,
-                flush_latency: latency,
                 shutdown_latency: latency,
             }
         };
@@ -624,8 +624,6 @@ pub mod mock {
                 flush_failure_rate: FailureRate::MAX,
                 shutdown_failure_rate: FailureRate::MAX,
                 read_latency: LatencyInterval::ZERO,
-                write_latency: LatencyInterval::ZERO,
-                flush_latency: LatencyInterval::ZERO,
                 shutdown_latency: LatencyInterval::ZERO,
             }
         };
