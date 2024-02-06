@@ -562,6 +562,7 @@ where
             },
             () = tokio::time::sleep_until(disconnected.reconnect_at), if self.our_id < self.peer_id => {
                 // to prevent "reconnection ping-pongs", only the side with lower PeerId is responsible for reconnecting
+                debug!(target: LOG_NET_PEER, our_id = %self.our_id, peer_id = %self.peer_id, "Reconnecting to peer after timeout");
                 self.reconnect(disconnected).await
             },
             _ = task_handle.make_shutdown_rx().await => {
