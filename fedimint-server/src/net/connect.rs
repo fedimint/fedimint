@@ -252,7 +252,7 @@ pub mod mock {
     use std::future::Future;
     use std::net::SocketAddr;
     use std::pin::Pin;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::Arc;
     use std::time::{Duration, SystemTime};
 
@@ -281,6 +281,8 @@ pub mod mock {
         flush_generator: Option<UnreliabilityGenerator>,
         shutdown_generator: Option<UnreliabilityGenerator>,
     }
+
+    pub static FAILURES: AtomicU64 = AtomicU64::new(0);
 
     impl UnreliableDuplexStream {
         fn new(inner: DuplexStream, reliability: StreamReliability) -> UnreliableDuplexStream {
@@ -376,10 +378,12 @@ pub mod mock {
             let duration = fedimint_core::time::now()
                 .duration_since(self.start)
                 .unwrap_or_default();
-            if self.failure_rate.random_fail(duration) {
+            if FAILURES.load(Ordering::SeqCst) < 10 && self.failure_rate.random_fail(duration) {
+                let failures = FAILURES.fetch_add(1, Ordering::SeqCst);
                 tracing::debug!(
                     duration_ms = %duration.as_millis(),
                     successes = self.successes,
+                    failures = failures,
                     "Returning random error on unreliable stream after {} successes",
                     self.successes
                 );
