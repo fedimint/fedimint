@@ -19,7 +19,7 @@ use fedimint_core::endpoint_constants::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, CoreConsensusVersion, InputMeta,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiVersion, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
     SupportedModuleApiVersions, TransactionItemAmount,
 };
@@ -858,12 +858,14 @@ impl ServerModule for Lightning {
         vec![
             api_endpoint! {
                 BLOCK_COUNT_ENDPOINT,
+                ApiVersion::new(0, 0),
                 async |module: &Lightning, context, _v: ()| -> Option<u64> {
                     Ok(Some(module.consensus_block_count(&mut context.dbtx().into_nc()).await))
                 }
             },
             api_endpoint! {
                 ACCOUNT_ENDPOINT,
+                ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> Option<ContractAccount> {
                     Ok(module
                         .get_contract_account(&mut context.dbtx().into_nc(), contract_id)
@@ -872,6 +874,7 @@ impl ServerModule for Lightning {
             },
             api_endpoint! {
                 AWAIT_ACCOUNT_ENDPOINT,
+                ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> ContractAccount {
                     Ok(module
                         .wait_contract_account(context, contract_id)
@@ -880,6 +883,7 @@ impl ServerModule for Lightning {
             },
             api_endpoint! {
                 AWAIT_BLOCK_HEIGHT_ENDPOINT,
+                ApiVersion::new(0, 0),
                 async |module: &Lightning, context, block_height: u64| -> () {
                     module.wait_block_height(block_height, &mut context.dbtx().into_nc()).await;
                     Ok(())
@@ -887,24 +891,28 @@ impl ServerModule for Lightning {
             },
             api_endpoint! {
                 AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT,
+                ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> ContractAccount {
                     Ok(module.wait_outgoing_contract_account_cancelled(context, contract_id).await)
                 }
             },
             api_endpoint! {
                 GET_DECRYPTED_PREIMAGE_STATUS,
+                ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> (IncomingContractAccount, DecryptedPreimageStatus) {
                     Ok(module.get_decrypted_preimage_status(context, contract_id).await)
                 }
             },
             api_endpoint! {
                 AWAIT_PREIMAGE_DECRYPTION,
+                ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> (IncomingContractAccount, Option<Preimage>) {
                     Ok(module.wait_preimage_decrypted(context, contract_id).await)
                 }
             },
             api_endpoint! {
                 OFFER_ENDPOINT,
+                ApiVersion::new(0, 0),
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> Option<IncomingContractOffer> {
                     Ok(module
                         .get_offer(&mut context.dbtx().into_nc(), payment_hash)
@@ -913,6 +921,7 @@ impl ServerModule for Lightning {
             },
             api_endpoint! {
                 AWAIT_OFFER_ENDPOINT,
+                ApiVersion::new(0, 0),
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
                     Ok(module
                         .wait_offer(context, payment_hash)
@@ -921,12 +930,14 @@ impl ServerModule for Lightning {
             },
             api_endpoint! {
                 LIST_GATEWAYS_ENDPOINT,
+                ApiVersion::new(0, 0),
                 async |module: &Lightning, context, _v: ()| -> Vec<LightningGatewayAnnouncement> {
                     Ok(module.list_gateways(&mut context.dbtx().into_nc()).await)
                 }
             },
             api_endpoint! {
                 REGISTER_GATEWAY_ENDPOINT,
+                ApiVersion::new(0, 0),
                 async |module: &Lightning, context, gateway: LightningGatewayAnnouncement| -> () {
                     module.register_gateway(&mut context.dbtx().into_nc(), gateway).await;
                     Ok(())
