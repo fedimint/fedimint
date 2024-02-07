@@ -2,8 +2,11 @@
 
 set -euo pipefail
 
+# versions to test when run without arguments
+default_versions=("v0.2.1")
 # all versions to use for testing
-versions=("v0.2.1")
+versions=( "${@:-${default_versions[@]}}" )
+
 >&2 echo "Running backwards-compatibility tests for versions: ${versions[*]}"
 
 # signal to downstream test scripts
