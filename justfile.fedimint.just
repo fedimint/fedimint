@@ -22,6 +22,9 @@ test-ci-all:
 test-count:
   ./scripts/tests/test-cov.sh
 
+test-compatibility *VERSIONS:
+  ./scripts/tests/backwards-compatibility-test.sh {{VERSIONS}}
+
 # `cargo udeps` check
 udeps:
   nix build -L .#debug.workspaceCargoUdeps
