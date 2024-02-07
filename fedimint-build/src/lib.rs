@@ -1,20 +1,17 @@
+pub mod envs;
+
 use std::env;
 use std::path::Path;
 use std::process::Command;
 
-/// Env variable to set to force git hash during build process
-const FORCE_GIT_HASH_ENV: &str = "FEDIMINT_BUILD_FORCE_GIT_HASH";
-
-/// Env variable the cargo will set during crate build to pass the detected git
-/// hash to the binary itself.
-const GIT_HASH_ENV: &str = "FEDIMINT_BUILD_CODE_VERSION";
+use crate::envs::{FEDIMINT_BUILD_CODE_VERSION_ENV, FORCE_GIT_HASH_ENV};
 
 fn set_code_version_inner() -> Result<(), String> {
     println!("cargo:rerun-if-env-changed={FORCE_GIT_HASH_ENV}");
 
     if let Ok(hash) = env::var(FORCE_GIT_HASH_ENV) {
         eprintln!("Forced hash via {FORCE_GIT_HASH_ENV} to {hash}");
-        println!("cargo:rustc-env={GIT_HASH_ENV}={hash}");
+        println!("cargo:rustc-env={FEDIMINT_BUILD_CODE_VERSION_ENV}={hash}");
         return Ok(());
     }
 
@@ -29,7 +26,7 @@ fn set_code_version_inner() -> Result<(), String> {
                 info
             )
         })?;
-        println!("cargo:rustc-env={GIT_HASH_ENV}={hash}");
+        println!("cargo:rustc-env={FEDIMINT_BUILD_CODE_VERSION_ENV}={hash}");
         return Ok(());
     }
 
@@ -74,7 +71,7 @@ fn set_code_version_inner() -> Result<(), String> {
         hash
     };
 
-    println!("cargo:rustc-env={GIT_HASH_ENV}={hash}");
+    println!("cargo:rustc-env={FEDIMINT_BUILD_CODE_VERSION_ENV}={hash}");
 
     Ok(())
 }

@@ -1,3 +1,4 @@
+use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_logging::TracingSetup;
@@ -12,7 +13,7 @@ use tracing::info;
 /// remote Lightning node accessible through a `GatewayLightningServer`.
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    handle_version_hash_command(env!("FEDIMINT_BUILD_CODE_VERSION"));
+    handle_version_hash_command(fedimint_build_code_version_env!());
     TracingSetup::default().init()?;
     let mut tg = TaskGroup::new();
     tg.install_kill_handler();

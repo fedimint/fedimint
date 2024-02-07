@@ -31,7 +31,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::util::{handle_version_hash_command, SafeUrl};
-use fedimint_core::{task, PeerId, TieredMulti};
+use fedimint_core::{fedimint_build_code_version_env, task, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{TracingSetup, LOG_CLIENT};
 use fedimint_mint_client::{MintClientInit, MintClientModule, SpendableNote};
@@ -459,7 +459,7 @@ impl FedimintCli {
     /// Build a new `fedimintd` with a custom version hash
     pub fn new(version_hash: &str) -> anyhow::Result<FedimintCli> {
         assert_eq!(
-            env!("FEDIMINT_BUILD_CODE_VERSION").len(),
+            fedimint_build_code_version_env!().len(),
             version_hash.len(),
             "version_hash must have an expected length"
         );
@@ -631,7 +631,7 @@ impl FedimintCli {
                 })
             }
             Command::VersionHash => Ok(CliOutput::VersionHash {
-                hash: env!("FEDIMINT_BUILD_CODE_VERSION").to_string(),
+                hash: fedimint_build_code_version_env!().to_string(),
             }),
             Command::Client(ClientCmd::Restore {
                 mnemonic,

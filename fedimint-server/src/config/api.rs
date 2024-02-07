@@ -40,6 +40,7 @@ use crate::config::io::{
     read_server_config, write_server_config, CONFIG_STAGING_DIR, PLAINTEXT_PASSWORD, SALT_FILE,
 };
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
+use crate::envs::FM_PEER_ID_SORT_BY_URL_ENV;
 use crate::net::peers::DelayCalculator;
 use crate::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
 
@@ -664,7 +665,7 @@ impl ConfigGenState {
             .sorted_by_cached_key(|peer| {
                 // in certain (very obscure) cases, it might be worthwhile to sort by urls, so
                 // just expose it as an env var; probably no need to document it too much
-                if std::env::var_os("FM_PEER_ID_SORT_BY_URL").is_some_and(|var| !var.is_empty()) {
+                if std::env::var_os(FM_PEER_ID_SORT_BY_URL_ENV).is_some_and(|var| !var.is_empty()) {
                     peer.api_url.to_string()
                 } else {
                     peer.name.to_lowercase()
