@@ -4,10 +4,10 @@ var srcIndex = JSON.parse('{\
 "fedimint_aead":["",[],["lib.rs"]],\
 "fedimint_bip39":["",[],["lib.rs"]],\
 "fedimint_bitcoind":["",[],["bitcoincore.rs","electrum.rs","esplora.rs","lib.rs"]],\
-"fedimint_build":["",[],["lib.rs"]],\
+"fedimint_build":["",[],["envs.rs","lib.rs"]],\
 "fedimint_cli":["",[],["main.rs"]],\
 "fedimint_client":["",[["module",[["init",[],["recovery.rs"]]],["init.rs","mod.rs","recovery.rs"]],["sm",[],["dbtx.rs","executor.rs","mod.rs","notifier.rs","state.rs","util.rs"]],["transaction",[],["builder.rs","mod.rs","sm.rs"]]],["backup.rs","db.rs","lib.rs","oplog.rs","secret.rs"]],\
-"fedimint_core":["",[["core",[],["backup.rs","server.rs"]],["db",[],["mem_impl.rs","mod.rs","notifications.rs"]],["encoding",[],["as_hex.rs","btc.rs","mod.rs","secp256k1.rs","tbs.rs","tls.rs"]],["hex",[],["mod.rs","serde.rs"]],["module",[],["audit.rs","mod.rs","registry.rs","version.rs"]],["net",[["peers",[],["fake.rs"]]],["mod.rs","peers.rs"]],["util",[],["broadcaststream.rs","mod.rs"]]],["admin_client.rs","api.rs","backup.rs","bitcoinrpc.rs","cancellable.rs","config.rs","core.rs","endpoint_constants.rs","epoch.rs","fmt_utils.rs","lib.rs","macros.rs","query.rs","session_outcome.rs","task.rs","tiered.rs","tiered_multi.rs","time.rs","timing.rs","transaction.rs","txoproof.rs"]],\
+"fedimint_core":["",[["core",[],["backup.rs","server.rs"]],["db",[],["mem_impl.rs","mod.rs","notifications.rs"]],["encoding",[],["as_hex.rs","btc.rs","mod.rs","secp256k1.rs","tbs.rs","tls.rs"]],["hex",[],["mod.rs","serde.rs"]],["module",[],["audit.rs","mod.rs","registry.rs","version.rs"]],["net",[["peers",[],["fake.rs"]]],["mod.rs","peers.rs"]],["util",[],["broadcaststream.rs","mod.rs"]]],["admin_client.rs","api.rs","backup.rs","bitcoinrpc.rs","cancellable.rs","config.rs","core.rs","endpoint_constants.rs","envs.rs","epoch.rs","fmt_utils.rs","lib.rs","macros.rs","query.rs","session_outcome.rs","task.rs","tiered.rs","tiered_multi.rs","time.rs","timing.rs","transaction.rs","txoproof.rs"]],\
 "fedimint_dbtool":["",[],["dump.rs","main.rs"]],\
 "fedimint_derive":["",[],["lib.rs"]],\
 "fedimint_derive_secret":["",[],["lib.rs"]],\
@@ -25,8 +25,8 @@ var srcIndex = JSON.parse('{\
 "fedimint_mint_server":["",[],["lib.rs"]],\
 "fedimint_portalloc":["",[["data",[],["dto.rs"]]],["data.rs","lib.rs","util.rs"]],\
 "fedimint_rocksdb":["",[],["lib.rs"]],\
-"fedimint_server":["",[["atomic_broadcast",[],["backup.rs","data_provider.rs","finalization_handler.rs","keychain.rs","mod.rs","network.rs","spawner.rs"]],["config",[],["api.rs","distributedgen.rs","io.rs","mod.rs"]],["consensus",[],["debug.rs","mod.rs","server.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","peers_reliable.rs","queue.rs"]]],["db.rs","lib.rs","multiplexed.rs"]],\
-"fedimint_testing":["",[["btc",[],["mock.rs","mod.rs","real.rs"]],["ln",[],["mock.rs","mod.rs","real.rs"]]],["db.rs","federation.rs","fixtures.rs","gateway.rs","lib.rs"]],\
+"fedimint_server":["",[["atomic_broadcast",[],["backup.rs","data_provider.rs","finalization_handler.rs","keychain.rs","mod.rs","network.rs","spawner.rs"]],["config",[],["api.rs","distributedgen.rs","io.rs","mod.rs"]],["consensus",[],["debug.rs","mod.rs","server.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","peers_reliable.rs","queue.rs"]]],["db.rs","envs.rs","lib.rs","multiplexed.rs"]],\
+"fedimint_testing":["",[["btc",[],["mock.rs","mod.rs","real.rs"]],["ln",[],["mock.rs","mod.rs","real.rs"]]],["db.rs","envs.rs","federation.rs","fixtures.rs","gateway.rs","lib.rs"]],\
 "fedimint_wallet_client":["",[],["api.rs","client_db.rs","deposit.rs","lib.rs","withdraw.rs"]],\
 "fedimint_wallet_common":["",[],["config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]],\
 "fedimint_wallet_server":["",[],["lib.rs"]],\
@@ -36,7 +36,7 @@ var srcIndex = JSON.parse('{\
 "gateway_cln_extension":["",[],["cln_extension.rs"]],\
 "gatewayd":["",[],["gatewayd.rs"]],\
 "hkdf":["",[],["lib.rs"]],\
-"ln_gateway":["",[["lightning",[],["cln.rs","lnd.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]],["state_machine",[],["complete.rs","mod.rs","pay.rs"]]],["client.rs","db.rs","lib.rs","types.rs","utils.rs"]],\
+"ln_gateway":["",[["lightning",[],["cln.rs","lnd.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]],["state_machine",[],["complete.rs","mod.rs","pay.rs"]]],["client.rs","db.rs","envs.rs","lib.rs","types.rs","utils.rs"]],\
 "recoverytool":["",[],["main.rs"]],\
 "tbs":["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["lib.rs"]]\
 }');

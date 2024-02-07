@@ -919,7 +919,7 @@
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseValue};
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
 <span class="kw">use </span>fedimint_core::util::{handle_version_hash_command, SafeUrl};
-<span class="kw">use </span>fedimint_core::{task, PeerId, TieredMulti};
+<span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, task, PeerId, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::LightningClientInit;
 <span class="kw">use </span>fedimint_logging::{TracingSetup, LOG_CLIENT};
 <span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintClientModule, SpendableNote};
@@ -1347,7 +1347,7 @@ Examples:
     <span class="doccomment">/// Build a new `fedimintd` with a custom version hash
     </span><span class="kw">pub fn </span>new(version_hash: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;FedimintCli&gt; {
         <span class="macro">assert_eq!</span>(
-            <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>).len(),
+            <span class="macro">fedimint_build_code_version_env!</span>().len(),
             version_hash.len(),
             <span class="string">&quot;version_hash must have an expected length&quot;
         </span>);
@@ -1519,7 +1519,7 @@ Examples:
                 })
             }
             Command::VersionHash =&gt; <span class="prelude-val">Ok</span>(CliOutput::VersionHash {
-                hash: <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>).to_string(),
+                hash: <span class="macro">fedimint_build_code_version_env!</span>().to_string(),
             }),
             Command::Client(ClientCmd::Restore {
                 mnemonic,

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FEDIMINT_BUILD_CODE_VERSION_ENV"]};

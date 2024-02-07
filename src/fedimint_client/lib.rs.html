@@ -2360,8 +2360,8 @@
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
-    OutPoint, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
+    maybe_add_send, maybe_add_send_sync, Amount, OutPoint, TransactionId,
 };
 <span class="kw">pub use </span>fedimint_derive_secret <span class="kw">as </span>derivable_secret;
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
@@ -3028,7 +3028,7 @@
     <span class="kw">pub async fn </span>start_executor(<span class="self">self</span>: <span class="kw-2">&amp;</span>Arc&lt;<span class="self">Self</span>&gt;) {
         <span class="macro">debug!</span>(
             <span class="string">&quot;Starting fedimint client executor (version: {})&quot;</span>,
-            <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>)
+            <span class="macro">fedimint_build_code_version_env!</span>()
         );
         <span class="self">self</span>.executor.start_executor(<span class="self">self</span>.context_gen()).<span class="kw">await</span>;
     }

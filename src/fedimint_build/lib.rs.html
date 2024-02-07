@@ -108,26 +108,20 @@
 <a href="#108" id="108">108</a>
 <a href="#109" id="109">109</a>
 <a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+</pre></div><pre class="rust"><code><span class="kw">pub mod </span>envs;
+
+<span class="kw">use </span>std::env;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::process::Command;
 
-<span class="doccomment">/// Env variable to set to force git hash during build process
-</span><span class="kw">const </span>FORCE_GIT_HASH_ENV: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FEDIMINT_BUILD_FORCE_GIT_HASH&quot;</span>;
-
-<span class="doccomment">/// Env variable the cargo will set during crate build to pass the detected git
-/// hash to the binary itself.
-</span><span class="kw">const </span>GIT_HASH_ENV: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>;
+<span class="kw">use </span><span class="kw">crate</span>::envs::{FEDIMINT_BUILD_CODE_VERSION_ENV, FORCE_GIT_HASH_ENV};
 
 <span class="kw">fn </span>set_code_version_inner() -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
     <span class="macro">println!</span>(<span class="string">&quot;cargo:rerun-if-env-changed={FORCE_GIT_HASH_ENV}&quot;</span>);
 
     <span class="kw">if let </span><span class="prelude-val">Ok</span>(hash) = env::var(FORCE_GIT_HASH_ENV) {
         <span class="macro">eprintln!</span>(<span class="string">&quot;Forced hash via {FORCE_GIT_HASH_ENV} to {hash}&quot;</span>);
-        <span class="macro">println!</span>(<span class="string">&quot;cargo:rustc-env={GIT_HASH_ENV}={hash}&quot;</span>);
+        <span class="macro">println!</span>(<span class="string">&quot;cargo:rustc-env={FEDIMINT_BUILD_CODE_VERSION_ENV}={hash}&quot;</span>);
         <span class="kw">return </span><span class="prelude-val">Ok</span>(());
     }
 
@@ -142,7 +136,7 @@
                 info
             )
         })<span class="question-mark">?</span>;
-        <span class="macro">println!</span>(<span class="string">&quot;cargo:rustc-env={GIT_HASH_ENV}={hash}&quot;</span>);
+        <span class="macro">println!</span>(<span class="string">&quot;cargo:rustc-env={FEDIMINT_BUILD_CODE_VERSION_ENV}={hash}&quot;</span>);
         <span class="kw">return </span><span class="prelude-val">Ok</span>(());
     }
 
@@ -187,7 +181,7 @@
         hash
     };
 
-    <span class="macro">println!</span>(<span class="string">&quot;cargo:rustc-env={GIT_HASH_ENV}={hash}&quot;</span>);
+    <span class="macro">println!</span>(<span class="string">&quot;cargo:rustc-env={FEDIMINT_BUILD_CODE_VERSION_ENV}={hash}&quot;</span>);
 
     <span class="prelude-val">Ok</span>(())
 }

@@ -291,6 +291,7 @@
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fs::read_dir;
 <span class="kw">use </span>std::io::ErrorKind;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -306,6 +307,8 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::RngCore;
 <span class="kw">use </span>tracing::debug;
+
+<span class="kw">use </span><span class="kw">crate</span>::envs::FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV;
 
 <span class="doccomment">/// Get the project root (relative to closest Cargo.lock file)
 /// ```rust
@@ -366,9 +369,8 @@
 <span class="kw">where
     </span>F: Fn(Database) -&gt; BoxFuture&lt;<span class="lifetime">&#39;a</span>, ()&gt;,
 {
-    <span class="kw">const </span>ENV_VAR_NAME: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_PREPARE_DB_MIGRATION_SNAPSHOTS&quot;</span>;
     <span class="kw">match </span>(
-        std::env::var_os(ENV_VAR_NAME)
+        std::env::var_os(FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV)
             .map(|s| s.to_string_lossy().into_owned())
             .as_deref(),
         snapshot_dir.exists(),
@@ -379,7 +381,7 @@
             prepare_fn(db).<span class="kw">await</span>;
         }
         (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="bool-val">true</span>) =&gt; {
-            <span class="macro">bail!</span>(<span class="string">&quot;{ENV_VAR_NAME} set, but {} already exists already exists. Set to &#39;force&#39; to overwrite.&quot;</span>, snapshot_dir.display());
+            <span class="macro">bail!</span>(<span class="string">&quot;{FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV} set, but {} already exists already exists. Set to &#39;force&#39; to overwrite.&quot;</span>, snapshot_dir.display());
         }
         (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="bool-val">false</span>) =&gt; {
             <span class="macro">debug!</span>(dir = %snapshot_dir.display(), <span class="string">&quot;Snapshot dir does not exist. Creating.&quot;</span>);
@@ -391,7 +393,7 @@
         }
         (<span class="prelude-val">None</span>, <span class="bool-val">false</span>) =&gt; {
             <span class="macro">bail!</span>(
-                <span class="string">&quot;{ENV_VAR_NAME} not set, but {} doest not exist.&quot;</span>,
+                <span class="string">&quot;{FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV} not set, but {} doest not exist.&quot;</span>,
                 snapshot_dir.display()
             );
         }

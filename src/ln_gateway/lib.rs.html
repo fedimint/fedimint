@@ -1499,8 +1499,12 @@
 <a href="#1499" id="1499">1499</a>
 <a href="#1500" id="1500">1500</a>
 <a href="#1501" id="1501">1501</a>
+<a href="#1502" id="1502">1502</a>
+<a href="#1503" id="1503">1503</a>
+<a href="#1504" id="1504">1504</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
+<span class="kw">pub mod </span>envs;
 <span class="kw">pub mod </span>lightning;
 <span class="kw">pub mod </span>rpc;
 <span class="kw">pub mod </span>state_machine;
@@ -1545,7 +1549,9 @@
 <span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::util::{SafeUrl, Spanned};
-<span class="kw">use </span>fedimint_core::{push_db_pair_items, Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>fedimint_core::{
+    fedimint_build_code_version_env, push_db_pair_items, Amount, BitcoinAmountOrAll,
+};
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
@@ -1618,34 +1624,34 @@
     </span>mode: LightningMode,
 
     <span class="doccomment">/// Path to folder containing gateway config and data files
-    </span><span class="attr">#[arg(long = <span class="string">&quot;data-dir&quot;</span>, env = <span class="string">&quot;FM_GATEWAY_DATA_DIR&quot;</span>)]
+    </span><span class="attr">#[arg(long = <span class="string">&quot;data-dir&quot;</span>, env = envs::FM_GATEWAY_DATA_DIR_ENV)]
     </span><span class="kw">pub </span>data_dir: PathBuf,
 
     <span class="doccomment">/// Gateway webserver listen address
-    </span><span class="attr">#[arg(long = <span class="string">&quot;listen&quot;</span>, env = <span class="string">&quot;FM_GATEWAY_LISTEN_ADDR&quot;</span>)]
+    </span><span class="attr">#[arg(long = <span class="string">&quot;listen&quot;</span>, env = envs::FM_GATEWAY_LISTEN_ADDR_ENV)]
     </span><span class="kw">pub </span>listen: SocketAddr,
 
     <span class="doccomment">/// Public URL from which the webserver API is reachable
-    </span><span class="attr">#[arg(long = <span class="string">&quot;api-addr&quot;</span>, env = <span class="string">&quot;FM_GATEWAY_API_ADDR&quot;</span>)]
+    </span><span class="attr">#[arg(long = <span class="string">&quot;api-addr&quot;</span>, env = envs::FM_GATEWAY_API_ADDR_ENV)]
     </span><span class="kw">pub </span>api_addr: SafeUrl,
 
     <span class="doccomment">/// Gateway webserver authentication password
-    </span><span class="attr">#[arg(long = <span class="string">&quot;password&quot;</span>, env = <span class="string">&quot;FM_GATEWAY_PASSWORD&quot;</span>)]
+    </span><span class="attr">#[arg(long = <span class="string">&quot;password&quot;</span>, env = envs::FM_GATEWAY_PASSWORD_ENV)]
     </span><span class="kw">pub </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
 
     <span class="doccomment">/// Bitcoin network this gateway will be running on
-    </span><span class="attr">#[arg(long = <span class="string">&quot;network&quot;</span>, env = <span class="string">&quot;FM_GATEWAY_NETWORK&quot;</span>)]
+    </span><span class="attr">#[arg(long = <span class="string">&quot;network&quot;</span>, env = envs::FM_GATEWAY_NETWORK_ENV)]
     </span><span class="kw">pub </span>network: <span class="prelude-ty">Option</span>&lt;Network&gt;,
 
     <span class="doccomment">/// Configured gateway routing fees
     /// Format: &lt;base_msat&gt;,&lt;proportional_millionths&gt;
-    </span><span class="attr">#[arg(long = <span class="string">&quot;fees&quot;</span>, env = <span class="string">&quot;FM_GATEWAY_FEES&quot;</span>)]
+    </span><span class="attr">#[arg(long = <span class="string">&quot;fees&quot;</span>, env = envs::FM_GATEWAY_FEES_ENV)]
     </span><span class="kw">pub </span>fees: <span class="prelude-ty">Option</span>&lt;GatewayFee&gt;,
 
     <span class="doccomment">/// Number of route hints to return in invoices
     </span><span class="attr">#[arg(
         long = <span class="string">&quot;num-route-hints&quot;</span>,
-        env = <span class="string">&quot;FM_NUMBER_OF_ROUTE_HINTS&quot;</span>,
+        env = envs::FM_NUMBER_OF_ROUTE_HINTS_ENV,
         default_value_t = DEFAULT_NUM_ROUTE_HINTS
     )]
     </span><span class="kw">pub </span>num_route_hints: u32,
@@ -1842,7 +1848,7 @@
 
         <span class="macro">info!</span>(
             <span class="string">&quot;Starting gatewayd (version: {})&quot;</span>,
-            <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>)
+            <span class="macro">fedimint_build_code_version_env!</span>()
         );
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
@@ -2174,7 +2180,7 @@
 
             <span class="kw">return </span><span class="prelude-val">Ok</span>(GatewayInfo {
                 federations,
-                version_hash: <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>).to_string(),
+                version_hash: <span class="macro">fedimint_build_code_version_env!</span>().to_string(),
                 lightning_pub_key: <span class="prelude-val">Some</span>(lightning_context.lightning_public_key.to_hex()),
                 lightning_alias: <span class="prelude-val">Some</span>(lightning_context.lightning_alias.clone()),
                 fees: <span class="prelude-val">Some</span>(gateway_config.routing_fees),
@@ -2187,7 +2193,7 @@
 
         <span class="prelude-val">Ok</span>(GatewayInfo {
             federations: <span class="macro">vec!</span>[],
-            version_hash: <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>).to_string(),
+            version_hash: <span class="macro">fedimint_build_code_version_env!</span>().to_string(),
             lightning_pub_key: <span class="prelude-val">None</span>,
             lightning_alias: <span class="prelude-val">None</span>,
             fees: <span class="prelude-val">None</span>,

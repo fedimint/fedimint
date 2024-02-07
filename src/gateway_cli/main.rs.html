@@ -208,7 +208,7 @@
 <span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::BitcoinAmountOrAll;
+<span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::{
@@ -310,7 +310,7 @@
 
     <span class="kw">match </span>cli.command {
         Commands::VersionHash =&gt; {
-            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>));
+            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="macro">fedimint_build_code_version_env!</span>());
         }
         Commands::Info =&gt; {
             <span class="comment">// For backwards-compatibility, fallback to the original POST endpoint if the
