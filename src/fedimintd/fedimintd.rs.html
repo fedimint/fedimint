@@ -328,6 +328,10 @@
 <a href="#328" id="328">328</a>
 <a href="#329" id="329">329</a>
 <a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -486,7 +490,8 @@
         })
     }
 
-    <span class="kw">pub fn </span>with_module&lt;T&gt;(<span class="kw-2">mut </span><span class="self">self</span>, gen: T) -&gt; <span class="self">Self
+    <span class="doccomment">/// Attach a server module to the Fedimintd instance
+    </span><span class="kw">pub fn </span>with_module&lt;T&gt;(<span class="kw-2">mut </span><span class="self">self</span>, gen: T) -&gt; <span class="self">Self
     </span><span class="kw">where
         </span>T: ServerModuleInit + <span class="lifetime">&#39;static </span>+ Send + Sync,
     {
@@ -494,7 +499,8 @@
         <span class="self">self
     </span>}
 
-    <span class="kw">pub fn </span>with_extra_module_inits_params&lt;P&gt;(
+    <span class="doccomment">/// Attach additional parameters for a server module to Fedimintd
+    </span><span class="kw">pub fn </span>with_extra_module_inits_params&lt;P&gt;(
         <span class="kw-2">mut </span><span class="self">self</span>,
         id: ModuleInstanceId,
         kind: ModuleKind,
@@ -508,13 +514,15 @@
         <span class="self">self
     </span>}
 
-    <span class="kw">pub fn </span>with_default_modules(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Attach default server modules to Fedimintd instance
+    </span><span class="kw">pub fn </span>with_default_modules(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.with_module(LightningInit)
             .with_module(MintInit)
             .with_module(WalletInit)
     }
 
-    <span class="kw">pub async fn </span>run(<span class="self">self</span>) -&gt; ! {
+    <span class="doccomment">/// Block thread and run a Fedimintd server
+    </span><span class="kw">pub async fn </span>run(<span class="self">self</span>) -&gt; ! {
         <span class="kw">let </span>opts: ServerOpts = ServerOpts::parse();
         TracingSetup::default()
             .tokio_console_bind(opts.tokio_console_bind)
