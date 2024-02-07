@@ -628,7 +628,7 @@ where
     ) -> FederationResult<ClientConfig> {
         // we have to download the api endpoints first
         let id = invite_code.federation_id();
-        let qs = FilterMap::new(
+        let query_strategy = FilterMap::new(
             move |cfg: ClientConfig| {
                 if id.0 != cfg.global.api_endpoints.consensus_hash() {
                     bail!("Guardian api endpoint map does not hash to FederationId")
@@ -637,13 +637,11 @@ where
                 Ok(cfg.global.api_endpoints)
             },
             self.all_peers().total(),
-        )
-        // downloading the endpoints shouldn't take too long
-        .with_request_timeout(Duration::from_secs(5));
+        );
 
         let api_endpoints = self
             .request_with_strategy(
-                qs,
+                query_strategy,
                 CLIENT_CONFIG_ENDPOINT.to_owned(),
                 ApiRequestErased::default(),
             )
