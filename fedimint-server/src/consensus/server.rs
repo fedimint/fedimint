@@ -326,14 +326,15 @@ impl ConsensusServer {
     pub async fn run_session(&self, session_index: u64) -> anyhow::Result<()> {
         // In order to bound a sessions RAM consumption we need to bound its number of
         // units and therefore its number of rounds. Since we use a session to
-        // create a threshold signature for the corresponding session outcome we have to
-        // guarantee that an attacker cannot exhaust our memory by preventing the
-        // creation of a threshold signature, thereby keeping the session open
-        // indefinitely. Hence, we increase the delay between rounds exponentially
-        // such that max_round would only be reached after a minimum of 100 years.
-        // In case of such an attack the broadcast stops ordering any items until the
-        // attack subsides as not items are ordered while the signatures are collected.
-        // The maximum RAM consumption of a peer is bound by:
+        // create a naive secp256k1 threshold signature for the header of session
+        // outcome we have to guarantee that an attacker cannot exhaust our
+        // memory by preventing the creation of a threshold signature, thereby
+        // keeping the session open indefinitely. Hence, after a certain round
+        // index, we increase the delay between rounds exponentially such that
+        // max_round would only be reached after a minimum of 100 years. In case
+        // of such an attack the broadcast stops ordering any items until the
+        // attack subsides as no items are ordered while the signatures are
+        // collected. The maximum RAM consumption of a peer is bound by:
         //
         // self.keychain.peer_count() * max_round * ALEPH_BFT_UNIT_BYTE_LIMIT
 
@@ -343,7 +344,7 @@ impl ConsensusServer {
         let max_round = 3 * self.cfg.consensus.broadcast_max_rounds_per_session;
         let round_delay = self.cfg.local.broadcast_round_delay_ms as f64;
 
-        let exponential_slowdown_offset = 3 * expected_rounds;
+        let exp_slowdown_offset = 3 * expected_rounds;
 
         let mut delay_config = aleph_bft::default_delay_config();
 
@@ -351,8 +352,7 @@ impl ConsensusServer {
             let delay = if round_index == 0 {
                 0.0
             } else {
-                round_delay
-                    * BASE.powf(round_index.saturating_sub(exponential_slowdown_offset) as f64)
+                round_delay * BASE.powf(round_index.saturating_sub(exp_slowdown_offset) as f64)
             };
 
             Duration::from_millis(delay.round() as u64)
@@ -366,9 +366,10 @@ impl ConsensusServer {
             delay_config,
             Duration::from_secs(100 * 365 * 24 * 60 * 60),
         )
-        .expect("Config is valid");
+        .expect("The exponential slowdown we defined exceeds 100 years");
 
-        // the number of units ordered in a single aleph session is bounded
+        // we can use an unbounded channel here since the number and size of units
+        // ordered in a single aleph session is bounded as described above
         let (unit_data_sender, unit_data_receiver) = async_channel::unbounded();
         let (signature_sender, signature_receiver) = watch::channel(None);
         let (terminator_sender, terminator_receiver) = futures::channel::oneshot::channel();
@@ -407,11 +408,14 @@ impl ConsensusServer {
             )
             .await?;
 
+        // We can terminate the session instead of waiting for other peers to complete
+        // it since they can always download the signed session outcome from us
         terminator_sender.send(()).ok();
         aleph_handle.await.ok();
 
-        // Only call this after aleph bft has shutdown to avoid write-write conflicts
-        // for the aleph bft units
+        // This method removes the backup of the current session from the database
+        // and therefore has to be called after we have waited for the session to
+        // shutdown or we risk write-write conflicts with the UnitSaver
         self.complete_session(session_index, signed_session_outcome)
             .await;
 
@@ -428,9 +432,9 @@ impl ConsensusServer {
         let mut num_batches = 0;
         let mut item_index = 0;
 
-        // we build a session outcome out of the ordered batches until either we have
-        // processed batches_per_session_outcome session outcomes or a signed session
-        // outcome arrives from our peers
+        // We build a session outcome out of the ordered batches until either we have
+        // processed batches_per_session_outcome of batches or a threshold signed
+        // session outcome is obtained from our peers
         while num_batches < batches_per_session_outcome {
             tokio::select! {
                 unit_data = unit_data_receiver.recv() => {
@@ -454,7 +458,11 @@ impl ConsensusServer {
                 signed_session_outcome = self.request_signed_session_outcome(session_index) => {
                     let pending_accepted_items = self.pending_accepted_items().await;
 
-                    let (processed, unprocessed) = signed_session_outcome.session_outcome.items.split_at(pending_accepted_items.len());
+                    // this panics if we have more accepted items than the signed session outcome
+                    let (processed, unprocessed) = signed_session_outcome
+                        .session_outcome
+                        .items
+                        .split_at(pending_accepted_items.len());
 
                     assert!(processed.iter().eq(pending_accepted_items.iter()));
 
@@ -476,25 +484,27 @@ impl ConsensusServer {
             }
         }
 
-        let session_outcome = SessionOutcome {
-            items: self.pending_accepted_items().await,
-        };
+        let items = self.pending_accepted_items().await;
+
+        assert_eq!(item_index, items.len() as u64);
+
+        let session_outcome = SessionOutcome { items };
 
         let header = session_outcome.header(session_index);
 
-        // we send our own signature to the data provider to be broadcasted
+        // We send our own signature to the data provider to be submitted to the atomic
+        // broadcast and collected by our peers
         signature_sender.send(Some(self.keychain.sign(&header)))?;
 
         let mut signatures = BTreeMap::new();
 
-        // we collect the ordered signatures until we either obtain a threshold
+        // We collect the ordered signatures until we either obtain a threshold
         // signature or a signed session outcome arrives from our peers
         while signatures.len() < self.keychain.threshold() {
             tokio::select! {
                 unit_data = unit_data_receiver.recv() => {
                     if let (UnitData::Signature(signature), peer) = unit_data? {
                         if self.keychain.verify(&header, &signature, to_node_index(peer)){
-                            // since the signature is valid the node index can be converted to a peer id
                             signatures.insert(peer, signature);
                         } else {
                             warn!(target: LOG_CONSENSUS, "Received invalid signature from peer {peer}");
@@ -576,26 +586,27 @@ impl ConsensusServer {
 
         let mut dbtx = self.db.begin_transaction().await;
 
-        // we disable the warning for uncommitted writes in the database transaction
-        // since we may return early because of a mid session crash or a rejected item
         dbtx.ignore_uncommitted();
 
+        // When we recover from a mid session crash aleph bft will replay the units that
+        // already were processed before the crash. We therefore skip all consensus
+        // items until we have seen all previously accepted items again.
         if let Some(accepted_item) = dbtx
             .get_value(&AcceptedItemKey(item_index.to_owned()))
             .await
         {
-            // this branch is only taken if we crashed mid session
             if accepted_item.item == item && accepted_item.peer == peer {
                 return Ok(());
             }
 
-            bail!("Item was discarded before we recovered");
+            bail!("Item was discarded previously");
         }
 
         self.process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item.clone(), peer)
             .await?;
 
-        // after this point the we have to commit the database transaction
+        // After this point the we have to commit the database transaction since the
+        // item has been fully processed without errors
         dbtx.warn_uncommitted();
 
         dbtx.insert_entry(&AcceptedItemKey(item_index), &AcceptedItem { item, peer })
@@ -713,7 +724,9 @@ impl ConsensusServer {
         let federation_api = WsFederationApi::new(self.api_endpoints.clone());
 
         loop {
-            // we wait until we have stalled
+            // We only want to initiate the request if we have not ordered a unit in a
+            // while. This indicates that we have fallen behind and our peers
+            // have already switched sessions without us
             sleep(Duration::from_secs(5)).await;
 
             let result = federation_api
@@ -760,10 +773,7 @@ async fn submit_module_consensus_items(
             "submit_module_consensus_items",
             move |task_handle| async move {
                 while !task_handle.is_shutting_down() {
-                    let mut dbtx = db.begin_transaction().await;
-
-                    // We ignore any writes
-                    dbtx.ignore_uncommitted();
+                    let mut dbtx = db.begin_transaction_nc().await;
 
                     for (instance_id, _, module) in modules.iter_modules() {
                         let module_consensus_items = module
