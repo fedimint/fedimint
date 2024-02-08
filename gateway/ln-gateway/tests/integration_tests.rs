@@ -1232,6 +1232,10 @@ async fn test_gateway_can_leave_connected_federations() -> anyhow::Result<()> {
 
             let info = rpc.get_info().await.unwrap();
             assert_eq!(info.federations.len(), 2);
+            assert_eq!(
+                info.channels.unwrap().keys().cloned().collect::<Vec<u64>>(),
+                vec![1, 2, 3, 4]
+            );
 
             drop(gateway); // keep until the end to avoid the gateway shutting down too early
             Ok(())

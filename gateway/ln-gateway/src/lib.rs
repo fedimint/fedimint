@@ -689,6 +689,7 @@ impl Gateway {
 
             return Ok(GatewayInfo {
                 federations,
+                channels: Some(self.scid_to_federation.read().await.clone()),
                 version_hash: fedimint_build_code_version_env!().to_string(),
                 lightning_pub_key: Some(lightning_context.lightning_public_key.to_hex()),
                 lightning_alias: Some(lightning_context.lightning_alias.clone()),
@@ -702,6 +703,7 @@ impl Gateway {
 
         Ok(GatewayInfo {
             federations: vec![],
+            channels: None,
             version_hash: fedimint_build_code_version_env!().to_string(),
             lightning_pub_key: None,
             lightning_alias: None,

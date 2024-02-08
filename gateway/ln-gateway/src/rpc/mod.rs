@@ -70,6 +70,7 @@ pub struct FederationInfo {
 pub struct GatewayInfo {
     pub version_hash: String,
     pub federations: Vec<FederationInfo>,
+    pub channels: Option<BTreeMap<u64, FederationId>>,
     pub lightning_pub_key: Option<String>,
     pub lightning_alias: Option<String>,
     #[serde(with = "serde_option_routing_fees")]
