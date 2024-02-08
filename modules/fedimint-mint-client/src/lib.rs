@@ -21,6 +21,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, ensure, Context as _};
 use async_stream::stream;
 use backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
+use base64::Engine as _;
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
 use client_db::DbKeyPrefix;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -162,12 +163,21 @@ impl Decodable for OOBNotes {
     }
 }
 
+const BASE64_URL_SAFE: base64::engine::GeneralPurpose = base64::engine::GeneralPurpose::new(
+    &base64::alphabet::URL_SAFE,
+    base64::engine::general_purpose::PAD,
+);
+
 impl FromStr for OOBNotes {
     type Err = anyhow::Error;
 
     /// Decode a set of out-of-band e-cash notes from a base64 string.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let bytes = base64::decode(s)?;
+        let bytes = if let Ok(bytes) = BASE64_URL_SAFE.decode(s) {
+            bytes
+        } else {
+            base64::engine::general_purpose::STANDARD.decode(s)?
+        };
         let oob_notes: OOBNotes = Decodable::consensus_decode(
             &mut std::io::Cursor::new(bytes),
             &ModuleDecoderRegistry::default(),
@@ -184,7 +194,7 @@ impl Display for OOBNotes {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut bytes = Vec::new();
         Encodable::consensus_encode(self, &mut bytes).expect("encodes correctly");
-        f.write_str(&base64::encode(&bytes))
+        f.write_str(&base64::engine::general_purpose::STANDARD.encode(&bytes))
     }
 }
 
