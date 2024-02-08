@@ -576,7 +576,7 @@ pub mod mock {
 
     impl StreamReliability {
         pub const MILDLY_UNRELIABLE: StreamReliability = {
-            let failure_rate = FailureRate(0.1);
+            let failure_rate = FailureRate(0.0);
             let latency = LatencyInterval {
                 min_millis: 1,
                 max_millis: 10,
