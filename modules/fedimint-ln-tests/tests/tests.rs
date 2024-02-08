@@ -948,6 +948,8 @@ mod fedimint_migration_tests {
                 }
             }
 
+            assert_eq!(0, 1);
+
             Ok(())
         })
         .await
