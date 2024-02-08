@@ -183,8 +183,8 @@ async fn leave_fed(
     Extension(mut gateway): Extension<Gateway>,
     Json(payload): Json<LeaveFedPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
-    gateway.handle_leave_federation(payload).await?;
-    Ok(Json(json!(())))
+    let fed = gateway.handle_leave_federation(payload).await?;
+    Ok(Json(json!(fed)))
 }
 
 /// Backup a gateway actor state

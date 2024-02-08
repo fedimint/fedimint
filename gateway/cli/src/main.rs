@@ -160,9 +160,10 @@ async fn main() -> anyhow::Result<()> {
             print_response(response).await;
         }
         Commands::LeaveFed { federation_id } => {
-            client()
+            let response = client()
                 .leave_federation(LeaveFedPayload { federation_id })
                 .await?;
+            print_response(response).await;
         }
         Commands::Backup { federation_id } => {
             client().backup(BackupPayload { federation_id }).await?;

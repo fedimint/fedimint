@@ -964,7 +964,16 @@ impl Gateway {
         Err(GatewayError::Disconnected)
     }
 
-    pub async fn handle_leave_federation(&mut self, payload: LeaveFedPayload) -> Result<()> {
+    pub async fn handle_leave_federation(
+        &mut self,
+        payload: LeaveFedPayload,
+    ) -> Result<FederationInfo> {
+        let federation_info = {
+            let client = self.select_client(payload.federation_id).await?;
+            self.make_federation_info(client.value(), payload.federation_id)
+                .await
+        };
+
         // TODO: This should optimistically try to contact the federation to remove the
         // registration record
         let _client_joining_lock = self.client_joining_lock.lock().await;
@@ -977,7 +986,8 @@ impl Gateway {
         .await;
         dbtx.commit_tx_result()
             .await
-            .map_err(GatewayError::DatabaseError)
+            .map_err(GatewayError::DatabaseError)?;
+        Ok(federation_info)
     }
 
     pub async fn handle_backup_msg(
