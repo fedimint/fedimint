@@ -28,6 +28,7 @@ use fedimint_core::task::{sleep, spawn, RwLock, TaskGroup, TaskHandle};
 use fedimint_core::timing::TimeReporter;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{timing, PeerId};
+use fedimint_logging::LOG_DB;
 use futures::StreamExt;
 use tokio::sync::watch;
 use tracing::{debug, info, warn};
@@ -116,7 +117,8 @@ impl ConsensusServer {
         for (module_id, module_cfg) in &cfg.consensus.modules {
             let kind = module_cfg.kind.clone();
             let Some(init) = module_inits.get(&kind) else {
-                bail!("Detected configuration for unsupported module id: {module_id}, kind: {kind}")
+                warn!(target: LOG_DB, "Attempting database migration for unsupported module id: {module_id}, kind: {kind}");
+                continue;
             };
             info!(target: LOG_CORE,
                 module_instance_id = *module_id, kind = %kind, "Init module");
