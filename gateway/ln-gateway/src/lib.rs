@@ -1229,6 +1229,12 @@ impl Gateway {
             .into_value();
 
         client.wait_until_fully_dropped().await;
+
+        // Remove previously assigned scid from `scid_to_federation` map
+        self.scid_to_federation
+            .write()
+            .await
+            .retain(|_, fid| *fid != federation_id);
         Ok(())
     }
 
