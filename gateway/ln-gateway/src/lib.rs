@@ -86,8 +86,9 @@ use crate::rpc::{
 };
 use crate::state_machine::GatewayExtPayStates;
 
-/// LND HTLC interceptor can't handle SCID of 0, so start from 1
-pub const INITIAL_SCID: u64 = 1;
+/// This initial SCID is considered invalid by LND HTLC interceptor,
+/// So we should always increment the value before assigning a new SCID.
+pub const INITIAL_SCID: u64 = 0;
 
 /// How long a gateway announcement stays valid
 pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
@@ -873,17 +874,12 @@ impl Gateway {
             let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
                 GatewayError::InvalidMetadata(format!("Invalid federation member string {e:?}"))
             })?;
+            let federation_id = invite_code.federation_id();
 
             let _join_federation = self.client_joining_lock.lock().await;
 
             // Check if this federation has already been registered
-            if self
-                .clients
-                .read()
-                .await
-                .get(&invite_code.federation_id())
-                .is_some()
-            {
+            if self.clients.read().await.get(&federation_id).is_some() {
                 return Err(GatewayError::FederationAlreadyConnected);
             }
 
@@ -905,7 +901,6 @@ impl Gateway {
                     ))?;
             *max_used_scid = mint_channel_id;
 
-            let federation_id = invite_code.federation_id();
             let gw_client_cfg = FederationConfig {
                 invite_code,
                 mint_channel_id,
@@ -926,7 +921,14 @@ impl Gateway {
                 .build(gw_client_cfg.clone(), self.clone())
                 .await?;
 
-            let federation_info = self.make_federation_info(&client, federation_id).await;
+            // Instead of using `make_federation_info`, we manually create federation info
+            // here because short channel id is not yet persisted
+            let federation_info = FederationInfo {
+                federation_id,
+                balance_msat: client.get_balance().await,
+                config: client.get_config().clone(),
+                channel_id: Some(mint_channel_id),
+            };
 
             self.check_federation_network(&federation_info, gateway_config.network)
                 .await?;
@@ -958,6 +960,7 @@ impl Gateway {
             self.client_builder
                 .save_config(gw_client_cfg.clone(), dbtx)
                 .await?;
+            debug!("Federation with ID: {federation_id} connected and assigned channel id: {mint_channel_id}");
 
             return Ok(federation_info);
         }
@@ -1391,11 +1394,24 @@ impl Gateway {
     ) -> FederationInfo {
         let balance_msat = client.get_balance().await;
         let config = client.get_config().clone();
+        let channel_id = self
+            .scid_to_federation
+            .read()
+            .await
+            .iter()
+            .find_map(|(scid, fid)| {
+                if *fid == federation_id {
+                    Some(*scid)
+                } else {
+                    None
+                }
+            });
 
         FederationInfo {
             federation_id,
             balance_msat,
             config,
+            channel_id,
         }
     }
 

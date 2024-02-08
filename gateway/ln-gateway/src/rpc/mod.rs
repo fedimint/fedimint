@@ -63,6 +63,7 @@ pub struct FederationInfo {
     pub federation_id: FederationId,
     pub balance_msat: Amount,
     pub config: ClientConfig,
+    pub channel_id: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
