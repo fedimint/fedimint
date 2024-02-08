@@ -579,6 +579,8 @@ pub async fn open_channel(
 pub enum LightningNode {
     Cln(Lightningd),
     Lnd(Lnd),
+    // No need to store LDK since it runs entirely inside of gatewayd and doesn't have its own daemon.
+    Ldk,
 }
 
 impl LightningNode {
@@ -586,6 +588,7 @@ impl LightningNode {
         match self {
             LightningNode::Cln(_) => LightningNodeType::Cln,
             LightningNode::Lnd(_) => LightningNodeType::Lnd,
+            LightningNode::Ldk => LightningNodeType::Ldk,
         }
     }
 }

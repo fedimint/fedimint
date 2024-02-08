@@ -64,6 +64,7 @@ use fedimint_wallet_client::{
 use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::Action;
 use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
+use ldk_node::lightning_invoice::Bolt11Invoice as LdkBolt11Invoice;
 use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::rngs::OsRng;
@@ -896,9 +897,24 @@ impl Gateway {
         &self,
         payload: RegisterPaymentHashPayload,
     ) -> Result<Bolt11Invoice> {
-        if let GatewayState::Running { .. } = self.state.read().await.clone() {
-            // TODO: Implement this.
-            unimplemented!()
+        if let GatewayState::Running { lightning_context } = self.state.read().await.clone() {
+            let invoice: LdkBolt11Invoice = lightning_context
+                .lnrpc
+                .create_invoice_for_hash(
+                    payload.amount.msats,
+                    payload.description,
+                    payload.expiry_time.as_secs(),
+                    payload.payment_hash,
+                )
+                .await
+                .map_err(|err| GatewayError::LightningRpcError(err))?;
+
+            return Bolt11Invoice::from_str(&invoice.to_string())
+                .map_err(|err| GatewayError::UnexpectedState(err.to_string()));
+
+            // return Err(GatewayError::UnexpectedState(
+            //     "Ran out of state updates while paying invoice".to_string(),
+            // ));
         }
 
         warn!("Gateway is not connected, cannot handle {payload:?}");
@@ -1423,9 +1439,9 @@ impl Gateway {
         lnrpc: Arc<dyn ILnRpcClient>,
         num_route_hints: u32,
     ) -> Result<Vec<RouteHint>> {
-        if num_route_hints == 0 {
-            return Ok(vec![]);
-        }
+        // if num_route_hints == 0 {
+        return Ok(vec![]);
+        // }
 
         for num_retries in 0.. {
             let route_hints = match Self::fetch_lightning_route_hints_try(

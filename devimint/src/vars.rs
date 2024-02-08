@@ -113,11 +113,13 @@ declare_vars! {
         FM_PORT_FEDIMINTD_BASE: u16 = port_alloc((3 * fed_size).try_into().unwrap())?;
         FM_PORT_GW_CLN: u16 = port_alloc(1)?;
         FM_PORT_GW_LND: u16 = port_alloc(1)?;
+        FM_PORT_GW_LDK: u16 = port_alloc(1)?;
         FM_PORT_CLN_EXTENSION: u16 = port_alloc(1)?;
         FM_PORT_FAUCET: u16 = 15243u16;
 
         FM_CLN_DIR: PathBuf = mkdir(FM_TEST_DIR.join("cln")).await?;
         FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join("lnd")).await?;
+        FM_LDK_DIR: PathBuf = mkdir(FM_TEST_DIR.join("ldk")).await?;
         FM_BTC_DIR: PathBuf = mkdir(FM_TEST_DIR.join("bitcoin")).await?;
         FM_DATA_DIR: PathBuf = FM_TEST_DIR.clone();
         FM_CLIENT_BASE_DIR: PathBuf = mkdir(FM_TEST_DIR.join("clients")).await?;
@@ -156,6 +158,8 @@ declare_vars! {
         FM_GWCLI_CLN: String = f!("{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_CLN}/",
             gateway_cli = crate::util::get_gateway_cli_path().join(" "),);
         FM_GWCLI_LND: String = f!("{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/",
+            gateway_cli = crate::util::get_gateway_cli_path().join(" "),);
+        FM_GWCLI_LDK: String = f!("{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LDK}/",
             gateway_cli = crate::util::get_gateway_cli_path().join(" "),);
         FM_DB_TOOL: String = f!("{fedimint_dbtool}", fedimint_dbtool = crate::util::get_fedimint_dbtool_cli_path().join(" "));
 

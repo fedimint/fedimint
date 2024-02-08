@@ -10,7 +10,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use fedimint_core::{OutPoint, TransactionId};
+use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 use fedimint_ln_common::contracts::{DecryptedPreimage, FundedContract};
@@ -370,7 +370,9 @@ impl LightningReceiveFunded {
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
 pub struct RegisterPaymentHashPayload {
-    pub federation_id: FederationId,
+    pub amount: Amount,
+    pub description: String,
+    pub expiry_time: Duration,
     pub payment_hash: sha256::Hash,
 }
 

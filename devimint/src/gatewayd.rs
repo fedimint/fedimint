@@ -24,6 +24,7 @@ impl Gatewayd {
         let port = match ln {
             LightningNode::Cln(_) => process_mgr.globals.FM_PORT_GW_CLN,
             LightningNode::Lnd(_) => process_mgr.globals.FM_PORT_GW_LND,
+            LightningNode::Ldk => process_mgr.globals.FM_PORT_GW_LDK,
         };
         let addr = format!("http://127.0.0.1:{port}/{V1_API_ENDPOINT}");
         let gateway_env: HashMap<String, String> = HashMap::from_iter([
@@ -60,6 +61,7 @@ impl Gatewayd {
         match self.ln.take() {
             Some(LightningNode::Lnd(lnd)) => lnd.terminate().await,
             Some(LightningNode::Cln(cln)) => cln.terminate().await,
+            Some(LightningNode::Ldk) => Ok(()),
             None => Err(anyhow::anyhow!(
                 "Cannot stop an already stopped Lightning Node"
             )),

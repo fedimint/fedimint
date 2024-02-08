@@ -107,6 +107,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
         fed,
         gw_cln,
         gw_lnd,
+        gw_ldk,
         electrs,
         esplora,
     } = dev_fed;
@@ -356,6 +357,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         fed,
         gw_cln,
         gw_lnd,
+        gw_ldk,
         electrs,
         esplora,
     } = dev_fed;
@@ -1329,6 +1331,7 @@ pub async fn lightning_gw_reconnect_test(
         fed,
         gw_cln,
         gw_lnd,
+        gw_ldk,
         electrs,
         esplora,
     } = dev_fed;
@@ -1414,6 +1417,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         fed,
         gw_cln,
         gw_lnd,
+        gw_ldk,
         electrs,
         esplora,
     } = dev_fed;
@@ -1425,11 +1429,15 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     // Query current gateway infos
     let mut cln_cmd = cmd!(gw_cln, "info");
     let mut lnd_cmd = cmd!(gw_lnd, "info");
-    let (cln_value, lnd_value) = tokio::try_join!(cln_cmd.out_json(), lnd_cmd.out_json())?;
+    let mut ldk_cmd = cmd!(gw_ldk, "info");
+    let (cln_value, lnd_value, ldk_value) =
+        tokio::try_join!(cln_cmd.out_json(), lnd_cmd.out_json(), ldk_cmd.out_json())?;
 
     // Drop references to cln and lnd gateways so the test can kill them
     drop(gw_cln);
     drop(gw_lnd);
+    // TODO: Finish wiring LDK up in this test.
+    drop(gw_ldk);
 
     // Verify that making a payment while the gateways are down does not result in
     // funds being stuck
@@ -1592,6 +1600,30 @@ pub async fn do_try_create_and_pay_invoice(
                 cln_rpc::model::responses::PayStatus::COMPLETE
             ));
         }
+        Some(LightningNode::Ldk) => {
+            // Pay the invoice using CLN
+            let invoice_status = new_cln
+                .request(cln_rpc::model::requests::PayRequest {
+                    bolt11: invoice,
+                    amount_msat: None,
+                    label: None,
+                    riskfactor: None,
+                    maxfeepercent: None,
+                    retry_for: None,
+                    maxdelay: None,
+                    exemptfee: None,
+                    localinvreqid: None,
+                    exclude: None,
+                    maxfee: None,
+                    description: None,
+                })
+                .await?
+                .status;
+            anyhow::ensure!(matches!(
+                invoice_status,
+                cln_rpc::model::responses::PayStatus::COMPLETE
+            ));
+        }
         None => {
             panic!("Lightning node did not come back up correctly");
         }
@@ -1609,6 +1641,7 @@ pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         mut fed,
         gw_cln,
         gw_lnd,
+        gw_ldk,
         electrs,
         esplora,
     } = dev_fed;
@@ -1653,6 +1686,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         fed,
         gw_cln,
         gw_lnd,
+        gw_ldk,
         electrs,
         esplora,
     } = dev_fed;

@@ -13,6 +13,7 @@ use std::time::Duration;
 use anyhow::{bail, ensure, format_err, Context};
 use async_stream::stream;
 use bitcoin::{KeyPair, Network};
+use bitcoin_hashes::hex::ToHex;
 use bitcoin_hashes::{sha256, Hash};
 use db::{DbKeyPrefix, LightningGatewayKey, PaymentResult, PaymentResultKey};
 use fedimint_client::derivable_secret::ChildId;
@@ -60,6 +61,7 @@ use lightning_invoice::{
 };
 use rand::seq::IteratorRandom;
 use rand::{CryptoRng, Rng, RngCore};
+use receive::RegisterPaymentHashPayload;
 use secp256k1::{PublicKey, ThirtyTwoByteHash};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
@@ -738,7 +740,6 @@ impl LightningClientModule {
         description: String,
         expiry_time: Duration,
     ) -> anyhow::Result<Bolt11Invoice> {
-        // TODO: Create `register_payment_hash` endpoint in gateway.
         let response = reqwest::Client::new()
             .post(
                 gateway
@@ -747,7 +748,12 @@ impl LightningClientModule {
                     .expect("register_payment_hash contains no invalid characters for a URL")
                     .as_str(),
             )
-            .json(&payment_hash)
+            .json(&RegisterPaymentHashPayload {
+                amount,
+                description: description.clone(),
+                expiry_time,
+                payment_hash,
+            })
             .send()
             .await
             .context("Failed to register payment hash with gateway")?;
@@ -820,6 +826,11 @@ impl LightningClientModule {
             // be a good idea.
             Err(_) => false,
         };
+
+        println!(
+            "gateway_must_create_invoices: {}",
+            gateway_must_create_invoices
+        );
 
         let invoice = if gateway_must_create_invoices {
             // Maybe retry a few times?
@@ -896,6 +907,8 @@ impl LightningClientModule {
             invoice_builder
                 .build_signed(|hash| self.secp.sign_ecdsa_recoverable(hash, &node_secret_key))?
         };
+
+        println!("invoice: {:?}", invoice);
 
         // Since we're not generating an invoice if using an LDK gateway,
         // let's validate that the invoice is what we asked it to be.

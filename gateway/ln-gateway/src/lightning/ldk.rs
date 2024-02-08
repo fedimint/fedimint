@@ -112,16 +112,22 @@ impl UnknownPreimageFetcher for LdkPreimageFetcher {
 }
 
 impl GatewayLdkClient {
-    pub async fn new(storage_dir_path: String, network: Network) -> Result<Self, BuildError> {
+    pub async fn new(
+        storage_dir_path_or: Option<String>,
+        network: Network,
+    ) -> Result<Self, BuildError> {
         let (preimage_fetcher, route_htlc_stream) = LdkPreimageFetcher::new();
         let preimage_fetcher_arc = Arc::from(preimage_fetcher);
 
-        let node = ldk_node::Builder::new()
+        let mut node_builder = ldk_node::Builder::new();
+        node_builder
             .set_unknown_preimage_fetcher(preimage_fetcher_arc.clone())
-            .set_storage_dir_path(storage_dir_path)
-            .set_network(network)
-            .build()
-            .unwrap();
+            .set_network(network);
+        if let Some(storage_dir_path) = storage_dir_path_or {
+            node_builder.set_storage_dir_path(storage_dir_path);
+        }
+
+        let node = node_builder.build().unwrap();
 
         Ok(GatewayLdkClient {
             node,
@@ -153,13 +159,7 @@ impl ILnRpcClient for GatewayLdkClient {
             pub_key: self.node.node_id().serialize().to_vec(),
             // TODO: This is a placeholder. We need to get the actual alias from the LDK node.
             alias: "LDK Fedimint Gateway Node".to_string(),
-            network: match self.network {
-                Network::Bitcoin => "main",
-                Network::Testnet => "test",
-                Network::Signet => "signet",
-                Network::Regtest => "regtest",
-            }
-            .to_string(),
+            network: self.network.to_string(),
         })
     }
 
@@ -167,7 +167,9 @@ impl ILnRpcClient for GatewayLdkClient {
         &self,
         num_route_hints: usize,
     ) -> Result<GetRouteHintsResponse, LightningRpcError> {
-        panic!("GatewayLdkClient::routehints() not implemented")
+        Ok(GetRouteHintsResponse {
+            route_hints: vec![],
+        })
     }
 
     async fn pay(
