@@ -272,9 +272,9 @@ pub struct Gateway {
     // A public key representing the identity of the gateway. Private key is not used.
     pub gateway_id: secp256k1::PublicKey,
 
-    // ID generator that atomically increments. Used for creation of new short channel ids that
-    // represent federations.
-    channel_id_generator: Arc<Mutex<u64>>,
+    // Tracker for short channel ID assignments. When connecting a new federation,
+    // this value is incremented and assigned to the federation as the `mint_channel_id`
+    max_used_scid: Arc<Mutex<u64>>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -287,7 +287,7 @@ impl std::fmt::Debug for Gateway {
             .field("clients", &self.clients)
             .field("scid_to_federation", &self.scid_to_federation)
             .field("gateway_id", &self.gateway_id)
-            .field("channel_id_generator", &self.channel_id_generator)
+            .field("max_used_scid", &self.max_used_scid)
             .finish()
     }
 }
@@ -325,7 +325,7 @@ impl Gateway {
             client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
             gateway_id: Gateway::get_gateway_id(gateway_db).await,
-            channel_id_generator: Arc::new(Mutex::new(INITIAL_SCID)),
+            max_used_scid: Arc::new(Mutex::new(INITIAL_SCID)),
         })
     }
 
@@ -360,7 +360,7 @@ impl Gateway {
             lightning_builder: Arc::new(GatewayLightningBuilder {
                 lightning_mode: opts.mode.clone(),
             }),
-            channel_id_generator: Arc::new(Mutex::new(INITIAL_SCID)),
+            max_used_scid: Arc::new(Mutex::new(INITIAL_SCID)),
             gateway_parameters: opts.to_gateway_parameters()?,
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
@@ -896,13 +896,14 @@ impl Gateway {
 
             // The gateway deterministically assigns a channel id (u64) to each federation
             // connected.
-            let mut channel_id_generator = self.channel_id_generator.lock().await;
-            let mint_channel_id = channel_id_generator.checked_add(1).ok_or(
-                GatewayError::GatewayConfigurationError(
-                    "Too many connected federations".to_string(),
-                ),
-            )?;
-            *channel_id_generator = mint_channel_id;
+            let mut max_used_scid = self.max_used_scid.lock().await;
+            let mint_channel_id =
+                max_used_scid
+                    .checked_add(1)
+                    .ok_or(GatewayError::GatewayConfigurationError(
+                        "Too many connected federations".to_string(),
+                    ))?;
+            *max_used_scid = mint_channel_id;
 
             let federation_id = invite_code.federation_id();
             let gw_client_cfg = FederationConfig {
@@ -1253,13 +1254,12 @@ impl Gateway {
     async fn load_clients(&mut self) {
         let dbtx = self.gateway_db.begin_transaction().await;
         let configs = self.client_builder.load_configs(dbtx.into_nc()).await;
-        let mut channel_id_generator = self.channel_id_generator.lock().await;
-        let mut next_channel_id = *channel_id_generator;
 
         let _join_federation = self.client_joining_lock.lock().await;
 
-        for config in configs {
+        for config in configs.clone() {
             let federation_id = config.invite_code.federation_id();
+            let scid = config.mint_channel_id;
 
             if let Ok(client) = Spanned::try_new(
                 info_span!("client", federation_id  = %federation_id.clone()),
@@ -1270,7 +1270,6 @@ impl Gateway {
                 // Registering each client happens in the background, since we're loading
                 // the clients for the first time, just add them to
                 // the in-memory maps
-                let scid = config.mint_channel_id;
                 self.clients.write().await.insert(federation_id, client);
                 self.scid_to_federation
                     .write()
@@ -1279,13 +1278,12 @@ impl Gateway {
             } else {
                 warn!("Failed to load client for federation: {federation_id}");
             }
-
-            if config.mint_channel_id > next_channel_id {
-                next_channel_id = config.mint_channel_id + 1;
-            }
         }
 
-        *channel_id_generator = next_channel_id;
+        if let Some(max_mint_channel_id) = configs.iter().map(|cfg| cfg.mint_channel_id).max() {
+            let mut max_used_scid = self.max_used_scid.lock().await;
+            *max_used_scid = max_mint_channel_id;
+        }
     }
 
     async fn register_clients_timer(&mut self, task_group: &mut TaskGroup) {
