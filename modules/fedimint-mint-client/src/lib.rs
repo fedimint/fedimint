@@ -1496,11 +1496,27 @@ impl std::fmt::Display for InsufficientBalanceError {
     }
 }
 
+/// Old and no longer used, will be deleted in the future
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+enum MintRestoreStates {
+    #[encodable_default]
+    Default { variant: u64, bytes: Vec<u8> },
+}
+
+/// Old and no longer used, will be deleted in the future
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+pub struct MintRestoreStateMachine {
+    operation_id: OperationId,
+    state: MintRestoreStates,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub enum MintClientStateMachines {
     Output(MintOutputStateMachine),
     Input(MintInputStateMachine),
     OOB(MintOOBStateMachine),
+    // Removed in https://github.com/fedimint/fedimint/pull/4035 , now ignored
+    Restore(MintRestoreStateMachine),
 }
 
 impl IntoDynInstance for MintClientStateMachines {
@@ -1538,6 +1554,9 @@ impl State for MintClientStateMachines {
                     MintClientStateMachines::OOB
                 )
             }
+            MintClientStateMachines::Restore(_) => {
+                sm_enum_variant_translation!(vec![], MintClientStateMachines::Restore)
+            }
         }
     }
 
@@ -1546,6 +1565,7 @@ impl State for MintClientStateMachines {
             MintClientStateMachines::Output(issuance_state) => issuance_state.operation_id(),
             MintClientStateMachines::Input(redemption_state) => redemption_state.operation_id(),
             MintClientStateMachines::OOB(oob_state) => oob_state.operation_id(),
+            MintClientStateMachines::Restore(r) => r.operation_id,
         }
     }
 }
