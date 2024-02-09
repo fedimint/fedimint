@@ -29,8 +29,8 @@ use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, SerdeModuleEncoding,
-    SupportedApiVersionsSummary,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
+    SerdeModuleEncoding, SupportedApiVersionsSummary,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
@@ -360,12 +360,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
     vec![
         api_endpoint! {
             VERSION_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> SupportedApiVersionsSummary {
                 Ok(fedimint.api_versions_summary().to_owned())
             }
         },
         api_endpoint! {
             SUBMIT_TRANSACTION_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, transaction: SerdeTransaction| -> SerdeModuleEncoding<Result<TransactionId, TransactionError>> {
                 let transaction = transaction
                     .try_into_inner(&fedimint.modules.decoder_registry())
@@ -378,6 +380,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             AWAIT_TRANSACTION_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionId {
                 debug!(transaction = %tx_hash, "Received request");
 
@@ -390,6 +393,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             AWAIT_OUTPUT_OUTCOME_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, outpoint: OutPoint| -> SerdeModuleEncoding<DynOutputOutcome> {
                 let outcome = fedimint
                     .await_output_outcome(outpoint)
@@ -401,24 +405,28 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             INVITE_CODE_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
                 Ok(fedimint.cfg.get_invite_code().to_string())
             }
         },
         api_endpoint! {
             CLIENT_CONFIG_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> ClientConfig {
                 Ok(fedimint.client_cfg.clone())
             }
         },
         api_endpoint! {
             SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> sha256::Hash {
                 Ok(fedimint.cfg.consensus.consensus_hash())
             }
         },
         api_endpoint! {
             STATUS_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> StatusResponse {
                 let consensus_status = fedimint
                     .consensus_status_cache
@@ -432,30 +440,35 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             SESSION_COUNT_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> u64 {
                 Ok(fedimint.session_count().await)
             }
         },
         api_endpoint! {
             AWAIT_SESSION_OUTCOME_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SessionOutcome> {
                 Ok((&fedimint.await_signed_session_outcome(index).await.session_outcome).into())
             }
         },
         api_endpoint! {
             AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SignedSessionOutcome> {
                 Ok((&fedimint.await_signed_session_outcome(index).await).into())
             }
         },
         api_endpoint! {
             SESSION_STATUS_ENDPOINT,
+            ApiVersion::new(0, 1),
             async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SessionStatus> {
                 Ok((&fedimint.session_status(index).await).into())
             }
         },
         api_endpoint! {
             AUDIT_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, _v: ()| -> AuditSummary {
                 check_auth(context)?;
                 Ok(fedimint.get_federation_audit().await?)
@@ -463,6 +476,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             VERIFY_CONFIG_HASH_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, _v: ()| -> BTreeMap<PeerId, sha256::Hash> {
                 check_auth(context)?;
                 Ok(get_verification_hashes(&fedimint.cfg))
@@ -470,6 +484,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             BACKUP_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, request: SignedBackupRequest| -> () {
                 fedimint
                     .handle_backup_request(&mut context.dbtx().into_nc(), request).await?;
@@ -479,6 +494,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             RECOVER_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, id: secp256k1_zkp::PublicKey| -> Option<ClientBackupSnapshot> {
                 Ok(fedimint
                     .handle_recover_request(&mut context.dbtx().into_nc(), id).await)
@@ -486,6 +502,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             AUTH_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |_fedimint: &ConsensusApi, context, _v: ()| -> () {
                 check_auth(context)?;
                 Ok(())
@@ -493,6 +510,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             MODULES_CONFIG_JSON_ENDPOINT,
+            ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> BTreeMap<ModuleInstanceId, JsonWithKind> {
                 Ok(fedimint.cfg.consensus.modules_json.clone())
             }

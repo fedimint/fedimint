@@ -266,11 +266,13 @@ pub mod __reexports {
 /// # Example
 ///
 /// ```rust
+/// # use fedimint_core::module::ApiVersion;
 /// # use fedimint_core::module::{api_endpoint, ApiEndpoint, registry::ModuleInstanceId};
 /// struct State;
 ///
 /// let _: ApiEndpoint<State> = api_endpoint! {
 ///     "/foobar",
+///     ApiVersion::new(0, 3),
 ///     async |state: &State, _dbtx, params: ()| -> i32 {
 ///         Ok(0)
 ///     }
@@ -280,6 +282,9 @@ pub mod __reexports {
 macro_rules! __api_endpoint {
     (
         $path:expr,
+        // Api Version this endpoint was introduced in, at the current consensus level
+        // Currently for documentation purposes only.
+        $version_introduced:expr,
         async |$state:ident: &$state_ty:ty, $context:ident, $param:ident: $param_ty:ty| -> $resp_ty:ty $body:block
     ) => {{
         struct Endpoint;
@@ -296,6 +301,10 @@ macro_rules! __api_endpoint {
                 $context: &'context mut $crate::module::ApiEndpointContext<'dbtx>,
                 $param: Self::Param,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
+                {
+                    // just to enforce the correct type
+                    const __API_VERSION: $crate::module::ApiVersion = $version_introduced;
+                }
                 $body
             }
         }

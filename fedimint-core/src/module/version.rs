@@ -151,6 +151,12 @@ pub struct ApiVersion {
     pub minor: u32,
 }
 
+impl ApiVersion {
+    pub const fn new(major: u32, minor: u32) -> Self {
+        Self { major, minor }
+    }
+}
+
 /// Multiple, disjoint, minimum required or maximum supported, [`ApiVersion`]s.
 ///
 /// If a given component can (potentially) support multiple different (distinct

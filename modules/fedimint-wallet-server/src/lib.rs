@@ -39,8 +39,8 @@ use fedimint_core::endpoint_constants::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
-    PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
+    api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
+    ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
     TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
@@ -686,6 +686,7 @@ impl ServerModule for Wallet {
         vec![
             api_endpoint! {
                 BLOCK_COUNT_ENDPOINT,
+                ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> u32 {
                     // TODO: perhaps change this to an Option
                     Ok(module.consensus_block_count(&mut context.dbtx().into_nc()).await.unwrap_or_default())
@@ -693,12 +694,14 @@ impl ServerModule for Wallet {
             },
             api_endpoint! {
                 BLOCK_COUNT_LOCAL_ENDPOINT,
+                ApiVersion::new(0, 0),
                 async |module: &Wallet, _context, _params: ()| -> Option<u32> {
                     Ok(*module.block_count_local.lock().expect("Locking failed"))
                 }
             },
             api_endpoint! {
                 PEG_OUT_FEES_ENDPOINT,
+                ApiVersion::new(0, 0),
                 async |module: &Wallet, context, params: (Address, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
                     let feerate = module.consensus_fee_rate(&mut context.dbtx().into_nc()).await;
