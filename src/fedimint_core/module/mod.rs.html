@@ -953,6 +953,15 @@
 <a href="#953" id="953">953</a>
 <a href="#954" id="954">954</a>
 <a href="#955" id="955">955</a>
+<a href="#956" id="956">956</a>
+<a href="#957" id="957">957</a>
+<a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
+<a href="#961" id="961">961</a>
+<a href="#962" id="962">962</a>
+<a href="#963" id="963">963</a>
+<a href="#964" id="964">964</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>registry;
 
@@ -1221,11 +1230,13 @@
 <span class="doccomment">/// # Example
 ///
 /// ```rust
+/// # use fedimint_core::module::ApiVersion;
 /// # use fedimint_core::module::{api_endpoint, ApiEndpoint, registry::ModuleInstanceId};
 /// struct State;
 ///
 /// let _: ApiEndpoint&lt;State&gt; = api_endpoint! {
 ///     &quot;/foobar&quot;,
+///     ApiVersion::new(0, 3),
 ///     async |state: &amp;State, _dbtx, params: ()| -&gt; i32 {
 ///         Ok(0)
 ///     }
@@ -1235,6 +1246,9 @@
 </span><span class="macro">macro_rules! </span>__api_endpoint {
     (
         <span class="macro-nonterminal">$path</span>:expr,
+        <span class="comment">// Api Version this endpoint was introduced in, at the current consensus level
+        // Currently for documentation purposes only.
+        </span><span class="macro-nonterminal">$version_introduced</span>:expr,
         <span class="kw">async </span>|<span class="macro-nonterminal">$state</span>:ident: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$state_ty</span>:ty, <span class="macro-nonterminal">$context</span>:ident, <span class="macro-nonterminal">$param</span>:ident: <span class="macro-nonterminal">$param_ty</span>:ty| -&gt; <span class="macro-nonterminal">$resp_ty</span>:ty <span class="macro-nonterminal">$body</span>:block
     ) =&gt; {{
         <span class="kw">struct </span>Endpoint;
@@ -1251,6 +1265,10 @@
                 <span class="macro-nonterminal">$context</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;context </span><span class="kw-2">mut </span><span class="macro-nonterminal">$crate::module::ApiEndpointContext</span>&lt;<span class="lifetime">&#39;dbtx</span>&gt;,
                 <span class="macro-nonterminal">$param</span>: <span class="self">Self</span>::Param,
             ) -&gt; ::std::result::Result&lt;<span class="self">Self</span>::Response, <span class="macro-nonterminal">$crate::module::ApiError</span>&gt; {
+                {
+                    <span class="comment">// just to enforce the correct type
+                    </span><span class="kw">const </span>__API_VERSION: <span class="macro-nonterminal">$crate::module::ApiVersion </span>= <span class="macro-nonterminal">$version_introduced</span>;
+                }
                 <span class="macro-nonterminal">$body
             </span>}
         }

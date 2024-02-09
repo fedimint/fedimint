@@ -568,6 +568,24 @@
 <a href="#568" id="568">568</a>
 <a href="#569" id="569">569</a>
 <a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -599,8 +617,8 @@
 <span class="kw">use </span>fedimint_core::module::audit::{Audit, AuditSummary};
 <span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, SerdeModuleEncoding,
-    SupportedApiVersionsSummary,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
+    SerdeModuleEncoding, SupportedApiVersionsSummary,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
@@ -930,12 +948,14 @@
     <span class="macro">vec!</span>[
         <span class="macro">api_endpoint! </span>{
             VERSION_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; SupportedApiVersionsSummary {
                 <span class="prelude-val">Ok</span>(fedimint.api_versions_summary().to_owned())
             }
         },
         <span class="macro">api_endpoint! </span>{
             SUBMIT_TRANSACTION_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, transaction: SerdeTransaction| -&gt; SerdeModuleEncoding&lt;<span class="prelude-ty">Result</span>&lt;TransactionId, TransactionError&gt;&gt; {
                 <span class="kw">let </span>transaction = transaction
                     .try_into_inner(<span class="kw-2">&amp;</span>fedimint.modules.decoder_registry())
@@ -948,6 +968,7 @@
         },
         <span class="macro">api_endpoint! </span>{
             AWAIT_TRANSACTION_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, tx_hash: TransactionId| -&gt; TransactionId {
                 <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Received request&quot;</span>);
 
@@ -960,6 +981,7 @@
         },
         <span class="macro">api_endpoint! </span>{
             AWAIT_OUTPUT_OUTCOME_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, outpoint: OutPoint| -&gt; SerdeModuleEncoding&lt;DynOutputOutcome&gt; {
                 <span class="kw">let </span>outcome = fedimint
                     .await_output_outcome(outpoint)
@@ -971,24 +993,28 @@
         },
         <span class="macro">api_endpoint! </span>{
             INVITE_CODE_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context,  _v: ()| -&gt; String {
                 <span class="prelude-val">Ok</span>(fedimint.cfg.get_invite_code().to_string())
             }
         },
         <span class="macro">api_endpoint! </span>{
             CLIENT_CONFIG_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; ClientConfig {
                 <span class="prelude-val">Ok</span>(fedimint.client_cfg.clone())
             }
         },
         <span class="macro">api_endpoint! </span>{
             SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; sha256::Hash {
                 <span class="prelude-val">Ok</span>(fedimint.cfg.consensus.consensus_hash())
             }
         },
         <span class="macro">api_endpoint! </span>{
             STATUS_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; StatusResponse {
                 <span class="kw">let </span>consensus_status = fedimint
                     .consensus_status_cache
@@ -1002,30 +1028,35 @@
         },
         <span class="macro">api_endpoint! </span>{
             SESSION_COUNT_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; u64 {
                 <span class="prelude-val">Ok</span>(fedimint.session_count().<span class="kw">await</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{
             AWAIT_SESSION_OUTCOME_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, index: u64| -&gt; SerdeModuleEncoding&lt;SessionOutcome&gt; {
                 <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>fedimint.await_signed_session_outcome(index).<span class="kw">await</span>.session_outcome).into())
             }
         },
         <span class="macro">api_endpoint! </span>{
             AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, index: u64| -&gt; SerdeModuleEncoding&lt;SignedSessionOutcome&gt; {
                 <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>fedimint.await_signed_session_outcome(index).<span class="kw">await</span>).into())
             }
         },
         <span class="macro">api_endpoint! </span>{
             SESSION_STATUS_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">1</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, index: u64| -&gt; SerdeModuleEncoding&lt;SessionStatus&gt; {
                 <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>fedimint.session_status(index).<span class="kw">await</span>).into())
             }
         },
         <span class="macro">api_endpoint! </span>{
             AUDIT_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; AuditSummary {
                 check_auth(context)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(fedimint.get_federation_audit().<span class="kw">await</span><span class="question-mark">?</span>)
@@ -1033,6 +1064,7 @@
         },
         <span class="macro">api_endpoint! </span>{
             VERIFY_CONFIG_HASH_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; BTreeMap&lt;PeerId, sha256::Hash&gt; {
                 check_auth(context)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(get_verification_hashes(<span class="kw-2">&amp;</span>fedimint.cfg))
@@ -1040,6 +1072,7 @@
         },
         <span class="macro">api_endpoint! </span>{
             BACKUP_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, request: SignedBackupRequest| -&gt; () {
                 fedimint
                     .handle_backup_request(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), request).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1049,6 +1082,7 @@
         },
         <span class="macro">api_endpoint! </span>{
             RECOVER_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, id: secp256k1_zkp::PublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt; {
                 <span class="prelude-val">Ok</span>(fedimint
                     .handle_recover_request(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), id).<span class="kw">await</span>)
@@ -1056,6 +1090,7 @@
         },
         <span class="macro">api_endpoint! </span>{
             AUTH_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|_fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; () {
                 check_auth(context)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(())
@@ -1063,6 +1098,7 @@
         },
         <span class="macro">api_endpoint! </span>{
             MODULES_CONFIG_JSON_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt; {
                 <span class="prelude-val">Ok</span>(fedimint.cfg.consensus.modules_json.clone())
             }

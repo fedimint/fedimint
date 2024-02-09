@@ -804,6 +804,8 @@
 <a href="#804" id="804">804</a>
 <a href="#805" id="805">805</a>
 <a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -817,9 +819,9 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-    ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
+    ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
+    SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::{
@@ -1334,6 +1336,7 @@
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
                 BACKUP_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, context, request: SignedBackupRequest| -&gt; () {
                     module
                         .handle_backup_request(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), request).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1342,6 +1345,7 @@
             },
             <span class="macro">api_endpoint! </span>{
                 RECOVER_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, context, id: secp256k1_zkp::PublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
                     <span class="prelude-val">Ok</span>(module
                         .handle_recover_request(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), id).<span class="kw">await</span>)

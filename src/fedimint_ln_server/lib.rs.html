@@ -1441,6 +1441,17 @@
 <a href="#1441" id="1441">1441</a>
 <a href="#1442" id="1442">1442</a>
 <a href="#1443" id="1443">1443</a>
+<a href="#1444" id="1444">1444</a>
+<a href="#1445" id="1445">1445</a>
+<a href="#1446" id="1446">1446</a>
+<a href="#1447" id="1447">1447</a>
+<a href="#1448" id="1448">1448</a>
+<a href="#1449" id="1449">1449</a>
+<a href="#1450" id="1450">1450</a>
+<a href="#1451" id="1451">1451</a>
+<a href="#1452" id="1452">1452</a>
+<a href="#1453" id="1453">1453</a>
+<a href="#1454" id="1454">1454</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -1462,7 +1473,7 @@
 };
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, CoreConsensusVersion, InputMeta,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiVersion, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
     SupportedModuleApiVersions, TransactionItemAmount,
 };
@@ -2301,12 +2312,14 @@
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
                 BLOCK_COUNT_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, _v: ()| -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
                     <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(module.consensus_block_count(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>))
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 ACCOUNT_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; <span class="prelude-ty">Option</span>&lt;ContractAccount&gt; {
                     <span class="prelude-val">Ok</span>(module
                         .get_contract_account(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), contract_id)
@@ -2315,6 +2328,7 @@
             },
             <span class="macro">api_endpoint! </span>{
                 AWAIT_ACCOUNT_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; ContractAccount {
                     <span class="prelude-val">Ok</span>(module
                         .wait_contract_account(context, contract_id)
@@ -2323,6 +2337,7 @@
             },
             <span class="macro">api_endpoint! </span>{
                 AWAIT_BLOCK_HEIGHT_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, block_height: u64| -&gt; () {
                     module.wait_block_height(block_height, <span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>;
                     <span class="prelude-val">Ok</span>(())
@@ -2330,24 +2345,28 @@
             },
             <span class="macro">api_endpoint! </span>{
                 AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; ContractAccount {
                     <span class="prelude-val">Ok</span>(module.wait_outgoing_contract_account_cancelled(context, contract_id).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 GET_DECRYPTED_PREIMAGE_STATUS,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; (IncomingContractAccount, DecryptedPreimageStatus) {
                     <span class="prelude-val">Ok</span>(module.get_decrypted_preimage_status(context, contract_id).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 AWAIT_PREIMAGE_DECRYPTION,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; (IncomingContractAccount, <span class="prelude-ty">Option</span>&lt;Preimage&gt;) {
                     <span class="prelude-val">Ok</span>(module.wait_preimage_decrypted(context, contract_id).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 OFFER_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; <span class="prelude-ty">Option</span>&lt;IncomingContractOffer&gt; {
                     <span class="prelude-val">Ok</span>(module
                         .get_offer(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), payment_hash)
@@ -2356,6 +2375,7 @@
             },
             <span class="macro">api_endpoint! </span>{
                 AWAIT_OFFER_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; IncomingContractOffer {
                     <span class="prelude-val">Ok</span>(module
                         .wait_offer(context, payment_hash)
@@ -2364,12 +2384,14 @@
             },
             <span class="macro">api_endpoint! </span>{
                 LIST_GATEWAYS_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, _v: ()| -&gt; Vec&lt;LightningGatewayAnnouncement&gt; {
                     <span class="prelude-val">Ok</span>(module.list_gateways(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 REGISTER_GATEWAY_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, gateway: LightningGatewayAnnouncement| -&gt; () {
                     module.register_gateway(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc(), gateway).<span class="kw">await</span>;
                     <span class="prelude-val">Ok</span>(())

@@ -1706,6 +1706,9 @@
 <a href="#1706" id="1706">1706</a>
 <a href="#1707" id="1707">1707</a>
 <a href="#1708" id="1708">1708</a>
+<a href="#1709" id="1709">1709</a>
+<a href="#1710" id="1710">1710</a>
+<a href="#1711" id="1711">1711</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -1747,8 +1750,8 @@
 };
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
-    PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
+    api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
+    ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
     TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
@@ -2394,6 +2397,7 @@
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
                 BLOCK_COUNT_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, _params: ()| -&gt; u32 {
                     <span class="comment">// TODO: perhaps change this to an Option
                     </span><span class="prelude-val">Ok</span>(module.consensus_block_count(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>.unwrap_or_default())
@@ -2401,12 +2405,14 @@
             },
             <span class="macro">api_endpoint! </span>{
                 BLOCK_COUNT_LOCAL_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, _context, _params: ()| -&gt; <span class="prelude-ty">Option</span>&lt;u32&gt; {
                     <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>module.block_count_local.lock().expect(<span class="string">&quot;Locking failed&quot;</span>))
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 PEG_OUT_FEES_ENDPOINT,
+                ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, params: (Address, u64)| -&gt; <span class="prelude-ty">Option</span>&lt;PegOutFees&gt; {
                     <span class="kw">let </span>(address, sats) = params;
                     <span class="kw">let </span>feerate = module.consensus_fee_rate(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>;
