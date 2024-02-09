@@ -38,7 +38,7 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
 };
 use fedimint_ln_common::api::LnFederationApi;
-use fedimint_ln_common::config::LightningClientConfig;
+use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
 use fedimint_ln_common::contracts::outgoing::{
     OutgoingContract, OutgoingContractAccount, OutgoingContractData,
@@ -505,21 +505,14 @@ impl LightningClientModule {
         let absolute_timelock = consensus_count + OUTGOING_LN_CONTRACT_TIMELOCK - 1;
 
         // Compute amount to lock in the outgoing contract
-        let invoice_amount_msat = invoice
-            .amount_milli_satoshis()
-            .context("MissingInvoiceAmount")?;
+        let invoice_amount = Amount::from_msats(
+            invoice
+                .amount_milli_satoshis()
+                .context("MissingInvoiceAmount")?,
+        );
 
-        let fees = gateway.fees;
-        let base_fee = fees.base_msat as u64;
-        let margin_fee: u64 = if fees.proportional_millionths > 0 {
-            let fee_percent = 1000000 / fees.proportional_millionths as u64;
-            invoice_amount_msat / fee_percent
-        } else {
-            0
-        };
-
-        let contract_amount_msat = invoice_amount_msat + base_fee + margin_fee;
-        let contract_amount = Amount::from_msats(contract_amount_msat);
+        let gateway_fee = gateway.fees.to_amount(&invoice_amount);
+        let contract_amount = invoice_amount + gateway_fee;
 
         let user_sk = bitcoin::KeyPair::new(&self.secp, &mut rng);
 
@@ -549,7 +542,7 @@ impl LightningClientModule {
                         operation_id,
                         federation_id: fed_id,
                         contract: outgoing_payment.clone(),
-                        gateway_fee: Amount::from_msats(base_fee + margin_fee),
+                        gateway_fee,
                         preimage_auth,
                         invoice: invoice.clone(),
                     },

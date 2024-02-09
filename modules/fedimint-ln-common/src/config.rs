@@ -4,7 +4,7 @@ pub use bitcoin::Network;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::plugin_types_trait_impl_config;
+use fedimint_core::{msats, plugin_types_trait_impl_config, Amount};
 use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::serde_impl::SerdeSecret;
@@ -144,5 +144,32 @@ impl FromStr for GatewayFee {
             base_msat,
             proportional_millionths,
         }))
+    }
+}
+
+/// Trait for converting a fee type to specific `Amount`,
+/// relative to a given payment `Amount`
+pub trait FeeToAmount {
+    /// Calculates fee `Amount` given a payment `Amount`
+    fn to_amount(&self, payment: &Amount) -> Amount;
+}
+
+impl FeeToAmount for RoutingFees {
+    fn to_amount(&self, payment: &Amount) -> Amount {
+        let base_fee = self.base_msat as u64;
+        let margin_fee: u64 = if self.proportional_millionths > 0 {
+            let fee_percent = 1000000 / self.proportional_millionths as u64;
+            payment.msats / fee_percent
+        } else {
+            0
+        };
+
+        msats(base_fee + margin_fee)
+    }
+}
+
+impl FeeToAmount for GatewayFee {
+    fn to_amount(&self, payment: &Amount) -> Amount {
+        self.0.to_amount(payment)
     }
 }

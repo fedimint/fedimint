@@ -26,7 +26,7 @@ use fedimint_ln_client::{
     OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::api::LnFederationApi;
-use fedimint_ln_common::config::{GatewayFee, LightningGenParams};
+use fedimint_ln_common::config::{FeeToAmount, GatewayFee, LightningGenParams};
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage, PreimageKey};
@@ -277,7 +277,7 @@ async fn test_can_change_routing_fees() -> anyhow::Result<()> {
             dummy_module.receive_money(outpoint).await?;
             assert_eq!(user_client.get_balance().await, sats(1000));
 
-            let fee = "10,0".to_string();
+            let fee = "10,10000".to_string();
             let set_configuration_payload = SetConfigurationPayload {
                 password: None,
                 num_route_hints: None,
@@ -291,16 +291,18 @@ async fn test_can_change_routing_fees() -> anyhow::Result<()> {
             .await;
 
             // Create test invoice
-            let invoice = other_lightning_client.invoice(sats(250), None).await?;
+            let invoice_amount = sats(250);
+            let invoice = other_lightning_client.invoice(invoice_amount, None).await?;
 
             let gateway = gateway.remove_client(&fed).await;
             pay_valid_invoice(invoice, &user_client, &gateway).await?;
 
+            let fee_amount = GatewayFee::from_str(&fee)?.to_amount(&invoice_amount);
             assert_eq!(
                 user_client.get_balance().await,
-                sats(1000 - 250) - msats(10)
+                sats(1000 - 250) - fee_amount
             );
-            assert_eq!(gateway.get_balance().await, sats(250) + msats(10));
+            assert_eq!(gateway.get_balance().await, sats(250) + fee_amount);
 
             Ok(())
         },
