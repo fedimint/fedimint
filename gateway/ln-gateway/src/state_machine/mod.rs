@@ -54,9 +54,6 @@ use crate::state_machine::complete::{
 };
 use crate::{Gateway, LightningContext};
 
-pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
-pub const INITIAL_REGISTER_BACKOFF_DURATION: Duration = Duration::from_secs(15);
-
 /// The high-level state of a reissue operation started with
 /// [`GatewayClientModule::gateway_pay_bolt11_invoice`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
