@@ -168,7 +168,7 @@ jobs:
           nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --option keep-failed true --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).ci.ciTestAll
 
       - name: Tests (5 times more)
-        if: github.event_name == 'merge_group'
+        if: github.event_name == 'merge_group' && matrix.run-tests
         run: |
           nix build -L .#ci.ciTestAll5Times --keep-failed
 
