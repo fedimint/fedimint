@@ -25,20 +25,28 @@
 <a href="#25" id="25">25</a>
 <a href="#26" id="26">26</a>
 <a href="#27" id="27">27</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::fedimint_build_code_version_env;
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(missing_docs)]
+</span><span class="doccomment">//! This crate provides `gatewayd`, the Fedimint gateway binary.
+//!
+//! The binary contains logic for sending/receiving Lightning payments on behalf
+//! of Fedimint clients in one or more connected Federations.
+//!
+//! It runs a webserver with a REST API that can be used by Fedimint
+//! clients to request routing of payments through the Lightning Network.
+//! The API also has endpoints for managing the gateway.
+
+</span><span class="kw">use </span>fedimint_core::fedimint_build_code_version_env;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>ln_gateway::Gateway;
 <span class="kw">use </span>tracing::info;
 
-<span class="doccomment">/// Fedimint Gateway Binary
-///
-/// This binary runs a webserver with an API that can be used by Fedimint
-/// clients to request routing of payments through the Lightning Network.
-/// It uses a `GatewayLightningClient`, an rpc client to communicate with a
-/// remote Lightning node accessible through a `GatewayLightningServer`.
-</span><span class="attr">#[tokio::main]
+<span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     handle_version_hash_command(<span class="macro">fedimint_build_code_version_env!</span>());
     TracingSetup::default().init()<span class="question-mark">?</span>;
