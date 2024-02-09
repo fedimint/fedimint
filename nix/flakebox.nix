@@ -312,10 +312,18 @@ rec {
     doCheck = false;
   };
 
-  workspaceCov = craneLib.buildPackage {
+  workspaceCov = craneLib.buildWorkspace {
     pname = "fedimint-workspace-lcov";
     cargoArtifacts = workspaceDepsCov;
-    buildPhaseCargoCommand = "source <(cargo llvm-cov show-env --export-prefix); cargo build --locked --workspace --all-targets --profile $CARGO_PROFILE; env RUST_BACKTRACE=1 RUST_LOG=info,timing=debug cargo nextest run --locked --workspace --all-targets --cargo-profile $CARGO_PROFILE --profile $CARGO_PROFILE --test-threads=$(($(nproc) * 2)); mkdir -p $out ; cargo llvm-cov report --profile $CARGO_PROFILE --lcov --output-path $out/lcov.info";
+    buildPhaseCargoCommand = "source <(cargo llvm-cov show-env --export-prefix); cargo build --locked --workspace --all-targets --profile $CARGO_PROFILE;";
+    nativeBuildInputs = [ pkgs.cargo-llvm-cov ];
+    doCheck = false;
+  };
+
+  workspaceTestCov = craneLib.buildPackage {
+    pname = "fedimint-workspace-lcov";
+    cargoArtifacts = workspaceCov;
+    buildPhaseCargoCommand = "source <(cargo llvm-cov show-env --export-prefix); env RUST_BACKTRACE=1 RUST_LOG=info,timing=debug cargo nextest run --locked --workspace --all-targets --cargo-profile $CARGO_PROFILE --profile $CARGO_PROFILE --test-threads=$(($(nproc) * 2)); mkdir -p $out ; cargo llvm-cov report --profile $CARGO_PROFILE --lcov --output-path $out/lcov.info";
     installPhaseCommand = "true";
     nativeBuildInputs = [ pkgs.cargo-llvm-cov ];
     doCheck = false;
