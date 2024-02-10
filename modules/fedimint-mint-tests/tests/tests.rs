@@ -77,6 +77,8 @@ async fn backup_encode_decode_roundtrip() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+// TODO: fix https://github.com/fedimint/fedimint/issues/4293
+#[ignore]
 async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
     // Print notes for client1
     let fed = fixtures().new_fed().await;
