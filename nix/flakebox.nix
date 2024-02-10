@@ -394,9 +394,11 @@ rec {
         patchShebangs ./scripts
         export FM_CARGO_DENY_COMPILATION=1
         ./scripts/tests/test-ci-all.sh || exit 1
+        cp scripts/tests/always-success-test.sh scripts/tests/always-success-test.sh.bck
         sed -i -e 's/exit 0/exit 1/g' scripts/tests/always-success-test.sh
         echo "Verifying failure detection..."
         ./scripts/tests/test-ci-all.sh 1>/dev/null 2>/dev/null && exit 1
+        cp -f scripts/tests/always-success-test.sh.bck scripts/tests/always-success-test.sh
       ''
     );
   };
