@@ -61,7 +61,7 @@ impl State for LightningReceiveStateMachine {
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
             LightningReceiveStates::SubmittedOffer(submitted_offer) => {
-                submitted_offer.transitions(self.operation_id, global_context)
+                submitted_offer.transitions(global_context)
             }
             LightningReceiveStates::Canceled(_) => {
                 vec![]
@@ -69,9 +69,7 @@ impl State for LightningReceiveStateMachine {
             LightningReceiveStates::ConfirmedInvoice(confirmed_invoice) => {
                 confirmed_invoice.transitions(global_context)
             }
-            LightningReceiveStates::Funded(funded) => {
-                funded.transitions(self.operation_id, global_context)
-            }
+            LightningReceiveStates::Funded(funded) => funded.transitions(global_context),
             LightningReceiveStates::Success(_) => {
                 vec![]
             }
@@ -106,7 +104,6 @@ pub enum LightningReceiveError {
 impl LightningReceiveSubmittedOffer {
     fn transitions(
         &self,
-        operation_id: OperationId,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<LightningReceiveStateMachine>> {
         let global_context = global_context.clone();
@@ -114,7 +111,7 @@ impl LightningReceiveSubmittedOffer {
         let invoice = self.invoice.clone();
         let payment_keypair = self.payment_keypair;
         vec![StateTransition::new(
-            Self::await_invoice_confirmation(global_context, operation_id, txid),
+            Self::await_invoice_confirmation(global_context, txid),
             move |_dbtx, result, old_state| {
                 Box::pin(Self::transition_confirmed_invoice(
                     result,
@@ -128,12 +125,11 @@ impl LightningReceiveSubmittedOffer {
 
     async fn await_invoice_confirmation(
         global_context: DynGlobalClientContext,
-        operation_id: OperationId,
         txid: TransactionId,
     ) -> Result<(), String> {
         // No network calls are done here, we just await other state machines, so no
         // retry logic is needed
-        global_context.await_tx_accepted(operation_id, txid).await
+        global_context.await_tx_accepted(txid).await
     }
 
     async fn transition_confirmed_invoice(
@@ -317,12 +313,11 @@ pub struct LightningReceiveFunded {
 impl LightningReceiveFunded {
     fn transitions(
         &self,
-        operation_id: OperationId,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<LightningReceiveStateMachine>> {
         let out_points = self.out_points.clone();
         vec![StateTransition::new(
-            Self::await_claim_success(operation_id, global_context.clone(), self.txid),
+            Self::await_claim_success(global_context.clone(), self.txid),
             move |_dbtx, result, old_state| {
                 let out_points = out_points.clone();
                 Box::pin(Self::transition_claim_success(
@@ -333,13 +328,12 @@ impl LightningReceiveFunded {
     }
 
     async fn await_claim_success(
-        operation_id: OperationId,
         global_context: DynGlobalClientContext,
         txid: TransactionId,
     ) -> Result<(), String> {
         // No network calls are done here, we just await other state machines, so no
         // retry logic is needed
-        global_context.await_tx_accepted(operation_id, txid).await
+        global_context.await_tx_accepted(txid).await
     }
 
     async fn transition_claim_success(

@@ -37,7 +37,7 @@ impl State for DummyStateMachine {
     ) -> Vec<StateTransition<Self>> {
         match self.clone() {
             DummyStateMachine::Input(amount, txid, id) => vec![StateTransition::new(
-                await_tx_accepted(global_context.clone(), id, txid),
+                await_tx_accepted(global_context.clone(), txid),
                 move |dbtx, res, _state: Self| match res {
                     // accepted, we are done
                     Ok(_) => Box::pin(async move { DummyStateMachine::InputDone(id) }),
@@ -89,10 +89,9 @@ async fn add_funds(amount: Amount, mut dbtx: DatabaseTransaction<'_>) {
 // TODO: Boiler-plate, should return OutputOutcome
 async fn await_tx_accepted(
     context: DynGlobalClientContext,
-    id: OperationId,
     txid: TransactionId,
 ) -> Result<(), String> {
-    context.await_tx_accepted(id, txid).await
+    context.await_tx_accepted(txid).await
 }
 
 async fn await_dummy_output_outcome(

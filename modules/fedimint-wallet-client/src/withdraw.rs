@@ -66,7 +66,7 @@ async fn await_withdraw_processed(
     created: CreatedWithdrawState,
 ) -> Result<Txid, String> {
     global_context
-        .await_tx_accepted(operation_id, created.fm_outpoint.txid)
+        .await_tx_accepted(created.fm_outpoint.txid)
         .await?;
 
     loop {
@@ -95,6 +95,7 @@ async fn await_withdraw_processed(
                     "Awaiting output outcome failed, retrying in {}s",
                     RETRY_DELAY.as_secs_f64()
                 );
+
                 sleep(RETRY_DELAY).await;
             }
         }
