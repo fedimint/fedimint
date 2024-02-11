@@ -430,10 +430,11 @@ impl Gateway {
     }
 
     pub async fn run(mut self, tg: &mut TaskGroup) -> anyhow::Result<TaskShutdownToken> {
-        self.start_webserver(tg).await;
         self.register_clients_timer(tg).await;
         self.load_clients().await;
         self.start_gateway(tg).await?;
+        // start webserver last to avoid handling requests before fully initialized
+        self.start_webserver(tg).await;
         let handle = tg.make_handle();
         let shutdown_receiver = handle.make_shutdown_rx().await;
         Ok(shutdown_receiver)
@@ -485,7 +486,8 @@ impl Gateway {
         }
     }
 
-    async fn start_gateway(mut self, task_group: &mut TaskGroup) -> Result<()> {
+    async fn start_gateway(&self, task_group: &mut TaskGroup) -> Result<()> {
+        let mut self_copy = self.clone();
         let tg = task_group.clone();
         task_group
             .spawn(
@@ -498,7 +500,7 @@ impl Gateway {
                         }
 
                         let mut htlc_task_group = tg.make_subgroup().await;
-                        let lnrpc_route = self.lightning_builder.build().await;
+                        let lnrpc_route = self_copy.lightning_builder.build().await;
 
                         debug!("Will try to intercept HTLC stream...");
                         // Re-create the HTLC stream if the connection breaks
@@ -508,17 +510,17 @@ impl Gateway {
                         {
                             Ok((stream, ln_client)) => {
                                 // Successful calls to route_htlcs establish a connection
-                                self.set_gateway_state(GatewayState::Connected).await;
+                                self_copy.set_gateway_state(GatewayState::Connected).await;
                                 info!("Established HTLC stream");
 
                                 match fetch_lightning_node_info(ln_client.clone()).await {
                                     Ok((lightning_public_key, lightning_alias, lightning_network)) => {
-                                        if let Some(config) = self.get_gateway_configuration().await {
+                                        if let Some(config) = self_copy.get_gateway_configuration().await {
                                             if config.network != lightning_network {
                                                 warn!("Lightning node does not match previously configured gateway network : ({:?})", config.network);
                                                 info!("Changing gateway network to match lightning node network : ({:?})", lightning_network);
-                                                self.handle_disconnect(htlc_task_group).await;
-                                                self.handle_set_configuration_msg(SetConfigurationPayload {
+                                                self_copy.handle_disconnect(htlc_task_group).await;
+                                                self_copy.handle_set_configuration_msg(SetConfigurationPayload {
                                                     password: Some(config.password),
                                                     network: Some(lightning_network),
                                                     num_route_hints: None,
@@ -535,18 +537,18 @@ impl Gateway {
                                             lightning_alias,
                                             lightning_network,
                                         };
-                                        self.set_gateway_state(GatewayState::Running {
+                                        self_copy.set_gateway_state(GatewayState::Running {
                                             lightning_context
                                         }).await;
 
                                         // Blocks until the connection to the lightning node breaks or we receive the shutdown signal
                                         tokio::select! {
-                                            _ = self.handle_htlc_stream(stream, handle.clone()) => {
+                                            _ = self_copy.handle_htlc_stream(stream, handle.clone()) => {
                                                 warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
                                             },
                                             _ = handle.make_shutdown_rx().await => {
                                                 info!("Received shutdown signal");
-                                                self.handle_disconnect(htlc_task_group).await;
+                                                self_copy.handle_disconnect(htlc_task_group).await;
                                                 break;
                                             }
                                         }
@@ -561,7 +563,7 @@ impl Gateway {
                             }
                         }
 
-                        self.handle_disconnect(htlc_task_group).await;
+                        self_copy.handle_disconnect(htlc_task_group).await;
 
                         warn!("Disconnected from Lightning Node. Waiting 5 seconds and trying again");
                         sleep(Duration::from_secs(5)).await;
