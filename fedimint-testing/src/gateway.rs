@@ -55,10 +55,14 @@ impl GatewayTest {
         GatewayRpcClient::new(self.versioned_api.clone(), None)
     }
 
-    /// Removes a client from the gateway
-    pub async fn remove_client(&self, fed: &FederationTest) -> ClientArc {
+    /// Removes a client from the gateway and keeps it alive
+    ///
+    /// Note: this makes the database opened, which can lead to gateway
+    /// wanting to rejoin it. Better get your own client instead of being
+    /// lazy here.
+    pub async fn remove_client_hack(&self, fed: &FederationTest) -> ClientArc {
         self.gateway
-            .remove_client(fed.id())
+            .remove_client_hack(fed.id())
             .await
             .unwrap()
             .into_value()
