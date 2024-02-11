@@ -8,8 +8,9 @@ use devimint::cmd;
 use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
-use fedimint_client::{Client, ClientArc, FederationInfo};
+use fedimint_client::{Client, ClientArc};
 use fedimint_core::api::InviteCode;
+use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::db::Database;
 use fedimint_core::module::CommonModuleInit;
@@ -150,13 +151,9 @@ pub async fn build_client(
 
     let client = if !Client::is_initialized(client_builder.db()).await {
         if let Some(invite_code) = &invite_code {
-            let federation_info = FederationInfo::from_invite_code(invite_code.clone()).await?;
+            let client_config = ClientConfig::download_from_invite_code(invite_code).await?;
             client_builder
-                .join(
-                    root_secret,
-                    federation_info.config().clone(),
-                    invite_code.clone(),
-                )
+                .join(root_secret, client_config.clone(), invite_code.clone())
                 .await
         } else {
             bail!("Database not initialize and invite code not provided");

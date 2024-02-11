@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{cmp, result};
 
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{anyhow, ensure};
 use bech32::Variant::Bech32m;
 use bech32::{FromBase32, ToBase32};
 use bitcoin::secp256k1;
@@ -48,14 +48,12 @@ use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::encoding::DecodeError;
 use crate::endpoint_constants::{
-    AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, RECOVER_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, RECOVER_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use crate::query::{
-    DiscoverApiVersionSet, FilterMap, QueryStep, QueryStrategy, ThresholdConsensus,
-    UnionResponsesSingle,
+    DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
 };
 use crate::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
 use crate::task;
@@ -485,9 +483,6 @@ pub trait IGlobalFederationApi: IRawFederationApi {
 
     async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId>;
 
-    /// Fetch client configuration info only if verified against a federation id
-    async fn download_client_config(&self, info: &InviteCode) -> FederationResult<ClientConfig>;
-
     /// Fetches the server consensus hash if enough peers agree on it
     async fn server_config_consensus_hash(&self) -> FederationResult<sha256::Hash>;
 
@@ -717,45 +712,6 @@ where
             ApiRequestErased::new(txid),
         )
         .await
-    }
-
-    async fn download_client_config(
-        &self,
-        invite_code: &InviteCode,
-    ) -> FederationResult<ClientConfig> {
-        // we have to download the api endpoints first
-        let id = invite_code.federation_id();
-        let query_strategy = FilterMap::new(
-            move |cfg: ClientConfig| {
-                if id.0 != cfg.global.api_endpoints.consensus_hash() {
-                    bail!("Guardian api endpoint map does not hash to FederationId")
-                }
-
-                Ok(cfg.global.api_endpoints)
-            },
-            self.all_peers().total(),
-        );
-
-        let api_endpoints = self
-            .request_with_strategy(
-                query_strategy,
-                CLIENT_CONFIG_ENDPOINT.to_owned(),
-                ApiRequestErased::default(),
-            )
-            .await?;
-
-        // now we can build an api for all guardians and download the client config
-        let api_endpoints = api_endpoints
-            .into_iter()
-            .map(|(peer, url)| (peer, url.url))
-            .collect();
-
-        WsFederationApi::new(api_endpoints)
-            .request_current_consensus(
-                CLIENT_CONFIG_ENDPOINT.to_owned(),
-                ApiRequestErased::default(),
-            )
-            .await
     }
 
     async fn server_config_consensus_hash(&self) -> FederationResult<sha256::Hash> {

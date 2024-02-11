@@ -1,7 +1,8 @@
 use anyhow::Result;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::{Client, FederationInfo};
+use fedimint_client::Client;
 use fedimint_core::api::InviteCode;
+use fedimint_core::config::ClientConfig;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_ln_client::LightningClientInit;
@@ -33,14 +34,14 @@ fn make_client_builder() -> fedimint_client::ClientBuilder {
 }
 
 async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientArc> {
-    let federation_info = FederationInfo::from_invite_code(invite_code.clone()).await?;
+    let client_config = ClientConfig::download_from_invite_code(invite_code).await?;
     let mut builder = make_client_builder();
     let client_secret = load_or_generate_mnemonic(builder.db()).await?;
     builder.stopped();
     builder
         .join(
             PlainRootSecretStrategy::to_root_secret(&client_secret),
-            federation_info.config().to_owned(),
+            client_config.to_owned(),
             invite_code.clone(),
         )
         .await

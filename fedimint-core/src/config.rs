@@ -4,16 +4,21 @@ use std::hash::Hash;
 use std::ops::Mul;
 use std::path::Path;
 use std::str::FromStr;
+use std::time::Duration;
 
-use anyhow::{bail, format_err, Context};
+use anyhow::{anyhow, bail, format_err, Context};
 use bitcoin::secp256k1;
 use bitcoin_hashes::hex::{format_hex, FromHex};
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin_hashes::{hex, sha256};
+use fedimint_core::api::{FederationApiExt, InviteCode, WsFederationApi};
 use fedimint_core::cancellable::Cancelled;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{DynRawFallback, Encodable};
+use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::module::ApiRequestErased;
+use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use fedimint_logging::LOG_CORE;
@@ -24,7 +29,7 @@ use tbs::{serde_impl, Scalar};
 use thiserror::Error;
 use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective};
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::core::DynClientConfig;
 use crate::encoding::Decodable;
@@ -32,6 +37,7 @@ use crate::module::{
     CoreConsensusVersion, DynCommonModuleInit, DynServerModuleInit, IDynCommonModuleInit,
     ModuleConsensusVersion,
 };
+use crate::query::FilterMap;
 use crate::{maybe_add_send_sync, PeerId};
 
 // TODO: make configurable
@@ -202,6 +208,81 @@ impl ClientConfig {
         serde_json::from_str(str_value)
             .map(Some)
             .context(format!("Decoding meta field '{key}' failed"))
+    }
+
+    /// Create an invite code with the api endpoint of the given peer which can
+    /// be used to download this client config
+    pub fn invite_code(&self, peer: &PeerId) -> Option<InviteCode> {
+        self.global
+            .api_endpoints
+            .get(peer)
+            .map(|peer_url| InviteCode::new(peer_url.url.clone(), *peer, self.federation_id()))
+    }
+
+    /// Tries to download the client config from the federation,
+    /// attempts to retry teb times before giving up.
+    pub async fn download_from_invite_code(
+        invite_code: &InviteCode,
+    ) -> anyhow::Result<ClientConfig> {
+        debug!("Downloading client config from {:?}", invite_code);
+
+        for _ in 0..10 {
+            match Self::try_download_client_config(invite_code).await {
+                Ok(cfg) => {
+                    return Ok(cfg);
+                }
+                Err(error) => {
+                    debug!("Failed to download client config {:?}", error);
+
+                    sleep(Duration::from_millis(500)).await;
+                }
+            }
+        }
+
+        Err(anyhow!("Failed to download client config"))
+    }
+
+    async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Result<ClientConfig> {
+        // we have to download the api endpoints first
+        let federation_id = invite_code.federation_id();
+
+        let query_strategy = FilterMap::new(
+            move |cfg: ClientConfig| {
+                if federation_id.0 != cfg.global.api_endpoints.consensus_hash() {
+                    bail!("Guardian api endpoint map does not hash to FederationId")
+                }
+
+                Ok(cfg.global.api_endpoints)
+            },
+            1,
+        );
+
+        let api_endpoints = WsFederationApi::from_invite_code(&[invite_code.clone()])
+            .request_with_strategy(
+                query_strategy,
+                CLIENT_CONFIG_ENDPOINT.to_owned(),
+                ApiRequestErased::default(),
+            )
+            .await?;
+
+        // now we can build an api for all guardians and download the client config
+        let api_endpoints = api_endpoints
+            .into_iter()
+            .map(|(peer, url)| (peer, url.url))
+            .collect();
+
+        let client_config = WsFederationApi::new(api_endpoints)
+            .request_current_consensus::<ClientConfig>(
+                CLIENT_CONFIG_ENDPOINT.to_owned(),
+                ApiRequestErased::default(),
+            )
+            .await?;
+
+        if client_config.federation_id() != federation_id {
+            bail!("Obtained client config has different federation id");
+        }
+
+        Ok(client_config)
     }
 }
 
