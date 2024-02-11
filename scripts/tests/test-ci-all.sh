@@ -33,6 +33,11 @@ cargo nextest run --no-run ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${
 # If you really need to break this rule, ping dpc
 export FM_CARGO_DENY_COMPILATION=1
 
+function rust_unit_tests() {
+  fm-run-test "${FUNCNAME[0]}" cargo nextest run ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
+}
+export -f rust_unit_tests
+
 function recoverytool_tests() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/recoverytool-tests.sh
 }
@@ -135,6 +140,7 @@ if parallel \
   --memfree 1G \
   --nice 15 ::: \
   always_success_test \
+  rust_unit_tests \
   backend_test_bitcoind \
   backend_test_electrs \
   backend_test_esplora \
