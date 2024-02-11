@@ -72,7 +72,7 @@ use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
 use strum::IntoEnumIterator;
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::db::{FederationConfig, FederationIdKeyPrefix};
@@ -234,6 +234,9 @@ pub struct LightningContext {
     pub lightning_network: Network,
 }
 
+// A marker struct, to distinguish lock over `Gateway::clients`.
+struct ClientsJoinLock;
+
 #[derive(Clone)]
 pub struct Gateway {
     // Builder struct that allows the gateway to build a `ILnRpcClient`, which represents a
@@ -256,6 +259,11 @@ pub struct Gateway {
     // Map of `FederationId` -> `Client`. Used for efficient retrieval of the client while handling
     // incoming HTLCs.
     clients: FederationToClientMap,
+
+    /// Joining or leaving Federation is protected by this lock to prevent
+    /// trying to use same database at the same time from multiple threads.
+    /// Could be more granular (per id), but shouldn't matter in practice.
+    client_joining_lock: Arc<tokio::sync::Mutex<ClientsJoinLock>>,
 
     // Map of short channel ids to `FederationId`. Use for efficient retrieval of the client while
     // handling incoming HTLCs.
@@ -314,6 +322,7 @@ impl Gateway {
             client_builder,
             gateway_db: gateway_db.clone(),
             clients: Arc::new(RwLock::new(BTreeMap::new())),
+            client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
             gateway_id: Gateway::get_gateway_id(gateway_db).await,
             channel_id_generator: Arc::new(Mutex::new(INITIAL_SCID)),
@@ -359,6 +368,7 @@ impl Gateway {
             gateway_db,
             clients: Arc::new(RwLock::new(BTreeMap::new())),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
+            client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
         })
     }
 
@@ -862,6 +872,8 @@ impl Gateway {
                 GatewayError::InvalidMetadata(format!("Invalid federation member string {e:?}"))
             })?;
 
+            let _join_federation = self.client_joining_lock.lock().await;
+
             // Check if this federation has already been registered
             if self
                 .clients
@@ -953,7 +965,9 @@ impl Gateway {
     pub async fn handle_leave_federation(&mut self, payload: LeaveFedPayload) -> Result<()> {
         // TODO: This should optimistically try to contact the federation to remove the
         // registration record
-        self.remove_client(payload.federation_id).await?;
+        let _client_joining_lock = self.client_joining_lock.lock().await;
+        self.remove_client(payload.federation_id, &_client_joining_lock)
+            .await?;
         let mut dbtx = self.gateway_db.begin_transaction().await;
         dbtx.remove_entry(&FederationIdKey {
             id: payload.federation_id,
@@ -1179,7 +1193,20 @@ impl Gateway {
         Some(gateway_config)
     }
 
-    pub async fn remove_client(
+    async fn remove_client(
+        &self,
+        federation_id: FederationId,
+        // Note: MUST be protected by a lock, to keep
+        // `clients` and opened databases in sync
+        _lock: &MutexGuard<'_, ClientsJoinLock>,
+    ) -> Result<()> {
+        let _ = self.clients.write().await.remove(&federation_id).ok_or(
+            GatewayError::InvalidMetadata(format!("No federation with id {federation_id}")),
+        )?;
+        Ok(())
+    }
+
+    pub async fn remove_client_hack(
         &self,
         federation_id: FederationId,
     ) -> Result<Spanned<fedimint_client::ClientArc>> {
@@ -1208,6 +1235,8 @@ impl Gateway {
         let configs = self.client_builder.load_configs(dbtx.into_nc()).await;
         let mut channel_id_generator = self.channel_id_generator.lock().await;
         let mut next_channel_id = *channel_id_generator;
+
+        let _join_federation = self.client_joining_lock.lock().await;
 
         for config in configs {
             let federation_id = config.invite_code.federation_id();

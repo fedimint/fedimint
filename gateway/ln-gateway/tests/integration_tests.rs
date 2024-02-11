@@ -219,7 +219,7 @@ async fn test_gateway_can_pay_ldk_node() -> anyhow::Result<()> {
         )
         .await?;
 
-        let gateway = gateway.remove_client(&fed).await;
+        let gateway = gateway.remove_client_hack(&fed).await;
         // Print money for user_client
         let dummy_module = user_client.get_first_module::<DummyClientModule>();
         let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
@@ -242,7 +242,7 @@ async fn test_gateway_can_pay_ldk_node() -> anyhow::Result<()> {
 async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway = gateway.remove_client(&fed).await;
+            let gateway = gateway.remove_client_hack(&fed).await;
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>();
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
@@ -294,7 +294,7 @@ async fn test_can_change_routing_fees() -> anyhow::Result<()> {
             let invoice_amount = sats(250);
             let invoice = other_lightning_client.invoice(invoice_amount, None).await?;
 
-            let gateway = gateway.remove_client(&fed).await;
+            let gateway = gateway.remove_client_hack(&fed).await;
             pay_valid_invoice(invoice, &user_client, &gateway).await?;
 
             let fee_amount = GatewayFee::from_str(&fee)?.to_amount(&invoice_amount);
@@ -314,7 +314,7 @@ async fn test_can_change_routing_fees() -> anyhow::Result<()> {
 async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway = gateway.remove_client(&fed).await;
+            let gateway = gateway.remove_client_hack(&fed).await;
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>();
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
@@ -380,7 +380,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
 async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway = gateway.remove_client(&fed).await;
+            let gateway = gateway.remove_client_hack(&fed).await;
             // Print money for user client
             let dummy_module = user_client.get_first_module::<DummyClientModule>();
             let lightning_module = user_client.get_first_module::<LightningClientModule>();
@@ -444,7 +444,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, user_client, _| async move {
-        let gateway = gateway.remove_client(&fed).await;
+        let gateway = gateway.remove_client_hack(&fed).await;
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
         let dummy_module = gateway.get_first_module::<DummyClientModule>();
@@ -501,7 +501,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, _, _| async move {
-        let gateway = gateway.remove_client(&fed).await;
+        let gateway = gateway.remove_client_hack(&fed).await;
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
         let dummy_module = gateway.get_first_module::<DummyClientModule>();
@@ -539,7 +539,7 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, user_client, _| async move {
-        let gateway = gateway.remove_client(&fed).await;
+        let gateway = gateway.remove_client_hack(&fed).await;
         // User client creates invoice in federation
         let (_invoice_op, invoice, _) = user_client
             .get_first_module::<LightningClientModule>()
@@ -581,7 +581,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
 async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway = gateway.remove_client(&fed).await;
+            let gateway = gateway.remove_client_hack(&fed).await;
             // Print money for gateway client
             let initial_gateway_balance = sats(1000);
             let gateway_dummy_module = gateway.get_first_module::<DummyClientModule>();
@@ -742,7 +742,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
 async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway = gateway.remove_client(&fed).await;
+            let gateway = gateway.remove_client_hack(&fed).await;
             let invoice = other_lightning_client
                 .invoice(sats(1000), 1.into())
                 .await
