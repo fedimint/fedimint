@@ -1,3 +1,6 @@
+use fedimint_logging::LOG_CONSENSUS;
+use tracing::warn;
+
 #[derive(Clone)]
 pub struct Spawner;
 
@@ -27,7 +30,9 @@ impl aleph_bft::SpawnHandle for Spawner {
 
         fedimint_core::task::spawn(name, async move {
             task.await;
-            res_tx.send(()).expect("We own the rx.");
+            if let Err(_err) = res_tx.send(()) {
+                warn!(target: LOG_CONSENSUS, "Unable to send essential spawned task completion. Are we shutting down?");
+            }
         });
 
         Box::pin(async move { res_rx.await.map_err(|_| ()) })
