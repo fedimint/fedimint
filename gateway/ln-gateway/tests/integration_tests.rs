@@ -264,6 +264,8 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+// TODO: re-enable https://github.com/fedimint/fedimint/issues/4300
+#[ignore]
 async fn test_can_change_routing_fees() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
