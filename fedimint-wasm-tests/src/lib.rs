@@ -124,6 +124,11 @@ mod tests {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;
         set_gateway(&client).await?;
+        futures::future::try_join_all((0..10).map(|_| receive_once(client.clone()))).await?;
+        Ok(())
+    }
+
+    async fn receive_once(client: fedimint_client::ClientArc) -> Result<()> {
         let lightning_module = client.get_first_module::<LightningClientModule>();
         let (opid, invoice, _) = lightning_module
             .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None, ())
@@ -158,35 +163,9 @@ mod tests {
         assert!(format!("key: {key:?}").len() > 8);
     }
 
-    #[wasm_bindgen_test]
-    async fn receive_and_pay() -> Result<()> {
-        let client = client(&faucet::invite_code().await?.parse()?).await?;
-        client.start_executor().await;
-        set_gateway(&client).await?;
+    async fn pay_once(client: fedimint_client::ClientArc) -> Result<(), anyhow::Error> {
         let lightning_module = client.get_first_module::<LightningClientModule>();
-        let (opid, invoice, _) = lightning_module
-            .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None, ())
-            .await?;
-        faucet::pay_invoice(&invoice.to_string()).await?;
-
-        let mut updates = lightning_module
-            .subscribe_ln_receive(opid)
-            .await?
-            .into_stream();
-
-        loop {
-            match updates.next().await {
-                Some(LnReceiveState::Claimed) => break,
-                Some(LnReceiveState::Canceled { reason }) => {
-                    return Err(reason.into());
-                }
-                None => return Err(anyhow::anyhow!("Lightning receive failed")),
-                _ => {}
-            }
-        }
-
         let bolt11 = faucet::generate_invoice(11).await?;
-
         let gateway = lightning_module.select_active_gateway_opt().await;
         let OutgoingLightningPayment {
             payment_type,
@@ -198,13 +177,11 @@ mod tests {
         let PayType::Lightning(operation_id) = payment_type else {
             unreachable!("paying invoice over lightning");
         };
-
         let lightning_module = client.get_first_module::<LightningClientModule>();
         let mut updates = lightning_module
             .subscribe_ln_pay(operation_id)
             .await?
             .into_stream();
-
         loop {
             match updates.next().await {
                 Some(LnPayState::Success { preimage: _ }) => {
@@ -217,6 +194,17 @@ mod tests {
                 _ => {}
             }
         }
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn receive_and_pay() -> Result<()> {
+        let client = client(&faucet::invite_code().await?.parse()?).await?;
+        client.start_executor().await;
+        set_gateway(&client).await?;
+
+        futures::future::try_join_all((0..10).map(|_| receive_once(client.clone()))).await?;
+        futures::future::try_join_all((0..10).map(|_| pay_once(client.clone()))).await?;
 
         Ok(())
     }
