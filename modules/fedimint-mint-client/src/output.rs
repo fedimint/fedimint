@@ -152,7 +152,7 @@ impl MintOutputStatesCreated {
 
     async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
         if global_context
-            .await_tx_accepted(common.operation_id, common.out_point.txid)
+            .await_tx_accepted(common.out_point.txid)
             .await
             .is_err()
         {

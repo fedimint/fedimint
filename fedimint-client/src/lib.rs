@@ -224,10 +224,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         sm: Box<maybe_add_send_sync!(dyn IState)>,
     ) -> AddStateMachinesResult;
 
-    async fn transaction_update_stream(
-        &self,
-        operation_id: OperationId,
-    ) -> BoxStream<OperationState<TxSubmissionStates>>;
+    async fn transaction_update_stream(&self) -> BoxStream<OperationState<TxSubmissionStates>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -272,10 +269,7 @@ impl IGlobalClientContext for () {
         unimplemented!("fake implementation, only for tests");
     }
 
-    async fn transaction_update_stream(
-        &self,
-        _operation_id: OperationId,
-    ) -> BoxStream<OperationState<TxSubmissionStates>> {
+    async fn transaction_update_stream(&self) -> BoxStream<OperationState<TxSubmissionStates>> {
         unimplemented!("fake implementation, only for tests");
     }
 }
@@ -292,12 +286,8 @@ impl DynGlobalClientContext {
         DynGlobalClientContext::from(())
     }
 
-    pub async fn await_tx_accepted(
-        &self,
-        operation_id: OperationId,
-        query_txid: TransactionId,
-    ) -> Result<(), String> {
-        self.transaction_update_stream(operation_id)
+    pub async fn await_tx_accepted(&self, query_txid: TransactionId) -> Result<(), String> {
+        self.transaction_update_stream()
             .await
             .filter_map(|tx_update| {
                 std::future::ready(match tx_update.state {
@@ -497,11 +487,8 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
             .await
     }
 
-    async fn transaction_update_stream(
-        &self,
-        operation_id: OperationId,
-    ) -> BoxStream<OperationState<TxSubmissionStates>> {
-        self.client.transaction_update_stream(operation_id).await
+    async fn transaction_update_stream(&self) -> BoxStream<OperationState<TxSubmissionStates>> {
+        self.client.transaction_update_stream(self.operation).await
     }
 }
 

@@ -55,7 +55,7 @@ impl State for MintInputStateMachine {
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
             MintInputStates::Created(created) => created.transitions(&self.common, global_context),
-            MintInputStates::Refund(refund) => refund.transitions(&self.common, global_context),
+            MintInputStates::Refund(refund) => refund.transitions(global_context),
             MintInputStates::Success(_) => {
                 vec![]
             }
@@ -103,9 +103,7 @@ impl MintInputStateCreated {
         common: MintInputCommon,
         global_context: DynGlobalClientContext,
     ) -> Result<(), String> {
-        global_context
-            .await_tx_accepted(common.operation_id, common.txid)
-            .await
+        global_context.await_tx_accepted(common.txid).await
     }
 
     async fn transition_success(
@@ -166,23 +164,19 @@ pub struct MintInputStateRefund {
 impl MintInputStateRefund {
     fn transitions(
         &self,
-        common: &MintInputCommon,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<MintInputStateMachine>> {
         vec![StateTransition::new(
-            Self::await_refund_success(*common, global_context.clone(), self.refund_txid),
+            Self::await_refund_success(global_context.clone(), self.refund_txid),
             |_dbtx, result, old_state| Box::pin(Self::transition_refund_success(result, old_state)),
         )]
     }
 
     async fn await_refund_success(
-        common: MintInputCommon,
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
     ) -> Result<(), String> {
-        global_context
-            .await_tx_accepted(common.operation_id, refund_txid)
-            .await
+        global_context.await_tx_accepted(refund_txid).await
     }
 
     async fn transition_refund_success(

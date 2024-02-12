@@ -96,7 +96,7 @@ impl State for LightningPayStateMachine {
             LightningPayStates::Refundable(refundable) => {
                 refundable.transitions(self.common.clone(), global_context.clone())
             }
-            LightningPayStates::Refund(refund) => refund.transitions(&self.common, global_context),
+            LightningPayStates::Refund(refund) => refund.transitions(global_context),
             LightningPayStates::Refunded(_) => {
                 vec![]
             }
@@ -512,12 +512,11 @@ pub struct LightningPayRefund {
 impl LightningPayRefund {
     fn transitions(
         &self,
-        common: &LightningPayCommon,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<LightningPayStateMachine>> {
         let refund_out_points = self.out_points.clone();
         vec![StateTransition::new(
-            Self::await_refund_success(common.clone(), global_context.clone(), self.txid),
+            Self::await_refund_success(global_context.clone(), self.txid),
             move |_dbtx, result, old_state| {
                 let refund_out_points = refund_out_points.clone();
                 Box::pin(Self::transition_refund_success(
@@ -530,15 +529,12 @@ impl LightningPayRefund {
     }
 
     async fn await_refund_success(
-        common: LightningPayCommon,
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
     ) -> Result<(), String> {
         // No network calls are done here, we just await other state machines, so no
         // retry logic is needed
-        global_context
-            .await_tx_accepted(common.operation_id, refund_txid)
-            .await
+        global_context.await_tx_accepted(refund_txid).await
     }
 
     async fn transition_refund_success(
