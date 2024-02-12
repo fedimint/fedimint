@@ -1202,9 +1202,17 @@ impl Gateway {
         // `clients` and opened databases in sync
         _lock: &MutexGuard<'_, ClientsJoinLock>,
     ) -> Result<()> {
-        let _ = self.clients.write().await.remove(&federation_id).ok_or(
-            GatewayError::InvalidMetadata(format!("No federation with id {federation_id}")),
-        )?;
+        let client = self
+            .clients
+            .write()
+            .await
+            .remove(&federation_id)
+            .ok_or(GatewayError::InvalidMetadata(format!(
+                "No federation with id {federation_id}"
+            )))?
+            .into_value();
+
+        wait_till_fully_dropped(client, federation_id).await;
         Ok(())
     }
 
@@ -1422,6 +1430,24 @@ impl Gateway {
             GatewayState::Running { lightning_context } => Ok(lightning_context),
             _ => Err(LightningRpcError::FailedToConnect),
         }
+    }
+}
+
+/// Block for the `client` to no longer contain any strong references.
+///
+/// Some parts of the code will temporarily clone it to perform some actions.
+/// No further strong references guarantees that the `client` is no longer used
+/// inside the system.
+async fn wait_till_fully_dropped(client: ClientArc, federation_id: FederationId) {
+    let weak = client.downgrade();
+    drop(client);
+
+    while 0 < weak.strong_count() {
+        info!(
+            %federation_id,
+            "Waiting for federation client to stop being used"
+        );
+        fedimint_core::task::sleep(Duration::from_millis(100)).await;
     }
 }
 
