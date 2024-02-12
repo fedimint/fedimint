@@ -577,6 +577,10 @@ impl ClientWeak {
     pub fn upgrade(&self) -> Option<ClientArc> {
         Weak::upgrade(&self.inner).map(ClientArc::new)
     }
+
+    pub fn strong_count(&self) -> usize {
+        self.inner.strong_count()
+    }
 }
 
 /// We need a separate drop implementation for `Client` that triggers
