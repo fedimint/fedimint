@@ -293,9 +293,6 @@
                   pkgs.nodePackages.bash-language-server
                 ] ++ lib.optionals (!stdenv.isAarch64 && !stdenv.isDarwin) [
                   pkgs.semgrep
-                ] ++ lib.optionals (stdenv.isLinux) [
-                  pkgs.xclip
-                  pkgs.wl-clipboard
                 ];
 
                 shellHook = ''
