@@ -56,6 +56,7 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
     // ports above 32k are typically ephmeral increasing a chance of random conflict
     // after port was already tried
     const HIGH: u16 = 32000;
+    const RETRY_DELAY: Duration = Duration::from_millis(100);
 
     data_dir.with_lock(|data_dir| {
         // `_listeners` are here only to prevent other processes from binding until
@@ -71,7 +72,7 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
                     range_size,
                     "Could not use a port (already reserved). Will try a different range."
                 );
-                data_dir.r#yield(Duration::from_millis(100))?;
+                data_dir.r#yield(RETRY_DELAY)?;
                 continue 'retry;
             }
 
@@ -82,16 +83,22 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
                             ?error,
                             port, "Could not use a port. Will try a different range"
                         );
-                        data_dir.r#yield(Duration::from_millis(100))?;
+                        data_dir.r#yield(RETRY_DELAY)?;
                         continue 'retry;
                     }
                     Ok(l) => l,
                 };
             }
 
-            // The caller gets 120 seconds to use the port (`bind`), to prevent
-            // other callers from re-using it.
-            data.insert(range, now_ts() + 120);
+            const ALLOCATION_TIME_SECS: u64 = 600;
+            // The caller gets some time actually start using the port (`bind`),
+            // to prevent other callers from re-using it. This could typically be
+            // much shorter, as portalloc will not only respect the allocation,
+            // but also try to bind before using a given port range. But for tests
+            // that temporarily release ports (e.g. restarts, failure simulations, etc.),
+            // there's a chance that this can expire and another tests snatches the test,
+            // so better to keep it around the time a longest test can take.
+            data.insert(range, now_ts() + ALLOCATION_TIME_SECS);
 
             data_dir.store_data(&data)?;
 
