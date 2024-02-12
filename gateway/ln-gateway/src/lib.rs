@@ -1212,7 +1212,7 @@ impl Gateway {
             )))?
             .into_value();
 
-        wait_till_fully_dropped(client, federation_id).await;
+        wait_till_db_fully_dropped(client, federation_id).await;
         Ok(())
     }
 
@@ -1438,14 +1438,14 @@ impl Gateway {
 /// Some parts of the code will temporarily clone it to perform some actions.
 /// No further strong references guarantees that the `client` is no longer used
 /// inside the system.
-async fn wait_till_fully_dropped(client: ClientArc, federation_id: FederationId) {
-    let weak = client.downgrade();
+async fn wait_till_db_fully_dropped(client: ClientArc, federation_id: FederationId) {
+    let weak = Arc::downgrade(&client.db().clone().into_inner());
     drop(client);
 
     while 0 < weak.strong_count() {
         info!(
             %federation_id,
-            "Waiting for federation client to stop being used"
+            "Waiting for federation client database to stop being used"
         );
         fedimint_core::task::sleep(Duration::from_millis(100)).await;
     }
