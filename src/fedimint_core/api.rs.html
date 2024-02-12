@@ -1385,8 +1385,6 @@
 <a href="#1385" id="1385">1385</a>
 <a href="#1386" id="1386">1386</a>
 <a href="#1387" id="1387">1387</a>
-<a href="#1388" id="1388">1388</a>
-<a href="#1389" id="1389">1389</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -2017,7 +2015,7 @@
     ) -&gt; FederationResult&lt;ClientConfig&gt; {
         <span class="comment">// we have to download the api endpoints first
         </span><span class="kw">let </span>id = invite_code.federation_id();
-        <span class="kw">let </span>qs = FilterMap::new(
+        <span class="kw">let </span>query_strategy = FilterMap::new(
             <span class="kw">move </span>|cfg: ClientConfig| {
                 <span class="kw">if </span>id.<span class="number">0 </span>!= cfg.global.api_endpoints.consensus_hash() {
                     <span class="macro">bail!</span>(<span class="string">&quot;Guardian api endpoint map does not hash to FederationId&quot;</span>)
@@ -2026,13 +2024,11 @@
                 <span class="prelude-val">Ok</span>(cfg.global.api_endpoints)
             },
             <span class="self">self</span>.all_peers().total(),
-        )
-        <span class="comment">// downloading the endpoints shouldn&#39;t take too long
-        </span>.with_request_timeout(Duration::from_secs(<span class="number">5</span>));
+        );
 
         <span class="kw">let </span>api_endpoints = <span class="self">self
             </span>.request_with_strategy(
-                qs,
+                query_strategy,
                 CLIENT_CONFIG_ENDPOINT.to_owned(),
                 ApiRequestErased::default(),
             )
