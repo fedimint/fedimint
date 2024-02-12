@@ -950,7 +950,7 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_client_db_migrations() -> anyhow::Result<()> {
-        TracingSetup::default().init()?;
+        let _ = TracingSetup::default().init();
 
         let module = DynCommonModuleInit::from(WalletClientInit::default());
         validate_migrations_module(module, "wallet-client", |db| async move {
