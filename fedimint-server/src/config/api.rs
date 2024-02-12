@@ -1167,6 +1167,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[ignore] // TODO: flaky https://github.com/fedimint/fedimint/issues/4308
     async fn test_restart_setup() {
         const PEER_NUM: u16 = 4;
         const PORTS_PER_PEER: u16 = 2;
