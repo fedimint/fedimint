@@ -138,7 +138,6 @@
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
 <a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_client::sm::{DynState, State, StateTransition};
@@ -178,7 +177,7 @@
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="self">self</span>.clone() {
             DummyStateMachine::Input(amount, txid, id) =&gt; <span class="macro">vec!</span>[StateTransition::new(
-                await_tx_accepted(global_context.clone(), id, txid),
+                await_tx_accepted(global_context.clone(), txid),
                 <span class="kw">move </span>|dbtx, res, _state: <span class="self">Self</span>| <span class="kw">match </span>res {
                     <span class="comment">// accepted, we are done
                     </span><span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; Box::pin(<span class="kw">async move </span>{ DummyStateMachine::InputDone(id) }),
@@ -230,10 +229,9 @@
 <span class="comment">// TODO: Boiler-plate, should return OutputOutcome
 </span><span class="kw">async fn </span>await_tx_accepted(
     context: DynGlobalClientContext,
-    id: OperationId,
     txid: TransactionId,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-    context.await_tx_accepted(id, txid).<span class="kw">await
+    context.await_tx_accepted(txid).<span class="kw">await
 </span>}
 
 <span class="kw">async fn </span>await_dummy_output_outcome(

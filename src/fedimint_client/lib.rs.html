@@ -2237,19 +2237,6 @@
 <a href="#2237" id="2237">2237</a>
 <a href="#2238" id="2238">2238</a>
 <a href="#2239" id="2239">2239</a>
-<a href="#2240" id="2240">2240</a>
-<a href="#2241" id="2241">2241</a>
-<a href="#2242" id="2242">2242</a>
-<a href="#2243" id="2243">2243</a>
-<a href="#2244" id="2244">2244</a>
-<a href="#2245" id="2245">2245</a>
-<a href="#2246" id="2246">2246</a>
-<a href="#2247" id="2247">2247</a>
-<a href="#2248" id="2248">2248</a>
-<a href="#2249" id="2249">2249</a>
-<a href="#2250" id="2250">2250</a>
-<a href="#2251" id="2251">2251</a>
-<a href="#2252" id="2252">2252</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2476,10 +2463,7 @@
         sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState)&gt;,
     ) -&gt; AddStateMachinesResult;
 
-    <span class="kw">async fn </span>transaction_update_stream(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-    ) -&gt; BoxStream&lt;OperationState&lt;TxSubmissionStates&gt;&gt;;
+    <span class="kw">async fn </span>transaction_update_stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;OperationState&lt;TxSubmissionStates&gt;&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -2524,10 +2508,7 @@
         <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
     }
 
-    <span class="kw">async fn </span>transaction_update_stream(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _operation_id: OperationId,
-    ) -&gt; BoxStream&lt;OperationState&lt;TxSubmissionStates&gt;&gt; {
+    <span class="kw">async fn </span>transaction_update_stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;OperationState&lt;TxSubmissionStates&gt;&gt; {
         <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
     }
 }
@@ -2544,12 +2525,8 @@
         DynGlobalClientContext::from(())
     }
 
-    <span class="kw">pub async fn </span>await_tx_accepted(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-        query_txid: TransactionId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-        <span class="self">self</span>.transaction_update_stream(operation_id)
+    <span class="kw">pub async fn </span>await_tx_accepted(<span class="kw-2">&amp;</span><span class="self">self</span>, query_txid: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
+        <span class="self">self</span>.transaction_update_stream()
             .<span class="kw">await
             </span>.filter_map(|tx_update| {
                 std::future::ready(<span class="kw">match </span>tx_update.state {
@@ -2749,11 +2726,8 @@
             .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>transaction_update_stream(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-    ) -&gt; BoxStream&lt;OperationState&lt;TxSubmissionStates&gt;&gt; {
-        <span class="self">self</span>.client.transaction_update_stream(operation_id).<span class="kw">await
+    <span class="kw">async fn </span>transaction_update_stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;OperationState&lt;TxSubmissionStates&gt;&gt; {
+        <span class="self">self</span>.client.transaction_update_stream(<span class="self">self</span>.operation).<span class="kw">await
     </span>}
 }
 

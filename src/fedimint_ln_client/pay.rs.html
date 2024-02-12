@@ -656,10 +656,6 @@
 <a href="#656" id="656">656</a>
 <a href="#657" id="657">657</a>
 <a href="#658" id="658">658</a>
-<a href="#659" id="659">659</a>
-<a href="#660" id="660">660</a>
-<a href="#661" id="661">661</a>
-<a href="#662" id="662">662</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -758,7 +754,7 @@
             LightningPayStates::Refundable(refundable) =&gt; {
                 refundable.transitions(<span class="self">self</span>.common.clone(), global_context.clone())
             }
-            LightningPayStates::Refund(refund) =&gt; refund.transitions(<span class="kw-2">&amp;</span><span class="self">self</span>.common, global_context),
+            LightningPayStates::Refund(refund) =&gt; refund.transitions(global_context),
             LightningPayStates::Refunded(<span class="kw">_</span>) =&gt; {
                 <span class="macro">vec!</span>[]
             }
@@ -1174,12 +1170,11 @@
 <span class="kw">impl </span>LightningPayRefund {
     <span class="kw">fn </span>transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        common: <span class="kw-2">&amp;</span>LightningPayCommon,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;LightningPayStateMachine&gt;&gt; {
         <span class="kw">let </span>refund_out_points = <span class="self">self</span>.out_points.clone();
         <span class="macro">vec!</span>[StateTransition::new(
-            <span class="self">Self</span>::await_refund_success(common.clone(), global_context.clone(), <span class="self">self</span>.txid),
+            <span class="self">Self</span>::await_refund_success(global_context.clone(), <span class="self">self</span>.txid),
             <span class="kw">move </span>|_dbtx, result, old_state| {
                 <span class="kw">let </span>refund_out_points = refund_out_points.clone();
                 Box::pin(<span class="self">Self</span>::transition_refund_success(
@@ -1192,15 +1187,12 @@
     }
 
     <span class="kw">async fn </span>await_refund_success(
-        common: LightningPayCommon,
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
         <span class="comment">// No network calls are done here, we just await other state machines, so no
         // retry logic is needed
-        </span>global_context
-            .await_tx_accepted(common.operation_id, refund_txid)
-            .<span class="kw">await
+        </span>global_context.await_tx_accepted(refund_txid).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>transition_refund_success(

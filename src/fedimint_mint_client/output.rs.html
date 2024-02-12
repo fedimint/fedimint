@@ -524,7 +524,7 @@
 
     <span class="kw">async fn </span>await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
         <span class="kw">if </span>global_context
-            .await_tx_accepted(common.operation_id, common.out_point.txid)
+            .await_tx_accepted(common.out_point.txid)
             .<span class="kw">await
             </span>.is_err()
         {
