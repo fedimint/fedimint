@@ -121,8 +121,6 @@ use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy as _};
 use thiserror::Error;
-#[cfg(not(target_family = "wasm"))]
-use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
 use tokio::sync::watch;
 use tracing::{debug, error, info, warn};
 
@@ -577,10 +575,6 @@ impl ClientWeak {
     pub fn upgrade(&self) -> Option<ClientArc> {
         Weak::upgrade(&self.inner).map(ClientArc::new)
     }
-
-    pub fn strong_count(&self) -> usize {
-        self.inner.strong_count()
-    }
 }
 
 /// We need a separate drop implementation for `Client` that triggers
@@ -601,31 +595,7 @@ impl Drop for ClientArc {
         // client reference
         if client_count == 1 {
             info!("Last client reference dropped, shutting down client task group");
-            let maybe_shutdown_confirmation = self.inner.executor.stop_executor();
-
-            // Just in case the shutdown does not take immediate effect we block here if
-            // possible. If running as WASM we are running in single-threaded mode and
-            // cannot use block_on.
-            #[cfg(not(target_family = "wasm"))]
-            {
-                if RuntimeHandle::current().runtime_flavor() == RuntimeFlavor::CurrentThread {
-                    // We can't use block_on in single-threaded mode
-                    return;
-                }
-
-                let Some(shutdown_confirmation) = maybe_shutdown_confirmation else {
-                    // Already shut down
-                    return;
-                };
-
-                tokio::task::block_in_place(move || {
-                    futures::executor::block_on(async {
-                        if shutdown_confirmation.await.is_err() {
-                            error!("Error while awaiting client shutdown confirmation");
-                        }
-                    });
-                });
-            }
+            self.inner.executor.stop_executor();
         }
     }
 }
