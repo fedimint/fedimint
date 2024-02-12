@@ -118,7 +118,7 @@ jobs:
           - host: linux
             runs-on: buildjet-8vcpu-ubuntu-2004
             build-in-pr: true
-            timeout: 60
+            timeout: 75
             run-tests: true
           - host: macos
             runs-on: macos-14
