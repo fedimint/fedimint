@@ -121,6 +121,8 @@ use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy as _};
 use thiserror::Error;
+#[cfg(not(target_family = "wasm"))]
+use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
 use tokio::sync::watch;
 use tracing::{debug, error, info, warn};
 
@@ -511,7 +513,7 @@ fn states_add_instance(
 #[derive(Debug)]
 pub struct ClientArc {
     // Use [`ClientArc::new`] instead
-    inner: Arc<Client>,
+    inner: Option<Arc<Client>>,
 
     __use_constructor_to_create: (),
 }
@@ -523,32 +525,61 @@ impl ClientArc {
             .client_count
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Self {
-            inner,
+            inner: Some(inner),
             // this is the constructor
             __use_constructor_to_create: (),
+        }
+    }
+
+    fn as_inner(&self) -> &Arc<Client> {
+        self.inner.as_ref().expect("Inner always set")
+    }
+
+    pub async fn start_executor(&self) {
+        self.as_inner().start_executor().await
+    }
+
+    /// Block for the `client` to no longer contain any strong references.
+    ///
+    /// Some parts of the code can temporarily clone client to perform some
+    /// actions. No further strong references guarantees that the `client`
+    /// is no longer used inside the system.
+    pub async fn wait_until_fully_dropped(self) {
+        let weak = self.downgrade();
+        drop(self);
+
+        for attempt in 0u64.. {
+            if Weak::strong_count(&weak.inner) == 0 {
+                break;
+            }
+            // we want to retry fast, give feedback, but not spam
+            if attempt % 100 == 0 {
+                info!("Waiting for ArcClient to stop being used");
+            }
+            fedimint_core::task::sleep(Duration::from_millis(10)).await;
         }
     }
 }
 
 impl ops::Deref for ClientArc {
-    type Target = Arc<Client>;
+    type Target = Client;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        self.inner.as_ref().expect("Must have inner client set")
     }
 }
 
 impl ClientArc {
     pub fn downgrade(&self) -> ClientWeak {
         ClientWeak {
-            inner: Arc::downgrade(&self.inner),
+            inner: Arc::downgrade(self.inner.as_ref().expect("Inner always set")),
         }
     }
 }
 
 impl Clone for ClientArc {
     fn clone(&self) -> Self {
-        ClientArc::new(self.inner.clone())
+        ClientArc::new(self.inner.clone().expect("Must have inner client set"))
     }
 }
 
@@ -574,7 +605,7 @@ impl Drop for ClientArc {
         // Not sure if Ordering::SeqCst is strictly needed here, but better safe than
         // sorry.
         let client_count = self
-            .inner
+            .as_inner()
             .client_count
             .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 
@@ -582,7 +613,42 @@ impl Drop for ClientArc {
         // client reference
         if client_count == 1 {
             info!("Last client reference dropped, shutting down client task group");
-            self.inner.executor.stop_executor();
+            let inner = self.inner.take().expect("Must have inner client set");
+            inner.executor.stop_executor();
+
+            #[cfg(not(target_family = "wasm"))]
+            {
+                if RuntimeHandle::current().runtime_flavor() == RuntimeFlavor::CurrentThread {
+                    // We can't use block_on in single-threaded mode
+                    return;
+                }
+
+                let db = inner.db.clone();
+                let federation_id = inner.federation_id();
+
+                drop(inner);
+
+                // wait until `self.inner.db` is the only strong reference
+                for attempt in 0u64.. {
+                    let strong_count = db.strong_count();
+                    if strong_count <= 1 {
+                        break;
+                    }
+                    tokio::task::block_in_place(|| {
+                        futures::executor::block_on(async {
+                            // we want to retry fast, give feedback, but not spam
+                            if attempt % 100 == 0 {
+                                info!(
+                                    %federation_id,
+                                    strong_count,
+                                    "Waiting for client database to stop being used"
+                                );
+                            }
+                            fedimint_core::task::sleep(Duration::from_millis(10)).await;
+                        });
+                    });
+                }
+            }
         }
     }
 }
@@ -1770,7 +1836,7 @@ impl ClientBuilder {
 
         let client = self.build_stopped(root_secret, config).await?;
         if !stopped {
-            client.start_executor().await;
+            client.as_inner().start_executor().await;
         }
         Ok(client)
     }
@@ -1842,7 +1908,7 @@ impl ClientBuilder {
 
         let client = self.build_stopped(root_secret, config).await?;
         if !stopped {
-            client.start_executor().await;
+            client.as_inner().start_executor().await;
         }
         Ok(client)
     }
