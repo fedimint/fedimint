@@ -284,10 +284,9 @@ async fn test_can_change_routing_fees() -> anyhow::Result<()> {
                 routing_fees: Some(fee.clone()),
                 network: None,
             };
-            verify_rpc(
-                || rpc_client.set_configuration(set_configuration_payload.clone()),
-                StatusCode::OK,
-            )
+            verify_gateway_rpc_success("set_configuration", || {
+                rpc_client.set_configuration(set_configuration_payload.clone())
+            })
             .await;
 
             // Create test invoice
@@ -717,14 +716,11 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
         .get_rpc()
         .await
         .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
-    verify_rpc(
-        || {
-            rpc_client.leave_federation(LeaveFedPayload {
-                federation_id: fed.id(),
-            })
-        },
-        StatusCode::OK,
-    )
+    verify_gateway_rpc_success("leave_federation", || {
+        rpc_client.leave_federation(LeaveFedPayload {
+            federation_id: fed.id(),
+        })
+    })
     .await;
 
     // Reconnect the federation and verify that the gateway has registered.
@@ -952,14 +948,14 @@ async fn test_cannot_connect_same_federation() -> anyhow::Result<()> {
         invite_code: fed.invite_code().to_string(),
     };
 
-    verify_rpc(
-        || rpc_client.connect_federation(join_payload.clone()),
-        StatusCode::OK,
-    )
+    verify_gateway_rpc_success("connect_federation", || {
+        rpc_client.connect_federation(join_payload.clone())
+    })
     .await;
 
     // Try to connect the same federation
-    verify_rpc(
+    verify_gateway_rpc_failure(
+        "connect_federation",
         || rpc_client.connect_federation(join_payload.clone()),
         StatusCode::INTERNAL_SERVER_ERROR,
     )
@@ -983,7 +979,8 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         invite_code: fed.invite_code().to_string(),
     };
 
-    verify_rpc(
+    verify_gateway_rpc_failure(
+        "connect_federation",
         || rpc_client.connect_federation(join_payload.clone()),
         StatusCode::NOT_FOUND,
     )
@@ -1004,10 +1001,9 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         routing_fees: None,
         network: None,
     };
-    verify_rpc(
-        || rpc_client.set_configuration(set_configuration_payload.clone()),
-        StatusCode::OK,
-    )
+    verify_gateway_rpc_success("set_configuration", || {
+        rpc_client.set_configuration(set_configuration_payload.clone())
+    })
     .await;
 
     GatewayTest::wait_for_gateway_state(gateway.gateway.clone(), |gw_state| {
@@ -1016,7 +1012,12 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     .await?;
 
     // Verify old password no longer works
-    verify_rpc(|| rpc_client.get_info(), StatusCode::UNAUTHORIZED).await;
+    verify_gateway_rpc_failure(
+        "get_info",
+        || rpc_client.get_info(),
+        StatusCode::UNAUTHORIZED,
+    )
+    .await;
 
     // Verify the gateway's state is "Running" with default fee and default or
     // lightning node network
@@ -1035,10 +1036,9 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         routing_fees: Some(fee.clone()),
         network: None,
     };
-    verify_rpc(
-        || rpc_client.set_configuration(set_configuration_payload.clone()),
-        StatusCode::OK,
-    )
+    verify_gateway_rpc_success("set_configuration", || {
+        rpc_client.set_configuration(set_configuration_payload.clone())
+    })
     .await;
 
     // Verify info works with the new password.
@@ -1066,10 +1066,9 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         routing_fees: None,
         network: Some(DEFAULT_NETWORK), // Same as connected lightning node's network
     };
-    verify_rpc(
-        || rpc_client.set_configuration(set_configuration_payload.clone()),
-        StatusCode::OK,
-    )
+    verify_gateway_rpc_success("set_configuration", || {
+        rpc_client.set_configuration(set_configuration_payload.clone())
+    })
     .await;
 
     // Verify we cannot reconfigure gateway to a network different than the
@@ -1080,7 +1079,8 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         routing_fees: None,
         network: Some(Network::Testnet), // Different from connected lightning node's network
     };
-    verify_rpc(
+    verify_gateway_rpc_failure(
+        "set_configuration",
         || rpc_client.set_configuration(set_configuration_payload.clone()),
         StatusCode::INTERNAL_SERVER_ERROR,
     )
@@ -1088,19 +1088,15 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
 
     // Verify we can connect to a federation if the gateway is configured to use
     // the same network. Test federations are on Regtest by default
-    verify_rpc(
-        || rpc_client.connect_federation(join_payload.clone()),
-        StatusCode::OK,
-    )
+    verify_gateway_rpc_success("connect_federation", || {
+        rpc_client.connect_federation(join_payload.clone())
+    })
     .await;
-    verify_rpc(
-        || {
-            rpc_client.get_balance(BalancePayload {
-                federation_id: fed.invite_code().federation_id(),
-            })
-        },
-        StatusCode::OK,
-    )
+    verify_gateway_rpc_success("get_balance", || {
+        rpc_client.get_balance(BalancePayload {
+            federation_id: fed.invite_code().federation_id(),
+        })
+    })
     .await;
 
     Ok(())
@@ -1301,12 +1297,38 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
     .await
 }
 
-async fn verify_rpc<Fut, T>(func: impl Fn() -> Fut, status_code: StatusCode)
+/// Verifies that a gateway RPC succeeds. If it fails, the status code of the
+/// RPC is printed.
+async fn verify_gateway_rpc_success<Fut, T>(name: &str, func: impl Fn() -> Fut) -> T
 where
     Fut: Future<Output = GatewayRpcResult<T>>,
 {
-    if let Err(GatewayRpcError::BadStatus(status)) = func().await {
-        assert_eq!(status, status_code)
+    match func().await {
+        Ok(ret) => ret,
+        Err(GatewayRpcError::RequestError(e)) => panic!("RequestError during {name}: {e:?}"),
+        Err(GatewayRpcError::BadStatus(status)) => {
+            panic!("{name} returned error code {status} when success was expected")
+        }
+    }
+}
+
+/// Verifies that a gateway RPC fails with a specific `StatusCode`
+async fn verify_gateway_rpc_failure<Fut, T>(
+    name: &str,
+    func: impl Fn() -> Fut,
+    status_code: StatusCode,
+) where
+    Fut: Future<Output = GatewayRpcResult<T>>,
+{
+    match func().await {
+        Ok(_) => panic!("{name} returned success, expected {status_code}"),
+        Err(GatewayRpcError::RequestError(e)) => panic!("RequestError during {name}: {e:?}"),
+        Err(GatewayRpcError::BadStatus(status)) => {
+            assert_eq!(
+                status, status_code,
+                "Unexpected status code returned. Expected: {status_code}, found {status}"
+            )
+        }
     }
 }
 
