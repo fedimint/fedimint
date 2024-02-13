@@ -972,8 +972,6 @@ async fn test_cannot_connect_same_federation() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-// flaky: https://github.com/fedimint/fedimint/issues/4290
-#[ignore]
 async fn test_gateway_configuration() -> anyhow::Result<()> {
     let fixtures = fixtures();
 
