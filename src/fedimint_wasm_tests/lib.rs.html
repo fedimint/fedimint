@@ -209,6 +209,49 @@
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::{Client, FederationInfo};
@@ -299,11 +342,15 @@
 
 <span class="macro">wasm_bindgen_test::wasm_bindgen_test_configure!</span>(run_in_browser);
 <span class="kw">mod </span>tests {
+    <span class="kw">use </span>std::time::Duration;
+
+    <span class="kw">use </span>anyhow::anyhow;
     <span class="kw">use </span>fedimint_client::derivable_secret::DerivableSecret;
     <span class="kw">use </span>fedimint_core::Amount;
     <span class="kw">use </span>fedimint_ln_client::{
         LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
     };
+    <span class="kw">use </span>fedimint_mint_client::{MintClientModule, ReissueExternalNotesState};
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>wasm_bindgen_test::wasm_bindgen_test;
 
@@ -359,7 +406,7 @@
                 <span class="kw">_ </span>=&gt; {}
             }
         }
-        <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Lightning receive failed&quot;</span>))
+        <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Lightning receive failed&quot;</span>))
     }
 
     <span class="comment">// Tests that ChaCha20 crypto functions used for backup and recovery are
@@ -399,9 +446,9 @@
                     <span class="kw">break</span>;
                 }
                 <span class="prelude-val">Some</span>(LnPayState::Refunded { gateway_error }) =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;refunded {gateway_error}&quot;</span>));
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;refunded {gateway_error}&quot;</span>));
                 }
-                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Lightning send failed&quot;</span>)),
+                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Lightning send failed&quot;</span>)),
                 <span class="kw">_ </span>=&gt; {}
             }
         }
@@ -417,6 +464,45 @@
         futures::future::try_join_all((<span class="number">0</span>..<span class="number">10</span>).map(|<span class="kw">_</span>| receive_once(client.clone()))).<span class="kw">await</span><span class="question-mark">?</span>;
         futures::future::try_join_all((<span class="number">0</span>..<span class="number">10</span>).map(|<span class="kw">_</span>| pay_once(client.clone()))).<span class="kw">await</span><span class="question-mark">?</span>;
 
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">async fn </span>send_and_recv_ecash_once(
+        client: fedimint_client::ClientArc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+        <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;();
+        <span class="kw">let </span>(<span class="kw">_</span>, notes) = mint
+            .spend_notes(Amount::from_sats(<span class="number">11</span>), Duration::from_secs(<span class="number">10000</span>), <span class="bool-val">false</span>, ())
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>operation_id = mint.reissue_external_notes(notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>updates = mint
+            .subscribe_reissue_external_notes(operation_id)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.into_stream();
+        <span class="kw">loop </span>{
+            <span class="kw">match </span>updates.next().<span class="kw">await </span>{
+                <span class="prelude-val">Some</span>(ReissueExternalNotesState::Done) =&gt; {
+                    <span class="kw">break</span>;
+                }
+                <span class="prelude-val">Some</span>(ReissueExternalNotesState::Failed(error)) =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;reissue failed {error}&quot;</span>));
+                }
+                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;reissue failed&quot;</span>)),
+                <span class="kw">_ </span>=&gt; {}
+            }
+        }
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="attr">#[wasm_bindgen_test]
+    </span><span class="kw">async fn </span>test_ecash() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>client = client(<span class="kw-2">&amp;</span>faucet::invite_code().<span class="kw">await</span><span class="question-mark">?</span>.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        client.start_executor().<span class="kw">await</span>;
+        set_gateway(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        futures::future::try_join_all((<span class="number">0</span>..<span class="number">10</span>).map(|<span class="kw">_</span>| receive_once(client.clone()))).<span class="kw">await</span><span class="question-mark">?</span>;
+        futures::future::try_join_all((<span class="number">0</span>..<span class="number">10</span>).map(|<span class="kw">_</span>| send_and_recv_ecash_once(client.clone())))
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 }
