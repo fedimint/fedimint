@@ -412,7 +412,7 @@ jobs:
             deb: fedimint-gateway
 
     runs-on: buildjet-4vcpu-ubuntu-2004
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v25
