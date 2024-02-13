@@ -2,7 +2,7 @@ use anyhow::Result;
 use fedimint_logging::LOG_DEVIMINT;
 use tracing::info;
 
-use crate::external::{Bitcoind, Electrs, Esplora, Lightningd, Lnd};
+use crate::external::{open_channel_with_ldk, Bitcoind, Electrs, Esplora, Lightningd, Lnd};
 use crate::federation::Federation;
 use crate::gatewayd::Gatewayd;
 use crate::util::ProcessManager;
@@ -51,6 +51,18 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
         Esplora::new(process_mgr, bitcoind.clone()),
         Federation::new(process_mgr, bitcoind.clone(), fed_size),
     )?;
+    open_channel_with_ldk(process_mgr, &bitcoind, &lnd)
+        .await
+        .unwrap();
+
+    // Send a coin to LDK wallet.
+    bitcoind
+        .send_to(
+            String::from("03c964ca4d2eed93720809be7c8779ed602f80ba308e474d03bcb81b9bad807477"),
+            100_000_000,
+        )
+        .await?;
+    bitcoind.mine_blocks(10).await?;
 
     info!(target: LOG_DEVIMINT, "federation and gateways started");
 

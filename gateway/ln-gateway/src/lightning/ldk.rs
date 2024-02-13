@@ -6,17 +6,20 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use bitcoin_hashes::hex::ToHex;
 use bitcoin_hashes::sha256;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::BitcoinHash;
+use fedimint_logging::LOG_DEVIMINT;
 use ldk_node::bitcoin::hashes::Hash;
 use ldk_node::io::sqlite_store::SqliteStore;
+use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
 use ldk_node::lightning_invoice::Bolt11Invoice;
 use ldk_node::{BuildError, Network, PaymentStatus, UnknownPreimageFetcher};
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::error;
+use tracing::{error, info};
 
 use super::cln::{HtlcResult, RouteHtlcStream};
 use super::{ILnRpcClient, LightningRpcError};
@@ -116,38 +119,42 @@ impl GatewayLdkClient {
         storage_dir_path_or: Option<String>,
         network: Network,
     ) -> Result<Self, BuildError> {
+        // panic!("Called GatewayLdkClient::new()");
         let (preimage_fetcher, route_htlc_stream) = LdkPreimageFetcher::new();
         let preimage_fetcher_arc = Arc::from(preimage_fetcher);
 
         let mut node_builder = ldk_node::Builder::new();
         node_builder
             .set_unknown_preimage_fetcher(preimage_fetcher_arc.clone())
+            // .set_entropy_seed_bytes(vec![64; 64])
+            // .unwrap()
+            .set_listening_addresses(vec![SocketAddress::TcpIpV4 {
+                addr: [0, 0, 0, 0],
+                port: 15151,
+            }])
+            .unwrap()
             .set_network(network);
         if let Some(storage_dir_path) = storage_dir_path_or {
             node_builder.set_storage_dir_path(storage_dir_path);
         }
 
         let node = node_builder.build().unwrap();
+        node.start()
+            .map_err(|e| {
+                error!("Failed to start LDK Node: {e:?}");
+                LightningRpcError::FailedToConnect
+            })
+            .unwrap();
+        let node_pubkey = format!("{}", node.node_id());
+        info!(target: LOG_DEVIMINT, "Setting DEVIMINT_LDK_NODE_PUBKEY to {node_pubkey}");
+        println!("Setting DEVIMINT_LDK_NODE_PUBKEY to {node_pubkey}");
+        std::env::set_var("DEVIMINT_LDK_NODE_PUBKEY", node_pubkey);
 
         Ok(GatewayLdkClient {
             node,
             network,
             preimage_fetcher: preimage_fetcher_arc,
             route_htlc_stream_or: Some(Mutex::from(route_htlc_stream)),
-        })
-    }
-
-    pub fn start(&self) -> Result<(), LightningRpcError> {
-        self.node.start().map_err(|e| {
-            error!("Failed to start LDK Node: {e:?}");
-            LightningRpcError::FailedToConnect
-        })
-    }
-
-    pub fn stop(&self) -> Result<(), LightningRpcError> {
-        self.node.stop().map_err(|e| {
-            error!("Failed to stop LDK Node: {e:?}");
-            LightningRpcError::FailedToConnect
         })
     }
 }
