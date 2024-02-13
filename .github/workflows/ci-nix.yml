@@ -438,7 +438,7 @@ jobs:
           mkdir -p bins
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
-            nix bundle .#$bin -o "bins/$bin-$BUILD_ID" && sha256sum "bin/$bin-$BUILD_ID"
+            nix bundle .#$bin -o "bins/$bin-$BUILD_ID" && sha256sum "bins/$bin-$BUILD_ID"
           done
 
       - name: Check version ${{ matrix.build.bins }}
