@@ -426,7 +426,7 @@ jobs:
 
       - name: Build ${{ matrix.build.flake-output }}
         run: |
-          nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).${{ matrix.build.flake-output }}
+          nix build -L .#${{ matrix.build.flake-output }}
           mkdir -p bins
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
@@ -444,7 +444,7 @@ jobs:
         run: |
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
-            nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).$bin && sha256sum "./result/bin/$bin"
+            nix build .#$bin && sha256sum "./result/bin/$bin"
           done
 
       - name: Upload Binaries
