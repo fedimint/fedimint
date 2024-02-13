@@ -25,6 +25,10 @@ pub struct CommonArgs {
     #[clap(long, env = "FM_LINK_TEST_DIR")]
     /// Create a link to the test dir under this path
     pub link_test_dir: Option<PathBuf>,
+
+    /// Run degraded federation with FM_OFFLINE_NODES shutdown
+    #[clap(long, env = "FM_OFFLINE_NODES", default_value = "0")]
+    pub offline_nodes: usize,
 }
 
 impl CommonArgs {
@@ -75,7 +79,7 @@ pub enum RpcCmd {
 }
 
 pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
-    let globals = vars::Global::new(&arg.mk_test_dir()?, arg.fed_size).await?;
+    let globals = vars::Global::new(&arg.mk_test_dir()?, arg.fed_size, arg.offline_nodes).await?;
 
     let log_file = fs::OpenOptions::new()
         .write(true)

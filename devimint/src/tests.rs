@@ -96,14 +96,35 @@ pub async fn log_binary_versions() -> Result<()> {
     Ok(())
 }
 
-pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
+/// fedimintd v0.2.1 contains a bug that impacts degraded federations, so we
+/// need to run certain backwards-compatibility tests with all peers.
+/// see: `<https://github.com/fedimint/fedimint/pull/4188>`
+async fn start_all_peers_for_0_2_1_bug(
+    fed: &mut Federation,
+    process_mgr: &ProcessManager,
+) -> Result<()> {
+    let degraded = process_mgr.globals.FM_OFFLINE_NODES > 0;
+    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+    if degraded && VersionReq::parse("=0.2.1")?.matches(&fedimintd_version) {
+        info!("starting all guardians to handle v0.2.1 bug");
+        fed.start_all_servers(process_mgr).await?
+    };
+    Ok(())
+}
+
+pub async fn latency_tests(
+    dev_fed: DevFed,
+    process_mgr: &ProcessManager,
+    r#type: LatencyTest,
+) -> Result<()> {
     log_binary_versions().await?;
+
     #[allow(unused_variables)]
     let DevFed {
         bitcoind,
         cln,
         lnd,
-        fed,
+        mut fed,
         gw_cln,
         gw_lnd,
         electrs,
@@ -113,9 +134,13 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
     let max_p90_factor = 5.0;
     let p90_median_factor = 5;
 
+    start_all_peers_for_0_2_1_bug(&mut fed, process_mgr).await?;
+
     let client = fed.new_joined_client("latency-tests-client").await?;
     client.use_gateway(&gw_cln).await?;
     fed.pegin_client(10_000_000, &client).await?;
+
+    // LN operations take longer, we need less iterations
     let iterations = 20;
 
     match r#type {
@@ -137,7 +162,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             }
             let reissue_stats = stats_for(reissues);
             println!("### LATENCY REISSUE: {reissue_stats}");
-            assert!(reissue_stats.median < Duration::from_secs(4));
+            assert!(reissue_stats.median < Duration::from_secs(6));
 
             assert!(reissue_stats.p90 < reissue_stats.median * p90_median_factor);
             assert!(
@@ -145,7 +170,6 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             );
         }
         LatencyTest::LnSend => {
-            // LN operations take longer, we need less iterations
             info!("Testing latency of ln send");
             let mut ln_sends = Vec::with_capacity(iterations);
             for _ in 0..iterations {
@@ -285,7 +309,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             let fm_pay_stats = stats_for(fm_internal_pay);
 
             println!("### LATENCY FM PAY: {fm_pay_stats}");
-            assert!(fm_pay_stats.median < Duration::from_secs(6));
+            assert!(fm_pay_stats.median < Duration::from_secs(12));
             assert!(fm_pay_stats.p90 < fm_pay_stats.median * p90_median_factor);
             assert!(
                 fm_pay_stats.max.as_secs_f64() < fm_pay_stats.p90.as_secs_f64() * max_p90_factor
@@ -297,18 +321,37 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
                 .as_str()
                 .map(ToOwned::to_owned)
                 .unwrap();
-            let restore_client = Client::create("restore").await?;
+            let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
             let start_time = Instant::now();
-            cmd!(
-                restore_client,
-                "restore",
-                "--mnemonic",
-                &backup_secret,
-                "--invite-code",
-                fed.invite_code()?
-            )
-            .run()
-            .await?;
+            if VersionReq::parse(">=0.3.0-alpha")?.matches(&fedimint_cli_version) {
+                let restore_client = Client::create("restore").await?;
+                cmd!(
+                    restore_client,
+                    "restore",
+                    "--mnemonic",
+                    &backup_secret,
+                    "--invite-code",
+                    fed.invite_code()?
+                )
+                .run()
+                .await?;
+            } else {
+                let client = client.new_forked("restore-without-backup").await?;
+                let _ = cmd!(client, "wipe", "--force",).out_json().await?;
+
+                assert_eq!(
+                    0,
+                    cmd!(client, "info").out_json().await?["total_amount_msat"]
+                        .as_u64()
+                        .unwrap()
+                );
+
+                let _post_balance = cmd!(client, "restore", &backup_secret)
+                    .out_json()
+                    .await?
+                    .as_u64()
+                    .unwrap();
+            }
             let restore_time = start_time.elapsed();
 
             println!("### LATENCY RESTORE: {restore_time:?}");
@@ -319,7 +362,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
     Ok(())
 }
 
-pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
+pub async fn cli_tests(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
     log_binary_versions().await?;
     let data_dir = env::var("FM_DATA_DIR")?;
 
@@ -328,7 +371,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         bitcoind,
         cln,
         lnd,
-        fed,
+        mut fed,
         gw_cln,
         gw_lnd,
         electrs,
@@ -529,12 +572,23 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     assert_eq!(operation["operation_kind"].as_str().unwrap(), "wallet");
     assert!(operation["outcome"]["Claimed"].as_object().is_some());
 
-    info!("Testing backup&restore");
+    // We need to specifically handle a bug for degraded federations in v0.2.1
+    // only for backup & restore in the cli tests. Once backup & restore completes,
+    // we'll return to a degraded federation.
+    start_all_peers_for_0_2_1_bug(&mut fed, process_mgr).await?;
+
+    info!("Testing backup & restore");
     // TODO: make sure there are no in-progress operations involved
     // This test can't tolerate "spend", but not "reissue"d coins currently,
     // and there's a no clean way to do `reissue` on `spend` output ATM
     // so just putting it here for time being.
     cli_tests_backup_and_restore(&fed, &client).await?;
+    let degraded = process_mgr.globals.FM_OFFLINE_NODES > 0;
+    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+    if degraded && VersionReq::parse("=0.2.1")?.matches(&fedimintd_version) {
+        info!("degrading federation for v0.2.1 now that backup & restore is complete");
+        fed.degrade_federation(process_mgr).await?;
+    }
 
     // # Spend from client
     info!("Testing spending from client");
@@ -1109,7 +1163,9 @@ pub async fn run_ln_circular_load_test(
     );
 
     info!("Testing ln-circular-load-test with 'partner-ping-pong' strategy");
-    // Note invite code isn't required because we already have an archive dir
+    // Note: invite code isn't required because we already have an archive dir
+    // Note: test-duration-secs needs to be greater than the timeout for
+    // discover_api_version_set to work with degraded federations
     let output = cmd!(
         LoadTestTool,
         "--archive-dir",
@@ -1120,7 +1176,7 @@ pub async fn run_ln_circular_load_test(
         "--strategy",
         "partner-ping-pong",
         "--test-duration-secs",
-        "2",
+        "6",
         "--invite-code",
         invite_code
     )
@@ -1612,19 +1668,22 @@ pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     Ok(())
 }
 
-pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
+pub async fn recoverytool_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
     log_binary_versions().await?;
     #[allow(unused_variables)]
     let DevFed {
         bitcoind,
         cln,
         lnd,
-        fed,
+        mut fed,
         gw_cln,
         gw_lnd,
         electrs,
         esplora,
     } = dev_fed;
+
+    start_all_peers_for_0_2_1_bug(&mut fed, process_mgr).await?;
+
     let data_dir = env::var("FM_DATA_DIR")?;
     let client = fed.new_joined_client("recoverytool-test-client").await?;
 
@@ -1862,7 +1921,7 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
         TestCmd::LatencyTests { r#type } => {
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
-            latency_tests(dev_fed, r#type).await?;
+            latency_tests(dev_fed, &process_mgr, r#type).await?;
         }
         TestCmd::ReconnectTest => {
             let (process_mgr, _) = setup(common_args).await?;
@@ -1872,7 +1931,7 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
         TestCmd::CliTests => {
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
-            cli_tests(dev_fed).await?;
+            cli_tests(dev_fed, &process_mgr).await?;
         }
         TestCmd::LoadTestToolTest => {
             let (process_mgr, _) = setup(common_args).await?;
@@ -1892,7 +1951,7 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
         TestCmd::RecoverytoolTests => {
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
-            recoverytool_test(dev_fed).await?;
+            recoverytool_test(dev_fed, &process_mgr).await?;
         }
     }
     Ok(())

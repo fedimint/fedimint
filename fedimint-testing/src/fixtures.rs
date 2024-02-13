@@ -34,6 +34,7 @@ pub const TIMEOUT: Duration = Duration::from_secs(10);
 /// A tool for easily writing fedimint integration tests
 pub struct Fixtures {
     num_peers: u16,
+    num_offline: u16,
     clients: Vec<DynClientModuleInit>,
     servers: Vec<DynServerModuleInit>,
     params: ServerModuleConfigGenParamsRegistry,
@@ -54,6 +55,7 @@ impl Fixtures {
         let _ = TracingSetup::default().init();
         let real_testing = Fixtures::is_real_test();
         let num_peers = 4;
+        let num_offline = 1;
         let task_group = TaskGroup::new();
         let (dyn_bitcoin_rpc, bitcoin, config): (
             DynBitcoindRpc,
@@ -77,6 +79,7 @@ impl Fixtures {
 
         Self {
             num_peers,
+            num_offline,
             clients: vec![],
             servers: vec![],
             params: Default::default(),
@@ -112,14 +115,16 @@ impl Fixtures {
 
     /// Starts a new federation with default number of peers for testing
     pub async fn new_fed(&self) -> FederationTest {
-        self.new_fed_with_peers(self.num_peers).await
+        self.new_fed_with_peers(self.num_peers, self.num_offline)
+            .await
     }
 
     /// Starts a new federation with number of peers
-    pub async fn new_fed_with_peers(&self, num_peers: u16) -> FederationTest {
+    pub async fn new_fed_with_peers(&self, num_peers: u16, num_offline: u16) -> FederationTest {
         info!(target: LOG_TEST, num_peers, "Setting federation with peers");
         FederationTest::new(
             num_peers,
+            num_offline,
             tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(num_peers * 2))
                 .expect("Failed to allocate a port range"),
             self.params.clone(),

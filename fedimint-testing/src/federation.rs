@@ -84,8 +84,10 @@ impl FederationTest {
             .federation_id()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
         num_peers: u16,
+        num_offline: u16,
         base_port: u16,
         params: ServerModuleConfigGenParamsRegistry,
         server_init: ServerModuleInitRegistry,
@@ -93,6 +95,10 @@ impl FederationTest {
         primary_client: ModuleInstanceId,
         version_hash: String,
     ) -> Self {
+        assert!(
+            num_peers > 3 * num_offline,
+            "too many peers offline ({num_offline}) to reach consensus"
+        );
         let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
         let params =
             local_config_gen_params(&peers, base_port, params).expect("Generates local config");
@@ -102,6 +108,9 @@ impl FederationTest {
 
         let mut task = TaskGroup::new();
         for (peer_id, config) in configs.clone() {
+            if u16::from(peer_id) >= num_peers - num_offline {
+                continue;
+            }
             let reliability = StreamReliability::INTEGRATION_TEST;
             let connections = network.connector(peer_id, reliability).into_dyn();
 

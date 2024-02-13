@@ -5,6 +5,9 @@ set -euo pipefail
 # prevent locale settings messing with some setups
 export LANG=C
 
+# default to run all tests in a 3/4 setup
+export FM_OFFLINE_NODES=1
+
 if [ "$(ulimit -Sn)" -lt "10000" ]; then
   >&2 echo "⚠️  ulimit too small. Running 'ulimit -Sn 10000' to avoid problems running tests"
   ulimit -Sn 10000
@@ -47,7 +50,8 @@ function recoverytool_tests() {
 export -f recoverytool_tests
 
 function reconnect_test() {
-  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/reconnect-test.sh
+  # reconnect-test runs a degraded federation, so we need to override FM_OFFLINE_NODES
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/reconnect-test.sh
 }
 export -f reconnect_test
 
@@ -62,42 +66,27 @@ function gateway_reboot_test() {
 export -f gateway_reboot_test
 
 function latency_test_reissue() {
-  # latency tests are not necessary for backwards-compatibility tests
-  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh reissue
-  fi
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh reissue
 }
 export -f latency_test_reissue
 
 function latency_test_ln_send() {
-  # latency tests are not necessary for backwards-compatibility tests
-  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh ln-send
-  fi
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh ln-send
 }
 export -f latency_test_ln_send
 
 function latency_test_ln_receive() {
-  # latency tests are not necessary for backwards-compatibility tests
-  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh ln-receive
-  fi
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh ln-receive
 }
 export -f latency_test_ln_receive
 
 function latency_test_fm_pay() {
-  # latency tests are not necessary for backwards-compatibility tests
-  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh fm-pay
-  fi
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh fm-pay
 }
 export -f latency_test_fm_pay
 
 function latency_test_restore() {
-  # latency tests are not necessary for backwards-compatibility tests
-  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh restore
-  fi
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh restore
 }
 export -f latency_test_restore
 
@@ -107,7 +96,7 @@ function devimint_cli_test() {
 export -f devimint_cli_test
 
 function devimint_cli_test_single() {
-  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-cli-test-single.sh
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/devimint-cli-test-single.sh
 }
 export -f devimint_cli_test_single
 
