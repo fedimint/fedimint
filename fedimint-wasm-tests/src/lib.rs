@@ -88,11 +88,15 @@ mod faucet {
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 mod tests {
+    use std::time::Duration;
+
+    use anyhow::anyhow;
     use fedimint_client::derivable_secret::DerivableSecret;
     use fedimint_core::Amount;
     use fedimint_ln_client::{
         LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
     };
+    use fedimint_mint_client::{MintClientModule, ReissueExternalNotesState};
     use futures::StreamExt;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -148,7 +152,7 @@ mod tests {
                 _ => {}
             }
         }
-        Err(anyhow::anyhow!("Lightning receive failed"))
+        Err(anyhow!("Lightning receive failed"))
     }
 
     // Tests that ChaCha20 crypto functions used for backup and recovery are
@@ -188,9 +192,9 @@ mod tests {
                     break;
                 }
                 Some(LnPayState::Refunded { gateway_error }) => {
-                    return Err(anyhow::anyhow!("refunded {gateway_error}"));
+                    return Err(anyhow!("refunded {gateway_error}"));
                 }
-                None => return Err(anyhow::anyhow!("Lightning send failed")),
+                None => return Err(anyhow!("Lightning send failed")),
                 _ => {}
             }
         }
@@ -206,6 +210,45 @@ mod tests {
         futures::future::try_join_all((0..10).map(|_| receive_once(client.clone()))).await?;
         futures::future::try_join_all((0..10).map(|_| pay_once(client.clone()))).await?;
 
+        Ok(())
+    }
+
+    async fn send_and_recv_ecash_once(
+        client: fedimint_client::ClientArc,
+    ) -> Result<(), anyhow::Error> {
+        let mint = client.get_first_module::<MintClientModule>();
+        let (_, notes) = mint
+            .spend_notes(Amount::from_sats(11), Duration::from_secs(10000), false, ())
+            .await?;
+        let operation_id = mint.reissue_external_notes(notes, ()).await?;
+        let mut updates = mint
+            .subscribe_reissue_external_notes(operation_id)
+            .await?
+            .into_stream();
+        loop {
+            match updates.next().await {
+                Some(ReissueExternalNotesState::Done) => {
+                    break;
+                }
+                Some(ReissueExternalNotesState::Failed(error)) => {
+                    return Err(anyhow!("reissue failed {error}"));
+                }
+                None => return Err(anyhow!("reissue failed")),
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_ecash() -> Result<()> {
+        let client = client(&faucet::invite_code().await?.parse()?).await?;
+        client.start_executor().await;
+        set_gateway(&client).await?;
+
+        futures::future::try_join_all((0..10).map(|_| receive_once(client.clone()))).await?;
+        futures::future::try_join_all((0..10).map(|_| send_and_recv_ecash_once(client.clone())))
+            .await?;
         Ok(())
     }
 }
