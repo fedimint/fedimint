@@ -320,14 +320,30 @@ rec {
     doCheck = false;
   };
 
-  workspaceTestCov = craneLib.buildPackage {
+  workspaceTestCovBase = { times }: craneLib.buildPackage {
     pname = "fedimint-workspace-lcov";
     cargoArtifacts = workspaceCov;
-    buildPhaseCargoCommand = "source <(cargo llvm-cov show-env --export-prefix); env RUST_BACKTRACE=1 RUST_LOG=info,timing=debug cargo nextest run --locked --workspace --all-targets --cargo-profile $CARGO_PROFILE --profile $CARGO_PROFILE --test-threads=$(($(nproc) * 2)); mkdir -p $out ; cargo llvm-cov report --profile $CARGO_PROFILE --lcov --output-path $out/lcov.info";
+    buildPhaseCargoCommand = (''
+      source <(cargo llvm-cov show-env --export-prefix)
+    '' +
+    lib.concatStringsSep "\n"
+      (
+        lib.replicate times ''
+          env RUST_BACKTRACE=1 RUST_LOG=info,timing=debug cargo nextest run --locked --workspace --all-targets --cargo-profile $CARGO_PROFILE --profile $CARGO_PROFILE --test-threads=$(($(nproc) * 2))
+        ''
+      ) + ''
+      mkdir -p $out
+      cargo llvm-cov report --profile $CARGO_PROFILE --lcov --output-path $out/lcov.info
+    ''
+    );
     installPhaseCommand = "true";
     nativeBuildInputs = [ pkgs.cargo-llvm-cov ];
     doCheck = false;
   };
+
+  workspaceTestCov = workspaceTestCovBase { times = 1; };
+  workspaceTest5TimesCov = workspaceTestCovBase { times = 5; };
+  workspaceTest10TimesCov = workspaceTestCovBase { times = 10; };
 
   reconnectTest = craneLibTests.mkCargoDerivation {
     pname = "${commonCliTestArgs.pname}-reconnect";
@@ -365,7 +381,7 @@ rec {
     buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/test/backend-test.sh";
   };
 
-  ciTestAll = craneLibTests.mkCargoDerivation {
+  ciTestAllBase = { times }: craneLibTests.mkCargoDerivation {
     pname = "${commonCliTestArgs.pname}-all";
     cargoArtifacts = workspaceBuild;
 
@@ -373,15 +389,22 @@ rec {
     # and make sure we detect it (happened too many times that we didn't).
     # Thanks to early termination, this should be all very quick, as we actually
     # won't start other tests.
-    buildPhaseCargoCommand = ''
-      patchShebangs ./scripts
-      export FM_CARGO_DENY_COMPILATION=1
-      ./scripts/tests/test-ci-all.sh || exit 1
-      sed -i -e 's/exit 0/exit 1/g' scripts/tests/always-success-test.sh
-      echo "Verifying failure detection..."
-      ./scripts/tests/test-ci-all.sh 1>/dev/null 2>/dev/null && exit 1
-    '';
+    buildPhaseCargoCommand = lib.concatStringsSep "\n" (
+      lib.replicate times ''
+        patchShebangs ./scripts
+        export FM_CARGO_DENY_COMPILATION=1
+        ./scripts/tests/test-ci-all.sh || exit 1
+        cp scripts/tests/always-success-test.sh scripts/tests/always-success-test.sh.bck
+        sed -i -e 's/exit 0/exit 1/g' scripts/tests/always-success-test.sh
+        echo "Verifying failure detection..."
+        ./scripts/tests/test-ci-all.sh 1>/dev/null 2>/dev/null && exit 1
+        cp -f scripts/tests/always-success-test.sh.bck scripts/tests/always-success-test.sh
+      ''
+    );
   };
+
+  ciTestAll = ciTestAllBase { times = 1; };
+  ciTestAll5Times = ciTestAllBase { times = 5; };
 
   alwaysFailTest = craneLibTests.mkCargoDerivation {
     pname = "${commonCliTestArgs.pname}-always-fail";

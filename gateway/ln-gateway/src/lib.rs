@@ -72,7 +72,7 @@ use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
 use strum::IntoEnumIterator;
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::db::{FederationConfig, FederationIdKeyPrefix};
@@ -234,6 +234,9 @@ pub struct LightningContext {
     pub lightning_network: Network,
 }
 
+// A marker struct, to distinguish lock over `Gateway::clients`.
+struct ClientsJoinLock;
+
 #[derive(Clone)]
 pub struct Gateway {
     // Builder struct that allows the gateway to build a `ILnRpcClient`, which represents a
@@ -256,6 +259,11 @@ pub struct Gateway {
     // Map of `FederationId` -> `Client`. Used for efficient retrieval of the client while handling
     // incoming HTLCs.
     clients: FederationToClientMap,
+
+    /// Joining or leaving Federation is protected by this lock to prevent
+    /// trying to use same database at the same time from multiple threads.
+    /// Could be more granular (per id), but shouldn't matter in practice.
+    client_joining_lock: Arc<tokio::sync::Mutex<ClientsJoinLock>>,
 
     // Map of short channel ids to `FederationId`. Use for efficient retrieval of the client while
     // handling incoming HTLCs.
@@ -314,6 +322,7 @@ impl Gateway {
             client_builder,
             gateway_db: gateway_db.clone(),
             clients: Arc::new(RwLock::new(BTreeMap::new())),
+            client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
             gateway_id: Gateway::get_gateway_id(gateway_db).await,
             channel_id_generator: Arc::new(Mutex::new(INITIAL_SCID)),
@@ -359,6 +368,7 @@ impl Gateway {
             gateway_db,
             clients: Arc::new(RwLock::new(BTreeMap::new())),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
+            client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
         })
     }
 
@@ -420,10 +430,11 @@ impl Gateway {
     }
 
     pub async fn run(mut self, tg: &mut TaskGroup) -> anyhow::Result<TaskShutdownToken> {
-        self.start_webserver(tg).await;
         self.register_clients_timer(tg).await;
         self.load_clients().await;
         self.start_gateway(tg).await?;
+        // start webserver last to avoid handling requests before fully initialized
+        self.start_webserver(tg).await;
         let handle = tg.make_handle();
         let shutdown_receiver = handle.make_shutdown_rx().await;
         Ok(shutdown_receiver)
@@ -475,7 +486,8 @@ impl Gateway {
         }
     }
 
-    async fn start_gateway(mut self, task_group: &mut TaskGroup) -> Result<()> {
+    async fn start_gateway(&self, task_group: &mut TaskGroup) -> Result<()> {
+        let mut self_copy = self.clone();
         let tg = task_group.clone();
         task_group
             .spawn(
@@ -488,7 +500,7 @@ impl Gateway {
                         }
 
                         let mut htlc_task_group = tg.make_subgroup().await;
-                        let lnrpc_route = self.lightning_builder.build().await;
+                        let lnrpc_route = self_copy.lightning_builder.build().await;
 
                         debug!("Will try to intercept HTLC stream...");
                         // Re-create the HTLC stream if the connection breaks
@@ -498,17 +510,17 @@ impl Gateway {
                         {
                             Ok((stream, ln_client)) => {
                                 // Successful calls to route_htlcs establish a connection
-                                self.set_gateway_state(GatewayState::Connected).await;
+                                self_copy.set_gateway_state(GatewayState::Connected).await;
                                 info!("Established HTLC stream");
 
                                 match fetch_lightning_node_info(ln_client.clone()).await {
                                     Ok((lightning_public_key, lightning_alias, lightning_network)) => {
-                                        if let Some(config) = self.get_gateway_configuration().await {
+                                        if let Some(config) = self_copy.get_gateway_configuration().await {
                                             if config.network != lightning_network {
                                                 warn!("Lightning node does not match previously configured gateway network : ({:?})", config.network);
                                                 info!("Changing gateway network to match lightning node network : ({:?})", lightning_network);
-                                                self.handle_disconnect(htlc_task_group).await;
-                                                self.handle_set_configuration_msg(SetConfigurationPayload {
+                                                self_copy.handle_disconnect(htlc_task_group).await;
+                                                self_copy.handle_set_configuration_msg(SetConfigurationPayload {
                                                     password: Some(config.password),
                                                     network: Some(lightning_network),
                                                     num_route_hints: None,
@@ -525,18 +537,18 @@ impl Gateway {
                                             lightning_alias,
                                             lightning_network,
                                         };
-                                        self.set_gateway_state(GatewayState::Running {
+                                        self_copy.set_gateway_state(GatewayState::Running {
                                             lightning_context
                                         }).await;
 
                                         // Blocks until the connection to the lightning node breaks or we receive the shutdown signal
                                         tokio::select! {
-                                            _ = self.handle_htlc_stream(stream, handle.clone()) => {
+                                            _ = self_copy.handle_htlc_stream(stream, handle.clone()) => {
                                                 warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
                                             },
                                             _ = handle.make_shutdown_rx().await => {
                                                 info!("Received shutdown signal");
-                                                self.handle_disconnect(htlc_task_group).await;
+                                                self_copy.handle_disconnect(htlc_task_group).await;
                                                 break;
                                             }
                                         }
@@ -551,7 +563,7 @@ impl Gateway {
                             }
                         }
 
-                        self.handle_disconnect(htlc_task_group).await;
+                        self_copy.handle_disconnect(htlc_task_group).await;
 
                         warn!("Disconnected from Lightning Node. Waiting 5 seconds and trying again");
                         sleep(Duration::from_secs(5)).await;
@@ -862,6 +874,8 @@ impl Gateway {
                 GatewayError::InvalidMetadata(format!("Invalid federation member string {e:?}"))
             })?;
 
+            let _join_federation = self.client_joining_lock.lock().await;
+
             // Check if this federation has already been registered
             if self
                 .clients
@@ -953,7 +967,9 @@ impl Gateway {
     pub async fn handle_leave_federation(&mut self, payload: LeaveFedPayload) -> Result<()> {
         // TODO: This should optimistically try to contact the federation to remove the
         // registration record
-        self.remove_client(payload.federation_id).await?;
+        let _client_joining_lock = self.client_joining_lock.lock().await;
+        self.remove_client(payload.federation_id, &_client_joining_lock)
+            .await?;
         let mut dbtx = self.gateway_db.begin_transaction().await;
         dbtx.remove_entry(&FederationIdKey {
             id: payload.federation_id,
@@ -1179,7 +1195,28 @@ impl Gateway {
         Some(gateway_config)
     }
 
-    pub async fn remove_client(
+    async fn remove_client(
+        &self,
+        federation_id: FederationId,
+        // Note: MUST be protected by a lock, to keep
+        // `clients` and opened databases in sync
+        _lock: &MutexGuard<'_, ClientsJoinLock>,
+    ) -> Result<()> {
+        let client = self
+            .clients
+            .write()
+            .await
+            .remove(&federation_id)
+            .ok_or(GatewayError::InvalidMetadata(format!(
+                "No federation with id {federation_id}"
+            )))?
+            .into_value();
+
+        client.wait_until_fully_dropped().await;
+        Ok(())
+    }
+
+    pub async fn remove_client_hack(
         &self,
         federation_id: FederationId,
     ) -> Result<Spanned<fedimint_client::ClientArc>> {
@@ -1208,6 +1245,8 @@ impl Gateway {
         let configs = self.client_builder.load_configs(dbtx.into_nc()).await;
         let mut channel_id_generator = self.channel_id_generator.lock().await;
         let mut next_channel_id = *channel_id_generator;
+
+        let _join_federation = self.client_joining_lock.lock().await;
 
         for config in configs {
             let federation_id = config.invite_code.federation_id();

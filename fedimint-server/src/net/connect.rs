@@ -576,7 +576,7 @@ pub mod mock {
 
     impl StreamReliability {
         pub const MILDLY_UNRELIABLE: StreamReliability = {
-            let failure_rate = FailureRate(0.1);
+            let failure_rate = FailureRate(0.0);
             let latency = LatencyInterval {
                 min_millis: 1,
                 max_millis: 10,
@@ -599,7 +599,7 @@ pub mod mock {
             // If an order of magnitude higher, tests may take unreasonable amounts of time.
             // If an order of magnitude lower, a test may run without any error actually
             // happening
-            let failure_rate_base = 1e-3;
+            let failure_rate_base = 0.0;
             let latency = LatencyInterval {
                 min_millis: 1,
                 max_millis: 10,

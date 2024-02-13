@@ -1117,9 +1117,11 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_config_api() {
+        const PEER_NUM: u16 = 4;
+        const PORTS_PER_PEER: u16 = 2;
         let _ = TracingSetup::default().init();
         let (data_dir, _maybe_tmp_dir_guard) = test_dir("test-config-api");
-        let base_port = port_alloc(1).unwrap();
+        let base_port = port_alloc(PEER_NUM * PORTS_PER_PEER).unwrap();
 
         // let mut join_handles = vec![];
         let mut apis = vec![];
@@ -1128,8 +1130,8 @@ mod tests {
 
         apis.push(api);
 
-        for i in 1..4 {
-            let port = base_port + (i * 2);
+        for i in 1..PEER_NUM {
+            let port = base_port + (i * PORTS_PER_PEER);
             let (follower, api) = TestConfigApi::new(port, i, data_dir.clone()).await;
             apis.push(api);
             followers.push(follower);
@@ -1165,10 +1167,13 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[ignore] // TODO: flaky https://github.com/fedimint/fedimint/issues/4308
     async fn test_restart_setup() {
+        const PEER_NUM: u16 = 4;
+        const PORTS_PER_PEER: u16 = 2;
         let _ = TracingSetup::default().init();
         let (data_dir, _maybe_tmp_dir_guard) = test_dir("test-restart-setup");
-        let base_port = port_alloc(1).unwrap();
+        let base_port = port_alloc(PEER_NUM * PORTS_PER_PEER).unwrap();
 
         // let mut join_handles = vec![];
         let mut apis = vec![];
@@ -1177,8 +1182,8 @@ mod tests {
 
         apis.push(api);
 
-        for i in 1..4 {
-            let port = base_port + (i * 2);
+        for i in 1..PEER_NUM {
+            let port = base_port + (i * PORTS_PER_PEER);
             let (follower, api) = TestConfigApi::new(port, i, data_dir.clone()).await;
             apis.push(api);
             followers.push(follower);

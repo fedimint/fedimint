@@ -282,6 +282,16 @@ pub struct Database {
 }
 
 impl Database {
+    pub fn strong_count(&self) -> usize {
+        Arc::strong_count(&self.inner)
+    }
+
+    pub fn into_inner(self) -> Arc<dyn IDatabase + 'static> {
+        self.inner
+    }
+}
+
+impl Database {
     /// Creates a new Fedimint database from any object implementing
     /// [`IDatabase`].
     ///

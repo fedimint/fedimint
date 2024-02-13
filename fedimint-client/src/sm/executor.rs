@@ -64,7 +64,7 @@ struct ExecutorInner {
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
     valid_module_ids: BTreeSet<ModuleInstanceId>,
     notifier: Notifier,
-    shutdown_executor: Mutex<Option<oneshot::Sender<oneshot::Sender<()>>>>,
+    shutdown_executor: Mutex<Option<oneshot::Sender<()>>>,
 }
 
 /// Builder to which module clients can be attached and used to build an
@@ -250,8 +250,7 @@ impl Executor {
             "start_executor was called previously"
         );
 
-        let (shutdown_sender, shutdown_receiver) =
-            tokio::sync::oneshot::channel::<tokio::sync::oneshot::Sender<()>>();
+        let (shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel::<()>();
 
         let replaced_old_shutdown_sender = self
             .inner
@@ -271,9 +270,8 @@ impl Executor {
             select! {
                 shutdown_happened_sender = shutdown_receiver => {
                     match shutdown_happened_sender {
-                        Ok(shutdown_happened_sender) => {
+                        Ok(()) => {
                             info!("Shutting down state machine executor runner due to shutdown signal");
-                            let _ = shutdown_happened_sender.send(());
                         },
                         Err(_) => {
                             error!("Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)");
@@ -300,7 +298,7 @@ impl Executor {
     ///
     /// ## Panics
     /// If called in parallel with [`start_executor`](Self::start_executor).
-    pub fn stop_executor(&self) -> Option<oneshot::Receiver<()>> {
+    pub fn stop_executor(&self) -> Option<()> {
         self.inner.stop_executor()
     }
 
@@ -606,7 +604,7 @@ impl ExecutorInner {
 
 impl ExecutorInner {
     /// See [`Executor::stop_executor`].
-    fn stop_executor(&self) -> Option<oneshot::Receiver<()>> {
+    fn stop_executor(&self) -> Option<()> {
         let Some(shutdown_sender) = self
             .shutdown_executor
             .try_lock()
@@ -617,14 +615,11 @@ impl ExecutorInner {
             return None;
         };
 
-        let (shutdown_confirmation_sender, shutdown_confirmation_receiver) =
-            oneshot::channel::<()>();
-
-        if shutdown_sender.send(shutdown_confirmation_sender).is_err() {
+        if shutdown_sender.send(()).is_err() {
             warn!("Failed to send shutdown signal to executor, already dead?");
         }
 
-        Some(shutdown_confirmation_receiver)
+        Some(())
     }
 }
 
