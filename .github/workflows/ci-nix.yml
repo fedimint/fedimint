@@ -285,7 +285,7 @@ jobs:
             runs-on: macos-14
             build-in-pr: false
             # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
-            timeout: 60
+            timeout: 120
         exclude:
             # there's not enough macos runners available for our CI, so test only the more important cross-compilation toolchains
             # if they work, rest probably works as well
