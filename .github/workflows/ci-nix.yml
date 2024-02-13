@@ -424,13 +424,21 @@ jobs:
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
 
+      - name: Set BUILD_ID to tag or commit hash
+        run: |
+          if [[ $GITHUB_REF_TYPE == "tag" ]]; then
+            echo "BUILD_ID=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+          else
+            echo "BUILD_ID=${GITHUB_SHA}" >> $GITHUB_ENV
+          fi
+
       - name: Build ${{ matrix.build.flake-output }}
         run: |
           nix build -L .#${{ matrix.build.flake-output }}
           mkdir -p bins
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
-            nix bundle .#$bin -o bins/$bin
+            nix bundle .#$bin -o "bins/$bin-$BUILD_ID" && sha256sum "bin/$bin-$BUILD_ID"
           done
 
       - name: Check version ${{ matrix.build.bins }}
