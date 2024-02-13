@@ -1134,11 +1134,6 @@
 <a href="#1134" id="1134">1134</a>
 <a href="#1135" id="1135">1135</a>
 <a href="#1136" id="1136">1136</a>
-<a href="#1137" id="1137">1137</a>
-<a href="#1138" id="1138">1138</a>
-<a href="#1139" id="1139">1139</a>
-<a href="#1140" id="1140">1140</a>
-<a href="#1141" id="1141">1141</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
@@ -1205,7 +1200,7 @@
     module_contexts: BTreeMap&lt;ModuleInstanceId, DynContext&gt;,
     valid_module_ids: BTreeSet&lt;ModuleInstanceId&gt;,
     notifier: Notifier,
-    shutdown_executor: Mutex&lt;<span class="prelude-ty">Option</span>&lt;oneshot::Sender&lt;oneshot::Sender&lt;()&gt;&gt;&gt;&gt;,
+    shutdown_executor: Mutex&lt;<span class="prelude-ty">Option</span>&lt;oneshot::Sender&lt;()&gt;&gt;&gt;,
 }
 
 <span class="doccomment">/// Builder to which module clients can be attached and used to build an
@@ -1391,8 +1386,7 @@
             <span class="string">&quot;start_executor was called previously&quot;
         </span>);
 
-        <span class="kw">let </span>(shutdown_sender, shutdown_receiver) =
-            tokio::sync::oneshot::channel::&lt;tokio::sync::oneshot::Sender&lt;()&gt;&gt;();
+        <span class="kw">let </span>(shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel::&lt;()&gt;();
 
         <span class="kw">let </span>replaced_old_shutdown_sender = <span class="self">self
             </span>.inner
@@ -1412,9 +1406,8 @@
             <span class="macro">select! </span>{
                 shutdown_happened_sender = shutdown_receiver =&gt; {
                     <span class="kw">match </span>shutdown_happened_sender {
-                        <span class="prelude-val">Ok</span>(shutdown_happened_sender) =&gt; {
+                        <span class="prelude-val">Ok</span>(()) =&gt; {
                             <span class="macro">info!</span>(<span class="string">&quot;Shutting down state machine executor runner due to shutdown signal&quot;</span>);
-                            <span class="kw">let _ </span>= shutdown_happened_sender.send(());
                         },
                         <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
                             <span class="macro">error!</span>(<span class="string">&quot;Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)&quot;</span>);
@@ -1441,7 +1434,7 @@
     ///
     /// ## Panics
     /// If called in parallel with [`start_executor`](Self::start_executor).
-    </span><span class="kw">pub fn </span>stop_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;oneshot::Receiver&lt;()&gt;&gt; {
+    </span><span class="kw">pub fn </span>stop_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;()&gt; {
         <span class="self">self</span>.inner.stop_executor()
     }
 
@@ -1747,7 +1740,7 @@
 
 <span class="kw">impl </span>ExecutorInner {
     <span class="doccomment">/// See [`Executor::stop_executor`].
-    </span><span class="kw">fn </span>stop_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;oneshot::Receiver&lt;()&gt;&gt; {
+    </span><span class="kw">fn </span>stop_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;()&gt; {
         <span class="kw">let </span><span class="prelude-val">Some</span>(shutdown_sender) = <span class="self">self
             </span>.shutdown_executor
             .try_lock()
@@ -1758,14 +1751,11 @@
             <span class="kw">return </span><span class="prelude-val">None</span>;
         };
 
-        <span class="kw">let </span>(shutdown_confirmation_sender, shutdown_confirmation_receiver) =
-            oneshot::channel::&lt;()&gt;();
-
-        <span class="kw">if </span>shutdown_sender.send(shutdown_confirmation_sender).is_err() {
+        <span class="kw">if </span>shutdown_sender.send(()).is_err() {
             <span class="macro">warn!</span>(<span class="string">&quot;Failed to send shutdown signal to executor, already dead?&quot;</span>);
         }
 
-        <span class="prelude-val">Some</span>(shutdown_confirmation_receiver)
+        <span class="prelude-val">Some</span>(())
     }
 }
 

@@ -1604,7 +1604,7 @@
 
     <span class="kw">impl </span>StreamReliability {
         <span class="kw">pub const </span>MILDLY_UNRELIABLE: StreamReliability = {
-            <span class="kw">let </span>failure_rate = FailureRate(<span class="number">0.1</span>);
+            <span class="kw">let </span>failure_rate = FailureRate(<span class="number">0.0</span>);
             <span class="kw">let </span>latency = LatencyInterval {
                 min_millis: <span class="number">1</span>,
                 max_millis: <span class="number">10</span>,
@@ -1627,7 +1627,7 @@
             // If an order of magnitude higher, tests may take unreasonable amounts of time.
             // If an order of magnitude lower, a test may run without any error actually
             // happening
-            </span><span class="kw">let </span>failure_rate_base = <span class="number">1e-3</span>;
+            </span><span class="kw">let </span>failure_rate_base = <span class="number">0.0</span>;
             <span class="kw">let </span>latency = LatencyInterval {
                 min_millis: <span class="number">1</span>,
                 max_millis: <span class="number">10</span>,

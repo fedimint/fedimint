@@ -2237,6 +2237,46 @@
 <a href="#2237" id="2237">2237</a>
 <a href="#2238" id="2238">2238</a>
 <a href="#2239" id="2239">2239</a>
+<a href="#2240" id="2240">2240</a>
+<a href="#2241" id="2241">2241</a>
+<a href="#2242" id="2242">2242</a>
+<a href="#2243" id="2243">2243</a>
+<a href="#2244" id="2244">2244</a>
+<a href="#2245" id="2245">2245</a>
+<a href="#2246" id="2246">2246</a>
+<a href="#2247" id="2247">2247</a>
+<a href="#2248" id="2248">2248</a>
+<a href="#2249" id="2249">2249</a>
+<a href="#2250" id="2250">2250</a>
+<a href="#2251" id="2251">2251</a>
+<a href="#2252" id="2252">2252</a>
+<a href="#2253" id="2253">2253</a>
+<a href="#2254" id="2254">2254</a>
+<a href="#2255" id="2255">2255</a>
+<a href="#2256" id="2256">2256</a>
+<a href="#2257" id="2257">2257</a>
+<a href="#2258" id="2258">2258</a>
+<a href="#2259" id="2259">2259</a>
+<a href="#2260" id="2260">2260</a>
+<a href="#2261" id="2261">2261</a>
+<a href="#2262" id="2262">2262</a>
+<a href="#2263" id="2263">2263</a>
+<a href="#2264" id="2264">2264</a>
+<a href="#2265" id="2265">2265</a>
+<a href="#2266" id="2266">2266</a>
+<a href="#2267" id="2267">2267</a>
+<a href="#2268" id="2268">2268</a>
+<a href="#2269" id="2269">2269</a>
+<a href="#2270" id="2270">2270</a>
+<a href="#2271" id="2271">2271</a>
+<a href="#2272" id="2272">2272</a>
+<a href="#2273" id="2273">2273</a>
+<a href="#2274" id="2274">2274</a>
+<a href="#2275" id="2275">2275</a>
+<a href="#2276" id="2276">2276</a>
+<a href="#2277" id="2277">2277</a>
+<a href="#2278" id="2278">2278</a>
+<a href="#2279" id="2279">2279</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2752,7 +2792,7 @@
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>ClientArc {
     <span class="comment">// Use [`ClientArc::new`] instead
-    </span>inner: Arc&lt;Client&gt;,
+    </span>inner: <span class="prelude-ty">Option</span>&lt;Arc&lt;Client&gt;&gt;,
 
     __use_constructor_to_create: (),
 }
@@ -2764,32 +2804,61 @@
             .client_count
             .fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
         <span class="self">Self </span>{
-            inner,
+            inner: <span class="prelude-val">Some</span>(inner),
             <span class="comment">// this is the constructor
             </span>__use_constructor_to_create: (),
+        }
+    }
+
+    <span class="kw">fn </span>as_inner(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Arc&lt;Client&gt; {
+        <span class="self">self</span>.inner.as_ref().expect(<span class="string">&quot;Inner always set&quot;</span>)
+    }
+
+    <span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="self">self</span>.as_inner().start_executor().<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Block for the `client` to no longer contain any strong references.
+    ///
+    /// Some parts of the code can temporarily clone client to perform some
+    /// actions. No further strong references guarantees that the `client`
+    /// is no longer used inside the system.
+    </span><span class="kw">pub async fn </span>wait_until_fully_dropped(<span class="self">self</span>) {
+        <span class="kw">let </span>weak = <span class="self">self</span>.downgrade();
+        drop(<span class="self">self</span>);
+
+        <span class="kw">for </span>attempt <span class="kw">in </span><span class="number">0u64</span>.. {
+            <span class="kw">if </span>Weak::strong_count(<span class="kw-2">&amp;</span>weak.inner) == <span class="number">0 </span>{
+                <span class="kw">break</span>;
+            }
+            <span class="comment">// we want to retry fast, give feedback, but not spam
+            </span><span class="kw">if </span>attempt % <span class="number">100 </span>== <span class="number">0 </span>{
+                <span class="macro">info!</span>(<span class="string">&quot;Waiting for ArcClient to stop being used&quot;</span>);
+            }
+            fedimint_core::task::sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
         }
     }
 }
 
 <span class="kw">impl </span>ops::Deref <span class="kw">for </span>ClientArc {
-    <span class="kw">type </span>Target = Arc&lt;Client&gt;;
+    <span class="kw">type </span>Target = Client;
 
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.inner
+        <span class="self">self</span>.inner.as_ref().expect(<span class="string">&quot;Must have inner client set&quot;</span>)
     }
 }
 
 <span class="kw">impl </span>ClientArc {
     <span class="kw">pub fn </span>downgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientWeak {
         ClientWeak {
-            inner: Arc::downgrade(<span class="kw-2">&amp;</span><span class="self">self</span>.inner),
+            inner: Arc::downgrade(<span class="self">self</span>.inner.as_ref().expect(<span class="string">&quot;Inner always set&quot;</span>)),
         }
     }
 }
 
 <span class="kw">impl </span>Clone <span class="kw">for </span>ClientArc {
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
-        ClientArc::new(<span class="self">self</span>.inner.clone())
+        ClientArc::new(<span class="self">self</span>.inner.clone().expect(<span class="string">&quot;Must have inner client set&quot;</span>))
     }
 }
 
@@ -2815,7 +2884,7 @@
         <span class="comment">// Not sure if Ordering::SeqCst is strictly needed here, but better safe than
         // sorry.
         </span><span class="kw">let </span>client_count = <span class="self">self
-            </span>.inner
+            </span>.as_inner()
             .client_count
             .fetch_sub(<span class="number">1</span>, std::sync::atomic::Ordering::SeqCst);
 
@@ -2823,30 +2892,41 @@
         // client reference
         </span><span class="kw">if </span>client_count == <span class="number">1 </span>{
             <span class="macro">info!</span>(<span class="string">&quot;Last client reference dropped, shutting down client task group&quot;</span>);
-            <span class="kw">let </span>maybe_shutdown_confirmation = <span class="self">self</span>.inner.executor.stop_executor();
+            <span class="kw">let </span>inner = <span class="self">self</span>.inner.take().expect(<span class="string">&quot;Must have inner client set&quot;</span>);
+            inner.executor.stop_executor();
 
-            <span class="comment">// Just in case the shutdown does not take immediate effect we block here if
-            // possible. If running as WASM we are running in single-threaded mode and
-            // cannot use block_on.
-            </span><span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+            <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
             </span>{
                 <span class="kw">if </span>RuntimeHandle::current().runtime_flavor() == RuntimeFlavor::CurrentThread {
                     <span class="comment">// We can&#39;t use block_on in single-threaded mode
                     </span><span class="kw">return</span>;
                 }
 
-                <span class="kw">let </span><span class="prelude-val">Some</span>(shutdown_confirmation) = maybe_shutdown_confirmation <span class="kw">else </span>{
-                    <span class="comment">// Already shut down
-                    </span><span class="kw">return</span>;
-                };
+                <span class="kw">let </span>db = inner.db.clone();
+                <span class="kw">let </span>federation_id = inner.federation_id();
 
-                tokio::task::block_in_place(<span class="kw">move </span>|| {
-                    futures::executor::block_on(<span class="kw">async </span>{
-                        <span class="kw">if </span>shutdown_confirmation.<span class="kw">await</span>.is_err() {
-                            <span class="macro">error!</span>(<span class="string">&quot;Error while awaiting client shutdown confirmation&quot;</span>);
-                        }
+                drop(inner);
+
+                <span class="comment">// wait until `self.inner.db` is the only strong reference
+                </span><span class="kw">for </span>attempt <span class="kw">in </span><span class="number">0u64</span>.. {
+                    <span class="kw">let </span>strong_count = db.strong_count();
+                    <span class="kw">if </span>strong_count &lt;= <span class="number">1 </span>{
+                        <span class="kw">break</span>;
+                    }
+                    tokio::task::block_in_place(|| {
+                        futures::executor::block_on(<span class="kw">async </span>{
+                            <span class="comment">// we want to retry fast, give feedback, but not spam
+                            </span><span class="kw">if </span>attempt % <span class="number">100 </span>== <span class="number">0 </span>{
+                                <span class="macro">info!</span>(
+                                    %federation_id,
+                                    strong_count,
+                                    <span class="string">&quot;Waiting for client database to stop being used&quot;
+                                </span>);
+                            }
+                            fedimint_core::task::sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
+                        });
                     });
-                });
+                }
             }
         }
     }
@@ -4035,7 +4115,7 @@
 
         <span class="kw">let </span>client = <span class="self">self</span>.build_stopped(root_secret, config).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!stopped {
-            client.start_executor().<span class="kw">await</span>;
+            client.as_inner().start_executor().<span class="kw">await</span>;
         }
         <span class="prelude-val">Ok</span>(client)
     }
@@ -4107,7 +4187,7 @@
 
         <span class="kw">let </span>client = <span class="self">self</span>.build_stopped(root_secret, config).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!stopped {
-            client.start_executor().<span class="kw">await</span>;
+            client.as_inner().start_executor().<span class="kw">await</span>;
         }
         <span class="prelude-val">Ok</span>(client)
     }

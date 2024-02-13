@@ -1502,6 +1502,45 @@
 <a href="#1502" id="1502">1502</a>
 <a href="#1503" id="1503">1503</a>
 <a href="#1504" id="1504">1504</a>
+<a href="#1505" id="1505">1505</a>
+<a href="#1506" id="1506">1506</a>
+<a href="#1507" id="1507">1507</a>
+<a href="#1508" id="1508">1508</a>
+<a href="#1509" id="1509">1509</a>
+<a href="#1510" id="1510">1510</a>
+<a href="#1511" id="1511">1511</a>
+<a href="#1512" id="1512">1512</a>
+<a href="#1513" id="1513">1513</a>
+<a href="#1514" id="1514">1514</a>
+<a href="#1515" id="1515">1515</a>
+<a href="#1516" id="1516">1516</a>
+<a href="#1517" id="1517">1517</a>
+<a href="#1518" id="1518">1518</a>
+<a href="#1519" id="1519">1519</a>
+<a href="#1520" id="1520">1520</a>
+<a href="#1521" id="1521">1521</a>
+<a href="#1522" id="1522">1522</a>
+<a href="#1523" id="1523">1523</a>
+<a href="#1524" id="1524">1524</a>
+<a href="#1525" id="1525">1525</a>
+<a href="#1526" id="1526">1526</a>
+<a href="#1527" id="1527">1527</a>
+<a href="#1528" id="1528">1528</a>
+<a href="#1529" id="1529">1529</a>
+<a href="#1530" id="1530">1530</a>
+<a href="#1531" id="1531">1531</a>
+<a href="#1532" id="1532">1532</a>
+<a href="#1533" id="1533">1533</a>
+<a href="#1534" id="1534">1534</a>
+<a href="#1535" id="1535">1535</a>
+<a href="#1536" id="1536">1536</a>
+<a href="#1537" id="1537">1537</a>
+<a href="#1538" id="1538">1538</a>
+<a href="#1539" id="1539">1539</a>
+<a href="#1540" id="1540">1540</a>
+<a href="#1541" id="1541">1541</a>
+<a href="#1542" id="1542">1542</a>
+<a href="#1543" id="1543">1543</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1576,7 +1615,7 @@
 <span class="kw">use </span>state_machine::GatewayClientModule;
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tokio::sync::Mutex;
+<span class="kw">use </span>tokio::sync::{Mutex, MutexGuard};
 <span class="kw">use </span>tracing::{debug, error, info, info_span, warn, Instrument};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{FederationConfig, FederationIdKeyPrefix};
@@ -1738,6 +1777,9 @@
     <span class="kw">pub </span>lightning_network: Network,
 }
 
+<span class="comment">// A marker struct, to distinguish lock over `Gateway::clients`.
+</span><span class="kw">struct </span>ClientsJoinLock;
+
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Gateway {
     <span class="comment">// Builder struct that allows the gateway to build a `ILnRpcClient`, which represents a
@@ -1760,6 +1802,11 @@
     <span class="comment">// Map of `FederationId` -&gt; `Client`. Used for efficient retrieval of the client while handling
     // incoming HTLCs.
     </span>clients: FederationToClientMap,
+
+    <span class="doccomment">/// Joining or leaving Federation is protected by this lock to prevent
+    /// trying to use same database at the same time from multiple threads.
+    /// Could be more granular (per id), but shouldn&#39;t matter in practice.
+    </span>client_joining_lock: Arc&lt;tokio::sync::Mutex&lt;ClientsJoinLock&gt;&gt;,
 
     <span class="comment">// Map of short channel ids to `FederationId`. Use for efficient retrieval of the client while
     // handling incoming HTLCs.
@@ -1818,6 +1865,7 @@
             client_builder,
             gateway_db: gateway_db.clone(),
             clients: Arc::new(RwLock::new(BTreeMap::new())),
+            client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
             gateway_id: Gateway::get_gateway_id(gateway_db).<span class="kw">await</span>,
             channel_id_generator: Arc::new(Mutex::new(INITIAL_SCID)),
@@ -1863,6 +1911,7 @@
             gateway_db,
             clients: Arc::new(RwLock::new(BTreeMap::new())),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
+            client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
         })
     }
 
@@ -1924,10 +1973,11 @@
     }
 
     <span class="kw">pub async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>, tg: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
-        <span class="self">self</span>.start_webserver(tg).<span class="kw">await</span>;
         <span class="self">self</span>.register_clients_timer(tg).<span class="kw">await</span>;
         <span class="self">self</span>.load_clients().<span class="kw">await</span>;
         <span class="self">self</span>.start_gateway(tg).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="comment">// start webserver last to avoid handling requests before fully initialized
+        </span><span class="self">self</span>.start_webserver(tg).<span class="kw">await</span>;
         <span class="kw">let </span>handle = tg.make_handle();
         <span class="kw">let </span>shutdown_receiver = handle.make_shutdown_rx().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(shutdown_receiver)
@@ -1979,7 +2029,8 @@
         }
     }
 
-    <span class="kw">async fn </span>start_gateway(<span class="kw-2">mut </span><span class="self">self</span>, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">async fn </span>start_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>self_copy = <span class="self">self</span>.clone();
         <span class="kw">let </span>tg = task_group.clone();
         task_group
             .spawn(
@@ -1992,7 +2043,7 @@
                         }
 
                         <span class="kw">let </span><span class="kw-2">mut </span>htlc_task_group = tg.make_subgroup().<span class="kw">await</span>;
-                        <span class="kw">let </span>lnrpc_route = <span class="self">self</span>.lightning_builder.build().<span class="kw">await</span>;
+                        <span class="kw">let </span>lnrpc_route = self_copy.lightning_builder.build().<span class="kw">await</span>;
 
                         <span class="macro">debug!</span>(<span class="string">&quot;Will try to intercept HTLC stream...&quot;</span>);
                         <span class="comment">// Re-create the HTLC stream if the connection breaks
@@ -2002,17 +2053,17 @@
                         </span>{
                             <span class="prelude-val">Ok</span>((stream, ln_client)) =&gt; {
                                 <span class="comment">// Successful calls to route_htlcs establish a connection
-                                </span><span class="self">self</span>.set_gateway_state(GatewayState::Connected).<span class="kw">await</span>;
+                                </span>self_copy.set_gateway_state(GatewayState::Connected).<span class="kw">await</span>;
                                 <span class="macro">info!</span>(<span class="string">&quot;Established HTLC stream&quot;</span>);
 
                                 <span class="kw">match </span>fetch_lightning_node_info(ln_client.clone()).<span class="kw">await </span>{
                                     <span class="prelude-val">Ok</span>((lightning_public_key, lightning_alias, lightning_network)) =&gt; {
-                                        <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = <span class="self">self</span>.get_gateway_configuration().<span class="kw">await </span>{
+                                        <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = self_copy.get_gateway_configuration().<span class="kw">await </span>{
                                             <span class="kw">if </span>config.network != lightning_network {
                                                 <span class="macro">warn!</span>(<span class="string">&quot;Lightning node does not match previously configured gateway network : ({:?})&quot;</span>, config.network);
                                                 <span class="macro">info!</span>(<span class="string">&quot;Changing gateway network to match lightning node network : ({:?})&quot;</span>, lightning_network);
-                                                <span class="self">self</span>.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
-                                                <span class="self">self</span>.handle_set_configuration_msg(SetConfigurationPayload {
+                                                self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
+                                                self_copy.handle_set_configuration_msg(SetConfigurationPayload {
                                                     password: <span class="prelude-val">Some</span>(config.password),
                                                     network: <span class="prelude-val">Some</span>(lightning_network),
                                                     num_route_hints: <span class="prelude-val">None</span>,
@@ -2029,18 +2080,18 @@
                                             lightning_alias,
                                             lightning_network,
                                         };
-                                        <span class="self">self</span>.set_gateway_state(GatewayState::Running {
+                                        self_copy.set_gateway_state(GatewayState::Running {
                                             lightning_context
                                         }).<span class="kw">await</span>;
 
                                         <span class="comment">// Blocks until the connection to the lightning node breaks or we receive the shutdown signal
                                         </span><span class="macro">tokio::select! </span>{
-                                            <span class="kw">_ </span>= <span class="self">self</span>.handle_htlc_stream(stream, handle.clone()) =&gt; {
+                                            <span class="kw">_ </span>= self_copy.handle_htlc_stream(stream, handle.clone()) =&gt; {
                                                 <span class="macro">warn!</span>(<span class="string">&quot;HTLC Stream Lightning connection broken. Gateway is disconnected&quot;</span>);
                                             },
                                             <span class="kw">_ </span>= handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
                                                 <span class="macro">info!</span>(<span class="string">&quot;Received shutdown signal&quot;</span>);
-                                                <span class="self">self</span>.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
+                                                self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
                                                 <span class="kw">break</span>;
                                             }
                                         }
@@ -2055,7 +2106,7 @@
                             }
                         }
 
-                        <span class="self">self</span>.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
+                        self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
 
                         <span class="macro">warn!</span>(<span class="string">&quot;Disconnected from Lightning Node. Waiting 5 seconds and trying again&quot;</span>);
                         sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
@@ -2366,6 +2417,8 @@
                 GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">&quot;Invalid federation member string {e:?}&quot;</span>))
             })<span class="question-mark">?</span>;
 
+            <span class="kw">let </span>_join_federation = <span class="self">self</span>.client_joining_lock.lock().<span class="kw">await</span>;
+
             <span class="comment">// Check if this federation has already been registered
             </span><span class="kw">if </span><span class="self">self
                 </span>.clients
@@ -2457,7 +2510,9 @@
     <span class="kw">pub async fn </span>handle_leave_federation(<span class="kw-2">&amp;mut </span><span class="self">self</span>, payload: LeaveFedPayload) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="comment">// TODO: This should optimistically try to contact the federation to remove the
         // registration record
-        </span><span class="self">self</span>.remove_client(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="kw">let </span>_client_joining_lock = <span class="self">self</span>.client_joining_lock.lock().<span class="kw">await</span>;
+        <span class="self">self</span>.remove_client(payload.federation_id, <span class="kw-2">&amp;</span>_client_joining_lock)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
         dbtx.remove_entry(<span class="kw-2">&amp;</span>FederationIdKey {
             id: payload.federation_id,
@@ -2683,7 +2738,28 @@
         <span class="prelude-val">Some</span>(gateway_config)
     }
 
-    <span class="kw">pub async fn </span>remove_client(
+    <span class="kw">async fn </span>remove_client(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        federation_id: FederationId,
+        <span class="comment">// Note: MUST be protected by a lock, to keep
+        // `clients` and opened databases in sync
+        </span>_lock: <span class="kw-2">&amp;</span>MutexGuard&lt;<span class="lifetime">&#39;_</span>, ClientsJoinLock&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>client = <span class="self">self
+            </span>.clients
+            .write()
+            .<span class="kw">await
+            </span>.remove(<span class="kw-2">&amp;</span>federation_id)
+            .ok_or(GatewayError::InvalidMetadata(<span class="macro">format!</span>(
+                <span class="string">&quot;No federation with id {federation_id}&quot;
+            </span>)))<span class="question-mark">?
+            </span>.into_value();
+
+        client.wait_until_fully_dropped().<span class="kw">await</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">pub async fn </span>remove_client_hack(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id: FederationId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Spanned&lt;fedimint_client::ClientArc&gt;&gt; {
@@ -2712,6 +2788,8 @@
         <span class="kw">let </span>configs = <span class="self">self</span>.client_builder.load_configs(dbtx.into_nc()).<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>channel_id_generator = <span class="self">self</span>.channel_id_generator.lock().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>next_channel_id = <span class="kw-2">*</span>channel_id_generator;
+
+        <span class="kw">let </span>_join_federation = <span class="self">self</span>.client_joining_lock.lock().<span class="kw">await</span>;
 
         <span class="kw">for </span>config <span class="kw">in </span>configs {
             <span class="kw">let </span>federation_id = config.invite_code.federation_id();

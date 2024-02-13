@@ -272,6 +272,10 @@
 <a href="#272" id="272">272</a>
 <a href="#273" id="273">273</a>
 <a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
@@ -329,10 +333,14 @@
         GatewayRpcClient::new(<span class="self">self</span>.versioned_api.clone(), <span class="prelude-val">None</span>)
     }
 
-    <span class="doccomment">/// Removes a client from the gateway
-    </span><span class="kw">pub async fn </span>remove_client(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; ClientArc {
+    <span class="doccomment">/// Removes a client from the gateway and keeps it alive
+    ///
+    /// Note: this makes the database opened, which can lead to gateway
+    /// wanting to rejoin it. Better get your own client instead of being
+    /// lazy here.
+    </span><span class="kw">pub async fn </span>remove_client_hack(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; ClientArc {
         <span class="self">self</span>.gateway
-            .remove_client(fed.id())
+            .remove_client_hack(fed.id())
             .<span class="kw">await
             </span>.unwrap()
             .into_value()

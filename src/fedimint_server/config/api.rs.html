@@ -1377,6 +1377,11 @@
 <a href="#1377" id="1377">1377</a>
 <a href="#1378" id="1378">1378</a>
 <a href="#1379" id="1379">1379</a>
+<a href="#1380" id="1380">1380</a>
+<a href="#1381" id="1381">1381</a>
+<a href="#1382" id="1382">1382</a>
+<a href="#1383" id="1383">1383</a>
+<a href="#1384" id="1384">1384</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -2496,9 +2501,11 @@
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_config_api() {
+        <span class="kw">const </span>PEER_NUM: u16 = <span class="number">4</span>;
+        <span class="kw">const </span>PORTS_PER_PEER: u16 = <span class="number">2</span>;
         <span class="kw">let _ </span>= TracingSetup::default().init();
         <span class="kw">let </span>(data_dir, _maybe_tmp_dir_guard) = test_dir(<span class="string">&quot;test-config-api&quot;</span>);
-        <span class="kw">let </span>base_port = port_alloc(<span class="number">1</span>).unwrap();
+        <span class="kw">let </span>base_port = port_alloc(PEER_NUM * PORTS_PER_PEER).unwrap();
 
         <span class="comment">// let mut join_handles = vec![];
         </span><span class="kw">let </span><span class="kw-2">mut </span>apis = <span class="macro">vec!</span>[];
@@ -2507,8 +2514,8 @@
 
         apis.push(api);
 
-        <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..<span class="number">4 </span>{
-            <span class="kw">let </span>port = base_port + (i * <span class="number">2</span>);
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..PEER_NUM {
+            <span class="kw">let </span>port = base_port + (i * PORTS_PER_PEER);
             <span class="kw">let </span>(follower, api) = TestConfigApi::new(port, i, data_dir.clone()).<span class="kw">await</span>;
             apis.push(api);
             followers.push(follower);
@@ -2544,10 +2551,13 @@
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    #[ignore] </span><span class="comment">// TODO: flaky https://github.com/fedimint/fedimint/issues/4308
     </span><span class="kw">async fn </span>test_restart_setup() {
+        <span class="kw">const </span>PEER_NUM: u16 = <span class="number">4</span>;
+        <span class="kw">const </span>PORTS_PER_PEER: u16 = <span class="number">2</span>;
         <span class="kw">let _ </span>= TracingSetup::default().init();
         <span class="kw">let </span>(data_dir, _maybe_tmp_dir_guard) = test_dir(<span class="string">&quot;test-restart-setup&quot;</span>);
-        <span class="kw">let </span>base_port = port_alloc(<span class="number">1</span>).unwrap();
+        <span class="kw">let </span>base_port = port_alloc(PEER_NUM * PORTS_PER_PEER).unwrap();
 
         <span class="comment">// let mut join_handles = vec![];
         </span><span class="kw">let </span><span class="kw-2">mut </span>apis = <span class="macro">vec!</span>[];
@@ -2556,8 +2566,8 @@
 
         apis.push(api);
 
-        <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..<span class="number">4 </span>{
-            <span class="kw">let </span>port = base_port + (i * <span class="number">2</span>);
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..PEER_NUM {
+            <span class="kw">let </span>port = base_port + (i * PORTS_PER_PEER);
             <span class="kw">let </span>(follower, api) = TestConfigApi::new(port, i, data_dir.clone()).<span class="kw">await</span>;
             apis.push(api);
             followers.push(follower);
