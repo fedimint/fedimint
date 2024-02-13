@@ -345,9 +345,6 @@ jobs:
     strategy:
       matrix:
         build:
-          - flake-output: client-pkgs
-            bins: ""
-            deb: fedimint
           - flake-output: fedimint-pkgs
             bins: fedimintd,fedimint-cli,fedimint-dbtool
             deb: fedimint
