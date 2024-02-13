@@ -442,7 +442,7 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_client_db_migrations() -> anyhow::Result<()> {
-        TracingSetup::default().init()?;
+        let _ = TracingSetup::default().init();
 
         let module = DynCommonModuleInit::from(MintClientInit);
         validate_migrations_module(module, "mint-client", |db| async move {
