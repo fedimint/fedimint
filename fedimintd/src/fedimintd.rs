@@ -15,7 +15,7 @@ use fedimint_core::db::Database;
 use fedimint_core::module::ServerModuleInit;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::timing;
-use fedimint_core::util::{write_overwrite, SafeUrl};
+use fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintInit;
@@ -134,13 +134,7 @@ pub struct Fedimintd {
 
 impl Fedimintd {
     pub fn new() -> anyhow::Result<Fedimintd> {
-        let mut args = std::env::args();
-        if let Some(ref arg) = args.nth(1) {
-            if arg.as_str() == "version-hash" {
-                println!("{CODE_VERSION}");
-                std::process::exit(0);
-            }
-        }
+        handle_version_hash_command(CODE_VERSION);
 
         info!("Starting fedimintd (version: {CODE_VERSION})");
 

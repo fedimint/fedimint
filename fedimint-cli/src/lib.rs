@@ -30,7 +30,7 @@ use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::DatabaseValue;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{handle_version_hash_command, SafeUrl};
 use fedimint_core::{task, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::TracingSetup;
@@ -486,15 +486,8 @@ pub struct FedimintCli {
 
 impl FedimintCli {
     pub fn new() -> anyhow::Result<FedimintCli> {
-        pub const CODE_VERSION: &str = env!("FEDIMINT_BUILD_CODE_VERSION");
-
-        let mut args = std::env::args();
-        if let Some(ref arg) = args.nth(1) {
-            if arg.as_str() == "version-hash" {
-                println!("{CODE_VERSION}");
-                std::process::exit(0);
-            }
-        }
+        const CODE_VERSION: &str = env!("FEDIMINT_BUILD_CODE_VERSION");
+        handle_version_hash_command(CODE_VERSION);
 
         TracingSetup::default().init().expect("tracing initializes");
 
