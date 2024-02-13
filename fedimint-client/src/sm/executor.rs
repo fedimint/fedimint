@@ -83,7 +83,7 @@ impl Executor {
         ExecutorBuilder::default()
     }
 
-    pub async fn get_active_states(&self) -> Vec<(DynState, ActiveState)> {
+    pub async fn get_active_states(&self) -> Vec<(DynState, ActiveStateMeta)> {
         self.inner.get_active_states().await
     }
 
@@ -172,7 +172,7 @@ impl Executor {
 
             dbtx.insert_entry(
                 &ActiveStateKey::from_state(state.clone()),
-                &ActiveState::new(),
+                &ActiveStateMeta::default(),
             )
             .await;
             let notify_sender = self.inner.notifier.sender();
@@ -223,14 +223,14 @@ impl Executor {
             .any(|(s, _)| s == state)
     }
 
-    pub async fn await_inactive_state(&self, state: DynState) -> InactiveState {
+    pub async fn await_inactive_state(&self, state: DynState) -> InactiveStateMeta {
         self.inner
             .db
             .wait_key_exists(&InactiveStateKey::from_state(state))
             .await
     }
 
-    pub async fn await_active_state(&self, state: DynState) -> ActiveState {
+    pub async fn await_active_state(&self, state: DynState) -> ActiveStateMeta {
         self.inner
             .db
             .wait_key_exists(&ActiveStateKey::from_state(state))
@@ -331,7 +331,7 @@ impl Drop for ExecutorInner {
 struct TransitionForActiveState {
     outcome: serde_json::Value,
     state: DynState,
-    meta: ActiveState,
+    meta: ActiveStateMeta,
     transition_fn: StateTransitionFunction<DynState>,
 }
 
@@ -356,7 +356,7 @@ impl ExecutorInner {
     async fn get_transition_for(
         &self,
         state: &DynState,
-        meta: ActiveState,
+        meta: ActiveStateMeta,
         global_context_gen: &ContextGen,
     ) -> Vec<BoxFuture<'static, TransitionForActiveState>> {
         let module_instance = state.module_instance_id();
@@ -397,7 +397,7 @@ impl ExecutorInner {
                     |dbtx, _| {
                         Box::pin(async {
                             let k = InactiveStateKey::from_state(state.clone());
-                            let v = ActiveState::new().into_inactive();
+                            let v = ActiveStateMeta::default().into_inactive();
                             dbtx.remove_entry(&ActiveStateKey::from_state(state.clone()))
                                 .await;
                             dbtx.insert_entry(&k, &v).await;
@@ -579,7 +579,7 @@ impl ExecutorInner {
                                                     let k = InactiveStateKey::from_state(
                                                         new_state.clone(),
                                                     );
-                                                    let v = ActiveState::new().into_inactive();
+                                                    let v = ActiveStateMeta::default().into_inactive();
                                                     dbtx.insert_entry(&k, &v).await;
                                                     Ok(ActiveOrInactiveState::Inactive {
                                                         dyn_state: new_state,
@@ -588,7 +588,7 @@ impl ExecutorInner {
                                                     let k = ActiveStateKey::from_state(
                                                         new_state.clone(),
                                                     );
-                                                    let v = ActiveState::new();
+                                                    let v = ActiveStateMeta::default();
                                                     dbtx.insert_entry(&k, &v).await;
                                                     Ok(ActiveOrInactiveState::Active {
                                                         dyn_state: new_state,
@@ -656,11 +656,11 @@ impl ExecutorInner {
         Ok(())
     }
 
-    async fn get_active_states(&self) -> Vec<(DynState, ActiveState)> {
+    async fn get_active_states(&self) -> Vec<(DynState, ActiveStateMeta)> {
         self.db
             .begin_transaction()
             .await
-            .find_by_prefix(&ActiveStateKeyPrefix::new())
+            .find_by_prefix(&ActiveStateKeyPrefix)
             .await
             // ignore states from modules that are not initialized yet
             .filter(|(state, _)| {
@@ -674,7 +674,7 @@ impl ExecutorInner {
             .await
     }
 
-    async fn get_active_state(&self, state: &DynState) -> Option<ActiveState> {
+    async fn get_active_state(&self, state: &DynState) -> Option<ActiveStateMeta> {
         // ignore states from modules that are not initialized yet
         if !self
             .module_contexts
@@ -689,11 +689,11 @@ impl ExecutorInner {
             .await
     }
 
-    async fn get_inactive_states(&self) -> Vec<(DynState, InactiveState)> {
+    async fn get_inactive_states(&self) -> Vec<(DynState, InactiveStateMeta)> {
         self.db
             .begin_transaction()
             .await
-            .find_by_prefix(&InactiveStateKeyPrefix::new())
+            .find_by_prefix(&InactiveStateKeyPrefix)
             .await
             // ignore states from modules that are not initialized yet
             .filter(|(state, _)| {
@@ -811,7 +811,7 @@ pub struct ActiveStateKey {
 }
 
 impl ActiveStateKey {
-    pub(crate) fn from_state(state: DynState) -> ActiveStateKey {
+    pub fn from_state(state: DynState) -> ActiveStateKey {
         ActiveStateKey {
             operation_id: state.operation_id(),
             state,
@@ -839,6 +839,45 @@ impl Decodable for ActiveStateKey {
         Ok(ActiveStateKey {
             operation_id,
             state,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct ActiveStateKeyBytes {
+    pub operation_id: OperationId,
+    pub module_instance_id: ModuleInstanceId,
+    pub state: Vec<u8>,
+}
+
+impl Encodable for ActiveStateKeyBytes {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        let mut len = 0;
+        len += self.operation_id.consensus_encode(writer)?;
+        len += writer.write(self.state.as_slice())?;
+        Ok(len)
+    }
+}
+
+impl Decodable for ActiveStateKeyBytes {
+    fn consensus_decode<R: std::io::Read>(
+        reader: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let operation_id = OperationId::consensus_decode(reader, modules)?;
+        let module_instance_id = ModuleInstanceId::consensus_decode(reader, modules)?;
+        let mut bytes = Vec::new();
+        reader
+            .read_to_end(&mut bytes)
+            .map_err(DecodeError::from_err)?;
+
+        let mut instance_bytes = ModuleInstanceId::consensus_encode_to_vec(&module_instance_id);
+        instance_bytes.append(&mut bytes);
+
+        Ok(ActiveStateKeyBytes {
+            operation_id,
+            module_instance_id,
+            state: instance_bytes,
         })
     }
 }
@@ -878,13 +917,7 @@ impl ::fedimint_core::db::DatabaseLookup for ActiveModuleOperationStateKeyPrefix
 }
 
 #[derive(Debug)]
-struct ActiveStateKeyPrefix;
-
-impl ActiveStateKeyPrefix {
-    pub fn new() -> Self {
-        ActiveStateKeyPrefix
-    }
-}
+pub struct ActiveStateKeyPrefix;
 
 impl Encodable for ActiveStateKeyPrefix {
     fn consensus_encode<W: Write>(&self, _writer: &mut W) -> Result<usize, Error> {
@@ -893,7 +926,7 @@ impl Encodable for ActiveStateKeyPrefix {
 }
 
 #[derive(Debug, Copy, Clone, Encodable, Decodable)]
-pub struct ActiveState {
+pub struct ActiveStateMeta {
     pub created_at: SystemTime,
 }
 
@@ -901,7 +934,7 @@ impl ::fedimint_core::db::DatabaseRecord for ActiveStateKey {
     const DB_PREFIX: u8 = ExecutorDbPrefixes::ActiveStates as u8;
     const NOTIFY_ON_MODIFY: bool = true;
     type Key = Self;
-    type Value = ActiveState;
+    type Value = ActiveStateMeta;
 }
 
 impl DatabaseKeyWithNotify for ActiveStateKey {}
@@ -910,15 +943,31 @@ impl ::fedimint_core::db::DatabaseLookup for ActiveStateKeyPrefix {
     type Record = ActiveStateKey;
 }
 
-impl ActiveState {
-    fn new() -> ActiveState {
-        ActiveState {
+#[derive(Debug, Encodable, Decodable)]
+pub(crate) struct ActiveStateKeyPrefixBytes;
+
+impl ::fedimint_core::db::DatabaseRecord for ActiveStateKeyBytes {
+    const DB_PREFIX: u8 = ExecutorDbPrefixes::ActiveStates as u8;
+    const NOTIFY_ON_MODIFY: bool = false;
+    type Key = Self;
+    type Value = ActiveStateMeta;
+}
+
+impl ::fedimint_core::db::DatabaseLookup for ActiveStateKeyPrefixBytes {
+    type Record = ActiveStateKeyBytes;
+}
+
+impl Default for ActiveStateMeta {
+    fn default() -> Self {
+        Self {
             created_at: fedimint_core::time::now(),
         }
     }
+}
 
-    fn into_inactive(self) -> InactiveState {
-        InactiveState {
+impl ActiveStateMeta {
+    fn into_inactive(self) -> InactiveStateMeta {
+        InactiveStateMeta {
             created_at: self.created_at,
             exited_at: fedimint_core::time::now(),
         }
@@ -934,7 +983,7 @@ pub struct InactiveStateKey {
 }
 
 impl InactiveStateKey {
-    pub(crate) fn from_state(state: DynState) -> InactiveStateKey {
+    pub fn from_state(state: DynState) -> InactiveStateKey {
         InactiveStateKey {
             operation_id: state.operation_id(),
             state,
@@ -962,6 +1011,45 @@ impl Decodable for InactiveStateKey {
         Ok(InactiveStateKey {
             operation_id,
             state,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct InactiveStateKeyBytes {
+    pub operation_id: OperationId,
+    pub module_instance_id: ModuleInstanceId,
+    pub state: Vec<u8>,
+}
+
+impl Encodable for InactiveStateKeyBytes {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        let mut len = 0;
+        len += self.operation_id.consensus_encode(writer)?;
+        len += writer.write(self.state.as_slice())?;
+        Ok(len)
+    }
+}
+
+impl Decodable for InactiveStateKeyBytes {
+    fn consensus_decode<R: std::io::Read>(
+        reader: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let operation_id = OperationId::consensus_decode(reader, modules)?;
+        let module_instance_id = ModuleInstanceId::consensus_decode(reader, modules)?;
+        let mut bytes = Vec::new();
+        reader
+            .read_to_end(&mut bytes)
+            .map_err(DecodeError::from_err)?;
+
+        let mut instance_bytes = ModuleInstanceId::consensus_encode_to_vec(&module_instance_id);
+        instance_bytes.append(&mut bytes);
+
+        Ok(InactiveStateKeyBytes {
+            operation_id,
+            module_instance_id,
+            state: instance_bytes,
         })
     }
 }
@@ -1001,13 +1089,7 @@ impl ::fedimint_core::db::DatabaseLookup for InactiveModuleOperationStateKeyPref
 }
 
 #[derive(Debug, Clone)]
-struct InactiveStateKeyPrefix;
-
-impl InactiveStateKeyPrefix {
-    pub fn new() -> Self {
-        InactiveStateKeyPrefix
-    }
-}
+pub struct InactiveStateKeyPrefix;
 
 impl Encodable for InactiveStateKeyPrefix {
     fn consensus_encode<W: Write>(&self, _writer: &mut W) -> Result<usize, Error> {
@@ -1015,8 +1097,22 @@ impl Encodable for InactiveStateKeyPrefix {
     }
 }
 
+#[derive(Debug, Encodable, Decodable)]
+pub(crate) struct InactiveStateKeyPrefixBytes;
+
+impl ::fedimint_core::db::DatabaseRecord for InactiveStateKeyBytes {
+    const DB_PREFIX: u8 = ExecutorDbPrefixes::InactiveStates as u8;
+    const NOTIFY_ON_MODIFY: bool = false;
+    type Key = Self;
+    type Value = InactiveStateMeta;
+}
+
+impl ::fedimint_core::db::DatabaseLookup for InactiveStateKeyPrefixBytes {
+    type Record = InactiveStateKeyBytes;
+}
+
 #[derive(Debug, Copy, Clone, Decodable, Encodable)]
-pub struct InactiveState {
+pub struct InactiveStateMeta {
     pub created_at: SystemTime,
     pub exited_at: SystemTime,
 }
@@ -1025,7 +1121,7 @@ impl ::fedimint_core::db::DatabaseRecord for InactiveStateKey {
     const DB_PREFIX: u8 = ExecutorDbPrefixes::InactiveStates as u8;
     const NOTIFY_ON_MODIFY: bool = true;
     type Key = Self;
-    type Value = InactiveState;
+    type Value = InactiveStateMeta;
 }
 
 impl DatabaseKeyWithNotify for InactiveStateKey {}
@@ -1039,7 +1135,7 @@ enum ActiveOrInactiveState {
     Active {
         dyn_state: DynState,
         #[allow(dead_code)] // currently not printed anywhere, but useful in the db
-        meta: ActiveState,
+        meta: ActiveStateMeta,
     },
     Inactive {
         dyn_state: DynState,

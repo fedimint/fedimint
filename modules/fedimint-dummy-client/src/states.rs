@@ -25,6 +25,7 @@ pub enum DummyStateMachine {
     InputDone(OperationId),
     OutputDone(Amount, OperationId),
     Refund(OperationId),
+    Unreachable(OperationId, Amount),
 }
 
 impl State for DummyStateMachine {
@@ -67,6 +68,7 @@ impl State for DummyStateMachine {
             DummyStateMachine::InputDone(_) => vec![],
             DummyStateMachine::OutputDone(_, _) => vec![],
             DummyStateMachine::Refund(_) => vec![],
+            DummyStateMachine::Unreachable(_, _) => vec![],
         }
     }
 
@@ -77,6 +79,7 @@ impl State for DummyStateMachine {
             DummyStateMachine::InputDone(id) => *id,
             DummyStateMachine::OutputDone(_, id) => *id,
             DummyStateMachine::Refund(id) => *id,
+            DummyStateMachine::Unreachable(id, _) => *id,
         }
     }
 }

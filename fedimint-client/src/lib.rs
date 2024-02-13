@@ -80,9 +80,9 @@ use anyhow::{anyhow, bail, ensure, Context};
 use async_stream::stream;
 use backup::ClientBackup;
 use db::{
-    CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix,
-    ClientInitStateKey, ClientInviteCodeKey, ClientInviteCodeKeyPrefix, ClientModuleRecovery,
-    EncodedClientSecretKey, InitMode,
+    apply_migrations_client, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey,
+    ClientConfigKeyPrefix, ClientInitStateKey, ClientInviteCodeKey, ClientInviteCodeKeyPrefix,
+    ClientModuleRecovery, EncodedClientSecretKey, InitMode,
 };
 use fedimint_core::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi, InviteCode,
@@ -95,8 +95,7 @@ use fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
 };
 use fedimint_core::db::{
-    apply_migrations, AutocommitError, Database, DatabaseTransaction,
-    IDatabaseTransactionOpsCoreTyped,
+    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1755,7 +1754,11 @@ impl ClientBuilder {
         )
     }
 
-    async fn migrate_database(&self) -> anyhow::Result<()> {
+    async fn migrate_database(
+        &self,
+        db: &Database,
+        decoders: ModuleDecoderRegistry,
+    ) -> anyhow::Result<()> {
         // Only apply the client database migrations if the database has been
         // initialized.
         if let Ok(client_config) = self.load_existing_config().await {
@@ -1766,12 +1769,13 @@ impl ClientBuilder {
                     continue;
                 };
 
-                apply_migrations(
-                    self.db(),
+                apply_migrations_client(
+                    db,
                     kind.to_string(),
                     init.database_version(),
                     init.get_database_migrations(),
-                    Some(module_id),
+                    module_id,
+                    decoders.clone(),
                 )
                 .await?;
             }
@@ -1926,7 +1930,7 @@ impl ClientBuilder {
 
         // Migrate the database before interacting with it in case any on-disk data
         // structures have changed.
-        self.migrate_database().await?;
+        self.migrate_database(&db, decoders.clone()).await?;
 
         let init_state = Self::load_init_state(&db).await;
 

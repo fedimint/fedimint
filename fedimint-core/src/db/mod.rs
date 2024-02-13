@@ -1830,15 +1830,12 @@ macro_rules! push_db_key_items {
     };
 }
 
-/// MigrationMap is a BTreeMap that maps DatabaseVersions to async functions.
-/// These functions are expected to "migrate" the database from the keyed
-/// DatabaseVersion to DatabaseVersion + 1.
-pub type MigrationMap = BTreeMap<
-    DatabaseVersion,
+/// `ServerMigrationFn` that modules can implement to "migrate" the database
+/// to the next database version.
+pub type ServerMigrationFn =
     for<'r, 'tx> fn(
         &'r mut DatabaseTransaction<'tx>,
-    ) -> Pin<Box<dyn futures::Future<Output = anyhow::Result<()>> + Send + 'r>>,
->;
+    ) -> Pin<Box<dyn futures::Future<Output = anyhow::Result<()>> + Send + 'r>>;
 
 /// Applies the database migrations to a non-isolated database. Intended only to
 /// be used for `fedimint-server`.
@@ -1846,24 +1843,24 @@ pub async fn apply_migrations_server(
     db: &Database,
     kind: String,
     target_db_version: DatabaseVersion,
-    migrations: MigrationMap,
+    migrations: BTreeMap<DatabaseVersion, ServerMigrationFn>,
 ) -> Result<(), anyhow::Error> {
     apply_migrations(db, kind, target_db_version, migrations, None).await
 }
 
 /// `apply_migrations` iterates from the on disk database version for the module
 /// up to `target_db_version` and executes all of the migrations that exist in
-/// the `MigrationMap`. Each migration in `MigrationMap` updates the database to
-/// have the correct on-disk structures that the code is expecting. The entire
-/// migration process is atomic (i.e migration from 0->1 and 1->2 happen
-/// atomically). This function is called before the module is initialized and as
-/// long as the correct migrations are supplied in `MigrationMap`, the module
-/// will be able to read and write from the database successfully.
+/// the migrations map. Each migration in migrations map updates the
+/// database to have the correct on-disk structures that the code is expecting.
+/// The entire migration process is atomic (i.e migration from 0->1 and 1->2
+/// happen atomically). This function is called before the module is initialized
+/// and as long as the correct migrations are supplied in the migrations map,
+/// the module will be able to read and write from the database successfully.
 pub async fn apply_migrations(
     db: &Database,
     kind: String,
     target_db_version: DatabaseVersion,
-    migrations: MigrationMap,
+    migrations: BTreeMap<DatabaseVersion, ServerMigrationFn>,
     module_instance_id: Option<ModuleInstanceId>,
 ) -> Result<(), anyhow::Error> {
     db.ensure_global()?;
@@ -1906,7 +1903,7 @@ pub async fn apply_migrations(
                     migration(&mut global_dbtx.to_ref_nc()).await?;
                 }
             } else {
-                panic!("Missing migration for version {current_db_version}");
+                warn!(target: LOG_DB, "Missing server db migration for version {current_db_version}");
             }
 
             current_db_version.increment();
@@ -2008,13 +2005,14 @@ fn module_instance_id_or_global(module_instance_id: Option<ModuleInstanceId>) ->
 
 #[allow(unused_imports)]
 mod test_utils {
+    use std::collections::BTreeMap;
     use std::time::Duration;
 
     use futures::{Future, FutureExt, StreamExt};
 
     use super::{
         apply_migrations, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
-        DatabaseVersionKeyV0, MigrationMap,
+        DatabaseVersionKeyV0, ServerMigrationFn,
     };
     use crate::core::ModuleKind;
     use crate::db::mem_impl::MemDatabase;
@@ -2609,7 +2607,7 @@ mod test_utils {
             .await;
         dbtx.commit_tx().await;
 
-        let mut migrations = MigrationMap::new();
+        let mut migrations: BTreeMap<DatabaseVersion, ServerMigrationFn> = BTreeMap::new();
 
         migrations.insert(DatabaseVersion(0), move |dbtx| {
             migrate_test_db_version_0(dbtx).boxed()

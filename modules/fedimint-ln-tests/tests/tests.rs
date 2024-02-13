@@ -485,19 +485,22 @@ mod fedimint_migration_tests {
 
     use anyhow::ensure;
     use bitcoin_hashes::{sha256, Hash};
+    use fedimint_client::module::init::DynClientModuleInit;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::encoding::Encodable;
-    use fedimint_core::module::DynCommonModuleInit;
+    use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{Amount, OutPoint, PeerId, TransactionId};
     use fedimint_ln_client::db::{
         MetaOverrides, MetaOverridesKey, MetaOverridesPrefix, PaymentResult, PaymentResultKey,
         PaymentResultPrefix,
     };
-    use fedimint_ln_client::{LightningClientInit, OutgoingLightningPayment};
+    use fedimint_ln_client::{
+        LightningClientInit, LightningClientModule, OutgoingLightningPayment,
+    };
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer, OfferId,
     };
@@ -515,11 +518,13 @@ mod fedimint_migration_tests {
     };
     use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
     use fedimint_ln_common::{
-        ContractAccount, LightningGateway, LightningGatewayRegistration, LightningOutputOutcomeV0,
+        ContractAccount, LightningCommonInit, LightningGateway, LightningGatewayRegistration,
+        LightningOutputOutcomeV0,
     };
     use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
-        snapshot_db_migrations, validate_migrations_module, BYTE_32, BYTE_33, BYTE_8, STRING_64,
+        snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
+        validate_migrations_server, BYTE_32, BYTE_33, BYTE_8, STRING_64,
     };
     use futures::StreamExt;
     use lightning_invoice::RoutingFees;
@@ -739,8 +744,7 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
-        let module = DynCommonModuleInit::from(LightningInit);
-        snapshot_db_migrations(module, "lightning-server-v0", |db| {
+        snapshot_db_migrations::<_, LightningCommonInit>("lightning-server-v0", |db| {
             Box::pin(async move {
                 create_server_db_with_v0_data(db).await;
             })
@@ -751,9 +755,9 @@ mod fedimint_migration_tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_server_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
-        let module = DynCommonModuleInit::from(LightningInit);
+        let module = DynServerModuleInit::from(LightningInit);
 
-        validate_migrations_module(
+        validate_migrations_server(
             module,
             "lightning-server",
             |db| async move {
@@ -889,10 +893,11 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
-        let module = DynCommonModuleInit::from(LightningClientInit);
-        snapshot_db_migrations(module, "lightning-client-v0", |db| {
-            Box::pin(async move { create_client_db_with_v0_data(db).await })
-        })
+        snapshot_db_migrations_client::<_, _, LightningCommonInit, LightningClientModule>(
+            "lightning-client-v0",
+            |db| Box::pin(async move { create_client_db_with_v0_data(db).await }),
+            || (Vec::new(), Vec::new()),
+        )
         .await
     }
 
@@ -900,56 +905,60 @@ mod fedimint_migration_tests {
     async fn test_client_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
 
-        let module = DynCommonModuleInit::from(LightningClientInit);
-        validate_migrations_module(module, "lightning-client", |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+        let module = DynClientModuleInit::from(LightningClientInit);
+        validate_migrations_client::<_, _, LightningClientModule>(
+            module,
+            "lightning-client",
+            |db, _, _| async move {
+                let mut dbtx = db.begin_transaction_nc().await;
 
-            for prefix in fedimint_ln_client::db::DbKeyPrefix::iter() {
-                match prefix {
-                    fedimint_ln_client::db::DbKeyPrefix::LightningGateway => {
-                        let gateways = dbtx
-                            .find_by_prefix(&fedimint_ln_client::db::LightningGatewayKeyPrefix)
-                            .await
-                            .collect::<Vec<_>>()
-                            .await;
-                        let num_gateways = gateways.len();
-                        ensure!(
-                            num_gateways > 0,
-                            "validate_migrations was not able to read any LightningGateways"
-                        );
-                        info!("Validated LightningGateways");
-                    }
-                    fedimint_ln_client::db::DbKeyPrefix::PaymentResult => {
-                        let payment_results = dbtx
-                            .find_by_prefix(&PaymentResultPrefix)
-                            .await
-                            .collect::<Vec<_>>()
-                            .await;
-                        let num_payment_results = payment_results.len();
-                        ensure!(
-                            num_payment_results > 0,
-                            "validate_migrations was not able to read any PaymentResults"
-                        );
-                        info!("Validated PaymentResults");
-                    }
-                    fedimint_ln_client::db::DbKeyPrefix::MetaOverrides => {
-                        let meta_overrides = dbtx
-                            .find_by_prefix(&MetaOverridesPrefix)
-                            .await
-                            .collect::<Vec<_>>()
-                            .await;
-                        let num_meta_overrides = meta_overrides.len();
-                        ensure!(
-                            num_meta_overrides > 0,
-                            "validate_migrations was not able to read any MetaOverrides"
-                        );
-                        info!("Validated MetaOverrides");
+                for prefix in fedimint_ln_client::db::DbKeyPrefix::iter() {
+                    match prefix {
+                        fedimint_ln_client::db::DbKeyPrefix::LightningGateway => {
+                            let gateways = dbtx
+                                .find_by_prefix(&fedimint_ln_client::db::LightningGatewayKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_gateways = gateways.len();
+                            ensure!(
+                                num_gateways > 0,
+                                "validate_migrations was not able to read any LightningGateways"
+                            );
+                            info!("Validated LightningGateways");
+                        }
+                        fedimint_ln_client::db::DbKeyPrefix::PaymentResult => {
+                            let payment_results = dbtx
+                                .find_by_prefix(&PaymentResultPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_payment_results = payment_results.len();
+                            ensure!(
+                                num_payment_results > 0,
+                                "validate_migrations was not able to read any PaymentResults"
+                            );
+                            info!("Validated PaymentResults");
+                        }
+                        fedimint_ln_client::db::DbKeyPrefix::MetaOverrides => {
+                            let meta_overrides = dbtx
+                                .find_by_prefix(&MetaOverridesPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_meta_overrides = meta_overrides.len();
+                            ensure!(
+                                num_meta_overrides > 0,
+                                "validate_migrations was not able to read any MetaOverrides"
+                            );
+                            info!("Validated MetaOverrides");
+                        }
                     }
                 }
-            }
 
-            Ok(())
-        })
+                Ok(())
+            },
+        )
         .await
     }
 }
