@@ -340,27 +340,27 @@ jobs:
 
       - name: Build fedimintd container
         run: |
-          nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).container.fedimintd
+          nix build -L .#container.fedimintd
           echo "fedimintd_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Build fedimint-cli container
         run: |
-          nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).container.fedimint-cli
+          nix build -L .#container.fedimint-cli
           echo "fedimint_cli_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Build gatewayd container
         run: |
-          nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).container.gatewayd
+          nix build -L .#container.gatewayd
           echo "gatewayd_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Build gateway-cli container
         run: |
-          nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).container.gateway-cli
+          nix build -L .#container.gateway-cli
           echo "gateway-cli_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Build devtools container
         run: |
-          nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).container.devtools
+          nix build -L .#container.devtools
           echo "devtools_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Login to Docker Hub
