@@ -576,8 +576,6 @@ impl ExecutorInner {
                                                     state.operation_id(),
                                                 );
                                                 if new_state.is_terminal(context, &global_context) {
-                                                    // TODO: log state machine id or something
-                                                    debug!("State machine reached terminal state");
                                                     let k = InactiveStateKey::from_state(
                                                         new_state.clone(),
                                                     );
@@ -607,6 +605,7 @@ impl ExecutorInner {
                                 debug!(
                                     target: LOG_CLIENT_REACTOR,
                                     operation_id = %state.operation_id(),
+                                    terminal = !outcome.is_active(),
                                     ?outcome,
                                     "Finished executing state transition",
                                 );
