@@ -34,7 +34,10 @@ cargo nextest run --no-run ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${
 export FM_CARGO_DENY_COMPILATION=1
 
 function rust_unit_tests() {
-  fm-run-test "${FUNCNAME[0]}" cargo nextest run ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
+  # unit tests don't use binaries from old versions, so there's no need to run for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" cargo nextest run ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
+  fi
 }
 export -f rust_unit_tests
 
