@@ -33,19 +33,26 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     // Spend from client1 to client2
     let client1_mint = client1.get_first_module::<MintClientModule>();
     let client2_mint = client2.get_first_module::<MintClientModule>();
+    info!("### SPEND NOTES");
     let (op, notes) = client1_mint
         .spend_notes(sats(750), TIMEOUT, false, ())
         .await?;
     let sub1 = &mut client1_mint.subscribe_spend_notes(op).await?.into_stream();
     assert_eq!(sub1.ok().await?, SpendOOBState::Created);
 
+    info!("### REISSUE");
     let op = client2_mint.reissue_external_notes(notes, ()).await?;
     let sub2 = client2_mint.subscribe_reissue_external_notes(op).await?;
     let mut sub2 = sub2.into_stream();
+    info!("### SUB2: WAIT CREATED");
     assert_eq!(sub2.ok().await?, ReissueExternalNotesState::Created);
+    info!("### SUB2: WAIT ISSUING");
     assert_eq!(sub2.ok().await?, ReissueExternalNotesState::Issuing);
+    info!("### SUB2: WAIT DONE");
     assert_eq!(sub2.ok().await?, ReissueExternalNotesState::Done);
+    info!("### SUB1: WAIT SUCCESS");
     assert_eq!(sub1.ok().await?, SpendOOBState::Success);
+    info!("### REISSUE: DONE");
 
     assert_eq!(client1.get_balance().await, sats(250));
     assert_eq!(client2.get_balance().await, sats(750));
