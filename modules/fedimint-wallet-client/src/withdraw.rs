@@ -67,7 +67,8 @@ async fn await_withdraw_processed(
 ) -> Result<Txid, String> {
     global_context
         .await_tx_accepted(created.fm_outpoint.txid)
-        .await?;
+        .await
+        .map_err(|e| e.to_string())?;
 
     loop {
         match global_context

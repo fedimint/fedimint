@@ -103,7 +103,10 @@ impl MintInputStateCreated {
         common: MintInputCommon,
         global_context: DynGlobalClientContext,
     ) -> Result<(), String> {
-        global_context.await_tx_accepted(common.txid).await
+        global_context
+            .await_tx_accepted(common.txid)
+            .await
+            .map_err(|e| e.to_string())
     }
 
     async fn transition_success(
@@ -176,7 +179,10 @@ impl MintInputStateRefund {
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
     ) -> Result<(), String> {
-        global_context.await_tx_accepted(refund_txid).await
+        global_context
+            .await_tx_accepted(refund_txid)
+            .await
+            .map_err(|e| e.to_string())
     }
 
     async fn transition_refund_success(

@@ -105,7 +105,7 @@ use fedimint_core::module::{
     SupportedModuleApiVersions,
 };
 use fedimint_core::task::{sleep, MaybeSend, MaybeSync, TaskGroup};
-use fedimint_core::transaction::Transaction;
+use fedimint_core::transaction::{Transaction, TransactionError};
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
@@ -286,14 +286,20 @@ impl DynGlobalClientContext {
         DynGlobalClientContext::from(())
     }
 
-    pub async fn await_tx_accepted(&self, query_txid: TransactionId) -> Result<(), String> {
+    pub async fn await_tx_accepted(
+        &self,
+        query_txid: TransactionId,
+    ) -> Result<(), TransactionError> {
         self.transaction_update_stream()
             .await
             .filter_map(|tx_update| {
                 std::future::ready(match tx_update.state {
                     TxSubmissionStates::Accepted(txid) if txid == query_txid => Some(Ok(())),
-                    TxSubmissionStates::Rejected(txid, submit_error) if txid == query_txid => {
-                        Some(Err(submit_error))
+                    TxSubmissionStates::RejectedLegacy(txid, ..) if txid == query_txid => {
+                        Some(Err(TransactionError::InvalidWitnessLength))
+                    }
+                    TxSubmissionStates::Rejected(txid, error) if txid == query_txid => {
+                        Some(Err(error))
                     }
                     _ => None,
                 })
@@ -1634,13 +1640,19 @@ pub struct TransactionUpdates {
 impl TransactionUpdates {
     /// Waits for the transaction to be accepted or rejected as part of the
     /// operation to which the `TransactionUpdates` object is subscribed.
-    pub async fn await_tx_accepted(self, await_txid: TransactionId) -> Result<(), String> {
+    pub async fn await_tx_accepted(
+        self,
+        await_txid: TransactionId,
+    ) -> Result<(), TransactionError> {
         self.update_stream
             .filter_map(|tx_update| {
                 std::future::ready(match tx_update.state {
                     TxSubmissionStates::Accepted(txid) if txid == await_txid => Some(Ok(())),
-                    TxSubmissionStates::Rejected(txid, submit_error) if txid == await_txid => {
-                        Some(Err(submit_error))
+                    TxSubmissionStates::RejectedLegacy(txid, ..) if txid == await_txid => {
+                        Some(Err(TransactionError::InvalidWitnessLength))
+                    }
+                    TxSubmissionStates::Rejected(txid, error) if txid == await_txid => {
+                        Some(Err(error))
                     }
                     _ => None,
                 })

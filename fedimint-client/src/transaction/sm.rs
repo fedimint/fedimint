@@ -1,11 +1,12 @@
 //! State machine for submitting transactions
 
+use std::io::Cursor;
 use std::time::Duration;
 
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use fedimint_core::transaction::Transaction;
+use fedimint_core::transaction::{Transaction, TransactionError};
 use fedimint_core::TransactionId;
 use fedimint_logging::LOG_CLIENT_NET_API;
 use tracing::warn;
@@ -55,9 +56,10 @@ pub enum TxSubmissionStates {
     /// The transaction has been rejected by a quorum on submission
     ///
     /// **This state is final**
-    Rejected(TransactionId, String),
+    RejectedLegacy(TransactionId, String),
     #[deprecated(since = "0.2.2", note = "all errors should be retried")]
     NonRetryableError(String),
+    Rejected(TransactionId, TransactionError),
 }
 
 impl State for TxSubmissionStates {
@@ -70,12 +72,13 @@ impl State for TxSubmissionStates {
     ) -> Vec<StateTransition<Self>> {
         match self {
             TxSubmissionStates::Created(transaction) => {
+                let gc = global_context.clone();
                 let txid = transaction.tx_hash();
                 vec![
                     StateTransition::new(
                         Self::trigger_created_rejected(transaction.clone(), global_context.clone()),
                         move |_, error, _| {
-                            Box::pin(async move { TxSubmissionStates::Rejected(txid, error) })
+                            Box::pin(Self::transition_created_rejected(gc.clone(), txid, error))
                         },
                     ),
                     StateTransition::new(
@@ -87,10 +90,13 @@ impl State for TxSubmissionStates {
             TxSubmissionStates::Accepted(..) => {
                 vec![]
             }
-            TxSubmissionStates::Rejected(..) => {
+            TxSubmissionStates::RejectedLegacy(..) => {
                 vec![]
             }
             TxSubmissionStates::NonRetryableError(..) => {
+                vec![]
+            }
+            TxSubmissionStates::Rejected(..) => {
                 vec![]
             }
         }
@@ -102,13 +108,13 @@ impl State for TxSubmissionStates {
 }
 
 impl TxSubmissionStates {
-    async fn trigger_created_rejected(tx: Transaction, context: DynGlobalClientContext) -> String {
+    async fn trigger_created_rejected(tx: Transaction, context: DynGlobalClientContext) -> Vec<u8> {
         loop {
             match context.api().submit_transaction(tx.clone()).await {
                 Ok(serde_result) => match serde_result.try_into_inner(context.decoders()) {
                     Ok(result) => {
                         if let Err(transaction_error) = result {
-                            return transaction_error.to_string();
+                            return transaction_error.consensus_encode_to_vec();
                         }
                     }
                     Err(decode_error) => {
@@ -122,6 +128,21 @@ impl TxSubmissionStates {
 
             sleep(RETRY_INTERVAL).await;
         }
+    }
+
+    async fn transition_created_rejected(
+        global_context: DynGlobalClientContext,
+        txid: TransactionId,
+        error: Vec<u8>,
+    ) -> TxSubmissionStates {
+        TxSubmissionStates::Rejected(
+            txid,
+            TransactionError::consensus_decode(
+                &mut Cursor::new(error),
+                global_context.clone().decoders(),
+            )
+            .expect("We just encoded that ourselves"),
+        )
     }
 
     async fn trigger_created_accepted(txid: TransactionId, context: DynGlobalClientContext) {

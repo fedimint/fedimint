@@ -91,7 +91,10 @@ async fn await_tx_accepted(
     context: DynGlobalClientContext,
     txid: TransactionId,
 ) -> Result<(), String> {
-    context.await_tx_accepted(txid).await
+    context
+        .await_tx_accepted(txid)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 async fn await_dummy_output_outcome(

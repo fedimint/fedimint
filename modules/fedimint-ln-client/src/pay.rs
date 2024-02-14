@@ -534,7 +534,10 @@ impl LightningPayRefund {
     ) -> Result<(), String> {
         // No network calls are done here, we just await other state machines, so no
         // retry logic is needed
-        global_context.await_tx_accepted(refund_txid).await
+        global_context
+            .await_tx_accepted(refund_txid)
+            .await
+            .map_err(|e| e.to_string())
     }
 
     async fn transition_refund_success(

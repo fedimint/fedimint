@@ -129,7 +129,10 @@ impl LightningReceiveSubmittedOffer {
     ) -> Result<(), String> {
         // No network calls are done here, we just await other state machines, so no
         // retry logic is needed
-        global_context.await_tx_accepted(txid).await
+        global_context
+            .await_tx_accepted(txid)
+            .await
+            .map_err(|e| e.to_string())
     }
 
     async fn transition_confirmed_invoice(
@@ -333,7 +336,10 @@ impl LightningReceiveFunded {
     ) -> Result<(), String> {
         // No network calls are done here, we just await other state machines, so no
         // retry logic is needed
-        global_context.await_tx_accepted(txid).await
+        global_context
+            .await_tx_accepted(txid)
+            .await
+            .map_err(|e| e.to_string())
     }
 
     async fn transition_claim_success(
