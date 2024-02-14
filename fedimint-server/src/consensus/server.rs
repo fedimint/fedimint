@@ -38,6 +38,7 @@ use crate::atomic_broadcast::network::Network;
 use crate::atomic_broadcast::spawner::Spawner;
 use crate::atomic_broadcast::{to_node_index, Keychain, Message};
 use crate::config::ServerConfig;
+use crate::consensus::debug::FmtDbgConsensusItem;
 use crate::consensus::process_transaction_with_dbtx;
 use crate::db::{
     get_global_database_migrations, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey,
@@ -577,7 +578,7 @@ impl ConsensusServer {
     ) -> anyhow::Result<()> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item");
 
-        debug!("Peer {peer}: {}", super::debug::item_message(&item));
+        debug!(%peer, item = ?FmtDbgConsensusItem(&item), "Processing consensus item");
 
         self.latest_contribution_by_peer
             .write()
