@@ -487,6 +487,7 @@ impl ExecutorInner {
                         continue;
                     }
 
+                    let transitions_num = transitions.len();
                     currently_running_sms.insert(state.clone());
                     futures.push(Box::pin(async move {
                         let (first_completed_result, _index, _unused_transitions) =
@@ -494,7 +495,7 @@ impl ExecutorInner {
                         ExecutorLoopEvent::Triggered(first_completed_result)
                     }));
 
-                    info!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), "Started new active state machine.");
+                    info!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), transitions_num, "Started new active state machine.");
                 }
                 ExecutorLoopEvent::Triggered(TransitionForActiveState {
                     outcome,
@@ -502,6 +503,11 @@ impl ExecutorInner {
                     meta,
                     transition_fn,
                 }) => {
+                    debug!(
+                        target: LOG_CLIENT_REACTOR,
+                        operation_id = %state.operation_id(),
+                        "State machine trigger function complete. Starting transition function.",
+                    );
                     let span = tracing::info_span!(
                         "state_machine_transition",
                         operation_id = %state.operation_id()
@@ -598,6 +604,13 @@ impl ExecutorInner {
                                     .await
                                     .expect("autocommit should keep trying to commit (max_attempt: None) and body doesn't return errors");
 
+                                debug!(
+                                    target: LOG_CLIENT_REACTOR,
+                                    operation_id = %state.operation_id(),
+                                    ?outcome,
+                                    "Finished executing state transition",
+                                );
+
                                 match &outcome {
                                     ActiveOrInactiveState::Active { dyn_state, meta: _ } => {
                                         sm_update_tx
@@ -616,7 +629,10 @@ impl ExecutorInner {
                     });
                 }
                 ExecutorLoopEvent::Completed { state, outcome } => {
-                    currently_running_sms.remove(&state);
+                    assert!(
+                        currently_running_sms.remove(&state),
+                        "State must have been recorded"
+                    );
                     info!(
                         target: LOG_CLIENT_REACTOR,
                         operation_id = %state.operation_id(),
