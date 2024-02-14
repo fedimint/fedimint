@@ -80,13 +80,11 @@ use async_stream::stream;
 use backup::ClientBackup;
 use db::{
     apply_migrations_client, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey,
-    ClientConfigKeyPrefix, ClientInitStateKey, ClientInviteCodeKey, ClientInviteCodeKeyPrefix,
-    ClientModuleRecovery, EncodedClientSecretKey, InitMode,
+    ClientConfigKeyPrefix, ClientInitStateKey, ClientModuleRecovery, EncodedClientSecretKey,
+    InitMode,
 };
 use envs::get_discover_api_version_timeout;
-use fedimint_core::api::{
-    ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi, InviteCode,
-};
+use fedimint_core::api::{ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi};
 use fedimint_core::config::{
     ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
     ModuleInitRegistry,
@@ -1820,7 +1818,6 @@ impl ClientBuilder {
         self,
         root_secret: DerivableSecret,
         config: ClientConfig,
-        invite_code: InviteCode,
         init_mode: InitMode,
     ) -> anyhow::Result<ClientHandle> {
         if Client::is_initialized(&self.db).await {
@@ -1840,8 +1837,6 @@ impl ClientBuilder {
                 &config,
             )
             .await;
-            dbtx.insert_new_entry(&ClientInviteCodeKey {}, &invite_code)
-                .await;
 
             let init_state = InitState::Pending(init_mode);
             dbtx.insert_entry(&ClientInitStateKey, &init_state).await;
@@ -1933,7 +1928,7 @@ impl ClientBuilder {
     ///     // .with_module(LightningClientInit)
     ///     // .with_module(MintClientInit)
     ///     // .with_module(WalletClientInit::default())
-    ///     .join(root_secret, config, invite_code)
+    ///     .join(root_secret, config)
     ///     .await
     ///     .expect("Error joining federation");
     /// # }
@@ -1942,10 +1937,8 @@ impl ClientBuilder {
         self,
         root_secret: DerivableSecret,
         config: ClientConfig,
-        invite_code: InviteCode,
     ) -> anyhow::Result<ClientHandle> {
-        self.init(root_secret, config, invite_code, InitMode::Fresh)
-            .await
+        self.init(root_secret, config, InitMode::Fresh).await
     }
 
     /// Download most recent valid backup found from the Federation
@@ -1977,14 +1970,12 @@ impl ClientBuilder {
         self,
         root_secret: DerivableSecret,
         config: ClientConfig,
-        invite_code: InviteCode,
         backup: Option<ClientBackup>,
     ) -> anyhow::Result<ClientHandle> {
         let client = self
             .init(
                 root_secret,
                 config,
-                invite_code,
                 InitMode::Recover {
                     snapshot: backup.clone(),
                 },
@@ -2299,18 +2290,6 @@ impl ClientBuilder {
     ) -> DerivableSecret {
         root_secret.federation_key(&config.global.calculate_federation_id())
     }
-}
-
-pub async fn get_invite_code_from_db(db: &Database) -> Option<InviteCode> {
-    let mut dbtx = db.begin_transaction().await;
-    #[allow(clippy::let_and_return)]
-    let invite = dbtx
-        .find_by_prefix(&ClientInviteCodeKeyPrefix)
-        .await
-        .next()
-        .await
-        .map(|(_, invite)| invite);
-    invite
 }
 
 /// Fetches the encoded client secret from the database and decodes it.

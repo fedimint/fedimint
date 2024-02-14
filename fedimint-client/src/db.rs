@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::pin::Pin;
 
-use fedimint_core::api::{ApiVersionSet, InviteCode};
+use fedimint_core::api::ApiVersionSet;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
@@ -35,7 +35,7 @@ pub enum DbKeyPrefix {
     ChronologicalOperationLog = 0x2d,
     CommonApiVersionCache = 0x2e,
     ClientConfig = 0x2f,
-    ClientInviteCode = 0x30,
+    ClientInviteCode = 0x30, // Unused; clean out remnant data before re-using!
     ClientInitState = 0x31,
     ClientMetadata = 0x32,
     ClientLastBackup = 0x33,
@@ -142,23 +142,6 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = ClientConfigKey, query_prefix = ClientConfigKeyPrefix);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct ClientInviteCodeKey;
-
-#[derive(Debug, Encodable)]
-pub struct ClientInviteCodeKeyPrefix;
-
-impl_db_record!(
-    key = ClientInviteCodeKey,
-    value = InviteCode,
-    db_prefix = DbKeyPrefix::ClientInviteCode
-);
-
-impl_db_lookup!(
-    key = ClientInviteCodeKey,
-    query_prefix = ClientInviteCodeKeyPrefix
-);
 
 /// Client metadata that will be stored/restored on backup&recovery
 #[derive(Debug, Encodable, Decodable, Serialize)]

@@ -95,7 +95,7 @@ impl GatewayClientBuilder {
             let client_config = ClientConfig::download_from_invite_code(&invite_code).await?;
             client_builder
                 // TODO: make this configurable?
-                .join(root_secret, client_config.to_owned(), invite_code)
+                .join(root_secret, client_config.to_owned())
                 .await
         }
         .map_err(GatewayError::ClientStateMachineError)

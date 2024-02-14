@@ -42,7 +42,6 @@ async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandl
         .join(
             PlainRootSecretStrategy::to_root_secret(&client_secret),
             client_config.to_owned(),
-            invite_code.clone(),
         )
         .await
 }
