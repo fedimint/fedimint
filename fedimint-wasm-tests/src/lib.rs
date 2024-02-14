@@ -90,13 +90,13 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 mod tests {
     use std::time::Duration;
 
-    use anyhow::anyhow;
+    use anyhow::{anyhow, bail};
     use fedimint_client::derivable_secret::DerivableSecret;
     use fedimint_core::Amount;
     use fedimint_ln_client::{
         LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
     };
-    use fedimint_mint_client::{MintClientModule, ReissueExternalNotesState};
+    use fedimint_mint_client::{MintClientModule, ReissueExternalNotesState, SpendOOBState};
     use futures::StreamExt;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -128,14 +128,17 @@ mod tests {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;
         set_gateway(&client).await?;
-        futures::future::try_join_all((0..10).map(|_| receive_once(client.clone()))).await?;
+        futures::future::try_join_all(
+            (0..10).map(|_| receive_once(client.clone(), Amount::from_sats(21))),
+        )
+        .await?;
         Ok(())
     }
 
-    async fn receive_once(client: fedimint_client::ClientArc) -> Result<()> {
+    async fn receive_once(client: fedimint_client::ClientArc, amount: Amount) -> Result<()> {
         let lightning_module = client.get_first_module::<LightningClientModule>();
         let (opid, invoice, _) = lightning_module
-            .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None, ())
+            .create_bolt11_invoice(amount, "test".to_string(), None, ())
             .await?;
         faucet::pay_invoice(&invoice.to_string()).await?;
 
@@ -207,7 +210,10 @@ mod tests {
         client.start_executor().await;
         set_gateway(&client).await?;
 
-        futures::future::try_join_all((0..10).map(|_| receive_once(client.clone()))).await?;
+        futures::future::try_join_all(
+            (0..10).map(|_| receive_once(client.clone(), Amount::from_sats(21))),
+        )
+        .await?;
         futures::future::try_join_all((0..10).map(|_| pay_once(client.clone()))).await?;
 
         Ok(())
@@ -240,15 +246,58 @@ mod tests {
         Ok(())
     }
 
+    async fn send_ecash_exact(
+        client: fedimint_client::ClientArc,
+        amount: Amount,
+    ) -> Result<(), anyhow::Error> {
+        let mint = client.get_first_module::<MintClientModule>();
+        'retry: loop {
+            let (operation_id, notes) = mint
+                .spend_notes(amount, Duration::from_secs(10000), false, ())
+                .await?;
+            if notes.total_amount() == amount {
+                return Ok(());
+            }
+            mint.try_cancel_spend_notes(operation_id).await;
+            let mut updates = mint
+                .subscribe_spend_notes(operation_id)
+                .await?
+                .into_stream();
+            while let Some(update) = updates.next().await {
+                if update == SpendOOBState::UserCanceledSuccess {
+                    continue 'retry;
+                }
+            }
+            bail!("failed to cancel notes");
+        }
+    }
+
     #[wasm_bindgen_test]
     async fn test_ecash() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;
         set_gateway(&client).await?;
 
-        futures::future::try_join_all((0..10).map(|_| receive_once(client.clone()))).await?;
+        futures::future::try_join_all(
+            (0..10).map(|_| receive_once(client.clone(), Amount::from_sats(21))),
+        )
+        .await?;
         futures::future::try_join_all((0..10).map(|_| send_and_recv_ecash_once(client.clone())))
             .await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_ecash_exact() -> Result<()> {
+        let client = client(&faucet::invite_code().await?.parse()?).await?;
+        client.start_executor().await;
+        set_gateway(&client).await?;
+
+        receive_once(client.clone(), Amount::from_sats(100)).await?;
+        futures::future::try_join_all(
+            (0..3).map(|_| send_ecash_exact(client.clone(), Amount::from_sats(1))),
+        )
+        .await?;
         Ok(())
     }
 }
