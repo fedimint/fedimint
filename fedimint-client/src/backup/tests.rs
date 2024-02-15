@@ -9,11 +9,17 @@ use crate::Client;
 
 #[test]
 fn sanity_ecash_backup_align() {
-    assert_eq!(ClientBackup::get_alignment_size(1), 16 * 1024);
-    assert_eq!(ClientBackup::get_alignment_size(16 * 1024), 16 * 1024);
     assert_eq!(
-        ClientBackup::get_alignment_size(16 * 1024 + 1),
-        16 * 1024 * 2
+        ClientBackup::get_alignment_size(1),
+        ClientBackup::PADDING_ALIGNMENT
+    );
+    assert_eq!(
+        ClientBackup::get_alignment_size(ClientBackup::PADDING_ALIGNMENT),
+        ClientBackup::PADDING_ALIGNMENT
+    );
+    assert_eq!(
+        ClientBackup::get_alignment_size(ClientBackup::PADDING_ALIGNMENT + 1),
+        ClientBackup::PADDING_ALIGNMENT * 2
     );
 }
 
@@ -26,7 +32,7 @@ fn sanity_ecash_backup_decode_encode() -> Result<()> {
     };
 
     let encoded = orig.consensus_encode_to_vec();
-    assert_eq!(encoded.len(), 16 * 1024);
+    assert_eq!(encoded.len(), ClientBackup::PADDING_ALIGNMENT);
     assert_eq!(
         orig,
         ClientBackup::consensus_decode(&mut Cursor::new(encoded), &Default::default())?

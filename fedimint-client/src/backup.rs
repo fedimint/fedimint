@@ -75,9 +75,11 @@ pub struct ClientBackup {
 }
 
 impl ClientBackup {
+    pub const PADDING_ALIGNMENT: usize = 4 * 1024;
+
     /// Align an ecoded message size up for better privacy
     fn get_alignment_size(len: usize) -> usize {
-        let padding_alignment = 16 * 1024;
+        let padding_alignment = Self::PADDING_ALIGNMENT;
         ((len.saturating_sub(1) / padding_alignment) + 1) * padding_alignment
     }
 
