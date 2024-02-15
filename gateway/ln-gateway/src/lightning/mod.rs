@@ -165,6 +165,10 @@ pub enum LightningMode {
         #[arg(long = "ldk-storage-dir", env = "FM_LDK_STORAGE_DIR")]
         storage_dir_path_or: Option<String>,
 
+        /// LDK storage directory path
+        #[arg(long = "ldk-esplora-server-url", env = "FM_LDK_ESPLORA_SERVER_URL")]
+        esplora_server_url: String,
+
         /// LDK network (detaults to mainnet if not provided)
         #[arg(long = "ldk-network", env = "FM_LDK_NETWORK")]
         network_or: Option<CliNetwork>,
@@ -230,10 +234,12 @@ impl LightningBuilder for GatewayLightningBuilder {
             ),
             LightningMode::Ldk {
                 storage_dir_path_or,
+                esplora_server_url,
                 network_or,
             } => Box::new(
                 ldk::GatewayLdkClient::new(
                     storage_dir_path_or,
+                    esplora_server_url,
                     network_or.unwrap_or(CliNetwork::Regtest).to_network(),
                 )
                 .await

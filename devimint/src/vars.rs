@@ -117,6 +117,9 @@ declare_vars! {
         FM_PORT_CLN_EXTENSION: u16 = port_alloc(1)?;
         FM_PORT_FAUCET: u16 = 15243u16;
 
+        FM_LDK_ESPLORA_SERVER_URL: String = format!("http://localhost:{FM_PORT_ESPLORA}");
+        FM_LDK_STORAGE_DIR: PathBuf = mkdir(FM_TEST_DIR.join("ldk_storage")).await?;
+
         FM_CLN_DIR: PathBuf = mkdir(FM_TEST_DIR.join("cln")).await?;
         FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join("lnd")).await?;
         FM_LDK_DIR: PathBuf = mkdir(FM_TEST_DIR.join("ldk")).await?;

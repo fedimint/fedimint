@@ -117,23 +117,23 @@ impl UnknownPreimageFetcher for LdkPreimageFetcher {
 impl GatewayLdkClient {
     pub async fn new(
         storage_dir_path_or: Option<String>,
+        esplora_server_url: String,
         network: Network,
     ) -> Result<Self, BuildError> {
-        // panic!("Called GatewayLdkClient::new()");
         let (preimage_fetcher, route_htlc_stream) = LdkPreimageFetcher::new();
         let preimage_fetcher_arc = Arc::from(preimage_fetcher);
 
         let mut node_builder = ldk_node::Builder::new();
         node_builder
             .set_unknown_preimage_fetcher(preimage_fetcher_arc.clone())
-            // .set_entropy_seed_bytes(vec![64; 64])
-            // .unwrap()
             .set_listening_addresses(vec![SocketAddress::TcpIpV4 {
                 addr: [0, 0, 0, 0],
                 port: 15151,
             }])
             .unwrap()
-            .set_network(network);
+            .set_network(network)
+            .set_esplora_server(esplora_server_url)
+            .set_gossip_source_p2p();
         if let Some(storage_dir_path) = storage_dir_path_or {
             node_builder.set_storage_dir_path(storage_dir_path);
         }
