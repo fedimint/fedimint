@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 use anyhow::Result;
 use bitcoin_hashes::hex::ToHex;
@@ -32,7 +32,7 @@ pub enum DatabaseOperation {
 
 #[derive(Debug, Default)]
 pub struct MemDatabase {
-    data: Mutex<BTreeMap<Vec<u8>, Vec<u8>>>,
+    data: RwLock<BTreeMap<Vec<u8>, Vec<u8>>>,
 }
 
 #[derive(Debug)]
@@ -54,7 +54,7 @@ impl MemDatabase {
     }
 
     pub fn dump_db(&self) {
-        let data = self.data.lock().unwrap();
+        let data = self.data.read().unwrap();
         let data_iter = data.iter();
         for (key, value) in data_iter {
             println!("{}: {}", key.to_hex(), value.to_hex());
@@ -66,7 +66,7 @@ impl MemDatabase {
 impl IRawDatabase for MemDatabase {
     type Transaction<'a> = MemTransaction<'a>;
     async fn begin_transaction<'a>(&'a self) -> MemTransaction<'a> {
-        let db_copy = self.data.lock().unwrap().clone();
+        let db_copy = self.data.read().unwrap().clone();
         let mut memtx = MemTransaction {
             operations: Vec::new(),
             tx_data: db_copy.clone(),
@@ -181,12 +181,12 @@ impl<'a> IRawDatabaseTransaction for MemTransaction<'a> {
                 DatabaseOperation::Insert(insert_op) => {
                     self.db
                         .data
-                        .lock()
+                        .write()
                         .unwrap()
                         .insert(insert_op.key, insert_op.value);
                 }
                 DatabaseOperation::Delete(delete_op) => {
-                    self.db.data.lock().unwrap().remove(&delete_op.key);
+                    self.db.data.write().unwrap().remove(&delete_op.key);
                 }
             }
         }
