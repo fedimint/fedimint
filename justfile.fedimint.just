@@ -107,3 +107,7 @@ exit-tmuxinator:
 # backport a PR
 backport-pr pr:
   nix shell nixpkgs#nodejs -c npx backport --pr-filter {{pr}}
+
+# sign a release (git tag)
+sign-release tag:
+  ./scripts/release/sign.sh {{tag}}
