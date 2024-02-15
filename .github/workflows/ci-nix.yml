@@ -290,7 +290,7 @@ jobs:
             # there's not enough macos runners available for our CI, so test only the more important cross-compilation toolchains
             # if they work, rest probably works as well
           - host: macos
-            toolchain: armv7-androideabi
+            toolchain: armv7-android
           - host: macos
             toolchain: x86_64-android
 
