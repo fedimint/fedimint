@@ -211,6 +211,8 @@
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
 <a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::marker::PhantomData;
 
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, OperationId};
@@ -255,9 +257,11 @@
         <span class="macro">trace!</span>(<span class="question-mark">?</span>state, %queue_len, <span class="string">&quot;Sending notification about state transition&quot;</span>);
         <span class="comment">// FIXME: use more robust notification mechanism
         </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.broadcast.send(state) {
-            <span class="macro">error!</span>(
+            <span class="macro">debug!</span>(
                 <span class="question-mark">?</span>e,
-                <span class="string">&quot;Could not send state transition notification, the client may misbehave&quot;
+                %queue_len,
+                receivers=<span class="self">self</span>.broadcast.receiver_count(),
+                <span class="string">&quot;Could not send state transition notification, no active receivers&quot;
             </span>);
         }
     }
