@@ -457,24 +457,32 @@ impl Database {
                     return Ok(val);
                 }
                 Err(err) => {
-                    warn!(
-                        target: LOG_DB,
-                        curr_attempts, "Database commit failed in an autocommit block"
-                    );
                     if max_attempts
                         .map(|max_att| max_att <= curr_attempts)
                         .unwrap_or(false)
                     {
+                        warn!(
+                            target: LOG_DB,
+                            curr_attempts,
+                            "Database commit failed in an autocommit block - terminating"
+                        );
                         return Err(AutocommitError::CommitFailed {
                             attempts: curr_attempts,
                             last_error: err,
                         });
                     }
+
+                    let delay = (2u64.pow(curr_attempts.min(7) as u32) * 10).min(1000);
+                    let delay = rand::thread_rng().gen_range(delay..(2 * delay));
+                    warn!(
+                        target: LOG_DB,
+                        curr_attempts,
+                        delay_ms = %delay,
+                        "Database commit failed in an autocommit block - retrying"
+                    );
+                    crate::task::sleep(Duration::from_millis(delay)).await;
                 }
             }
-            let delay = (2u64.pow(curr_attempts.min(7) as u32) * 10).min(1000);
-            let delay = rand::thread_rng().gen_range(delay..(2 * delay));
-            crate::task::sleep(Duration::from_millis(delay)).await;
         }
     }
 
