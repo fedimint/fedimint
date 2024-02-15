@@ -297,7 +297,6 @@ where
             }
         }
     }
-    #[allow(dead_code)]
     pub fn send_sync(&self, msg: T, recipient: Recipient) {
         match recipient {
             Recipient::Everyone => {
