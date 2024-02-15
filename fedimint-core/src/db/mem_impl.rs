@@ -5,7 +5,6 @@ use anyhow::Result;
 use bitcoin_hashes::hex::ToHex;
 use futures::{stream, StreamExt};
 use macro_rules_attribute::apply;
-use tokio::sync::Mutex;
 
 use super::{
     IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
@@ -34,7 +33,7 @@ pub enum DatabaseOperation {
 
 #[derive(Debug, Default)]
 pub struct MemDatabase {
-    data: Mutex<BTreeMap<Vec<u8>, Vec<u8>>>,
+    data: tokio::sync::RwLock<BTreeMap<Vec<u8>, Vec<u8>>>,
 }
 
 #[derive(Debug)]
@@ -56,7 +55,7 @@ impl MemDatabase {
     }
 
     pub async fn dump_db(&self) {
-        let data = self.data.lock().await;
+        let data = self.data.read().await;
         let data_iter = data.iter();
         for (key, value) in data_iter {
             println!("{}: {}", key.to_hex(), value.to_hex());
@@ -68,7 +67,7 @@ impl MemDatabase {
 impl IRawDatabase for MemDatabase {
     type Transaction<'a> = MemTransaction<'a>;
     async fn begin_transaction<'a>(&'a self) -> MemTransaction<'a> {
-        let db_copy = self.data.lock().await.clone();
+        let db_copy = self.data.read().await.clone();
         let mut memtx = MemTransaction {
             operations: Vec::new(),
             tx_data: db_copy.clone(),
@@ -179,7 +178,7 @@ impl<'a> IDatabaseTransactionOps for MemTransaction<'a> {
 #[apply(async_trait_maybe_send!)]
 impl<'a> IRawDatabaseTransaction for MemTransaction<'a> {
     async fn commit_tx(self) -> Result<()> {
-        let mut data = self.db.data.lock().await;
+        let mut data = self.db.data.write().await;
         let mut data_copy = data.clone();
         for op in self.operations {
             match op {
