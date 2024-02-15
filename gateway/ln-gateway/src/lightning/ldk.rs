@@ -146,8 +146,9 @@ impl GatewayLdkClient {
             })
             .unwrap();
         let node_pubkey = format!("{}", node.node_id());
-        info!(target: LOG_DEVIMINT, "Setting DEVIMINT_LDK_NODE_PUBKEY to {node_pubkey}");
-        println!("Setting DEVIMINT_LDK_NODE_PUBKEY to {node_pubkey}");
+        let address = node.new_onchain_address().unwrap();
+        println!("LDK node pubkey: {node_pubkey}");
+        println!("LDK on-chain address: {address}");
         std::env::set_var("DEVIMINT_LDK_NODE_PUBKEY", node_pubkey);
 
         Ok(GatewayLdkClient {

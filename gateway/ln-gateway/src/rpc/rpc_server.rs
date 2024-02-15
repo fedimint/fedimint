@@ -175,6 +175,7 @@ async fn register_payment_hash(
     Json(payload): Json<RegisterPaymentHashPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let invoice = gateway.handle_register_payment_hash_msg(payload).await?;
+    println!("Created invoice: {:?}", invoice);
     Ok(Json(json!(invoice)))
 }
 

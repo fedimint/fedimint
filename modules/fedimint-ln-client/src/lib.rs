@@ -832,7 +832,7 @@ impl LightningClientModule {
             gateway_must_create_invoices
         );
 
-        let invoice = if gateway_must_create_invoices {
+        let invoice = if true {
             // Maybe retry a few times?
             self.register_payment_hash_with_gateway(
                 &active_gateway_or?,

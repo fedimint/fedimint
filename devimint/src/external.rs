@@ -18,8 +18,8 @@ use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tonic_lnd::lnrpc::policy_update_request::Scope;
 use tonic_lnd::lnrpc::{
-    ChanInfoRequest, ConnectPeerRequest, GetInfoRequest, ListChannelsRequest, OpenChannelRequest,
-    PolicyUpdateRequest,
+    ChanInfoRequest, ConnectPeerRequest, GetInfoRequest, ListChannelsRequest, NewAddressRequest,
+    OpenChannelRequest, PolicyUpdateRequest,
 };
 use tonic_lnd::walletrpc::AddrRequest;
 use tonic_lnd::Client as LndClient;
@@ -456,8 +456,20 @@ pub async fn open_channel(
         .await?
         .bech32
         .context("bech32 should be present")?;
+    let lnd_addr = lnd
+        .lightning_client_lock()
+        .await?
+        .new_address(NewAddressRequest {
+            r#type: 4,
+            account: "".to_string(),
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .address;
 
-    bitcoind.send_to(cln_addr, 100_000_000).await?;
+    bitcoind.send_to(cln_addr, 1_000_000_000).await?;
+    bitcoind.send_to(lnd_addr, 1_000_000_000).await?;
     bitcoind.mine_blocks(10).await?;
 
     let lnd_pubkey = lnd.pub_key().await?;
@@ -603,7 +615,7 @@ pub async fn open_channel_with_ldk(
         .addr
         .to_string();
 
-    bitcoind.send_to(lnd_addr, 100_000_000).await?;
+    bitcoind.send_to(lnd_addr, 1_000_000_000).await?;
     bitcoind.mine_blocks(10).await?;
 
     let lnd_pubkey = lnd.pub_key().await?;
