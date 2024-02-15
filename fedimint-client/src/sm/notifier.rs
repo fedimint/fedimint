@@ -42,9 +42,11 @@ impl Notifier {
         trace!(?state, %queue_len, "Sending notification about state transition");
         // FIXME: use more robust notification mechanism
         if let Err(e) = self.broadcast.send(state) {
-            error!(
+            debug!(
                 ?e,
-                "Could not send state transition notification, the client may misbehave"
+                %queue_len,
+                receivers=self.broadcast.receiver_count(),
+                "Could not send state transition notification, no active receivers"
             );
         }
     }
