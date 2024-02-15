@@ -1,9 +1,9 @@
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use anyhow::Result;
 use bitcoin_hashes::hex::ToHex;
 use futures::{stream, StreamExt};
+use imbl::OrdMap;
 use macro_rules_attribute::apply;
 
 use super::{
@@ -33,15 +33,15 @@ pub enum DatabaseOperation {
 
 #[derive(Debug, Default)]
 pub struct MemDatabase {
-    data: tokio::sync::RwLock<BTreeMap<Vec<u8>, Vec<u8>>>,
+    data: tokio::sync::RwLock<OrdMap<Vec<u8>, Vec<u8>>>,
 }
 
 #[derive(Debug)]
 pub struct MemTransaction<'a> {
     operations: Vec<DatabaseOperation>,
-    tx_data: BTreeMap<Vec<u8>, Vec<u8>>,
+    tx_data: OrdMap<Vec<u8>, Vec<u8>>,
     db: &'a MemDatabase,
-    savepoint: BTreeMap<Vec<u8>, Vec<u8>>,
+    savepoint: OrdMap<Vec<u8>, Vec<u8>>,
     num_pending_operations: usize,
     num_savepoint_operations: usize,
 }
@@ -131,7 +131,7 @@ impl<'a> IDatabaseTransactionOpsCore for MemTransaction<'a> {
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
         let data = self
             .tx_data
-            .range::<Vec<u8>, _>((key_prefix.to_vec())..)
+            .range((key_prefix.to_vec())..)
             .take_while(|(key, _)| key.starts_with(key_prefix))
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect::<Vec<_>>();
@@ -144,7 +144,7 @@ impl<'a> IDatabaseTransactionOpsCore for MemTransaction<'a> {
     ) -> Result<PrefixStream<'_>> {
         let mut data = self
             .tx_data
-            .range::<Vec<u8>, _>((key_prefix.to_vec())..)
+            .range((key_prefix.to_vec())..)
             .take_while(|(key, _)| key.starts_with(key_prefix))
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect::<Vec<_>>();
