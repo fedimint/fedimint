@@ -316,7 +316,13 @@ jobs:
 
       - name: Build client packages for ${{ matrix.toolchain }}
         if: github.event_name != 'pull_request' || matrix.build-in-pr
-        run: nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).${{ matrix.toolchain }}.ci.client-pkgs
+        run: |
+          # nix-fast-build seems to strugle
+          if [[ "${{ matrix.host }}" == "macos" ]]; then
+            nix build -L .#ci.client-pkgs
+          else
+            nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).${{ matrix.toolchain }}.ci.client-pkgs
+          fi
 
   containers:
     if: github.repository == 'fedimint/fedimint'
