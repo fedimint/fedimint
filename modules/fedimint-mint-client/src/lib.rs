@@ -86,10 +86,10 @@ pub const LOG_TARGET: &str = "client::module::mint";
 /// ## Invariants
 /// * Has to contain at least one `Notes` item
 /// * Has to contain at least one `FederationIdPrefix` item
-#[derive(Clone, Debug, Encodable)]
+#[derive(Clone, Debug, Encodable, PartialEq, Eq)]
 pub struct OOBNotes(Vec<OOBNotesData>);
 
-#[derive(Clone, Debug, Decodable, Encodable)]
+#[derive(Clone, Debug, Decodable, Encodable, PartialEq, Eq)]
 enum OOBNotesData {
     Notes(TieredMulti<SpendableNote>),
     FederationIdPrefix(FederationIdPrefix),
