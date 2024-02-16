@@ -6,6 +6,15 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use secp256k1_zkp::{KeyPair, Message, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
 
+/// Maximum payload size of a backup request
+///
+/// Note: this is just a current hard limit,
+/// that could be changed in the future versions.
+///
+/// For comparison - at the time of writing, ecash module
+/// backup with 52 notes is around 5.1K.
+pub const BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES: usize = 128 * 1024;
+
 #[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct BackupRequest {
     pub id: secp256k1::PublicKey,
