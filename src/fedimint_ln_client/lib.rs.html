@@ -1528,6 +1528,38 @@
 <a href="#1528" id="1528">1528</a>
 <a href="#1529" id="1529">1529</a>
 <a href="#1530" id="1530">1530</a>
+<a href="#1531" id="1531">1531</a>
+<a href="#1532" id="1532">1532</a>
+<a href="#1533" id="1533">1533</a>
+<a href="#1534" id="1534">1534</a>
+<a href="#1535" id="1535">1535</a>
+<a href="#1536" id="1536">1536</a>
+<a href="#1537" id="1537">1537</a>
+<a href="#1538" id="1538">1538</a>
+<a href="#1539" id="1539">1539</a>
+<a href="#1540" id="1540">1540</a>
+<a href="#1541" id="1541">1541</a>
+<a href="#1542" id="1542">1542</a>
+<a href="#1543" id="1543">1543</a>
+<a href="#1544" id="1544">1544</a>
+<a href="#1545" id="1545">1545</a>
+<a href="#1546" id="1546">1546</a>
+<a href="#1547" id="1547">1547</a>
+<a href="#1548" id="1548">1548</a>
+<a href="#1549" id="1549">1549</a>
+<a href="#1550" id="1550">1550</a>
+<a href="#1551" id="1551">1551</a>
+<a href="#1552" id="1552">1552</a>
+<a href="#1553" id="1553">1553</a>
+<a href="#1554" id="1554">1554</a>
+<a href="#1555" id="1555">1555</a>
+<a href="#1556" id="1556">1556</a>
+<a href="#1557" id="1557">1557</a>
+<a href="#1558" id="1558">1558</a>
+<a href="#1559" id="1559">1559</a>
+<a href="#1560" id="1560">1560</a>
+<a href="#1561" id="1561">1561</a>
+<a href="#1562" id="1562">1562</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -1552,11 +1584,9 @@
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext, FederationInfo};
+<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::api::DynModuleApi;
-<span class="kw">use </span>fedimint_core::config::{
-    ClientConfig, FederationId, META_OVERRIDE_URL_KEY, META_VETTED_GATEWAYS_KEY,
-};
+<span class="kw">use </span>fedimint_core::config::{FederationId, META_OVERRIDE_URL_KEY, META_VETTED_GATEWAYS_KEY};
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -2414,21 +2444,25 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">async fn </span>fetch_meta_overrides(<span class="kw-2">&amp;</span><span class="self">self</span>, config: ClientConfig) -&gt; anyhow::Result&lt;String&gt; {
-        <span class="kw">let </span>federation_id = config.global.federation_id();
-        <span class="kw">let </span>override_src = <span class="kw">match </span>FederationInfo::from_config(config)
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.meta::&lt;String&gt;(META_OVERRIDE_URL_KEY)<span class="question-mark">?
-        </span>{
-            <span class="prelude-val">Some</span>(override_src) =&gt; override_src,
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="macro">debug!</span>(<span class="string">&quot;No meta override source configured&quot;</span>);
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="string">&quot;&quot;</span>.into());
-            }
-        };
+    <span class="doccomment">/// Fetches the metadata overrides for a given federation
+    ///
+    /// # Arguments
+    ///
+    /// * `federation_id` - A `FederationId` for which we want to fetch meta
+    ///   overrides.
+    /// * `override_src` - A configured `URL` from which meta overrides are
+    ///   requested.
+    ///
+    /// Valid meta overrides fetched from this source are cached in the client
+    /// database for up to `META_OVERRIDE_CACHE_DURATION`
+    </span><span class="kw">async fn </span>fetch_meta_overrides(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        federation_id: FederationId,
+        override_src: String,
+    ) -&gt; anyhow::Result&lt;BTreeMap&lt;String, String&gt;&gt; {
         <span class="macro">debug!</span>(<span class="string">&quot;Fetching meta overrides from {override_src}&quot;</span>);
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(meta) = <span class="self">self
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(cache) = <span class="self">self
             </span>.client_ctx
             .module_db()
             .begin_transaction()
@@ -2436,9 +2470,15 @@
             </span>.get_value(<span class="kw-2">&amp;</span>MetaOverridesKey {})
             .<span class="kw">await
         </span>{
-            <span class="kw">if </span>meta.fetched_at.elapsed().unwrap() &lt; META_OVERRIDE_CACHE_DURATION {
+            <span class="kw">if </span>cache.fetched_at.elapsed().unwrap() &lt; META_OVERRIDE_CACHE_DURATION {
                 <span class="macro">debug!</span>(<span class="string">&quot;Using cached meta overrides&quot;</span>);
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(meta.value);
+                <span class="kw">match </span>serde_json::from_str(<span class="kw-2">&amp;</span>cache.value) {
+                    <span class="prelude-val">Ok</span>(meta) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(meta),
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="macro">error!</span>(<span class="string">&quot;Error parsing cached meta overrides: {}&quot;</span>, e);
+                        <span class="macro">debug!</span>(<span class="string">&quot;Meta override cache returned invalid json: {}&quot;</span>, cache.value);
+                    }
+                }
             }
             <span class="macro">debug!</span>(<span class="string">&quot;Cached meta overrides are stale&quot;</span>);
         };
@@ -2450,7 +2490,7 @@
             </span>.context(<span class="string">&quot;Meta override request failed&quot;</span>)<span class="question-mark">?</span>;
         <span class="macro">debug!</span>(<span class="string">&quot;Meta override source returned status: {response:?}&quot;</span>);
 
-        <span class="kw">let </span>federation_meta = <span class="kw">match </span>response.status() {
+        <span class="kw">let </span>meta_value = <span class="kw">match </span>response.status() {
             reqwest::StatusCode::OK =&gt; {
                 <span class="kw">let </span>txt = response.text().<span class="kw">await</span>.context(<span class="macro">format!</span>(
                     <span class="string">&quot;Meta override source returned invalid body: {override_src}&quot;
@@ -2463,13 +2503,13 @@
                 }
 
                 <span class="kw">match </span>m.get(<span class="kw-2">&amp;</span>federation_id.to_string()) {
-                    <span class="prelude-val">Some</span>(meta) =&gt; {
+                    <span class="prelude-val">Some</span>(meta_value) =&gt; {
                         <span class="macro">debug!</span>(<span class="string">&quot;Found meta overrides for federation: {federation_id}&quot;</span>);
-                        meta.to_string()
+                        meta_value.clone()
                     }
                     <span class="prelude-val">None </span>=&gt; {
                         <span class="macro">debug!</span>(<span class="string">&quot;No meta overrides found for federation: {federation_id}&quot;</span>);
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="string">&quot;&quot;</span>.into());
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(BTreeMap::new());
                     }
                 }
             }
@@ -2479,11 +2519,16 @@
             ))<span class="question-mark">?</span>,
         };
 
+        <span class="kw">let </span>federation_meta: BTreeMap&lt;String, String&gt; = serde_json::from_value(meta_value.clone())
+            .context(<span class="macro">format!</span>(
+                <span class="string">&quot;Meta override source returned invalid json: {meta_value}&quot;
+            </span>))<span class="question-mark">?</span>;
+
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
         dbtx.insert_entry(
             <span class="kw-2">&amp;</span>MetaOverridesKey {},
             <span class="kw-2">&amp;</span>MetaOverrides {
-                value: federation_meta.clone(),
+                value: meta_value.to_string(),
                 fetched_at: fedimint_core::time::now(),
             },
         )
@@ -2493,53 +2538,72 @@
         <span class="prelude-val">Ok</span>(federation_meta)
     }
 
-    <span class="doccomment">/// Gateways actively registered with the fed
+    <span class="doccomment">/// Fetches gateways registered with the fed and applies gateway vetting
+    /// from &#39;vetted_gateways` meta field if configured
     </span><span class="kw">pub async fn </span>fetch_registered_gateways(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; anyhow::Result&lt;Vec&lt;LightningGatewayAnnouncement&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>gateways = <span class="self">self</span>.module_api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">if </span>!gateways.is_empty() {
-            <span class="macro">debug!</span>(<span class="string">&quot;Fetching meta overrides from remote source/cache&quot;</span>);
             <span class="kw">let </span>config = <span class="self">self</span>.client_ctx.get_config().clone();
-            <span class="kw">let </span>federation_meta = <span class="kw">match </span><span class="self">self</span>.fetch_meta_overrides(config).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(meta) =&gt; {
-                    <span class="kw">if </span>meta.is_empty() {
-                        <span class="macro">debug!</span>(<span class="string">&quot;No meta overrides found&quot;</span>);
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(gateways);
+            <span class="kw">let </span>global_meta: BTreeMap&lt;String, String&gt; = config.global.meta.clone();
+            <span class="kw">let </span>federation_id = config.global.federation_id();
+
+            <span class="kw">let </span>meta = <span class="kw">match </span>config.meta::&lt;String&gt;(META_OVERRIDE_URL_KEY)<span class="question-mark">? </span>{
+                <span class="prelude-val">Some</span>(override_src) =&gt; {
+                    <span class="kw">match </span><span class="self">self</span>.fetch_meta_overrides(federation_id, override_src).<span class="kw">await </span>{
+                        <span class="prelude-val">Ok</span>(override_meta) =&gt; {
+                            <span class="kw">if </span>override_meta.contains_key(META_VETTED_GATEWAYS_KEY) {
+                                override_meta
+                            } <span class="kw">else </span>{
+                                global_meta
+                            }
+                        }
+                        <span class="prelude-val">Err</span>(e) =&gt; {
+                            <span class="macro">error!</span>(<span class="string">&quot;Error fetching meta overrides: {}&quot;</span>, e);
+                            global_meta
+                        }
                     }
-                    meta
                 }
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">error!</span>(<span class="string">&quot;Error fetching meta overrides: {}&quot;</span>, e);
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(gateways);
+                <span class="prelude-val">None </span>=&gt; {
+                    <span class="macro">debug!</span>(<span class="string">&quot;No meta override source configured&quot;</span>);
+                    global_meta
                 }
             };
+
+            <span class="kw">if </span>meta.is_empty() {
+                <span class="macro">debug!</span>(<span class="string">&quot;No meta overrides found&quot;</span>);
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(gateways);
+            }
 
             <span class="macro">debug!</span>(<span class="string">&quot;Applying vetted meta field to registered gateways&quot;</span>);
-            <span class="kw">let </span>meta: BTreeMap&lt;String, serde_json::Value&gt; = serde_json::from_str(<span class="kw-2">&amp;</span>federation_meta)
-                .context(<span class="macro">format!</span>(
-                    <span class="string">&quot;Meta override source returned invalid json: {}&quot;</span>,
-                    federation_meta
-                ))<span class="question-mark">?</span>;
-            <span class="kw">let </span>vetted_gids = <span class="kw">match </span>meta
-                .get(META_VETTED_GATEWAYS_KEY)
-                .and_then(|vetted| serde_json::from_value::&lt;Vec&lt;String&gt;&gt;(vetted.clone()).ok())
-            {
+            <span class="kw">match </span>meta.get(META_VETTED_GATEWAYS_KEY).and_then(|vetted| {
+                <span class="macro">debug!</span>(<span class="string">&quot;Found vetted gateways meta field: {vetted:?}&quot;</span>);
+                <span class="kw">match </span>serde_json::from_str::&lt;Vec&lt;String&gt;&gt;(vetted) {
+                    <span class="prelude-val">Ok</span>(vetted) =&gt; <span class="prelude-val">Some</span>(vetted),
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="macro">error!</span>(<span class="string">&quot;Error parsing vetted gateways meta field: {}&quot;</span>, e);
+                        <span class="prelude-val">None
+                    </span>}
+                }
+            }) {
                 <span class="prelude-val">Some</span>(vetted) =&gt; {
                     <span class="macro">debug!</span>(<span class="string">&quot;Found the following vetted gateways: {:?}&quot;</span>, vetted);
-                    vetted
+                    <span class="kw">let </span>vetted_gids = vetted
                         .into_iter()
                         .map(|pk| PublicKey::from_str(<span class="kw-2">&amp;</span>pk).map_err(anyhow::Error::from))
-                        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?
-                </span>}
-                <span class="prelude-val">None </span>=&gt; Vec::new(),
-            };
-            <span class="macro">debug!</span>(<span class="string">&quot;Vetted gateways: {:?}&quot;</span>, vetted_gids);
+                        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
 
-            <span class="kw">for </span>gateway <span class="kw">in </span>gateways.iter_mut() {
-                gateway.vetted = vetted_gids.contains(<span class="kw-2">&amp;</span>gateway.info.gateway_id);
-            }
+                    <span class="macro">debug!</span>(<span class="string">&quot;Vetted gateways: {:?}&quot;</span>, vetted_gids);
+                    <span class="kw">for </span>gateway <span class="kw">in </span>gateways.iter_mut() {
+                        gateway.vetted = vetted_gids.contains(<span class="kw-2">&amp;</span>gateway.info.gateway_id);
+                    }
+                }
+                <span class="prelude-val">None </span>=&gt; {
+                    <span class="macro">debug!</span>(<span class="string">&quot;No vetted gateways meta field found&quot;</span>);
+                }
+            };
         }
 
         <span class="prelude-val">Ok</span>(gateways)

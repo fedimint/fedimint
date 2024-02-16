@@ -940,6 +940,19 @@
 <a href="#940" id="940">940</a>
 <a href="#941" id="941">941</a>
 <a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
+<a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a>
+<a href="#949" id="949">949</a>
+<a href="#950" id="950">950</a>
+<a href="#951" id="951">951</a>
+<a href="#952" id="952">952</a>
+<a href="#953" id="953">953</a>
+<a href="#954" id="954">954</a>
+<a href="#955" id="955">955</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1131,6 +1144,19 @@
 
     <span class="kw">pub fn </span>federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
         <span class="self">self</span>.global.federation_id()
+    }
+
+    <span class="doccomment">/// Get the value of a given meta field
+    </span><span class="kw">pub fn </span>meta&lt;V: serde::de::DeserializeOwned&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        key: <span class="kw-2">&amp;</span>str,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;V&gt;, anyhow::Error&gt; {
+        <span class="kw">let </span><span class="prelude-val">Some</span>(str_value) = <span class="self">self</span>.global.meta.get(key) <span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+        };
+        serde_json::from_str(str_value)
+            .map(<span class="prelude-val">Some</span>)
+            .context(<span class="macro">format!</span>(<span class="string">&quot;Decoding meta field &#39;{key}&#39; failed&quot;</span>))
     }
 }
 
