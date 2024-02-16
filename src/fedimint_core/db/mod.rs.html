@@ -2941,6 +2941,14 @@
 <a href="#2941" id="2941">2941</a>
 <a href="#2942" id="2942">2942</a>
 <a href="#2943" id="2943">2943</a>
+<a href="#2944" id="2944">2944</a>
+<a href="#2945" id="2945">2945</a>
+<a href="#2946" id="2946">2946</a>
+<a href="#2947" id="2947">2947</a>
+<a href="#2948" id="2948">2948</a>
+<a href="#2949" id="2949">2949</a>
+<a href="#2950" id="2950">2950</a>
+<a href="#2951" id="2951">2951</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -3400,24 +3408,32 @@
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(val);
                 }
                 <span class="prelude-val">Err</span>(err) =&gt; {
-                    <span class="macro">warn!</span>(
-                        target: LOG_DB,
-                        curr_attempts, <span class="string">&quot;Database commit failed in an autocommit block&quot;
-                    </span>);
                     <span class="kw">if </span>max_attempts
                         .map(|max_att| max_att &lt;= curr_attempts)
                         .unwrap_or(<span class="bool-val">false</span>)
                     {
+                        <span class="macro">warn!</span>(
+                            target: LOG_DB,
+                            curr_attempts,
+                            <span class="string">&quot;Database commit failed in an autocommit block - terminating&quot;
+                        </span>);
                         <span class="kw">return </span><span class="prelude-val">Err</span>(AutocommitError::CommitFailed {
                             attempts: curr_attempts,
                             last_error: err,
                         });
                     }
+
+                    <span class="kw">let </span>delay = (<span class="number">2u64</span>.pow(curr_attempts.min(<span class="number">7</span>) <span class="kw">as </span>u32) * <span class="number">10</span>).min(<span class="number">1000</span>);
+                    <span class="kw">let </span>delay = rand::thread_rng().gen_range(delay..(<span class="number">2 </span>* delay));
+                    <span class="macro">warn!</span>(
+                        target: LOG_DB,
+                        curr_attempts,
+                        delay_ms = %delay,
+                        <span class="string">&quot;Database commit failed in an autocommit block - retrying&quot;
+                    </span>);
+                    <span class="kw">crate</span>::task::sleep(Duration::from_millis(delay)).<span class="kw">await</span>;
                 }
             }
-            <span class="kw">let </span>delay = (<span class="number">2u64</span>.pow(curr_attempts.min(<span class="number">7</span>) <span class="kw">as </span>u32) * <span class="number">10</span>).min(<span class="number">1000</span>);
-            <span class="kw">let </span>delay = rand::thread_rng().gen_range(delay..(<span class="number">2 </span>* delay));
-            <span class="kw">crate</span>::task::sleep(Duration::from_millis(delay)).<span class="kw">await</span>;
         }
     }
 
