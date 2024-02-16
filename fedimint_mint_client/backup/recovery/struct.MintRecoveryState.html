@@ -38,27 +38,27 @@ amount).</p>
     gap_limit: <a class="primitive" href="https://doc.rust-lang.org/1.73.0/std/primitive.u64.html">u64</a>,
     tbs_pks: <a class="struct" href="../../../fedimint_core/tiered/struct.Tiered.html" title="struct fedimint_core::tiered::Tiered">Tiered</a>&lt;<a class="struct" href="../../../tbs/struct.AggregatePublicKey.html" title="struct tbs::AggregatePublicKey">AggregatePublicKey</a>&gt;,
     pub_key_shares: <a class="struct" href="https://doc.rust-lang.org/1.73.0/alloc/collections/btree/map/struct.BTreeMap.html" title="struct alloc::collections::btree::map::BTreeMap">BTreeMap</a>&lt;<a class="struct" href="../../../fedimint_core/struct.PeerId.html" title="struct fedimint_core::PeerId">PeerId</a>, <a class="struct" href="../../../fedimint_core/tiered/struct.Tiered.html" title="struct fedimint_core::tiered::Tiered">Tiered</a>&lt;<a class="struct" href="../../../tbs/struct.PublicKeyShare.html" title="struct tbs::PublicKeyShare">PublicKeyShare</a>&gt;&gt;,
-    secret: &amp;DerivableSecret
+    secret: &amp;<a class="struct" href="../../../fedimint_derive_secret/struct.DerivableSecret.html" title="struct fedimint_derive_secret::DerivableSecret">DerivableSecret</a>
 ) -&gt; Self</h4></section><details class="toggle method-toggle" open><summary><section id="method.fill_initial_pending_nonces" class="method"><a class="src rightside" href="../../../src/fedimint_mint_client/backup/recovery.rs.html#337-342">source</a><h4 class="code-header">fn <a href="#method.fill_initial_pending_nonces" class="fn">fill_initial_pending_nonces</a>(
     &amp;mut self,
     amount: <a class="struct" href="../../../fedimint_core/struct.Amount.html" title="struct fedimint_core::Amount">Amount</a>,
-    secret: &amp;DerivableSecret
+    secret: &amp;<a class="struct" href="../../../fedimint_derive_secret/struct.DerivableSecret.html" title="struct fedimint_derive_secret::DerivableSecret">DerivableSecret</a>
 )</h4></section></summary><div class="docblock"><p>Fill each tier pool to the gap limit</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.add_next_pending_nonce_in_pending_pool" class="method"><a class="src rightside" href="../../../src/fedimint_mint_client/backup/recovery.rs.html#345-361">source</a><h4 class="code-header">fn <a href="#method.add_next_pending_nonce_in_pending_pool" class="fn">add_next_pending_nonce_in_pending_pool</a>(
     &amp;mut self,
     amount: <a class="struct" href="../../../fedimint_core/struct.Amount.html" title="struct fedimint_core::Amount">Amount</a>,
-    secret: &amp;DerivableSecret
+    secret: &amp;<a class="struct" href="../../../fedimint_derive_secret/struct.DerivableSecret.html" title="struct fedimint_derive_secret::DerivableSecret">DerivableSecret</a>
 )</h4></section></summary><div class="docblock"><p>Add next nonce from <code>amount</code> tier to the <code>next_pending_note_idx</code></p>
 </div></details><section id="method.handle_input" class="method"><a class="src rightside" href="../../../src/fedimint_mint_client/backup/recovery.rs.html#363-374">source</a><h4 class="code-header">pub fn <a href="#method.handle_input" class="fn">handle_input</a>(&amp;mut self, input: &amp;<a class="enum" href="../../enum.MintInput.html" title="enum fedimint_mint_client::MintInput">MintInput</a>)</h4></section><section id="method.handle_output" class="method"><a class="src rightside" href="../../../src/fedimint_mint_client/backup/recovery.rs.html#376-440">source</a><h4 class="code-header">pub fn <a href="#method.handle_output" class="fn">handle_output</a>(
     &amp;mut self,
     out_point: <a class="struct" href="../../../fedimint_core/struct.OutPoint.html" title="struct fedimint_core::OutPoint">OutPoint</a>,
     output: &amp;<a class="enum" href="../../enum.MintOutput.html" title="enum fedimint_mint_client::MintOutput">MintOutput</a>,
-    secret: &amp;DerivableSecret
+    secret: &amp;<a class="struct" href="../../../fedimint_derive_secret/struct.DerivableSecret.html" title="struct fedimint_derive_secret::DerivableSecret">DerivableSecret</a>
 )</h4></section><details class="toggle method-toggle" open><summary><section id="method.observe_nonce_idx_being_used" class="method"><a class="src rightside" href="../../../src/fedimint_mint_client/backup/recovery.rs.html#448-472">source</a><h4 class="code-header">fn <a href="#method.observe_nonce_idx_being_used" class="fn">observe_nonce_idx_being_used</a>(
     &amp;mut self,
     amount: <a class="struct" href="../../../fedimint_core/struct.Amount.html" title="struct fedimint_core::Amount">Amount</a>,
     note_idx: <a class="struct" href="../../struct.NoteIndex.html" title="struct fedimint_mint_client::NoteIndex">NoteIndex</a>,
-    secret: &amp;DerivableSecret
+    secret: &amp;<a class="struct" href="../../../fedimint_derive_secret/struct.DerivableSecret.html" title="struct fedimint_derive_secret::DerivableSecret">DerivableSecret</a>
 )</h4></section></summary><div class="docblock"><p>React to a valid pending nonce being tracked being used in the epoch
 history</p>
 <p>(Possibly) increment the <code>self.last_mined_nonce_idx</code>, then replenish the
