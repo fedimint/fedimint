@@ -739,6 +739,11 @@ fn to_command(cli: Vec<String>) -> Command {
     }
 }
 
+/// Returns true if running backwards-compatibility tests
+pub fn is_backwards_compatibility_test() -> bool {
+    std::env::var("FM_BACKWARDS_COMPATIBILITY_TEST").is_ok_and(|x| x == "1")
+}
+
 /// Parses a version string returned from clap
 /// ex: fedimintd 0.3.0-alpha -> 0.3.0-alpha
 fn parse_clap_version(res: &str) -> Version {

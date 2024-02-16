@@ -47,7 +47,7 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
         },
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
-        async { Federation::new(process_mgr, bitcoind.clone(), fed_size).await },
+        Federation::new(process_mgr, bitcoind.clone(), fed_size),
     )?;
 
     info!(target: LOG_DEVIMINT, "federation and gateways started");

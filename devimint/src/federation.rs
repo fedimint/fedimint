@@ -262,14 +262,6 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn start_all_servers(&mut self, process_mgr: &ProcessManager) -> Result<()> {
-        let fed_size = process_mgr.globals.FM_FED_SIZE;
-        while self.num_members() < fed_size {
-            self.start_server(process_mgr, self.num_members()).await?
-        }
-        Ok(())
-    }
-
     pub async fn terminate_server(&mut self, peer_id: usize) -> Result<()> {
         let Some((_, fedimintd)) = self.members.remove_entry(&peer_id) else {
             bail!("fedimintd-{peer_id} does not exist");
@@ -290,7 +282,9 @@ impl Federation {
             self.terminate_server(self.num_members() - 1).await?;
         }
 
-        info!(fed_size, offline_nodes, "federation is degraded");
+        if offline_nodes > 0 {
+            info!(fed_size, offline_nodes, "federation is degraded");
+        }
         Ok(())
     }
 

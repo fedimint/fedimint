@@ -5,9 +5,6 @@ set -euo pipefail
 # prevent locale settings messing with some setups
 export LANG=C
 
-# default to run all tests in a 3/4 setup
-export FM_OFFLINE_NODES=1
-
 if [ "$(ulimit -Sn)" -lt "10000" ]; then
   >&2 echo "⚠️  ulimit too small. Running 'ulimit -Sn 10000' to avoid problems running tests"
   ulimit -Sn 10000
@@ -35,6 +32,13 @@ cargo nextest run --no-run ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${
 # in the PATH.
 # If you really need to break this rule, ping dpc
 export FM_CARGO_DENY_COMPILATION=1
+
+# default to run all tests in a 3/4 setup and 4/4 in backwards-compatibility tests
+if [ -n "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+  export FM_OFFLINE_NODES=0
+else
+  export FM_OFFLINE_NODES=1
+fi
 
 function rust_unit_tests() {
   # unit tests don't use binaries from old versions, so there's no need to run for backwards-compatibility tests
