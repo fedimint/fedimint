@@ -1067,7 +1067,7 @@
 <span class="comment">// Allow macro to be used within the crate. See https://stackoverflow.com/a/31749071.
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>cmd;
 
-<span class="kw">const </span>DEFAULT_RETRIES: usize = <span class="number">20</span>;
+<span class="kw">const </span>DEFAULT_RETRIES: usize = <span class="number">30</span>;
 <span class="doccomment">/// Will retry calling `f`.
 /// - if `f` return Ok(val), this returns with Ok(val).
 /// - if `f` return Err(Control::Break(err)), this returns Err(err)
