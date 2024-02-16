@@ -315,7 +315,7 @@ macro_rules! poll_eq {
 // Allow macro to be used within the crate. See https://stackoverflow.com/a/31749071.
 pub(crate) use cmd;
 
-const DEFAULT_RETRIES: usize = 20;
+const DEFAULT_RETRIES: usize = 30;
 /// Will retry calling `f`.
 /// - if `f` return Ok(val), this returns with Ok(val).
 /// - if `f` return Err(Control::Break(err)), this returns Err(err)
