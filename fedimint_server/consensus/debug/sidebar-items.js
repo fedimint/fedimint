@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["item_message"]};
+window.SIDEBAR_ITEMS = {"struct":["FmtDbgConsensusItem"]};

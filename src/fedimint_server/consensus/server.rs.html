@@ -797,6 +797,7 @@
 <a href="#797" id="797">797</a>
 <a href="#798" id="798">798</a>
 <a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -837,6 +838,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::spawner::Spawner;
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::{to_node_index, Keychain, Message};
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::debug::FmtDbgConsensusItem;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::process_transaction_with_dbtx;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     get_global_database_migrations, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey,
@@ -1376,7 +1378,7 @@
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;process_consensus_item&quot;</span>);
 
-        <span class="macro">debug!</span>(<span class="string">&quot;Peer {peer}: {}&quot;</span>, <span class="kw">super</span>::debug::item_message(<span class="kw-2">&amp;</span>item));
+        <span class="macro">debug!</span>(%peer, item = <span class="question-mark">?</span>FmtDbgConsensusItem(<span class="kw-2">&amp;</span>item), <span class="string">&quot;Processing consensus item&quot;</span>);
 
         <span class="self">self</span>.latest_contribution_by_peer
             .write()
