@@ -16,7 +16,11 @@ Here are the recommended steps for new developers:
 
 Small PRs fixing typos, TODOs, broken links are always welcome, but please discuss bigger changes on Discord or GitHub first.
 
+<!-- markdown-link-check-disable -->
+
 For commits, please use [imperative mood](https://stackoverflow.com/questions/3580013/should-i-use-past-or-present-tense-in-git-commit-messages/3580764#3580764).
+
+<!-- markdown-link-check-enable -->
 
 Happy hacking!
 
