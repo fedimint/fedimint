@@ -414,6 +414,7 @@ impl GatewayClientModule {
     }
 
     /// Attempt fulfill HTLC by buying preimage from the federation
+    /// This is being triggered on invoice creation for some reason
     pub async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
         debug!("Handling intercepted HTLC {htlc:?}");
         let (operation_id, client_output) = self

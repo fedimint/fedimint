@@ -374,6 +374,7 @@ pub struct RegisterPaymentHashPayload {
     pub description: String,
     pub expiry_time: Duration,
     pub payment_hash: sha256::Hash,
+    pub federation_id: FederationId,
 }
 
 #[cfg(test)]

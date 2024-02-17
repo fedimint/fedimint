@@ -753,6 +753,7 @@ impl LightningClientModule {
                 description: description.clone(),
                 expiry_time,
                 payment_hash,
+                federation_id: self.client_ctx.get_config().global.federation_id(),
             })
             .send()
             .await
@@ -1637,12 +1638,12 @@ async fn fetch_and_validate_offer(
             error_message: e.to_string(),
         })?;
 
-    if offer.amount > amount_msat {
-        return Err(IncomingSmError::ViolatedFeePolicy {
-            offer_amount: offer.amount,
-            payment_amount: amount_msat,
-        });
-    }
+    // if offer.amount > amount_msat {
+    //     return Err(IncomingSmError::ViolatedFeePolicy {
+    //         offer_amount: offer.amount,
+    //         payment_amount: amount_msat,
+    //     });
+    // }
     if offer.hash != payment_hash {
         return Err(IncomingSmError::InvalidOffer {
             offer_hash: offer.hash,
