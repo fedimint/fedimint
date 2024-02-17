@@ -22,6 +22,7 @@ anyhow = "1.0.65"
 async-stream = "0.3.5"
 async-trait = "0.1.73"
 bitcoin = "0.29.2"
+bitcoin30 = { package = "bitcoin", version = "0.30.0" }
 bitcoincore-rpc = "0.16.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions" ], default-features = false }
 cln-rpc = { workspace = true }
@@ -34,7 +35,7 @@ fedimint-rocksdb = { version = "0.3.0-alpha", path = "../fedimint-rocksdb" }
 fs-lock = "0.1.0"
 lazy_static = "1.4.0"
 ln-gateway = { version = "0.3.0-alpha", package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
-ldk-node = { package = "fedimint-ldk-node", version = "0.1.0" }
+ldk-node = "0.2.1"
 futures = "0.3"
 lightning-invoice = "0.26.0"
 tempfile = "3.4.0"
