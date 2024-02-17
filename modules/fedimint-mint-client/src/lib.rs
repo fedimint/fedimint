@@ -1507,20 +1507,20 @@ impl std::fmt::Display for InsufficientBalanceError {
 }
 
 /// Old and no longer used, will be deleted in the future
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 enum MintRestoreStates {
     #[encodable_default]
     Default { variant: u64, bytes: Vec<u8> },
 }
 
 /// Old and no longer used, will be deleted in the future
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintRestoreStateMachine {
     operation_id: OperationId,
     state: MintRestoreStates,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum MintClientStateMachines {
     Output(MintOutputStateMachine),
     Input(MintInputStateMachine),

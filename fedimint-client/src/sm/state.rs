@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::future::Future;
+use std::hash;
 use std::io::{Error, Read, Write};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -17,7 +18,16 @@ use crate::DynGlobalClientContext;
 
 /// Implementors act as state machines that can be executed
 pub trait State:
-    Debug + Clone + Eq + PartialEq + Encodable + Decodable + MaybeSend + MaybeSync + 'static
+    Debug
+    + Clone
+    + Eq
+    + PartialEq
+    + std::hash::Hash
+    + Encodable
+    + Decodable
+    + MaybeSend
+    + MaybeSync
+    + 'static
 {
     /// Additional resources made available in this module's state transitions
     type ModuleContext: Context;
@@ -55,6 +65,8 @@ pub trait IState: Debug + DynEncodable + MaybeSend + MaybeSync {
     fn clone(&self, module_instance_id: ModuleInstanceId) -> DynState;
 
     fn erased_eq_no_instance_id(&self, other: &DynState) -> bool;
+
+    fn erased_hash_no_instance_id(&self, hasher: &mut dyn std::hash::Hasher);
 }
 
 /// Something that can be a [`DynContext`] for a state machine
@@ -222,6 +234,10 @@ where
 
         self == other
     }
+
+    fn erased_hash_no_instance_id(&self, mut hasher: &mut dyn std::hash::Hasher) {
+        self.hash(&mut hasher);
+    }
 }
 
 /// A type-erased state of a state machine belonging to a module instance, see
@@ -236,6 +252,13 @@ impl std::ops::Deref for DynState {
 
     fn deref(&self) -> &<Self as std::ops::Deref>::Target {
         &*self.0
+    }
+}
+
+impl hash::Hash for DynState {
+    fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
+        self.1.hash(hasher);
+        self.0.erased_hash_no_instance_id(hasher);
     }
 }
 
@@ -423,6 +446,16 @@ where
 }
 
 impl<S> Eq for OperationState<S> where S: State {}
+
+impl<S> hash::Hash for OperationState<S>
+where
+    S: hash::Hash,
+{
+    fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
+        self.operation_id.hash(hasher);
+        self.state.hash(hasher);
+    }
+}
 
 impl<S> Clone for OperationState<S>
 where

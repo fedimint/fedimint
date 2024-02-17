@@ -48,7 +48,7 @@ use crate::GatewayState;
 ///    CancelContract -- cancel tx submission successful --> Canceled
 ///    CancelContract -- cancel tx submission unsuccessful --> Failed
 /// ```
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
 pub enum GatewayPayStates {
     PayInvoice(GatewayPayInvoice),
     CancelContract(Box<GatewayPayCancelContract>),
@@ -67,12 +67,12 @@ pub enum GatewayPayStates {
     },
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayCommon {
     pub operation_id: OperationId,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayStateMachine {
     pub common: GatewayPayCommon,
     pub state: GatewayPayStates,
@@ -118,7 +118,9 @@ impl State for GatewayPayStateMachine {
     }
 }
 
-#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+#[derive(
+    Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
+)]
 pub enum OutgoingContractError {
     #[error("Invalid OutgoingContract {contract_id}")]
     InvalidOutgoingContract { contract_id: ContractId },
@@ -138,7 +140,9 @@ pub enum OutgoingContractError {
     InvoiceExpired(u64),
 }
 
-#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+#[derive(
+    Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
+)]
 pub enum OutgoingPaymentErrorType {
     #[error("OutgoingContract does not exist {contract_id}")]
     OutgoingContractDoesNotExist { contract_id: ContractId },
@@ -152,7 +156,9 @@ pub enum OutgoingPaymentErrorType {
     InvoiceAlreadyPaid,
 }
 
-#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+#[derive(
+    Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
+)]
 pub struct OutgoingPaymentError {
     error_type: OutgoingPaymentErrorType,
     contract_id: ContractId,
@@ -165,7 +171,7 @@ impl Display for OutgoingPaymentError {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayInvoice {
     pub pay_invoice_payload: PayInvoicePayload,
 }
@@ -634,7 +640,7 @@ pub struct PaymentParameters {
     payment_data: PaymentData,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayClaimOutgoingContract {
     contract: OutgoingContractAccount,
     preimage: Preimage,
@@ -689,7 +695,7 @@ impl GatewayPayClaimOutgoingContract {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayWaitForSwapPreimage {
     contract: OutgoingContractAccount,
     federation_id: FederationId,
@@ -817,7 +823,7 @@ impl GatewayPayWaitForSwapPreimage {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayCancelContract {
     contract: OutgoingContractAccount,
     error: OutgoingPaymentError,

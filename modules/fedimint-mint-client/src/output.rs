@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::hash;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail};
@@ -47,7 +48,7 @@ const BLINDING_KEY_CHILD_ID: ChildId = ChildId(1);
 ///     Outcome -- invalid blind signatures  --> Failed
 ///     end
 /// ```
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum MintOutputStates {
     /// Issuance request was created, we are waiting for blind signatures
     Created(MintOutputStatesCreated),
@@ -64,13 +65,13 @@ pub enum MintOutputStates {
     Succeeded(MintOutputStatesSucceeded),
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOutputCommon {
     pub(crate) operation_id: OperationId,
     pub(crate) out_point: OutPoint,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOutputStateMachine {
     pub(crate) common: MintOutputCommon,
     pub(crate) state: MintOutputStates,
@@ -106,7 +107,7 @@ impl State for MintOutputStateMachine {
 }
 
 /// See [`MintOutputStates`]
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOutputStatesCreated {
     pub(crate) amount: Amount,
     pub(crate) issuance_request: NoteIssuanceRequest,
@@ -306,17 +307,17 @@ pub fn verify_blind_share(
 }
 
 /// See [`MintOutputStates`]
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOutputStatesAborted;
 
 /// See [`MintOutputStates`]
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOutputStatesFailed {
     pub error: String,
 }
 
 /// See [`MintOutputStates`]
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOutputStatesSucceeded {
     pub amount: Amount,
 }
@@ -333,6 +334,13 @@ pub struct NoteIssuanceRequest {
     blinding_key: BlindingKey,
 }
 
+impl hash::Hash for NoteIssuanceRequest {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.spend_key.hash(state);
+        // ignore `blinding_key` as it doesn't impl Hash; `spend_key` has enough
+        // entropy anyway
+    }
+}
 impl NoteIssuanceRequest {
     /// Generate a request session for a single note and returns it plus the
     /// corresponding blinded message

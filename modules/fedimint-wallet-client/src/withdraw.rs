@@ -19,7 +19,7 @@ const RETRY_DELAY: Duration = Duration::from_secs(1);
 /// graph LR
 ///     Created --> Success
 ///     Created --> Aborted
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct WithdrawStateMachine {
     pub(crate) operation_id: OperationId,
     pub(crate) state: WithdrawStates,
@@ -125,24 +125,24 @@ async fn transition_withdraw_processed(
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum WithdrawStates {
     Created(CreatedWithdrawState),
     Success(SuccessWithdrawState),
     Aborted(AbortedWithdrawState),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct CreatedWithdrawState {
     pub(crate) fm_outpoint: OutPoint,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct SuccessWithdrawState {
     pub(crate) txid: Txid,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct AbortedWithdrawState {
     pub(crate) error: String,
 }

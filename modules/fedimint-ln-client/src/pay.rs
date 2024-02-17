@@ -46,7 +46,7 @@ const RETRY_DELAY: Duration = Duration::from_secs(1);
 ///  Refund -- await transaction rejected --> Failure
 /// ```
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum LightningPayStates {
     CreatedOutgoingLnContract(LightningPayCreatedOutgoingLnContract),
     Canceled,
@@ -58,7 +58,7 @@ pub enum LightningPayStates {
     Failure(String),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct LightningPayCommon {
     pub operation_id: OperationId,
     pub federation_id: FederationId,
@@ -68,7 +68,7 @@ pub struct LightningPayCommon {
     pub invoice: lightning_invoice::Bolt11Invoice,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct LightningPayStateMachine {
     pub common: LightningPayCommon,
     pub state: LightningPayStates,
@@ -111,7 +111,7 @@ impl State for LightningPayStateMachine {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct LightningPayCreatedOutgoingLnContract {
     pub funding_txid: TransactionId,
     pub contract_id: ContractId,
@@ -243,14 +243,16 @@ impl LightningPayCreatedOutgoingLnContract {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct LightningPayFunded {
     payload: PayInvoicePayload,
     gateway: LightningGateway,
     timelock: u32,
 }
 
-#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+#[derive(
+    Error, Debug, Hash, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum GatewayPayError {
     #[error("Lightning Gateway failed to pay invoice. ErrorCode: {error_code:?} ErrorMessage: {error_message}")]
@@ -389,7 +391,7 @@ impl LightningPayFunded {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct LightningPayRefundable {
     contract_id: ContractId,
     pub block_timelock: u32,
@@ -503,7 +505,7 @@ impl LightningPayRefundable {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct LightningPayRefund {
     txid: TransactionId,
     out_points: Vec<OutPoint>,
@@ -563,7 +565,7 @@ impl LightningPayRefund {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 pub struct PayInvoicePayload {
     pub federation_id: FederationId,
     pub contract_id: ContractId,
@@ -596,7 +598,7 @@ impl PayInvoicePayload {
 
 /// Data needed to pay an invoice, may be the whole invoice or only the required
 /// parts of it.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 #[serde(rename_all = "snake_case")]
 pub enum PaymentData {
     Invoice(Bolt11Invoice),

@@ -23,7 +23,7 @@ use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
 ///     Created -- User triggered refund --> RefundU["User Refund"]
 ///     Created -- Timeout triggered refund --> RefundT["Timeout Refund"]
 /// ```
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum MintOOBStates {
     /// The e-cash has been taken out of the wallet and we are waiting for the
     /// recipient to reissue it or the user to trigger a refund.
@@ -36,25 +36,25 @@ pub enum MintOOBStates {
     TimeoutRefund(MintOOBStatesTimeoutRefund),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOOBStateMachine {
     pub(crate) operation_id: OperationId,
     pub(crate) state: MintOOBStates,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOOBStatesCreated {
     pub(crate) amount: Amount,
     pub(crate) spendable_note: SpendableNote,
     pub(crate) timeout: SystemTime,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOOBStatesUserRefund {
     pub(crate) refund_txid: TransactionId,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOOBStatesTimeoutRefund {
     pub(crate) refund_txid: TransactionId,
 }
