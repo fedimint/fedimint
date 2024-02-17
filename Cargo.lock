@@ -410,21 +410,21 @@ checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
 
 [[package]]
 name = "bdk"
-version = "0.28.2"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b15adb2017ab6437b6704a779ab8bbefe857612f5af9d84b677a1767f965e099"
+checksum = "2fc1fc1a92e0943bfbcd6eb7d32c1b2a79f2f1357eb1e2eee9d7f36d6d7ca44a"
 dependencies = [
  "ahash 0.7.7",
  "async-trait",
  "bdk-macros",
  "bip39",
- "bitcoin 0.29.2",
- "esplora-client 0.4.0",
+ "bitcoin 0.30.2",
+ "esplora-client 0.6.0",
  "futures",
  "getrandom",
  "js-sys",
  "log",
- "miniscript 9.0.2",
+ "miniscript 10.0.0",
  "rand",
  "rusqlite",
  "serde",
@@ -479,7 +479,7 @@ dependencies = [
  "lazy_static",
  "lazycell",
  "peeking_take_while",
- "prettyplease",
+ "prettyplease 0.2.15",
  "proc-macro2",
  "quote",
  "regex",
@@ -513,7 +513,6 @@ version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0694ea59225b0c5f3cb405ff3f670e4828358ed26aec49dc352f730f0cb1a8a3"
 dependencies = [
- "base64 0.13.1",
  "bech32",
  "bitcoin_hashes 0.11.0",
  "core2",
@@ -528,6 +527,7 @@ version = "0.30.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1945a5048598e4189e239d3f809b19bdad4845c4b2ba400d304d2dcf26d2c462"
 dependencies = [
+ "base64 0.13.1",
  "bech32",
  "bitcoin-private",
  "bitcoin_hashes 0.12.0",
@@ -535,6 +535,12 @@ dependencies = [
  "secp256k1 0.27.0",
  "serde",
 ]
+
+[[package]]
+name = "bitcoin-internals"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f9997f8650dd818369931b5672a18dbef95324d0513aa99aae758de8ce86e5b"
 
 [[package]]
 name = "bitcoin-private"
@@ -754,7 +760,6 @@ dependencies = [
  "android-tzdata",
  "iana-time-zone",
  "num-traits",
- "serde",
  "windows-targets 0.48.5",
 ]
 
@@ -1183,9 +1188,9 @@ dependencies = [
 
 [[package]]
 name = "esplora-client"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "847e59bd6ee1c3f2bdf217118ee3640b97a1b1d8becb55771e67e533b87da66f"
+checksum = "d3e11244e7fd8b0beee0a3c62137c4bd9f756fe2c492ccf93171f81467b59200"
 dependencies = [
  "bitcoin 0.29.2",
  "log",
@@ -1195,11 +1200,12 @@ dependencies = [
 
 [[package]]
 name = "esplora-client"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3e11244e7fd8b0beee0a3c62137c4bd9f756fe2c492ccf93171f81467b59200"
+checksum = "0cb1f7f2489cce83bc3bd92784f9ba5271eeb6e729b975895fc541f78cbfcdca"
 dependencies = [
- "bitcoin 0.29.2",
+ "bitcoin 0.30.2",
+ "bitcoin-internals",
  "log",
  "reqwest",
  "serde",
@@ -1634,33 +1640,6 @@ name = "fedimint-hkdf"
 version = "0.3.0-alpha"
 dependencies = [
  "bitcoin_hashes 0.11.0",
-]
-
-[[package]]
-name = "fedimint-ldk-node"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d38e0d2f0981cd917809d627416de48232499319863c8d032ac0a56cf204edfb"
-dependencies = [
- "bdk",
- "bip39",
- "bitcoin 0.29.2",
- "chrono",
- "esplora-client 0.4.0",
- "futures",
- "libc",
- "lightning 0.0.115",
- "lightning-background-processor",
- "lightning-invoice 0.23.0",
- "lightning-net-tokio",
- "lightning-persister",
- "lightning-rapid-gossip-sync",
- "lightning-transaction-sync",
- "rand",
- "reqwest",
- "rusqlite",
- "serde_json",
- "tokio",
 ]
 
 [[package]]
@@ -2153,13 +2132,13 @@ dependencies = [
  "async-stream",
  "async-trait",
  "bitcoin 0.29.2",
+ "bitcoin 0.30.2",
  "bitcoincore-rpc",
  "clap",
  "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-cln-rpc",
  "fedimint-core",
- "fedimint-ldk-node",
  "fedimint-ln-gateway",
  "fedimint-logging",
  "fedimint-portalloc",
@@ -2169,6 +2148,7 @@ dependencies = [
  "fs-lock",
  "futures",
  "lazy_static",
+ "ldk-node",
  "lightning-invoice 0.26.0",
  "rand",
  "secp256k1 0.24.3",
@@ -2444,6 +2424,21 @@ name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
+
+[[package]]
+name = "foreign-types"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6f339eb8adc052cd2ca78910fda869aefa38d22d5cb648e6485e4d3fc06f3b1"
+dependencies = [
+ "foreign-types-shared",
+]
+
+[[package]]
+name = "foreign-types-shared"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
 name = "form_urlencoded"
@@ -2815,6 +2810,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex-conservative"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30ed443af458ccb6d81c1e7e661545f94d3176752fb1df2f543b902a1e0f51e2"
+
+[[package]]
 name = "hex_fmt"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2929,6 +2930,19 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-io-timeout",
+]
+
+[[package]]
+name = "hyper-tls"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
+dependencies = [
+ "bytes",
+ "hyper",
+ "native-tls",
+ "tokio",
+ "tokio-native-tls",
 ]
 
 [[package]]
@@ -3351,6 +3365,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
+name = "ldk-node"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6b8ca6c5ea2c691a7a4ba0183120fa81e45ba79448ba7c3826fe2cdca4accb0"
+dependencies = [
+ "bdk",
+ "bip39",
+ "bitcoin 0.30.2",
+ "chrono",
+ "esplora-client 0.6.0",
+ "futures",
+ "libc",
+ "lightning 0.0.121",
+ "lightning-background-processor",
+ "lightning-invoice 0.29.0",
+ "lightning-net-tokio",
+ "lightning-persister",
+ "lightning-rapid-gossip-sync",
+ "lightning-transaction-sync",
+ "prost 0.11.9",
+ "rand",
+ "reqwest",
+ "rusqlite",
+ "tokio",
+ "vss-client",
+ "winapi",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.150"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3417,15 +3460,6 @@ dependencies = [
 
 [[package]]
 name = "lightning"
-version = "0.0.115"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e009e1c0c21f66378b491bb40f548682138c63e09db6f3a05af59f8804bb9f4a"
-dependencies = [
- "bitcoin 0.29.2",
-]
-
-[[package]]
-name = "lightning"
 version = "0.0.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d52cec5fa9382154fe9671e8df93095b800c7d77abc66e2a5ef839d672521c5e"
@@ -3436,28 +3470,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightning-background-processor"
-version = "0.0.115"
+name = "lightning"
+version = "0.0.121"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "721b05b9848a09d5b943915449b5ffb31e24708007763640cf9d79b124a17e19"
+checksum = "5b0c1f811ae288f86c6767055c55b5f7a721ca1e61bf1897a9ae2ec663e8aba1"
 dependencies = [
- "bitcoin 0.29.2",
- "lightning 0.0.115",
- "lightning-rapid-gossip-sync",
+ "bitcoin 0.30.2",
+ "hex-conservative",
 ]
 
 [[package]]
-name = "lightning-invoice"
-version = "0.23.0"
+name = "lightning-background-processor"
+version = "0.0.121"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4e44b0e2822c8811470137d2339fdfe67a699b3248bb1606d1d02eb6a1e9f0a"
+checksum = "57d4711ad9cc33f30c2e8e876fcfd6255523fc250440abb8c374cd98e6c40e79"
 dependencies = [
- "bech32",
- "bitcoin 0.29.2",
- "bitcoin_hashes 0.11.0",
- "lightning 0.0.115",
- "num-traits",
- "secp256k1 0.24.3",
+ "bitcoin 0.30.2",
+ "lightning 0.0.121",
+ "lightning-rapid-gossip-sync",
 ]
 
 [[package]]
@@ -3476,50 +3506,61 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightning-net-tokio"
-version = "0.0.115"
+name = "lightning-invoice"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4561ec5d4df2dd410a8b80955791fcfb007ef9210395db6e914b9527397b868c"
+checksum = "5b186aca4a605d4db3b85979922be287b9ebd5dedd8132963bb9dbeb8f7d2a04"
 dependencies = [
- "bitcoin 0.29.2",
- "lightning 0.0.115",
+ "bech32",
+ "bitcoin 0.30.2",
+ "lightning 0.0.121",
+ "num-traits",
+ "secp256k1 0.27.0",
+]
+
+[[package]]
+name = "lightning-net-tokio"
+version = "0.0.121"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4813cca14ed984924a6975895e80cde8673a0a105a1c7ddf3b0fb3d1ce59e6bf"
+dependencies = [
+ "bitcoin 0.30.2",
+ "lightning 0.0.121",
  "tokio",
 ]
 
 [[package]]
 name = "lightning-persister"
-version = "0.0.115"
+version = "0.0.121"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c52ed57ec33fb945f464b7e91b5df49f49fec649e1b44909f3ce517e96b0449a"
+checksum = "a82a633e4d08b75e16dc131af2961254b7005c30ab29577e215080d2943c0511"
 dependencies = [
- "bitcoin 0.29.2",
- "libc",
- "lightning 0.0.115",
- "winapi",
+ "bitcoin 0.30.2",
+ "lightning 0.0.121",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
 name = "lightning-rapid-gossip-sync"
-version = "0.0.115"
+version = "0.0.121"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd84d74a9b3892db22a60ac11dfc12e76b257b3174db6743e818ecc24834f3be"
+checksum = "128d6c450cb698b46ecacc6645ebeb2b57d6f9458482635ab523863fa8378314"
 dependencies = [
- "bitcoin 0.29.2",
- "lightning 0.0.115",
+ "bitcoin 0.30.2",
+ "lightning 0.0.121",
 ]
 
 [[package]]
 name = "lightning-transaction-sync"
-version = "0.0.115"
+version = "0.0.121"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "173e4fc554de3fdb88dde6d4fb63fbaa01a44b466a0e4d0a07abdcfcd4869ac8"
+checksum = "b0721b05c0230f11e1c96af68304103ad07e146b13b47f7fd9a12e69cacb610d"
 dependencies = [
  "bdk-macros",
- "bitcoin 0.29.2",
- "esplora-client 0.4.0",
+ "bitcoin 0.30.2",
+ "esplora-client 0.6.0",
  "futures",
- "lightning 0.0.115",
- "reqwest",
+ "lightning 0.0.121",
 ]
 
 [[package]]
@@ -3648,7 +3689,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5b106477a0709e2da253e5559ba4ab20a272f8577f1eefff72f3a905b5d35f5"
 dependencies = [
  "bitcoin 0.29.2",
- "serde",
 ]
 
 [[package]]
@@ -3687,6 +3727,24 @@ name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+
+[[package]]
+name = "native-tls"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07226173c32f2926027b63cce4bcd8076c3552846cbe7925f3aaffeac0a3b92e"
+dependencies = [
+ "lazy_static",
+ "libc",
+ "log",
+ "openssl",
+ "openssl-probe",
+ "openssl-sys",
+ "schannel",
+ "security-framework",
+ "security-framework-sys",
+ "tempfile",
+]
 
 [[package]]
 name = "nix"
@@ -3760,6 +3818,50 @@ name = "opaque-debug"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
+
+[[package]]
+name = "openssl"
+version = "0.10.63"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15c9d69dd87a29568d4d017cfe8ec518706046a05184e5aea92d0af890b803c8"
+dependencies = [
+ "bitflags 2.4.1",
+ "cfg-if",
+ "foreign-types",
+ "libc",
+ "once_cell",
+ "openssl-macros",
+ "openssl-sys",
+]
+
+[[package]]
+name = "openssl-macros"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.39",
+]
+
+[[package]]
+name = "openssl-probe"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
+
+[[package]]
+name = "openssl-sys"
+version = "0.9.99"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22e1bf214306098e4832460f797824c05d25aacdf896f64a985fb0fd992454ae"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+ "vcpkg",
+]
 
 [[package]]
 name = "opentelemetry"
@@ -4024,6 +4126,16 @@ checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
 name = "prettyplease"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c8646e95016a7a6c4adea95bafa8a16baab64b583356217f2c85db4a39d9a86"
+dependencies = [
+ "proc-macro2",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "prettyplease"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae005bd773ab59b4725093fd7df83fd7892f7d8eafb48dbd7de6e024e4215f9d"
@@ -4112,6 +4224,28 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
+version = "0.11.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "119533552c9a7ffacc21e099c24a0ac8bb19c2a2a3f363de84cd9b844feab270"
+dependencies = [
+ "bytes",
+ "heck",
+ "itertools 0.10.5",
+ "lazy_static",
+ "log",
+ "multimap",
+ "petgraph",
+ "prettyplease 0.1.25",
+ "prost 0.11.9",
+ "prost-types 0.11.9",
+ "regex",
+ "syn 1.0.109",
+ "tempfile",
+ "which",
+]
+
+[[package]]
+name = "prost-build"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c55e02e35260070b6f716a2423c2ff1c3bb1642ddca6f99e1f26d06268a0e2d2"
@@ -4123,7 +4257,7 @@ dependencies = [
  "multimap",
  "once_cell",
  "petgraph",
- "prettyplease",
+ "prettyplease 0.2.15",
  "prost 0.12.3",
  "prost-types 0.12.3",
  "regex",
@@ -4328,10 +4462,12 @@ dependencies = [
  "http-body",
  "hyper",
  "hyper-rustls",
+ "hyper-tls",
  "ipnet",
  "js-sys",
  "log",
  "mime",
+ "native-tls",
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
@@ -4342,6 +4478,7 @@ dependencies = [
  "serde_urlencoded",
  "system-configuration",
  "tokio",
+ "tokio-native-tls",
  "tokio-rustls 0.24.1",
  "tokio-socks",
  "tower-service",
@@ -4527,6 +4664,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ad4cc8da4ef723ed60bced201181d83791ad433213d8c24efffda1eec85d741"
 
 [[package]]
+name = "schannel"
+version = "0.1.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbc91545643bcf3a0bbb6569265615222618bdf33ce4ffbbd13c4bbd4c093534"
+dependencies = [
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "scoped-tls"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4567,6 +4713,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25996b82292a7a57ed3508f052cfff8640d38d32018784acd714758b43da9c8f"
 dependencies = [
  "bitcoin_hashes 0.12.0",
+ "rand",
  "secp256k1-sys 0.8.1",
  "serde",
 ]
@@ -4609,6 +4756,29 @@ checksum = "64e7a2beac087c1da2d21018a3b7f043fe2f138654ad9c1518d409061a4a0034"
 dependencies = [
  "cc",
  "secp256k1-sys 0.6.1",
+]
+
+[[package]]
+name = "security-framework"
+version = "2.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05b64fb303737d99b81884b2c63433e9ae28abebe5eb5045dcdd175dc2ecf4de"
+dependencies = [
+ "bitflags 1.3.2",
+ "core-foundation",
+ "core-foundation-sys",
+ "libc",
+ "security-framework-sys",
+]
+
+[[package]]
+name = "security-framework-sys"
+version = "2.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e932934257d3b408ed8f30db49d85ea163bfe74961f017f405b025af298f0c7a"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
 ]
 
 [[package]]
@@ -5032,9 +5202,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.34.0"
+version = "1.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0c014766411e834f7af5b8f4cf46257aab4036ca95e9d2c144a10f59ad6f5b9"
+checksum = "61285f6515fa018fb2d1e46eb21223fff441ee8db5d0f1435e8ab4f5cdb80931"
 dependencies = [
  "backtrace",
  "bytes",
@@ -5069,6 +5239,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.39",
+]
+
+[[package]]
+name = "tokio-native-tls"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbae76ab933c85776efabc971569dd6119c580d8f5d448769dec1764bf796ef2"
+dependencies = [
+ "native-tls",
+ "tokio",
 ]
 
 [[package]]
@@ -5223,9 +5403,9 @@ version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d021fc044c18582b9a2408cd0dd05b1596e3ecdb5c4df822bb0183545683889"
 dependencies = [
- "prettyplease",
+ "prettyplease 0.2.15",
  "proc-macro2",
- "prost-build",
+ "prost-build 0.12.3",
  "quote",
  "syn 2.0.39",
 ]
@@ -5531,6 +5711,19 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
+
+[[package]]
+name = "vss-client"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3d56cb3a4c815901ee46fcaac027ab1674232eb4f136a17e3b0576a4c77ded7"
+dependencies = [
+ "prost 0.11.9",
+ "prost-build 0.11.9",
+ "rand",
+ "reqwest",
+ "tokio",
+]
 
 [[package]]
 name = "want"

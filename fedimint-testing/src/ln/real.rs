@@ -8,12 +8,17 @@ use async_trait::async_trait;
 use bitcoin::{secp256k1, Network};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::{model, ClnRpc, Request, Response};
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_public_key, bitcoin30_to_bitcoin29_address,
+    bitcoin30_to_bitcoin29_public_key,
+};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::Amount;
 use fedimint_logging::LOG_TEST;
-use ldk_node::io::SqliteStore;
-use ldk_node::{Builder, Event, LogLevel, NetAddress, Node};
+use ldk_node::io::sqlite_store::SqliteStore;
+use ldk_node::lightning::ln::msgs::SocketAddress;
+use ldk_node::{Builder, Event, LogLevel, Node};
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::gateway_lnrpc::{
     EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
@@ -390,7 +395,7 @@ enum LdkMessage {
     OpenChannelRequest {
         node_id: PublicKey,
         amount: u64,
-        connect_address: NetAddress,
+        connect_address: SocketAddress,
         response_sender: std::sync::mpsc::Sender<LdkMessage>,
     },
     MineBlocksResponse,
@@ -415,12 +420,14 @@ impl LdkLightningTest {
         bitcoin: Arc<dyn BitcoinTest>,
     ) -> Result<LdkLightningTest, LightningRpcError> {
         let mut builder = Builder::new();
-        builder.set_network(Network::Regtest);
+        builder.set_network(ldk_node::Network::Regtest);
         let unused_port = find_unused_port().expect("Could not find an unused port for LdkNode");
-        builder.set_listening_address(
-            NetAddress::from_str(format!("0.0.0.0:{unused_port}").as_str())
-                .expect("Couldnt parse listening address"),
-        );
+        builder
+            .set_listening_addresses(vec![SocketAddress::from_str(
+                format!("0.0.0.0:{unused_port}").as_str(),
+            )
+            .expect("Couldnt parse listening address")])
+            .expect("Couldnt set listening address");
         builder.set_storage_dir_path(db_path.to_string_lossy().to_string());
         let esplora_port = std::env::var("FM_PORT_ESPLORA").unwrap_or(String::from("50002"));
         builder.set_esplora_server(format!("http://127.0.0.1:{esplora_port}"));
@@ -438,7 +445,9 @@ impl LdkLightningTest {
         })?;
         let btc_amount = bitcoin::Amount::from_sat(2000000000);
         bitcoin.mine_blocks(1).await;
-        bitcoin.send_and_mine_block(&address, btc_amount).await;
+        bitcoin
+            .send_and_mine_block(&bitcoin30_to_bitcoin29_address(address), btc_amount)
+            .await;
 
         let (sender, receiver) = std::sync::mpsc::channel::<LdkMessage>();
         node.start().map_err(|e| {
@@ -468,7 +477,11 @@ impl LdkLightningTest {
         Self::spawn_ldk_event_loop(node, receiver).await;
 
         Ok(LdkLightningTest {
-            node_pub_key: pub_key,
+            node_pub_key: bitcoin30_to_bitcoin29_public_key(bitcoin30::PublicKey {
+                compressed: false,
+                inner: pub_key.into(),
+            })
+            .inner,
             alias: format!("LDKNode-{}", rand::random::<u64>()),
             ldk_node_sender: Arc::new(Mutex::new(sender)),
             listening_address: format!("127.0.0.1:{unused_port}"),
@@ -511,7 +524,11 @@ impl LdkLightningTest {
                         // channel initially
                         let amount_push = amount / 2;
                         node.connect_open_channel(
-                            node_id,
+                            bitcoin29_to_bitcoin30_public_key(bitcoin::PublicKey {
+                                compressed: false,
+                                inner: node_id.into(),
+                            })
+                            .inner,
                             connect_address.clone(),
                             amount,
                             Some(amount_push * 1000),
@@ -556,7 +573,7 @@ impl LdkLightningTest {
                         response_sender,
                     } => {
                         node.send_payment(
-                            &ldk_node::lightning_invoice::Invoice::from_str(invoice.as_str())
+                            &ldk_node::lightning_invoice::Bolt11Invoice::from_str(invoice.as_str())
                                 .expect("SendPayment could not parse invoice"),
                         )
                         .expect("Failed to send payment to invoice");
@@ -604,7 +621,7 @@ impl LdkLightningTest {
         bitcoin: Box<dyn BitcoinTest + Send + Sync>,
     ) -> anyhow::Result<()> {
         let (sender, receiver) = std::sync::mpsc::channel::<LdkMessage>();
-        let connect_address = NetAddress::from_str(address.as_str()).map_err(|e| {
+        let connect_address = SocketAddress::from_str(address.as_str()).map_err(|e| {
             LightningRpcError::FailedToOpenChannel {
                 failure_reason: format!("Failed to parse connect address: {e:?}"),
             }

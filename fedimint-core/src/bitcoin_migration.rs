@@ -8,6 +8,11 @@ pub fn bitcoin29_to_bitcoin30_public_key(pk: bitcoin::PublicKey) -> bitcoin30::P
         .expect("Failed to convert bitcoin v29 public key to bitcoin v30 public key")
 }
 
+pub fn bitcoin30_to_bitcoin29_public_key(pk: bitcoin30::PublicKey) -> bitcoin::PublicKey {
+    bitcoin::PublicKey::from_slice(&pk.to_bytes())
+        .expect("Failed to convert bitcoin v30 public key to bitcoin v29 public key")
+}
+
 pub fn bitcoin29_to_bitcoin30_network(network: bitcoin::Network) -> bitcoin30::Network {
     match network {
         bitcoin::Network::Bitcoin => bitcoin30::Network::Bitcoin,
@@ -50,11 +55,6 @@ mod tests {
     use rand::thread_rng;
 
     use super::*;
-
-    fn bitcoin30_to_bitcoin29_public_key(pk: bitcoin30::PublicKey) -> bitcoin::PublicKey {
-        bitcoin::PublicKey::from_slice(&pk.to_bytes())
-            .expect("Failed to convert bitcoin v30 public key to bitcoin v29 public key")
-    }
 
     fn bitcoin29_to_bitcoin30_script(script: bitcoin::Script) -> bitcoin30::ScriptBuf {
         bitcoin30::ScriptBuf::from_bytes(script.into_bytes())
