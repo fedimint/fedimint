@@ -414,6 +414,8 @@
 <a href="#414" id="414">414</a>
 <a href="#415" id="415">415</a>
 <a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -452,7 +454,7 @@
 ///     Funded -- await claim tx acceptance --&gt; Success
 ///     Funded -- await claim tx rejection --&gt; Canceled
 /// ```
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>LightningReceiveStates {
     SubmittedOffer(LightningReceiveSubmittedOffer),
     Canceled(LightningReceiveError),
@@ -461,7 +463,7 @@
     Success(Vec&lt;OutPoint&gt;),
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningReceiveStateMachine {
     <span class="kw">pub </span>operation_id: OperationId,
     <span class="kw">pub </span>state: LightningReceiveStates,
@@ -497,14 +499,16 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningReceiveSubmittedOffer {
     <span class="kw">pub </span>offer_txid: TransactionId,
     <span class="kw">pub </span>invoice: Bolt11Invoice,
     <span class="kw">pub </span>payment_keypair: KeyPair,
 }
 
-<span class="attr">#[derive(Error, Clone, Debug, Serialize, Deserialize, Encodable, Decodable, Eq, PartialEq)]
+<span class="attr">#[derive(
+    Error, Clone, Debug, Serialize, Deserialize, Encodable, Decodable, Eq, PartialEq, Hash,
+)]
 #[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>LightningReceiveError {
     <span class="attr">#[error(<span class="string">&quot;Offer transaction was rejected&quot;</span>)]
@@ -570,7 +574,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningReceiveConfirmedInvoice {
     invoice: Bolt11Invoice,
     keypair: KeyPair,
@@ -720,7 +724,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningReceiveFunded {
     txid: TransactionId,
     out_points: Vec&lt;OutPoint&gt;,

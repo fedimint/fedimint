@@ -249,7 +249,7 @@
 ///     Refund -- refund tx rejected --&gt; Error
 ///     Refund -- refund tx accepted --&gt; RS[Refund Success]
 /// ```
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>MintInputStates {
     Created(MintInputStateCreated),
     Refund(MintInputStateRefund),
@@ -258,14 +258,14 @@
     RefundSuccess(MintInputStateRefundSuccess),
 }
 
-<span class="attr">#[derive(Debug, Copy, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Copy, Clone, Eq, Hash, PartialEq, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintInputCommon {
     <span class="kw">pub</span>(<span class="kw">crate</span>) operation_id: OperationId,
     <span class="kw">pub</span>(<span class="kw">crate</span>) txid: TransactionId,
     <span class="kw">pub</span>(<span class="kw">crate</span>) input_idx: u64,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintInputStateMachine {
     <span class="kw">pub</span>(<span class="kw">crate</span>) common: MintInputCommon,
     <span class="kw">pub</span>(<span class="kw">crate</span>) state: MintInputStates,
@@ -299,7 +299,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintInputStateCreated {
     <span class="kw">pub</span>(<span class="kw">crate</span>) amount: Amount,
     <span class="kw">pub</span>(<span class="kw">crate</span>) spendable_note: SpendableNote,
@@ -382,7 +382,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintInputStateRefund {
     refund_txid: TransactionId,
 }
@@ -438,15 +438,15 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintInputStateSuccess {}
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintInputStateError {
     error: String,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintInputStateRefundSuccess {
     refund_txid: TransactionId,
 }

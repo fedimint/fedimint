@@ -1411,7 +1411,7 @@
     ChildId(index)
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>WalletClientStates {
     Deposit(DepositStateMachine),
     Withdraw(WithdrawStateMachine),

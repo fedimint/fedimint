@@ -167,7 +167,7 @@
 </span><span class="doccomment">/// graph LR
 ///     Created --&gt; Success
 ///     Created --&gt; Aborted
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>WithdrawStateMachine {
     <span class="kw">pub</span>(<span class="kw">crate</span>) operation_id: OperationId,
     <span class="kw">pub</span>(<span class="kw">crate</span>) state: WithdrawStates,
@@ -273,24 +273,24 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>WithdrawStates {
     Created(CreatedWithdrawState),
     Success(SuccessWithdrawState),
     Aborted(AbortedWithdrawState),
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>CreatedWithdrawState {
     <span class="kw">pub</span>(<span class="kw">crate</span>) fm_outpoint: OutPoint,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>SuccessWithdrawState {
     <span class="kw">pub</span>(<span class="kw">crate</span>) txid: Txid,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>AbortedWithdrawState {
     <span class="kw">pub</span>(<span class="kw">crate</span>) error: String,
 }

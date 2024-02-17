@@ -1351,7 +1351,7 @@
 ///
 /// This is a subset of the data from a [`lightning_invoice::Bolt11Invoice`]
 /// that does not contain the description, which increases privacy for the user.
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>PrunedInvoice {
     <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>destination: secp256k1::PublicKey,

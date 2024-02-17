@@ -374,7 +374,7 @@
 ///     AwaitingConfirmations -- &quot;Retransmit seen tx (planned)&quot; --&gt; AwaitingConfirmations
 ///     Created -- &quot;No transactions seen for [time]&quot; --&gt; Timeout[&quot;Timed out&quot;]
 /// ```
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>DepositStateMachine {
     <span class="kw">pub</span>(<span class="kw">crate</span>) operation_id: OperationId,
     <span class="kw">pub</span>(<span class="kw">crate</span>) state: DepositStates,
@@ -644,7 +644,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>DepositStates {
     Created(CreatedDepositState),
     WaitingForConfirmations(WaitingForConfirmationsDepositState),
@@ -652,13 +652,13 @@
     TimedOut(TimedOutDepositState),
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>CreatedDepositState {
     <span class="kw">pub</span>(<span class="kw">crate</span>) tweak_key: KeyPair,
     <span class="kw">pub</span>(<span class="kw">crate</span>) timeout_at: SystemTime,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>WaitingForConfirmationsDepositState {
     <span class="doccomment">/// Key pair of which the public was used to tweak the federation&#39;s wallet
     /// descriptor. The secret key is later used to sign the fedimint claim
@@ -671,13 +671,13 @@
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) out_idx: u32,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>ClaimingDepositState {
     <span class="doccomment">/// Fedimint transaction id in which the deposit is being claimed.
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) transaction_id: TransactionId,
     <span class="kw">pub</span>(<span class="kw">crate</span>) change: Vec&lt;OutPoint&gt;,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>TimedOutDepositState {}
 </code></pre></div></section></main></body></html>

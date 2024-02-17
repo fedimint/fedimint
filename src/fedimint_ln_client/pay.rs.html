@@ -656,6 +656,8 @@
 <a href="#656" id="656">656</a>
 <a href="#657" id="657">657</a>
 <a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -704,7 +706,7 @@
 ///  Refund -- await transaction rejected --&gt; Failure
 /// ```
 </span><span class="attr">#[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>LightningPayStates {
     CreatedOutgoingLnContract(LightningPayCreatedOutgoingLnContract),
     Canceled,
@@ -716,7 +718,7 @@
     Failure(String),
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningPayCommon {
     <span class="kw">pub </span>operation_id: OperationId,
     <span class="kw">pub </span>federation_id: FederationId,
@@ -726,7 +728,7 @@
     <span class="kw">pub </span>invoice: lightning_invoice::Bolt11Invoice,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningPayStateMachine {
     <span class="kw">pub </span>common: LightningPayCommon,
     <span class="kw">pub </span>state: LightningPayStates,
@@ -769,7 +771,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningPayCreatedOutgoingLnContract {
     <span class="kw">pub </span>funding_txid: TransactionId,
     <span class="kw">pub </span>contract_id: ContractId,
@@ -901,14 +903,16 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningPayFunded {
     payload: PayInvoicePayload,
     gateway: LightningGateway,
     timelock: u32,
 }
 
-<span class="attr">#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+<span class="attr">#[derive(
+    Error, Debug, Hash, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq,
+)]
 #[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>GatewayPayError {
     <span class="attr">#[error(<span class="string">&quot;Lightning Gateway failed to pay invoice. ErrorCode: {error_code:?} ErrorMessage: {error_message}&quot;</span>)]
@@ -1047,7 +1051,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningPayRefundable {
     contract_id: ContractId,
     <span class="kw">pub </span>block_timelock: u32,
@@ -1161,7 +1165,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningPayRefund {
     txid: TransactionId,
     out_points: Vec&lt;OutPoint&gt;,
@@ -1221,7 +1225,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>PayInvoicePayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>contract_id: ContractId,
@@ -1254,7 +1258,7 @@
 
 <span class="doccomment">/// Data needed to pay an invoice, may be the whole invoice or only the required
 /// parts of it.
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 #[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>PaymentData {
     Invoice(Bolt11Invoice),

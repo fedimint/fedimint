@@ -158,7 +158,7 @@
 <span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
 <span class="doccomment">/// Tracks a transaction
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>DummyStateMachine {
     Input(Amount, TransactionId, OperationId),
     Output(Amount, TransactionId, OperationId),

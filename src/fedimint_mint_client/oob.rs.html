@@ -221,7 +221,7 @@
 ///     Created -- User triggered refund --&gt; RefundU[&quot;User Refund&quot;]
 ///     Created -- Timeout triggered refund --&gt; RefundT[&quot;Timeout Refund&quot;]
 /// ```
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>MintOOBStates {
     <span class="doccomment">/// The e-cash has been taken out of the wallet and we are waiting for the
     /// recipient to reissue it or the user to trigger a refund.
@@ -234,25 +234,25 @@
     </span>TimeoutRefund(MintOOBStatesTimeoutRefund),
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintOOBStateMachine {
     <span class="kw">pub</span>(<span class="kw">crate</span>) operation_id: OperationId,
     <span class="kw">pub</span>(<span class="kw">crate</span>) state: MintOOBStates,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintOOBStatesCreated {
     <span class="kw">pub</span>(<span class="kw">crate</span>) amount: Amount,
     <span class="kw">pub</span>(<span class="kw">crate</span>) spendable_note: SpendableNote,
     <span class="kw">pub</span>(<span class="kw">crate</span>) timeout: SystemTime,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintOOBStatesUserRefund {
     <span class="kw">pub</span>(<span class="kw">crate</span>) refund_txid: TransactionId,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintOOBStatesTimeoutRefund {
     <span class="kw">pub</span>(<span class="kw">crate</span>) refund_txid: TransactionId,
 }

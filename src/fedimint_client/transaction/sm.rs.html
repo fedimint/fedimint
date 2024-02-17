@@ -194,7 +194,7 @@
 ///     Created -- tx is accepted by consensus --&gt; Accepted
 ///     Created -- tx is rejected on submission --&gt; Rejected
 /// ```
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>TxSubmissionStates {
     <span class="doccomment">/// The transaction has been created and potentially already been submitted,
     /// but no rejection or acceptance happened so far

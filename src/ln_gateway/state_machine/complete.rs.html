@@ -268,7 +268,7 @@
 ///    CompleteHtlc -- successfully completed or canceled htlc --&gt; HtlcFinished
 ///    CompleteHtlc -- failed to finish htlc --&gt; Failure
 /// ```
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>GatewayCompleteStates {
     WaitForPreimage(WaitForPreimageState),
     CompleteHtlc(CompleteHtlcState),
@@ -276,14 +276,14 @@
     Failure,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>GatewayCompleteCommon {
     <span class="kw">pub </span>operation_id: OperationId,
     <span class="kw">pub </span>incoming_chan_id: u64,
     <span class="kw">pub </span>htlc_id: u64,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>GatewayCompleteStateMachine {
     <span class="kw">pub </span>common: GatewayCompleteCommon,
     <span class="kw">pub </span>state: GatewayCompleteStates,
@@ -313,7 +313,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>WaitForPreimageState;
 
 <span class="kw">impl </span>WaitForPreimageState {
@@ -378,13 +378,13 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>HtlcOutcome {
     Success(Preimage),
     Failure(String),
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>CompleteHtlcState {
     outcome: HtlcOutcome,
 }

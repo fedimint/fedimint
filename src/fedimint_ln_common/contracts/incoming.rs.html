@@ -241,7 +241,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>IncomingContractAccount {
     <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>contract: IncomingContract,

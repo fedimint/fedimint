@@ -3376,20 +3376,20 @@
 }
 
 <span class="doccomment">/// Old and no longer used, will be deleted in the future
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">enum </span>MintRestoreStates {
     <span class="attr">#[encodable_default]
     </span>Default { variant: u64, bytes: Vec&lt;u8&gt; },
 }
 
 <span class="doccomment">/// Old and no longer used, will be deleted in the future
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintRestoreStateMachine {
     operation_id: OperationId,
     state: MintRestoreStates,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>MintClientStateMachines {
     Output(MintOutputStateMachine),
     Input(MintInputStateMachine),

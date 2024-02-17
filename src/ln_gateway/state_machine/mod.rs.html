@@ -1357,7 +1357,7 @@
 }
 
 <span class="attr">#[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>GatewayClientStateMachines {
     Pay(GatewayPayStateMachine),
     Receive(IncomingStateMachine),
