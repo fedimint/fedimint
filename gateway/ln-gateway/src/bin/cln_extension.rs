@@ -38,10 +38,10 @@ use tracing::{debug, error, info, warn};
 const MAX_HTLC_PROCESSING_DURATION: Duration = Duration::MAX;
 
 #[derive(Parser)]
-pub struct ClnExtensionOpts {
+struct ClnExtensionOpts {
     /// Gateway CLN extension service listen address
     #[arg(long = "fm-gateway-listen", env = FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV)]
-    pub fm_gateway_listen: SocketAddr,
+    fm_gateway_listen: SocketAddr,
 }
 
 #[tokio::main]
@@ -76,43 +76,41 @@ async fn main() -> Result<(), anyhow::Error> {
 // TODO: upstream these structs to cln-plugin
 // See: https://github.com/ElementsProject/lightning/blob/master/doc/PLUGINS.md#htlc_accepted
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct Htlc {
-    pub amount_msat: Amount,
+struct Htlc {
+    amount_msat: Amount,
     // TODO: use these to validate we can actually redeem the HTLC in time
-    pub cltv_expiry: u32,
-    pub cltv_expiry_relative: u32,
-    pub payment_hash: bitcoin_hashes::sha256::Hash,
+    cltv_expiry: u32,
+    cltv_expiry_relative: u32,
+    payment_hash: bitcoin_hashes::sha256::Hash,
     // The short channel id of the incoming channel
-    pub short_channel_id: String,
+    short_channel_id: String,
     // The ID of the HTLC
-    pub id: u64,
+    id: u64,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct Onion {
+struct Onion {
     #[serde(default)]
-    pub short_channel_id: Option<String>,
-    pub forward_msat: Amount,
+    short_channel_id: Option<String>,
+    forward_msat: Amount,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct HtlcAccepted {
-    pub htlc: Htlc,
-    pub onion: Onion,
+struct HtlcAccepted {
+    htlc: Htlc,
+    onion: Onion,
 }
-
-pub struct ClnRpcClient {}
 
 #[allow(dead_code)]
-pub struct ClnRpcService {
+struct ClnRpcService {
     socket: PathBuf,
     interceptor: Arc<ClnHtlcInterceptor>,
     task_group: TaskGroup,
 }
 
 impl ClnRpcService {
-    pub async fn new(
-    ) -> Result<(Self, SocketAddr, Plugin<Arc<ClnHtlcInterceptor>>), ClnExtensionError> {
+    async fn new() -> Result<(Self, SocketAddr, Plugin<Arc<ClnHtlcInterceptor>>), ClnExtensionError>
+    {
         let interceptor = Arc::new(ClnHtlcInterceptor::new());
 
         if let Some(plugin) = Builder::new(stdin(), stdout())
@@ -195,7 +193,7 @@ impl ClnRpcService {
         })
     }
 
-    pub async fn info(&self) -> Result<(PublicKey, String, String), ClnExtensionError> {
+    async fn info(&self) -> Result<(PublicKey, String, String), ClnExtensionError> {
         self.rpc_client()
             .await?
             .call(cln_rpc::Request::Getinfo(
@@ -500,7 +498,7 @@ impl GatewayLightning for ClnRpcService {
 }
 
 #[derive(Debug, Error)]
-pub enum ClnExtensionError {
+enum ClnExtensionError {
     #[error("Gateway CLN Extension Error : {0:?}")]
     Error(#[from] anyhow::Error),
     #[error("Gateway CLN Extension Error : {0:?}")]
@@ -535,8 +533,8 @@ type HtlcOutcomeSender = oneshot::Sender<serde_json::Value>;
 /// Functional structure to filter intercepted HTLCs into subscription streams.
 /// Used as a CLN plugin
 #[derive(Clone)]
-pub struct ClnHtlcInterceptor {
-    pub outcomes: Arc<Mutex<BTreeMap<(u64, u64), HtlcOutcomeSender>>>,
+struct ClnHtlcInterceptor {
+    outcomes: Arc<Mutex<BTreeMap<(u64, u64), HtlcOutcomeSender>>>,
     sender: Arc<Mutex<Option<HtlcInterceptionSender>>>,
 }
 

@@ -1,4 +1,4 @@
-pub mod complete;
+mod complete;
 pub mod pay;
 
 use std::sync::Arc;
@@ -39,7 +39,6 @@ use futures::StreamExt;
 use lightning_invoice::RoutingFees;
 use secp256k1::{KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use tracing::{debug, info, warn};
 
 use self::complete::GatewayCompleteStateMachine;
@@ -239,7 +238,7 @@ impl ClientModule for GatewayClientModule {
 }
 
 impl GatewayClientModule {
-    pub fn to_gateway_registration_info(
+    fn to_gateway_registration_info(
         &self,
         route_hints: Vec<RouteHint>,
         ttl: Duration,
@@ -655,11 +654,6 @@ impl State for GatewayClientStateMachines {
     }
 }
 
-#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
-pub enum ReceiveError {
-    #[error("Route htlc error")]
-    RouteHtlcError,
-}
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct Htlc {
     /// The HTLC payment hash.
@@ -695,7 +689,7 @@ impl TryFrom<InterceptHtlcRequest> for Htlc {
 }
 
 #[derive(Debug, Clone)]
-pub struct SwapParameters {
+struct SwapParameters {
     payment_hash: sha256::Hash,
     amount_msat: Amount,
 }

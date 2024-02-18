@@ -143,7 +143,7 @@ pub enum OutgoingContractError {
 #[derive(
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
 )]
-pub enum OutgoingPaymentErrorType {
+enum OutgoingPaymentErrorType {
     #[error("OutgoingContract does not exist {contract_id}")]
     OutgoingContractDoesNotExist { contract_id: ContractId },
     #[error("An error occurred while paying the lightning invoice.")]
@@ -634,7 +634,7 @@ impl GatewayPayInvoice {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
-pub struct PaymentParameters {
+struct PaymentParameters {
     max_delay: u64,
     max_send_amount: Amount,
     payment_data: PaymentData,
