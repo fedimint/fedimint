@@ -214,7 +214,6 @@ impl ServerConfig {
     }
     /// Creates a new config from the results of a trusted or distributed key
     /// setup
-    #[allow(clippy::too_many_arguments)]
     pub fn from(
         params: ConfigGenParams,
         identity: PeerId,
