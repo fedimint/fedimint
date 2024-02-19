@@ -297,6 +297,7 @@
                   pkgs.nil
                   pkgs.convco
                   pkgs.nodePackages.bash-language-server
+                  pkgs.sccache
                 ] ++ lib.optionals (!stdenv.isAarch64 && !stdenv.isDarwin) [
                   pkgs.semgrep
                 ];
@@ -330,6 +331,8 @@
                   if [ -z "$(git config --global merge.ours.driver)" ]; then
                       >&2 echo "⚠️  Recommended to run 'git config --global merge.ours.driver true' to enable better lock file handling. See https://blog.aspect.dev/easier-merges-on-lockfiles for more info"
                   fi
+
+                  export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache
                 '';
               };
             in
