@@ -32,6 +32,7 @@ use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
 use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
+use fedimint_core::time::now;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
 };
@@ -908,7 +909,8 @@ impl LightningClientModule {
             .get_value(&MetaOverridesKey {})
             .await
         {
-            if cache.fetched_at.elapsed().unwrap() < META_OVERRIDE_CACHE_DURATION {
+            let elapsed = now().duration_since(cache.fetched_at).unwrap();
+            if elapsed < META_OVERRIDE_CACHE_DURATION {
                 debug!("Using cached meta overrides");
                 match serde_json::from_str(&cache.value) {
                     Ok(meta) => return Ok(meta),
