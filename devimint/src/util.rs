@@ -323,6 +323,7 @@ const DEFAULT_RETRIES: usize = 30;
 ///   `retries` times.
 pub async fn poll<Fut, R>(
     name: &str,
+    // TODO: this should be `Duration`, not number of retries --dpc
     retries: impl Into<Option<usize>>,
     f: impl Fn() -> Fut,
 ) -> Result<R>

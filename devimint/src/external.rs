@@ -327,7 +327,7 @@ impl Lnd {
             process,
         };
         // wait for lnd rpc to be active
-        poll("lnd_startup", None, || async {
+        poll("lnd_startup", 60, || async {
             this.pub_key().await.map_err(ControlFlow::Continue)
         })
         .await?;
