@@ -996,18 +996,21 @@ impl Gateway {
         &mut self,
         payload: LeaveFedPayload,
     ) -> Result<FederationInfo> {
-        let federation_info = {
-            let client = self.select_client(payload.federation_id).await?;
-            self.make_federation_info(client.value(), payload.federation_id)
-                .await
-        };
+        let client = self.select_client(payload.federation_id).await?;
+        let federation_info = self.make_federation_info(client.value(), payload.federation_id).await;
 
-        // TODO: This should optimistically try to contact the federation to remove the
-        // registration record
         let _client_joining_lock = self.client_joining_lock.lock().await;
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+
+        let keypair = dbtx.get_value(&GatewayPublicKey).await.expect("Gateway keypair does not exist");
+        client
+            .value()
+            .get_first_module::<GatewayClientModule>()
+            .remove_from_federation(keypair)
+            .await;
+
         self.remove_client(payload.federation_id, &_client_joining_lock)
             .await?;
-        let mut dbtx = self.gateway_db.begin_transaction().await;
         dbtx.remove_entry(&FederationIdKey {
             id: payload.federation_id,
         })
@@ -1483,6 +1486,21 @@ impl Gateway {
         match self.state.read().await.clone() {
             GatewayState::Running { lightning_context } => Ok(lightning_context),
             _ => Err(LightningRpcError::FailedToConnect),
+        }
+    }
+
+    /// Iterates through all of the federations the gateway is registered with
+    /// and requests to remove the registration record.
+    pub async fn leave_all_federations(&self) {
+        let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+        if let Some(keypair) = dbtx.get_value(&GatewayPublicKey).await {
+            for (_, client) in self.clients.read().await.iter() {
+                client
+                    .value()
+                    .get_first_module::<GatewayClientModule>()
+                    .remove_from_federation(keypair)
+                    .await;
+            }
         }
     }
 }

@@ -728,9 +728,13 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     })
     .await;
 
-    // Reconnect the federation and verify that the gateway has registered.
     let gateways = lightning_module.fetch_registered_gateways().await?;
+    assert!(gateways.is_empty());
+
+    // Reconnect the federation and verify that the gateway has registered.
     gateway_test.connect_fed(&fed).await;
+
+    let gateways = lightning_module.fetch_registered_gateways().await?;
     assert!(!gateways.is_empty());
     assert!(gateways
         .into_iter()

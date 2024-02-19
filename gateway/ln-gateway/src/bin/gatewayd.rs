@@ -21,11 +21,10 @@ async fn main() -> Result<(), anyhow::Error> {
     TracingSetup::default().init()?;
     let mut tg = TaskGroup::new();
     tg.install_kill_handler();
-    let shutdown_receiver = Gateway::new_with_default_modules()
-        .await?
-        .run(&mut tg)
-        .await?;
+    let gatewayd = Gateway::new_with_default_modules().await?;
+    let shutdown_receiver = gatewayd.clone().run(&mut tg).await?;
     shutdown_receiver.await;
+    gatewayd.leave_all_federations().await;
     info!("Gatewayd exiting...");
     Ok(())
 }

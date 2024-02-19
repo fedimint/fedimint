@@ -9,13 +9,15 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    DatabaseTransaction, DatabaseValue, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
     GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
-    REGISTER_GATEWAY_ENDPOINT,
+    REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -29,6 +31,7 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId,
     ServerModule,
 };
+use fedimint_ln_common::api::RemoveGatewayRequest;
 use fedimint_ln_common::config::{
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
     LightningConfigLocal, LightningConfigPrivate, LightningGenParams,
@@ -60,8 +63,9 @@ use fedimint_metrics::{
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
 use rand::rngs::OsRng;
+use secp256k1::{Message, PublicKey};
 use strum::IntoEnumIterator;
-use tracing::{debug, error, info_span, trace};
+use tracing::{debug, error, info, info_span, trace, warn};
 
 lazy_static! {
     static ref LN_INCOMING_OFFER: IntCounter = register_int_counter!(opts!(
@@ -257,7 +261,12 @@ impl ServerModuleInit for LightningInit {
         for metric in ALL_METRICS.iter() {
             metric.collect();
         }
-        Ok(Lightning::new(args.cfg().to_typed()?, &mut args.task_group().clone())?.into())
+        Ok(Lightning::new(
+            args.cfg().to_typed()?,
+            &mut args.task_group().clone(),
+            args.our_peer_id(),
+        )?
+        .into())
     }
 
     fn trusted_dealer_gen(
@@ -374,6 +383,7 @@ impl ServerModuleInit for LightningInit {
 pub struct Lightning {
     cfg: LightningConfig,
     btc_rpc: DynBitcoindRpc,
+    our_peer_id: PeerId,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -943,14 +953,39 @@ impl ServerModule for Lightning {
                     Ok(())
                 }
             },
+            api_endpoint! {
+                REMOVE_GATEWAY_CHALLENGE_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &Lightning, context, gateway_id: PublicKey| -> Option<sha256::Hash> {
+                    Ok(module.get_gateway_remove_challenge(gateway_id, &mut context.dbtx().into_nc()).await)
+                }
+            },
+            api_endpoint! {
+                REMOVE_GATEWAY_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &Lightning, context, remove_gateway_request: RemoveGatewayRequest| -> bool {
+                    match module.remove_gateway(remove_gateway_request, &mut context.dbtx().into_nc()).await {
+                        Ok(_) => Ok(true),
+                        _ => Ok(false),
+                    }
+                }
+            },
         ]
     }
 }
 
 impl Lightning {
-    fn new(cfg: LightningConfig, task_group: &mut TaskGroup) -> anyhow::Result<Self> {
+    fn new(
+        cfg: LightningConfig,
+        task_group: &mut TaskGroup,
+        our_peer_id: PeerId,
+    ) -> anyhow::Result<Self> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc, task_group.make_handle())?;
-        Ok(Lightning { cfg, btc_rpc })
+        Ok(Lightning {
+            cfg,
+            btc_rpc,
+            our_peer_id,
+        })
     }
 
     async fn block_count(&self) -> anyhow::Result<u64> {
@@ -1173,6 +1208,65 @@ impl Lightning {
             dbtx.remove_entry(&key).await;
         }
     }
+
+    /// Returns the challenge to the gateway that must be signed by the
+    /// gateway's private key in order for the gateway registration record
+    /// to be removed. The challenge is the concatenation of the gateway's
+    /// public key and the `valid_until` bytes. This ensures that the
+    /// challenges changes every time the gateway is re-registered and ensures
+    /// that the challenge is unique per-gateway.
+    async fn get_gateway_remove_challenge(
+        &self,
+        gateway_id: PublicKey,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Option<sha256::Hash> {
+        if let Some(gateway) = dbtx.get_value(&LightningGatewayKey(gateway_id)).await {
+            let mut valid_until_bytes = gateway.valid_until.to_bytes();
+            let mut challenge_bytes = gateway_id.to_bytes();
+            challenge_bytes.append(&mut valid_until_bytes);
+            Some(sha256::Hash::hash(&challenge_bytes))
+        } else {
+            None
+        }
+    }
+
+    /// Removes the gateway registration record. First the signature provided by
+    /// the gateway is verified by checking if the gateway's challenge has
+    /// been signed by the gateway's private key.
+    async fn remove_gateway(
+        &self,
+        remove_gateway_request: RemoveGatewayRequest,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> anyhow::Result<()> {
+        let gateway_id = remove_gateway_request.gateway_id;
+        let our_peer_id = self.our_peer_id;
+        let signature = remove_gateway_request.signatures.get(&our_peer_id);
+
+        if signature.is_none() {
+            warn!("No signature provided for gateway: {gateway_id}");
+            return Err(anyhow::anyhow!(
+                "No signature provided for gateway {gateway_id}"
+            ));
+        }
+
+        let signature = signature.expect("Already checked for none");
+
+        // If there is no challenge, the gateway does not exist in the database and
+        // there is nothing to do
+        if let Some(challenge) = self.get_gateway_remove_challenge(gateway_id, dbtx).await {
+            // Verify the supplied schnorr signature is valid
+            let msg = Message::from_slice(&challenge)?;
+            signature.verify(&msg, &gateway_id.x_only_public_key().0)?;
+
+            dbtx.remove_entry(&LightningGatewayKey(gateway_id)).await;
+            info!("Successfully removed gateway: {gateway_id}");
+            return Ok(());
+        }
+
+        Err(anyhow::anyhow!(
+            "Gateway {gateway_id} is not registered with peer {our_peer_id}"
+        ))
+    }
 }
 
 fn calculate_funded_contract_metrics(
@@ -1283,7 +1377,7 @@ mod tests {
     async fn encrypted_preimage_only_usable_once() {
         let (server_cfg, client_cfg) = build_configs();
         let mut tg = TaskGroup::new();
-        let server = Lightning::new(server_cfg[0].clone(), &mut tg).unwrap();
+        let server = Lightning::new(server_cfg[0].clone(), &mut tg, 0.into()).unwrap();
 
         let preimage = [42u8; 32];
         let encrypted_preimage = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt([42; 32]));
@@ -1345,7 +1439,7 @@ mod tests {
         let mut dbtx = db.begin_transaction().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42);
         let mut tg = TaskGroup::new();
-        let server = Lightning::new(server_cfg[0].clone(), &mut tg).unwrap();
+        let server = Lightning::new(server_cfg[0].clone(), &mut tg, 0.into()).unwrap();
 
         let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
         let funded_incoming_contract = FundedContract::Incoming(FundedIncomingContract {
@@ -1406,7 +1500,7 @@ mod tests {
         let mut dbtx = db.begin_transaction().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42);
         let mut tg = TaskGroup::new();
-        let server = Lightning::new(server_cfg[0].clone(), &mut tg).unwrap();
+        let server = Lightning::new(server_cfg[0].clone(), &mut tg, 0.into()).unwrap();
 
         let preimage = Preimage([42u8; 32]);
         let gateway_key = random_pub_key();

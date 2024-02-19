@@ -1,6 +1,7 @@
 pub mod complete;
 pub mod pay;
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -21,13 +22,13 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationI
 use fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion, TransactionItemAmount};
-use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
+use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId, TransactionId};
 use fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{create_incoming_contract_output, LightningClientInit};
-use fedimint_ln_common::api::LnFederationApi;
+use fedimint_ln_common::api::{LnFederationApi, RemoveGatewayRequest};
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
@@ -37,7 +38,8 @@ use fedimint_ln_common::{
 };
 use futures::StreamExt;
 use lightning_invoice::RoutingFees;
-use secp256k1::{KeyPair, Secp256k1};
+use secp256k1::schnorr::Signature;
+use secp256k1::{KeyPair, Message, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, info, warn};
@@ -359,6 +361,52 @@ impl GatewayClientModule {
         let federation_id = self.client_ctx.get_config().global.federation_id();
         self.module_api.register_gateway(&registration_info).await?;
         debug!("Successfully registered gateway {gateway_id} with federation {federation_id}");
+        Ok(())
+    }
+
+    /// Attempts to remove a gateway's registration from the federation. Since
+    /// removing gateway registrations is best effort, this does not return
+    /// an error and simply emits a warning when the registration cannot be
+    /// removed.
+    pub async fn remove_from_federation(&self, gateway_keypair: KeyPair) {
+        // Removing gateway registrations is best effort, so just emit a warning if it
+        // fails
+        if let Err(e) = self.remove_from_federation_inner(gateway_keypair).await {
+            let gateway_id = gateway_keypair.public_key();
+            let federation_id = self.client_ctx.get_config().global.federation_id();
+            warn!("Failed to remove gateway {gateway_id} from federation {federation_id}: {e:?}");
+        }
+    }
+
+    /// Retrieves the signing challenge from each federation peer. Since each
+    /// peer maintains their own list of registered gateways, the gateway
+    /// needs to provide a signature that is signed by the private key of the
+    /// gateway id to remove the registration.
+    async fn remove_from_federation_inner(&self, gateway_keypair: KeyPair) -> anyhow::Result<()> {
+        let gateway_id = gateway_keypair.public_key();
+        let challenges = self
+            .module_api
+            .get_remove_gateway_challenge(gateway_id)
+            .await?;
+
+        let mut signatures: BTreeMap<PeerId, Signature> = BTreeMap::new();
+        for (peer_id, challenge) in challenges {
+            if let Some(challenge) = challenge {
+                let msg = Message::from_slice(&challenge)?;
+                let signature = gateway_keypair.sign_schnorr(msg);
+                signatures.insert(peer_id, signature);
+            }
+        }
+
+        let remove_gateway_request = RemoveGatewayRequest {
+            gateway_id,
+            signatures,
+        };
+
+        self.module_api
+            .remove_gateway(remove_gateway_request)
+            .await?;
+
         Ok(())
     }
 
