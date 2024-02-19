@@ -750,6 +750,7 @@
 <a href="#750" id="750">750</a>
 <a href="#751" id="751">751</a>
 <a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -1075,7 +1076,8 @@
 ///   `retries` times.
 </span><span class="kw">pub async fn </span>poll&lt;Fut, R&gt;(
     name: <span class="kw-2">&amp;</span>str,
-    retries: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;usize&gt;&gt;,
+    <span class="comment">// TODO: this should be `Duration`, not number of retries --dpc
+    </span>retries: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;usize&gt;&gt;,
     f: <span class="kw">impl </span>Fn() -&gt; Fut,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt;
 <span class="kw">where

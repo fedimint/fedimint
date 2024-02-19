@@ -1039,7 +1039,7 @@
             process,
         };
         <span class="comment">// wait for lnd rpc to be active
-        </span>poll(<span class="string">&quot;lnd_startup&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+        </span>poll(<span class="string">&quot;lnd_startup&quot;</span>, <span class="number">60</span>, || <span class="kw">async </span>{
             this.pub_key().<span class="kw">await</span>.map_err(ControlFlow::Continue)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
