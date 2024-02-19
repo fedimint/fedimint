@@ -40,7 +40,6 @@ impl GatewayClientBuilder {
 }
 
 impl GatewayClientBuilder {
-    #[allow(clippy::too_many_arguments)]
     pub async fn build(
         &self,
         config: FederationConfig,

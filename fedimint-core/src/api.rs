@@ -510,7 +510,6 @@ struct GlobalFederationApiWithCache<T> {
     /// (near-)bottlenecked on fetching blocks they will naturally
     /// synchronize, or split into a handful of groups. And if they are not,
     /// no LRU here is going to help them.
-    #[allow(clippy::type_complexity)]
     await_block_lru: Arc<tokio::sync::Mutex<lru::LruCache<u64, Arc<OnceCell<SessionOutcome>>>>>,
 }
 

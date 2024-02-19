@@ -42,7 +42,6 @@ pub trait RootSecretStrategy: Debug {
     type Encoding: Clone;
 
     /// Conversion function from the external encoding to the internal one
-    #[allow(clippy::wrong_self_convention)]
     fn to_root_secret(secret: &Self::Encoding) -> DerivableSecret;
 
     /// Serialization function for the external encoding

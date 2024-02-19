@@ -321,7 +321,6 @@ async fn load_or_generate_mnemonic(db: &Database) -> Result<Mnemonic, CliError> 
 }
 
 #[derive(Subcommand, Clone)]
-#[allow(clippy::large_enum_variant)]
 enum Command {
     /// Print the latest Git commit hash this bin. was built with.
     VersionHash,
