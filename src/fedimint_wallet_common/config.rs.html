@@ -209,7 +209,6 @@
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
@@ -352,8 +351,7 @@
 }
 
 <span class="kw">impl </span>WalletConfig {
-    <span class="attr">#[allow(clippy::too_many_arguments)]
-    </span><span class="kw">pub fn </span>new(
+    <span class="kw">pub fn </span>new(
         pubkeys: BTreeMap&lt;PeerId, CompressedPublicKey&gt;,
         sk: SecretKey,
         threshold: usize,
