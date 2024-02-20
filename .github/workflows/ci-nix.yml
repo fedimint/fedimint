@@ -444,7 +444,7 @@ jobs:
           mkdir -p bins
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
-            nix bundle .#$bin -o "bins/$bin-$BUILD_ID" && sha256sum "bins/$bin-$BUILD_ID"
+            nix bundle --bundler .# .#$bin -o "bins/$bin-$BUILD_ID" && sha256sum "bins/$bin-$BUILD_ID"
           done
 
       - name: Check version ${{ matrix.build.bins }}
@@ -477,7 +477,7 @@ jobs:
         run: |
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
-            nix bundle -L --bundler github:NixOS/bundlers#toDEB --accept-flake-config -o debs/$bin .#$bin
+            nix bundle -L --bundler .#toDEB --accept-flake-config -o debs/$bin .#$bin
             # workaround: https://github.com/actions/upload-artifact/issues/92
             cp -a debs/$bin/*.deb debs/
           done
@@ -486,7 +486,7 @@ jobs:
         run: |
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
-            nix bundle -L --bundler github:NixOS/bundlers#toRPM --accept-flake-config -o rpms/$bin .#$bin
+            nix bundle -L --bundler .#toRPM --accept-flake-config -o rpms/$bin .#$bin
             # workaround: https://github.com/actions/upload-artifact/issues/92
             cp -a rpms/$bin/*.rpm rpms/
           done
