@@ -440,6 +440,27 @@
 <a href="#440" id="440">440</a>
 <a href="#441" id="441">441</a>
 <a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{cmp, ops};
 
@@ -448,8 +469,8 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::module::ModuleCommon;
-<span class="kw">use </span>fedimint_core::session_outcome::SessionOutcome;
+<span class="kw">use </span>fedimint_core::module::{ApiVersion, ModuleCommon};
+<span class="kw">use </span>fedimint_core::session_outcome::{AcceptedItem, SessionStatus};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, OutPoint};
@@ -542,9 +563,9 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;&lt;<span class="self">Self</span>::Init <span class="kw">as </span>ClientModuleInit&gt;::Module&gt;,
         _session_idx: u64,
-        session: <span class="kw-2">&amp;</span>SessionOutcome,
+        session_items: <span class="kw-2">&amp;</span>Vec&lt;AcceptedItem&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">for </span>accepted_item <span class="kw">in </span><span class="kw-2">&amp;</span>session.items {
+        <span class="kw">for </span>accepted_item <span class="kw">in </span>session_items {
             <span class="kw">if let </span>ConsensusItem::Transaction(<span class="kw-2">ref </span>transaction) = accepted_item.item {
                 <span class="self">self</span>.handle_transaction(client_ctx, transaction).<span class="kw">await</span><span class="question-mark">?</span>;
             }
@@ -687,26 +708,40 @@
         /// errors via `sender` itself.
         </span><span class="kw">fn </span>fetch_block_stream&lt;<span class="lifetime">&#39;a</span>&gt;(
             api: DynGlobalApi,
+            api_version: ApiVersion,
             decoders: ModuleDecoderRegistry,
             epoch_range: ops::Range&lt;u64&gt;,
-        ) -&gt; <span class="kw">impl </span>futures::Stream&lt;Item = (u64, SessionOutcome)&gt; + <span class="lifetime">&#39;a </span>{
+        ) -&gt; <span class="kw">impl </span>futures::Stream&lt;Item = (u64, Vec&lt;AcceptedItem&gt;)&gt; + <span class="lifetime">&#39;a </span>{
             <span class="comment">// How many request for blocks to run in parallel (streaming).
             </span><span class="kw">const </span>PARALLISM_LEVEL: usize = <span class="number">8</span>;
+            <span class="kw">const </span>VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
+                ApiVersion { major: <span class="number">0</span>, minor: <span class="number">1 </span>};
 
-            futures::stream::iter(epoch_range)
-                .map(<span class="kw">move </span>|block_idx| {
+            futures::stream::iter(epoch_range.clone())
+                .map(<span class="kw">move </span>|session_idx| {
                     <span class="kw">let </span>api = api.clone();
                     <span class="kw">let </span>decoders = decoders.clone();
                     Box::pin(<span class="kw">async move </span>{
-                        <span class="macro">info!</span>(block_idx, <span class="string">&quot;Fetching epoch&quot;</span>);
+                        <span class="macro">info!</span>(session_idx, <span class="string">&quot;Fetching epoch&quot;</span>);
 
                         <span class="kw">let </span><span class="kw-2">mut </span>retry_sleep = Duration::from_millis(<span class="number">10</span>);
                         <span class="kw">let </span>block = <span class="kw">loop </span>{
-                            <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY, block_idx, <span class="string">&quot;Awaiting signed block&quot;</span>);
-                            <span class="kw">match </span>api.await_block(block_idx, <span class="kw-2">&amp;</span>decoders).<span class="kw">await </span>{
+                            <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY, session_idx, <span class="string">&quot;Awaiting signed block&quot;</span>);
+
+                            <span class="kw">let </span>items_res = <span class="kw">if </span>api_version &lt;= VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
+                                api.await_block(session_idx, <span class="kw-2">&amp;</span>decoders).<span class="kw">await</span>.map(|s| s.items)
+                            } <span class="kw">else </span>{
+                                api.get_session_status(session_idx, <span class="kw-2">&amp;</span>decoders).<span class="kw">await</span>.map(|s| <span class="kw">match </span>s {
+                                    SessionStatus::Initial =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Federation missing session that existed when we started recovery&quot;</span>),
+                                    SessionStatus::Pending(items) =&gt; items,
+                                    SessionStatus::Complete(s) =&gt; s.items,
+                                })
+                            };
+
+                            <span class="kw">match </span>items_res {
                                 <span class="prelude-val">Ok</span>(block) =&gt; <span class="kw">break </span>block,
                                 <span class="prelude-val">Err</span>(e) =&gt; {
-                                    <span class="macro">info!</span>(e = %e, block_idx, <span class="string">&quot;Error trying to fetch signed block&quot;</span>);
+                                    <span class="macro">info!</span>(e = %e, session_idx, <span class="string">&quot;Error trying to fetch signed block&quot;</span>);
                                     <span class="comment">// We don&#39;t want PARALLISM_LEVEL tasks hammering Federation
                                     // with requests, so max sleep is significant
                                     </span><span class="kw">const </span>MAX_SLEEP: Duration = Duration::from_secs(<span class="number">120</span>);
@@ -720,7 +755,7 @@
                             }
                         };
 
-                        (block_idx, block)
+                        (session_idx, block)
                     })
                 })
                 .buffered(PARALLISM_LEVEL)
@@ -732,7 +767,7 @@
             client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;&lt;Init <span class="kw">as </span>ClientModuleInit&gt;::Module&gt;,
             common_state: <span class="kw-2">&amp;mut </span>RecoveryFromHistoryCommon,
             state: <span class="kw-2">&amp;mut </span>Recovery,
-            block_stream: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>Stream&lt;Item = (u64, SessionOutcome)&gt; + Unpin),
+            block_stream: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>Stream&lt;Item = (u64, Vec&lt;AcceptedItem&gt;)&gt; + Unpin),
         ) -&gt; anyhow::Result&lt;()&gt;
         <span class="kw">where
             </span>Init: ClientModuleInit,
@@ -761,13 +796,13 @@
             </span>);
 
             <span class="kw">for _ in </span>block_range {
-                <span class="kw">let </span><span class="prelude-val">Some</span>((session_idx, session)) = block_stream.next().<span class="kw">await else </span>{
+                <span class="kw">let </span><span class="prelude-val">Some</span>((session_idx, accepted_items)) = block_stream.next().<span class="kw">await else </span>{
                     <span class="kw">break</span>;
                 };
 
                 <span class="macro">assert_eq!</span>(common_state.next_session, session_idx);
                 state
-                    .handle_session(client_ctx, session_idx, <span class="kw-2">&amp;</span>session)
+                    .handle_session(client_ctx, session_idx, <span class="kw-2">&amp;</span>accepted_items)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
                 common_state.next_session += <span class="number">1</span>;
@@ -807,6 +842,7 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
         <span class="kw">let </span>current_session_count = client_ctx.global_api().session_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, session_count = current_session_count, <span class="string">&quot;Current session count&quot;</span>);
 
         <span class="kw">let </span>(<span class="kw-2">mut </span>state, <span class="kw-2">mut </span>common_state) =
             <span class="comment">// TODO: if load fails (e.g. module didn&#39;t migrate an existing recovery state and failed to decode it),
@@ -815,6 +851,8 @@
                 (state, common_state)
             } <span class="kw">else </span>{
                 <span class="kw">let </span>(state, start_session) = Recovery::new(<span class="self">self</span>, snapshot).<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, start_session, <span class="string">&quot;Recovery start session&quot;</span>);
                 (state,
                 RecoveryFromHistoryCommon {
                     start_session,
@@ -823,10 +861,14 @@
                 })
             };
 
+        <span class="kw">let </span>block_stream_session_range = common_state.next_session..common_state.end_session;
+        <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, range = <span class="question-mark">?</span>block_stream_session_range, <span class="string">&quot;Starting block streaming&quot;</span>);
+
         <span class="kw">let </span><span class="kw-2">mut </span>block_stream = fetch_block_stream(
             <span class="self">self</span>.api().clone(),
+            <span class="kw-2">*</span><span class="self">self</span>.api_version(),
             client_ctx.decoders(),
-            common_state.next_session..common_state.end_session,
+            block_stream_session_range,
         );
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.context();
 
