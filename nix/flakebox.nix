@@ -488,6 +488,12 @@ rec {
       bin = "gateway-cli";
     };
 
+  gateway-cln-extension = flakeboxLib.pickBinary
+    {
+      pkg = gateway-pkgs;
+      bin = "gateway-cln-extension";
+    };
+
   container =
     let
       entrypointScript =

@@ -414,7 +414,7 @@ jobs:
             bins: fedimintd,fedimint-cli,fedimint-dbtool
             deb: fedimint
           - flake-output: gateway-pkgs
-            bins: gateway-cli,gatewayd
+            bins: gateway-cli,gatewayd,gateway-cln-extension
             deb: fedimint-gateway
 
     runs-on: buildjet-4vcpu-ubuntu-2004
