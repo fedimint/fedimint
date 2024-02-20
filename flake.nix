@@ -14,6 +14,65 @@
   };
 
   outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-kitman, flake-utils, flakebox, advisory-db }:
+    let
+      overlays = [
+        (final: prev:
+          let
+            pkgs-unstable = nixpkgs-unstable.legacyPackages.${final.system};
+          in
+          {
+            cargo-udeps = pkgs-unstable.cargo-udeps;
+
+            wasm-bindgen-cli = final.rustPlatform.buildRustPackage rec {
+              pname = "wasm-bindgen-cli";
+              version = "0.2.88";
+              hash = "sha256-CpyB2poKIqP4Zfn3Gk1hA9m6EQ/ZiyO91wZViMH7Wsk=";
+              cargoHash = "sha256-0D5ABJ3jwsrFIvXSOYgOqJtV5B9JUsHZfJEKl6PO47I=";
+
+              src = final.fetchCrate {
+                inherit pname version hash;
+              };
+
+              nativeBuildInputs = [ final.pkg-config ];
+
+              buildInputs = [ final.openssl ] ++ final.lib.optionals final.stdenv.isDarwin [ final.curl final.Security ];
+
+              nativeCheckInputs = [ final.nodejs ];
+
+              # tests require it to be ran in the wasm-bindgen monorepo
+              doCheck = false;
+            };
+
+            clightning = prev.clightning.overrideAttrs (oldAttrs: {
+              configureFlags = [ "--enable-developer" "--disable-valgrind" ];
+            } // final.lib.optionalAttrs (!final.stdenv.isDarwin) {
+              NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation -w";
+            });
+
+            # Note: we are using cargo-nextest from pkgs-unstable because it has some fixes we need
+            # Note: shell script adding DYLD_FALLBACK_LIBRARY_PATH because of: https://github.com/nextest-rs/nextest/issues/962
+            cargo-nextest = final.writeShellScriptBin "cargo-nextest" "exec env DYLD_FALLBACK_LIBRARY_PATH=\"$(dirname $(${final.which}/bin/which rustc))/../lib\" ${pkgs-unstable.cargo-nextest}/bin/cargo-nextest \"$@\"";
+
+            cargo-llvm-cov = prev.rustPlatform.buildRustPackage rec {
+              pname = "cargo-llvm-cov";
+              version = "0.5.31";
+              buildInputs = [ ];
+
+              src = final.fetchCrate {
+                inherit pname version;
+                sha256 = "sha256-HjnP9H1t660PJ5eXzgAhrdDEgqdzzb+9Dbk5RGUPjaQ=";
+              };
+              doCheck = false;
+              cargoHash = "sha256-p6zpRRNX4g+jESNSwouWMjZlFhTBFJhe7LirYtFrZ1g=";
+            };
+          })
+      ];
+    in
+    {
+      overlays = {
+        fedimint = overlays;
+      };
+    } //
     flake-utils.lib.eachDefaultSystem
       (system:
         let
@@ -21,57 +80,10 @@
             inherit system;
           };
 
-          pkgs = import nixpkgs {
-            inherit system;
-            overlays = [
-              (final: prev: {
-                cargo-udeps = pkgs-unstable.cargo-udeps;
-
-                wasm-bindgen-cli = final.rustPlatform.buildRustPackage rec {
-                  pname = "wasm-bindgen-cli";
-                  version = "0.2.88";
-                  hash = "sha256-CpyB2poKIqP4Zfn3Gk1hA9m6EQ/ZiyO91wZViMH7Wsk=";
-                  cargoHash = "sha256-0D5ABJ3jwsrFIvXSOYgOqJtV5B9JUsHZfJEKl6PO47I=";
-
-                  src = final.fetchCrate {
-                    inherit pname version hash;
-                  };
-
-                  nativeBuildInputs = [ final.pkg-config ];
-
-                  buildInputs = [ final.openssl ] ++ lib.optionals stdenv.isDarwin [ final.curl final.Security ];
-
-                  nativeCheckInputs = [ final.nodejs ];
-
-                  # tests require it to be ran in the wasm-bindgen monorepo
-                  doCheck = false;
-                };
-
-                clightning = prev.clightning.overrideAttrs (oldAttrs: {
-                  configureFlags = [ "--enable-developer" "--disable-valgrind" ];
-                } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
-                  NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation -w";
-                });
-
-                # Note: we are using cargo-nextest from pkgs-unstable because it has some fixes we need
-                # Note: shell script adding DYLD_FALLBACK_LIBRARY_PATH because of: https://github.com/nextest-rs/nextest/issues/962
-                cargo-nextest = pkgs.writeShellScriptBin "cargo-nextest" "exec env DYLD_FALLBACK_LIBRARY_PATH=\"$(dirname $(${pkgs.which}/bin/which rustc))/../lib\" ${pkgs-unstable.cargo-nextest}/bin/cargo-nextest \"$@\"";
-
-                cargo-llvm-cov = prev.rustPlatform.buildRustPackage rec {
-                  pname = "cargo-llvm-cov";
-                  version = "0.5.31";
-                  buildInputs = [ ];
-
-                  src = pkgs.fetchCrate {
-                    inherit pname version;
-                    sha256 = "sha256-HjnP9H1t660PJ5eXzgAhrdDEgqdzzb+9Dbk5RGUPjaQ=";
-                  };
-                  doCheck = false;
-                  cargoHash = "sha256-p6zpRRNX4g+jESNSwouWMjZlFhTBFJhe7LirYtFrZ1g=";
-                };
-              })
-            ];
-          };
+          pkgs = import nixpkgs
+            {
+              inherit system overlays;
+            };
 
           pkgs-kitman = import nixpkgs-kitman {
             inherit system;
