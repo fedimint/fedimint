@@ -6,10 +6,13 @@ use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
 use bitcoin::hashes::hex::FromHex;
-use bitcoin::hashes::sha256::Hash;
 use bitcoin::network::constants::Network;
 use bitcoin::OutPoint;
 use clap::{ArgGroup, Parser, Subcommand};
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_hash160_hash, bitcoin29_to_bitcoin30_ripemd160_hash,
+    bitcoin29_to_bitcoin30_sha256_hash,
+};
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -392,6 +395,10 @@ impl MiniscriptKey for Key {
         false
     }
 
+    fn num_der_paths(&self) -> usize {
+        0
+    }
+
     type Sha256 = bitcoin::hashes::sha256::Hash;
     type Hash256 = miniscript::hash256::Hash;
     type Ripemd160 = bitcoin::hashes::ripemd160::Hash;
@@ -399,24 +406,30 @@ impl MiniscriptKey for Key {
 }
 
 impl ToPublicKey for Key {
-    fn to_public_key(&self) -> bitcoin::PublicKey {
+    fn to_public_key(&self) -> miniscript::bitcoin::PublicKey {
         self.to_compressed_public_key().to_public_key()
     }
 
-    fn to_sha256(hash: &<Self as MiniscriptKey>::Sha256) -> Hash {
-        *hash
+    fn to_sha256(
+        hash: &<Self as MiniscriptKey>::Sha256,
+    ) -> miniscript::bitcoin::hashes::sha256::Hash {
+        bitcoin29_to_bitcoin30_sha256_hash(*hash)
     }
 
     fn to_hash256(hash: &<Self as MiniscriptKey>::Hash256) -> miniscript::hash256::Hash {
         *hash
     }
 
-    fn to_ripemd160(hash: &<Self as MiniscriptKey>::Ripemd160) -> bitcoin::hashes::ripemd160::Hash {
-        *hash
+    fn to_ripemd160(
+        hash: &<Self as MiniscriptKey>::Ripemd160,
+    ) -> miniscript::bitcoin::hashes::ripemd160::Hash {
+        bitcoin29_to_bitcoin30_ripemd160_hash(*hash)
     }
 
-    fn to_hash160(hash: &<Self as MiniscriptKey>::Hash160) -> bitcoin::hashes::hash160::Hash {
-        *hash
+    fn to_hash160(
+        hash: &<Self as MiniscriptKey>::Hash160,
+    ) -> miniscript::bitcoin::hashes::hash160::Hash {
+        bitcoin29_to_bitcoin30_hash160_hash(*hash)
     }
 }
 

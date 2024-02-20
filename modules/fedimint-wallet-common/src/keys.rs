@@ -1,10 +1,11 @@
 use std::io::{Error, Write};
 use std::str::FromStr;
 
-use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::secp256k1::{Secp256k1, Verification};
 use bitcoin::PublicKey;
+use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_public_key;
 use fedimint_core::encoding::{Decodable, Encodable};
+use miniscript::bitcoin::hashes::{hash160, ripemd160, sha256};
 use miniscript::{hash256, MiniscriptKey, ToPublicKey};
 use secp256k1::Signing;
 use serde::{Deserialize, Serialize};
@@ -35,18 +36,22 @@ impl MiniscriptKey for CompressedPublicKey {
         false
     }
 
-    type Sha256 = bitcoin::hashes::sha256::Hash;
+    fn num_der_paths(&self) -> usize {
+        0
+    }
+
+    type Sha256 = miniscript::bitcoin::hashes::sha256::Hash;
     type Hash256 = miniscript::hash256::Hash;
-    type Ripemd160 = bitcoin::hashes::ripemd160::Hash;
-    type Hash160 = bitcoin::hashes::hash160::Hash;
+    type Ripemd160 = miniscript::bitcoin::hashes::ripemd160::Hash;
+    type Hash160 = miniscript::bitcoin::hashes::hash160::Hash;
 }
 
 impl ToPublicKey for CompressedPublicKey {
-    fn to_public_key(&self) -> PublicKey {
-        PublicKey {
+    fn to_public_key(&self) -> miniscript::bitcoin::PublicKey {
+        bitcoin29_to_bitcoin30_public_key(PublicKey {
             compressed: true,
             inner: self.key,
-        }
+        })
     }
 
     fn to_sha256(hash: &<Self as MiniscriptKey>::Sha256) -> sha256::Hash {
