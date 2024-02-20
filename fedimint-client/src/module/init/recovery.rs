@@ -6,8 +6,8 @@ use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::ModuleCommon;
-use fedimint_core::session_outcome::SessionOutcome;
+use fedimint_core::module::{ApiVersion, ModuleCommon};
+use fedimint_core::session_outcome::{AcceptedItem, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::{apply, async_trait_maybe_send, OutPoint};
@@ -100,9 +100,9 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
         &mut self,
         client_ctx: &ClientContext<<Self::Init as ClientModuleInit>::Module>,
         _session_idx: u64,
-        session: &SessionOutcome,
+        session_items: &Vec<AcceptedItem>,
     ) -> anyhow::Result<()> {
-        for accepted_item in &session.items {
+        for accepted_item in session_items {
             if let ConsensusItem::Transaction(ref transaction) = accepted_item.item {
                 self.handle_transaction(client_ctx, transaction).await?;
             }
@@ -245,26 +245,40 @@ where
         /// errors via `sender` itself.
         fn fetch_block_stream<'a>(
             api: DynGlobalApi,
+            api_version: ApiVersion,
             decoders: ModuleDecoderRegistry,
             epoch_range: ops::Range<u64>,
-        ) -> impl futures::Stream<Item = (u64, SessionOutcome)> + 'a {
+        ) -> impl futures::Stream<Item = (u64, Vec<AcceptedItem>)> + 'a {
             // How many request for blocks to run in parallel (streaming).
             const PARALLISM_LEVEL: usize = 8;
+            const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
+                ApiVersion { major: 0, minor: 1 };
 
-            futures::stream::iter(epoch_range)
-                .map(move |block_idx| {
+            futures::stream::iter(epoch_range.clone())
+                .map(move |session_idx| {
                     let api = api.clone();
                     let decoders = decoders.clone();
                     Box::pin(async move {
-                        info!(block_idx, "Fetching epoch");
+                        info!(session_idx, "Fetching epoch");
 
                         let mut retry_sleep = Duration::from_millis(10);
                         let block = loop {
-                            info!(target: LOG_CLIENT_RECOVERY, block_idx, "Awaiting signed block");
-                            match api.await_block(block_idx, &decoders).await {
+                            info!(target: LOG_CLIENT_RECOVERY, session_idx, "Awaiting signed block");
+
+                            let items_res = if api_version <= VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
+                                api.await_block(session_idx, &decoders).await.map(|s| s.items)
+                            } else {
+                                api.get_session_status(session_idx, &decoders).await.map(|s| match s {
+                                    SessionStatus::Initial => panic!("Federation missing session that existed when we started recovery"),
+                                    SessionStatus::Pending(items) => items,
+                                    SessionStatus::Complete(s) => s.items,
+                                })
+                            };
+
+                            match items_res {
                                 Ok(block) => break block,
                                 Err(e) => {
-                                    info!(e = %e, block_idx, "Error trying to fetch signed block");
+                                    info!(e = %e, session_idx, "Error trying to fetch signed block");
                                     // We don't want PARALLISM_LEVEL tasks hammering Federation
                                     // with requests, so max sleep is significant
                                     const MAX_SLEEP: Duration = Duration::from_secs(120);
@@ -278,7 +292,7 @@ where
                             }
                         };
 
-                        (block_idx, block)
+                        (session_idx, block)
                     })
                 })
                 .buffered(PARALLISM_LEVEL)
@@ -290,7 +304,7 @@ where
             client_ctx: &ClientContext<<Init as ClientModuleInit>::Module>,
             common_state: &mut RecoveryFromHistoryCommon,
             state: &mut Recovery,
-            block_stream: &mut (impl Stream<Item = (u64, SessionOutcome)> + Unpin),
+            block_stream: &mut (impl Stream<Item = (u64, Vec<AcceptedItem>)> + Unpin),
         ) -> anyhow::Result<()>
         where
             Init: ClientModuleInit,
@@ -319,13 +333,13 @@ where
             );
 
             for _ in block_range {
-                let Some((session_idx, session)) = block_stream.next().await else {
+                let Some((session_idx, accepted_items)) = block_stream.next().await else {
                     break;
                 };
 
                 assert_eq!(common_state.next_session, session_idx);
                 state
-                    .handle_session(client_ctx, session_idx, &session)
+                    .handle_session(client_ctx, session_idx, &accepted_items)
                     .await?;
 
                 common_state.next_session += 1;
@@ -365,6 +379,7 @@ where
             return Ok(());
         }
         let current_session_count = client_ctx.global_api().session_count().await?;
+        debug!(target: LOG_CLIENT_RECOVERY, session_count = current_session_count, "Current session count");
 
         let (mut state, mut common_state) =
             // TODO: if load fails (e.g. module didn't migrate an existing recovery state and failed to decode it),
@@ -373,6 +388,8 @@ where
                 (state, common_state)
             } else {
                 let (state, start_session) = Recovery::new(self, snapshot).await?;
+
+                debug!(target: LOG_CLIENT_RECOVERY, start_session, "Recovery start session");
                 (state,
                 RecoveryFromHistoryCommon {
                     start_session,
@@ -381,10 +398,14 @@ where
                 })
             };
 
+        let block_stream_session_range = common_state.next_session..common_state.end_session;
+        debug!(target: LOG_CLIENT_RECOVERY, range = ?block_stream_session_range, "Starting block streaming");
+
         let mut block_stream = fetch_block_stream(
             self.api().clone(),
+            *self.api_version(),
             client_ctx.decoders(),
-            common_state.next_session..common_state.end_session,
+            block_stream_session_range,
         );
         let client_ctx = self.context();
 
