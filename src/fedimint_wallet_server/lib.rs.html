@@ -1709,6 +1709,8 @@
 <a href="#1709" id="1709">1709</a>
 <a href="#1710" id="1710">1710</a>
 <a href="#1711" id="1711">1711</a>
+<a href="#1712" id="1712">1712</a>
+<a href="#1713" id="1713">1713</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -1736,6 +1738,7 @@
     WalletOutputOutcome, CONFIRMATION_TARGET,
 };
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_script;
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -1776,8 +1779,8 @@
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
 <span class="kw">use </span>fedimint_wallet_common::{Rbf, WalletInputError, WalletOutputError, WalletOutputV0};
 <span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>miniscript::psbt::PsbtExt;
 <span class="kw">use </span>miniscript::{translate_hash_fail, Descriptor, TranslatePk};
+<span class="kw">use </span>miniscript9::psbt::PsbtExt;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>secp256k1::{Message, Scalar};
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -2782,12 +2785,13 @@
     ) {
         <span class="self">self</span>.remove_rbf_transactions(dbtx, pending_tx).<span class="kw">await</span>;
 
-        <span class="kw">let </span>script_pk = <span class="self">self
-            </span>.cfg
-            .consensus
-            .peg_in_descriptor
-            .tweak(<span class="kw-2">&amp;</span>pending_tx.tweak, <span class="kw-2">&amp;</span><span class="self">self</span>.secp)
-            .script_pubkey();
+        <span class="kw">let </span>script_pk = bitcoin30_to_bitcoin29_script(
+            <span class="self">self</span>.cfg
+                .consensus
+                .peg_in_descriptor
+                .tweak(<span class="kw-2">&amp;</span>pending_tx.tweak, <span class="kw-2">&amp;</span><span class="self">self</span>.secp)
+                .script_pubkey(),
+        );
         <span class="kw">for </span>(idx, output) <span class="kw">in </span>pending_tx.tx.output.iter().enumerate() {
             <span class="kw">if </span>output.script_pubkey == script_pk {
                 dbtx.insert_entry(
@@ -3150,17 +3154,17 @@
                         non_witness_utxo: <span class="prelude-val">None</span>,
                         witness_utxo: <span class="prelude-val">Some</span>(TxOut {
                             value: utxo.amount.to_sat(),
-                            script_pubkey,
+                            script_pubkey: bitcoin30_to_bitcoin29_script(script_pubkey),
                         }),
                         partial_sigs: Default::default(),
                         sighash_type: <span class="prelude-val">None</span>,
                         redeem_script: <span class="prelude-val">None</span>,
-                        witness_script: <span class="prelude-val">Some</span>(
+                        witness_script: <span class="prelude-val">Some</span>(bitcoin30_to_bitcoin29_script(
                             <span class="self">self</span>.descriptor
                                 .tweak(<span class="kw-2">&amp;</span>utxo.tweak, <span class="self">self</span>.secp)
                                 .script_code()
                                 .expect(<span class="string">&quot;Failed to tweak descriptor&quot;</span>),
-                        ),
+                        )),
                         bip32_derivation: Default::default(),
                         final_script_sig: <span class="prelude-val">None</span>,
                         final_script_witness: <span class="prelude-val">None</span>,
@@ -3285,7 +3289,7 @@
             })
             .expect(<span class="string">&quot;can&#39;t fail&quot;</span>);
 
-        descriptor.script_pubkey()
+        bitcoin30_to_bitcoin29_script(descriptor.script_pubkey())
     }
 }
 

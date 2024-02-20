@@ -727,6 +727,9 @@
 <a href="#727" id="727">727</a>
 <a href="#728" id="728">728</a>
 <a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">pub mod </span>client_db;
@@ -752,6 +755,9 @@
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::api::DynModuleApi;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address,
+};
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
@@ -767,7 +773,6 @@
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
 <span class="kw">pub use </span>fedimint_wallet_common::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::{Stream, StreamExt};
-<span class="kw">use </span>miniscript::ToPublicKey;
 <span class="kw">use </span>rand::{thread_rng, Rng};
 <span class="kw">use </span>secp256k1::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1026,14 +1031,15 @@
             .to_secp_key(<span class="kw-2">&amp;</span><span class="self">self</span>.secp);
 
         <span class="kw">let </span>public_tweak_key = secret_tweak_key.public_key();
-        <span class="kw">let </span>operation_id = OperationId(public_tweak_key.to_x_only_pubkey().serialize()); <span class="comment">// TODO: make hash?
+        <span class="kw">let </span>operation_id = OperationId(public_tweak_key.x_only_public_key().<span class="number">0</span>.serialize()); <span class="comment">// TODO: make hash?
 
-        </span><span class="kw">let </span>address = <span class="self">self
-            </span>.cfg
-            .peg_in_descriptor
-            .tweak(<span class="kw-2">&amp;</span>public_tweak_key, secp256k1::SECP256K1)
-            .address(<span class="self">self</span>.cfg.network)
-            .unwrap();
+        </span><span class="kw">let </span>address = bitcoin30_to_bitcoin29_address(
+            <span class="self">self</span>.cfg
+                .peg_in_descriptor
+                .tweak(<span class="kw-2">&amp;</span>public_tweak_key, secp256k1::SECP256K1)
+                .address(bitcoin29_to_bitcoin30_network(<span class="self">self</span>.cfg.network))
+                .unwrap(),
+        );
 
         <span class="kw">let </span>deposit_sm = WalletClientStates::Deposit(DepositStateMachine {
             operation_id,

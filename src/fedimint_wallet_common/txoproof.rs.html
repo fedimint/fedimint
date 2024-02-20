@@ -238,10 +238,18 @@
 <a href="#238" id="238">238</a>
 <a href="#239" id="239">239</a>
 <a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::hash::Hash;
 
 <span class="kw">use </span>bitcoin::{BlockHash, OutPoint, Transaction};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_script;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
@@ -305,9 +313,11 @@
         secp: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
         untweaked_pegin_descriptor: <span class="kw-2">&amp;</span>Descriptor&lt;CompressedPublicKey&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), PegInProofError&gt; {
-        <span class="kw">let </span>script = untweaked_pegin_descriptor
-            .tweak(<span class="kw-2">&amp;</span><span class="self">self</span>.tweak_contract_key, secp)
-            .script_pubkey();
+        <span class="kw">let </span>script = bitcoin30_to_bitcoin29_script(
+            untweaked_pegin_descriptor
+                .tweak(<span class="kw-2">&amp;</span><span class="self">self</span>.tweak_contract_key, secp)
+                .script_pubkey(),
+        );
 
         <span class="kw">let </span>txo = <span class="self">self
             </span>.transaction
@@ -370,7 +380,11 @@
                 ))
             }
 
-            <span class="macro">translate_hash_fail!</span>(CompressedPublicKey, bitcoin::PublicKey, Infallible);
+            <span class="macro">translate_hash_fail!</span>(
+                CompressedPublicKey,
+                miniscript::bitcoin::PublicKey,
+                Infallible
+            );
         }
         <span class="self">self</span>.translate_pk(<span class="kw-2">&amp;mut </span>CompressedPublicKeyTranslator { tweak, secp })
             .expect(<span class="string">&quot;can&#39;t fail&quot;</span>)

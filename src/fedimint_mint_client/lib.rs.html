@@ -1956,10 +1956,10 @@
 /// ## Invariants
 /// * Has to contain at least one `Notes` item
 /// * Has to contain at least one `FederationIdPrefix` item
-</span><span class="attr">#[derive(Clone, Debug, Encodable)]
+</span><span class="attr">#[derive(Clone, Debug, Encodable, PartialEq, Eq)]
 </span><span class="kw">pub struct </span>OOBNotes(Vec&lt;OOBNotesData&gt;);
 
-<span class="attr">#[derive(Clone, Debug, Decodable, Encodable)]
+<span class="attr">#[derive(Clone, Debug, Decodable, Encodable, PartialEq, Eq)]
 </span><span class="kw">enum </span>OOBNotesData {
     Notes(TieredMulti&lt;SpendableNote&gt;),
     FederationIdPrefix(FederationIdPrefix),

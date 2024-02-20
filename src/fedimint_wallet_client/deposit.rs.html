@@ -339,6 +339,9 @@
 <a href="#339" id="339">339</a>
 <a href="#340" id="340">340</a>
 <a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -346,6 +349,7 @@
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_script;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
@@ -442,10 +446,12 @@
     context: WalletClientContext,
     tweak: KeyPair,
 ) -&gt; (bitcoin::Transaction, u32) {
-    <span class="kw">let </span>script = context
-        .wallet_descriptor
-        .tweak(<span class="kw-2">&amp;</span>tweak.public_key(), <span class="kw-2">&amp;</span>context.secp)
-        .script_pubkey();
+    <span class="kw">let </span>script = bitcoin30_to_bitcoin29_script(
+        context
+            .wallet_descriptor
+            .tweak(<span class="kw-2">&amp;</span>tweak.public_key(), <span class="kw-2">&amp;</span>context.secp)
+            .script_pubkey(),
+    );
     <span class="kw">loop </span>{
         <span class="kw">match </span>context.rpc.watch_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break</span>,
