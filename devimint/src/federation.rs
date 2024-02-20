@@ -147,7 +147,7 @@ impl Federation {
         servers: usize,
     ) -> Result<Self> {
         let mut members = BTreeMap::new();
-        let mut vars = BTreeMap::new();
+        let mut peer_to_env_vars_map = BTreeMap::new();
 
         let peers: Vec<_> = (0..servers).map(|id| PeerId::from(id as u16)).collect();
         let params: HashMap<PeerId, ConfigGenParams> = local_config_gen_params(
@@ -158,34 +158,56 @@ impl Federation {
 
         let mut admin_clients: BTreeMap<PeerId, WsAdminClient> = BTreeMap::new();
         for (peer, peer_params) in &params {
-            let var = vars::Fedimintd::init(&process_mgr.globals, peer_params.to_owned()).await?;
+            let peer_env_vars =
+                vars::Fedimintd::init(&process_mgr.globals, peer_params.to_owned()).await?;
             members.insert(
                 peer.to_usize(),
-                Fedimintd::new(process_mgr, bitcoind.clone(), peer.to_usize(), &var).await?,
+                Fedimintd::new(
+                    process_mgr,
+                    bitcoind.clone(),
+                    peer.to_usize(),
+                    &peer_env_vars,
+                )
+                .await?,
             );
-            let admin_client = WsAdminClient::new(SafeUrl::parse(&var.FM_API_URL)?);
+            let admin_client = WsAdminClient::new(SafeUrl::parse(&peer_env_vars.FM_API_URL)?);
             admin_clients.insert(*peer, admin_client);
-            vars.insert(peer.to_usize(), var);
+            peer_to_env_vars_map.insert(peer.to_usize(), peer_env_vars);
         }
 
         run_dkg(admin_clients, params).await?;
 
-        let out_dir = &vars[&0].FM_DATA_DIR;
-        let cfg_dir = &process_mgr.globals.FM_CLIENT_DIR;
-        let out_dir = utf8(out_dir);
-        let cfg_dir = utf8(cfg_dir);
         // move configs to config directory
-        tokio::fs::rename(
-            format!("{out_dir}/invite-code"),
-            format!("{cfg_dir}/invite-code"),
+        let client_dir = utf8(&process_mgr.globals.FM_CLIENT_DIR);
+        let invite_code_filename_original = "invite-code";
+
+        // copy over invite-code file to client directory
+        let peer_data_dir = utf8(&peer_to_env_vars_map[&0].FM_DATA_DIR);
+        tokio::fs::copy(
+            format!("{peer_data_dir}/{invite_code_filename_original}"),
+            format!("{client_dir}/{invite_code_filename_original}"),
         )
         .await
-        .context("moving invite code file")?;
-        info!("moved client configs");
+        .context("copying invite-code file")?;
+
+        // move each guardian's invite-code file to the client's directory
+        // appending the peer id to the end
+        for (index, peer_env_vars) in &peer_to_env_vars_map {
+            let peer_data_dir = utf8(&peer_env_vars.FM_DATA_DIR);
+
+            let invite_code_filename_indexed = format!("{invite_code_filename_original}-{}", index);
+            tokio::fs::rename(
+                format!("{peer_data_dir}/{}", invite_code_filename_original),
+                format!("{client_dir}/{}", invite_code_filename_indexed),
+            )
+            .await
+            .context("moving invite-code file")?;
+        }
+        info!("moved invite-code files to client data directory");
 
         Ok(Self {
             members,
-            vars,
+            vars: peer_to_env_vars_map,
             bitcoind,
             client: Client::open_or_create("default").await?,
         })
@@ -200,6 +222,13 @@ impl Federation {
     pub fn invite_code(&self) -> Result<String> {
         let data_dir: PathBuf = env::var("FM_CLIENT_DIR")?.parse()?;
         let invite_code = fs::read_to_string(data_dir.join("invite-code"))?;
+        Ok(invite_code)
+    }
+
+    pub fn invite_code_for(peer_id: PeerId) -> Result<String> {
+        let data_dir: PathBuf = env::var("FM_CLIENT_DIR")?.parse()?;
+        let name = format!("invite-code-{}", peer_id);
+        let invite_code = fs::read_to_string(data_dir.join(name))?;
         Ok(invite_code)
     }
 
