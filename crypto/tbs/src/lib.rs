@@ -85,7 +85,12 @@ impl SecretKeyShare {
 impl BlindingKey {
     pub fn random() -> BlindingKey {
         // TODO: fix rand incompatibities
-        BlindingKey(Scalar::random(OsRng))
+        let scalar = Scalar::random(OsRng);
+        // make sure we don't return zero or one
+        if scalar == Scalar::zero() || scalar == Scalar::one() {
+            return BlindingKey::random();
+        }
+        BlindingKey(scalar)
     }
 }
 
