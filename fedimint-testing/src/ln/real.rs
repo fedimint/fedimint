@@ -483,7 +483,7 @@ impl LdkLightningTest {
         Ok(LdkLightningTest {
             node_pub_key: bitcoin30_to_bitcoin29_public_key(bitcoin30::PublicKey {
                 compressed: false,
-                inner: pub_key.into(),
+                inner: pub_key,
             })
             .inner,
             alias: format!("LDKNode-{}", rand::random::<u64>()),
@@ -530,7 +530,7 @@ impl LdkLightningTest {
                         node.connect_open_channel(
                             bitcoin29_to_bitcoin30_public_key(bitcoin::PublicKey {
                                 compressed: false,
-                                inner: node_id.into(),
+                                inner: node_id,
                             })
                             .inner,
                             connect_address.clone(),
