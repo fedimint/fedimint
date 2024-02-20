@@ -909,7 +909,7 @@ impl LightningClientModule {
             .get_value(&MetaOverridesKey {})
             .await
         {
-            let elapsed = now().duration_since(cache.fetched_at).unwrap();
+            let elapsed = now().duration_since(cache.fetched_at).unwrap_or_default();
             if elapsed < META_OVERRIDE_CACHE_DURATION {
                 debug!("Using cached meta overrides");
                 match serde_json::from_str(&cache.value) {
