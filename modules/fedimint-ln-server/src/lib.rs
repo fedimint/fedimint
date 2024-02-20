@@ -253,7 +253,7 @@ impl ServerModuleInit for LightningInit {
     }
 
     fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw((u32::MAX, 0), (0, 0), &[(0, 0)])
+        SupportedModuleApiVersions::from_raw((u32::MAX, 0), (0, 0), &[(0, 1)])
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
@@ -955,14 +955,14 @@ impl ServerModule for Lightning {
             },
             api_endpoint! {
                 REMOVE_GATEWAY_CHALLENGE_ENDPOINT,
-                ApiVersion::new(0, 0),
+                ApiVersion::new(0, 1),
                 async |module: &Lightning, context, gateway_id: PublicKey| -> Option<sha256::Hash> {
                     Ok(module.get_gateway_remove_challenge(gateway_id, &mut context.dbtx().into_nc()).await)
                 }
             },
             api_endpoint! {
                 REMOVE_GATEWAY_ENDPOINT,
-                ApiVersion::new(0, 0),
+                ApiVersion::new(0, 1),
                 async |module: &Lightning, context, remove_gateway_request: RemoveGatewayRequest| -> bool {
                     match module.remove_gateway(remove_gateway_request.clone(), &mut context.dbtx().into_nc()).await {
                         Ok(_) => Ok(true),
@@ -1244,32 +1244,30 @@ impl Lightning {
         let fed_public_key = self.cfg.consensus.threshold_pub_keys.public_key();
         let gateway_id = remove_gateway_request.gateway_id;
         let our_peer_id = self.our_peer_id;
-        let signature = remove_gateway_request.signatures.get(&our_peer_id);
-
-        if signature.is_none() {
-            warn!("No signature provided for gateway: {gateway_id}");
-            return Err(anyhow::anyhow!(
-                "No signature provided for gateway {gateway_id}"
-            ));
-        }
-
-        let signature = signature.expect("Already checked for none");
+        let signature = remove_gateway_request
+            .signatures
+            .get(&our_peer_id)
+            .ok_or_else(|| {
+                warn!("No signature provided for gateway: {gateway_id}");
+                anyhow::anyhow!("No signature provided for gateway {gateway_id}")
+            })?;
 
         // If there is no challenge, the gateway does not exist in the database and
         // there is nothing to do
-        if let Some(challenge) = self.get_gateway_remove_challenge(gateway_id, dbtx).await {
-            // Verify the supplied schnorr signature is valid
-            let msg = create_gateway_remove_message(fed_public_key, our_peer_id, challenge);
-            signature.verify(&msg, &gateway_id.x_only_public_key().0)?;
+        let challenge = self
+            .get_gateway_remove_challenge(gateway_id, dbtx)
+            .await
+            .ok_or(anyhow::anyhow!(
+                "Gateway {gateway_id} is not registered with peer {our_peer_id}"
+            ))?;
 
-            dbtx.remove_entry(&LightningGatewayKey(gateway_id)).await;
-            info!("Successfully removed gateway: {gateway_id}");
-            return Ok(());
-        }
+        // Verify the supplied schnorr signature is valid
+        let msg = create_gateway_remove_message(fed_public_key, our_peer_id, challenge);
+        signature.verify(&msg, &gateway_id.x_only_public_key().0)?;
 
-        Err(anyhow::anyhow!(
-            "Gateway {gateway_id} is not registered with peer {our_peer_id}"
-        ))
+        dbtx.remove_entry(&LightningGatewayKey(gateway_id)).await;
+        info!("Successfully removed gateway: {gateway_id}");
+        Ok(())
     }
 }
 
