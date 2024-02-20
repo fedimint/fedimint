@@ -18,7 +18,7 @@ use fedimint_bitcoind::{
     Result as BitcoinRpcResult,
 };
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-use fedimint_core::task::{sleep, TaskHandle};
+use fedimint_core::task::{sleep_in_test, TaskHandle};
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, Feerate};
@@ -234,7 +234,7 @@ impl BitcoinTest for FakeBitcoinTest {
 
             let tx = match maybe_tx {
                 None => {
-                    sleep(Duration::from_millis(100)).await;
+                    sleep_in_test("no transaction found", Duration::from_millis(100)).await;
                     continue;
                 }
                 Some(tx) => tx,

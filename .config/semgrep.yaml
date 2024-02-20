@@ -85,3 +85,35 @@ rules:
   message: "Wildcard imports make it unclear which items are being used. Avoid using `use ...::*;` except in sub-modules of a file such as `use super::*;` in a test module."
   pattern-regex: '^use .*::\*;$'
   severity: WARNING
+
+- id: ban-direct-sleep-in-tests
+  languages:
+    - rust
+  patterns:
+    - pattern: sleep($X)
+  paths:
+    include:
+      - fedimint-testing/
+      - fedimint-wasm-testing/
+      - fedimint-wasm-tests/
+      - fedimint-load-test-tool/
+      - modules/fedimint-dummy-tests/
+      - modules/fedimint-wallet-tests/
+      - modules/fedimint-ln-tests/
+      - modules/fedimint-mint-tests/
+      - gateway/ln-gateway/tests/
+      - fedimint-client/src/backup/tests.rs
+      - devimint/src/tests.rs
+  message: "Direct use of fedimint_core::task::sleep in tests is discouraged. Use fedimint_core::task::sleep_in_test instead."
+  severity: WARNING
+
+- id: ban-sleep-in-test-scripts
+  languages:
+     - bash
+  patterns:
+    - pattern: sleep $X
+  paths:
+    include:
+      - scripts/tests/
+  message: "Sleeping in test scripts is discouraged. Sleep in rust using fedimint_core::task::sleep_in_test instead."
+  severity: WARNING
