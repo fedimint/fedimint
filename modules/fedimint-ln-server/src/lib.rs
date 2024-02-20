@@ -51,10 +51,10 @@ use fedimint_ln_common::db::{
     OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
 };
 use fedimint_ln_common::{
-    ContractAccount, LightningCommonInit, LightningConsensusItem, LightningGatewayAnnouncement,
-    LightningGatewayRegistration, LightningInput, LightningInputError, LightningModuleTypes,
-    LightningOutput, LightningOutputError, LightningOutputOutcome, LightningOutputOutcomeV0,
-    LightningOutputV0,
+    create_gateway_remove_message, ContractAccount, LightningCommonInit, LightningConsensusItem,
+    LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
+    LightningInputError, LightningModuleTypes, LightningOutput, LightningOutputError,
+    LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0,
 };
 use fedimint_metrics::{
     histogram_opts, lazy_static, opts, prometheus, register_histogram, register_int_counter,
@@ -63,7 +63,7 @@ use fedimint_metrics::{
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
 use rand::rngs::OsRng;
-use secp256k1::{Message, PublicKey};
+use secp256k1::PublicKey;
 use strum::IntoEnumIterator;
 use tracing::{debug, error, info, info_span, trace, warn};
 
@@ -964,9 +964,12 @@ impl ServerModule for Lightning {
                 REMOVE_GATEWAY_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, remove_gateway_request: RemoveGatewayRequest| -> bool {
-                    match module.remove_gateway(remove_gateway_request, &mut context.dbtx().into_nc()).await {
+                    match module.remove_gateway(remove_gateway_request.clone(), &mut context.dbtx().into_nc()).await {
                         Ok(_) => Ok(true),
-                        _ => Ok(false),
+                        Err(e) => {
+                            warn!("Unable to remove gateway registration {remove_gateway_request:?} Error: {e:?}");
+                            Ok(false)
+                        },
                     }
                 }
             },
@@ -1238,6 +1241,7 @@ impl Lightning {
         remove_gateway_request: RemoveGatewayRequest,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> anyhow::Result<()> {
+        let fed_public_key = self.cfg.consensus.threshold_pub_keys.public_key();
         let gateway_id = remove_gateway_request.gateway_id;
         let our_peer_id = self.our_peer_id;
         let signature = remove_gateway_request.signatures.get(&our_peer_id);
@@ -1255,7 +1259,7 @@ impl Lightning {
         // there is nothing to do
         if let Some(challenge) = self.get_gateway_remove_challenge(gateway_id, dbtx).await {
             // Verify the supplied schnorr signature is valid
-            let msg = Message::from_slice(&challenge)?;
+            let msg = create_gateway_remove_message(fed_public_key, our_peer_id, challenge);
             signature.verify(&msg, &gateway_id.x_only_public_key().0)?;
 
             dbtx.remove_entry(&LightningGatewayKey(gateway_id)).await;

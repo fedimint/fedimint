@@ -33,13 +33,13 @@ use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
-    LightningClientContext, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
-    LightningModuleTypes, LightningOutput, LightningOutputV0, KIND,
+    create_gateway_remove_message, LightningClientContext, LightningCommonInit, LightningGateway,
+    LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0, KIND,
 };
 use futures::StreamExt;
 use lightning_invoice::RoutingFees;
 use secp256k1::schnorr::Signature;
-use secp256k1::{KeyPair, Message, Secp256k1};
+use secp256k1::{KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, info, warn};
@@ -389,10 +389,11 @@ impl GatewayClientModule {
             .get_remove_gateway_challenge(gateway_id)
             .await?;
 
+        let fed_public_key = self.cfg.threshold_pub_key;
         let mut signatures: BTreeMap<PeerId, Signature> = BTreeMap::new();
         for (peer_id, challenge) in challenges {
             if let Some(challenge) = challenge {
-                let msg = Message::from_slice(&challenge)?;
+                let msg = create_gateway_remove_message(fed_public_key, peer_id, challenge);
                 let signature = gateway_keypair.sign_schnorr(msg);
                 signatures.insert(peer_id, signature);
             }

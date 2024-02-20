@@ -19,7 +19,7 @@ use itertools::Itertools;
 use secp256k1::schnorr::Signature;
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 use crate::contracts::outgoing::OutgoingContractAccount;
@@ -241,6 +241,8 @@ where
         for (peer_id, response) in responses.into_iter() {
             if response {
                 info!("Successfully removed {gateway_id} gateway from peer: {peer_id}",);
+            } else {
+                warn!("Unable to remove gateway {gateway_id} registration from peer: {peer_id}");
             }
         }
 
