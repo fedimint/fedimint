@@ -8,7 +8,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::bail;
 use fedimint_core::time::now;
-use fedimint_logging::LOG_TASK;
+use fedimint_logging::{LOG_TASK, LOG_TEST};
 #[cfg(target_family = "wasm")]
 use futures::channel::oneshot;
 use futures::lock::Mutex;
@@ -616,6 +616,19 @@ impl<T: Sync> MaybeSync for T {}
 
 #[cfg(target_family = "wasm")]
 impl<T> MaybeSync for T {}
+
+// Used in tests when sleep functionality is desired so it can be logged.
+// Must include comment describing the reason for sleeping.
+pub async fn sleep_in_test(comment: impl AsRef<str>, duration: Duration) {
+    info!(
+        target: LOG_TEST,
+        "Sleeping for {}.{:03} seconds because: {}",
+        duration.as_secs(),
+        duration.subsec_millis(),
+        comment.as_ref()
+    );
+    sleep(duration).await;
+}
 
 #[cfg(test)]
 mod tests {

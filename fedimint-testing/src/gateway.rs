@@ -11,7 +11,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::{block_in_place, sleep, TaskGroup};
+use fedimint_core::task::{block_in_place, sleep_in_test, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_TEST;
 use futures::executor::block_on;
@@ -194,7 +194,7 @@ impl GatewayTest {
                 return Ok(());
             }
 
-            sleep(Duration::from_secs(1)).await;
+            sleep_in_test("waiting for webserver to be ready", Duration::from_secs(1)).await;
         }
 
         Err(anyhow!(
@@ -212,7 +212,7 @@ impl GatewayTest {
                 return Ok(());
             }
 
-            sleep(Duration::from_secs(1)).await;
+            sleep_in_test("waiting for gateway state", Duration::from_secs(1)).await;
         }
 
         Err(anyhow!(

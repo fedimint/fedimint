@@ -9,7 +9,7 @@ use bitcoincore_rpc::{Client, RpcApi};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::sleep;
+use fedimint_core::task::sleep_in_test;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{task, Amount};
@@ -71,7 +71,8 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                         ?current_block_count,
                         "Waiting for blocks to be mined"
                     );
-                    sleep(Duration::from_millis(200)).await;
+                    sleep_in_test("waiting for blocks to be mined", Duration::from_millis(200))
+                        .await;
                 } else {
                     debug!(
                         target: LOG_TEST,
@@ -145,7 +146,7 @@ impl BitcoinTest for RealBitcoinTestNoLock {
             match self.client.get_mempool_entry(txid) {
                 Ok(tx) => return tx.fees.base.into(),
                 Err(_) => {
-                    sleep(Duration::from_millis(100)).await;
+                    sleep_in_test("could not get mempool tx fee", Duration::from_millis(100)).await;
                     continue;
                 }
             }
