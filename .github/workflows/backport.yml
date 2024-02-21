@@ -39,10 +39,18 @@ jobs:
     if: ${{ needs.backport.outputs.was_successful == 'false' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Set SHORT_PR_TITLE env
+        run: |
+          # logic to truncate titles needs to be run in a previous step
+          # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-environment-variable
+          SHORT_PR_TITLE=$(echo ${{ github.event.pull_request.title }} | awk '{print (length($0) > 20) ? substr($0, 1, 20) "..." : $0}')
+          echo "SHORT_PR_TITLE=$SHORT_PR_TITLE" >> "$GITHUB_ENV"
       - name: Create issue
         uses: JasonEtco/create-an-issue@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          SHORT_PR_TITLE: ${{ env.SHORT_PR_TITLE }}
         with:
           filename: .github/templates/failed-backport-issue.md
