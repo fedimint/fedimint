@@ -17,7 +17,6 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
 use fedimint_core::api::DynModuleApi;
-use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -264,19 +263,6 @@ impl GatewayClientModule {
         }
     }
 
-    async fn register_with_federation_inner(
-        &self,
-        id: FederationId,
-        registration: LightningGatewayAnnouncement,
-    ) -> anyhow::Result<()> {
-        self.module_api.register_gateway(&registration).await?;
-        debug!(
-            "Successfully registered gateway {} with federation {id}",
-            registration.info.gateway_id
-        );
-        Ok(())
-    }
-
     async fn create_funding_incoming_contract_output_from_htlc(
         &self,
         htlc: Htlc,
@@ -366,19 +352,14 @@ impl GatewayClientModule {
         fees: RoutingFees,
         lightning_context: LightningContext,
     ) -> anyhow::Result<()> {
-        {
-            let registration_info = self.to_gateway_registration_info(
-                route_hints,
-                time_to_live,
-                fees,
-                lightning_context,
-            );
+        let registration_info =
+            self.to_gateway_registration_info(route_hints, time_to_live, fees, lightning_context);
+        let gateway_id = registration_info.info.gateway_id;
 
-            let federation_id = self.client_ctx.get_config().global.federation_id();
-            self.register_with_federation_inner(federation_id, registration_info)
-                .await?;
-            Ok(())
-        }
+        let federation_id = self.client_ctx.get_config().global.federation_id();
+        self.module_api.register_gateway(&registration_info).await?;
+        debug!("Successfully registered gateway {gateway_id} with federation {federation_id}");
+        Ok(())
     }
 
     /// Attempt fulfill HTLC by buying preimage from the federation
