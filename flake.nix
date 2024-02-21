@@ -114,6 +114,7 @@
             targets = (pkgs.lib.getAttrs
               [
                 "default"
+                "wasm32-unknown"
               ]
               stdTargets
             );
@@ -122,6 +123,7 @@
           # toolchains for the native + wasm build
           toolchainWasm = flakeboxLib.mkFenixToolchain (toolchainArgs
           // {
+            defaultTarget = "wasm32-unknown-unknown";
             targets = (pkgs.lib.getAttrs
               [
                 "default"
@@ -129,6 +131,10 @@
               ]
               stdTargets
             );
+
+            args = {
+              nativeBuildInputs = [ pkgs.firefox pkgs.wasm-bindgen-cli pkgs.geckodriver pkgs.wasm-pack ];
+            };
           });
 
           # toolchains for the native + wasm build

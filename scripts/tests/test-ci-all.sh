@@ -143,7 +143,14 @@ function backend_test_esplora() {
 export -f backend_test_esplora
 
 function wasm_test() {
-  fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/tests/wasm-test.sh
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    # TODO: move this check to when forming the test list
+    if which wasm-pack 1>/dev/null 2>/dev/null ; then
+      fm-run-test "${FUNCNAME[0]}" ./scripts/tests/wasm-test.sh
+    else
+      echo >&2 "### SKIP: ${FUNCNAME[0]}"
+    fi
+  fi
 }
 export -f wasm_test
 
@@ -173,6 +180,7 @@ fi
 tests_to_run_in_parallel=(
   "always_success_test"
   "rust_unit_tests"
+  "wasm_test"
   "backend_test_bitcoind"
   "backend_test_bitcoind_ln_gateway"
   "backend_test_electrs"
