@@ -714,25 +714,6 @@
 <a href="#714" id="714">714</a>
 <a href="#715" id="715">715</a>
 <a href="#716" id="716">716</a>
-<a href="#717" id="717">717</a>
-<a href="#718" id="718">718</a>
-<a href="#719" id="719">719</a>
-<a href="#720" id="720">720</a>
-<a href="#721" id="721">721</a>
-<a href="#722" id="722">722</a>
-<a href="#723" id="723">723</a>
-<a href="#724" id="724">724</a>
-<a href="#725" id="725">725</a>
-<a href="#726" id="726">726</a>
-<a href="#727" id="727">727</a>
-<a href="#728" id="728">728</a>
-<a href="#729" id="729">729</a>
-<a href="#730" id="730">730</a>
-<a href="#731" id="731">731</a>
-<a href="#732" id="732">732</a>
-<a href="#733" id="733">733</a>
-<a href="#734" id="734">734</a>
-<a href="#735" id="735">735</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -752,7 +733,6 @@
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::api::DynModuleApi;
-<span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -999,19 +979,6 @@
         }
     }
 
-    <span class="kw">async fn </span>register_with_federation_inner(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        id: FederationId,
-        registration: LightningGatewayAnnouncement,
-    ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.module_api.register_gateway(<span class="kw-2">&amp;</span>registration).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(
-            <span class="string">&quot;Successfully registered gateway {} with federation {id}&quot;</span>,
-            registration.info.gateway_id
-        );
-        <span class="prelude-val">Ok</span>(())
-    }
-
     <span class="kw">async fn </span>create_funding_incoming_contract_output_from_htlc(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         htlc: Htlc,
@@ -1101,19 +1068,14 @@
         fees: RoutingFees,
         lightning_context: LightningContext,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        {
-            <span class="kw">let </span>registration_info = <span class="self">self</span>.to_gateway_registration_info(
-                route_hints,
-                time_to_live,
-                fees,
-                lightning_context,
-            );
+        <span class="kw">let </span>registration_info =
+            <span class="self">self</span>.to_gateway_registration_info(route_hints, time_to_live, fees, lightning_context);
+        <span class="kw">let </span>gateway_id = registration_info.info.gateway_id;
 
-            <span class="kw">let </span>federation_id = <span class="self">self</span>.client_ctx.get_config().global.federation_id();
-            <span class="self">self</span>.register_with_federation_inner(federation_id, registration_info)
-                .<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(())
-        }
+        <span class="kw">let </span>federation_id = <span class="self">self</span>.client_ctx.get_config().global.federation_id();
+        <span class="self">self</span>.module_api.register_gateway(<span class="kw-2">&amp;</span>registration_info).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(<span class="string">&quot;Successfully registered gateway {gateway_id} with federation {federation_id}&quot;</span>);
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Attempt fulfill HTLC by buying preimage from the federation
