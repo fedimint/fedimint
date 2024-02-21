@@ -250,6 +250,30 @@ pub struct ApiVersionSet {
 /// [`IRawFederationApi`].
 #[apply(async_trait_maybe_send!)]
 pub trait FederationApiExt: IRawFederationApi {
+    /// Make a request to a single peer in the federation with an optional
+    /// timeout.
+    async fn request_single_peer(
+        &self,
+        timeout: Option<Duration>,
+        method: String,
+        params: ApiRequestErased,
+        peer_id: PeerId,
+    ) -> JsonRpcResult<jsonrpsee_core::JsonValue> {
+        let request = async {
+            self.request_raw(peer_id, &method, &[params.to_json()])
+                .await
+        };
+
+        if let Some(timeout) = timeout {
+            match fedimint_core::task::timeout(timeout, request).await {
+                Ok(result) => result,
+                Err(_timeout) => Err(JsonRpcClientError::RequestTimeout),
+            }
+        } else {
+            request.await
+        }
+    }
+
     /// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
     async fn request_with_strategy<PeerRet: serde::de::DeserializeOwned, FedRet: Debug>(
