@@ -3,5 +3,5 @@
 "fedimint_ln_client":[["impl ClientModuleInit for <a class=\"struct\" href=\"fedimint_ln_client/struct.LightningClientInit.html\" title=\"struct fedimint_ln_client::LightningClientInit\">LightningClientInit</a>"]],
 "fedimint_mint_client":[["impl ClientModuleInit for <a class=\"struct\" href=\"fedimint_mint_client/struct.MintClientInit.html\" title=\"struct fedimint_mint_client::MintClientInit\">MintClientInit</a>"]],
 "fedimint_wallet_client":[["impl ClientModuleInit for <a class=\"struct\" href=\"fedimint_wallet_client/struct.WalletClientInit.html\" title=\"struct fedimint_wallet_client::WalletClientInit\">WalletClientInit</a>"]],
-"ln_gateway":[["impl <a class=\"trait\" href=\"fedimint_client/module/init/trait.ClientModuleInit.html\" title=\"trait fedimint_client::module::init::ClientModuleInit\">ClientModuleInit</a> for <a class=\"struct\" href=\"ln_gateway/state_machine/struct.GatewayClientInit.html\" title=\"struct ln_gateway::state_machine::GatewayClientInit\">GatewayClientInit</a>"]]
+"ln_gateway":[["impl ClientModuleInit for <a class=\"struct\" href=\"ln_gateway/state_machine/struct.GatewayClientInit.html\" title=\"struct ln_gateway::state_machine::GatewayClientInit\">GatewayClientInit</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
