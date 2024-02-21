@@ -8,6 +8,13 @@ rules:
 
   severity: WARNING
 
+- id: ban-std-time
+  languages:
+    - rust
+  message: TODO
+  pattern: std::time
+  severity: WARNING
+
 - id: ban-instant-now
   languages:
     - rust

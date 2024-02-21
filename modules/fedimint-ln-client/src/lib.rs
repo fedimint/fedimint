@@ -7,6 +7,8 @@ use std::collections::BTreeMap;
 use std::iter::once;
 use std::str::FromStr;
 use std::sync::Arc;
+// semgrep fails to identify std::time
+use std::time;
 use std::time::Duration;
 
 use anyhow::{bail, ensure, format_err, Context};
@@ -909,6 +911,7 @@ impl LightningClientModule {
             .get_value(&MetaOverridesKey {})
             .await
         {
+            let _epoch = time::UNIX_EPOCH;
             let elapsed = now().duration_since(cache.fetched_at).unwrap();
             if elapsed < META_OVERRIDE_CACHE_DURATION {
                 debug!("Using cached meta overrides");
