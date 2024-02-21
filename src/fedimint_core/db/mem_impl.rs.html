@@ -286,12 +286,12 @@
 <a href="#286" id="286">286</a>
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::fmt::Debug;
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>futures::{stream, StreamExt};
+<span class="kw">use </span>imbl::OrdMap;
 <span class="kw">use </span>macro_rules_attribute::apply;
 
 <span class="kw">use super</span>::{
@@ -321,15 +321,15 @@
 
 <span class="attr">#[derive(Debug, Default)]
 </span><span class="kw">pub struct </span>MemDatabase {
-    data: tokio::sync::RwLock&lt;BTreeMap&lt;Vec&lt;u8&gt;, Vec&lt;u8&gt;&gt;&gt;,
+    data: tokio::sync::RwLock&lt;OrdMap&lt;Vec&lt;u8&gt;, Vec&lt;u8&gt;&gt;&gt;,
 }
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>MemTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     operations: Vec&lt;DatabaseOperation&gt;,
-    tx_data: BTreeMap&lt;Vec&lt;u8&gt;, Vec&lt;u8&gt;&gt;,
+    tx_data: OrdMap&lt;Vec&lt;u8&gt;, Vec&lt;u8&gt;&gt;,
     db: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MemDatabase,
-    savepoint: BTreeMap&lt;Vec&lt;u8&gt;, Vec&lt;u8&gt;&gt;,
+    savepoint: OrdMap&lt;Vec&lt;u8&gt;, Vec&lt;u8&gt;&gt;,
     num_pending_operations: usize,
     num_savepoint_operations: usize,
 }
@@ -419,7 +419,7 @@
     <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
         <span class="kw">let </span>data = <span class="self">self
             </span>.tx_data
-            .range::&lt;Vec&lt;u8&gt;, <span class="kw">_</span>&gt;((key_prefix.to_vec())..)
+            .range((key_prefix.to_vec())..)
             .take_while(|(key, <span class="kw">_</span>)| key.starts_with(key_prefix))
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
@@ -432,7 +432,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="self">self
             </span>.tx_data
-            .range::&lt;Vec&lt;u8&gt;, <span class="kw">_</span>&gt;((key_prefix.to_vec())..)
+            .range((key_prefix.to_vec())..)
             .take_while(|(key, <span class="kw">_</span>)| key.starts_with(key_prefix))
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
