@@ -1,4 +1,7 @@
 ---
-title: Backport PR `#{{ env.PR_NUMBER }}`
+title: Backport PR `#{{ env.PR_NUMBER }}` {{ env.SHORT_PR_TITLE }}
 ---
-The backport bot was unable to open a pull request to backport changes from PR #{{ env.PR_NUMBER }}. Please open a PR to backport these changes.
+PR: #{{ env.PR_NUMBER }}
+Title: {{ env.PR_TITLE }}
+
+The backport bot failed. Please open a PR to backport these changes.
