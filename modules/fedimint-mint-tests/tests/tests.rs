@@ -170,11 +170,12 @@ mod fedimint_migration_tests {
     use bitcoin_hashes::Hash;
     use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
     use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
+    use fedimint_client::module::init::DynClientModuleInit;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
-    use fedimint_core::module::DynCommonModuleInit;
+    use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::time::now;
     use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
     use fedimint_logging::TracingSetup;
@@ -185,15 +186,16 @@ mod fedimint_migration_tests {
         NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix, RecoveryStateKey,
     };
     use fedimint_mint_client::output::NoteIssuanceRequest;
-    use fedimint_mint_client::{MintClientInit, NoteIndex, SpendableNote};
+    use fedimint_mint_client::{MintClientInit, MintClientModule, NoteIndex, SpendableNote};
     use fedimint_mint_common::db::{
         DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix,
         MintAuditItemKey, MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix,
         NonceKey, NonceKeyPrefix,
     };
-    use fedimint_mint_common::{MintOutputOutcome, Nonce};
+    use fedimint_mint_common::{MintCommonInit, MintOutputOutcome, Nonce};
     use fedimint_testing::db::{
-        snapshot_db_migrations, validate_migrations_module, BYTE_32, BYTE_8,
+        snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
+        validate_migrations_server, BYTE_32, BYTE_8,
     };
     use ff::Field;
     use futures::StreamExt;
@@ -357,8 +359,7 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
-        let module = DynCommonModuleInit::from(MintInit);
-        snapshot_db_migrations(module, "mint-server-v0", |db| {
+        snapshot_db_migrations::<_, MintCommonInit>("mint-server-v0", |db| {
             Box::pin(async move {
                 create_server_db_with_v0_data(db).await;
             })
@@ -370,8 +371,8 @@ mod fedimint_migration_tests {
     async fn test_server_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
 
-        let module = DynCommonModuleInit::from(MintInit);
-        validate_migrations_module(module, "mint-server", |db| async move {
+        let module = DynServerModuleInit::from(MintInit);
+        validate_migrations_server(module, "mint-server", |db| async move {
             let mut dbtx = db.begin_transaction_nc().await;
 
             for prefix in DbKeyPrefix::iter() {
@@ -438,10 +439,11 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
-        let module = DynCommonModuleInit::from(MintClientInit);
-        snapshot_db_migrations(module, "mint-client-v0", |dbtx| {
-            Box::pin(async move { create_client_db_with_v0_data(dbtx).await })
-        })
+        snapshot_db_migrations_client::<_, _, MintCommonInit, MintClientModule>(
+            "mint-client-v0",
+            |dbtx| Box::pin(async move { create_client_db_with_v0_data(dbtx).await }),
+            || (Vec::new(), Vec::new()),
+        )
         .await
     }
 
@@ -449,72 +451,76 @@ mod fedimint_migration_tests {
     async fn test_client_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
 
-        let module = DynCommonModuleInit::from(MintClientInit);
-        validate_migrations_module(module, "mint-client", |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+        let module = DynClientModuleInit::from(MintClientInit);
+        validate_migrations_client::<_, _, MintClientModule>(
+            module,
+            "mint-client",
+            |db, _, _| async move {
+                let mut dbtx = db.begin_transaction_nc().await;
 
-            for prefix in fedimint_mint_client::client_db::DbKeyPrefix::iter() {
-                match prefix {
-                    fedimint_mint_client::client_db::DbKeyPrefix::Note => {
-                        let notes = dbtx
-                            .find_by_prefix(&NoteKeyPrefix)
-                            .await
-                            .collect::<Vec<_>>()
-                            .await;
-                        let num_notes = notes.len();
-                        ensure!(
-                            num_notes > 0,
-                            "validate_migrations was not able to read any Notes"
-                        );
-                        info!("Validated Notes");
-                    }
-                    fedimint_mint_client::client_db::DbKeyPrefix::NextECashNoteIndex => {
-                        let next_index = dbtx
-                            .find_by_prefix(&NextECashNoteIndexKeyPrefix)
-                            .await
-                            .collect::<Vec<_>>()
-                            .await;
-                        let num_next_indices = next_index.len();
-                        ensure!(
-                            num_next_indices > 0,
-                            "validate_migrations was not able to read any NextECashNoteIndices"
-                        );
-                        info!("Validated NextECashNoteIndex");
-                    }
-                    fedimint_mint_client::client_db::DbKeyPrefix::CancelledOOBSpend => {
-                        let canceled_spend = dbtx
-                            .find_by_prefix(&CancelledOOBSpendKeyPrefix)
-                            .await
-                            .collect::<Vec<_>>()
-                            .await;
-                        let num_cancel_spends = canceled_spend.len();
-                        ensure!(
+                for prefix in fedimint_mint_client::client_db::DbKeyPrefix::iter() {
+                    match prefix {
+                        fedimint_mint_client::client_db::DbKeyPrefix::Note => {
+                            let notes = dbtx
+                                .find_by_prefix(&NoteKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_notes = notes.len();
+                            ensure!(
+                                num_notes > 0,
+                                "validate_migrations was not able to read any Notes"
+                            );
+                            info!("Validated Notes");
+                        }
+                        fedimint_mint_client::client_db::DbKeyPrefix::NextECashNoteIndex => {
+                            let next_index = dbtx
+                                .find_by_prefix(&NextECashNoteIndexKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_next_indices = next_index.len();
+                            ensure!(
+                                num_next_indices > 0,
+                                "validate_migrations was not able to read any NextECashNoteIndices"
+                            );
+                            info!("Validated NextECashNoteIndex");
+                        }
+                        fedimint_mint_client::client_db::DbKeyPrefix::CancelledOOBSpend => {
+                            let canceled_spend = dbtx
+                                .find_by_prefix(&CancelledOOBSpendKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_cancel_spends = canceled_spend.len();
+                            ensure!(
                             num_cancel_spends > 0,
                             "validate_migrations was not able to read any CancelledOOBSpendKeys"
                         );
-                        info!("Validated CancelledOOBSpendKey");
-                    }
-                    fedimint_mint_client::client_db::DbKeyPrefix::RecoveryState => {
-                        let restore_state = dbtx.get_value(&RecoveryStateKey).await;
-                        ensure!(
-                            restore_state.is_some(),
-                            "validate_migrations was not able to read any RecoveryState"
-                        );
-                        info!("Validated RecoveryState");
-                    }
-                    fedimint_mint_client::client_db::DbKeyPrefix::RecoveryFinalized => {
-                        let recovery_finalized = dbtx.get_value(&RecoveryStateKey).await;
-                        ensure!(
-                            recovery_finalized.is_some(),
-                            "validate_migrations was not able to read any RecoveryFinalized"
-                        );
-                        info!("Validated RecoveryFinalized");
+                            info!("Validated CancelledOOBSpendKey");
+                        }
+                        fedimint_mint_client::client_db::DbKeyPrefix::RecoveryState => {
+                            let restore_state = dbtx.get_value(&RecoveryStateKey).await;
+                            ensure!(
+                                restore_state.is_some(),
+                                "validate_migrations was not able to read any RecoveryState"
+                            );
+                            info!("Validated RecoveryState");
+                        }
+                        fedimint_mint_client::client_db::DbKeyPrefix::RecoveryFinalized => {
+                            let recovery_finalized = dbtx.get_value(&RecoveryStateKey).await;
+                            ensure!(
+                                recovery_finalized.is_some(),
+                                "validate_migrations was not able to read any RecoveryFinalized"
+                            );
+                            info!("Validated RecoveryFinalized");
+                        }
                     }
                 }
-            }
 
-            Ok(())
-        })
+                Ok(())
+            },
+        )
         .await
     }
 }

@@ -4,12 +4,23 @@ use std::path::{Path, PathBuf};
 use std::{env, fs, io};
 
 use anyhow::{bail, format_err, Context};
-use fedimint_core::db::{apply_migrations, apply_migrations_server, Database};
+use fedimint_client::db::{
+    apply_migrations_client, remove_old_and_persist_new_active_states,
+    remove_old_and_persist_new_inactive_states,
+};
+use fedimint_client::module::init::DynClientModuleInit;
+use fedimint_client::module::ClientModule;
+use fedimint_client::sm::{ActiveStateKeyPrefix, InactiveStateKeyPrefix};
+use fedimint_core::core::IntoDynInstance;
+use fedimint_core::db::{
+    apply_migrations, apply_migrations_server, Database, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::DynCommonModuleInit;
+use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
 use futures::future::BoxFuture;
+use futures::{FutureExt, StreamExt};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use tracing::debug;
@@ -73,7 +84,7 @@ async fn create_snapshot<'a, F>(
     prepare_fn: F,
 ) -> anyhow::Result<()>
 where
-    F: Fn(Database) -> BoxFuture<'a, ()>,
+    F: FnOnce(Database) -> BoxFuture<'a, ()>,
 {
     match (
         std::env::var_os(FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV)
@@ -124,28 +135,85 @@ where
     create_snapshot(snapshot_dir, decoders, false, prepare_fn).await
 }
 
-/// Creates the database backup directory by appending the `snapshot_name`
-/// to `db/migrations`. Then this function will execute the provided
-/// `prepare_fn` which is expected to populate the database with the appropriate
-/// data for testing a migration. If the snapshot directory already exists,
-/// this function will do nothing.
-pub async fn snapshot_db_migrations<'a, F>(
-    module: DynCommonModuleInit,
+/// Creates the database backup directory for a server module by appending the
+/// `snapshot_name` to `db/migrations`. Then this function will execute the
+/// provided `prepare_fn` which is expected to populate the database with the
+/// appropriate data for testing a migration.
+pub async fn snapshot_db_migrations<'a, F, I>(
     snapshot_name: &str,
     prepare_fn: F,
 ) -> anyhow::Result<()>
 where
     F: Fn(Database) -> BoxFuture<'a, ()>,
+    I: CommonModuleInit,
 {
     let project_root = get_project_root().unwrap();
     let snapshot_dir = project_root.join("db/migrations").join(snapshot_name);
 
-    let decoders = ModuleDecoderRegistry::from_iter([(
-        TEST_MODULE_INSTANCE_ID,
-        module.module_kind(),
-        module.decoder(),
-    )]);
+    let decoders =
+        ModuleDecoderRegistry::from_iter([(TEST_MODULE_INSTANCE_ID, I::KIND, I::decoder())]);
     create_snapshot(snapshot_dir, decoders, true, prepare_fn).await
+}
+
+/// Create the database backup directory for a client module.
+/// Two prepare functions are taken as parameters. `data_prepare` is expected to
+/// create any data that the client module uses and is stored in the isolated
+/// namespace. `state_machine_prepare` creates client state machine data that
+/// can be used for testing state machine migrations. This is created in the
+/// global namespace.
+pub async fn snapshot_db_migrations_client<'a, F, S, I, T>(
+    snapshot_name: &str,
+    data_prepare: F,
+    state_machine_prepare: S,
+) -> anyhow::Result<()>
+where
+    F: Fn(Database) -> BoxFuture<'a, ()> + Send + Sync,
+    S: Fn() -> (Vec<T::States>, Vec<T::States>) + Send + Sync,
+    I: CommonModuleInit,
+    T: ClientModule,
+{
+    let project_root = get_project_root().unwrap();
+    let snapshot_dir = project_root.join("db/migrations").join(snapshot_name);
+
+    let decoders =
+        ModuleDecoderRegistry::from_iter([(TEST_MODULE_INSTANCE_ID, I::KIND, I::decoder())]);
+
+    let snapshot_fn = |db: Database| {
+        async move {
+            let isolated_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID);
+            data_prepare(isolated_db).await;
+
+            let (active_states, inactive_states) = state_machine_prepare();
+            let new_active_states = active_states
+                .into_iter()
+                .map(|state| state.into_dyn(TEST_MODULE_INSTANCE_ID))
+                .collect::<Vec<_>>();
+            let new_inactive_states = inactive_states
+                .into_iter()
+                .map(|state| state.into_dyn(TEST_MODULE_INSTANCE_ID))
+                .collect::<Vec<_>>();
+
+            let mut global_dbtx = db.begin_transaction().await;
+            remove_old_and_persist_new_active_states(
+                &mut global_dbtx.to_ref_nc(),
+                new_active_states,
+                Vec::new(),
+                TEST_MODULE_INSTANCE_ID,
+            )
+            .await;
+            remove_old_and_persist_new_inactive_states(
+                &mut global_dbtx.to_ref_nc(),
+                new_inactive_states,
+                Vec::new(),
+                TEST_MODULE_INSTANCE_ID,
+            )
+            .await;
+            global_dbtx.commit_tx().await;
+        }
+        .boxed()
+    };
+
+    create_snapshot(snapshot_dir, decoders, false, snapshot_fn).await
 }
 
 pub const STRING_64: &str = "0123456789012345678901234567890101234567890123456789012345678901";
@@ -195,7 +263,7 @@ async fn get_temp_database(
 /// passed in as an argument since `fedimint-server` is module agnostic. First
 /// applies all defined migrations to the database then executes the `validate``
 /// function which should confirm the database migrations were successful.
-pub async fn validate_migrations_server<F, Fut>(
+pub async fn validate_migrations_global<F, Fut>(
     validate: F,
     decoders: ModuleDecoderRegistry,
 ) -> anyhow::Result<()>
@@ -219,11 +287,11 @@ where
     Ok(())
 }
 
-/// Validates the database migrations for each module. First applies all
+/// Validates the database migrations for a server module. First applies all
 /// database migrations to the module, then calls the `validate` which should
 /// confirm the database migrations were successful.
-pub async fn validate_migrations_module<F, Fut>(
-    module: DynCommonModuleInit,
+pub async fn validate_migrations_server<F, Fut>(
+    module: DynServerModuleInit,
     db_prefix: &str,
     validate: F,
 ) -> anyhow::Result<()>
@@ -249,6 +317,65 @@ where
 
     let module_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID);
     validate(module_db)
+        .await
+        .with_context(|| format!("Validating {db_prefix}"))?;
+
+    Ok(())
+}
+
+/// Validates the database migrations for a client module. First applies all
+/// database migrations to the module, including the state machine migrations.
+/// Then calls the `validate` function, including the new `active_states` and
+/// `inactive_states`, and is expected to confirm the database migrations were
+/// successful.
+pub async fn validate_migrations_client<F, Fut, T>(
+    module: DynClientModuleInit,
+    db_prefix: &str,
+    validate: F,
+) -> anyhow::Result<()>
+where
+    F: Fn(Database, Vec<T::States>, Vec<T::States>) -> Fut,
+    Fut: futures::Future<Output = anyhow::Result<()>>,
+    T: ClientModule,
+{
+    let decoders = ModuleDecoderRegistry::from_iter([(
+        TEST_MODULE_INSTANCE_ID,
+        module.as_common().module_kind(),
+        T::decoder(),
+    )]);
+    let db = get_temp_database(db_prefix, decoders.clone()).await?;
+    apply_migrations_client(
+        &db,
+        module.as_common().module_kind().to_string(),
+        module.database_version(),
+        module.get_database_migrations(),
+        TEST_MODULE_INSTANCE_ID,
+        decoders,
+    )
+    .await
+    .context("Error applying migrations to temp database")?;
+
+    let mut global_dbtx = db.begin_transaction_nc().await;
+    let active_states = global_dbtx
+        .find_by_prefix(&ActiveStateKeyPrefix)
+        .await
+        .filter_map(|(state, _)| async move {
+            state.state.as_any().downcast_ref::<T::States>().cloned()
+        })
+        .collect::<Vec<_>>()
+        .await;
+
+    let inactive_states = global_dbtx
+        .find_by_prefix(&InactiveStateKeyPrefix)
+        .await
+        .filter_map(|(state, _)| async move {
+            state.state.as_any().downcast_ref::<T::States>().cloned()
+        })
+        .collect::<Vec<_>>()
+        .await;
+
+    let module_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID);
+    validate(module_db, active_states, inactive_states)
         .await
         .with_context(|| format!("Validating {db_prefix}"))?;
 

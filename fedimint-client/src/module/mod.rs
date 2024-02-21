@@ -24,7 +24,7 @@ use secp256k1_zkp::PublicKey;
 
 use self::init::ClientModuleInit;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
-use crate::sm::{self, ActiveState, Context, DynContext, DynState, State};
+use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use crate::{oplog, AddStateMachinesResult, ClientArc, ClientWeak, TransactionUpdates};
 
@@ -407,7 +407,7 @@ where
         self.client.get().has_active_states(op_id).await
     }
 
-    pub async fn get_own_active_states(&self) -> Vec<(M::States, ActiveState)> {
+    pub async fn get_own_active_states(&self) -> Vec<(M::States, ActiveStateMeta)> {
         self.client
             .get()
             .executor

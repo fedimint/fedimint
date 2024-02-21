@@ -27,7 +27,7 @@ use crate::core::{
 };
 use crate::db::{
     Committable, Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
-    DatabaseVersion, MigrationMap,
+    DatabaseVersion, ServerMigrationFn,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
@@ -410,11 +410,6 @@ pub trait IDynCommonModuleInit: Debug {
 
     fn database_version(&self) -> DatabaseVersion;
 
-    /// Retrieves the `MigrationMap` from the module to be applied to the
-    /// database before the module is initialized. The `MigrationMap` is
-    /// indexed on the from version.
-    fn get_database_migrations(&self) -> MigrationMap;
-
     async fn dump_database(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -434,13 +429,6 @@ pub trait ModuleInit: Debug + Clone + Send + Sync + 'static {
     /// migration function in `get_database_migrations` which should define how
     /// to move from the previous database version to the current version.
     const DATABASE_VERSION: DatabaseVersion;
-
-    /// Retrieves the `MigrationMap` from the module to be applied to the
-    /// database before the module is initialized. The `MigrationMap` is
-    /// indexed on the from version.
-    fn get_database_migrations(&self) -> MigrationMap {
-        MigrationMap::new()
-    }
 
     async fn dump_database(
         &self,
@@ -468,10 +456,6 @@ where
 
     fn database_version(&self) -> DatabaseVersion {
         <Self as ModuleInit>::DATABASE_VERSION
-    }
-
-    fn get_database_migrations(&self) -> MigrationMap {
-        <Self as ModuleInit>::get_database_migrations(self)
     }
 
     async fn dump_database(
@@ -528,6 +512,11 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         module_instance_id: ModuleInstanceId,
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<ClientModuleConfig>;
+
+    /// Retrieves the migrations map from the server module to be applied to the
+    /// database before the module is initialized. The migrations map is
+    /// indexed on the from version.
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerMigrationFn>;
 }
 
 dyn_newtype_define!(
@@ -659,6 +648,13 @@ pub trait ServerModuleInit: ModuleInit + Sized {
         &self,
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<<<Self as ModuleInit>::Common as CommonModuleInit>::ClientConfig>;
+
+    /// Retrieves the migrations map from the server module to be applied to the
+    /// database before the module is initialized. The migrations map is
+    /// indexed on the from version.
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
+        BTreeMap::new()
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -730,6 +726,10 @@ where
             config.version,
             <Self as ServerModuleInit>::get_client_config(self, config)?,
         )
+    }
+
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
+        <Self as ServerModuleInit>::get_database_migrations(self)
     }
 }
 

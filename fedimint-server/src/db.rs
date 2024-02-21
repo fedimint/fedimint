@@ -1,7 +1,8 @@
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
+use fedimint_core::db::{DatabaseVersion, ServerMigrationFn, MODULE_GLOBAL_PREFIX};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
@@ -88,8 +89,8 @@ impl_db_record!(
 );
 impl_db_lookup!(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
-pub fn get_global_database_migrations() -> MigrationMap {
-    MigrationMap::new()
+pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
+    BTreeMap::new()
 }
 
 #[cfg(test)]
@@ -114,7 +115,7 @@ mod fedimint_migration_tests {
     use fedimint_dummy_server::Dummy;
     use fedimint_logging::{TracingSetup, LOG_DB};
     use fedimint_testing::db::{
-        snapshot_db_migrations_server, validate_migrations_server, BYTE_32, TEST_MODULE_INSTANCE_ID,
+        snapshot_db_migrations_server, validate_migrations_global, BYTE_32, TEST_MODULE_INSTANCE_ID,
     };
     use futures::StreamExt;
     use rand::rngs::OsRng;
@@ -220,7 +221,7 @@ mod fedimint_migration_tests {
     async fn test_server_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
 
-        validate_migrations_server(
+        validate_migrations_global(
             |db| async move {
                 let mut dbtx = db.begin_transaction().await;
 

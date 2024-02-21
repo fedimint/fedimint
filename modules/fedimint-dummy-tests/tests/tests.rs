@@ -142,22 +142,28 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
 
 mod fedimint_migration_tests {
     use anyhow::ensure;
+    use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
-    use fedimint_core::module::DynCommonModuleInit;
+    use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::{Amount, BitcoinHash, OutPoint, TransactionId};
     use fedimint_dummy_client::db::{
         DummyClientFundsKeyV0, DummyClientFundsKeyV1, DummyClientNameKey,
     };
-    use fedimint_dummy_client::DummyClientInit;
-    use fedimint_dummy_common::DummyOutputOutcome;
+    use fedimint_dummy_client::states::DummyStateMachine;
+    use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
+    use fedimint_dummy_common::{DummyCommonInit, DummyOutputOutcome};
     use fedimint_dummy_server::db::{
         DbKeyPrefix, DummyFundsKeyV0, DummyFundsPrefixV1, DummyOutcomeKey, DummyOutcomePrefix,
     };
     use fedimint_dummy_server::DummyInit;
     use fedimint_logging::TracingSetup;
-    use fedimint_testing::db::{snapshot_db_migrations, validate_migrations_module, BYTE_32};
+    use fedimint_testing::db::{
+        snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
+        validate_migrations_server, BYTE_32,
+    };
     use futures::StreamExt;
     use rand::rngs::OsRng;
     use strum::IntoEnumIterator;
@@ -204,10 +210,25 @@ mod fedimint_migration_tests {
         dbtx.commit_tx().await;
     }
 
+    fn create_client_states() -> (Vec<DummyStateMachine>, Vec<DummyStateMachine>) {
+        // Create an active state and inactive state that will not be migrated.
+        let input_operation_id = OperationId::new_random();
+        let txid = TransactionId::from_slice(&BYTE_32).unwrap();
+        let input_state =
+            DummyStateMachine::Input(Amount::from_sats(1000), txid, input_operation_id);
+
+        // Create and active state and inactive state that will be migrated.
+        let operation_id = OperationId::new_random();
+        let state = DummyStateMachine::Unreachable(operation_id, Amount::from_sats(1000));
+        (
+            vec![state.clone(), input_state.clone()],
+            vec![state, input_state],
+        )
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
-        let module = DynCommonModuleInit::from(DummyInit);
-        snapshot_db_migrations(module, "dummy-server-v0", |db| {
+        snapshot_db_migrations::<_, DummyCommonInit>("dummy-server-v0", |db| {
             Box::pin(async move {
                 create_server_db_with_v0_data(db).await;
             })
@@ -219,8 +240,8 @@ mod fedimint_migration_tests {
     async fn test_server_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
 
-        let module = DynCommonModuleInit::from(DummyInit);
-        validate_migrations_module(module, "dummy-server", |db| async move {
+        let module = DynServerModuleInit::from(DummyInit);
+        validate_migrations_server(module, "dummy-server", |db| async move {
             let mut dbtx = db.begin_transaction_nc().await;
             for prefix in DbKeyPrefix::iter() {
                 match prefix {
@@ -260,10 +281,11 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
-        let module = DynCommonModuleInit::from(DummyClientInit);
-        snapshot_db_migrations(module, "dummy-client-v0", |db| {
-            Box::pin(async move { create_client_db_with_v0_data(db).await })
-        })
+        snapshot_db_migrations_client::<_, _, DummyCommonInit, DummyClientModule>(
+            "dummy-client-v0",
+            |db| Box::pin(async move { create_client_db_with_v0_data(db).await }),
+            create_client_states,
+        )
         .await
     }
 
@@ -271,9 +293,9 @@ mod fedimint_migration_tests {
     async fn test_client_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
 
-        let module = DynCommonModuleInit::from(DummyClientInit);
+        let module = DynClientModuleInit::from(DummyClientInit);
 
-        validate_migrations_module(module, "dummy-client", |db| async move {
+        validate_migrations_client::<_, _, DummyClientModule>(module, "dummy-client", |db, active_states, inactive_states| async move {
             let mut dbtx = db.begin_transaction_nc().await;
 
             // After applying migrations, validate that `ClientName` cannot currently be
@@ -301,6 +323,33 @@ mod fedimint_migration_tests {
                     }
                 }
             }
+
+            // Verify that after the state machine migrations, there is one `Input` state and no `Unreachable` states.
+            let mut input_count = 0;
+            for active_state in active_states {
+                match active_state {
+                    DummyStateMachine::Input(_, _, _) => {
+                        input_count += 1;
+                    }
+                    DummyStateMachine::Unreachable(_, _) => panic!("State machine migration failed, active states still contain Unreachable state"),
+                    _ => {}
+                }
+            }
+
+            ensure!(input_count == 1, "Expecting one `Input` active state, found {input_count}");
+
+            let mut input_count = 0;
+            for inactive_state in inactive_states {
+                match inactive_state {
+                    DummyStateMachine::Input(_, _, _) => {
+                        input_count += 1;
+                    }
+                    DummyStateMachine::Unreachable(_, _) => panic!("State machine migration failed, active states still contain Unreachable state"),
+                    _ => {}
+                }
+            }
+
+            ensure!(input_count == 1, "Expecting one `Input` inactive state, found {input_count}");
 
             Ok(())
         })

@@ -9,7 +9,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationMap,
+    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, ServerMigrationFn,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -46,13 +46,6 @@ pub struct DummyInit;
 impl ModuleInit for DummyInit {
     type Common = DummyCommonInit;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
-
-    /// DB migrations to move from old to newer versions
-    fn get_database_migrations(&self) -> MigrationMap {
-        let mut migrations = MigrationMap::new();
-        migrations.insert(DatabaseVersion(0), move |dbtx| migrate_to_v1(dbtx).boxed());
-        migrations
-    }
 
     /// Dumps all database items for debugging
     async fn dump_database(
@@ -176,6 +169,13 @@ impl ServerModuleInit for DummyInit {
         _config: ServerModuleConfig,
     ) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    /// DB migrations to move from old to newer versions
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
+        let mut migrations: BTreeMap<DatabaseVersion, ServerMigrationFn> = BTreeMap::new();
+        migrations.insert(DatabaseVersion(0), move |dbtx| migrate_to_v1(dbtx).boxed());
+        migrations
     }
 }
 

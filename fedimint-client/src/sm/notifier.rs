@@ -11,7 +11,7 @@ use crate::sm::executor::{
     ActiveModuleOperationStateKeyPrefix, ActiveStateKey, InactiveModuleOperationStateKeyPrefix,
     InactiveStateKey,
 };
-use crate::sm::{ActiveState, DynState, InactiveState, State};
+use crate::sm::{ActiveStateMeta, DynState, InactiveStateMeta, State};
 
 /// State transition notifier owned by the modularized client used to inform
 /// modules of state transitions.
@@ -144,7 +144,7 @@ where
                     module_instance: self.module_instance,
                 })
                 .await
-                .map(|(key, val): (ActiveStateKey, ActiveState)| {
+                .map(|(key, val): (ActiveStateKey, ActiveStateMeta)| {
                     (to_typed_state(key.state), val.created_at)
                 })
                 .collect::<Vec<(S, _)>>()
@@ -156,7 +156,7 @@ where
                     module_instance: self.module_instance,
                 })
                 .await
-                .map(|(key, val): (InactiveStateKey, InactiveState)| {
+                .map(|(key, val): (InactiveStateKey, InactiveStateMeta)| {
                     (to_typed_state(key.state), val.created_at)
                 })
                 .collect::<Vec<(S, _)>>()

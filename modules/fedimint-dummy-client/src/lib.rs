@@ -4,7 +4,8 @@ use std::time::Duration;
 
 use anyhow::{anyhow, format_err, Context as _};
 use common::broken_fed_key_pair;
-use db::{migrate_to_v1, DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey};
+use db::{migrate_to_v1, migrate_to_v2, DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey};
+use fedimint_client::db::ClientMigrationFn;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
@@ -12,7 +13,7 @@ use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_core::core::{Decoder, KeyPair, OperationId};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationMap,
+    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -318,13 +319,7 @@ pub struct DummyClientInit;
 #[apply(async_trait_maybe_send!)]
 impl ModuleInit for DummyClientInit {
     type Common = DummyCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
-
-    fn get_database_migrations(&self) -> MigrationMap {
-        let mut migrations = MigrationMap::new();
-        migrations.insert(DatabaseVersion(0), move |dbtx| migrate_to_v1(dbtx).boxed());
-        migrations
-    }
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(2);
 
     async fn dump_database(
         &self,
@@ -376,5 +371,21 @@ impl ClientModuleInit for DummyClientInit {
             client_ctx: args.context(),
             db: args.db().clone(),
         })
+    }
+
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
+        let mut migrations: BTreeMap<DatabaseVersion, ClientMigrationFn> = BTreeMap::new();
+        migrations.insert(DatabaseVersion(0), move |dbtx, _, _, _, _| {
+            migrate_to_v1(dbtx).boxed()
+        });
+
+        migrations.insert(
+            DatabaseVersion(1),
+            move |_, module_instance_id, active_states, inactive_states, decoders| {
+                migrate_to_v2(module_instance_id, active_states, inactive_states, decoders).boxed()
+            },
+        );
+
+        migrations
     }
 }

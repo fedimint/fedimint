@@ -599,17 +599,19 @@ mod fedimint_migration_tests {
         Amount, BlockHash, PackedLockTime, Script, Sequence, Transaction, TxIn, TxOut, Txid,
         WPubkeyHash,
     };
+    use fedimint_client::module::init::DynClientModuleInit;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
-    use fedimint_core::module::DynCommonModuleInit;
+    use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, TransactionId};
     use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
-        snapshot_db_migrations, validate_migrations_module, BYTE_20, BYTE_32, BYTE_33,
+        snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
+        validate_migrations_server, BYTE_20, BYTE_32, BYTE_33,
     };
     use fedimint_wallet_client::client_db::NextPegInTweakIndexKey;
-    use fedimint_wallet_client::WalletClientInit;
+    use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
     use fedimint_wallet_common::db::{
         BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
         FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction,
@@ -618,7 +620,7 @@ mod fedimint_migration_tests {
         UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey,
     };
     use fedimint_wallet_common::{
-        PegOutFees, PendingTransaction, Rbf, SpendableUTXO, UnsignedTransaction,
+        PegOutFees, PendingTransaction, Rbf, SpendableUTXO, UnsignedTransaction, WalletCommonInit,
         WalletOutputOutcome,
     };
     use futures::StreamExt;
@@ -804,8 +806,7 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
-        let module = DynCommonModuleInit::from(WalletInit);
-        snapshot_db_migrations(module, "wallet-server-v0", |db| {
+        snapshot_db_migrations::<_, WalletCommonInit>("wallet-server-v0", |db| {
             Box::pin(async move {
                 create_server_db_with_v0_data(db).await;
             })
@@ -817,8 +818,8 @@ mod fedimint_migration_tests {
     async fn test_server_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
 
-        let module = DynCommonModuleInit::from(WalletInit);
-        validate_migrations_module(
+        let module = DynServerModuleInit::from(WalletInit);
+        validate_migrations_server(
             module,
             "wallet-server",
             |db| async move {
@@ -946,10 +947,11 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
-        let module = DynCommonModuleInit::from(WalletClientInit::default());
-        snapshot_db_migrations(module, "wallet-client-v0", |db| {
-            Box::pin(async move { create_client_db_with_v0_data(db).await })
-        })
+        snapshot_db_migrations_client::<_, _, WalletCommonInit, WalletClientModule>(
+            "wallet-client-v0",
+            |db| Box::pin(async move { create_client_db_with_v0_data(db).await }),
+            || (Vec::new(), Vec::new()),
+        )
         .await
     }
 
@@ -957,24 +959,28 @@ mod fedimint_migration_tests {
     async fn test_client_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
 
-        let module = DynCommonModuleInit::from(WalletClientInit::default());
-        validate_migrations_module(module, "wallet-client", |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
-            for prefix in fedimint_wallet_client::client_db::DbKeyPrefix::iter() {
-                match prefix {
-                    fedimint_wallet_client::client_db::DbKeyPrefix::NextPegInTweakIndex => {
-                        let next_peg_in_tweak = dbtx.get_value(&NextPegInTweakIndexKey).await;
-                        ensure!(
-                            next_peg_in_tweak.is_some(),
-                            "validate_migrations was not able to read any peg in tweak index"
-                        );
-                        info!("Validated next peg in tweak index");
+        let module = DynClientModuleInit::from(WalletClientInit::default());
+        validate_migrations_client::<_, _, WalletClientModule>(
+            module,
+            "wallet-client",
+            |db, _, _| async move {
+                let mut dbtx = db.begin_transaction_nc().await;
+                for prefix in fedimint_wallet_client::client_db::DbKeyPrefix::iter() {
+                    match prefix {
+                        fedimint_wallet_client::client_db::DbKeyPrefix::NextPegInTweakIndex => {
+                            let next_peg_in_tweak = dbtx.get_value(&NextPegInTweakIndexKey).await;
+                            ensure!(
+                                next_peg_in_tweak.is_some(),
+                                "validate_migrations was not able to read any peg in tweak index"
+                            );
+                            info!("Validated next peg in tweak index");
+                        }
                     }
                 }
-            }
 
-            Ok(())
-        })
+                Ok(())
+            },
+        )
         .await
     }
 }

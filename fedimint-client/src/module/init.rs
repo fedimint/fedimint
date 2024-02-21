@@ -1,5 +1,6 @@
 pub mod recovery;
 
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::marker;
 use std::sync::Arc;
@@ -7,7 +8,7 @@ use std::sync::Arc;
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::{ClientModuleConfig, FederationId, ModuleInitRegistry};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
-use fedimint_core::db::Database;
+use fedimint_core::db::{Database, DatabaseVersion};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, IDynCommonModuleInit, ModuleInit, MultiApiVersion,
 };
@@ -19,6 +20,7 @@ use tracing::warn;
 
 use super::recovery::{DynModuleBackup, RecoveryProgress};
 use super::{ClientContext, FinalClient};
+use crate::db::ClientMigrationFn;
 use crate::module::{ClientModule, DynClientModule};
 use crate::sm::{ModuleNotifier, Notifier};
 
@@ -194,6 +196,13 @@ pub trait ClientModuleInit: ModuleInit + Sized {
 
     /// Initialize a [`ClientModule`] instance from its config
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module>;
+
+    /// Retrieves the database migrations from the module to be applied to the
+    /// database before the module is initialized. The database migrations map
+    /// is indexed on the "from" version.
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
+        BTreeMap::new()
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -236,6 +245,8 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
         notifier: Notifier,
         api: DynGlobalApi,
     ) -> anyhow::Result<DynClientModule>;
+
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -339,6 +350,10 @@ where
             })
             .await?
             .into())
+    }
+
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
+        <Self as ClientModuleInit>::get_database_migrations(self)
     }
 }
 
