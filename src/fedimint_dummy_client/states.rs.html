@@ -138,6 +138,9 @@
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
 <a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_client::sm::{DynState, State, StateTransition};
@@ -165,6 +168,7 @@
     InputDone(OperationId),
     OutputDone(Amount, OperationId),
     Refund(OperationId),
+    Unreachable(OperationId, Amount),
 }
 
 <span class="kw">impl </span>State <span class="kw">for </span>DummyStateMachine {
@@ -207,6 +211,7 @@
             DummyStateMachine::InputDone(<span class="kw">_</span>) =&gt; <span class="macro">vec!</span>[],
             DummyStateMachine::OutputDone(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="macro">vec!</span>[],
             DummyStateMachine::Refund(<span class="kw">_</span>) =&gt; <span class="macro">vec!</span>[],
+            DummyStateMachine::Unreachable(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="macro">vec!</span>[],
         }
     }
 
@@ -217,6 +222,7 @@
             DummyStateMachine::InputDone(id) =&gt; <span class="kw-2">*</span>id,
             DummyStateMachine::OutputDone(<span class="kw">_</span>, id) =&gt; <span class="kw-2">*</span>id,
             DummyStateMachine::Refund(id) =&gt; <span class="kw-2">*</span>id,
+            DummyStateMachine::Unreachable(id, <span class="kw">_</span>) =&gt; <span class="kw-2">*</span>id,
         }
     }
 }

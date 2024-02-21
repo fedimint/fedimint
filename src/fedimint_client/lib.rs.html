@@ -2277,6 +2277,10 @@
 <a href="#2277" id="2277">2277</a>
 <a href="#2278" id="2278">2278</a>
 <a href="#2279" id="2279">2279</a>
+<a href="#2280" id="2280">2280</a>
+<a href="#2281" id="2281">2281</a>
+<a href="#2282" id="2282">2282</a>
+<a href="#2283" id="2283">2283</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2359,9 +2363,9 @@
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>backup::ClientBackup;
 <span class="kw">use </span>db::{
-    CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix,
-    ClientInitStateKey, ClientInviteCodeKey, ClientInviteCodeKeyPrefix, ClientModuleRecovery,
-    EncodedClientSecretKey, InitMode,
+    apply_migrations_client, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey,
+    ClientConfigKeyPrefix, ClientInitStateKey, ClientInviteCodeKey, ClientInviteCodeKeyPrefix,
+    ClientModuleRecovery, EncodedClientSecretKey, InitMode,
 };
 <span class="kw">use </span>fedimint_core::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi, InviteCode,
@@ -2374,8 +2378,7 @@
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
 };
 <span class="kw">use </span>fedimint_core::db::{
-    apply_migrations, AutocommitError, Database, DatabaseTransaction,
-    IDatabaseTransactionOpsCoreTyped,
+    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -4034,7 +4037,11 @@
         </span>)
     }
 
-    <span class="kw">async fn </span>migrate_database(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>migrate_database(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        db: <span class="kw-2">&amp;</span>Database,
+        decoders: ModuleDecoderRegistry,
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="comment">// Only apply the client database migrations if the database has been
         // initialized.
         </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(client_config) = <span class="self">self</span>.load_existing_config().<span class="kw">await </span>{
@@ -4045,12 +4052,13 @@
                     <span class="kw">continue</span>;
                 };
 
-                apply_migrations(
-                    <span class="self">self</span>.db(),
+                apply_migrations_client(
+                    db,
                     kind.to_string(),
                     init.database_version(),
                     init.get_database_migrations(),
-                    <span class="prelude-val">Some</span>(module_id),
+                    module_id,
+                    decoders.clone(),
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             }
@@ -4205,7 +4213,7 @@
 
         <span class="comment">// Migrate the database before interacting with it in case any on-disk data
         // structures have changed.
-        </span><span class="self">self</span>.migrate_database().<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="self">self</span>.migrate_database(<span class="kw-2">&amp;</span>db, decoders.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>init_state = <span class="self">Self</span>::load_init_state(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
 

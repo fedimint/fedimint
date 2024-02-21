@@ -378,13 +378,25 @@
 <a href="#378" id="378">378</a>
 <a href="#379" id="379">379</a>
 <a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, format_err, Context <span class="kw">as _</span>};
 <span class="kw">use </span>common::broken_fed_key_pair;
-<span class="kw">use </span>db::{migrate_to_v1, DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey};
+<span class="kw">use </span>db::{migrate_to_v1, migrate_to_v2, DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey};
+<span class="kw">use </span>fedimint_client::db::ClientMigrationFn;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
@@ -392,7 +404,7 @@
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_core::core::{Decoder, KeyPair, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationMap,
+    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -698,13 +710,7 @@
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>DummyClientInit {
     <span class="kw">type </span>Common = DummyCommonInit;
-    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">1</span>);
-
-    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
-        <span class="kw">let </span><span class="kw-2">mut </span>migrations = MigrationMap::new();
-        migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx| migrate_to_v1(dbtx).boxed());
-        migrations
-    }
+    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">2</span>);
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -756,6 +762,22 @@
             client_ctx: args.context(),
             db: args.db().clone(),
         })
+    }
+
+    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; = BTreeMap::new();
+        migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>| {
+            migrate_to_v1(dbtx).boxed()
+        });
+
+        migrations.insert(
+            DatabaseVersion(<span class="number">1</span>),
+            <span class="kw">move </span>|<span class="kw">_</span>, module_instance_id, active_states, inactive_states, decoders| {
+                migrate_to_v2(module_instance_id, active_states, inactive_states, decoders).boxed()
+            },
+        );
+
+        migrations
     }
 }
 </code></pre></div></section></main></body></html>

@@ -798,6 +798,8 @@
 <a href="#798" id="798">798</a>
 <a href="#799" id="799">799</a>
 <a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -917,7 +919,9 @@
         <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span><span class="kw-2">&amp;</span>cfg.consensus.modules {
             <span class="kw">let </span>kind = module_cfg.kind.clone();
             <span class="kw">let </span><span class="prelude-val">Some</span>(init) = module_inits.get(<span class="kw-2">&amp;</span>kind) <span class="kw">else </span>{
-                <span class="macro">bail!</span>(<span class="string">&quot;Detected configuration for unsupported module id: {module_id}, kind: {kind}&quot;</span>)
+                <span class="macro">bail!</span>(
+                    <span class="string">&quot;Detected configuration for unsupported module id: {module_id}, kind: {kind}&quot;
+                </span>);
             };
             <span class="macro">info!</span>(target: LOG_CORE,
                 module_instance_id = <span class="kw-2">*</span>module_id, kind = %kind, <span class="string">&quot;Init module&quot;</span>);

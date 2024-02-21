@@ -888,7 +888,7 @@
 
 <span class="kw">use </span><span class="self">self</span>::init::ClientModuleInit;
 <span class="kw">use </span><span class="kw">crate</span>::module::recovery::{DynModuleBackup, ModuleBackup};
-<span class="kw">use </span><span class="kw">crate</span>::sm::{<span class="self">self</span>, ActiveState, Context, DynContext, DynState, State};
+<span class="kw">use </span><span class="kw">crate</span>::sm::{<span class="self">self</span>, ActiveStateMeta, Context, DynContext, DynState, State};
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use crate</span>::{oplog, AddStateMachinesResult, ClientArc, ClientWeak, TransactionUpdates};
 
@@ -1271,7 +1271,7 @@
         <span class="self">self</span>.client.get().has_active_states(op_id).<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>get_own_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(M::States, ActiveState)&gt; {
+    <span class="kw">pub async fn </span>get_own_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(M::States, ActiveStateMeta)&gt; {
         <span class="self">self</span>.client
             .get()
             .executor

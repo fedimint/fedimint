@@ -991,7 +991,7 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     Committable, Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
-    DatabaseVersion, MigrationMap,
+    DatabaseVersion, ServerMigrationFn,
 };
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::fmt_utils::AbbreviateHexBytes;
@@ -1374,11 +1374,6 @@
 
     <span class="kw">fn </span>database_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseVersion;
 
-    <span class="doccomment">/// Retrieves the `MigrationMap` from the module to be applied to the
-    /// database before the module is initialized. The `MigrationMap` is
-    /// indexed on the from version.
-    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap;
-
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
@@ -1398,13 +1393,6 @@
     /// migration function in `get_database_migrations` which should define how
     /// to move from the previous database version to the current version.
     </span><span class="kw">const </span>DATABASE_VERSION: DatabaseVersion;
-
-    <span class="doccomment">/// Retrieves the `MigrationMap` from the module to be applied to the
-    /// database before the module is initialized. The `MigrationMap` is
-    /// indexed on the from version.
-    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
-        MigrationMap::new()
-    }
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1432,10 +1420,6 @@
 
     <span class="kw">fn </span>database_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseVersion {
         &lt;<span class="self">Self </span><span class="kw">as </span>ModuleInit&gt;::DATABASE_VERSION
-    }
-
-    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleInit&gt;::get_database_migrations(<span class="self">self</span>)
     }
 
     <span class="kw">async fn </span>dump_database(
@@ -1492,6 +1476,11 @@
         module_instance_id: ModuleInstanceId,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
     ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt;;
+
+    <span class="doccomment">/// Retrieves the migrations map from the server module to be applied to the
+    /// database before the module is initialized. The migrations map is
+    /// indexed on the from version.
+    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt;;
 }
 
 <span class="macro">dyn_newtype_define!</span>(
@@ -1623,6 +1612,13 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
     ) -&gt; anyhow::Result&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ModuleInit&gt;::Common <span class="kw">as </span>CommonModuleInit&gt;::ClientConfig&gt;;
+
+    <span class="doccomment">/// Retrieves the migrations map from the server module to be applied to the
+    /// database before the module is initialized. The migrations map is
+    /// indexed on the from version.
+    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt; {
+        BTreeMap::new()
+    }
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -1694,6 +1690,10 @@
             config.version,
             &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleInit&gt;::get_client_config(<span class="self">self</span>, config)<span class="question-mark">?</span>,
         )
+    }
+
+    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt; {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleInit&gt;::get_database_migrations(<span class="self">self</span>)
     }
 }
 

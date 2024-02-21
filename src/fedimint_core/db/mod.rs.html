@@ -2947,8 +2947,6 @@
 <a href="#2947" id="2947">2947</a>
 <a href="#2948" id="2948">2948</a>
 <a href="#2949" id="2949">2949</a>
-<a href="#2950" id="2950">2950</a>
-<a href="#2951" id="2951">2951</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -4781,15 +4779,12 @@
     };
 }
 
-<span class="doccomment">/// MigrationMap is a BTreeMap that maps DatabaseVersions to async functions.
-/// These functions are expected to &quot;migrate&quot; the database from the keyed
-/// DatabaseVersion to DatabaseVersion + 1.
-</span><span class="kw">pub type </span>MigrationMap = BTreeMap&lt;
-    DatabaseVersion,
+<span class="doccomment">/// `ServerMigrationFn` that modules can implement to &quot;migrate&quot; the database
+/// to the next database version.
+</span><span class="kw">pub type </span>ServerMigrationFn =
     <span class="kw">for</span>&lt;<span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;tx</span>&gt; <span class="kw">fn</span>(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;r </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>&gt;,
-    ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;r</span>&gt;&gt;,
-&gt;;
+    ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;r</span>&gt;&gt;;
 
 <span class="doccomment">/// Applies the database migrations to a non-isolated database. Intended only to
 /// be used for `fedimint-server`.
@@ -4797,24 +4792,24 @@
     db: <span class="kw-2">&amp;</span>Database,
     kind: String,
     target_db_version: DatabaseVersion,
-    migrations: MigrationMap,
+    migrations: BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     apply_migrations(db, kind, target_db_version, migrations, <span class="prelude-val">None</span>).<span class="kw">await
 </span>}
 
 <span class="doccomment">/// `apply_migrations` iterates from the on disk database version for the module
 /// up to `target_db_version` and executes all of the migrations that exist in
-/// the `MigrationMap`. Each migration in `MigrationMap` updates the database to
-/// have the correct on-disk structures that the code is expecting. The entire
-/// migration process is atomic (i.e migration from 0-&gt;1 and 1-&gt;2 happen
-/// atomically). This function is called before the module is initialized and as
-/// long as the correct migrations are supplied in `MigrationMap`, the module
-/// will be able to read and write from the database successfully.
+/// the migrations map. Each migration in migrations map updates the
+/// database to have the correct on-disk structures that the code is expecting.
+/// The entire migration process is atomic (i.e migration from 0-&gt;1 and 1-&gt;2
+/// happen atomically). This function is called before the module is initialized
+/// and as long as the correct migrations are supplied in the migrations map,
+/// the module will be able to read and write from the database successfully.
 </span><span class="kw">pub async fn </span>apply_migrations(
     db: <span class="kw-2">&amp;</span>Database,
     kind: String,
     target_db_version: DatabaseVersion,
-    migrations: MigrationMap,
+    migrations: BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt;,
     module_instance_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     db.ensure_global()<span class="question-mark">?</span>;
@@ -4857,7 +4852,7 @@
                     migration(<span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc()).<span class="kw">await</span><span class="question-mark">?</span>;
                 }
             } <span class="kw">else </span>{
-                <span class="macro">panic!</span>(<span class="string">&quot;Missing migration for version {current_db_version}&quot;</span>);
+                <span class="macro">warn!</span>(target: LOG_DB, <span class="string">&quot;Missing server db migration for version {current_db_version}&quot;</span>);
             }
 
             current_db_version.increment();
@@ -4959,13 +4954,14 @@
 
 <span class="attr">#[allow(unused_imports)]
 </span><span class="kw">mod </span>test_utils {
+    <span class="kw">use </span>std::collections::BTreeMap;
     <span class="kw">use </span>std::time::Duration;
 
     <span class="kw">use </span>futures::{Future, FutureExt, StreamExt};
 
     <span class="kw">use super</span>::{
         apply_migrations, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
-        DatabaseVersionKeyV0, MigrationMap,
+        DatabaseVersionKeyV0, ServerMigrationFn,
     };
     <span class="kw">use </span><span class="kw">crate</span>::core::ModuleKind;
     <span class="kw">use </span><span class="kw">crate</span>::db::mem_impl::MemDatabase;
@@ -5560,7 +5556,7 @@
             .<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>migrations = MigrationMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt; = BTreeMap::new();
 
         migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx| {
             migrate_test_db_version_0(dbtx).boxed()

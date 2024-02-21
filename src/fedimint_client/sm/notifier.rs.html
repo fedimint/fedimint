@@ -226,7 +226,7 @@
     ActiveModuleOperationStateKeyPrefix, ActiveStateKey, InactiveModuleOperationStateKeyPrefix,
     InactiveStateKey,
 };
-<span class="kw">use </span><span class="kw">crate</span>::sm::{ActiveState, DynState, InactiveState, State};
+<span class="kw">use </span><span class="kw">crate</span>::sm::{ActiveStateMeta, DynState, InactiveStateMeta, State};
 
 <span class="doccomment">/// State transition notifier owned by the modularized client used to inform
 /// modules of state transitions.
@@ -359,7 +359,7 @@
                     module_instance: <span class="self">self</span>.module_instance,
                 })
                 .<span class="kw">await
-                </span>.map(|(key, val): (ActiveStateKey, ActiveState)| {
+                </span>.map(|(key, val): (ActiveStateKey, ActiveStateMeta)| {
                     (to_typed_state(key.state), val.created_at)
                 })
                 .collect::&lt;Vec&lt;(S, <span class="kw">_</span>)&gt;&gt;()
@@ -371,7 +371,7 @@
                     module_instance: <span class="self">self</span>.module_instance,
                 })
                 .<span class="kw">await
-                </span>.map(|(key, val): (InactiveStateKey, InactiveState)| {
+                </span>.map(|(key, val): (InactiveStateKey, InactiveStateMeta)| {
                     (to_typed_state(key.state), val.created_at)
                 })
                 .collect::&lt;Vec&lt;(S, <span class="kw">_</span>)&gt;&gt;()
