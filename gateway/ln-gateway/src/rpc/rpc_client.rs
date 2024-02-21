@@ -83,7 +83,10 @@ impl GatewayRpcClient {
         self.call_post(url, payload).await
     }
 
-    pub async fn leave_federation(&self, payload: LeaveFedPayload) -> GatewayRpcResult<()> {
+    pub async fn leave_federation(
+        &self,
+        payload: LeaveFedPayload,
+    ) -> GatewayRpcResult<FederationInfo> {
         let url = self.base_url.join("/leave-fed").expect("invalid base url");
         self.call_post(url, payload).await
     }

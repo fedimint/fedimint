@@ -86,8 +86,9 @@ use crate::rpc::{
 };
 use crate::state_machine::GatewayExtPayStates;
 
-/// LND HTLC interceptor can't handle SCID of 0, so start from 1
-pub const INITIAL_SCID: u64 = 1;
+/// This initial SCID is considered invalid by LND HTLC interceptor,
+/// So we should always increment the value before assigning a new SCID.
+pub const INITIAL_SCID: u64 = 0;
 
 /// How long a gateway announcement stays valid
 pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
@@ -272,9 +273,9 @@ pub struct Gateway {
     // A public key representing the identity of the gateway. Private key is not used.
     pub gateway_id: secp256k1::PublicKey,
 
-    // ID generator that atomically increments. Used for creation of new short channel ids that
-    // represent federations.
-    channel_id_generator: Arc<Mutex<u64>>,
+    // Tracker for short channel ID assignments. When connecting a new federation,
+    // this value is incremented and assigned to the federation as the `mint_channel_id`
+    max_used_scid: Arc<Mutex<u64>>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -287,7 +288,7 @@ impl std::fmt::Debug for Gateway {
             .field("clients", &self.clients)
             .field("scid_to_federation", &self.scid_to_federation)
             .field("gateway_id", &self.gateway_id)
-            .field("channel_id_generator", &self.channel_id_generator)
+            .field("max_used_scid", &self.max_used_scid)
             .finish()
     }
 }
@@ -325,7 +326,7 @@ impl Gateway {
             client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
             gateway_id: Gateway::get_gateway_id(gateway_db).await,
-            channel_id_generator: Arc::new(Mutex::new(INITIAL_SCID)),
+            max_used_scid: Arc::new(Mutex::new(INITIAL_SCID)),
         })
     }
 
@@ -360,7 +361,7 @@ impl Gateway {
             lightning_builder: Arc::new(GatewayLightningBuilder {
                 lightning_mode: opts.mode.clone(),
             }),
-            channel_id_generator: Arc::new(Mutex::new(INITIAL_SCID)),
+            max_used_scid: Arc::new(Mutex::new(INITIAL_SCID)),
             gateway_parameters: opts.to_gateway_parameters()?,
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
@@ -688,6 +689,7 @@ impl Gateway {
 
             return Ok(GatewayInfo {
                 federations,
+                channels: Some(self.scid_to_federation.read().await.clone()),
                 version_hash: fedimint_build_code_version_env!().to_string(),
                 lightning_pub_key: Some(lightning_context.lightning_public_key.to_hex()),
                 lightning_alias: Some(lightning_context.lightning_alias.clone()),
@@ -701,6 +703,7 @@ impl Gateway {
 
         Ok(GatewayInfo {
             federations: vec![],
+            channels: None,
             version_hash: fedimint_build_code_version_env!().to_string(),
             lightning_pub_key: None,
             lightning_alias: None,
@@ -873,17 +876,12 @@ impl Gateway {
             let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
                 GatewayError::InvalidMetadata(format!("Invalid federation member string {e:?}"))
             })?;
+            let federation_id = invite_code.federation_id();
 
             let _join_federation = self.client_joining_lock.lock().await;
 
             // Check if this federation has already been registered
-            if self
-                .clients
-                .read()
-                .await
-                .get(&invite_code.federation_id())
-                .is_some()
-            {
+            if self.clients.read().await.get(&federation_id).is_some() {
                 return Err(GatewayError::FederationAlreadyConnected);
             }
 
@@ -896,15 +894,15 @@ impl Gateway {
 
             // The gateway deterministically assigns a channel id (u64) to each federation
             // connected.
-            let mut channel_id_generator = self.channel_id_generator.lock().await;
-            let mint_channel_id = channel_id_generator.checked_add(1).ok_or(
-                GatewayError::GatewayConfigurationError(
-                    "Too many connected federations".to_string(),
-                ),
-            )?;
-            *channel_id_generator = mint_channel_id;
+            let mut max_used_scid = self.max_used_scid.lock().await;
+            let mint_channel_id =
+                max_used_scid
+                    .checked_add(1)
+                    .ok_or(GatewayError::GatewayConfigurationError(
+                        "Too many connected federations".to_string(),
+                    ))?;
+            *max_used_scid = mint_channel_id;
 
-            let federation_id = invite_code.federation_id();
             let gw_client_cfg = FederationConfig {
                 invite_code,
                 mint_channel_id,
@@ -925,7 +923,14 @@ impl Gateway {
                 .build(gw_client_cfg.clone(), self.clone())
                 .await?;
 
-            let federation_info = self.make_federation_info(&client, federation_id).await;
+            // Instead of using `make_federation_info`, we manually create federation info
+            // here because short channel id is not yet persisted
+            let federation_info = FederationInfo {
+                federation_id,
+                balance_msat: client.get_balance().await,
+                config: client.get_config().clone(),
+                channel_id: Some(mint_channel_id),
+            };
 
             self.check_federation_network(&federation_info, gateway_config.network)
                 .await?;
@@ -957,6 +962,7 @@ impl Gateway {
             self.client_builder
                 .save_config(gw_client_cfg.clone(), dbtx)
                 .await?;
+            debug!("Federation with ID: {federation_id} connected and assigned channel id: {mint_channel_id}");
 
             return Ok(federation_info);
         }
@@ -964,7 +970,16 @@ impl Gateway {
         Err(GatewayError::Disconnected)
     }
 
-    pub async fn handle_leave_federation(&mut self, payload: LeaveFedPayload) -> Result<()> {
+    pub async fn handle_leave_federation(
+        &mut self,
+        payload: LeaveFedPayload,
+    ) -> Result<FederationInfo> {
+        let federation_info = {
+            let client = self.select_client(payload.federation_id).await?;
+            self.make_federation_info(client.value(), payload.federation_id)
+                .await
+        };
+
         // TODO: This should optimistically try to contact the federation to remove the
         // registration record
         let _client_joining_lock = self.client_joining_lock.lock().await;
@@ -977,7 +992,8 @@ impl Gateway {
         .await;
         dbtx.commit_tx_result()
             .await
-            .map_err(GatewayError::DatabaseError)
+            .map_err(GatewayError::DatabaseError)?;
+        Ok(federation_info)
     }
 
     pub async fn handle_backup_msg(
@@ -1213,6 +1229,12 @@ impl Gateway {
             .into_value();
 
         client.wait_until_fully_dropped().await;
+
+        // Remove previously assigned scid from `scid_to_federation` map
+        self.scid_to_federation
+            .write()
+            .await
+            .retain(|_, fid| *fid != federation_id);
         Ok(())
     }
 
@@ -1243,13 +1265,12 @@ impl Gateway {
     async fn load_clients(&mut self) {
         let dbtx = self.gateway_db.begin_transaction().await;
         let configs = self.client_builder.load_configs(dbtx.into_nc()).await;
-        let mut channel_id_generator = self.channel_id_generator.lock().await;
-        let mut next_channel_id = *channel_id_generator;
 
         let _join_federation = self.client_joining_lock.lock().await;
 
-        for config in configs {
+        for config in configs.clone() {
             let federation_id = config.invite_code.federation_id();
+            let scid = config.mint_channel_id;
 
             if let Ok(client) = Spanned::try_new(
                 info_span!("client", federation_id  = %federation_id.clone()),
@@ -1260,7 +1281,6 @@ impl Gateway {
                 // Registering each client happens in the background, since we're loading
                 // the clients for the first time, just add them to
                 // the in-memory maps
-                let scid = config.mint_channel_id;
                 self.clients.write().await.insert(federation_id, client);
                 self.scid_to_federation
                     .write()
@@ -1269,13 +1289,12 @@ impl Gateway {
             } else {
                 warn!("Failed to load client for federation: {federation_id}");
             }
-
-            if config.mint_channel_id > next_channel_id {
-                next_channel_id = config.mint_channel_id + 1;
-            }
         }
 
-        *channel_id_generator = next_channel_id;
+        if let Some(max_mint_channel_id) = configs.iter().map(|cfg| cfg.mint_channel_id).max() {
+            let mut max_used_scid = self.max_used_scid.lock().await;
+            *max_used_scid = max_mint_channel_id;
+        }
     }
 
     async fn register_clients_timer(&mut self, task_group: &mut TaskGroup) {
@@ -1383,11 +1402,24 @@ impl Gateway {
     ) -> FederationInfo {
         let balance_msat = client.get_balance().await;
         let config = client.get_config().clone();
+        let channel_id = self
+            .scid_to_federation
+            .read()
+            .await
+            .iter()
+            .find_map(|(scid, fid)| {
+                if *fid == federation_id {
+                    Some(*scid)
+                } else {
+                    None
+                }
+            });
 
         FederationInfo {
             federation_id,
             balance_msat,
             config,
+            channel_id,
         }
     }
 

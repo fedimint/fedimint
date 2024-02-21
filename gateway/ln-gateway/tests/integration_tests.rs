@@ -1169,6 +1169,82 @@ async fn test_gateway_shows_info_about_all_connected_federations() -> anyhow::Re
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_can_leave_connected_federations() -> anyhow::Result<()> {
+    multi_federation_test(
+        LightningNodeType::Lnd,
+        |gateway, rpc, fed1, fed2, _| async move {
+            assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
+
+            let invite1 = fed1.invite_code();
+            let invite2 = fed2.invite_code();
+
+            let id1 = invite1.federation_id();
+            let id2 = invite2.federation_id();
+
+            connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
+
+            let info = rpc.get_info().await.unwrap();
+            assert_eq!(info.federations.len(), 2);
+            assert!(info
+                .federations
+                .iter()
+                .any(|info| info.federation_id == id1 && info.channel_id == Some(1)));
+            assert!(info
+                .federations
+                .iter()
+                .any(|info| info.federation_id == id2 && info.channel_id == Some(2)));
+
+            // remove first connected federation
+            let fed_info = rpc
+                .leave_federation(LeaveFedPayload { federation_id: id1 })
+                .await
+                .unwrap();
+            assert_eq!(fed_info.federation_id, id1);
+            assert_eq!(fed_info.channel_id, Some(1));
+
+            // reconnect the first federation
+            let fed_info = rpc
+                .connect_federation(ConnectFedPayload {
+                    invite_code: invite1.to_string(),
+                })
+                .await
+                .unwrap();
+            assert_eq!(fed_info.federation_id, id1);
+            assert_eq!(fed_info.channel_id, Some(3));
+
+            // remove second connected federation
+            let fed_info = rpc
+                .leave_federation(LeaveFedPayload { federation_id: id2 })
+                .await
+                .unwrap();
+            assert_eq!(fed_info.federation_id, id2);
+            assert_eq!(fed_info.channel_id, Some(2));
+
+            // reconnect the second federation
+            let fed_info = rpc
+                .connect_federation(ConnectFedPayload {
+                    invite_code: invite2.to_string(),
+                })
+                .await
+                .unwrap();
+            assert_eq!(fed_info.federation_id, id2);
+            assert_eq!(fed_info.channel_id, Some(4));
+
+            let info = rpc.get_info().await.unwrap();
+            assert_eq!(info.federations.len(), 2);
+            assert_eq!(
+                info.channels.unwrap().keys().cloned().collect::<Vec<u64>>(),
+                vec![3, 4]
+            );
+
+            drop(gateway); // keep until the end to avoid the gateway shutting down too early
+            Ok(())
+        },
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_shows_balance_for_any_connected_federation() -> anyhow::Result<()> {
     multi_federation_test(
         LightningNodeType::Lnd,

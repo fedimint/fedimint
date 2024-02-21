@@ -63,12 +63,14 @@ pub struct FederationInfo {
     pub federation_id: FederationId,
     pub balance_msat: Amount,
     pub config: ClientConfig,
+    pub channel_id: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct GatewayInfo {
     pub version_hash: String,
     pub federations: Vec<FederationInfo>,
+    pub channels: Option<BTreeMap<u64, FederationId>>,
     pub lightning_pub_key: Option<String>,
     pub lightning_alias: Option<String>,
     #[serde(with = "serde_option_routing_fees")]
