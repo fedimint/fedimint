@@ -289,7 +289,7 @@
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::task::{block_in_place, sleep, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::{block_in_place, sleep_in_test, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>futures::executor::block_on;
@@ -472,7 +472,7 @@
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
 
-            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+            sleep_in_test(<span class="string">&quot;waiting for webserver to be ready&quot;</span>, Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
         }
 
         <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
@@ -490,7 +490,7 @@
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
 
-            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+            sleep_in_test(<span class="string">&quot;waiting for gateway state&quot;</span>, Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
         }
 
         <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(

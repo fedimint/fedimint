@@ -278,6 +278,7 @@
 <a href="#278" id="278">278</a>
 <a href="#279" id="279">279</a>
 <a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -289,7 +290,7 @@
 <span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::task::sleep;
+<span class="kw">use </span>fedimint_core::task::sleep_in_test;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{task, Amount};
@@ -351,7 +352,8 @@
                         <span class="question-mark">?</span>current_block_count,
                         <span class="string">&quot;Waiting for blocks to be mined&quot;
                     </span>);
-                    sleep(Duration::from_millis(<span class="number">200</span>)).<span class="kw">await</span>;
+                    sleep_in_test(<span class="string">&quot;waiting for blocks to be mined&quot;</span>, Duration::from_millis(<span class="number">200</span>))
+                        .<span class="kw">await</span>;
                 } <span class="kw">else </span>{
                     <span class="macro">debug!</span>(
                         target: LOG_TEST,
@@ -425,7 +427,7 @@
             <span class="kw">match </span><span class="self">self</span>.client.get_mempool_entry(txid) {
                 <span class="prelude-val">Ok</span>(tx) =&gt; <span class="kw">return </span>tx.fees.base.into(),
                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                    sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+                    sleep_in_test(<span class="string">&quot;could not get mempool tx fee&quot;</span>, Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
                     <span class="kw">continue</span>;
                 }
             }

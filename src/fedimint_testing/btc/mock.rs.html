@@ -347,7 +347,7 @@
     <span class="prelude-ty">Result </span><span class="kw">as </span>BitcoinRpcResult,
 };
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-<span class="kw">use </span>fedimint_core::task::{sleep, TaskHandle};
+<span class="kw">use </span>fedimint_core::task::{sleep_in_test, TaskHandle};
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, Feerate};
@@ -563,7 +563,7 @@
 
             <span class="kw">let </span>tx = <span class="kw">match </span>maybe_tx {
                 <span class="prelude-val">None </span>=&gt; {
-                    sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+                    sleep_in_test(<span class="string">&quot;no transaction found&quot;</span>, Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
                     <span class="kw">continue</span>;
                 }
                 <span class="prelude-val">Some</span>(tx) =&gt; tx,
