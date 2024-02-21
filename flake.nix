@@ -8,13 +8,16 @@
       url = "github:dpc/flakebox?rev=db74cf9715c2e21c59f7a0bcb2002ae87ad5068a";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    bundlers = {
+      url = "github:NixOS/bundlers?rev=00762a03a3d862a2ca6272a21fdc50bda5d36c42";
+    };
     advisory-db = {
       url = "github:rustsec/advisory-db";
       flake = false;
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, flakebox, advisory-db }:
+  outputs = { self, nixpkgs, flake-utils, flakebox, advisory-db, bundlers }:
     let
       # overlay combining all overlays we use
       overlayAll =
@@ -37,6 +40,9 @@
         wasm-bindgen = import ./nix/overlays/wasm-bindgen.nix;
         darwin-compile-fixes = import ./nix/overlays/darwin-compile-fixes.nix;
       };
+
+      bundlers = bundlers.bundlers;
+      defaultBundler = bundlers.defaultBundler;
     } //
     flake-utils.lib.eachDefaultSystem
       (system:
