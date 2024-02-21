@@ -154,6 +154,9 @@
 <a href="#154" id="154">154</a>
 <a href="#155" id="155">155</a>
 <a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::result::Result;
 
 <span class="kw">use </span>bitcoin::Address;
@@ -239,7 +242,10 @@
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>leave_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: LeaveFedPayload) -&gt; GatewayRpcResult&lt;()&gt; {
+    <span class="kw">pub async fn </span>leave_federation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: LeaveFedPayload,
+    ) -&gt; GatewayRpcResult&lt;FederationInfo&gt; {
         <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/leave-fed&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}

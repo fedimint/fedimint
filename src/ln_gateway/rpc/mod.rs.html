@@ -91,6 +91,8 @@
 <a href="#91" id="91">91</a>
 <a href="#92" id="92">92</a>
 <a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
@@ -156,12 +158,14 @@
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>balance_msat: Amount,
     <span class="kw">pub </span>config: ClientConfig,
+    <span class="kw">pub </span>channel_id: <span class="prelude-ty">Option</span>&lt;u64&gt;,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, PartialEq)]
 </span><span class="kw">pub struct </span>GatewayInfo {
     <span class="kw">pub </span>version_hash: String,
     <span class="kw">pub </span>federations: Vec&lt;FederationInfo&gt;,
+    <span class="kw">pub </span>channels: <span class="prelude-ty">Option</span>&lt;BTreeMap&lt;u64, FederationId&gt;&gt;,
     <span class="kw">pub </span>lightning_pub_key: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>lightning_alias: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="attr">#[serde(with = <span class="string">&quot;serde_option_routing_fees&quot;</span>)]

@@ -204,6 +204,7 @@
 <a href="#204" id="204">204</a>
 <a href="#205" id="205">205</a>
 <a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::config::FederationId;
@@ -366,9 +367,10 @@
             print_response(response).<span class="kw">await</span>;
         }
         Commands::LeaveFed { federation_id } =&gt; {
-            client()
+            <span class="kw">let </span>response = client()
                 .leave_federation(LeaveFedPayload { federation_id })
                 .<span class="kw">await</span><span class="question-mark">?</span>;
+            print_response(response).<span class="kw">await</span>;
         }
         Commands::Backup { federation_id } =&gt; {
             client().backup(BackupPayload { federation_id }).<span class="kw">await</span><span class="question-mark">?</span>;

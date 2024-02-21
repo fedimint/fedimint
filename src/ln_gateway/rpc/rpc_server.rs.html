@@ -407,8 +407,8 @@
     Extension(<span class="kw-2">mut </span>gateway): Extension&lt;Gateway&gt;,
     Json(payload): Json&lt;LeaveFedPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
-    gateway.handle_leave_federation(payload).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(())))
+    <span class="kw">let </span>fed = gateway.handle_leave_federation(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(fed)))
 }
 
 <span class="doccomment">/// Backup a gateway actor state
