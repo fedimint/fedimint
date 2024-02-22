@@ -115,7 +115,8 @@ mod fedimint_migration_tests {
     use fedimint_dummy_server::Dummy;
     use fedimint_logging::{TracingSetup, LOG_DB};
     use fedimint_testing::db::{
-        snapshot_db_migrations_server, validate_migrations_global, BYTE_32, TEST_MODULE_INSTANCE_ID,
+        snapshot_db_migrations_with_decoders, validate_migrations_global, BYTE_32,
+        TEST_MODULE_INSTANCE_ID,
     };
     use futures::StreamExt;
     use rand::rngs::OsRng;
@@ -125,9 +126,9 @@ mod fedimint_migration_tests {
 
     use super::AcceptedTransactionKey;
     use crate::db::{
-        AcceptedItem, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKeyPrefix,
-        AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix, SignedSessionOutcomeKey,
-        SignedSessionOutcomePrefix,
+        get_global_database_migrations, AcceptedItem, AcceptedItemKey, AcceptedItemPrefix,
+        AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix,
+        SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
     };
 
     /// Create a database with version 0 data. The database produced is not
@@ -202,7 +203,8 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
-        snapshot_db_migrations_server(
+        snapshot_db_migrations_with_decoders(
+            "fedimint-server",
             |db| {
                 Box::pin(async move {
                     create_server_db_with_v0_data(db).await;
@@ -285,6 +287,9 @@ mod fedimint_migration_tests {
                 }
                 Ok(())
             },
+            "fedimint-server",
+            GLOBAL_DATABASE_VERSION,
+            get_global_database_migrations(),
             ModuleDecoderRegistry::from_iter([(
                 TEST_MODULE_INSTANCE_ID,
                 DummyCommonInit::KIND,

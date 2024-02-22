@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs::read_dir;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -13,12 +14,12 @@ use fedimint_client::module::ClientModule;
 use fedimint_client::sm::{ActiveStateKeyPrefix, InactiveStateKeyPrefix};
 use fedimint_core::core::IntoDynInstance;
 use fedimint_core::db::{
-    apply_migrations, apply_migrations_server, Database, IDatabaseTransactionOpsCoreTyped,
+    apply_migrations, apply_migrations_server, Database, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped, ServerMigrationFn,
 };
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
 use fedimint_rocksdb::RocksDb;
-use fedimint_server::db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
 use futures::future::BoxFuture;
 use futures::{FutureExt, StreamExt};
 use rand::rngs::OsRng;
@@ -118,12 +119,13 @@ where
     Ok(())
 }
 
-/// Creates the database backup for `fedimint-server`
+/// Creates the database backup for `snapshot_name`
 /// to `db/migrations`. Then this function will execute the provided
 /// `prepare_fn` which is expected to populate the database with the appropriate
 /// data for testing a migration. If the snapshot directory already exists,
 /// this function will do nothing.
-pub async fn snapshot_db_migrations_server<'a, F>(
+pub async fn snapshot_db_migrations_with_decoders<'a, F>(
+    snapshot_name: &str,
     prepare_fn: F,
     decoders: ModuleDecoderRegistry,
 ) -> anyhow::Result<()>
@@ -131,7 +133,7 @@ where
     F: Fn(Database) -> BoxFuture<'a, ()>,
 {
     let project_root = get_project_root().unwrap();
-    let snapshot_dir = project_root.join("db/migrations").join("fedimint-server");
+    let snapshot_dir = project_root.join("db/migrations").join(snapshot_name);
     create_snapshot(snapshot_dir, decoders, false, prepare_fn).await
 }
 
@@ -259,31 +261,29 @@ async fn get_temp_database(
     ))
 }
 
-/// Validates the `fedimint-server` database migrations. `decoders` need to be
-/// passed in as an argument since `fedimint-server` is module agnostic. First
+/// Validates the database migrations. `decoders` need to be
+/// passed in as an argument since this is module agnostic. First
 /// applies all defined migrations to the database then executes the `validate``
 /// function which should confirm the database migrations were successful.
 pub async fn validate_migrations_global<F, Fut>(
     validate: F,
+    db_prefix: &str,
+    target_db_version: DatabaseVersion,
+    migrations: BTreeMap<DatabaseVersion, ServerMigrationFn>,
     decoders: ModuleDecoderRegistry,
 ) -> anyhow::Result<()>
 where
     F: Fn(Database) -> Fut,
     Fut: futures::Future<Output = anyhow::Result<()>>,
 {
-    let db = get_temp_database("fedimint-server", decoders).await?;
-    apply_migrations_server(
-        &db,
-        "fedimint-server".to_string(),
-        GLOBAL_DATABASE_VERSION,
-        get_global_database_migrations(),
-    )
-    .await
-    .context("Error applying migrations to temp database")?;
+    let db = get_temp_database(db_prefix, decoders).await?;
+    apply_migrations_server(&db, db_prefix.to_string(), target_db_version, migrations)
+        .await
+        .context("Error applying migrations to temp database")?;
 
     validate(db)
         .await
-        .with_context(|| "Validating fedimint-server".to_string())?;
+        .with_context(|| format!("Validating {db_prefix}"))?;
     Ok(())
 }
 
