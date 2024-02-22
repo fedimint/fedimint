@@ -1867,6 +1867,87 @@
 <a href="#1867" id="1867">1867</a>
 <a href="#1868" id="1868">1868</a>
 <a href="#1869" id="1869">1869</a>
+<a href="#1870" id="1870">1870</a>
+<a href="#1871" id="1871">1871</a>
+<a href="#1872" id="1872">1872</a>
+<a href="#1873" id="1873">1873</a>
+<a href="#1874" id="1874">1874</a>
+<a href="#1875" id="1875">1875</a>
+<a href="#1876" id="1876">1876</a>
+<a href="#1877" id="1877">1877</a>
+<a href="#1878" id="1878">1878</a>
+<a href="#1879" id="1879">1879</a>
+<a href="#1880" id="1880">1880</a>
+<a href="#1881" id="1881">1881</a>
+<a href="#1882" id="1882">1882</a>
+<a href="#1883" id="1883">1883</a>
+<a href="#1884" id="1884">1884</a>
+<a href="#1885" id="1885">1885</a>
+<a href="#1886" id="1886">1886</a>
+<a href="#1887" id="1887">1887</a>
+<a href="#1888" id="1888">1888</a>
+<a href="#1889" id="1889">1889</a>
+<a href="#1890" id="1890">1890</a>
+<a href="#1891" id="1891">1891</a>
+<a href="#1892" id="1892">1892</a>
+<a href="#1893" id="1893">1893</a>
+<a href="#1894" id="1894">1894</a>
+<a href="#1895" id="1895">1895</a>
+<a href="#1896" id="1896">1896</a>
+<a href="#1897" id="1897">1897</a>
+<a href="#1898" id="1898">1898</a>
+<a href="#1899" id="1899">1899</a>
+<a href="#1900" id="1900">1900</a>
+<a href="#1901" id="1901">1901</a>
+<a href="#1902" id="1902">1902</a>
+<a href="#1903" id="1903">1903</a>
+<a href="#1904" id="1904">1904</a>
+<a href="#1905" id="1905">1905</a>
+<a href="#1906" id="1906">1906</a>
+<a href="#1907" id="1907">1907</a>
+<a href="#1908" id="1908">1908</a>
+<a href="#1909" id="1909">1909</a>
+<a href="#1910" id="1910">1910</a>
+<a href="#1911" id="1911">1911</a>
+<a href="#1912" id="1912">1912</a>
+<a href="#1913" id="1913">1913</a>
+<a href="#1914" id="1914">1914</a>
+<a href="#1915" id="1915">1915</a>
+<a href="#1916" id="1916">1916</a>
+<a href="#1917" id="1917">1917</a>
+<a href="#1918" id="1918">1918</a>
+<a href="#1919" id="1919">1919</a>
+<a href="#1920" id="1920">1920</a>
+<a href="#1921" id="1921">1921</a>
+<a href="#1922" id="1922">1922</a>
+<a href="#1923" id="1923">1923</a>
+<a href="#1924" id="1924">1924</a>
+<a href="#1925" id="1925">1925</a>
+<a href="#1926" id="1926">1926</a>
+<a href="#1927" id="1927">1927</a>
+<a href="#1928" id="1928">1928</a>
+<a href="#1929" id="1929">1929</a>
+<a href="#1930" id="1930">1930</a>
+<a href="#1931" id="1931">1931</a>
+<a href="#1932" id="1932">1932</a>
+<a href="#1933" id="1933">1933</a>
+<a href="#1934" id="1934">1934</a>
+<a href="#1935" id="1935">1935</a>
+<a href="#1936" id="1936">1936</a>
+<a href="#1937" id="1937">1937</a>
+<a href="#1938" id="1938">1938</a>
+<a href="#1939" id="1939">1939</a>
+<a href="#1940" id="1940">1940</a>
+<a href="#1941" id="1941">1941</a>
+<a href="#1942" id="1942">1942</a>
+<a href="#1943" id="1943">1943</a>
+<a href="#1944" id="1944">1944</a>
+<a href="#1945" id="1945">1945</a>
+<a href="#1946" id="1946">1946</a>
+<a href="#1947" id="1947">1947</a>
+<a href="#1948" id="1948">1948</a>
+<a href="#1949" id="1949">1949</a>
+<a href="#1950" id="1950">1950</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2206,11 +2287,22 @@
     <span class="kw">pub </span>extra_meta: serde_json::Value,
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>MintOperationMetaVariant {
-    Reissuance {
-        out_point: OutPoint,
+    <span class="comment">// TODO: add migrations for operation log and clean up schema
+    </span><span class="doccomment">/// Either `legacy_out_point` or both `txid` and `out_point_indices` will be
+    /// present.
+    </span>Reissuance {
+        <span class="comment">// Removed in 0.3.0:
+        </span><span class="attr">#[serde(skip_serializing, default, rename = <span class="string">&quot;out_point&quot;</span>)]
+        </span>legacy_out_point: <span class="prelude-ty">Option</span>&lt;OutPoint&gt;,
+        <span class="comment">// Introduced in 0.3.0:
+        </span><span class="attr">#[serde(default)]
+        </span>txid: <span class="prelude-ty">Option</span>&lt;TransactionId&gt;,
+        <span class="comment">// Introduced in 0.3.0:
+        </span><span class="attr">#[serde(default)]
+        </span>out_point_indices: Vec&lt;u64&gt;,
     },
     SpendOOB {
         requested_amount: Amount,
@@ -2933,16 +3025,27 @@
 
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
             .expect(<span class="string">&quot;MintClientModule::reissue_external_notes extra_meta is serializable&quot;</span>);
-        <span class="kw">let </span>operation_meta_gen = <span class="kw">move </span>|txid, <span class="kw">_</span>| MintOperationMeta {
-            variant: MintOperationMetaVariant::Reissuance {
-                out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
-            },
-            amount,
-            extra_meta: extra_meta.clone(),
+        <span class="kw">let </span>operation_meta_gen = <span class="kw">move </span>|txid, out_points: Vec&lt;OutPoint&gt;| {
+            <span class="macro">assert!</span>(
+                out_points.iter().all(|out_point| out_point.txid == txid),
+                <span class="string">&quot;Change outpoints didn&#39;t all have consistent transaction id.&quot;
+            </span>);
+
+            MintOperationMeta {
+                variant: MintOperationMetaVariant::Reissuance {
+                    legacy_out_point: <span class="prelude-val">None</span>,
+                    txid: <span class="prelude-val">Some</span>(txid),
+                    out_point_indices: out_points
+                        .iter()
+                        .map(|out_point| out_point.out_idx)
+                        .collect(),
+                },
+                amount,
+                extra_meta: extra_meta.clone(),
+            }
         };
 
-        <span class="kw">let </span>change = <span class="self">self
-            </span>.client_ctx
+        <span class="self">self</span>.client_ctx
             .finalize_and_submit_transaction(
                 operation_id,
                 MintCommonInit::KIND.as_str(),
@@ -2950,12 +3053,7 @@
                 tx,
             )
             .<span class="kw">await
-            </span>.context(<span class="string">&quot;We already reissued these notes&quot;</span>)<span class="question-mark">?
-            </span>.<span class="number">1</span>;
-
-        <span class="self">self</span>.client_ctx
-            .await_primary_module_outputs(operation_id, change)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+            </span>.context(<span class="string">&quot;We already reissued these notes&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(operation_id)
     }
@@ -2967,8 +3065,26 @@
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;ReissueExternalNotesState&gt;&gt; {
         <span class="kw">let </span>operation = <span class="self">self</span>.mint_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>out_point = <span class="kw">match </span>operation.meta::&lt;MintOperationMeta&gt;().variant {
-            MintOperationMetaVariant::Reissuance { out_point } =&gt; out_point,
+        <span class="kw">let </span>(txid, out_points) = <span class="kw">match </span>operation.meta::&lt;MintOperationMeta&gt;().variant {
+            MintOperationMetaVariant::Reissuance {
+                legacy_out_point,
+                txid,
+                out_point_indices,
+            } =&gt; {
+                <span class="comment">// Either txid or legacy_out_point will be present, so we should always
+                // have a source for the txid
+                </span><span class="kw">let </span>txid = txid
+                    .or(legacy_out_point.map(|out_point| out_point.txid))
+                    .context(<span class="string">&quot;Empty reissuance not permitted, this should never happen&quot;</span>)<span class="question-mark">?</span>;
+
+                <span class="kw">let </span>out_points = out_point_indices
+                    .into_iter()
+                    .map(|out_idx| OutPoint { txid, out_idx })
+                    .chain(legacy_out_point)
+                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+                (txid, out_points)
+            }
             <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a reissuance&quot;</span>),
         };
 
@@ -2981,7 +3097,7 @@
                 <span class="kw">match </span>client_ctx
                     .transaction_updates(operation_id)
                     .<span class="kw">await
-                    </span>.await_tx_accepted(out_point.txid)
+                    </span>.await_tx_accepted(txid)
                     .<span class="kw">await
                 </span>{
                     <span class="prelude-val">Ok</span>(()) =&gt; {
@@ -2989,17 +3105,17 @@
                     }
                     <span class="prelude-val">Err</span>(e) =&gt; {
                         <span class="kw">yield </span>ReissueExternalNotesState::Failed(<span class="macro">format!</span>(<span class="string">&quot;Transaction not accepted {e:?}&quot;</span>));
+                        <span class="kw">return</span>;
                     }
                 }
 
-                <span class="kw">match </span>client_ctx.self_ref().await_output_finalized(operation_id, out_point).<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                        <span class="kw">yield </span>ReissueExternalNotesState::Done;
-                    },
-                    <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="kw">for </span>out_point <span class="kw">in </span>out_points {
+                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client_ctx.self_ref().await_output_finalized(operation_id, out_point).<span class="kw">await </span>{
                         <span class="kw">yield </span>ReissueExternalNotesState::Failed(e.to_string());
-                    },
+                        <span class="kw">return</span>;
+                    }
                 }
+                <span class="kw">yield </span>ReissueExternalNotesState::Done;
             }}
         ))
     }
@@ -3548,10 +3664,15 @@
     <span class="kw">use </span>fedimint_core::api::InviteCode;
     <span class="kw">use </span>fedimint_core::config::FederationId;
     <span class="kw">use </span>fedimint_core::encoding::Decodable;
-    <span class="kw">use </span>fedimint_core::{Amount, PeerId, Tiered, TieredMulti, TieredSummary};
+    <span class="kw">use </span>fedimint_core::{
+        Amount, OutPoint, PeerId, Tiered, TieredMulti, TieredSummary, TransactionId,
+    };
     <span class="kw">use </span>itertools::Itertools;
+    <span class="kw">use </span>serde_json::json;
 
-    <span class="kw">use crate</span>::{select_notes_from_stream, OOBNotes, OOBNotesData, SpendableNote};
+    <span class="kw">use crate</span>::{
+        select_notes_from_stream, MintOperationMetaVariant, OOBNotes, OOBNotesData, SpendableNote,
+    };
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>select_notes_avg_test() {
@@ -3734,6 +3855,47 @@
         ]);
         <span class="kw">let </span>notes_inconsistent_str = notes_inconsistent.to_string();
         <span class="macro">assert!</span>(notes_inconsistent_str.parse::&lt;OOBNotes&gt;().is_err());
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>reissuance_meta_compatibility_02_03() {
+        <span class="kw">let </span>dummy_outpoint = OutPoint {
+            txid: TransactionId::all_zeros(),
+            out_idx: <span class="number">0</span>,
+        };
+
+        <span class="kw">let </span>old_meta_json = <span class="macro">json!</span>({
+            <span class="string">&quot;reissuance&quot;</span>: {
+                <span class="string">&quot;out_point&quot;</span>: dummy_outpoint
+            }
+        });
+
+        <span class="kw">let </span>old_meta: MintOperationMetaVariant =
+            serde_json::from_value(old_meta_json).expect(<span class="string">&quot;parsing old reissuance meta failed&quot;</span>);
+        <span class="macro">assert_eq!</span>(
+            old_meta,
+            MintOperationMetaVariant::Reissuance {
+                legacy_out_point: <span class="prelude-val">Some</span>(dummy_outpoint),
+                txid: <span class="prelude-val">None</span>,
+                out_point_indices: <span class="macro">vec!</span>[],
+            }
+        );
+
+        <span class="kw">let </span>new_meta_json = serde_json::to_value(MintOperationMetaVariant::Reissuance {
+            legacy_out_point: <span class="prelude-val">None</span>,
+            txid: <span class="prelude-val">Some</span>(dummy_outpoint.txid),
+            out_point_indices: <span class="macro">vec!</span>[<span class="number">0</span>],
+        })
+        .expect(<span class="string">&quot;serializing always works&quot;</span>);
+        <span class="macro">assert_eq!</span>(
+            new_meta_json,
+            <span class="macro">json!</span>({
+                <span class="string">&quot;reissuance&quot;</span>: {
+                    <span class="string">&quot;txid&quot;</span>: dummy_outpoint.txid,
+                    <span class="string">&quot;out_point_indices&quot;</span>: [dummy_outpoint.out_idx],
+                }
+            })
+        );
     }
 }
 </code></pre></div></section></main></body></html>
