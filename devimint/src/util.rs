@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::future::Future;
 use std::ops::ControlFlow;
+use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{env, unreachable};
@@ -203,13 +204,18 @@ impl Command {
 
     pub async fn run_inner(&mut self) -> Result<std::process::Output> {
         debug!(target: LOG_DEVIMINT, "> {}", self.command_debug());
-        let output = self.cmd.output().await?;
+        let output = self
+            .cmd
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()?
+            .wait_with_output()
+            .await?;
         if !output.status.success() {
             bail!(
-                "{}\nstdout:\n{}\nstderr:\n{}",
+                "{}\nstdout:\n{}",
                 output.status,
                 String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr),
             );
         }
         Ok(output)
