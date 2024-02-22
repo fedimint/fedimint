@@ -88,6 +88,8 @@ pub fn utf8(path: &Path) -> &str {
 declare_vars! {
     Global = (test_dir: &Path, fed_size: usize, offline_nodes: usize) =>
     {
+        FM_USE_UNKNOWN_MODULE : String = "1";
+
         FM_FED_SIZE: usize = fed_size;
         FM_OFFLINE_NODES: usize = offline_nodes;
         FM_TMP_DIR: PathBuf = mkdir(test_dir.into()).await?;

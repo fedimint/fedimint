@@ -589,11 +589,19 @@ impl ModuleRegistry<ConfigGenModuleParams> {
         kind: ModuleKind,
         gen: T,
     ) -> &mut Self {
-        self.register_module(
-            id,
-            kind,
-            ConfigGenModuleParams::from_typed(gen).expect("Invalid config gen params for {kind}"),
-        );
+        let params = ConfigGenModuleParams::from_typed(gen)
+            .unwrap_or_else(|err| panic!("Invalid config gen params for {kind}: {err}"));
+        self.register_module(id, kind, params);
+        self
+    }
+    pub fn append_config_gen_params<T: ModuleInitParams>(
+        &mut self,
+        kind: ModuleKind,
+        gen: T,
+    ) -> &mut Self {
+        let params = ConfigGenModuleParams::from_typed(gen)
+            .unwrap_or_else(|err| panic!("Invalid config gen params for {kind}: {err}"));
+        self.append_module(kind, params);
         self
     }
 }

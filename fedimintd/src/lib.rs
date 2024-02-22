@@ -13,6 +13,10 @@ use fedimint_ln_common::config::{
 use fedimint_ln_server::LightningInit;
 use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_server::MintInit;
+use fedimint_unknown_common::config::{
+    UnknownGenParams, UnknownGenParamsConsensus, UnknownGenParamsLocal,
+};
+use fedimint_unknown_server::UnknownInit;
 use fedimint_wallet_server::common::config::{
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };
@@ -63,6 +67,17 @@ pub fn attach_default_module_init_params(
         );
 }
 
+pub fn attach_unknown_module_init_params(
+    module_init_params: &mut ServerModuleConfigGenParamsRegistry,
+) {
+    module_init_params.append_config_gen_params(
+        UnknownInit::kind(),
+        UnknownGenParams {
+            local: UnknownGenParamsLocal,
+            consensus: UnknownGenParamsConsensus,
+        },
+    );
+}
 pub fn default_esplora_server(network: Network) -> BitcoinRpcConfig {
     let url = match network {
         Network::Bitcoin => SafeUrl::parse("https://blockstream.info/api/")

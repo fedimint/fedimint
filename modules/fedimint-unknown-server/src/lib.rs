@@ -152,7 +152,7 @@ impl ServerModule for Unknown {
         _consensus_item: UnknownConsensusItem,
         _peer_id: PeerId,
     ) -> anyhow::Result<()> {
-        bail!("The dummy module does not use consensus items");
+        bail!("The unknown module does not use consensus items");
     }
 
     async fn process_input<'a, 'b, 'c>(

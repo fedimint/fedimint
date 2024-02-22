@@ -71,6 +71,8 @@ url = { version = "2.3.1", features = ["serde"] }
 [dev-dependencies]
 fedimint-dummy-server = { path = "../../modules/fedimint-dummy-server" }
 fedimint-dummy-common = { path = "../../modules/fedimint-dummy-common" }
+fedimint-unknown-server = { path = "../../modules/fedimint-unknown-server" }
+fedimint-unknown-common = { path = "../../modules/fedimint-unknown-common" }
 fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
 fedimint-ln-server = { path = "../../modules/fedimint-ln-server" }
 fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }

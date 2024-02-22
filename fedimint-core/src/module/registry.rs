@@ -140,6 +140,18 @@ impl<M: std::fmt::Debug, State> ModuleRegistry<M, State> {
             "Module was already registered!"
         )
     }
+
+    pub fn append_module(&mut self, kind: ModuleKind, module: M) {
+        let last_id = self
+            .inner
+            .last_key_value()
+            .map(|id| id.0.checked_add(1).expect("Module id overflow"))
+            .unwrap_or_default();
+        assert!(
+            self.inner.insert(last_id, (kind, module)).is_none(),
+            "Module was already registered?!"
+        )
+    }
 }
 
 /// Collection of server modules
