@@ -751,10 +751,17 @@
 <a href="#751" id="751">751</a>
 <a href="#752" id="752">752</a>
 <a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::ops::ControlFlow;
+<span class="kw">use </span>std::process::Stdio;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{env, unreachable};
@@ -956,13 +963,18 @@
 
     <span class="kw">pub async fn </span>run_inner(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;std::process::Output&gt; {
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">&quot;&gt; {}&quot;</span>, <span class="self">self</span>.command_debug());
-        <span class="kw">let </span>output = <span class="self">self</span>.cmd.output().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>output = <span class="self">self
+            </span>.cmd
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()<span class="question-mark">?
+            </span>.wait_with_output()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!output.status.success() {
             <span class="macro">bail!</span>(
-                <span class="string">&quot;{}\nstdout:\n{}\nstderr:\n{}&quot;</span>,
+                <span class="string">&quot;{}\nstdout:\n{}&quot;</span>,
                 output.status,
                 String::from_utf8_lossy(<span class="kw-2">&amp;</span>output.stdout),
-                String::from_utf8_lossy(<span class="kw-2">&amp;</span>output.stderr),
             );
         }
         <span class="prelude-val">Ok</span>(output)
