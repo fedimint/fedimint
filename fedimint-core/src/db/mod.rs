@@ -1837,8 +1837,7 @@ pub type ServerMigrationFn =
         &'r mut DatabaseTransaction<'tx>,
     ) -> Pin<Box<dyn futures::Future<Output = anyhow::Result<()>> + Send + 'r>>;
 
-/// Applies the database migrations to a non-isolated database. Intended only to
-/// be used for `fedimint-server`.
+/// Applies the database migrations to a non-isolated database.
 pub async fn apply_migrations_server(
     db: &Database,
     kind: String,

@@ -30,6 +30,7 @@ use clap::Parser;
 use client::GatewayClientBuilder;
 use db::{
     DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey,
+    GATEWAYD_DATABASE_VERSION,
 };
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::ClientArc;
@@ -39,7 +40,9 @@ use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    apply_migrations_server, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
@@ -75,7 +78,7 @@ use thiserror::Error;
 use tokio::sync::{Mutex, MutexGuard};
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
-use crate::db::{FederationConfig, FederationIdKeyPrefix};
+use crate::db::{get_gatewayd_database_migrations, FederationConfig, FederationIdKeyPrefix};
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::lightning::cln::RouteHtlcStream;
 use crate::lightning::GatewayLightningBuilder;
@@ -180,7 +183,7 @@ impl GatewayOpts {
 /// If `GatewayConfiguration is set in the database, that takes precedence and
 /// the optional parameters will have no affect.
 #[derive(Clone, Debug)]
-struct GatewayParameters {
+pub struct GatewayParameters {
     listen: SocketAddr,
     versioned_api: SafeUrl,
     password: Option<String>,
@@ -309,9 +312,9 @@ impl Gateway {
         let versioned_api = api_addr
             .join(V1_API_ENDPOINT)
             .expect("Failed to version gateway API address");
-        Ok(Gateway {
+        Gateway::new(
             lightning_builder,
-            gateway_parameters: GatewayParameters {
+            GatewayParameters {
                 listen,
                 versioned_api,
                 password: cli_password,
@@ -319,15 +322,10 @@ impl Gateway {
                 fees: Some(GatewayFee(fees)),
                 network,
             },
-            state: Arc::new(RwLock::new(GatewayState::Initializing)),
+            gateway_db,
             client_builder,
-            gateway_db: gateway_db.clone(),
-            clients: Arc::new(RwLock::new(BTreeMap::new())),
-            client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
-            scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
-            gateway_id: Gateway::get_gateway_id(gateway_db).await,
-            max_used_scid: Arc::new(Mutex::new(INITIAL_SCID)),
-        })
+        )
+        .await
     }
 
     pub async fn new_with_default_modules() -> anyhow::Result<Gateway> {
@@ -357,12 +355,36 @@ impl Gateway {
             fedimint_build_code_version_env!()
         );
 
-        Ok(Self {
-            lightning_builder: Arc::new(GatewayLightningBuilder {
+        Gateway::new(
+            Arc::new(GatewayLightningBuilder {
                 lightning_mode: opts.mode.clone(),
             }),
+            opts.to_gateway_parameters()?,
+            gateway_db,
+            client_builder,
+        )
+        .await
+    }
+
+    pub async fn new(
+        lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
+        gateway_parameters: GatewayParameters,
+        gateway_db: Database,
+        client_builder: GatewayClientBuilder,
+    ) -> anyhow::Result<Gateway> {
+        // Apply database migrations before using the database
+        apply_migrations_server(
+            &gateway_db,
+            "gatewayd".to_string(),
+            GATEWAYD_DATABASE_VERSION,
+            get_gatewayd_database_migrations(),
+        )
+        .await?;
+
+        Ok(Self {
+            lightning_builder,
             max_used_scid: Arc::new(Mutex::new(INITIAL_SCID)),
-            gateway_parameters: opts.to_gateway_parameters()?,
+            gateway_parameters,
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
             gateway_id: Self::get_gateway_id(gateway_db.clone()).await,
