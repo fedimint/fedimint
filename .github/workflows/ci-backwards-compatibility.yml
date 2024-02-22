@@ -35,6 +35,8 @@ jobs:
       - uses: cachix/install-nix-action@v25
         with:
           nix_path: nixpkgs=channel:nixos-22.05
+          extra_nix_config: |
+            connect-timeout = 15
       - uses: cachix/cachix-action@v14
         with:
           name: fedimint

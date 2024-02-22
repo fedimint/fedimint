@@ -44,6 +44,8 @@ jobs:
       - uses: cachix/install-nix-action@v25
         with:
           nix_path: nixpkgs=channel:nixos-22.05
+          extra_nix_config: |
+            connect-timeout = 15
       - uses: cachix/cachix-action@v14
         with:
           name: fedimint
@@ -96,6 +98,8 @@ jobs:
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           nix_path: nixpkgs=channel:nixos-22.05
+          extra_nix_config: |
+            connect-timeout = 15
       - uses: cachix/cachix-action@v14
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
@@ -139,6 +143,8 @@ jobs:
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           nix_path: nixpkgs=channel:nixos-22.05
+          extra_nix_config: |
+            connect-timeout = 15
       - uses: cachix/cachix-action@v14
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
@@ -209,6 +215,8 @@ jobs:
       - uses: cachix/install-nix-action@v25
         with:
           nix_path: nixpkgs=channel:nixos-22.05
+          extra_nix_config: |
+            connect-timeout = 15
       - uses: cachix/cachix-action@v14
         with:
           name: fedimint
@@ -236,6 +244,8 @@ jobs:
       - uses: cachix/install-nix-action@v25
         with:
           nix_path: nixpkgs=channel:nixos-22.05
+          extra_nix_config: |
+            connect-timeout = 15
       - uses: cachix/cachix-action@v14
         with:
           name: fedimint
@@ -306,6 +316,8 @@ jobs:
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           nix_path: nixpkgs=channel:nixos-22.05
+          extra_nix_config: |
+            connect-timeout = 15
 
       - uses: cachix/cachix-action@v14
         if: github.event_name != 'pull_request' || matrix.build-in-pr
@@ -338,6 +350,8 @@ jobs:
       - uses: cachix/install-nix-action@v25
         with:
           nix_path: nixpkgs=channel:nixos-22.05
+          extra_nix_config: |
+            connect-timeout = 15
       - uses: cachix/cachix-action@v14
         with:
           name: fedimint
@@ -424,6 +438,8 @@ jobs:
       - uses: cachix/install-nix-action@v25
         with:
           nix_path: nixpkgs=channel:nixos-22.05
+          extra_nix_config: |
+            connect-timeout = 15
       - uses: cachix/cachix-action@v14
         with:
           name: fedimint
