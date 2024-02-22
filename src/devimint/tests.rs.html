@@ -1851,6 +1851,52 @@
 <a href="#1851" id="1851">1851</a>
 <a href="#1852" id="1852">1852</a>
 <a href="#1853" id="1853">1853</a>
+<a href="#1854" id="1854">1854</a>
+<a href="#1855" id="1855">1855</a>
+<a href="#1856" id="1856">1856</a>
+<a href="#1857" id="1857">1857</a>
+<a href="#1858" id="1858">1858</a>
+<a href="#1859" id="1859">1859</a>
+<a href="#1860" id="1860">1860</a>
+<a href="#1861" id="1861">1861</a>
+<a href="#1862" id="1862">1862</a>
+<a href="#1863" id="1863">1863</a>
+<a href="#1864" id="1864">1864</a>
+<a href="#1865" id="1865">1865</a>
+<a href="#1866" id="1866">1866</a>
+<a href="#1867" id="1867">1867</a>
+<a href="#1868" id="1868">1868</a>
+<a href="#1869" id="1869">1869</a>
+<a href="#1870" id="1870">1870</a>
+<a href="#1871" id="1871">1871</a>
+<a href="#1872" id="1872">1872</a>
+<a href="#1873" id="1873">1873</a>
+<a href="#1874" id="1874">1874</a>
+<a href="#1875" id="1875">1875</a>
+<a href="#1876" id="1876">1876</a>
+<a href="#1877" id="1877">1877</a>
+<a href="#1878" id="1878">1878</a>
+<a href="#1879" id="1879">1879</a>
+<a href="#1880" id="1880">1880</a>
+<a href="#1881" id="1881">1881</a>
+<a href="#1882" id="1882">1882</a>
+<a href="#1883" id="1883">1883</a>
+<a href="#1884" id="1884">1884</a>
+<a href="#1885" id="1885">1885</a>
+<a href="#1886" id="1886">1886</a>
+<a href="#1887" id="1887">1887</a>
+<a href="#1888" id="1888">1888</a>
+<a href="#1889" id="1889">1889</a>
+<a href="#1890" id="1890">1890</a>
+<a href="#1891" id="1891">1891</a>
+<a href="#1892" id="1892">1892</a>
+<a href="#1893" id="1893">1893</a>
+<a href="#1894" id="1894">1894</a>
+<a href="#1895" id="1895">1895</a>
+<a href="#1896" id="1896">1896</a>
+<a href="#1897" id="1897">1897</a>
+<a href="#1898" id="1898">1898</a>
+<a href="#1899" id="1899">1899</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -1949,7 +1995,7 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">pub async fn </span>latency_tests(dev_fed: DevFed) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<span class="kw">pub async fn </span>latency_tests(dev_fed: DevFed, r#type: LatencyTest) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="attr">#[allow(unused_variables)]
     </span><span class="kw">let </span>DevFed {
@@ -1963,178 +2009,212 @@
         esplora,
     } = dev_fed;
 
+    <span class="kw">let </span>max_p90_factor = <span class="number">5.0</span>;
+    <span class="kw">let </span>p90_median_factor = <span class="number">5</span>;
+
     <span class="kw">let </span>client = fed.new_joined_client(<span class="string">&quot;latency-tests-client&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     client.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
     fed.pegin_client(<span class="number">10_000_000</span>, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>iterations = <span class="number">20</span>;
 
-    <span class="macro">info!</span>(<span class="string">&quot;Testing latency of reissue&quot;</span>);
-    <span class="comment">// On AlephBFT session times may lead to high latencies, so we need to run it
-    // for enough time to catch up a session end
-    </span><span class="kw">let </span>iterations = <span class="number">30</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>reissues = Vec::with_capacity(iterations);
-    <span class="kw">for _ in </span><span class="number">0</span>..iterations {
-        <span class="kw">let </span>notes = <span class="macro">cmd!</span>(client, <span class="string">&quot;spend&quot;</span>, <span class="string">&quot;1000000&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;notes&quot;</span>]
-            .as_str()
-            .context(<span class="string">&quot;note must be a string&quot;</span>)<span class="question-mark">?
-            </span>.to_owned();
+    <span class="kw">match </span>r#type {
+        LatencyTest::Reissue =&gt; {
+            <span class="macro">info!</span>(<span class="string">&quot;Testing latency of reissue&quot;</span>);
+            <span class="comment">// On AlephBFT session times may lead to high latencies, so we need to run it
+            // for enough time to catch up a session end
+            </span><span class="kw">let </span>iterations = <span class="number">30</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>reissues = Vec::with_capacity(iterations);
+            <span class="kw">for _ in </span><span class="number">0</span>..iterations {
+                <span class="kw">let </span>notes = <span class="macro">cmd!</span>(client, <span class="string">&quot;spend&quot;</span>, <span class="string">&quot;1000000&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;notes&quot;</span>]
+                    .as_str()
+                    .context(<span class="string">&quot;note must be a string&quot;</span>)<span class="question-mark">?
+                    </span>.to_owned();
 
-        <span class="kw">let </span>start_time = Instant::now();
-        <span class="macro">cmd!</span>(client, <span class="string">&quot;reissue&quot;</span>, notes).run().<span class="kw">await</span><span class="question-mark">?</span>;
-        reissues.push(start_time.elapsed());
+                <span class="kw">let </span>start_time = Instant::now();
+                <span class="macro">cmd!</span>(client, <span class="string">&quot;reissue&quot;</span>, notes).run().<span class="kw">await</span><span class="question-mark">?</span>;
+                reissues.push(start_time.elapsed());
+            }
+            <span class="kw">let </span>reissue_stats = stats_for(reissues);
+            <span class="macro">println!</span>(<span class="string">&quot;### LATENCY REISSUE: {reissue_stats}&quot;</span>);
+            <span class="macro">assert!</span>(reissue_stats.median &lt; Duration::from_secs(<span class="number">4</span>));
+
+            <span class="macro">assert!</span>(reissue_stats.p90 &lt; reissue_stats.median * p90_median_factor);
+            <span class="macro">assert!</span>(
+                reissue_stats.max.as_secs_f64() &lt; reissue_stats.p90.as_secs_f64() * max_p90_factor
+            );
+        }
+        LatencyTest::LnSend =&gt; {
+            <span class="comment">// LN operations take longer, we need less iterations
+            </span><span class="macro">info!</span>(<span class="string">&quot;Testing latency of ln send&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>ln_sends = Vec::with_capacity(iterations);
+            <span class="kw">for _ in </span><span class="number">0</span>..iterations {
+                <span class="kw">let </span>add_invoice = lnd
+                    .lightning_client_lock()
+                    .<span class="kw">await</span><span class="question-mark">?
+                    </span>.add_invoice(tonic_lnd::lnrpc::Invoice {
+                        value_msat: <span class="number">1_000_000</span>,
+                        ..Default::default()
+                    })
+                    .<span class="kw">await</span><span class="question-mark">?
+                    </span>.into_inner();
+
+                <span class="kw">let </span>invoice = add_invoice.payment_request;
+                <span class="kw">let </span>payment_hash = add_invoice.r_hash;
+                <span class="kw">let </span>start_time = Instant::now();
+                <span class="macro">cmd!</span>(client, <span class="string">&quot;ln-pay&quot;</span>, invoice).run().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>invoice_status = lnd
+                    .lightning_client_lock()
+                    .<span class="kw">await</span><span class="question-mark">?
+                    </span>.lookup_invoice(tonic_lnd::lnrpc::PaymentHash {
+                        r_hash: payment_hash,
+                        ..Default::default()
+                    })
+                    .<span class="kw">await</span><span class="question-mark">?
+                    </span>.into_inner()
+                    .state();
+                <span class="macro">anyhow::ensure!</span>(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
+                ln_sends.push(start_time.elapsed());
+            }
+            <span class="kw">let </span>ln_sends_stats = stats_for(ln_sends);
+            <span class="macro">println!</span>(<span class="string">&quot;### LATENCY LN SEND: {ln_sends_stats}&quot;</span>);
+            <span class="macro">assert!</span>(ln_sends_stats.median &lt; Duration::from_secs(<span class="number">6</span>));
+            <span class="macro">assert!</span>(ln_sends_stats.p90 &lt; ln_sends_stats.median * p90_median_factor);
+            <span class="macro">assert!</span>(
+                ln_sends_stats.max.as_secs_f64()
+                    &lt; ln_sends_stats.p90.as_secs_f64() * max_p90_factor
+            );
+        }
+        LatencyTest::LnReceive =&gt; {
+            <span class="macro">info!</span>(<span class="string">&quot;Testing latency of ln receive&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>ln_receives = Vec::with_capacity(iterations);
+
+            <span class="comment">// give lnd some funds
+            </span><span class="kw">let </span>add_invoice = lnd
+                .lightning_client_lock()
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.add_invoice(tonic_lnd::lnrpc::Invoice {
+                    value_msat: <span class="number">10_000_000</span>,
+                    ..Default::default()
+                })
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.into_inner();
+
+            <span class="kw">let </span>invoice = add_invoice.payment_request;
+            <span class="macro">cmd!</span>(client, <span class="string">&quot;ln-pay&quot;</span>, invoice).run().<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">for _ in </span><span class="number">0</span>..iterations {
+                <span class="kw">let </span>invoice = <span class="macro">cmd!</span>(
+                    client,
+                    <span class="string">&quot;ln-invoice&quot;</span>,
+                    <span class="string">&quot;--amount=100000msat&quot;</span>,
+                    <span class="string">&quot;--description=incoming-over-lnd-gw&quot;
+                </span>)
+                .out_json()
+                .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;invoice&quot;</span>]
+                    .as_str()
+                    .context(<span class="string">&quot;invoice must be string&quot;</span>)<span class="question-mark">?
+                    </span>.to_owned();
+
+                <span class="kw">let </span>start_time = Instant::now();
+                <span class="kw">let </span>payment = lnd
+                    .lightning_client_lock()
+                    .<span class="kw">await</span><span class="question-mark">?
+                    </span>.send_payment_sync(tonic_lnd::lnrpc::SendRequest {
+                        payment_request: invoice,
+                        ..Default::default()
+                    })
+                    .<span class="kw">await</span><span class="question-mark">?
+                    </span>.into_inner();
+                <span class="kw">let </span>payment_status = lnd
+                    .lightning_client_lock()
+                    .<span class="kw">await</span><span class="question-mark">?
+                    </span>.list_payments(tonic_lnd::lnrpc::ListPaymentsRequest {
+                        include_incomplete: <span class="bool-val">true</span>,
+                        ..Default::default()
+                    })
+                    .<span class="kw">await</span><span class="question-mark">?
+                    </span>.into_inner()
+                    .payments
+                    .into_iter()
+                    .find(|p| p.payment_hash == payment.payment_hash.to_hex())
+                    .context(<span class="string">&quot;payment not in list&quot;</span>)<span class="question-mark">?
+                    </span>.status();
+                <span class="macro">anyhow::ensure!</span>(
+                    payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded
+                );
+                ln_receives.push(start_time.elapsed());
+            }
+            <span class="kw">let </span>ln_receives_stats = stats_for(ln_receives);
+            <span class="macro">println!</span>(<span class="string">&quot;### LATENCY LN RECV: {ln_receives_stats}&quot;</span>);
+            <span class="macro">assert!</span>(ln_receives_stats.median &lt; Duration::from_secs(<span class="number">6</span>));
+            <span class="macro">assert!</span>(ln_receives_stats.p90 &lt; ln_receives_stats.median * p90_median_factor);
+            <span class="macro">assert!</span>(
+                ln_receives_stats.max.as_secs_f64()
+                    &lt; ln_receives_stats.p90.as_secs_f64() * max_p90_factor
+            );
+        }
+        LatencyTest::FmPay =&gt; {
+            <span class="macro">info!</span>(<span class="string">&quot;Testing latency of internal payments within a federation&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>fm_internal_pay = Vec::with_capacity(iterations);
+            <span class="kw">let </span>sender = fed.new_joined_client(<span class="string">&quot;internal-swap-sender&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            fed.pegin_client(<span class="number">10_000_000</span>, <span class="kw-2">&amp;</span>sender).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">for _ in </span><span class="number">0</span>..iterations {
+                <span class="kw">let </span>recv = <span class="macro">cmd!</span>(
+                    client,
+                    <span class="string">&quot;ln-invoice&quot;</span>,
+                    <span class="string">&quot;--amount=1000000msat&quot;</span>,
+                    <span class="string">&quot;--description=internal-swap-invoice&quot;
+                </span>)
+                .out_json()
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>invoice = recv[<span class="string">&quot;invoice&quot;</span>]
+                    .as_str()
+                    .context(<span class="string">&quot;invoice must be string&quot;</span>)<span class="question-mark">?
+                    </span>.to_owned();
+                <span class="kw">let </span>recv_op = recv[<span class="string">&quot;operation_id&quot;</span>]
+                    .as_str()
+                    .context(<span class="string">&quot;operation id must be string&quot;</span>)<span class="question-mark">?
+                    </span>.to_owned();
+
+                <span class="kw">let </span>start_time = Instant::now();
+                <span class="macro">cmd!</span>(sender, <span class="string">&quot;ln-pay&quot;</span>, invoice).run().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="macro">cmd!</span>(client, <span class="string">&quot;await-invoice&quot;</span>, recv_op).run().<span class="kw">await</span><span class="question-mark">?</span>;
+                fm_internal_pay.push(start_time.elapsed());
+            }
+            <span class="kw">let </span>fm_pay_stats = stats_for(fm_internal_pay);
+
+            <span class="macro">println!</span>(<span class="string">&quot;### LATENCY FM PAY: {fm_pay_stats}&quot;</span>);
+            <span class="macro">assert!</span>(fm_pay_stats.median &lt; Duration::from_secs(<span class="number">6</span>));
+            <span class="macro">assert!</span>(fm_pay_stats.p90 &lt; fm_pay_stats.median * p90_median_factor);
+            <span class="macro">assert!</span>(
+                fm_pay_stats.max.as_secs_f64() &lt; fm_pay_stats.p90.as_secs_f64() * max_p90_factor
+            );
+        }
+        LatencyTest::Restore =&gt; {
+            <span class="macro">info!</span>(<span class="string">&quot;Testing latency of restore&quot;</span>);
+            <span class="kw">let </span>backup_secret = <span class="macro">cmd!</span>(client, <span class="string">&quot;print-secret&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;secret&quot;</span>]
+                .as_str()
+                .map(ToOwned::to_owned)
+                .unwrap();
+            <span class="kw">let </span>restore_client = Client::create(<span class="string">&quot;restore&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>start_time = Instant::now();
+            <span class="macro">cmd!</span>(
+                restore_client,
+                <span class="string">&quot;restore&quot;</span>,
+                <span class="string">&quot;--mnemonic&quot;</span>,
+                <span class="kw-2">&amp;</span>backup_secret,
+                <span class="string">&quot;--invite-code&quot;</span>,
+                fed.invite_code()<span class="question-mark">?
+            </span>)
+            .run()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>restore_time = start_time.elapsed();
+
+            <span class="macro">println!</span>(<span class="string">&quot;### LATENCY RESTORE: {restore_time:?}&quot;</span>);
+            <span class="macro">assert!</span>(restore_time &lt; Duration::from_secs(<span class="number">160</span>));
+        }
     }
 
-    <span class="comment">// LN operations take longer, we need less iterations
-    </span><span class="kw">let </span>iterations = <span class="number">20</span>;
-    <span class="macro">info!</span>(<span class="string">&quot;Testing latency of ln send&quot;</span>);
-    <span class="kw">let </span><span class="kw-2">mut </span>ln_sends = Vec::with_capacity(iterations);
-    <span class="kw">for _ in </span><span class="number">0</span>..iterations {
-        <span class="kw">let </span>add_invoice = lnd
-            .lightning_client_lock()
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.add_invoice(tonic_lnd::lnrpc::Invoice {
-                value_msat: <span class="number">1_000_000</span>,
-                ..Default::default()
-            })
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.into_inner();
-
-        <span class="kw">let </span>invoice = add_invoice.payment_request;
-        <span class="kw">let </span>payment_hash = add_invoice.r_hash;
-        <span class="kw">let </span>start_time = Instant::now();
-        <span class="macro">cmd!</span>(client, <span class="string">&quot;ln-pay&quot;</span>, invoice).run().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>invoice_status = lnd
-            .lightning_client_lock()
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.lookup_invoice(tonic_lnd::lnrpc::PaymentHash {
-                r_hash: payment_hash,
-                ..Default::default()
-            })
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.into_inner()
-            .state();
-        <span class="macro">anyhow::ensure!</span>(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
-        ln_sends.push(start_time.elapsed());
-    }
-
-    <span class="macro">info!</span>(<span class="string">&quot;Testing latency of ln receive&quot;</span>);
-    <span class="kw">let </span><span class="kw-2">mut </span>ln_receives = Vec::with_capacity(iterations);
-    <span class="kw">for _ in </span><span class="number">0</span>..iterations {
-        <span class="kw">let </span>invoice = <span class="macro">cmd!</span>(
-            client,
-            <span class="string">&quot;ln-invoice&quot;</span>,
-            <span class="string">&quot;--amount=1000000msat&quot;</span>,
-            <span class="string">&quot;--description=incoming-over-lnd-gw&quot;
-        </span>)
-        .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;invoice&quot;</span>]
-            .as_str()
-            .context(<span class="string">&quot;invoice must be string&quot;</span>)<span class="question-mark">?
-            </span>.to_owned();
-
-        <span class="kw">let </span>start_time = Instant::now();
-        <span class="kw">let </span>payment = lnd
-            .lightning_client_lock()
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.send_payment_sync(tonic_lnd::lnrpc::SendRequest {
-                payment_request: invoice,
-                ..Default::default()
-            })
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.into_inner();
-        <span class="kw">let </span>payment_status = lnd
-            .lightning_client_lock()
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.list_payments(tonic_lnd::lnrpc::ListPaymentsRequest {
-                include_incomplete: <span class="bool-val">true</span>,
-                ..Default::default()
-            })
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.into_inner()
-            .payments
-            .into_iter()
-            .find(|p| p.payment_hash == payment.payment_hash.to_hex())
-            .context(<span class="string">&quot;payment not in list&quot;</span>)<span class="question-mark">?
-            </span>.status();
-        <span class="macro">anyhow::ensure!</span>(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
-        ln_receives.push(start_time.elapsed());
-    }
-
-    <span class="macro">info!</span>(<span class="string">&quot;Testing latency of internal payments within a federation&quot;</span>);
-    <span class="kw">let </span><span class="kw-2">mut </span>fm_internal_pay = Vec::with_capacity(iterations);
-    <span class="kw">let </span>sender = fed.new_joined_client(<span class="string">&quot;internal-swap-sender&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-    fed.pegin_client(<span class="number">10_000_000</span>, <span class="kw-2">&amp;</span>sender).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">for _ in </span><span class="number">0</span>..iterations {
-        <span class="kw">let </span>recv = <span class="macro">cmd!</span>(
-            client,
-            <span class="string">&quot;ln-invoice&quot;</span>,
-            <span class="string">&quot;--amount=1000000msat&quot;</span>,
-            <span class="string">&quot;--description=internal-swap-invoice&quot;
-        </span>)
-        .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>invoice = recv[<span class="string">&quot;invoice&quot;</span>]
-            .as_str()
-            .context(<span class="string">&quot;invoice must be string&quot;</span>)<span class="question-mark">?
-            </span>.to_owned();
-        <span class="kw">let </span>recv_op = recv[<span class="string">&quot;operation_id&quot;</span>]
-            .as_str()
-            .context(<span class="string">&quot;operation id must be string&quot;</span>)<span class="question-mark">?
-            </span>.to_owned();
-
-        <span class="kw">let </span>start_time = Instant::now();
-        <span class="macro">cmd!</span>(sender, <span class="string">&quot;ln-pay&quot;</span>, invoice).run().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">cmd!</span>(client, <span class="string">&quot;await-invoice&quot;</span>, recv_op).run().<span class="kw">await</span><span class="question-mark">?</span>;
-        fm_internal_pay.push(start_time.elapsed());
-    }
-
-    <span class="kw">let </span>reissue_stats = stats_for(reissues);
-    <span class="kw">let </span>ln_sends_stats = stats_for(ln_sends);
-    <span class="kw">let </span>ln_receives_stats = stats_for(ln_receives);
-    <span class="kw">let </span>fm_pay_stats = stats_for(fm_internal_pay);
-
-    <span class="macro">info!</span>(<span class="string">&quot;Testing latency of restore&quot;</span>);
-    <span class="kw">let </span>backup_secret = <span class="macro">cmd!</span>(client, <span class="string">&quot;print-secret&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;secret&quot;</span>]
-        .as_str()
-        .map(ToOwned::to_owned)
-        .unwrap();
-    <span class="kw">let </span>restore_client = Client::create(<span class="string">&quot;restore&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>start_time = Instant::now();
-    <span class="macro">cmd!</span>(
-        restore_client,
-        <span class="string">&quot;restore&quot;</span>,
-        <span class="string">&quot;--mnemonic&quot;</span>,
-        <span class="kw-2">&amp;</span>backup_secret,
-        <span class="string">&quot;--invite-code&quot;</span>,
-        fed.invite_code()<span class="question-mark">?
-    </span>)
-    .run()
-    .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>restore_time = start_time.elapsed();
-
-    <span class="macro">println!</span>(
-        <span class="string">&quot;================= RESULTS ==================\n\
-              REISSUE: {reissue_stats}\n\
-              LN SEND: {ln_sends_stats}\n\
-              LN RECV: {ln_receives_stats}\n\
-              FM PAY: {fm_pay_stats}\n\
-              RESTORE: {restore_time:?}&quot;
-    </span>);
-    <span class="comment">// FIXME: should be smaller
-    </span><span class="macro">assert!</span>(reissue_stats.median &lt; Duration::from_secs(<span class="number">4</span>));
-    <span class="macro">assert!</span>(ln_sends_stats.median &lt; Duration::from_secs(<span class="number">6</span>));
-    <span class="macro">assert!</span>(ln_receives_stats.median &lt; Duration::from_secs(<span class="number">6</span>));
-    <span class="macro">assert!</span>(fm_pay_stats.median &lt; Duration::from_secs(<span class="number">6</span>));
-    <span class="macro">assert!</span>(restore_time &lt; Duration::from_secs(<span class="number">160</span>));
-    <span class="kw">let </span>factor = <span class="number">5</span>;
-    <span class="macro">assert!</span>(reissue_stats.p90 &lt; reissue_stats.median * factor);
-    <span class="macro">assert!</span>(ln_sends_stats.p90 &lt; ln_sends_stats.median * factor);
-    <span class="macro">assert!</span>(ln_receives_stats.p90 &lt; ln_receives_stats.median * factor);
-    <span class="macro">assert!</span>(fm_pay_stats.p90 &lt; fm_pay_stats.median * factor);
-    <span class="kw">let </span>factor = <span class="number">5.0</span>;
-    <span class="macro">assert!</span>(reissue_stats.max.as_secs_f64() &lt; reissue_stats.p90.as_secs_f64() * factor);
-    <span class="macro">assert!</span>(ln_sends_stats.max.as_secs_f64() &lt; ln_sends_stats.p90.as_secs_f64() * factor);
-    <span class="macro">assert!</span>(ln_receives_stats.max.as_secs_f64() &lt; ln_receives_stats.p90.as_secs_f64() * factor);
-    <span class="macro">assert!</span>(fm_pay_stats.max.as_secs_f64() &lt; fm_pay_stats.p90.as_secs_f64() * factor);
     <span class="prelude-val">Ok</span>(())
 }
 
@@ -3600,10 +3680,22 @@
 }
 
 <span class="attr">#[derive(Subcommand)]
+</span><span class="kw">pub enum </span>LatencyTest {
+    Reissue,
+    LnSend,
+    LnReceive,
+    FmPay,
+    Restore,
+}
+
+<span class="attr">#[derive(Subcommand)]
 </span><span class="kw">pub enum </span>TestCmd {
     <span class="doccomment">/// `devfed` then checks the average latency of reissuing ecash, LN receive,
     /// and LN send
-    </span>LatencyTests,
+    </span>LatencyTests {
+        <span class="attr">#[clap(subcommand)]
+        </span>r#type: LatencyTest,
+    },
     <span class="doccomment">/// `devfed` then kills and restarts most of the Guardian nodes in a 4 node
     /// fedimint
     </span>ReconnectTest,
@@ -3666,10 +3758,10 @@
             };
             cleanup_on_exit(main, task_group).<span class="kw">await</span><span class="question-mark">?</span>;
         }
-        TestCmd::LatencyTests =&gt; {
+        TestCmd::LatencyTests { r#type } =&gt; {
             <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-            latency_tests(dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+            latency_tests(dev_fed, r#type).<span class="kw">await</span><span class="question-mark">?</span>;
         }
         TestCmd::ReconnectTest =&gt; {
             <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
