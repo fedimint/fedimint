@@ -103,7 +103,7 @@ for fed_version in "${versions[@]}"; do
       fi
 
       # cleair=$(dirname "$(mktemp -u)")
-      rm -rf "$tmpdir"/devimint-*
+      rm -rf "${TMPDIR:-/tmp}"/devimint-*
 
       >&2 echo "========== Finished backwards-compatibility run ==========="
       >&2 echo "fed version: $fed_version"
