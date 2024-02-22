@@ -771,6 +771,14 @@ impl<T> DynRawFallback<T>
 where
     T: Decodable + 'static,
 {
+    /// Get the decoded `T` or `None` if not decoded yet
+    pub fn decoded(self) -> Option<T> {
+        match self {
+            DynRawFallback::Raw { .. } => None,
+            DynRawFallback::Decoded(v) => Some(v),
+        }
+    }
+
     pub fn expect_decoded(self) -> T {
         match self {
             DynRawFallback::Raw { .. } => {
