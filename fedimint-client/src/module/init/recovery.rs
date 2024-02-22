@@ -245,7 +245,7 @@ where
         /// errors via `sender` itself.
         fn fetch_block_stream<'a>(
             api: DynGlobalApi,
-            api_version: ApiVersion,
+            core_api_version: ApiVersion,
             decoders: ModuleDecoderRegistry,
             epoch_range: ops::Range<u64>,
         ) -> impl futures::Stream<Item = (u64, Vec<AcceptedItem>)> + 'a {
@@ -265,7 +265,7 @@ where
                         let block = loop {
                             info!(target: LOG_CLIENT_RECOVERY, session_idx, "Awaiting signed block");
 
-                            let items_res = if api_version <= VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
+                            let items_res = if core_api_version < VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
                                 api.await_block(session_idx, &decoders).await.map(|s| s.items)
                             } else {
                                 api.get_session_status(session_idx, &decoders).await.map(|s| match s {
@@ -403,7 +403,7 @@ where
 
         let mut block_stream = fetch_block_stream(
             self.api().clone(),
-            *self.api_version(),
+            *self.core_api_version(),
             client_ctx.decoders(),
             block_stream_session_range,
         );

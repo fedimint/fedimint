@@ -1415,7 +1415,10 @@ impl Client {
         let common_api_versions =
             Client::discover_common_api_version_static(config, module_inits, api).await?;
 
-        debug!("Updating the cached common api versions");
+        debug!(
+            value = ?common_api_versions,
+            "Updating the cached common api versions"
+        );
         let mut dbtx = db.begin_transaction().await;
         let _ = dbtx
             .insert_entry(
@@ -1948,6 +1951,8 @@ impl ClientBuilder {
         )
         .await?;
 
+        debug!(?common_api_versions, "Completed api version negotiation");
+
         let mut module_recoveries: BTreeMap<
             ModuleInstanceId,
             Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
@@ -1999,6 +2004,7 @@ impl ClientBuilder {
                                             module_config.clone(),
                                             db.clone(),
                                             module_instance_id,
+                                            common_api_versions.core,
                                             api_version,
                                             root_secret.derive_module_secret(module_instance_id),
                                             notifier.clone(),
@@ -2066,6 +2072,7 @@ impl ClientBuilder {
                             module_config,
                             db.clone(),
                             module_instance_id,
+                            common_api_versions.core,
                             api_version,
                             // This is a divergence from the legacy client, where the child secret
                             // keys were derived using *module kind*-specific derivation paths.

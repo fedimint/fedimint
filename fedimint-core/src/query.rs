@@ -441,20 +441,15 @@ fn discover_common_core_api_version(
     let mut best_major = None;
     let mut best_major_peer_num = 0;
 
+    // Find major api version with highest peer number supporting it
     for client_api_version in &client_versions.api {
         let peers_compatible_num = peer_versions
             .values()
-            .filter(|supported_versions| {
-                (supported_versions.core_consensus.major == client_versions.core_consensus.major)
-                    .then(|| {
-                        supported_versions
-                            .api
-                            .get_by_major(client_api_version.major)
-                    })
-                    .flatten()
-                    .map(|peer_version| client_api_version.minor <= peer_version.minor)
-                    .unwrap_or(false)
+            .filter_map(|supported_versions| {
+                supported_versions
+                    .get_minor_api_version(client_versions.core_consensus, client_api_version.major)
             })
+            .filter(|peer_minor| client_api_version.minor <= *peer_minor)
             .count();
 
         if best_major_peer_num < peers_compatible_num {
@@ -463,7 +458,23 @@ fn discover_common_core_api_version(
         }
     }
 
-    best_major
+    // Adjust the minor version to the smallest supported by all matching peers
+    best_major.map(
+        |ApiVersion {
+             major: best_major,
+             minor: best_major_minor,
+         }| ApiVersion {
+            major: best_major,
+            minor: peer_versions
+                .values()
+                .filter_map(|supported| {
+                    supported.get_minor_api_version(client_versions.core_consensus, best_major)
+                })
+                .filter(|peer_minor| best_major_minor <= *peer_minor)
+                .min()
+                .expect("We must have at least one"),
+        },
+    )
 }
 
 #[test]
@@ -488,7 +499,7 @@ fn discover_common_core_api_version_sanity() {
                 PeerId(0),
                 SupportedCoreApiVersions {
                     core_consensus: crate::module::CoreConsensusVersion::new(0, 0),
-                    api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 4 }])
+                    api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 3 }])
                         .unwrap(),
                 }
             )])
@@ -502,7 +513,7 @@ fn discover_common_core_api_version_sanity() {
                 PeerId(0),
                 SupportedCoreApiVersions {
                     core_consensus: crate::module::CoreConsensusVersion::new(0, 1), /* different minor consensus version, we don't care */
-                    api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 4 }])
+                    api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 3 }])
                         .unwrap(),
                 }
             )])
@@ -555,6 +566,30 @@ fn discover_common_core_api_version_sanity() {
         ),
         Some(ApiVersion { major: 3, minor: 1 })
     );
+    assert_eq!(
+        discover_common_core_api_version(
+            &client_versions,
+            BTreeMap::from([
+                (
+                    PeerId(0),
+                    SupportedCoreApiVersions {
+                        core_consensus,
+                        api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 4 }])
+                            .unwrap(),
+                    }
+                ),
+                (
+                    PeerId(1),
+                    SupportedCoreApiVersions {
+                        core_consensus,
+                        api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 5 }])
+                            .unwrap(),
+                    }
+                ),
+            ])
+        ),
+        Some(ApiVersion { major: 2, minor: 4 })
+    );
 }
 
 fn discover_common_module_api_version(
@@ -564,22 +599,18 @@ fn discover_common_module_api_version(
     let mut best_major = None;
     let mut best_major_peer_num = 0;
 
+    // Find major api version with highest peer number supporting it
     for client_api_version in &client_versions.api {
         let peers_compatible_num = peer_versions
             .values()
-            .filter(|supported_versions| {
-                (supported_versions.core_consensus.major == client_versions.core_consensus.major
-                    && supported_versions.module_consensus.major
-                        == client_versions.module_consensus.major)
-                    .then(|| {
-                        supported_versions
-                            .api
-                            .get_by_major(client_api_version.major)
-                    })
-                    .flatten()
-                    .map(|peer_version| client_api_version.minor <= peer_version.minor)
-                    .unwrap_or(false)
+            .filter_map(|supported_versions| {
+                supported_versions.get_minor_api_version(
+                    client_versions.core_consensus,
+                    client_versions.module_consensus,
+                    client_api_version.major,
+                )
             })
+            .filter(|peer_minor| client_api_version.minor <= *peer_minor)
             .count();
 
         if best_major_peer_num < peers_compatible_num {
@@ -588,7 +619,27 @@ fn discover_common_module_api_version(
         }
     }
 
-    best_major
+    // Adjust the minor version to the smallest supported by all matching peers
+    best_major.map(
+        |ApiVersion {
+             major: best_major,
+             minor: best_major_minor,
+         }| ApiVersion {
+            major: best_major,
+            minor: peer_versions
+                .values()
+                .filter_map(|supported| {
+                    supported.get_minor_api_version(
+                        client_versions.core_consensus,
+                        client_versions.module_consensus,
+                        best_major,
+                    )
+                })
+                .filter(|peer_minor| best_major_minor <= *peer_minor)
+                .min()
+                .expect("We must have at least one"),
+        },
+    )
 }
 
 fn discover_common_api_versions_set(

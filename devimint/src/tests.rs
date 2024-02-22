@@ -312,7 +312,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             let restore_time = start_time.elapsed();
 
             println!("### LATENCY RESTORE: {restore_time:?}");
-            assert!(restore_time < Duration::from_secs(160));
+            assert!(restore_time < Duration::from_secs(10));
         }
     }
 
