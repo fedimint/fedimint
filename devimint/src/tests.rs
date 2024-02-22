@@ -96,7 +96,7 @@ pub async fn log_binary_versions() -> Result<()> {
     Ok(())
 }
 
-pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
+pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
     log_binary_versions().await?;
     #[allow(unused_variables)]
     let DevFed {
@@ -110,178 +110,212 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
         esplora,
     } = dev_fed;
 
+    let max_p90_factor = 5.0;
+    let p90_median_factor = 5;
+
     let client = fed.new_joined_client("latency-tests-client").await?;
     client.use_gateway(&gw_cln).await?;
     fed.pegin_client(10_000_000, &client).await?;
-
-    info!("Testing latency of reissue");
-    // On AlephBFT session times may lead to high latencies, so we need to run it
-    // for enough time to catch up a session end
-    let iterations = 30;
-    let mut reissues = Vec::with_capacity(iterations);
-    for _ in 0..iterations {
-        let notes = cmd!(client, "spend", "1000000").out_json().await?["notes"]
-            .as_str()
-            .context("note must be a string")?
-            .to_owned();
-
-        let start_time = Instant::now();
-        cmd!(client, "reissue", notes).run().await?;
-        reissues.push(start_time.elapsed());
-    }
-
-    // LN operations take longer, we need less iterations
     let iterations = 20;
-    info!("Testing latency of ln send");
-    let mut ln_sends = Vec::with_capacity(iterations);
-    for _ in 0..iterations {
-        let add_invoice = lnd
-            .lightning_client_lock()
-            .await?
-            .add_invoice(tonic_lnd::lnrpc::Invoice {
-                value_msat: 1_000_000,
-                ..Default::default()
-            })
-            .await?
-            .into_inner();
 
-        let invoice = add_invoice.payment_request;
-        let payment_hash = add_invoice.r_hash;
-        let start_time = Instant::now();
-        cmd!(client, "ln-pay", invoice).run().await?;
-        let invoice_status = lnd
-            .lightning_client_lock()
-            .await?
-            .lookup_invoice(tonic_lnd::lnrpc::PaymentHash {
-                r_hash: payment_hash,
-                ..Default::default()
-            })
-            .await?
-            .into_inner()
-            .state();
-        anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
-        ln_sends.push(start_time.elapsed());
+    match r#type {
+        LatencyTest::Reissue => {
+            info!("Testing latency of reissue");
+            // On AlephBFT session times may lead to high latencies, so we need to run it
+            // for enough time to catch up a session end
+            let iterations = 30;
+            let mut reissues = Vec::with_capacity(iterations);
+            for _ in 0..iterations {
+                let notes = cmd!(client, "spend", "1000000").out_json().await?["notes"]
+                    .as_str()
+                    .context("note must be a string")?
+                    .to_owned();
+
+                let start_time = Instant::now();
+                cmd!(client, "reissue", notes).run().await?;
+                reissues.push(start_time.elapsed());
+            }
+            let reissue_stats = stats_for(reissues);
+            println!("### LATENCY REISSUE: {reissue_stats}");
+            assert!(reissue_stats.median < Duration::from_secs(4));
+
+            assert!(reissue_stats.p90 < reissue_stats.median * p90_median_factor);
+            assert!(
+                reissue_stats.max.as_secs_f64() < reissue_stats.p90.as_secs_f64() * max_p90_factor
+            );
+        }
+        LatencyTest::LnSend => {
+            // LN operations take longer, we need less iterations
+            info!("Testing latency of ln send");
+            let mut ln_sends = Vec::with_capacity(iterations);
+            for _ in 0..iterations {
+                let add_invoice = lnd
+                    .lightning_client_lock()
+                    .await?
+                    .add_invoice(tonic_lnd::lnrpc::Invoice {
+                        value_msat: 1_000_000,
+                        ..Default::default()
+                    })
+                    .await?
+                    .into_inner();
+
+                let invoice = add_invoice.payment_request;
+                let payment_hash = add_invoice.r_hash;
+                let start_time = Instant::now();
+                cmd!(client, "ln-pay", invoice).run().await?;
+                let invoice_status = lnd
+                    .lightning_client_lock()
+                    .await?
+                    .lookup_invoice(tonic_lnd::lnrpc::PaymentHash {
+                        r_hash: payment_hash,
+                        ..Default::default()
+                    })
+                    .await?
+                    .into_inner()
+                    .state();
+                anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
+                ln_sends.push(start_time.elapsed());
+            }
+            let ln_sends_stats = stats_for(ln_sends);
+            println!("### LATENCY LN SEND: {ln_sends_stats}");
+            assert!(ln_sends_stats.median < Duration::from_secs(6));
+            assert!(ln_sends_stats.p90 < ln_sends_stats.median * p90_median_factor);
+            assert!(
+                ln_sends_stats.max.as_secs_f64()
+                    < ln_sends_stats.p90.as_secs_f64() * max_p90_factor
+            );
+        }
+        LatencyTest::LnReceive => {
+            info!("Testing latency of ln receive");
+            let mut ln_receives = Vec::with_capacity(iterations);
+
+            // give lnd some funds
+            let add_invoice = lnd
+                .lightning_client_lock()
+                .await?
+                .add_invoice(tonic_lnd::lnrpc::Invoice {
+                    value_msat: 10_000_000,
+                    ..Default::default()
+                })
+                .await?
+                .into_inner();
+
+            let invoice = add_invoice.payment_request;
+            cmd!(client, "ln-pay", invoice).run().await?;
+
+            for _ in 0..iterations {
+                let invoice = cmd!(
+                    client,
+                    "ln-invoice",
+                    "--amount=100000msat",
+                    "--description=incoming-over-lnd-gw"
+                )
+                .out_json()
+                .await?["invoice"]
+                    .as_str()
+                    .context("invoice must be string")?
+                    .to_owned();
+
+                let start_time = Instant::now();
+                let payment = lnd
+                    .lightning_client_lock()
+                    .await?
+                    .send_payment_sync(tonic_lnd::lnrpc::SendRequest {
+                        payment_request: invoice,
+                        ..Default::default()
+                    })
+                    .await?
+                    .into_inner();
+                let payment_status = lnd
+                    .lightning_client_lock()
+                    .await?
+                    .list_payments(tonic_lnd::lnrpc::ListPaymentsRequest {
+                        include_incomplete: true,
+                        ..Default::default()
+                    })
+                    .await?
+                    .into_inner()
+                    .payments
+                    .into_iter()
+                    .find(|p| p.payment_hash == payment.payment_hash.to_hex())
+                    .context("payment not in list")?
+                    .status();
+                anyhow::ensure!(
+                    payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded
+                );
+                ln_receives.push(start_time.elapsed());
+            }
+            let ln_receives_stats = stats_for(ln_receives);
+            println!("### LATENCY LN RECV: {ln_receives_stats}");
+            assert!(ln_receives_stats.median < Duration::from_secs(6));
+            assert!(ln_receives_stats.p90 < ln_receives_stats.median * p90_median_factor);
+            assert!(
+                ln_receives_stats.max.as_secs_f64()
+                    < ln_receives_stats.p90.as_secs_f64() * max_p90_factor
+            );
+        }
+        LatencyTest::FmPay => {
+            info!("Testing latency of internal payments within a federation");
+            let mut fm_internal_pay = Vec::with_capacity(iterations);
+            let sender = fed.new_joined_client("internal-swap-sender").await?;
+            fed.pegin_client(10_000_000, &sender).await?;
+            for _ in 0..iterations {
+                let recv = cmd!(
+                    client,
+                    "ln-invoice",
+                    "--amount=1000000msat",
+                    "--description=internal-swap-invoice"
+                )
+                .out_json()
+                .await?;
+                let invoice = recv["invoice"]
+                    .as_str()
+                    .context("invoice must be string")?
+                    .to_owned();
+                let recv_op = recv["operation_id"]
+                    .as_str()
+                    .context("operation id must be string")?
+                    .to_owned();
+
+                let start_time = Instant::now();
+                cmd!(sender, "ln-pay", invoice).run().await?;
+                cmd!(client, "await-invoice", recv_op).run().await?;
+                fm_internal_pay.push(start_time.elapsed());
+            }
+            let fm_pay_stats = stats_for(fm_internal_pay);
+
+            println!("### LATENCY FM PAY: {fm_pay_stats}");
+            assert!(fm_pay_stats.median < Duration::from_secs(6));
+            assert!(fm_pay_stats.p90 < fm_pay_stats.median * p90_median_factor);
+            assert!(
+                fm_pay_stats.max.as_secs_f64() < fm_pay_stats.p90.as_secs_f64() * max_p90_factor
+            );
+        }
+        LatencyTest::Restore => {
+            info!("Testing latency of restore");
+            let backup_secret = cmd!(client, "print-secret").out_json().await?["secret"]
+                .as_str()
+                .map(ToOwned::to_owned)
+                .unwrap();
+            let restore_client = Client::create("restore").await?;
+            let start_time = Instant::now();
+            cmd!(
+                restore_client,
+                "restore",
+                "--mnemonic",
+                &backup_secret,
+                "--invite-code",
+                fed.invite_code()?
+            )
+            .run()
+            .await?;
+            let restore_time = start_time.elapsed();
+
+            println!("### LATENCY RESTORE: {restore_time:?}");
+            assert!(restore_time < Duration::from_secs(160));
+        }
     }
 
-    info!("Testing latency of ln receive");
-    let mut ln_receives = Vec::with_capacity(iterations);
-    for _ in 0..iterations {
-        let invoice = cmd!(
-            client,
-            "ln-invoice",
-            "--amount=1000000msat",
-            "--description=incoming-over-lnd-gw"
-        )
-        .out_json()
-        .await?["invoice"]
-            .as_str()
-            .context("invoice must be string")?
-            .to_owned();
-
-        let start_time = Instant::now();
-        let payment = lnd
-            .lightning_client_lock()
-            .await?
-            .send_payment_sync(tonic_lnd::lnrpc::SendRequest {
-                payment_request: invoice,
-                ..Default::default()
-            })
-            .await?
-            .into_inner();
-        let payment_status = lnd
-            .lightning_client_lock()
-            .await?
-            .list_payments(tonic_lnd::lnrpc::ListPaymentsRequest {
-                include_incomplete: true,
-                ..Default::default()
-            })
-            .await?
-            .into_inner()
-            .payments
-            .into_iter()
-            .find(|p| p.payment_hash == payment.payment_hash.to_hex())
-            .context("payment not in list")?
-            .status();
-        anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
-        ln_receives.push(start_time.elapsed());
-    }
-
-    info!("Testing latency of internal payments within a federation");
-    let mut fm_internal_pay = Vec::with_capacity(iterations);
-    let sender = fed.new_joined_client("internal-swap-sender").await?;
-    fed.pegin_client(10_000_000, &sender).await?;
-    for _ in 0..iterations {
-        let recv = cmd!(
-            client,
-            "ln-invoice",
-            "--amount=1000000msat",
-            "--description=internal-swap-invoice"
-        )
-        .out_json()
-        .await?;
-        let invoice = recv["invoice"]
-            .as_str()
-            .context("invoice must be string")?
-            .to_owned();
-        let recv_op = recv["operation_id"]
-            .as_str()
-            .context("operation id must be string")?
-            .to_owned();
-
-        let start_time = Instant::now();
-        cmd!(sender, "ln-pay", invoice).run().await?;
-        cmd!(client, "await-invoice", recv_op).run().await?;
-        fm_internal_pay.push(start_time.elapsed());
-    }
-
-    let reissue_stats = stats_for(reissues);
-    let ln_sends_stats = stats_for(ln_sends);
-    let ln_receives_stats = stats_for(ln_receives);
-    let fm_pay_stats = stats_for(fm_internal_pay);
-
-    info!("Testing latency of restore");
-    let backup_secret = cmd!(client, "print-secret").out_json().await?["secret"]
-        .as_str()
-        .map(ToOwned::to_owned)
-        .unwrap();
-    let restore_client = Client::create("restore").await?;
-    let start_time = Instant::now();
-    cmd!(
-        restore_client,
-        "restore",
-        "--mnemonic",
-        &backup_secret,
-        "--invite-code",
-        fed.invite_code()?
-    )
-    .run()
-    .await?;
-    let restore_time = start_time.elapsed();
-
-    println!(
-        "================= RESULTS ==================\n\
-              REISSUE: {reissue_stats}\n\
-              LN SEND: {ln_sends_stats}\n\
-              LN RECV: {ln_receives_stats}\n\
-              FM PAY: {fm_pay_stats}\n\
-              RESTORE: {restore_time:?}"
-    );
-    // FIXME: should be smaller
-    assert!(reissue_stats.median < Duration::from_secs(4));
-    assert!(ln_sends_stats.median < Duration::from_secs(6));
-    assert!(ln_receives_stats.median < Duration::from_secs(6));
-    assert!(fm_pay_stats.median < Duration::from_secs(6));
-    assert!(restore_time < Duration::from_secs(160));
-    let factor = 5;
-    assert!(reissue_stats.p90 < reissue_stats.median * factor);
-    assert!(ln_sends_stats.p90 < ln_sends_stats.median * factor);
-    assert!(ln_receives_stats.p90 < ln_receives_stats.median * factor);
-    assert!(fm_pay_stats.p90 < fm_pay_stats.median * factor);
-    let factor = 5.0;
-    assert!(reissue_stats.max.as_secs_f64() < reissue_stats.p90.as_secs_f64() * factor);
-    assert!(ln_sends_stats.max.as_secs_f64() < ln_sends_stats.p90.as_secs_f64() * factor);
-    assert!(ln_receives_stats.max.as_secs_f64() < ln_receives_stats.p90.as_secs_f64() * factor);
-    assert!(fm_pay_stats.max.as_secs_f64() < fm_pay_stats.p90.as_secs_f64() * factor);
     Ok(())
 }
 
@@ -1747,10 +1781,22 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
 }
 
 #[derive(Subcommand)]
+pub enum LatencyTest {
+    Reissue,
+    LnSend,
+    LnReceive,
+    FmPay,
+    Restore,
+}
+
+#[derive(Subcommand)]
 pub enum TestCmd {
     /// `devfed` then checks the average latency of reissuing ecash, LN receive,
     /// and LN send
-    LatencyTests,
+    LatencyTests {
+        #[clap(subcommand)]
+        r#type: LatencyTest,
+    },
     /// `devfed` then kills and restarts most of the Guardian nodes in a 4 node
     /// fedimint
     ReconnectTest,
@@ -1813,10 +1859,10 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             };
             cleanup_on_exit(main, task_group).await?;
         }
-        TestCmd::LatencyTests => {
+        TestCmd::LatencyTests { r#type } => {
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
-            latency_tests(dev_fed).await?;
+            latency_tests(dev_fed, r#type).await?;
         }
         TestCmd::ReconnectTest => {
             let (process_mgr, _) = setup(common_args).await?;
