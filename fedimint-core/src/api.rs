@@ -870,6 +870,26 @@ impl InviteCode {
         ])
     }
 
+    /// Constructs an [`InviteCode`] which contains as many guardian URLs as
+    /// needed to always be able to join a working federation
+    pub fn new_with_essential_num_guardians(
+        peer_to_url_map: &BTreeMap<PeerId, SafeUrl>,
+        federation_id: FederationId,
+    ) -> Self {
+        let max_size = peer_to_url_map.max_evil() + 1;
+        let mut code_vec: Vec<InviteCodeData> = peer_to_url_map
+            .iter()
+            .take(max_size)
+            .map(|(peer, url)| InviteCodeData::Api {
+                url: url.clone(),
+                peer: *peer,
+            })
+            .collect();
+        code_vec.push(InviteCodeData::FederationId(federation_id));
+
+        InviteCode(code_vec)
+    }
+
     /// Returns the API URL of one of the guardians.
     pub fn url(&self) -> SafeUrl {
         self.0
@@ -891,6 +911,17 @@ impl InviteCode {
                 _ => None,
             })
             .expect("Ensured by constructor")
+    }
+
+    /// Get all peer URLs in the [`InviteCode`]
+    pub fn peers(&self) -> BTreeMap<PeerId, SafeUrl> {
+        self.0
+            .iter()
+            .filter_map(|entry| match entry {
+                InviteCodeData::Api { url, peer } => Some((*peer, url.clone())),
+                _ => None,
+            })
+            .collect()
     }
 
     /// Returns the federation's ID that can be used to authenticate the config
@@ -1480,5 +1511,24 @@ mod tests {
         assert_eq!(connect_as_string, bech32);
         let connect_parsed_json: InviteCode = serde_json::from_str(&json).unwrap();
         assert_eq!(connect_parsed_json, connect_parsed);
+    }
+
+    #[test]
+    fn creates_essential_guardians_invite_code() {
+        let mut peer_to_url_map = BTreeMap::new();
+        peer_to_url_map.insert(PeerId(0), "ws://test1".parse().expect("URL fail"));
+        peer_to_url_map.insert(PeerId(1), "ws://test2".parse().expect("URL fail"));
+        peer_to_url_map.insert(PeerId(2), "ws://test3".parse().expect("URL fail"));
+        peer_to_url_map.insert(PeerId(3), "ws://test4".parse().expect("URL fail"));
+        let max_size = peer_to_url_map.max_evil() + 1;
+
+        let code =
+            InviteCode::new_with_essential_num_guardians(&peer_to_url_map, FederationId::dummy());
+
+        assert_eq!(FederationId::dummy(), code.federation_id());
+
+        let expected_map: BTreeMap<PeerId, SafeUrl> =
+            peer_to_url_map.into_iter().take(max_size).collect();
+        assert_eq!(expected_map, code.peers());
     }
 }
