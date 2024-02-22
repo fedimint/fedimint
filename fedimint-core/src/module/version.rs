@@ -368,6 +368,24 @@ pub struct SupportedCoreApiVersions {
     pub api: MultiApiVersion,
 }
 
+impl SupportedCoreApiVersions {
+    /// Get minor supported version by consensus and major numbers
+    pub fn get_minor_api_version(
+        &self,
+        core_consensus: CoreConsensusVersion,
+        major: u32,
+    ) -> Option<u32> {
+        if self.core_consensus.major != core_consensus.major {
+            return None;
+        }
+
+        self.api.get_by_major(major).map(|v| {
+            debug_assert_eq!(v.major, major);
+            v.minor
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SupportedModuleApiVersions {
     pub core_consensus: CoreConsensusVersion,
@@ -395,6 +413,27 @@ impl SupportedModuleApiVersions {
                 "overlapping (conflicting) api versions when declaring SupportedModuleApiVersions",
             ),
         }
+    }
+
+    /// Get minor supported version by consensus and major numbers
+    pub fn get_minor_api_version(
+        &self,
+        core_consensus: CoreConsensusVersion,
+        module_consensus: ModuleConsensusVersion,
+        major: u32,
+    ) -> Option<u32> {
+        if self.core_consensus.major != core_consensus.major {
+            return None;
+        }
+
+        if self.module_consensus.major != module_consensus.major {
+            return None;
+        }
+
+        self.api.get_by_major(major).map(|v| {
+            debug_assert_eq!(v.major, major);
+            v.minor
+        })
     }
 }
 
