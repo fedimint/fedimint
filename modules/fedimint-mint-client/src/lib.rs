@@ -337,11 +337,22 @@ pub struct MintOperationMeta {
     pub extra_meta: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum MintOperationMetaVariant {
+    // TODO: add migrations for operation log and clean up schema
+    /// Either `legacy_out_point` or both `txid` and `out_point_indices` will be
+    /// present.
     Reissuance {
-        out_point: OutPoint,
+        // Removed in 0.3.0:
+        #[serde(skip_serializing, default, rename = "out_point")]
+        legacy_out_point: Option<OutPoint>,
+        // Introduced in 0.3.0:
+        #[serde(default)]
+        txid: Option<TransactionId>,
+        // Introduced in 0.3.0:
+        #[serde(default)]
+        out_point_indices: Vec<u64>,
     },
     SpendOOB {
         requested_amount: Amount,
@@ -1064,16 +1075,27 @@ impl MintClientModule {
 
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientModule::reissue_external_notes extra_meta is serializable");
-        let operation_meta_gen = move |txid, _| MintOperationMeta {
-            variant: MintOperationMetaVariant::Reissuance {
-                out_point: OutPoint { txid, out_idx: 0 },
-            },
-            amount,
-            extra_meta: extra_meta.clone(),
+        let operation_meta_gen = move |txid, out_points: Vec<OutPoint>| {
+            assert!(
+                out_points.iter().all(|out_point| out_point.txid == txid),
+                "Change outpoints didn't all have consistent transaction id."
+            );
+
+            MintOperationMeta {
+                variant: MintOperationMetaVariant::Reissuance {
+                    legacy_out_point: None,
+                    txid: Some(txid),
+                    out_point_indices: out_points
+                        .iter()
+                        .map(|out_point| out_point.out_idx)
+                        .collect(),
+                },
+                amount,
+                extra_meta: extra_meta.clone(),
+            }
         };
 
-        let change = self
-            .client_ctx
+        self.client_ctx
             .finalize_and_submit_transaction(
                 operation_id,
                 MintCommonInit::KIND.as_str(),
@@ -1081,12 +1103,7 @@ impl MintClientModule {
                 tx,
             )
             .await
-            .context("We already reissued these notes")?
-            .1;
-
-        self.client_ctx
-            .await_primary_module_outputs(operation_id, change)
-            .await?;
+            .context("We already reissued these notes")?;
 
         Ok(operation_id)
     }
@@ -1098,8 +1115,26 @@ impl MintClientModule {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<ReissueExternalNotesState>> {
         let operation = self.mint_operation(operation_id).await?;
-        let out_point = match operation.meta::<MintOperationMeta>().variant {
-            MintOperationMetaVariant::Reissuance { out_point } => out_point,
+        let (txid, out_points) = match operation.meta::<MintOperationMeta>().variant {
+            MintOperationMetaVariant::Reissuance {
+                legacy_out_point,
+                txid,
+                out_point_indices,
+            } => {
+                // Either txid or legacy_out_point will be present, so we should always
+                // have a source for the txid
+                let txid = txid
+                    .or(legacy_out_point.map(|out_point| out_point.txid))
+                    .context("Empty reissuance not permitted, this should never happen")?;
+
+                let out_points = out_point_indices
+                    .into_iter()
+                    .map(|out_idx| OutPoint { txid, out_idx })
+                    .chain(legacy_out_point)
+                    .collect::<Vec<_>>();
+
+                (txid, out_points)
+            }
             _ => bail!("Operation is not a reissuance"),
         };
 
@@ -1112,7 +1147,7 @@ impl MintClientModule {
                 match client_ctx
                     .transaction_updates(operation_id)
                     .await
-                    .await_tx_accepted(out_point.txid)
+                    .await_tx_accepted(txid)
                     .await
                 {
                     Ok(()) => {
@@ -1120,17 +1155,17 @@ impl MintClientModule {
                     }
                     Err(e) => {
                         yield ReissueExternalNotesState::Failed(format!("Transaction not accepted {e:?}"));
+                        return;
                     }
                 }
 
-                match client_ctx.self_ref().await_output_finalized(operation_id, out_point).await {
-                    Ok(_) => {
-                        yield ReissueExternalNotesState::Done;
-                    },
-                    Err(e) => {
+                for out_point in out_points {
+                    if let Err(e) = client_ctx.self_ref().await_output_finalized(operation_id, out_point).await {
                         yield ReissueExternalNotesState::Failed(e.to_string());
-                    },
+                        return;
+                    }
                 }
+                yield ReissueExternalNotesState::Done;
             }}
         ))
     }
@@ -1679,10 +1714,15 @@ mod tests {
     use fedimint_core::api::InviteCode;
     use fedimint_core::config::FederationId;
     use fedimint_core::encoding::Decodable;
-    use fedimint_core::{Amount, PeerId, Tiered, TieredMulti, TieredSummary};
+    use fedimint_core::{
+        Amount, OutPoint, PeerId, Tiered, TieredMulti, TieredSummary, TransactionId,
+    };
     use itertools::Itertools;
+    use serde_json::json;
 
-    use crate::{select_notes_from_stream, OOBNotes, OOBNotesData, SpendableNote};
+    use crate::{
+        select_notes_from_stream, MintOperationMetaVariant, OOBNotes, OOBNotesData, SpendableNote,
+    };
 
     #[test_log::test(tokio::test)]
     async fn select_notes_avg_test() {
@@ -1865,5 +1905,46 @@ mod tests {
         ]);
         let notes_inconsistent_str = notes_inconsistent.to_string();
         assert!(notes_inconsistent_str.parse::<OOBNotes>().is_err());
+    }
+
+    #[test]
+    fn reissuance_meta_compatibility_02_03() {
+        let dummy_outpoint = OutPoint {
+            txid: TransactionId::all_zeros(),
+            out_idx: 0,
+        };
+
+        let old_meta_json = json!({
+            "reissuance": {
+                "out_point": dummy_outpoint
+            }
+        });
+
+        let old_meta: MintOperationMetaVariant =
+            serde_json::from_value(old_meta_json).expect("parsing old reissuance meta failed");
+        assert_eq!(
+            old_meta,
+            MintOperationMetaVariant::Reissuance {
+                legacy_out_point: Some(dummy_outpoint),
+                txid: None,
+                out_point_indices: vec![],
+            }
+        );
+
+        let new_meta_json = serde_json::to_value(MintOperationMetaVariant::Reissuance {
+            legacy_out_point: None,
+            txid: Some(dummy_outpoint.txid),
+            out_point_indices: vec![0],
+        })
+        .expect("serializing always works");
+        assert_eq!(
+            new_meta_json,
+            json!({
+                "reissuance": {
+                    "txid": dummy_outpoint.txid,
+                    "out_point_indices": [dummy_outpoint.out_idx],
+                }
+            })
+        );
     }
 }
