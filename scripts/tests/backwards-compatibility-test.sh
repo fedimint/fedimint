@@ -57,12 +57,30 @@ function use_gateway_binaries_for_version() {
 test_results="fed_version,client_version,gateway_version,exit_code\n"
 has_failure=false
 versions+=("current")
+
+# count number of times the first argument appears in rest of the arguments
+function filter_count() {
+  item="$1"
+  ((count=0))
+  shift
+
+
+  for arg in "$@"; do
+    if [ "$arg" == "$item" ]; then
+      ((count++))
+    fi
+  done
+
+  echo "$count"
+}
+
 for fed_version in "${versions[@]}"; do
   for client_version in "${versions[@]}"; do
     for gateway_version in "${versions[@]}"; do
-      # test-ci-all already tests binaries running the same version, so no need to run again
-      if [[ "$fed_version" == "$client_version" && "$fed_version" == "$gateway_version" ]]; then
-        continue
+
+      # we only need to try everything against one element being in a different version
+      if [ "$(filter_count "current" "$fed_version" "$client_version" "$gateway_version")" != 2 ]; then
+         continue
       fi
 
       use_fed_binaries_for_version "$fed_version"
@@ -84,9 +102,8 @@ for fed_version in "${versions[@]}"; do
         has_failure=true
       fi
 
-      # cleanup devimint dir
-      tmpdir=$(dirname "$(mktemp -u)")
-      rm -rf "$tmpdir"/devimint-*
+      # cleair=$(dirname "$(mktemp -u)")
+      rm -rf "${TMPDIR:-/tmp}"/devimint-*
 
       >&2 echo "========== Finished backwards-compatibility run ==========="
       >&2 echo "fed version: $fed_version"
