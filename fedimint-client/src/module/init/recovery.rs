@@ -265,7 +265,7 @@ where
                         let block = loop {
                             info!(target: LOG_CLIENT_RECOVERY, session_idx, "Awaiting signed block");
 
-                            let items_res = if core_api_version <= VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
+                            let items_res = if core_api_version < VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
                                 api.await_block(session_idx, &decoders).await.map(|s| s.items)
                             } else {
                                 api.get_session_status(session_idx, &decoders).await.map(|s| match s {
