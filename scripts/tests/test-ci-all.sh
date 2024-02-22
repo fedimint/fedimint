@@ -61,13 +61,45 @@ function gateway_reboot_test() {
 }
 export -f gateway_reboot_test
 
-function latency_test() {
+function latency_test_reissue() {
   # latency tests are not necessary for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh
+    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh reissue
   fi
 }
-export -f latency_test
+export -f latency_test_reissue
+
+function latency_test_ln_send() {
+  # latency tests are not necessary for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh ln-send
+  fi
+}
+export -f latency_test_ln_send
+
+function latency_test_ln_receive() {
+  # latency tests are not necessary for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh ln-receive
+  fi
+}
+export -f latency_test_ln_receive
+
+function latency_test_fm_pay() {
+  # latency tests are not necessary for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh fm-pay
+  fi
+}
+export -f latency_test_fm_pay
+
+function latency_test_restore() {
+  # latency tests are not necessary for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh restore
+  fi
+}
+export -f latency_test_restore
 
 function devimint_cli_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-cli-test.sh
@@ -147,7 +179,11 @@ if parallel \
   backend_test_bitcoind \
   backend_test_electrs \
   backend_test_esplora \
-  latency_test \
+  latency_test_reissue \
+  latency_test_ln_send\
+  latency_test_ln_receive \
+  latency_test_fm_pay\
+  latency_test_restore \
   reconnect_test \
   lightning_reconnect_test \
   gateway_reboot_test \
