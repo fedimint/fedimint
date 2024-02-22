@@ -2004,6 +2004,7 @@ impl ClientBuilder {
                                             module_config.clone(),
                                             db.clone(),
                                             module_instance_id,
+                                            common_api_versions.core,
                                             api_version,
                                             root_secret.derive_module_secret(module_instance_id),
                                             notifier.clone(),
@@ -2071,6 +2072,7 @@ impl ClientBuilder {
                             module_config,
                             db.clone(),
                             module_instance_id,
+                            common_api_versions.core,
                             api_version,
                             // This is a divergence from the legacy client, where the child secret
                             // keys were derived using *module kind*-specific derivation paths.

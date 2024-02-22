@@ -33,7 +33,8 @@ where
     federation_id: FederationId,
     cfg: <<C as ModuleInit>::Common as CommonModuleInit>::ClientConfig,
     db: Database,
-    api_version: ApiVersion,
+    core_api_version: ApiVersion,
+    module_api_version: ApiVersion,
     module_root_secret: DerivableSecret,
     notifier: ModuleNotifier<<<C as ClientModuleInit>::Module as ClientModule>::States>,
     api: DynGlobalApi,
@@ -57,8 +58,17 @@ where
         &self.db
     }
 
+    pub fn core_api_version(&self) -> &ApiVersion {
+        &self.core_api_version
+    }
+
+    pub fn module_api_version(&self) -> &ApiVersion {
+        &self.module_api_version
+    }
+
+    // TODO: deprecate, use `module_api_version` instead
     pub fn api_version(&self) -> &ApiVersion {
-        &self.api_version
+        &self.module_api_version
     }
 
     pub fn module_root_secret(&self) -> &DerivableSecret {
@@ -99,7 +109,8 @@ where
     federation_id: FederationId,
     cfg: <<C as ModuleInit>::Common as CommonModuleInit>::ClientConfig,
     db: Database,
-    api_version: ApiVersion,
+    core_api_version: ApiVersion,
+    module_api_version: ApiVersion,
     module_root_secret: DerivableSecret,
     notifier: ModuleNotifier<<<C as ClientModuleInit>::Module as ClientModule>::States>,
     api: DynGlobalApi,
@@ -124,8 +135,17 @@ where
         &self.db
     }
 
+    pub fn core_api_version(&self) -> &ApiVersion {
+        &self.core_api_version
+    }
+
+    pub fn module_api_version(&self) -> &ApiVersion {
+        &self.module_api_version
+    }
+
+    // TODO: deprecate, use module_api_version instead
     pub fn api_version(&self) -> &ApiVersion {
-        &self.api_version
+        &self.module_api_version
     }
 
     pub fn module_root_secret(&self) -> &DerivableSecret {
@@ -224,7 +244,8 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
-        api_version: ApiVersion,
+        core_api_version: ApiVersion,
+        module_api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: Notifier,
         api: DynGlobalApi,
@@ -240,7 +261,8 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
-        api_version: ApiVersion,
+        core_api_version: ApiVersion,
+        module_api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: Notifier,
         api: DynGlobalApi,
@@ -277,7 +299,8 @@ where
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
-        api_version: ApiVersion,
+        core_api_version: ApiVersion,
+        module_api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         // TODO: make dyn type for notifier
         notifier: Notifier,
@@ -299,7 +322,8 @@ where
                     federation_id,
                     cfg: typed_cfg.clone(),
                     db: db.with_prefix_module_id(instance_id),
-                    api_version,
+                    core_api_version,
+                    module_api_version,
                     module_root_secret,
                     notifier: notifier.module_notifier(instance_id),
                     api: api.clone(),
@@ -324,7 +348,8 @@ where
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
-        api_version: ApiVersion,
+        core_api_version: ApiVersion,
+        module_api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         // TODO: make dyn type for notifier
         notifier: Notifier,
@@ -336,7 +361,8 @@ where
                 federation_id,
                 cfg: typed_cfg.clone(),
                 db: db.with_prefix_module_id(instance_id),
-                api_version,
+                core_api_version,
+                module_api_version,
                 module_root_secret,
                 notifier: notifier.module_notifier(instance_id),
                 api: api.clone(),
