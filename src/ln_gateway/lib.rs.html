@@ -1573,6 +1573,28 @@
 <a href="#1573" id="1573">1573</a>
 <a href="#1574" id="1574">1574</a>
 <a href="#1575" id="1575">1575</a>
+<a href="#1576" id="1576">1576</a>
+<a href="#1577" id="1577">1577</a>
+<a href="#1578" id="1578">1578</a>
+<a href="#1579" id="1579">1579</a>
+<a href="#1580" id="1580">1580</a>
+<a href="#1581" id="1581">1581</a>
+<a href="#1582" id="1582">1582</a>
+<a href="#1583" id="1583">1583</a>
+<a href="#1584" id="1584">1584</a>
+<a href="#1585" id="1585">1585</a>
+<a href="#1586" id="1586">1586</a>
+<a href="#1587" id="1587">1587</a>
+<a href="#1588" id="1588">1588</a>
+<a href="#1589" id="1589">1589</a>
+<a href="#1590" id="1590">1590</a>
+<a href="#1591" id="1591">1591</a>
+<a href="#1592" id="1592">1592</a>
+<a href="#1593" id="1593">1593</a>
+<a href="#1594" id="1594">1594</a>
+<a href="#1595" id="1595">1595</a>
+<a href="#1596" id="1596">1596</a>
+<a href="#1597" id="1597">1597</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1605,6 +1627,7 @@
 <span class="kw">use </span>client::GatewayClientBuilder;
 <span class="kw">use </span>db::{
     DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey,
+    GATEWAYD_DATABASE_VERSION,
 };
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::ClientArc;
@@ -1614,7 +1637,9 @@
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+<span class="kw">use </span>fedimint_core::db::{
+    apply_migrations_server, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+};
 <span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
@@ -1650,7 +1675,7 @@
 <span class="kw">use </span>tokio::sync::{Mutex, MutexGuard};
 <span class="kw">use </span>tracing::{debug, error, info, info_span, warn, Instrument};
 
-<span class="kw">use </span><span class="kw">crate</span>::db::{FederationConfig, FederationIdKeyPrefix};
+<span class="kw">use </span><span class="kw">crate</span>::db::{get_gatewayd_database_migrations, FederationConfig, FederationIdKeyPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::Forward;
 <span class="kw">use </span><span class="kw">crate</span>::lightning::cln::RouteHtlcStream;
 <span class="kw">use </span><span class="kw">crate</span>::lightning::GatewayLightningBuilder;
@@ -1755,7 +1780,7 @@
 /// If `GatewayConfiguration is set in the database, that takes precedence and
 /// the optional parameters will have no affect.
 </span><span class="attr">#[derive(Clone, Debug)]
-</span><span class="kw">struct </span>GatewayParameters {
+</span><span class="kw">pub struct </span>GatewayParameters {
     listen: SocketAddr,
     versioned_api: SafeUrl,
     password: <span class="prelude-ty">Option</span>&lt;String&gt;,
@@ -1884,9 +1909,9 @@
         <span class="kw">let </span>versioned_api = api_addr
             .join(V1_API_ENDPOINT)
             .expect(<span class="string">&quot;Failed to version gateway API address&quot;</span>);
-        <span class="prelude-val">Ok</span>(Gateway {
+        Gateway::new(
             lightning_builder,
-            gateway_parameters: GatewayParameters {
+            GatewayParameters {
                 listen,
                 versioned_api,
                 password: cli_password,
@@ -1894,16 +1919,11 @@
                 fees: <span class="prelude-val">Some</span>(GatewayFee(fees)),
                 network,
             },
-            state: Arc::new(RwLock::new(GatewayState::Initializing)),
+            gateway_db,
             client_builder,
-            gateway_db: gateway_db.clone(),
-            clients: Arc::new(RwLock::new(BTreeMap::new())),
-            client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
-            scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
-            gateway_id: Gateway::get_gateway_id(gateway_db).<span class="kw">await</span>,
-            max_used_scid: Arc::new(Mutex::new(INITIAL_SCID)),
-        })
-    }
+        )
+        .<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>new_with_default_modules() -&gt; anyhow::Result&lt;Gateway&gt; {
         <span class="kw">let </span>opts = GatewayOpts::parse();
@@ -1932,12 +1952,36 @@
             <span class="macro">fedimint_build_code_version_env!</span>()
         );
 
-        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            lightning_builder: Arc::new(GatewayLightningBuilder {
+        Gateway::new(
+            Arc::new(GatewayLightningBuilder {
                 lightning_mode: opts.mode.clone(),
             }),
+            opts.to_gateway_parameters()<span class="question-mark">?</span>,
+            gateway_db,
+            client_builder,
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>new(
+        lightning_builder: Arc&lt;<span class="kw">dyn </span>LightningBuilder + Send + Sync&gt;,
+        gateway_parameters: GatewayParameters,
+        gateway_db: Database,
+        client_builder: GatewayClientBuilder,
+    ) -&gt; anyhow::Result&lt;Gateway&gt; {
+        <span class="comment">// Apply database migrations before using the database
+        </span>apply_migrations_server(
+            <span class="kw-2">&amp;</span>gateway_db,
+            <span class="string">&quot;gatewayd&quot;</span>.to_string(),
+            GATEWAYD_DATABASE_VERSION,
+            get_gatewayd_database_migrations(),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            lightning_builder,
             max_used_scid: Arc::new(Mutex::new(INITIAL_SCID)),
-            gateway_parameters: opts.to_gateway_parameters()<span class="question-mark">?</span>,
+            gateway_parameters,
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
             gateway_id: <span class="self">Self</span>::get_gateway_id(gateway_db.clone()).<span class="kw">await</span>,

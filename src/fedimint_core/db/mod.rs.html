@@ -2946,7 +2946,6 @@
 <a href="#2946" id="2946">2946</a>
 <a href="#2947" id="2947">2947</a>
 <a href="#2948" id="2948">2948</a>
-<a href="#2949" id="2949">2949</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -4786,8 +4785,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;r </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>&gt;,
     ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;r</span>&gt;&gt;;
 
-<span class="doccomment">/// Applies the database migrations to a non-isolated database. Intended only to
-/// be used for `fedimint-server`.
+<span class="doccomment">/// Applies the database migrations to a non-isolated database.
 </span><span class="kw">pub async fn </span>apply_migrations_server(
     db: <span class="kw-2">&amp;</span>Database,
     kind: String,

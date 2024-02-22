@@ -419,7 +419,8 @@
 <a href="#419" id="419">419</a>
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::fs::read_dir;
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::fs::read_dir;
 <span class="kw">use </span>std::io::ErrorKind;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::{env, fs, io};
@@ -434,12 +435,12 @@
 <span class="kw">use </span>fedimint_client::sm::{ActiveStateKeyPrefix, InactiveStateKeyPrefix};
 <span class="kw">use </span>fedimint_core::core::IntoDynInstance;
 <span class="kw">use </span>fedimint_core::db::{
-    apply_migrations, apply_migrations_server, Database, IDatabaseTransactionOpsCoreTyped,
+    apply_migrations, apply_migrations_server, Database, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped, ServerMigrationFn,
 };
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
 <span class="kw">use </span>fedimint_rocksdb::RocksDb;
-<span class="kw">use </span>fedimint_server::db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
 <span class="kw">use </span>futures::future::BoxFuture;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
 <span class="kw">use </span>rand::rngs::OsRng;
@@ -539,12 +540,13 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="doccomment">/// Creates the database backup for `fedimint-server`
+<span class="doccomment">/// Creates the database backup for `snapshot_name`
 /// to `db/migrations`. Then this function will execute the provided
 /// `prepare_fn` which is expected to populate the database with the appropriate
 /// data for testing a migration. If the snapshot directory already exists,
 /// this function will do nothing.
-</span><span class="kw">pub async fn </span>snapshot_db_migrations_server&lt;<span class="lifetime">&#39;a</span>, F&gt;(
+</span><span class="kw">pub async fn </span>snapshot_db_migrations_with_decoders&lt;<span class="lifetime">&#39;a</span>, F&gt;(
+    snapshot_name: <span class="kw-2">&amp;</span>str,
     prepare_fn: F,
     decoders: ModuleDecoderRegistry,
 ) -&gt; anyhow::Result&lt;()&gt;
@@ -552,7 +554,7 @@
     </span>F: Fn(Database) -&gt; BoxFuture&lt;<span class="lifetime">&#39;a</span>, ()&gt;,
 {
     <span class="kw">let </span>project_root = get_project_root().unwrap();
-    <span class="kw">let </span>snapshot_dir = project_root.join(<span class="string">&quot;db/migrations&quot;</span>).join(<span class="string">&quot;fedimint-server&quot;</span>);
+    <span class="kw">let </span>snapshot_dir = project_root.join(<span class="string">&quot;db/migrations&quot;</span>).join(snapshot_name);
     create_snapshot(snapshot_dir, decoders, <span class="bool-val">false</span>, prepare_fn).<span class="kw">await
 </span>}
 
@@ -680,31 +682,29 @@
     </span>))
 }
 
-<span class="doccomment">/// Validates the `fedimint-server` database migrations. `decoders` need to be
-/// passed in as an argument since `fedimint-server` is module agnostic. First
+<span class="doccomment">/// Validates the database migrations. `decoders` need to be
+/// passed in as an argument since this is module agnostic. First
 /// applies all defined migrations to the database then executes the `validate``
 /// function which should confirm the database migrations were successful.
 </span><span class="kw">pub async fn </span>validate_migrations_global&lt;F, Fut&gt;(
     validate: F,
+    db_prefix: <span class="kw-2">&amp;</span>str,
+    target_db_version: DatabaseVersion,
+    migrations: BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt;,
     decoders: ModuleDecoderRegistry,
 ) -&gt; anyhow::Result&lt;()&gt;
 <span class="kw">where
     </span>F: Fn(Database) -&gt; Fut,
     Fut: futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt;,
 {
-    <span class="kw">let </span>db = get_temp_database(<span class="string">&quot;fedimint-server&quot;</span>, decoders).<span class="kw">await</span><span class="question-mark">?</span>;
-    apply_migrations_server(
-        <span class="kw-2">&amp;</span>db,
-        <span class="string">&quot;fedimint-server&quot;</span>.to_string(),
-        GLOBAL_DATABASE_VERSION,
-        get_global_database_migrations(),
-    )
-    .<span class="kw">await
-    </span>.context(<span class="string">&quot;Error applying migrations to temp database&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>db = get_temp_database(db_prefix, decoders).<span class="kw">await</span><span class="question-mark">?</span>;
+    apply_migrations_server(<span class="kw-2">&amp;</span>db, db_prefix.to_string(), target_db_version, migrations)
+        .<span class="kw">await
+        </span>.context(<span class="string">&quot;Error applying migrations to temp database&quot;</span>)<span class="question-mark">?</span>;
 
     validate(db)
         .<span class="kw">await
-        </span>.with_context(|| <span class="string">&quot;Validating fedimint-server&quot;</span>.to_string())<span class="question-mark">?</span>;
+        </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Validating {db_prefix}&quot;</span>))<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
 

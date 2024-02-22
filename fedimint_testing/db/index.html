@@ -14,7 +14,7 @@ Two prepare functions are taken as parameters. <code>data_prepare</code> is expe
 create any data that the client module uses and is stored in the isolated
 namespace. <code>state_machine_prepare</code> creates client state machine data that
 can be used for testing state machine migrations. This is created in the
-global namespace.</div></li><li><div class="item-name"><a class="fn" href="fn.snapshot_db_migrations_server.html" title="fn fedimint_testing::db::snapshot_db_migrations_server">snapshot_db_migrations_server</a></div><div class="desc docblock-short">Creates the database backup for <code>fedimint-server</code>
+global namespace.</div></li><li><div class="item-name"><a class="fn" href="fn.snapshot_db_migrations_with_decoders.html" title="fn fedimint_testing::db::snapshot_db_migrations_with_decoders">snapshot_db_migrations_with_decoders</a></div><div class="desc docblock-short">Creates the database backup for <code>snapshot_name</code>
 to <code>db/migrations</code>. Then this function will execute the provided
 <code>prepare_fn</code> which is expected to populate the database with the appropriate
 data for testing a migration. If the snapshot directory already exists,
@@ -22,8 +22,8 @@ this function will do nothing.</div></li><li><div class="item-name"><a class="fn
 database migrations to the module, including the state machine migrations.
 Then calls the <code>validate</code> function, including the new <code>active_states</code> and
 <code>inactive_states</code>, and is expected to confirm the database migrations were
-successful.</div></li><li><div class="item-name"><a class="fn" href="fn.validate_migrations_global.html" title="fn fedimint_testing::db::validate_migrations_global">validate_migrations_global</a></div><div class="desc docblock-short">Validates the <code>fedimint-server</code> database migrations. <code>decoders</code> need to be
-passed in as an argument since <code>fedimint-server</code> is module agnostic. First
+successful.</div></li><li><div class="item-name"><a class="fn" href="fn.validate_migrations_global.html" title="fn fedimint_testing::db::validate_migrations_global">validate_migrations_global</a></div><div class="desc docblock-short">Validates the database migrations. <code>decoders</code> need to be
+passed in as an argument since this is module agnostic. First
 applies all defined migrations to the database then executes the `validate``
 function which should confirm the database migrations were successful.</div></li><li><div class="item-name"><a class="fn" href="fn.validate_migrations_server.html" title="fn fedimint_testing::db::validate_migrations_server">validate_migrations_server</a></div><div class="desc docblock-short">Validates the database migrations for a server module. First applies all
 database migrations to the module, then calls the <code>validate</code> which should

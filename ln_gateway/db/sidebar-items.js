@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix"],"struct":["DbKeyPrefixIter","FederationConfig","FederationIdKey","FederationIdKeyPrefix","GatewayConfiguration","GatewayConfigurationKey","GatewayPublicKey","PreimageAuthentication"]};
+window.SIDEBAR_ITEMS = {"constant":["GATEWAYD_DATABASE_VERSION"],"enum":["DbKeyPrefix"],"fn":["get_gatewayd_database_migrations"],"struct":["DbKeyPrefixIter","FederationConfig","FederationIdKey","FederationIdKeyPrefix","GatewayConfiguration","GatewayConfigurationKey","GatewayPublicKey","PreimageAuthentication","PreimageAuthenticationPrefix"]};

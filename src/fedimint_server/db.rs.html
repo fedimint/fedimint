@@ -294,6 +294,11 @@
 <a href="#294" id="294">294</a>
 <a href="#295" id="295">295</a>
 <a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -411,7 +416,8 @@
     <span class="kw">use </span>fedimint_dummy_server::Dummy;
     <span class="kw">use </span>fedimint_logging::{TracingSetup, LOG_DB};
     <span class="kw">use </span>fedimint_testing::db::{
-        snapshot_db_migrations_server, validate_migrations_global, BYTE_32, TEST_MODULE_INSTANCE_ID,
+        snapshot_db_migrations_with_decoders, validate_migrations_global, BYTE_32,
+        TEST_MODULE_INSTANCE_ID,
     };
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>rand::rngs::OsRng;
@@ -421,9 +427,9 @@
 
     <span class="kw">use </span><span class="kw">super</span>::AcceptedTransactionKey;
     <span class="kw">use </span><span class="kw">crate</span>::db::{
-        AcceptedItem, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKeyPrefix,
-        AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix, SignedSessionOutcomeKey,
-        SignedSessionOutcomePrefix,
+        get_global_database_migrations, AcceptedItem, AcceptedItemKey, AcceptedItemPrefix,
+        AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix,
+        SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
     };
 
     <span class="doccomment">/// Create a database with version 0 data. The database produced is not
@@ -498,7 +504,8 @@
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>snapshot_server_db_migrations() -&gt; anyhow::Result&lt;()&gt; {
-        snapshot_db_migrations_server(
+        snapshot_db_migrations_with_decoders(
+            <span class="string">&quot;fedimint-server&quot;</span>,
             |db| {
                 Box::pin(<span class="kw">async move </span>{
                     create_server_db_with_v0_data(db).<span class="kw">await</span>;
@@ -581,6 +588,9 @@
                 }
                 <span class="prelude-val">Ok</span>(())
             },
+            <span class="string">&quot;fedimint-server&quot;</span>,
+            GLOBAL_DATABASE_VERSION,
+            get_global_database_migrations(),
             ModuleDecoderRegistry::from_iter([(
                 TEST_MODULE_INSTANCE_ID,
                 DummyCommonInit::KIND,
