@@ -1415,7 +1415,10 @@ impl Client {
         let common_api_versions =
             Client::discover_common_api_version_static(config, module_inits, api).await?;
 
-        debug!("Updating the cached common api versions");
+        debug!(
+            value = ?common_api_versions,
+            "Updating the cached common api versions"
+        );
         let mut dbtx = db.begin_transaction().await;
         let _ = dbtx
             .insert_entry(
@@ -1947,6 +1950,8 @@ impl ClientBuilder {
             &db,
         )
         .await?;
+
+        debug!(?common_api_versions, "Completed api version negotiation");
 
         let mut module_recoveries: BTreeMap<
             ModuleInstanceId,
