@@ -1482,6 +1482,56 @@
 <a href="#1482" id="1482">1482</a>
 <a href="#1483" id="1483">1483</a>
 <a href="#1484" id="1484">1484</a>
+<a href="#1485" id="1485">1485</a>
+<a href="#1486" id="1486">1486</a>
+<a href="#1487" id="1487">1487</a>
+<a href="#1488" id="1488">1488</a>
+<a href="#1489" id="1489">1489</a>
+<a href="#1490" id="1490">1490</a>
+<a href="#1491" id="1491">1491</a>
+<a href="#1492" id="1492">1492</a>
+<a href="#1493" id="1493">1493</a>
+<a href="#1494" id="1494">1494</a>
+<a href="#1495" id="1495">1495</a>
+<a href="#1496" id="1496">1496</a>
+<a href="#1497" id="1497">1497</a>
+<a href="#1498" id="1498">1498</a>
+<a href="#1499" id="1499">1499</a>
+<a href="#1500" id="1500">1500</a>
+<a href="#1501" id="1501">1501</a>
+<a href="#1502" id="1502">1502</a>
+<a href="#1503" id="1503">1503</a>
+<a href="#1504" id="1504">1504</a>
+<a href="#1505" id="1505">1505</a>
+<a href="#1506" id="1506">1506</a>
+<a href="#1507" id="1507">1507</a>
+<a href="#1508" id="1508">1508</a>
+<a href="#1509" id="1509">1509</a>
+<a href="#1510" id="1510">1510</a>
+<a href="#1511" id="1511">1511</a>
+<a href="#1512" id="1512">1512</a>
+<a href="#1513" id="1513">1513</a>
+<a href="#1514" id="1514">1514</a>
+<a href="#1515" id="1515">1515</a>
+<a href="#1516" id="1516">1516</a>
+<a href="#1517" id="1517">1517</a>
+<a href="#1518" id="1518">1518</a>
+<a href="#1519" id="1519">1519</a>
+<a href="#1520" id="1520">1520</a>
+<a href="#1521" id="1521">1521</a>
+<a href="#1522" id="1522">1522</a>
+<a href="#1523" id="1523">1523</a>
+<a href="#1524" id="1524">1524</a>
+<a href="#1525" id="1525">1525</a>
+<a href="#1526" id="1526">1526</a>
+<a href="#1527" id="1527">1527</a>
+<a href="#1528" id="1528">1528</a>
+<a href="#1529" id="1529">1529</a>
+<a href="#1530" id="1530">1530</a>
+<a href="#1531" id="1531">1531</a>
+<a href="#1532" id="1532">1532</a>
+<a href="#1533" id="1533">1533</a>
+<a href="#1534" id="1534">1534</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -2354,6 +2404,26 @@
         ])
     }
 
+    <span class="doccomment">/// Constructs an [`InviteCode`] which contains as many guardian URLs as
+    /// needed to always be able to join a working federation
+    </span><span class="kw">pub fn </span>new_with_essential_num_guardians(
+        peer_to_url_map: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, SafeUrl&gt;,
+        federation_id: FederationId,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>max_size = peer_to_url_map.max_evil() + <span class="number">1</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>code_vec: Vec&lt;InviteCodeData&gt; = peer_to_url_map
+            .iter()
+            .take(max_size)
+            .map(|(peer, url)| InviteCodeData::Api {
+                url: url.clone(),
+                peer: <span class="kw-2">*</span>peer,
+            })
+            .collect();
+        code_vec.push(InviteCodeData::FederationId(federation_id));
+
+        InviteCode(code_vec)
+    }
+
     <span class="doccomment">/// Returns the API URL of one of the guardians.
     </span><span class="kw">pub fn </span>url(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SafeUrl {
         <span class="self">self</span>.<span class="number">0
@@ -2375,6 +2445,17 @@
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
             })
             .expect(<span class="string">&quot;Ensured by constructor&quot;</span>)
+    }
+
+    <span class="doccomment">/// Get all peer URLs in the [`InviteCode`]
+    </span><span class="kw">pub fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, SafeUrl&gt; {
+        <span class="self">self</span>.<span class="number">0
+            </span>.iter()
+            .filter_map(|entry| <span class="kw">match </span>entry {
+                InviteCodeData::Api { url, peer } =&gt; <span class="prelude-val">Some</span>((<span class="kw-2">*</span>peer, url.clone())),
+                <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+            })
+            .collect()
     }
 
     <span class="doccomment">/// Returns the federation&#39;s ID that can be used to authenticate the config
@@ -2964,6 +3045,25 @@
         <span class="macro">assert_eq!</span>(connect_as_string, bech32);
         <span class="kw">let </span>connect_parsed_json: InviteCode = serde_json::from_str(<span class="kw-2">&amp;</span>json).unwrap();
         <span class="macro">assert_eq!</span>(connect_parsed_json, connect_parsed);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>creates_essential_guardians_invite_code() {
+        <span class="kw">let </span><span class="kw-2">mut </span>peer_to_url_map = BTreeMap::new();
+        peer_to_url_map.insert(PeerId(<span class="number">0</span>), <span class="string">&quot;ws://test1&quot;</span>.parse().expect(<span class="string">&quot;URL fail&quot;</span>));
+        peer_to_url_map.insert(PeerId(<span class="number">1</span>), <span class="string">&quot;ws://test2&quot;</span>.parse().expect(<span class="string">&quot;URL fail&quot;</span>));
+        peer_to_url_map.insert(PeerId(<span class="number">2</span>), <span class="string">&quot;ws://test3&quot;</span>.parse().expect(<span class="string">&quot;URL fail&quot;</span>));
+        peer_to_url_map.insert(PeerId(<span class="number">3</span>), <span class="string">&quot;ws://test4&quot;</span>.parse().expect(<span class="string">&quot;URL fail&quot;</span>));
+        <span class="kw">let </span>max_size = peer_to_url_map.max_evil() + <span class="number">1</span>;
+
+        <span class="kw">let </span>code =
+            InviteCode::new_with_essential_num_guardians(<span class="kw-2">&amp;</span>peer_to_url_map, FederationId::dummy());
+
+        <span class="macro">assert_eq!</span>(FederationId::dummy(), code.federation_id());
+
+        <span class="kw">let </span>expected_map: BTreeMap&lt;PeerId, SafeUrl&gt; =
+            peer_to_url_map.into_iter().take(max_size).collect();
+        <span class="macro">assert_eq!</span>(expected_map, code.peers());
     }
 }
 </code></pre></div></section></main></body></html>
