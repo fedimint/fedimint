@@ -2211,7 +2211,7 @@
             <span class="kw">let </span>restore_time = start_time.elapsed();
 
             <span class="macro">println!</span>(<span class="string">&quot;### LATENCY RESTORE: {restore_time:?}&quot;</span>);
-            <span class="macro">assert!</span>(restore_time &lt; Duration::from_secs(<span class="number">160</span>));
+            <span class="macro">assert!</span>(restore_time &lt; Duration::from_secs(<span class="number">10</span>));
         }
     }
 

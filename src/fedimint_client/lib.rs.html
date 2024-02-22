@@ -2281,6 +2281,13 @@
 <a href="#2281" id="2281">2281</a>
 <a href="#2282" id="2282">2282</a>
 <a href="#2283" id="2283">2283</a>
+<a href="#2284" id="2284">2284</a>
+<a href="#2285" id="2285">2285</a>
+<a href="#2286" id="2286">2286</a>
+<a href="#2287" id="2287">2287</a>
+<a href="#2288" id="2288">2288</a>
+<a href="#2289" id="2289">2289</a>
+<a href="#2290" id="2290">2290</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3698,7 +3705,10 @@
         <span class="kw">let </span>common_api_versions =
             Client::discover_common_api_version_static(config, module_inits, api).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="macro">debug!</span>(<span class="string">&quot;Updating the cached common api versions&quot;</span>);
+        <span class="macro">debug!</span>(
+            value = <span class="question-mark">?</span>common_api_versions,
+            <span class="string">&quot;Updating the cached common api versions&quot;
+        </span>);
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let _ </span>= dbtx
             .insert_entry(
@@ -4231,6 +4241,8 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
+        <span class="macro">debug!</span>(<span class="question-mark">?</span>common_api_versions, <span class="string">&quot;Completed api version negotiation&quot;</span>);
+
         <span class="kw">let </span><span class="kw-2">mut </span>module_recoveries: BTreeMap&lt;
             ModuleInstanceId,
             Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Future&lt;Output = anyhow::Result&lt;()&gt;&gt;)&gt;&gt;,
@@ -4282,6 +4294,7 @@
                                             module_config.clone(),
                                             db.clone(),
                                             module_instance_id,
+                                            common_api_versions.core,
                                             api_version,
                                             root_secret.derive_module_secret(module_instance_id),
                                             notifier.clone(),
@@ -4349,6 +4362,7 @@
                             module_config,
                             db.clone(),
                             module_instance_id,
+                            common_api_versions.core,
                             api_version,
                             <span class="comment">// This is a divergence from the legacy client, where the child secret
                             // keys were derived using *module kind*-specific derivation paths.

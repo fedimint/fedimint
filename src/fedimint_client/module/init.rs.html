@@ -373,6 +373,32 @@
 <a href="#373" id="373">373</a>
 <a href="#374" id="374">374</a>
 <a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>recovery;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -408,7 +434,8 @@
     federation_id: FederationId,
     cfg: &lt;&lt;C <span class="kw">as </span>ModuleInit&gt;::Common <span class="kw">as </span>CommonModuleInit&gt;::ClientConfig,
     db: Database,
-    api_version: ApiVersion,
+    core_api_version: ApiVersion,
+    module_api_version: ApiVersion,
     module_root_secret: DerivableSecret,
     notifier: ModuleNotifier&lt;&lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
     api: DynGlobalApi,
@@ -432,8 +459,17 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.db
     }
 
-    <span class="kw">pub fn </span>api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ApiVersion {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.api_version
+    <span class="kw">pub fn </span>core_api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ApiVersion {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.core_api_version
+    }
+
+    <span class="kw">pub fn </span>module_api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ApiVersion {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.module_api_version
+    }
+
+    <span class="comment">// TODO: deprecate, use `module_api_version` instead
+    </span><span class="kw">pub fn </span>api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ApiVersion {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.module_api_version
     }
 
     <span class="kw">pub fn </span>module_root_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DerivableSecret {
@@ -474,7 +510,8 @@
     federation_id: FederationId,
     cfg: &lt;&lt;C <span class="kw">as </span>ModuleInit&gt;::Common <span class="kw">as </span>CommonModuleInit&gt;::ClientConfig,
     db: Database,
-    api_version: ApiVersion,
+    core_api_version: ApiVersion,
+    module_api_version: ApiVersion,
     module_root_secret: DerivableSecret,
     notifier: ModuleNotifier&lt;&lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
     api: DynGlobalApi,
@@ -499,8 +536,17 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.db
     }
 
-    <span class="kw">pub fn </span>api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ApiVersion {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.api_version
+    <span class="kw">pub fn </span>core_api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ApiVersion {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.core_api_version
+    }
+
+    <span class="kw">pub fn </span>module_api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ApiVersion {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.module_api_version
+    }
+
+    <span class="comment">// TODO: deprecate, use module_api_version instead
+    </span><span class="kw">pub fn </span>api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ApiVersion {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.module_api_version
     }
 
     <span class="kw">pub fn </span>module_root_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DerivableSecret {
@@ -599,7 +645,8 @@
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
-        api_version: ApiVersion,
+        core_api_version: ApiVersion,
+        module_api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: Notifier,
         api: DynGlobalApi,
@@ -615,7 +662,8 @@
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
-        api_version: ApiVersion,
+        core_api_version: ApiVersion,
+        module_api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: Notifier,
         api: DynGlobalApi,
@@ -652,7 +700,8 @@
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
-        api_version: ApiVersion,
+        core_api_version: ApiVersion,
+        module_api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         <span class="comment">// TODO: make dyn type for notifier
         </span>notifier: Notifier,
@@ -674,7 +723,8 @@
                     federation_id,
                     cfg: typed_cfg.clone(),
                     db: db.with_prefix_module_id(instance_id),
-                    api_version,
+                    core_api_version,
+                    module_api_version,
                     module_root_secret,
                     notifier: notifier.module_notifier(instance_id),
                     api: api.clone(),
@@ -699,7 +749,8 @@
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
-        api_version: ApiVersion,
+        core_api_version: ApiVersion,
+        module_api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         <span class="comment">// TODO: make dyn type for notifier
         </span>notifier: Notifier,
@@ -711,7 +762,8 @@
                 federation_id,
                 cfg: typed_cfg.clone(),
                 db: db.with_prefix_module_id(instance_id),
-                api_version,
+                core_api_version,
+                module_api_version,
                 module_root_secret,
                 notifier: notifier.module_notifier(instance_id),
                 api: api.clone(),
