@@ -337,6 +337,7 @@ pub async fn apply_migrations_client(
         }
 
         if current_db_version == target_db_version {
+            global_dbtx.ignore_uncommitted();
             return Ok(());
         }
 
