@@ -12,7 +12,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
-use fedimint_core::envs::FM_USE_UNKNOWN_MODULE_ENV;
+use fedimint_core::envs::{is_env_var_set, FM_USE_UNKNOWN_MODULE_ENV};
 use fedimint_core::module::ServerModuleInit;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::timing;
@@ -189,7 +189,7 @@ impl Fedimintd {
             .with_module(MintInit)
             .with_module(WalletInit);
 
-        if std::env::var_os(FM_USE_UNKNOWN_MODULE_ENV).is_some() {
+        if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
             s.with_module(UnknownInit)
         } else {
             s
@@ -284,7 +284,7 @@ async fn run(
         opts.network,
         opts.finality_delay,
     );
-    if std::env::var_os(FM_USE_UNKNOWN_MODULE_ENV).is_some() {
+    if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
         attach_unknown_module_init_params(&mut module_inits_params);
     }
 
