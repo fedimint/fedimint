@@ -14,6 +14,7 @@ use fedimint_mint_client::{
 use fedimint_mint_common::config::MintGenParams;
 use fedimint_mint_server::MintInit;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
+use futures::StreamExt;
 use tracing::info;
 
 fn fixtures() -> Fixtures {
@@ -56,6 +57,92 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
 
     assert_eq!(client1.get_balance().await, sats(250));
     assert_eq!(client2.get_balance().await, sats(750));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
+    // Print notes for client1
+    let fed = fixtures().new_fed().await;
+    let client1 = fed.new_client_rocksdb().await;
+    let client2 = fed.new_client_rocksdb().await;
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
+    let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
+    client1.await_primary_module_output(op, outpoint).await?;
+
+    // We currently have a limit on DB retries, if this number is increased too much
+    // we might hit it
+    const NUM_PAR: u64 = 10;
+    // Tests are prety slow in CI, using the default 10s timeout worked locall but
+    // failed in CI
+    const ECASH_TIMEOUT: Duration = Duration::from_secs(60);
+
+    // Spend from client1 to client2 10 times in parallel
+    let mut spend_tasks = vec![];
+    for num_spend in 0..NUM_PAR {
+        let task_client1 = client1.clone();
+        spend_tasks.push(
+            fedimint_core::task::spawn(&format!("spend_ecash_{num_spend}"), async move {
+                info!("Starting spend {num_spend}");
+                let client1_mint = task_client1.get_first_module::<MintClientModule>();
+                let (op, notes) = client1_mint
+                    .spend_notes(sats(30), ECASH_TIMEOUT, false, ())
+                    .await
+                    .unwrap();
+                let sub1 = &mut client1_mint
+                    .subscribe_spend_notes(op)
+                    .await
+                    .unwrap()
+                    .into_stream();
+                assert_eq!(sub1.ok().await.unwrap(), SpendOOBState::Created);
+                notes
+            })
+            .expect("Returns a handle if not run in WASM"),
+        );
+    }
+
+    let note_bags = futures::stream::iter(spend_tasks)
+        .then(|handle| async move { handle.await.expect("Spend task failed") })
+        .collect::<Vec<_>>()
+        .await;
+    // Since we are overspending as soon as the right denominations aren't available
+    // anymore we have to use the amount actually sent and not the one requested
+    let total_amount_spent: Amount = note_bags.iter().map(|bag| bag.total_amount()).sum();
+    info!(%total_amount_spent, "Sent notes");
+
+    let mut reissue_tasks = vec![];
+    for (num_reissue, notes) in note_bags.into_iter().enumerate() {
+        let task_client2 = client2.clone();
+        reissue_tasks.push(
+            fedimint_core::task::spawn(&format!("reissue_ecash_{num_reissue}"), async move {
+                info!("Starting reissue {num_reissue}");
+                let client2_mint = task_client2.get_first_module::<MintClientModule>();
+                let op = client2_mint
+                    .reissue_external_notes(notes, ())
+                    .await
+                    .unwrap();
+                let sub2 = client2_mint
+                    .subscribe_reissue_external_notes(op)
+                    .await
+                    .unwrap();
+                let mut sub2 = sub2.into_stream();
+                assert_eq!(sub2.ok().await.unwrap(), ReissueExternalNotesState::Created);
+                info!("Reissuance {num_reissue} created");
+                assert_eq!(sub2.ok().await.unwrap(), ReissueExternalNotesState::Issuing);
+                info!("Reissuance {num_reissue} accepted");
+                assert_eq!(sub2.ok().await.unwrap(), ReissueExternalNotesState::Done);
+                info!("Reissuance {num_reissue} finished");
+            })
+            .expect("Returns a handle if not run in WASM"),
+        );
+    }
+
+    for task in reissue_tasks {
+        task.await.expect("reissue task failed");
+    }
+
+    assert_eq!(client1.get_balance().await, sats(1000) - total_amount_spent);
+    assert_eq!(client2.get_balance().await, total_amount_spent);
     Ok(())
 }
 

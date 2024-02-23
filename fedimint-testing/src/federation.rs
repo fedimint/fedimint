@@ -16,6 +16,7 @@ use fedimint_core::module::ApiAuth;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_TEST;
+use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::api::ConfigGenParamsLocal;
 use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus::server::ConsensusServer;
@@ -48,12 +49,29 @@ impl FederationTest {
             .to_client_config(&self.server_init)
             .unwrap();
 
-        self.new_client_with_config(client_config).await
+        self.new_client_with(client_config, MemDatabase::new().into())
+            .await
     }
 
-    pub async fn new_client_with_config(&self, client_config: ClientConfig) -> ClientArc {
+    /// Create a client connected to this fed but using RocksDB instead of MemDB
+    pub async fn new_client_rocksdb(&self) -> ClientArc {
+        let client_config = self.configs[&PeerId::from(0)]
+            .consensus
+            .to_client_config(&self.server_init)
+            .unwrap();
+
+        self.new_client_with(
+            client_config,
+            RocksDb::open(tempfile::tempdir().expect("Couldn't create temp dir"))
+                .expect("Couldn't open DB")
+                .into(),
+        )
+        .await
+    }
+
+    pub async fn new_client_with(&self, client_config: ClientConfig, db: Database) -> ClientArc {
         info!(target: LOG_TEST, "Setting new client with config");
-        let mut client_builder = Client::builder(MemDatabase::new().into());
+        let mut client_builder = Client::builder(db);
         client_builder.with_module_inits(self.client_init.clone());
         client_builder.with_primary_module(self.primary_client);
         let client_secret = Client::load_or_generate_client_secret(client_builder.db())
