@@ -9,7 +9,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     bundlers = {
-      url = "github:NixOS/bundlers?rev=00762a03a3d862a2ca6272a21fdc50bda5d36c42";
+      # TODO: switch back to upstream after https://github.com/matthewbauer/nix-bundle/pull/103 is available
+      url = "github:dpc/bundlers?branch=24-02-21-tar-deterministic&rev=e8aafe89a11ae0a5f3ce97d1d7d0fcfb354c79eb";
     };
     advisory-db = {
       url = "github:rustsec/advisory-db";

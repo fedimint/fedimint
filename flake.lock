@@ -47,17 +47,17 @@
         "nixpkgs": "nixpkgs_3"
       },
       "locked": {
-        "lastModified": 1696517060,
-        "narHash": "sha256-V296JCORatNg44vQnNCkZASOmElY8NFT15OQ45a1ACQ=",
-        "owner": "NixOS",
+        "lastModified": 1708548996,
+        "narHash": "sha256-U7DF6oLGaGm4SmfUnaK8X2Y36fprVd7EFr8sqV6Ocp8=",
+        "owner": "dpc",
         "repo": "bundlers",
-        "rev": "00762a03a3d862a2ca6272a21fdc50bda5d36c42",
+        "rev": "e8aafe89a11ae0a5f3ce97d1d7d0fcfb354c79eb",
         "type": "github"
       },
       "original": {
-        "owner": "NixOS",
+        "owner": "dpc",
         "repo": "bundlers",
-        "rev": "00762a03a3d862a2ca6272a21fdc50bda5d36c42",
+        "rev": "e8aafe89a11ae0a5f3ce97d1d7d0fcfb354c79eb",
         "type": "github"
       }
     },
@@ -231,16 +231,17 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1626704917,
-        "narHash": "sha256-cJ73kxY5ZCPWQeQZyCSdvkBqjqJkU5wgETBNaXfqF18=",
-        "owner": "matthewbauer",
+        "lastModified": 1708548961,
+        "narHash": "sha256-WVA2EMhl/jk5GS84y20ExnIW03UyH43wRuoiySxHGZE=",
+        "owner": "dpc",
         "repo": "nix-bundle",
-        "rev": "223f4ffc4179aa318c34dc873a08cb00090db829",
+        "rev": "8ab9acfe0a31805de7899eddb8f3312d4e34a13d",
         "type": "github"
       },
       "original": {
-        "owner": "matthewbauer",
+        "owner": "dpc",
         "repo": "nix-bundle",
+        "rev": "8ab9acfe0a31805de7899eddb8f3312d4e34a13d",
         "type": "github"
       }
     },
