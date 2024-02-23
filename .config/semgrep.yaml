@@ -8,6 +8,21 @@ rules:
 
   severity: WARNING
 
+- id: ban-system-time-elapsed
+  languages:
+    - rust
+  message: Use fedimint_core::time::now and std::time::duration_since to compare an elapsed time for better wasm compatibility.
+  pattern: $SYSTEM_TIME.elapsed()
+  paths:
+    exclude:
+      # server only
+      - fedimint-server/
+      # doesn't run in wasm
+      - fedimint-load-test-tool/
+      # doesn't run in wasm
+      - devimint/
+  severity: WARNING
+
 - id: ban-instant-now
   languages:
     - rust
