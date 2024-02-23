@@ -204,7 +204,6 @@ async fn pay_valid_invoice(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore] // TODO: resolve in https://github.com/fedimint/fedimint/pull/4354
 async fn test_gateway_can_pay_ldk_node() -> anyhow::Result<()> {
     // Running LDK Node with the mock services doesnt provide any additional
     // coverage, since `FakeLightningTest` does not open any channels.
