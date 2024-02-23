@@ -21,7 +21,7 @@ use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::module::ClientModule as _;
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
-use fedimint_client::{get_invite_code_from_db, Client, ClientArc, ClientBuilder, FederationInfo};
+use fedimint_client::{get_invite_code_from_db, Client, ClientArc, ClientBuilder};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
     FederationApiExt, FederationError, IRawFederationApi, InviteCode, WsFederationApi,
@@ -517,7 +517,7 @@ impl FedimintCli {
     }
 
     async fn client_join(&mut self, cli: &Opts, invite_code: InviteCode) -> CliResult<ClientArc> {
-        let federation_info = FederationInfo::from_invite_code(invite_code.clone())
+        let client_config = ClientConfig::download_from_invite_code(&invite_code)
             .await
             .map_err_cli_general()?;
 
@@ -529,9 +529,9 @@ impl FedimintCli {
             .join(
                 get_default_client_secret(
                     &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
-                    &federation_info.config().global.federation_id(),
+                    &client_config.global.federation_id(),
                 ),
-                federation_info.config().clone(),
+                client_config.clone(),
                 invite_code,
             )
             .await
@@ -572,7 +572,7 @@ impl FedimintCli {
     ) -> CliResult<ClientArc> {
         let builder = self.make_client_builder(cli).await?;
 
-        let federation_info = FederationInfo::from_invite_code(invite_code.clone())
+        let client_config = ClientConfig::download_from_invite_code(&invite_code)
             .await
             .map_err_cli_general()?;
 
@@ -593,14 +593,13 @@ impl FedimintCli {
             }
         }
 
-        let config = federation_info.config();
         builder
             .recover(
                 get_default_client_secret(
                     &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
-                    &config.federation_id(),
+                    &client_config.federation_id(),
                 ),
-                config.to_owned(),
+                client_config.to_owned(),
                 invite_code,
             )
             .await

@@ -103,7 +103,7 @@ use fedimint_core::module::{
     ApiVersion, MultiApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions,
     SupportedModuleApiVersions,
 };
-use fedimint_core::task::{sleep, MaybeSend, MaybeSync, TaskGroup};
+use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
@@ -1652,64 +1652,6 @@ impl TransactionUpdates {
     }
 }
 
-/// Federation config and meta data that can be used to show a preview of the
-/// federation one is about to join or to initialize a client.
-#[derive(Debug, Clone)]
-pub struct FederationInfo {
-    config: ClientConfig,
-    // TODO: make non-optional or remove
-    invite_code: Option<InviteCode>,
-}
-
-impl FederationInfo {
-    /// Download federation info using invitation code
-    pub async fn from_invite_code(invite: InviteCode) -> anyhow::Result<FederationInfo> {
-        let config = try_download_config(invite.clone(), 10).await?;
-        Ok(FederationInfo {
-            config,
-            invite_code: Some(invite),
-        })
-    }
-
-    /// Create `FederationInfo` from config, may download further meta data in
-    /// the future
-    pub async fn from_config(config: ClientConfig) -> anyhow::Result<FederationInfo> {
-        // The return type is a result in case we want to fallibly fetch additional meta
-        // data in the future
-        Ok(FederationInfo {
-            config,
-            invite_code: None,
-        })
-    }
-
-    /// Returns the federations configuration
-    pub fn config(&self) -> &ClientConfig {
-        &self.config
-    }
-
-    /// If the federation info was created from
-    pub fn invite_code(&self) -> Option<InviteCode> {
-        self.invite_code.clone()
-    }
-
-    /// Get the value of a given meta field
-    pub fn meta<V: serde::de::DeserializeOwned>(&self, key: &str) -> anyhow::Result<Option<V>> {
-        let Some(str_value) = self.config.global.meta.get(key) else {
-            return Ok(None);
-        };
-        serde_json::from_str(str_value).context(format!("Decoding meta field '{key}' failed"))
-    }
-
-    /// Creates an API client for the federation
-    pub fn api(&self) -> DynGlobalApi {
-        DynGlobalApi::from_config(&self.config)
-    }
-
-    pub fn federation_id(&self) -> FederationId {
-        self.config.global.federation_id()
-    }
-}
-
 pub struct ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
@@ -2221,33 +2163,6 @@ pub async fn get_invite_code_from_db(db: &Database) -> Option<InviteCode> {
         .await
         .map(|(_, invite)| invite);
     invite
-}
-
-/// Tries to download the client config from the federation,
-/// attempts up to `retries` number times
-async fn try_download_config(
-    invite_code: InviteCode,
-    max_retries: usize,
-) -> anyhow::Result<ClientConfig> {
-    debug!(target: LOG_CLIENT, "Download client config");
-    let api = DynGlobalApi::from_invite_code(&[invite_code.clone()]);
-    let mut num_retries = 0;
-    let wait_millis = 500;
-    loop {
-        if num_retries > max_retries {
-            break Err(anyhow!("Failed to download client config"));
-        }
-        match api.download_client_config(&invite_code).await {
-            Ok(cfg) => {
-                break Ok(cfg);
-            }
-            Err(e) => {
-                debug!("Failed to download client config {:?}", e);
-                sleep(Duration::from_millis(wait_millis)).await;
-            }
-        }
-        num_retries += 1;
-    }
 }
 
 /// Fetches the encoded client secret from the database and decodes it.

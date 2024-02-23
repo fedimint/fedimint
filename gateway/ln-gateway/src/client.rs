@@ -4,7 +4,8 @@ use std::path::PathBuf;
 
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::{Client, FederationInfo};
+use fedimint_client::Client;
+use fedimint_core::config::ClientConfig;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -91,14 +92,10 @@ impl GatewayClientBuilder {
                 .open(root_secret)
                 .await
         } else {
-            let federation_info = FederationInfo::from_invite_code(invite_code.clone()).await?;
+            let client_config = ClientConfig::download_from_invite_code(&invite_code).await?;
             client_builder
                 // TODO: make this configurable?
-                .join(
-                    root_secret,
-                    federation_info.config().to_owned(),
-                    invite_code,
-                )
+                .join(root_secret, client_config.to_owned(), invite_code)
                 .await
         }
         .map_err(GatewayError::ClientStateMachineError)
