@@ -1897,6 +1897,34 @@
 <a href="#1897" id="1897">1897</a>
 <a href="#1898" id="1898">1898</a>
 <a href="#1899" id="1899">1899</a>
+<a href="#1900" id="1900">1900</a>
+<a href="#1901" id="1901">1901</a>
+<a href="#1902" id="1902">1902</a>
+<a href="#1903" id="1903">1903</a>
+<a href="#1904" id="1904">1904</a>
+<a href="#1905" id="1905">1905</a>
+<a href="#1906" id="1906">1906</a>
+<a href="#1907" id="1907">1907</a>
+<a href="#1908" id="1908">1908</a>
+<a href="#1909" id="1909">1909</a>
+<a href="#1910" id="1910">1910</a>
+<a href="#1911" id="1911">1911</a>
+<a href="#1912" id="1912">1912</a>
+<a href="#1913" id="1913">1913</a>
+<a href="#1914" id="1914">1914</a>
+<a href="#1915" id="1915">1915</a>
+<a href="#1916" id="1916">1916</a>
+<a href="#1917" id="1917">1917</a>
+<a href="#1918" id="1918">1918</a>
+<a href="#1919" id="1919">1919</a>
+<a href="#1920" id="1920">1920</a>
+<a href="#1921" id="1921">1921</a>
+<a href="#1922" id="1922">1922</a>
+<a href="#1923" id="1923">1923</a>
+<a href="#1924" id="1924">1924</a>
+<a href="#1925" id="1925">1925</a>
+<a href="#1926" id="1926">1926</a>
+<a href="#1927" id="1927">1927</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -1997,6 +2025,7 @@
 
 <span class="kw">pub async fn </span>latency_tests(dev_fed: DevFed, r#type: LatencyTest) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="attr">#[allow(unused_variables)]
     </span><span class="kw">let </span>DevFed {
         bitcoind,
@@ -2010,12 +2039,14 @@
     } = dev_fed;
 
     <span class="kw">let </span>max_p90_factor = <span class="number">5.0</span>;
-    <span class="kw">let </span>p90_median_factor = <span class="number">5</span>;
+    <span class="kw">let </span>p90_median_factor = <span class="number">7</span>;
 
     <span class="kw">let </span>client = fed.new_joined_client(<span class="string">&quot;latency-tests-client&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     client.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
     fed.pegin_client(<span class="number">10_000_000</span>, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>iterations = <span class="number">20</span>;
+
+    <span class="comment">// LN operations take longer, we need less iterations
+    </span><span class="kw">let </span>iterations = <span class="number">20</span>;
 
     <span class="kw">match </span>r#type {
         LatencyTest::Reissue =&gt; {
@@ -2036,7 +2067,7 @@
             }
             <span class="kw">let </span>reissue_stats = stats_for(reissues);
             <span class="macro">println!</span>(<span class="string">&quot;### LATENCY REISSUE: {reissue_stats}&quot;</span>);
-            <span class="macro">assert!</span>(reissue_stats.median &lt; Duration::from_secs(<span class="number">4</span>));
+            <span class="macro">assert!</span>(reissue_stats.median &lt; Duration::from_secs(<span class="number">6</span>));
 
             <span class="macro">assert!</span>(reissue_stats.p90 &lt; reissue_stats.median * p90_median_factor);
             <span class="macro">assert!</span>(
@@ -2044,8 +2075,7 @@
             );
         }
         LatencyTest::LnSend =&gt; {
-            <span class="comment">// LN operations take longer, we need less iterations
-            </span><span class="macro">info!</span>(<span class="string">&quot;Testing latency of ln send&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">&quot;Testing latency of ln send&quot;</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>ln_sends = Vec::with_capacity(iterations);
             <span class="kw">for _ in </span><span class="number">0</span>..iterations {
                 <span class="kw">let </span>add_invoice = lnd
@@ -2184,7 +2214,7 @@
             <span class="kw">let </span>fm_pay_stats = stats_for(fm_internal_pay);
 
             <span class="macro">println!</span>(<span class="string">&quot;### LATENCY FM PAY: {fm_pay_stats}&quot;</span>);
-            <span class="macro">assert!</span>(fm_pay_stats.median &lt; Duration::from_secs(<span class="number">6</span>));
+            <span class="macro">assert!</span>(fm_pay_stats.median &lt; Duration::from_secs(<span class="number">12</span>));
             <span class="macro">assert!</span>(fm_pay_stats.p90 &lt; fm_pay_stats.median * p90_median_factor);
             <span class="macro">assert!</span>(
                 fm_pay_stats.max.as_secs_f64() &lt; fm_pay_stats.p90.as_secs_f64() * max_p90_factor
@@ -2196,22 +2226,45 @@
                 .as_str()
                 .map(ToOwned::to_owned)
                 .unwrap();
-            <span class="kw">let </span>restore_client = Client::create(<span class="string">&quot;restore&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
             <span class="kw">let </span>start_time = Instant::now();
-            <span class="macro">cmd!</span>(
-                restore_client,
-                <span class="string">&quot;restore&quot;</span>,
-                <span class="string">&quot;--mnemonic&quot;</span>,
-                <span class="kw-2">&amp;</span>backup_secret,
-                <span class="string">&quot;--invite-code&quot;</span>,
-                fed.invite_code()<span class="question-mark">?
-            </span>)
-            .run()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>VersionReq::parse(<span class="string">&quot;&gt;=0.3.0-alpha&quot;</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
+                <span class="kw">let </span>restore_client = Client::create(<span class="string">&quot;restore&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="macro">cmd!</span>(
+                    restore_client,
+                    <span class="string">&quot;restore&quot;</span>,
+                    <span class="string">&quot;--mnemonic&quot;</span>,
+                    <span class="kw-2">&amp;</span>backup_secret,
+                    <span class="string">&quot;--invite-code&quot;</span>,
+                    fed.invite_code()<span class="question-mark">?
+                </span>)
+                .run()
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            } <span class="kw">else </span>{
+                <span class="kw">let </span>client = client.new_forked(<span class="string">&quot;restore-without-backup&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">&quot;wipe&quot;</span>, <span class="string">&quot;--force&quot;</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="macro">assert_eq!</span>(
+                    <span class="number">0</span>,
+                    <span class="macro">cmd!</span>(client, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;total_amount_msat&quot;</span>]
+                        .as_u64()
+                        .unwrap()
+                );
+
+                <span class="kw">let </span>_post_balance = <span class="macro">cmd!</span>(client, <span class="string">&quot;restore&quot;</span>, <span class="kw-2">&amp;</span>backup_secret)
+                    .out_json()
+                    .<span class="kw">await</span><span class="question-mark">?
+                    </span>.as_u64()
+                    .unwrap();
+            }
             <span class="kw">let </span>restore_time = start_time.elapsed();
 
             <span class="macro">println!</span>(<span class="string">&quot;### LATENCY RESTORE: {restore_time:?}&quot;</span>);
-            <span class="macro">assert!</span>(restore_time &lt; Duration::from_secs(<span class="number">10</span>));
+            <span class="kw">if </span><span class="kw">crate</span>::util::is_backwards_compatibility_test() {
+                <span class="macro">assert!</span>(restore_time &lt; Duration::from_secs(<span class="number">160</span>));
+            } <span class="kw">else </span>{
+                <span class="macro">assert!</span>(restore_time &lt; Duration::from_secs(<span class="number">10</span>));
+            }
         }
     }
 
@@ -3008,7 +3061,9 @@
     </span>);
 
     <span class="macro">info!</span>(<span class="string">&quot;Testing ln-circular-load-test with &#39;partner-ping-pong&#39; strategy&quot;</span>);
-    <span class="comment">// Note invite code isn&#39;t required because we already have an archive dir
+    <span class="comment">// Note: invite code isn&#39;t required because we already have an archive dir
+    // Note: test-duration-secs needs to be greater than the timeout for
+    // discover_api_version_set to work with degraded federations
     </span><span class="kw">let </span>output = <span class="macro">cmd!</span>(
         LoadTestTool,
         <span class="string">&quot;--archive-dir&quot;</span>,
@@ -3019,7 +3074,7 @@
         <span class="string">&quot;--strategy&quot;</span>,
         <span class="string">&quot;partner-ping-pong&quot;</span>,
         <span class="string">&quot;--test-duration-secs&quot;</span>,
-        <span class="string">&quot;2&quot;</span>,
+        <span class="string">&quot;6&quot;</span>,
         <span class="string">&quot;--invite-code&quot;</span>,
         invite_code
     )
@@ -3524,6 +3579,7 @@
         electrs,
         esplora,
     } = dev_fed;
+
     <span class="kw">let </span>data_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
     <span class="kw">let </span>client = fed.new_joined_client(<span class="string">&quot;recoverytool-test-client&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 

@@ -402,9 +402,6 @@
 <a href="#402" id="402">402</a>
 <a href="#403" id="403">403</a>
 <a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -415,8 +412,9 @@
 <span class="kw">use </span>devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::transaction::TransactionBuilder;
-<span class="kw">use </span>fedimint_client::{Client, ClientArc, FederationInfo};
+<span class="kw">use </span>fedimint_client::{Client, ClientArc};
 <span class="kw">use </span>fedimint_core::api::InviteCode;
+<span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, OperationId};
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
@@ -557,13 +555,9 @@
 
     <span class="kw">let </span>client = <span class="kw">if </span>!Client::is_initialized(client_builder.db()).<span class="kw">await </span>{
         <span class="kw">if let </span><span class="prelude-val">Some</span>(invite_code) = <span class="kw-2">&amp;</span>invite_code {
-            <span class="kw">let </span>federation_info = FederationInfo::from_invite_code(invite_code.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>client_config = ClientConfig::download_from_invite_code(invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
             client_builder
-                .join(
-                    root_secret,
-                    federation_info.config().clone(),
-                    invite_code.clone(),
-                )
+                .join(root_secret, client_config.clone(), invite_code.clone())
                 .<span class="kw">await
         </span>} <span class="kw">else </span>{
             <span class="macro">bail!</span>(<span class="string">&quot;Database not initialize and invite code not provided&quot;</span>);

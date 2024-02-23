@@ -884,7 +884,6 @@
 <a href="#884" id="884">884</a>
 <a href="#885" id="885">885</a>
 <a href="#886" id="886">886</a>
-<a href="#887" id="887">887</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
@@ -908,7 +907,7 @@
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 <span class="kw">use </span>fedimint_client::module::ClientModule <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
-<span class="kw">use </span>fedimint_client::{get_invite_code_from_db, Client, ClientArc, ClientBuilder, FederationInfo};
+<span class="kw">use </span>fedimint_client::{get_invite_code_from_db, Client, ClientArc, ClientBuilder};
 <span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
 <span class="kw">use </span>fedimint_core::api::{
     FederationApiExt, FederationError, IRawFederationApi, InviteCode, WsFederationApi,
@@ -1404,7 +1403,7 @@ Examples:
     }
 
     <span class="kw">async fn </span>client_join(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cli: <span class="kw-2">&amp;</span>Opts, invite_code: InviteCode) -&gt; CliResult&lt;ClientArc&gt; {
-        <span class="kw">let </span>federation_info = FederationInfo::from_invite_code(invite_code.clone())
+        <span class="kw">let </span>client_config = ClientConfig::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
             .<span class="kw">await
             </span>.map_err_cli_general()<span class="question-mark">?</span>;
 
@@ -1416,9 +1415,9 @@ Examples:
             .join(
                 get_default_client_secret(
                     <span class="kw-2">&amp;</span>Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::to_root_secret(<span class="kw-2">&amp;</span>mnemonic),
-                    <span class="kw-2">&amp;</span>federation_info.config().global.federation_id(),
+                    <span class="kw-2">&amp;</span>client_config.global.federation_id(),
                 ),
-                federation_info.config().clone(),
+                client_config.clone(),
                 invite_code,
             )
             .<span class="kw">await
@@ -1459,7 +1458,7 @@ Examples:
     ) -&gt; CliResult&lt;ClientArc&gt; {
         <span class="kw">let </span>builder = <span class="self">self</span>.make_client_builder(cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>federation_info = FederationInfo::from_invite_code(invite_code.clone())
+        <span class="kw">let </span>client_config = ClientConfig::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
             .<span class="kw">await
             </span>.map_err_cli_general()<span class="question-mark">?</span>;
 
@@ -1480,14 +1479,13 @@ Examples:
             }
         }
 
-        <span class="kw">let </span>config = federation_info.config();
         builder
             .recover(
                 get_default_client_secret(
                     <span class="kw-2">&amp;</span>Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::to_root_secret(<span class="kw-2">&amp;</span>mnemonic),
-                    <span class="kw-2">&amp;</span>config.federation_id(),
+                    <span class="kw-2">&amp;</span>client_config.federation_id(),
                 ),
-                config.to_owned(),
+                client_config.to_owned(),
                 invite_code,
             )
             .<span class="kw">await

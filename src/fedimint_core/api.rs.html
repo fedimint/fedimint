@@ -1488,50 +1488,6 @@
 <a href="#1488" id="1488">1488</a>
 <a href="#1489" id="1489">1489</a>
 <a href="#1490" id="1490">1490</a>
-<a href="#1491" id="1491">1491</a>
-<a href="#1492" id="1492">1492</a>
-<a href="#1493" id="1493">1493</a>
-<a href="#1494" id="1494">1494</a>
-<a href="#1495" id="1495">1495</a>
-<a href="#1496" id="1496">1496</a>
-<a href="#1497" id="1497">1497</a>
-<a href="#1498" id="1498">1498</a>
-<a href="#1499" id="1499">1499</a>
-<a href="#1500" id="1500">1500</a>
-<a href="#1501" id="1501">1501</a>
-<a href="#1502" id="1502">1502</a>
-<a href="#1503" id="1503">1503</a>
-<a href="#1504" id="1504">1504</a>
-<a href="#1505" id="1505">1505</a>
-<a href="#1506" id="1506">1506</a>
-<a href="#1507" id="1507">1507</a>
-<a href="#1508" id="1508">1508</a>
-<a href="#1509" id="1509">1509</a>
-<a href="#1510" id="1510">1510</a>
-<a href="#1511" id="1511">1511</a>
-<a href="#1512" id="1512">1512</a>
-<a href="#1513" id="1513">1513</a>
-<a href="#1514" id="1514">1514</a>
-<a href="#1515" id="1515">1515</a>
-<a href="#1516" id="1516">1516</a>
-<a href="#1517" id="1517">1517</a>
-<a href="#1518" id="1518">1518</a>
-<a href="#1519" id="1519">1519</a>
-<a href="#1520" id="1520">1520</a>
-<a href="#1521" id="1521">1521</a>
-<a href="#1522" id="1522">1522</a>
-<a href="#1523" id="1523">1523</a>
-<a href="#1524" id="1524">1524</a>
-<a href="#1525" id="1525">1525</a>
-<a href="#1526" id="1526">1526</a>
-<a href="#1527" id="1527">1527</a>
-<a href="#1528" id="1528">1528</a>
-<a href="#1529" id="1529">1529</a>
-<a href="#1530" id="1530">1530</a>
-<a href="#1531" id="1531">1531</a>
-<a href="#1532" id="1532">1532</a>
-<a href="#1533" id="1533">1533</a>
-<a href="#1534" id="1534">1534</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1544,7 +1500,7 @@
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{cmp, result};
 
-<span class="kw">use </span>anyhow::{anyhow, bail, ensure};
+<span class="kw">use </span>anyhow::{anyhow, ensure};
 <span class="kw">use </span>bech32::Variant::Bech32m;
 <span class="kw">use </span>bech32::{FromBase32, ToBase32};
 <span class="kw">use </span>bitcoin::secp256k1;
@@ -1582,14 +1538,12 @@
 <span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, OutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::encoding::DecodeError;
 <span class="kw">use </span><span class="kw">crate</span>::endpoint_constants::{
-    AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, RECOVER_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, RECOVER_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 <span class="kw">use </span><span class="kw">crate</span>::query::{
-    DiscoverApiVersionSet, FilterMap, QueryStep, QueryStrategy, ThresholdConsensus,
-    UnionResponsesSingle,
+    DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
 };
 <span class="kw">use </span><span class="kw">crate</span>::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
 <span class="kw">use </span><span class="kw">crate</span>::task;
@@ -2019,9 +1973,6 @@
 
     <span class="kw">async fn </span>await_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; FederationResult&lt;TransactionId&gt;;
 
-    <span class="doccomment">/// Fetch client configuration info only if verified against a federation id
-    </span><span class="kw">async fn </span>download_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, info: <span class="kw-2">&amp;</span>InviteCode) -&gt; FederationResult&lt;ClientConfig&gt;;
-
     <span class="doccomment">/// Fetches the server consensus hash if enough peers agree on it
     </span><span class="kw">async fn </span>server_config_consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt;;
 
@@ -2253,45 +2204,6 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>download_client_config(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        invite_code: <span class="kw-2">&amp;</span>InviteCode,
-    ) -&gt; FederationResult&lt;ClientConfig&gt; {
-        <span class="comment">// we have to download the api endpoints first
-        </span><span class="kw">let </span>id = invite_code.federation_id();
-        <span class="kw">let </span>query_strategy = FilterMap::new(
-            <span class="kw">move </span>|cfg: ClientConfig| {
-                <span class="kw">if </span>id.<span class="number">0 </span>!= cfg.global.api_endpoints.consensus_hash() {
-                    <span class="macro">bail!</span>(<span class="string">&quot;Guardian api endpoint map does not hash to FederationId&quot;</span>)
-                }
-
-                <span class="prelude-val">Ok</span>(cfg.global.api_endpoints)
-            },
-            <span class="self">self</span>.all_peers().total(),
-        );
-
-        <span class="kw">let </span>api_endpoints = <span class="self">self
-            </span>.request_with_strategy(
-                query_strategy,
-                CLIENT_CONFIG_ENDPOINT.to_owned(),
-                ApiRequestErased::default(),
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="comment">// now we can build an api for all guardians and download the client config
-        </span><span class="kw">let </span>api_endpoints = api_endpoints
-            .into_iter()
-            .map(|(peer, url)| (peer, url.url))
-            .collect();
-
-        WsFederationApi::new(api_endpoints)
-            .request_current_consensus(
-                CLIENT_CONFIG_ENDPOINT.to_owned(),
-                ApiRequestErased::default(),
-            )
-            .<span class="kw">await
-    </span>}
-
     <span class="kw">async fn </span>server_config_consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt; {
         <span class="self">self</span>.request_current_consensus(
             SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT.to_owned(),
@@ -2325,7 +2237,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         client_versions: <span class="kw-2">&amp;</span>SupportedApiVersionsSummary,
     ) -&gt; FederationResult&lt;ApiVersionSet&gt; {
-        <span class="kw">let </span>timeout = Duration::from_secs(<span class="number">60</span>);
+        <span class="kw">let </span>timeout = Duration::from_secs(<span class="number">5</span>);
         <span class="self">self</span>.request_with_strategy(
             DiscoverApiVersionSet::new(
                 <span class="self">self</span>.all_peers().len(),

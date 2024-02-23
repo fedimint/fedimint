@@ -181,6 +181,11 @@
 <a href="#181" id="181">181</a>
 <a href="#182" id="182">182</a>
 <a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
@@ -269,9 +274,10 @@
 }
 
 <span class="macro">declare_vars! </span>{
-    Global = (test_dir: <span class="kw-2">&amp;</span>Path, fed_size: usize) =&gt;
+    Global = (test_dir: <span class="kw-2">&amp;</span>Path, fed_size: usize, offline_nodes: usize) =&gt;
     {
         FM_FED_SIZE: usize = fed_size;
+        FM_OFFLINE_NODES: usize = offline_nodes;
         FM_TMP_DIR: PathBuf = mkdir(test_dir.into()).<span class="kw">await</span><span class="question-mark">?</span>;
         FM_TEST_DIR: PathBuf = FM_TMP_DIR.clone();
         FM_TEST_FAST_WEAK_CRYPTO: String = <span class="string">&quot;1&quot;</span>;
@@ -348,8 +354,12 @@
 }
 
 <span class="kw">impl </span>Global {
-    <span class="kw">pub async fn </span>new(test_dir: <span class="kw-2">&amp;</span>Path, fed_size: usize) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>this = <span class="self">Self</span>::init(test_dir, fed_size).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">pub async fn </span>new(
+        test_dir: <span class="kw-2">&amp;</span>Path,
+        fed_size: usize,
+        offline_nodes: usize,
+    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>this = <span class="self">Self</span>::init(test_dir, fed_size, offline_nodes).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(this)
     }
 }

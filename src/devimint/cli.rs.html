@@ -334,6 +334,10 @@
 <a href="#334" id="334">334</a>
 <a href="#335" id="335">335</a>
 <a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -361,6 +365,10 @@
     <span class="attr">#[clap(long, env = <span class="string">&quot;FM_LINK_TEST_DIR&quot;</span>)]
     </span><span class="doccomment">/// Create a link to the test dir under this path
     </span><span class="kw">pub </span>link_test_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
+
+    <span class="doccomment">/// Run degraded federation with FM_OFFLINE_NODES shutdown
+    </span><span class="attr">#[clap(long, env = <span class="string">&quot;FM_OFFLINE_NODES&quot;</span>, default_value = <span class="string">&quot;0&quot;</span>)]
+    </span><span class="kw">pub </span>offline_nodes: usize,
 }
 
 <span class="kw">impl </span>CommonArgs {
@@ -411,7 +419,7 @@
 }
 
 <span class="kw">pub async fn </span>setup(arg: CommonArgs) -&gt; <span class="prelude-ty">Result</span>&lt;(ProcessManager, TaskGroup)&gt; {
-    <span class="kw">let </span>globals = vars::Global::new(<span class="kw-2">&amp;</span>arg.mk_test_dir()<span class="question-mark">?</span>, arg.fed_size).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>globals = vars::Global::new(<span class="kw-2">&amp;</span>arg.mk_test_dir()<span class="question-mark">?</span>, arg.fed_size, arg.offline_nodes).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>log_file = fs::OpenOptions::new()
         .write(<span class="bool-val">true</span>)

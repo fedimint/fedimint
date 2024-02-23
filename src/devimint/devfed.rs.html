@@ -78,6 +78,17 @@
 <a href="#78" id="78">78</a>
 <a href="#79" id="79">79</a>
 <a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>tracing::info;
@@ -101,9 +112,16 @@
 }
 
 <span class="kw">pub async fn </span>dev_fed(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;DevFed&gt; {
+    <span class="kw">let </span>fed_size = process_mgr.globals.FM_FED_SIZE;
+    <span class="kw">let </span>offline_nodes = process_mgr.globals.FM_OFFLINE_NODES;
+    <span class="macro">anyhow::ensure!</span>(
+        fed_size &gt; <span class="number">3 </span>* offline_nodes,
+        <span class="string">&quot;too many offline nodes ({offline_nodes}) to reach consensus&quot;
+    </span>);
+
     <span class="kw">let </span>start_time = fedimint_core::time::now();
     <span class="kw">let </span>bitcoind = Bitcoind::new(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>((cln, lnd, gw_cln, gw_lnd), electrs, esplora, fed) = <span class="macro">tokio::try_join!</span>(
+    <span class="kw">let </span>((cln, lnd, gw_cln, gw_lnd), electrs, esplora, <span class="kw-2">mut </span>fed) = <span class="macro">tokio::try_join!</span>(
         <span class="kw">async </span>{
             <span class="kw">let </span>(cln, lnd) = <span class="macro">tokio::try_join!</span>(
                 Lightningd::new(process_mgr, bitcoind.clone()),
@@ -120,10 +138,7 @@
         },
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
-        <span class="kw">async </span>{
-            <span class="kw">let </span>fed_size = process_mgr.globals.FM_FED_SIZE;
-            Federation::new(process_mgr, bitcoind.clone(), fed_size).<span class="kw">await
-        </span>},
+        Federation::new(process_mgr, bitcoind.clone(), fed_size),
     )<span class="question-mark">?</span>;
 
     <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;federation and gateways started&quot;</span>);
@@ -142,11 +157,18 @@
     </span><span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;await gateways registered&quot;</span>);
     fed.await_gateways_registered().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;gateways registered&quot;</span>);
+
+    <span class="comment">// Create a degraded federation if there are offline nodes
+    </span>fed.degrade_federation(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="macro">info!</span>(
         target: LOG_DEVIMINT,
-        <span class="string">&quot;starting dev federation took {:?}&quot;</span>,
+        fed_size,
+        offline_nodes,
+        <span class="string">&quot;finished creating dev federation, took {:?}&quot;</span>,
         start_time.elapsed()<span class="question-mark">?
     </span>);
+
     <span class="prelude-val">Ok</span>(DevFed {
         bitcoind,
         cln,

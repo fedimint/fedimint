@@ -1294,9 +1294,6 @@
 <a href="#1294" id="1294">1294</a>
 <a href="#1295" id="1295">1295</a>
 <a href="#1296" id="1296">1296</a>
-<a href="#1297" id="1297">1297</a>
-<a href="#1298" id="1298">1298</a>
-<a href="#1299" id="1299">1299</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -1312,7 +1309,8 @@
 <span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>devimint::util::{GatewayClnCli, GatewayLndCli};
 <span class="kw">use </span>fedimint_client::ClientArc;
-<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, InviteCode};
+<span class="kw">use </span>fedimint_core::api::InviteCode;
+<span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::task::spawn;
@@ -2326,16 +2324,13 @@
     users: u16,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">&#39;static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
-    <span class="kw">let </span>api = DynGlobalApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]);
-
     <span class="prelude-val">Ok</span>((<span class="number">0</span>..users)
         .map(|<span class="kw">_</span>| {
-            <span class="kw">let </span>api = api.clone();
             <span class="kw">let </span>invite_code = invite_code.clone();
             <span class="kw">let </span>event_sender = event_sender.clone();
             <span class="kw">let </span>f: BoxFuture&lt;<span class="kw">_</span>&gt; = Box::pin(<span class="kw">async move </span>{
                 <span class="kw">let </span>m = fedimint_core::time::now();
-                <span class="kw">let _ </span>= api.download_client_config(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let _ </span>= ClientConfig::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
                 event_sender.send(MetricEvent {
                     name: <span class="string">&quot;download_client_config&quot;</span>.into(),
                     duration: m.elapsed()<span class="question-mark">?</span>,
@@ -2355,8 +2350,7 @@
     limit_endpoints: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">&#39;static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
-    <span class="kw">let </span>api = DynGlobalApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]);
-    <span class="kw">let </span><span class="kw-2">mut </span>cfg = api.download_client_config(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>cfg = ClientConfig::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">if let </span><span class="prelude-val">Some</span>(limit_endpoints) = limit_endpoints {
         cfg.global.api_endpoints = cfg

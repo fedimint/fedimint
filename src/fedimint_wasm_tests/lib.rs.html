@@ -301,10 +301,12 @@
 <a href="#301" id="301">301</a>
 <a href="#302" id="302">302</a>
 <a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-<span class="kw">use </span>fedimint_client::{Client, FederationInfo};
+<span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_core::api::InviteCode;
+<span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_ln_client::LightningClientInit;
@@ -336,14 +338,14 @@
 }
 
 <span class="kw">async fn </span>client(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientArc&gt; {
-    <span class="kw">let </span>federation_info = FederationInfo::from_invite_code(invite_code.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>client_config = ClientConfig::download_from_invite_code(invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>builder = make_client_builder();
     <span class="kw">let </span>client_secret = load_or_generate_mnemonic(builder.db()).<span class="kw">await</span><span class="question-mark">?</span>;
     builder.stopped();
     builder
         .join(
             PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret),
-            federation_info.config().to_owned(),
+            client_config.to_owned(),
             invite_code.clone(),
         )
         .<span class="kw">await
