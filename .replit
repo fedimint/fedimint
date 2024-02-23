@@ -1,7 +1,7 @@
 # Replit support 
 run = "direnv allow && nix develop --command just mprocs"
 hidden = ["target"]
-entrypoint = "src/main.rs"
+entrypoint = "README.md"
 modules = ["rust-stable:v4-20240117-0bd73cd"]
 
 [env]
@@ -29,7 +29,3 @@ channel = "stable-23_11"
 
 [gitHubImport]
 requiredFiles = [".replit", "replit.nix"]
-
-[[ports]]
-localPort = 8333
-externalPort = 80
