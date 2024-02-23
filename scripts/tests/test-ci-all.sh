@@ -117,6 +117,14 @@ function backend_test_bitcoind() {
 }
 export -f backend_test_bitcoind
 
+function backend_test_bitcoind_ln_gateway() {
+  # backend tests don't support different versions, so we skip for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind-ln-gateway ./scripts/tests/backend-test.sh
+  fi
+}
+export -f backend_test_bitcoind_ln_gateway
+
 function backend_test_electrs() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
@@ -170,6 +178,7 @@ if parallel \
   always_success_test \
   rust_unit_tests \
   backend_test_bitcoind \
+  backend_test_bitcoind_ln_gateway \
   backend_test_electrs \
   backend_test_esplora \
   latency_test_reissue \

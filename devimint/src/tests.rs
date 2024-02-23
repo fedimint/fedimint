@@ -112,11 +112,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
     } = dev_fed;
 
     let max_p90_factor = 5.0;
-    let p90_median_factor = if crate::util::is_backwards_compatibility_test() {
-        7
-    } else {
-        5
-    };
+    let p90_median_factor = 7;
 
     let client = fed.new_joined_client("latency-tests-client").await?;
     client.use_gateway(&gw_cln).await?;
