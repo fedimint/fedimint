@@ -2473,7 +2473,7 @@
             </span>.get_value(<span class="kw-2">&amp;</span>MetaOverridesKey {})
             .<span class="kw">await
         </span>{
-            <span class="kw">let </span>elapsed = now().duration_since(cache.fetched_at).unwrap();
+            <span class="kw">let </span>elapsed = now().duration_since(cache.fetched_at).unwrap_or_default();
             <span class="kw">if </span>elapsed &lt; META_OVERRIDE_CACHE_DURATION {
                 <span class="macro">debug!</span>(<span class="string">&quot;Using cached meta overrides&quot;</span>);
                 <span class="kw">match </span>serde_json::from_str(<span class="kw-2">&amp;</span>cache.value) {
