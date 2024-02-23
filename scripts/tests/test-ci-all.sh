@@ -33,6 +33,13 @@ cargo nextest run --no-run ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${
 # If you really need to break this rule, ping dpc
 export FM_CARGO_DENY_COMPILATION=1
 
+# default to run all tests in a 3/4 setup and 4/4 in backwards-compatibility tests
+if [ -n "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+  export FM_OFFLINE_NODES=0
+else
+  export FM_OFFLINE_NODES=1
+fi
+
 function rust_unit_tests() {
   # unit tests don't use binaries from old versions, so there's no need to run for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
@@ -47,7 +54,8 @@ function recoverytool_tests() {
 export -f recoverytool_tests
 
 function reconnect_test() {
-  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/reconnect-test.sh
+  # reconnect-test runs a degraded federation, so we need to override FM_OFFLINE_NODES
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/reconnect-test.sh
 }
 export -f reconnect_test
 
@@ -62,42 +70,27 @@ function gateway_reboot_test() {
 export -f gateway_reboot_test
 
 function latency_test_reissue() {
-  # latency tests are not necessary for backwards-compatibility tests
-  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh reissue
-  fi
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh reissue
 }
 export -f latency_test_reissue
 
 function latency_test_ln_send() {
-  # latency tests are not necessary for backwards-compatibility tests
-  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh ln-send
-  fi
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh ln-send
 }
 export -f latency_test_ln_send
 
 function latency_test_ln_receive() {
-  # latency tests are not necessary for backwards-compatibility tests
-  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh ln-receive
-  fi
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh ln-receive
 }
 export -f latency_test_ln_receive
 
 function latency_test_fm_pay() {
-  # latency tests are not necessary for backwards-compatibility tests
-  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh fm-pay
-  fi
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh fm-pay
 }
 export -f latency_test_fm_pay
 
 function latency_test_restore() {
-  # latency tests are not necessary for backwards-compatibility tests
-  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh restore
-  fi
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh restore
 }
 export -f latency_test_restore
 
@@ -107,7 +100,7 @@ function devimint_cli_test() {
 export -f devimint_cli_test
 
 function devimint_cli_test_single() {
-  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-cli-test-single.sh
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/devimint-cli-test-single.sh
 }
 export -f devimint_cli_test_single
 
@@ -123,6 +116,14 @@ function backend_test_bitcoind() {
   fi
 }
 export -f backend_test_bitcoind
+
+function backend_test_bitcoind_ln_gateway() {
+  # backend tests don't support different versions, so we skip for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind-ln-gateway ./scripts/tests/backend-test.sh
+  fi
+}
+export -f backend_test_bitcoind_ln_gateway
 
 function backend_test_electrs() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
@@ -177,6 +178,7 @@ if parallel \
   always_success_test \
   rust_unit_tests \
   backend_test_bitcoind \
+  backend_test_bitcoind_ln_gateway \
   backend_test_electrs \
   backend_test_esplora \
   latency_test_reissue \

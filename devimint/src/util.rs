@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{env, unreachable};
 
-use anyhow::{bail, format_err, Context, Result};
+use anyhow::{anyhow, bail, format_err, Context, Result};
 use fedimint_core::task::{self, block_in_place};
 use fedimint_logging::LOG_DEVIMINT;
 use futures::executor::block_on;
@@ -505,6 +505,15 @@ pub fn get_fedimint_dbtool_cli_path() -> Vec<String> {
     )
 }
 
+/// Maps a version hash to a release version
+fn version_hash_to_version(version_hash: &str) -> Result<Version> {
+    match version_hash {
+        "a8422b84102ab5fc768307215d5b20d807143f27" => Ok(Version::new(0, 2, 1)),
+        "a849377f6466b26bf9b2747242ff01fd4d4a031b" => Ok(Version::new(0, 2, 2)),
+        _ => Err(anyhow!("no version known for version hash: {version_hash}")),
+    }
+}
+
 pub struct FedimintdCmd;
 impl FedimintdCmd {
     pub async fn cmd(self) -> Command {
@@ -514,12 +523,15 @@ impl FedimintdCmd {
         ))
     }
 
-    /// Returns the fedimintd version from clap or default min version if the
-    /// binary doesn't support a version flag
+    /// Returns the fedimintd version from clap or default min version
     pub async fn version_or_default() -> Version {
         match cmd!(FedimintdCmd, "--version").out_string().await {
             Ok(version) => parse_clap_version(&version),
-            Err(_) => DEFAULT_VERSION,
+            Err(_) => cmd!(FedimintdCmd, "version-hash")
+                .out_string()
+                .await
+                .map(|v| version_hash_to_version(&v).unwrap_or(DEFAULT_VERSION))
+                .unwrap_or(DEFAULT_VERSION),
         }
     }
 }
@@ -546,8 +558,7 @@ impl FedimintCli {
         ))
     }
 
-    /// Returns the fedimintd version from clap or default min version if the
-    /// binary doesn't support a version flag
+    /// Returns the fedimint-cli version from clap or default min version
     pub async fn version_or_default() -> Version {
         match cmd!(FedimintCli, "--version").out_string().await {
             Ok(version) => parse_clap_version(&version),
@@ -726,6 +737,11 @@ fn to_command(cli: Vec<String>) -> Command {
         cmd,
         args_debug: cli,
     }
+}
+
+/// Returns true if running backwards-compatibility tests
+pub fn is_backwards_compatibility_test() -> bool {
+    std::env::var("FM_BACKWARDS_COMPATIBILITY_TEST").is_ok_and(|x| x == "1")
 }
 
 /// Parses a version string returned from clap

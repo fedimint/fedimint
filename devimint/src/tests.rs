@@ -98,6 +98,7 @@ pub async fn log_binary_versions() -> Result<()> {
 
 pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
     log_binary_versions().await?;
+
     #[allow(unused_variables)]
     let DevFed {
         bitcoind,
@@ -111,11 +112,13 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
     } = dev_fed;
 
     let max_p90_factor = 5.0;
-    let p90_median_factor = 5;
+    let p90_median_factor = 7;
 
     let client = fed.new_joined_client("latency-tests-client").await?;
     client.use_gateway(&gw_cln).await?;
     fed.pegin_client(10_000_000, &client).await?;
+
+    // LN operations take longer, we need less iterations
     let iterations = 20;
 
     match r#type {
@@ -137,7 +140,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             }
             let reissue_stats = stats_for(reissues);
             println!("### LATENCY REISSUE: {reissue_stats}");
-            assert!(reissue_stats.median < Duration::from_secs(4));
+            assert!(reissue_stats.median < Duration::from_secs(6));
 
             assert!(reissue_stats.p90 < reissue_stats.median * p90_median_factor);
             assert!(
@@ -145,7 +148,6 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             );
         }
         LatencyTest::LnSend => {
-            // LN operations take longer, we need less iterations
             info!("Testing latency of ln send");
             let mut ln_sends = Vec::with_capacity(iterations);
             for _ in 0..iterations {
@@ -285,7 +287,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             let fm_pay_stats = stats_for(fm_internal_pay);
 
             println!("### LATENCY FM PAY: {fm_pay_stats}");
-            assert!(fm_pay_stats.median < Duration::from_secs(6));
+            assert!(fm_pay_stats.median < Duration::from_secs(12));
             assert!(fm_pay_stats.p90 < fm_pay_stats.median * p90_median_factor);
             assert!(
                 fm_pay_stats.max.as_secs_f64() < fm_pay_stats.p90.as_secs_f64() * max_p90_factor
@@ -297,22 +299,45 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
                 .as_str()
                 .map(ToOwned::to_owned)
                 .unwrap();
-            let restore_client = Client::create("restore").await?;
+            let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
             let start_time = Instant::now();
-            cmd!(
-                restore_client,
-                "restore",
-                "--mnemonic",
-                &backup_secret,
-                "--invite-code",
-                fed.invite_code()?
-            )
-            .run()
-            .await?;
+            if VersionReq::parse(">=0.3.0-alpha")?.matches(&fedimint_cli_version) {
+                let restore_client = Client::create("restore").await?;
+                cmd!(
+                    restore_client,
+                    "restore",
+                    "--mnemonic",
+                    &backup_secret,
+                    "--invite-code",
+                    fed.invite_code()?
+                )
+                .run()
+                .await?;
+            } else {
+                let client = client.new_forked("restore-without-backup").await?;
+                let _ = cmd!(client, "wipe", "--force",).out_json().await?;
+
+                assert_eq!(
+                    0,
+                    cmd!(client, "info").out_json().await?["total_amount_msat"]
+                        .as_u64()
+                        .unwrap()
+                );
+
+                let _post_balance = cmd!(client, "restore", &backup_secret)
+                    .out_json()
+                    .await?
+                    .as_u64()
+                    .unwrap();
+            }
             let restore_time = start_time.elapsed();
 
             println!("### LATENCY RESTORE: {restore_time:?}");
-            assert!(restore_time < Duration::from_secs(10));
+            if crate::util::is_backwards_compatibility_test() {
+                assert!(restore_time < Duration::from_secs(160));
+            } else {
+                assert!(restore_time < Duration::from_secs(10));
+            }
         }
     }
 
@@ -1109,7 +1134,9 @@ pub async fn run_ln_circular_load_test(
     );
 
     info!("Testing ln-circular-load-test with 'partner-ping-pong' strategy");
-    // Note invite code isn't required because we already have an archive dir
+    // Note: invite code isn't required because we already have an archive dir
+    // Note: test-duration-secs needs to be greater than the timeout for
+    // discover_api_version_set to work with degraded federations
     let output = cmd!(
         LoadTestTool,
         "--archive-dir",
@@ -1120,7 +1147,7 @@ pub async fn run_ln_circular_load_test(
         "--strategy",
         "partner-ping-pong",
         "--test-duration-secs",
-        "2",
+        "6",
         "--invite-code",
         invite_code
     )
@@ -1625,6 +1652,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         electrs,
         esplora,
     } = dev_fed;
+
     let data_dir = env::var("FM_DATA_DIR")?;
     let client = fed.new_joined_client("recoverytool-test-client").await?;
 

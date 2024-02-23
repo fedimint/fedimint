@@ -270,6 +270,24 @@ impl Federation {
         Ok(())
     }
 
+    pub async fn degrade_federation(&mut self, process_mgr: &ProcessManager) -> Result<()> {
+        let fed_size = process_mgr.globals.FM_FED_SIZE;
+        let offline_nodes = process_mgr.globals.FM_OFFLINE_NODES;
+        anyhow::ensure!(
+            fed_size > 3 * offline_nodes,
+            "too many offline nodes ({offline_nodes}) to reach consensus"
+        );
+
+        while self.num_members() > fed_size - offline_nodes {
+            self.terminate_server(self.num_members() - 1).await?;
+        }
+
+        if offline_nodes > 0 {
+            info!(fed_size, offline_nodes, "federation is degraded");
+        }
+        Ok(())
+    }
+
     pub async fn pegin_client(&self, amount: u64, client: &Client) -> Result<()> {
         info!(amount, "Pegging-in client funds");
         let deposit = cmd!(client, "deposit-address").out_json().await?;
@@ -401,6 +419,10 @@ impl Federation {
         self.bitcoind.mine_blocks(blocks).await?;
         self.await_block_sync().await?;
         Ok(())
+    }
+
+    pub fn num_members(&self) -> usize {
+        self.members.len()
     }
 }
 

@@ -747,7 +747,7 @@ where
         &self,
         client_versions: &SupportedApiVersionsSummary,
     ) -> FederationResult<ApiVersionSet> {
-        let timeout = Duration::from_secs(60);
+        let timeout = Duration::from_secs(5);
         self.request_with_strategy(
             DiscoverApiVersionSet::new(
                 self.all_peers().len(),

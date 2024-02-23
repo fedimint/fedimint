@@ -21,9 +21,16 @@ pub struct DevFed {
 }
 
 pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
+    let fed_size = process_mgr.globals.FM_FED_SIZE;
+    let offline_nodes = process_mgr.globals.FM_OFFLINE_NODES;
+    anyhow::ensure!(
+        fed_size > 3 * offline_nodes,
+        "too many offline nodes ({offline_nodes}) to reach consensus"
+    );
+
     let start_time = fedimint_core::time::now();
     let bitcoind = Bitcoind::new(process_mgr).await?;
-    let ((cln, lnd, gw_cln, gw_lnd), electrs, esplora, fed) = tokio::try_join!(
+    let ((cln, lnd, gw_cln, gw_lnd), electrs, esplora, mut fed) = tokio::try_join!(
         async {
             let (cln, lnd) = tokio::try_join!(
                 Lightningd::new(process_mgr, bitcoind.clone()),
@@ -40,10 +47,7 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
         },
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
-        async {
-            let fed_size = process_mgr.globals.FM_FED_SIZE;
-            Federation::new(process_mgr, bitcoind.clone(), fed_size).await
-        },
+        Federation::new(process_mgr, bitcoind.clone(), fed_size),
     )?;
 
     info!(target: LOG_DEVIMINT, "federation and gateways started");
@@ -62,11 +66,18 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
     info!(target: LOG_DEVIMINT, "await gateways registered");
     fed.await_gateways_registered().await?;
     info!(target: LOG_DEVIMINT, "gateways registered");
+
+    // Create a degraded federation if there are offline nodes
+    fed.degrade_federation(process_mgr).await?;
+
     info!(
         target: LOG_DEVIMINT,
-        "starting dev federation took {:?}",
+        fed_size,
+        offline_nodes,
+        "finished creating dev federation, took {:?}",
         start_time.elapsed()?
     );
+
     Ok(DevFed {
         bitcoind,
         cln,

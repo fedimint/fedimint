@@ -42,11 +42,17 @@ function run_tests() {
       ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
       ${TEST_ARGS_SERIALIZED} \
       -E 'package(fedimint-ln-tests)'
+    >&2 echo "### Testing against bitcoind - complete"
+  fi
+
+  if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind-ln-gateway" ]; then
+    >&2 echo "### Testing against bitcoind for ln-gateway"
+
     cargo nextest run --locked --workspace --all-targets \
       ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
       ${TEST_ARGS_SERIALIZED} \
       -E 'package(fedimint-ln-gateway)'
-    >&2 echo "### Testing against bitcoind - complete"
+    >&2 echo "### Testing against bitcoind for ln-gateway - complete"
   fi
 
   # Switch to electrum and run wallet tests
