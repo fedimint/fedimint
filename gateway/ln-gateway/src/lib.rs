@@ -1152,7 +1152,9 @@ impl Gateway {
 
             dbtx.commit_tx().await;
 
-            Self::register_all_federations(self, gateway_config).await;
+            if let Err(e) = Self::register_all_federations(self, gateway_config).await {
+                warn!("{e:?}")
+            };
         }
 
         Ok(())
@@ -1160,7 +1162,10 @@ impl Gateway {
 
     /// Iterates through all of the federation configurations and registers the
     /// gateway with each federation.
-    async fn register_all_federations(gateway: &Gateway, gateway_config: &GatewayConfiguration) {
+    async fn register_all_federations(
+        gateway: &Gateway,
+        gateway_config: &GatewayConfiguration,
+    ) -> Result<()> {
         let gateway_state = gateway.state.read().await.clone();
         if let GatewayState::Running { lightning_context } = gateway_state {
             match Self::fetch_lightning_route_hints(
@@ -1192,20 +1197,25 @@ impl Gateway {
                             .instrument(client.span())
                             .await
                             {
-                                warn!("Error registering federation {federation_id}: {e:?}");
+                                Err(GatewayError::FederationError(FederationError::general(
+                                    anyhow::anyhow!("Error registering federation {federation_id}: {e:?}")
+                                )))?
                             }
                         } else {
-                            warn!("Could not retrieve federation config for {federation_id}");
+                            Err(GatewayError::FederationError(FederationError::general(
+                                anyhow::anyhow!("Could not retrieve federation config for {federation_id}")
+                            )))?
                         }
                     }
                 }
-                Err(e) => {
-                    warn!(
-                        "Could not retrieve route hints, gateway will not be registered for now: {e:?}"
-                    );
-                }
+                Err(e) =>
+                    Err(GatewayError::LightningRpcError(LightningRpcError::FailedToGetRouteHints {
+                        failure_reason: format!("Could not retrieve route hints, gateway will not be registered for now: {e:?}")
+                    }
+                    ))?
             }
         }
+        Ok(())
     }
 
     /// This function will return a `GatewayConfiguration` one of two
@@ -1336,10 +1346,11 @@ impl Gateway {
             .spawn("register clients", move |handle| async move {
                 let registration_loop = async {
                     loop {
+                        let mut registration_result: Option<Result<()>> = None;
                         if let Some(gateway_config) = gateway.get_gateway_configuration().await {
                             let gateway_state = gateway.state.read().await.clone();
                             if let GatewayState::Running { .. } = &gateway_state {
-                                Self::register_all_federations(&gateway, &gateway_config).await;
+                                registration_result = Some(Self::register_all_federations(&gateway, &gateway_config).await);
                             } else {
                                 // We need to retry more often if the gateway is not in the Running state
                                 const NOT_RUNNING_RETRY: Duration = Duration::from_secs(10);
@@ -1351,9 +1362,15 @@ impl Gateway {
                             warn!("Cannot register clients because gateway configuration is not set.");
                         }
 
+                        let registration_delay: Duration = if let Some(Err(GatewayError::FederationError(_))) = registration_result {
+                            // Retry to register gateway with federations in 10 seconds since it failed
+                            Duration::from_secs(10)
+                        } else {
                         // Allow a 15% buffer of the TTL before the re-registering gateway
                         // with the federations.
-                        let registration_delay = GW_ANNOUNCEMENT_TTL.mul_f32(0.85);
+                            GW_ANNOUNCEMENT_TTL.mul_f32(0.85)
+                        };
+
                         sleep(registration_delay).await;
                     }
                 };
