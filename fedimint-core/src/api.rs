@@ -1223,6 +1223,14 @@ pub struct StatusResponse {
     pub federation: Option<FederationStatus>,
 }
 
+/// Archive of all the guardian config files that can be used to recover a lost
+/// guardian node.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GuardianConfigBackup {
+    #[serde(with = "fedimint_core::hex::serde")]
+    pub tar_archive_bytes: Vec<u8>,
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;

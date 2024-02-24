@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::io::Write;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -1812,6 +1813,142 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     Ok(())
 }
 
+pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
+    use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
+
+    log_binary_versions().await?;
+
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+    if VersionReq::parse("<0.3.0-alpha")?.matches(&fedimint_cli_version)
+        || VersionReq::parse("<0.3.0-alpha")?.matches(&fedimintd_version)
+    {
+        info!("Guardian backups didn't exist pre-0.3.0, so can't be tested, exiting");
+        return Ok(());
+    }
+
+    #[allow(unused_variables)]
+    let DevFed {
+        bitcoind,
+        cln,
+        lnd,
+        mut fed,
+        gw_cln,
+        gw_lnd,
+        electrs,
+        esplora,
+    } = dev_fed;
+
+    const PEER_TO_TEST: usize = 0;
+
+    fed.await_all_peers()
+        .await
+        .expect("Awaiting federation coming online failed");
+
+    let client = fed.new_joined_client("guardian-client").await?;
+    let old_block_count = cmd!(
+        client,
+        "dev",
+        "api",
+        "--peer-id",
+        PEER_TO_TEST.to_string(),
+        "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count",
+    )
+    .out_json()
+    .await?["value"]
+        .as_u64()
+        .expect("No block height returned");
+
+    let backup_res = cmd!(
+        client,
+        "--our-id",
+        PEER_TO_TEST.to_string(),
+        "--password",
+        "pass",
+        "admin",
+        "guardian-config-backup"
+    )
+    .out_json()
+    .await?;
+    let backup_hex = backup_res["tar_archive_bytes"]
+        .as_str()
+        .expect("expected hex string");
+    let backup_tar = hex::decode(backup_hex).expect("invalid hex");
+
+    let data_dir = fed
+        .vars
+        .get(&PEER_TO_TEST)
+        .expect("peer not found")
+        .FM_DATA_DIR
+        .clone();
+
+    fed.terminate_server(PEER_TO_TEST)
+        .await
+        .expect("could not terminate fedimintd");
+
+    std::fs::remove_dir_all(&data_dir).expect("error deleting old datadir");
+    std::fs::create_dir(&data_dir).expect("error creating new datadir");
+
+    let write_file = |name: &str, data: &[u8]| {
+        let mut file = std::fs::File::options()
+            .write(true)
+            .create(true)
+            .open(data_dir.join(name))
+            .expect("could not open file");
+        file.write_all(data).expect("could not write file");
+        file.flush().expect("could not flush file");
+    };
+
+    write_file("backup.tar", &backup_tar);
+    write_file("password.private", "pass".as_bytes());
+
+    assert_eq!(
+        std::process::Command::new("tar")
+            .arg("-xf")
+            .arg("backup.tar")
+            .current_dir(data_dir)
+            .spawn()
+            .expect("error spawning tar")
+            .wait()
+            .expect("error extracting archive")
+            .code(),
+        Some(0),
+        "tar failed"
+    );
+
+    fed.start_server(process_mgr, PEER_TO_TEST)
+        .await
+        .expect("could not restart fedimintd");
+
+    poll("Peer catches up again", Some(30), || async {
+        let block_count = cmd!(
+            client,
+            "dev",
+            "api",
+            "--peer-id",
+            PEER_TO_TEST.to_string(),
+            "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count",
+        )
+        .out_json()
+        .await
+        .map_err(ControlFlow::Continue)?["value"]
+            .as_u64()
+            .expect("No block height returned");
+
+        info!("Caught up to block {block_count} of at least {old_block_count}");
+
+        if block_count < old_block_count {
+            return Err(ControlFlow::Continue(anyhow!("Block count still behind")));
+        }
+
+        Ok(())
+    })
+    .await
+    .expect("Peer didn't rejoin federation");
+
+    Ok(())
+}
+
 #[derive(Subcommand)]
 pub enum LatencyTest {
     Reissue,
@@ -1850,6 +1987,8 @@ pub enum TestCmd {
         #[arg(long, trailing_var_arg = true, allow_hyphen_values = true, num_args=1..)]
         exec: Option<Vec<ffi::OsString>>,
     },
+    /// Restore guardian from downloaded backup
+    GuardianBackup,
 }
 
 pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()> {
@@ -1925,6 +2064,11 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             recoverytool_test(dev_fed).await?;
+        }
+        TestCmd::GuardianBackup => {
+            let (process_mgr, _) = setup(common_args).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
+            guardian_backup_test(dev_fed, &process_mgr).await?;
         }
     }
     Ok(())
