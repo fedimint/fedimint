@@ -1,0 +1,2 @@
+# Required for replit support to re-run on reconnect
+eval "$(direnv hook bash)"

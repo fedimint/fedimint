@@ -1,5 +1,11 @@
 { pkgs }: {
+    env = {
+        OPENSSL_DIR = "${pkgs.openssl.dev}";
+        LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+      };
   deps = [
+    pkgs.direnv
+    pkgs.just
     pkgs.gcc
     pkgs.mold
     pkgs.rustc
@@ -12,6 +18,7 @@
     pkgs.lld
     pkgs.pkg-config
     pkgs.openssl
-    pkgs.nix
+    pkgs.protobuf
+    pkgs.bitcoind
   ];
 }
