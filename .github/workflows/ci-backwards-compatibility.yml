@@ -47,7 +47,7 @@ jobs:
         run: |
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
           # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
-          env TMPDIR=/tmp nix develop -c ./scripts/tests/backwards-compatibility-test.sh
+          env TMPDIR=/tmp nix develop -c ./scripts/tests/test-ci-all.sh v0.2.1
 
       - name: Prepare failed test build dirs
         if: always()
