@@ -105,13 +105,14 @@ rules:
   languages:
     - rust
   patterns:
-    - pattern: sleep($X)
+    - pattern-either:
+      - pattern: sleep(...)
+      - pattern: fedimint_core::task::sleep(...)
   paths:
     include:
       - fedimint-testing/
       - fedimint-wasm-testing/
       - fedimint-wasm-tests/
-      - fedimint-load-test-tool/
       - modules/fedimint-dummy-tests/
       - modules/fedimint-wallet-tests/
       - modules/fedimint-ln-tests/

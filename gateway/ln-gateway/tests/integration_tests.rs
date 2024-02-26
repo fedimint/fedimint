@@ -13,7 +13,7 @@ use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder
 use fedimint_client::ClientArc;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
-use fedimint_core::task::sleep;
+use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{msats, sats, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -748,7 +748,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
             assert_eq!(invoice.expiry_time(), Duration::from_secs(1));
 
             // at seconds granularity, must wait `expiry + 1s` to make sure expired
-            sleep(Duration::from_secs(2)).await;
+            sleep_in_test("waiting for invoice to expire", Duration::from_secs(2)).await;
 
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>();

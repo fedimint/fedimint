@@ -456,9 +456,13 @@ impl LdkLightningTest {
                 break;
             }
 
-            fedimint_core::task::sleep(std::time::Duration::from_secs(1)).await;
+            fedimint_core::task::sleep_in_test(
+                "LDK Note didn't find onchain balance",
+                std::time::Duration::from_secs(1),
+            )
+            .await;
 
-            info!("LDK Node didn't find onchain balance, syncing wallet...");
+            info!("syncing wallet...");
             node.sync_wallets().map_err(|e| {
                 error!("Failed to sync LDK Node onchain wallet: {e:?}");
                 LightningRpcError::FailedToConnect

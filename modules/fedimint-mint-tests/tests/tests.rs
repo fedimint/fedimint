@@ -2,7 +2,7 @@ use std::io::Cursor;
 use std::time::Duration;
 
 use fedimint_client::backup::{ClientBackup, Metadata};
-use fedimint_core::task::sleep;
+use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -108,7 +108,7 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
 
     // FIXME: UserCanceledSuccess should mean the money is in our wallet
     for _ in 0..200 {
-        sleep(Duration::from_millis(100)).await;
+        sleep_in_test("sats not in wallet yet", Duration::from_millis(100)).await;
         if client.get_balance().await == sats(1000) {
             return Ok(());
         }

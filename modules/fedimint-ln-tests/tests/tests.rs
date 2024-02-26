@@ -481,7 +481,6 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
 #[cfg(test)]
 mod fedimint_migration_tests {
     use std::str::FromStr;
-    use std::time::SystemTime;
 
     use anyhow::ensure;
     use bitcoin_hashes::{sha256, Hash};
@@ -706,7 +705,7 @@ mod fedimint_migration_tests {
         let lightning_gateway_registration = LightningGatewayRegistration {
             info: gateway_info,
             vetted: false,
-            valid_until: SystemTime::now(),
+            valid_until: fedimint_core::time::now(),
         };
 
         dbtx.insert_new_entry(
@@ -734,7 +733,7 @@ mod fedimint_migration_tests {
             &MetaOverridesKey,
             &MetaOverrides {
                 value: "META OVERRIDE".to_string(),
-                fetched_at: SystemTime::now(),
+                fetched_at: fedimint_core::time::now(),
             },
         )
         .await;

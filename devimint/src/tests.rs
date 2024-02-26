@@ -1389,7 +1389,11 @@ pub async fn lightning_gw_reconnect_test(
                             RETRY_INTERVAL.as_secs(),
                             i + 1,
                         );
-                        fedimint_core::task::sleep(RETRY_INTERVAL).await;
+                        fedimint_core::task::sleep_in_test(
+                            "paying invoice for gateway failed",
+                            RETRY_INTERVAL,
+                        )
+                        .await;
                     }
                 }
             }
@@ -1793,7 +1797,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
             // 3 minutes should be enough to finish one or two sessions
             bail!("recoverytool epochs method timed out");
         } else {
-            fedimint_core::task::sleep(Duration::from_secs(1)).await
+            fedimint_core::task::sleep_in_test("recovery failed", Duration::from_secs(1)).await
         }
     };
     let epochs_descriptors = outputs

@@ -116,7 +116,7 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                     Err(e) => {
                         if e.to_string().contains("not yet in block") {
                             // mostly to yield, as we no other yield points
-                            task::sleep(Duration::from_millis(1)).await;
+                            task::sleep_in_test("not yet in block", Duration::from_millis(1)).await;
                             continue;
                         }
                         panic!("Could not get txoutproof: {e}");
