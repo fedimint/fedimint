@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+source scripts/_common.sh
+
 # prevent locale settings messing with some setups
 export LANG=C
 
@@ -32,13 +34,6 @@ cargo nextest run --no-run ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${
 # in the PATH.
 # If you really need to break this rule, ping dpc
 export FM_CARGO_DENY_COMPILATION=1
-
-# default to run all tests in a 3/4 setup and 4/4 in backwards-compatibility tests
-if [ -n "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-  export FM_OFFLINE_NODES=0
-else
-  export FM_OFFLINE_NODES=1
-fi
 
 function rust_unit_tests() {
   # unit tests don't use binaries from old versions, so there's no need to run for backwards-compatibility tests
@@ -151,6 +146,64 @@ function always_success_test() {
 }
 export -f always_success_test
 
+tagged_versions=("$@")
+num_versions="$#"
+versions=( "current" "${tagged_versions[@]}" )
+if [[ "$num_versions" == "0" ]]; then
+  current_binaries_count=3
+else
+  # precompile binaries
+  binaries=( "fedimintd" "fedimint-cli" "gateway-cli" "gatewayd" )
+  parallel nix_build_binary_for_version "{1}" "{2}" ::: "${binaries[@]}" ::: "${tagged_versions[@]}"
+  # we only need to try everything against one element being in a different version
+  current_binaries_count=2
+fi
+
+version_matrix=()
+for fed_version in "${versions[@]}"; do
+  for client_version in "${versions[@]}"; do
+    for gateway_version in "${versions[@]}"; do
+      if [ "$(filter_count "current" "$fed_version" "$client_version" "$gateway_version")" != "$current_binaries_count" ]; then
+         continue
+      fi
+
+      version_matrix+=("$fed_version $client_version $gateway_version")
+    done
+  done
+done
+
+# NOTE: try to keep the slowest tests first, except 'always_success_test',
+# as it's used for failure test
+tests_to_run_in_parallel=(
+  "always_success_test"
+  "rust_unit_tests"
+  "backend_test_bitcoind"
+  "backend_test_bitcoind_ln_gateway"
+  "backend_test_electrs"
+  "backend_test_esplora"
+  "latency_test_reissue"
+  "latency_test_ln_send"
+  "latency_test_ln_receive"
+  "latency_test_fm_pay"
+  "latency_test_restore"
+  "reconnect_test"
+  "lightning_reconnect_test"
+  "gateway_reboot_test"
+  "devimint_cli_test"
+  "devimint_cli_test_single"
+  "load_test_tool_test"
+  "recoverytool_tests"
+)
+
+tests_with_versions=()
+for version_combo in "${version_matrix[@]}"; do
+  for test in "${tests_to_run_in_parallel[@]}"; do
+    tests_with_versions+=("run_test_for_versions $test $version_combo")
+  done
+done
+
+parsed_test_commands=$(printf "%s\n" "${tests_with_versions[@]}")
+
 export parallel_jobs='+0'
 
 tmpdir=$(mktemp --tmpdir -d XXXXX)
@@ -164,9 +217,7 @@ PATH="$(pwd)/scripts/dev/run-test/:$PATH"
 # --delay to let nix start extracting and bump the load
 # --memfree to make sure tests have enough memory to run
 # --nice to let you browse twitter without lag while the tests are running
-# NOTE: try to keep the slowest tests first, except 'always_success_test',
-# as it's used for failure test
-if parallel \
+echo "$parsed_test_commands" | if parallel \
   --halt-on-error 1 \
   --joblog "$joblog" \
   --timeout 600 \
@@ -174,25 +225,7 @@ if parallel \
   --delay 5 \
   --jobs "$parallel_jobs" \
   --memfree 1G \
-  --nice 15 ::: \
-  always_success_test \
-  rust_unit_tests \
-  backend_test_bitcoind \
-  backend_test_bitcoind_ln_gateway \
-  backend_test_electrs \
-  backend_test_esplora \
-  latency_test_reissue \
-  latency_test_ln_send\
-  latency_test_ln_receive \
-  latency_test_fm_pay\
-  latency_test_restore \
-  reconnect_test \
-  lightning_reconnect_test \
-  gateway_reboot_test \
-  devimint_cli_test \
-  devimint_cli_test_single \
-  load_test_tool_test \
-  recoverytool_tests ; then
+  --nice 15 ; then
   >&2 echo "All tests successful"
 else
   >&2 echo "Some tests failed. Full job log:"
