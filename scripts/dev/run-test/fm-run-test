@@ -8,13 +8,15 @@ if [ -z "$test_name" ]; then
     exit 1
 fi
 
-set -eo pipefail # pipefail must be set manually again
-trap 'echo "## FAILED: $test_name"' ERR
+version_str="${FM_RUN_TEST_VERSIONS:+ ($FM_RUN_TEST_VERSIONS)}"
 
-echo "## START: $test_name"
+set -eo pipefail # pipefail must be set manually again
+trap 'echo "## FAILED: $test_name$version_str"' ERR
+
+echo "## START: $test_name$version_str"
 
 export FM_TEST_NAME="$test_name"
 
 "$@" 2>&1 | ts -s
 
-echo "## COMPLETE: $test_name"
+echo "## COMPLETE: $test_name$version_str"

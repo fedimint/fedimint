@@ -196,8 +196,8 @@ tests_to_run_in_parallel=(
 )
 
 tests_with_versions=()
-for version_combo in "${version_matrix[@]}"; do
-  for test in "${tests_to_run_in_parallel[@]}"; do
+for test in "${tests_to_run_in_parallel[@]}"; do
+  for version_combo in "${version_matrix[@]}"; do
     tests_with_versions+=("run_test_for_versions $test $version_combo")
   done
 done
@@ -221,7 +221,7 @@ echo "$parsed_test_commands" | if parallel \
   --halt-on-error 1 \
   --joblog "$joblog" \
   --timeout 600 \
-  --load 150% \
+  --load 1000% \
   --delay 5 \
   --jobs "$parallel_jobs" \
   --memfree 1G \
