@@ -1925,6 +1925,10 @@
 <a href="#1925" id="1925">1925</a>
 <a href="#1926" id="1926">1926</a>
 <a href="#1927" id="1927">1927</a>
+<a href="#1928" id="1928">1928</a>
+<a href="#1929" id="1929">1929</a>
+<a href="#1930" id="1930">1930</a>
+<a href="#1931" id="1931">1931</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -3316,7 +3320,11 @@
                             RETRY_INTERVAL.as_secs(),
                             i + <span class="number">1</span>,
                         );
-                        fedimint_core::task::sleep(RETRY_INTERVAL).<span class="kw">await</span>;
+                        fedimint_core::task::sleep_in_test(
+                            <span class="string">&quot;paying invoice for gateway failed&quot;</span>,
+                            RETRY_INTERVAL,
+                        )
+                        .<span class="kw">await</span>;
                     }
                 }
             }
@@ -3720,7 +3728,7 @@
             <span class="comment">// 3 minutes should be enough to finish one or two sessions
             </span><span class="macro">bail!</span>(<span class="string">&quot;recoverytool epochs method timed out&quot;</span>);
         } <span class="kw">else </span>{
-            fedimint_core::task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
+            fedimint_core::task::sleep_in_test(<span class="string">&quot;recovery failed&quot;</span>, Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
         </span>}
     };
     <span class="kw">let </span>epochs_descriptors = outputs
