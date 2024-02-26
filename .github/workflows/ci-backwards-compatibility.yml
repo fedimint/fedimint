@@ -43,6 +43,13 @@ jobs:
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
 
+      # caching ~/.cargo to avoid downloading all (especially git) deps
+      - name: Cache ~/.cargo
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo
+          key: ${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+
       - name: Backwards-compatibility tests
         run: |
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
