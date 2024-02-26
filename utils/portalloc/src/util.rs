@@ -11,7 +11,6 @@ pub fn open_lock_file(root_path: &Path) -> anyhow::Result<fs::File> {
     let file = fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .write(true)
         .read(true)
         .open(path.clone())?;
     debug!(path = %path.display(), "Opened lock file");
