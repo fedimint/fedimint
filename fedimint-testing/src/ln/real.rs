@@ -560,31 +560,27 @@ impl LdkLightningTest {
                                 .expect("SendPayment could not parse invoice"),
                         )
                         .expect("Failed to send payment to invoice");
-                        loop {
-                            let event = node.wait_next_event();
-                            match event {
-                                Event::PaymentFailed { payment_hash: _ } => {
-                                    node.event_handled();
-                                    response_sender
-                                        .send(LdkMessage::PayInvoiceFailureResponse)
-                                        .expect("Failed to send PayInvoiceFailureResponse");
-                                    break;
-                                }
-                                Event::PaymentSuccessful { payment_hash } => {
-                                    node.event_handled();
-                                    // PaymentSuccess doesn't return the preimage?
-                                    response_sender
-                                        .send(LdkMessage::PayInvoiceSuccessResponse {
-                                            preimage: payment_hash.0,
-                                        })
-                                        .expect("Failed to send PayInvoiceSuccessResponse");
-                                    break;
-                                }
-                                _ => {
-                                    panic!(
-                                        "Received unexpected event while paying invoice: {event:?}"
-                                    );
-                                }
+                        let event = node.wait_next_event();
+                        match event {
+                            Event::PaymentFailed { payment_hash: _ } => {
+                                node.event_handled();
+                                response_sender
+                                    .send(LdkMessage::PayInvoiceFailureResponse)
+                                    .expect("Failed to send PayInvoiceFailureResponse");
+                                break;
+                            }
+                            Event::PaymentSuccessful { payment_hash } => {
+                                node.event_handled();
+                                // PaymentSuccess doesn't return the preimage?
+                                response_sender
+                                    .send(LdkMessage::PayInvoiceSuccessResponse {
+                                        preimage: payment_hash.0,
+                                    })
+                                    .expect("Failed to send PayInvoiceSuccessResponse");
+                                break;
+                            }
+                            _ => {
+                                panic!("Received unexpected event while paying invoice: {event:?}");
                             }
                         }
                     }
