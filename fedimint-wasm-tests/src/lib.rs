@@ -52,7 +52,11 @@ mod faucet {
         let resp = gloo_net::http::Request::get("http://localhost:15243/connect-string")
             .send()
             .await?;
-        Ok(resp.text().await?)
+        if resp.ok() {
+            Ok(resp.text().await?)
+        } else {
+            anyhow::bail!(resp.text().await?);
+        }
     }
 
     pub async fn pay_invoice(invoice: &str) -> anyhow::Result<()> {
@@ -71,7 +75,11 @@ mod faucet {
         let resp = gloo_net::http::Request::get("http://localhost:15243/gateway-api")
             .send()
             .await?;
-        Ok(resp.text().await?)
+        if resp.ok() {
+            Ok(resp.text().await?)
+        } else {
+            anyhow::bail!(resp.text().await?);
+        }
     }
 
     pub async fn generate_invoice(amt: u64) -> anyhow::Result<String> {
