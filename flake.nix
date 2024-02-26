@@ -4,9 +4,14 @@
       url = "github:nixos/nixpkgs/nixos-23.11";
     };
     flake-utils.url = "github:numtide/flake-utils";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     flakebox = {
       url = "github:dpc/flakebox?rev=db74cf9715c2e21c59f7a0bcb2002ae87ad5068a";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.fenix.follows = "fenix";
     };
     bundlers = {
       # TODO: switch back to upstream after https://github.com/matthewbauer/nix-bundle/pull/103 is available
@@ -18,7 +23,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, flakebox, advisory-db, bundlers }:
+  outputs = { self, nixpkgs, flake-utils, flakebox, advisory-db, bundlers, ... }:
     let
       # overlay combining all overlays we use
       overlayAll =
