@@ -55,6 +55,15 @@ function run_test_for_versions() {
     export FM_OFFLINE_NODES=1
   fi
 
+  if \
+    [ "$fed_version" != "current" ] ||
+    [ "$client_version" != "current" ] ||
+    [ "$gateway_version" != "current" ] ; then
+    export FM_RUN_TEST_VERSIONS="$fed_version $client_version $gateway_version"
+  else
+    unset FM_RUN_TEST_VERSIONS
+  fi
+
   $fn_name
 }
 export -f run_test_for_versions
