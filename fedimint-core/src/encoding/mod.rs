@@ -87,6 +87,11 @@ pub trait Encodable {
         bytes.to_hex()
     }
 
+    /// Encode without storing the encoding, return the size
+    fn consensus_encode_to_len(&self) -> usize {
+        self.consensus_encode(&mut io::sink())
+            .expect("encoding to bytes can't fail for io reasons")
+    }
     /// Generate a SHA256 hash of the consensus encoding using the default hash
     /// engine for `H`.
     ///

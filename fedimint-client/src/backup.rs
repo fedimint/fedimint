@@ -1,12 +1,15 @@
 use std::cmp::Reverse;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Error, Read, Write};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use bitcoin::secp256k1;
 use fedimint_core::api::DynGlobalApi;
-use fedimint_core::core::backup::{BackupRequest, SignedBackupRequest};
+use fedimint_core::core::backup::{
+    BackupRequest, SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,
+};
 use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_derive_secret::DerivableSecret;
@@ -16,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
 use super::Client;
+use crate::db::LastBackupKey;
 use crate::get_decoded_client_secret;
 use crate::module::recovery::DynModuleBackup;
 use crate::secret::DeriveableSecretClientExt;
@@ -66,6 +70,13 @@ impl Metadata {
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct ClientBackup {
     /// Session count taken right before taking the backup
+    /// used to timestamp the backup file. Used for finding the
+    /// most recent backup from all available ones.
+    ///
+    /// Warning: Each particular module backup for each instance
+    /// in `Self::modules` could have been taken earlier than
+    /// that (e.g. older one used due to size limits), so modules
+    /// MUST maintain their own `session_count`s.
     pub session_count: u64,
     /// Application metadata
     pub metadata: Metadata,
@@ -76,6 +87,12 @@ pub struct ClientBackup {
 
 impl ClientBackup {
     pub const PADDING_ALIGNMENT: usize = 4 * 1024;
+
+    /// "32kiB is enough for any module backup" --dpc
+    ///
+    /// Federation storage is scarce, and since we can take older versions of
+    /// the backup, temporarily going over the limit is not a big problem.
+    pub const PER_MODULE_SIZE_LIMIT_BYTES: usize = 32 * 1024;
 
     /// Align an ecoded message size up for better privacy
     fn get_alignment_size(len: usize) -> usize {
@@ -89,6 +106,59 @@ impl ClientBackup {
 
         let encrypted = fedimint_aead::encrypt(encoded, key)?;
         Ok(EncryptedClientBackup(encrypted))
+    }
+
+    /// Validate and fallback invalid parts of the backup
+    ///
+    /// Given the size constraints and possible 3rd party modules,
+    /// it seems to use older, but smaller versions of backups when
+    /// current ones do not fit (either globally or in per-module limit).
+    fn validate_and_fallback_module_backups(
+        self,
+        last_backup: Option<&ClientBackup>,
+    ) -> ClientBackup {
+        // take all module ids from both backup and add them together
+        let all_ids: BTreeSet<_> = self
+            .modules
+            .keys()
+            .chain(last_backup.iter().flat_map(|b| b.modules.keys()))
+            .copied()
+            .collect();
+
+        let mut modules = BTreeMap::new();
+        for module_id in all_ids {
+            if let Some(module_backup) = self
+                .modules
+                .get(&module_id)
+                .or_else(|| last_backup.and_then(|lb| lb.modules.get(&module_id)))
+            {
+                let size = module_backup.consensus_encode_to_len();
+                let limit = Self::PER_MODULE_SIZE_LIMIT_BYTES;
+                if size < limit {
+                    modules.insert(module_id, module_backup.clone());
+                } else if let Some(last_module_backup) =
+                    last_backup.and_then(|lb| lb.modules.get(&module_id))
+                {
+                    let size_previous = last_module_backup.consensus_encode_to_len();
+                    warn!(
+                        size,
+                        size_previous, limit, "Module backup too large, will use previous version"
+                    );
+                    modules.insert(module_id, last_module_backup.clone());
+                } else {
+                    warn!(
+                        size,
+                        limit,
+                        "Module backup too large, no previous version available to fall-back to"
+                    );
+                }
+            }
+        }
+        ClientBackup {
+            session_count: self.session_count,
+            metadata: self.metadata,
+            modules,
+        }
     }
 }
 
@@ -132,6 +202,7 @@ impl Decodable for ClientBackup {
 }
 
 /// Encrypted version of [`ClientBackup`].
+#[derive(Clone)]
 pub struct EncryptedClientBackup(Vec<u8>);
 
 impl EncryptedClientBackup {
@@ -191,33 +262,56 @@ impl Client {
         })
     }
 
-    /// Create a backup, include provided `metadata`, and encrypt it with a
-    /// (derived) client root key
-    pub async fn create_encrypted_backup(
-        &self,
-        metadata: Metadata,
-    ) -> Result<EncryptedClientBackup> {
-        let plaintext = self.create_backup(metadata).await?;
-        plaintext.encrypt_to(&self.get_derived_backup_encryption_key())
+    async fn load_previous_backup(&self) -> Option<ClientBackup> {
+        let mut dbtx = self.db.begin_transaction_nc().await;
+        dbtx.ensure_global().expect("global tx");
+        dbtx.get_value(&LastBackupKey).await
+    }
+
+    async fn store_last_backup(&self, backup: &ClientBackup) {
+        let mut dbtx = self.db.begin_transaction().await;
+        dbtx.ensure_global().expect("global tx");
+        dbtx.insert_entry(&LastBackupKey, backup).await;
+        dbtx.commit_tx().await;
     }
 
     /// Prepare an encrypted backup and send it to federation for storing
     pub async fn backup_to_federation(&self, metadata: Metadata) -> Result<()> {
-        let backup = self.create_encrypted_backup(metadata).await?;
+        let last_backup = self.load_previous_backup().await;
+        let new_backup = self.create_backup(metadata).await?;
 
-        self.upload_backup(backup).await?;
+        let new_backup = new_backup.validate_and_fallback_module_backups(last_backup.as_ref());
+
+        let encrypted = new_backup.encrypt_to(&self.get_derived_backup_encryption_key())?;
+
+        self.validate_backup(&encrypted)?;
+
+        self.store_last_backup(&new_backup).await;
+
+        self.upload_backup(&encrypted).await?;
 
         Ok(())
     }
 
+    /// Validate backup before sending it to federation
+    pub fn validate_backup(&self, backup: &EncryptedClientBackup) -> Result<()> {
+        if BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES < backup.len() {
+            bail!("Backup payload too large");
+        }
+        Ok(())
+    }
+
     /// Upload `backup` to federation
-    pub async fn upload_backup(&self, backup: EncryptedClientBackup) -> Result<()> {
+    pub async fn upload_backup(&self, backup: &EncryptedClientBackup) -> Result<()> {
+        self.validate_backup(backup)?;
         let size = backup.len();
         info!(
             target: LOG_CLIENT_BACKUP,
             size, "Uploading backup to federation"
         );
-        let backup_request = backup.into_backup_request(&self.get_derived_backup_signing_key())?;
+        let backup_request = backup
+            .clone()
+            .into_backup_request(&self.get_derived_backup_signing_key())?;
         self.api.upload_backup(&backup_request).await?;
         info!(
             target: LOG_CLIENT_BACKUP,
