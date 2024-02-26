@@ -1792,6 +1792,11 @@ impl ClientBuilder {
 
     /// Join a new Federation
     ///
+    /// When a user wants to connect to a new federation this function fetches
+    /// the federation config and initializes the client database. If a user
+    /// already joined the federation in the past and has a preexisting database
+    /// use [`ClientBuilder::open`] instead.
+    ///
     /// **Warning**: Calling `join` with a `root_secret` key that was used
     /// previous to `join` a Federation will lead to all sorts of malfunctions
     /// including likely loss of funds.
@@ -1801,6 +1806,63 @@ impl ClientBuilder {
     /// that might have been previous used (e.g. provided by the user),
     /// it's safer to call [`Self::recover`] which will attempt to recover
     /// client module states for the Federation.
+    ///
+    /// A typical "join federation" flow would look as follows:
+    /// ```no_run
+    /// # use std::str::FromStr;
+    /// # use fedimint_core::api::InviteCode;
+    /// # use fedimint_core::config::ClientConfig;
+    /// # use fedimint_derive_secret::DerivableSecret;
+    /// # use fedimint_client::{Client, ClientBuilder};
+    /// # use fedimint_core::db::Database;
+    /// # use fedimint_core::config::META_FEDERATION_NAME_KEY;
+    /// #
+    /// # #[tokio::main]
+    /// # async fn main() {
+    /// # let root_secret: DerivableSecret = unimplemented!();
+    /// // Create a root secret, e.g. via fedimint-bip39, see also:
+    /// // https://github.com/fedimint/fedimint/blob/master/docs/secret_derivation.md
+    /// // let root_secret = …;
+    ///
+    /// // Get invite code from user
+    /// let invite_code = InviteCode::from_str("fed11qgqpw9thwvaz7te3xgmjuvpwxqhrzw3jxumrvvf0qqqjpetvlg8glnpvzcufhffgzhv8m75f7y34ryk7suamh8x7zetly8h0v9v0rm")
+    ///     .expect("Invalid invite code");
+    /// let config = ClientConfig::download_from_invite_code(&invite_code).await
+    ///     .expect("Error downloading config");
+    ///
+    /// // Tell the user the federation name, bitcoin network
+    /// // (e.g. from wallet module config), and other details
+    /// // that are typically contained in the federation's
+    /// // meta fields.
+    ///
+    /// // let network = config.get_first_module_by_kind::<WalletClientConfig>("wallet")
+    /// //     .expect("Module not found")
+    /// //     .network;
+    ///
+    /// println!(
+    ///     "The federation name is: {}",
+    ///     config.meta::<String>(META_FEDERATION_NAME_KEY)
+    ///         .expect("Could not decode name field")
+    ///         .expect("Name isn't set")
+    /// );
+    ///
+    /// // Open the client's database, using the federation ID
+    /// // as the DB name is a common pattern:
+    ///
+    /// // let db_path = format!("./path/to/db/{}", config.federation_id());
+    /// // let db = RocksDb::open(db_path).expect("error opening DB");
+    /// # let db: Database = unimplemented!();
+    ///
+    /// let client = Client::builder(db)
+    ///     // Mount the modules the client should support:
+    ///     // .with_module(LightningClientInit)
+    ///     // .with_module(MintClientInit)
+    ///     // .with_module(WalletClientInit::default())
+    ///     .join(root_secret, config, invite_code)
+    ///     .await
+    ///     .expect("Error joining federation");
+    /// # }
+    /// ```
     pub async fn join(
         self,
         root_secret: DerivableSecret,
