@@ -80,10 +80,14 @@ pub trait Encodable {
         bytes
     }
 
+    /// Encode and convert to hex string representation
     fn consensus_encode_to_hex(&self) -> String {
         let mut bytes = vec![];
         self.consensus_encode(&mut bytes)
             .expect("encoding to bytes can't fail for io reasons");
+        // TODO: This double allocation offends real Rustaceans. We should
+        // be able to go straight to String, but this use case seems under-served
+        // by hex encoding crates.
         bytes.to_hex()
     }
 
