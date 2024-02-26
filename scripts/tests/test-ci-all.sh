@@ -196,8 +196,8 @@ tests_to_run_in_parallel=(
 )
 
 tests_with_versions=()
-for version_combo in "${version_matrix[@]}"; do
-  for test in "${tests_to_run_in_parallel[@]}"; do
+for test in "${tests_to_run_in_parallel[@]}"; do
+  for version_combo in "${version_matrix[@]}"; do
     tests_with_versions+=("run_test_for_versions $test $version_combo")
   done
 done
