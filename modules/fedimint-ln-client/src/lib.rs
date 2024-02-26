@@ -1018,7 +1018,7 @@ impl LightningClientModule {
             }
 
             debug!("Applying vetted meta field to registered gateways");
-            match meta.get(META_VETTED_GATEWAYS_KEY).and_then(|vetted| {
+            let vetted = meta.get(META_VETTED_GATEWAYS_KEY).and_then(|vetted| {
                 debug!("Found vetted gateways meta field: {vetted:?}");
                 match serde_json::from_str::<Vec<String>>(vetted) {
                     Ok(vetted) => Some(vetted),
@@ -1027,7 +1027,8 @@ impl LightningClientModule {
                         None
                     }
                 }
-            }) {
+            });
+            match vetted {
                 Some(vetted) => {
                     debug!("Found the following vetted gateways: {:?}", vetted);
                     let vetted_gids = vetted
