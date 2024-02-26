@@ -221,7 +221,7 @@ echo "$parsed_test_commands" | if parallel \
   --halt-on-error 1 \
   --joblog "$joblog" \
   --timeout 600 \
-  --load 150% \
+  --load 1000% \
   --delay 5 \
   --jobs "$parallel_jobs" \
   --memfree 1G \
