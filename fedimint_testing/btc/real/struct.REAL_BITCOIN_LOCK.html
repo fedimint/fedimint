@@ -4,6 +4,9 @@
 </div></details><h2 id="fields" class="fields small-section-header">Fields<a href="#fields" class="anchor">§</a></h2><span id="structfield.__private_field" class="structfield small-section-header"><a href="#structfield.__private_field" class="anchor field">§</a><code>__private_field: <a class="primitive" href="https://doc.rust-lang.org/1.73.0/std/primitive.unit.html">()</a></code></span><h2 id="deref-methods-Mutex%3C()%3E" class="small-section-header"><span>Methods from <a class="trait" href="https://doc.rust-lang.org/1.73.0/core/ops/deref/trait.Deref.html" title="trait core::ops::deref::Deref">Deref</a>&lt;Target = Mutex&lt;<a class="primitive" href="https://doc.rust-lang.org/1.73.0/std/primitive.unit.html">()</a>&gt;&gt;</span><a href="#deref-methods-Mutex%3C()%3E" class="anchor">§</a></h2><div id="deref-methods-Mutex%3C()%3E-1" class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.lock" class="method"><h4 class="code-header">pub async fn <a href="#method.lock" class="fn">lock</a>(&amp;self) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.73.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = MutexGuard&lt;'_, T&gt;&gt;</h4></section></summary><div class="docblock"><p>Locks this mutex, causing the current task to yield until the lock has
 been acquired.  When the lock has been acquired, function returns a
 [<code>MutexGuard</code>].</p>
+<p>If the mutex is available to be acquired immediately, then this call
+will typically not yield to the runtime. However, this is not guaranteed
+under all circumstances.</p>
 <h5 id="cancel-safety"><a href="#cancel-safety">Cancel safety</a></h5>
 <p>This method uses a queue to fairly distribute locks in the order they
 were requested. Cancelling a call to <code>lock</code> makes you lose your place in
@@ -108,6 +111,9 @@ to call some (synchronous) function which performs one of these
 ) -&gt; impl <a class="trait" href="https://doc.rust-lang.org/1.73.0/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = OwnedMutexGuard&lt;T&gt;&gt;</h4></section></summary><div class="docblock"><p>Locks this mutex, causing the current task to yield until the lock has
 been acquired. When the lock has been acquired, this returns an
 [<code>OwnedMutexGuard</code>].</p>
+<p>If the mutex is available to be acquired immediately, then this call
+will typically not yield to the runtime. However, this is not guaranteed
+under all circumstances.</p>
 <p>This method is identical to [<code>Mutex::lock</code>], except that the returned
 guard references the <code>Mutex</code> with an <a href="https://doc.rust-lang.org/1.73.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc"><code>Arc</code></a> rather than by borrowing
 it. Therefore, the <code>Mutex</code> must be wrapped in an <code>Arc</code> to call this
