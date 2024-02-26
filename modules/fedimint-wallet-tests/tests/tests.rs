@@ -1,4 +1,4 @@
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use anyhow::{bail, Context};
 use assert_matches::assert_matches;
@@ -13,9 +13,9 @@ use fedimint_core::bitcoin_migration::{
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
-use fedimint_core::task::sleep;
+use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::{BoxStream, NextOrPending};
-use fedimint_core::{sats, Amount, Feerate, PeerId, ServerModule};
+use fedimint_core::{sats, time, Amount, Feerate, PeerId, ServerModule};
 use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
@@ -52,7 +52,7 @@ async fn peg_in<'a>(
     dyn_bitcoin_rpc: &DynBitcoindRpc,
     finality_delay: u64,
 ) -> anyhow::Result<BoxStream<'a, Amount>> {
-    let valid_until = SystemTime::now() + PEG_IN_TIMEOUT;
+    let valid_until = time::now() + PEG_IN_TIMEOUT;
 
     let mut balance_sub = client.subscribe_balance_changes().await;
     assert_eq!(balance_sub.ok().await?, sats(0));
@@ -93,7 +93,7 @@ async fn await_consensus_to_catch_up(client: &ClientArc, block_count: u64) -> an
             .await?;
         if current_consensus < block_count {
             info!("Current consensus block count is {current_consensus}, waiting for consensus to reach block count {block_count}");
-            sleep(Duration::from_secs(1)).await;
+            sleep_in_test(format!("Current consensus block count is {current_consensus}, waiting for consensus to reach block count {block_count}"), Duration::from_secs(1)).await;
         } else {
             info!("Current consensus block count is {current_consensus}, consensus caught up");
             return Ok(current_consensus);
