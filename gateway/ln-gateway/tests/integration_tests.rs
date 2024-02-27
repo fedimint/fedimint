@@ -878,14 +878,14 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
                         "Found {} route hints when 1 was expected for {gateway_type} gateway",
                         route_hints.len()
                     );
-                    let route_hint = route_hints.get(0).unwrap();
+                    let route_hint = route_hints.first().unwrap();
                     assert_eq!(
                         route_hint.0.len(),
                         1,
                         "Found {} hops when 1 was expected for {gateway_type} gateway",
                         route_hint.0.len()
                     );
-                    let route_hint_pub_key = route_hint.0.get(0).unwrap().src_node_id;
+                    let route_hint_pub_key = route_hint.0.first().unwrap().src_node_id;
                     assert_eq!(
                         route_hint_pub_key, public_key,
                         "Public key of route hint hop did not match expected public key"
@@ -907,7 +907,7 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
                     for route_hint in route_hints {
                         if route_hint.0.len() == 1 {
                             // If there's only one hop, it should contain the gateway's public key
-                            let route_hint_pub_key = route_hint.0.get(0).unwrap().src_node_id;
+                            let route_hint_pub_key = route_hint.0.first().unwrap().src_node_id;
                             assert_eq!(route_hint_pub_key, public_key);
                             num_one_hops += 1;
                         } else {

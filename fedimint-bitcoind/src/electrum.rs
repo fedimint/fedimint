@@ -64,7 +64,7 @@ impl IBitcoindRpc for ElectrumClient {
         let result = block_in_place(|| self.0.block_headers(height as usize, 1))?;
         Ok(result
             .headers
-            .get(0)
+            .first()
             .ok_or_else(|| format_err!("empty block headers response"))?
             .block_hash())
     }

@@ -452,78 +452,6 @@ pub fn evaluate_polynomial_g2(coefficients: &[G2Projective], x: &Scalar) -> G2Af
         .to_affine()
 }
 
-#[cfg(test)]
-mod tests {
-    use std::collections::{HashMap, VecDeque};
-
-    use fedimint_core::PeerId;
-    use rand::rngs::OsRng;
-    use threshold_crypto::{G1Projective, G2Projective};
-
-    use crate::config::distributedgen::{
-        evaluate_polynomial_g2, scalar, Dkg, DkgGroup, DkgKeys, DkgStep, ThresholdKeys,
-    };
-
-    #[test_log::test]
-    fn test_dkg() {
-        for (peer, keys) in run(G1Projective::generator()) {
-            let ThresholdKeys {
-                public_key_set,
-                secret_key_share,
-            } = keys.threshold_crypto();
-            assert_eq!(public_key_set.threshold(), 2);
-            assert_eq!(
-                public_key_set.public_key_share(peer.to_usize()),
-                secret_key_share.public_key_share()
-            );
-        }
-
-        for (peer, keys) in run(G2Projective::generator()) {
-            let (pk, sk) = keys.tbs();
-            assert_eq!(pk.len(), 3);
-            assert_eq!(
-                evaluate_polynomial_g2(&pk, &scalar(&peer)),
-                sk.to_pub_key_share().0
-            );
-        }
-    }
-
-    fn run<G: DkgGroup>(group: G) -> HashMap<PeerId, DkgKeys<G>> {
-        let mut rng = OsRng;
-        let num_peers = 4;
-        let threshold = 3;
-        let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
-
-        let mut steps: VecDeque<(PeerId, DkgStep<G>)> = VecDeque::new();
-        let mut dkgs: HashMap<PeerId, Dkg<G>> = HashMap::new();
-        let mut keys: HashMap<PeerId, DkgKeys<G>> = HashMap::new();
-
-        for peer in &peers {
-            let (dkg, step) = Dkg::new(group, *peer, peers.clone(), threshold, &mut rng);
-            dkgs.insert(*peer, dkg);
-            steps.push_back((*peer, step));
-        }
-
-        while keys.len() < peers.len() {
-            match steps.pop_front() {
-                Some((peer, DkgStep::Messages(messages))) => {
-                    for (receive_peer, msg) in messages {
-                        let receive_dkg = dkgs.get_mut(&receive_peer).unwrap();
-                        let step = receive_dkg.step(peer, msg);
-                        steps.push_back((receive_peer, step.unwrap()));
-                    }
-                }
-                Some((peer, DkgStep::Result(step_keys))) => {
-                    keys.insert(peer, step_keys);
-                }
-                _ => {}
-            }
-        }
-
-        keys
-    }
-}
-
 // TODO: this trait is only needed to break the `DkgHandle` impl
 // from it's definition that is still in `fedimint-core`
 #[async_trait]
@@ -648,5 +576,77 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
         }
 
         Ok(peer_data)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{HashMap, VecDeque};
+
+    use fedimint_core::PeerId;
+    use rand::rngs::OsRng;
+    use threshold_crypto::{G1Projective, G2Projective};
+
+    use crate::config::distributedgen::{
+        evaluate_polynomial_g2, scalar, Dkg, DkgGroup, DkgKeys, DkgStep, ThresholdKeys,
+    };
+
+    #[test_log::test]
+    fn test_dkg() {
+        for (peer, keys) in run(G1Projective::generator()) {
+            let ThresholdKeys {
+                public_key_set,
+                secret_key_share,
+            } = keys.threshold_crypto();
+            assert_eq!(public_key_set.threshold(), 2);
+            assert_eq!(
+                public_key_set.public_key_share(peer.to_usize()),
+                secret_key_share.public_key_share()
+            );
+        }
+
+        for (peer, keys) in run(G2Projective::generator()) {
+            let (pk, sk) = keys.tbs();
+            assert_eq!(pk.len(), 3);
+            assert_eq!(
+                evaluate_polynomial_g2(&pk, &scalar(&peer)),
+                sk.to_pub_key_share().0
+            );
+        }
+    }
+
+    fn run<G: DkgGroup>(group: G) -> HashMap<PeerId, DkgKeys<G>> {
+        let mut rng = OsRng;
+        let num_peers = 4;
+        let threshold = 3;
+        let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
+
+        let mut steps: VecDeque<(PeerId, DkgStep<G>)> = VecDeque::new();
+        let mut dkgs: HashMap<PeerId, Dkg<G>> = HashMap::new();
+        let mut keys: HashMap<PeerId, DkgKeys<G>> = HashMap::new();
+
+        for peer in &peers {
+            let (dkg, step) = Dkg::new(group, *peer, peers.clone(), threshold, &mut rng);
+            dkgs.insert(*peer, dkg);
+            steps.push_back((*peer, step));
+        }
+
+        while keys.len() < peers.len() {
+            match steps.pop_front() {
+                Some((peer, DkgStep::Messages(messages))) => {
+                    for (receive_peer, msg) in messages {
+                        let receive_dkg = dkgs.get_mut(&receive_peer).unwrap();
+                        let step = receive_dkg.step(peer, msg);
+                        steps.push_back((receive_peer, step.unwrap()));
+                    }
+                }
+                Some((peer, DkgStep::Result(step_keys))) => {
+                    keys.insert(peer, step_keys);
+                }
+                _ => {}
+            }
+        }
+
+        keys
     }
 }

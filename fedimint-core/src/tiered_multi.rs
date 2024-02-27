@@ -83,7 +83,7 @@ impl<T> TieredMulti<T> {
     /// Note: The order of the elements is important:
     /// from the lowest tier to the highest, then in order of elements in the
     /// Vec
-    pub fn iter_items(&self) -> impl Iterator<Item = (Amount, &T)> + DoubleEndedIterator {
+    pub fn iter_items(&self) -> impl DoubleEndedIterator<Item = (Amount, &T)> {
         // Note: If you change the method implementation, make sure that the returned
         // order of the elements stays consistent.
         self.0
@@ -96,7 +96,7 @@ impl<T> TieredMulti<T> {
     /// Note: The order of the elements is important:
     /// from the lowest tier to the highest, then in order of elements in the
     /// Vec
-    pub fn into_iter_items(self) -> impl Iterator<Item = (Amount, T)> + DoubleEndedIterator {
+    pub fn into_iter_items(self) -> impl DoubleEndedIterator<Item = (Amount, T)> {
         // Note: If you change the method implementation, make sure that the returned
         // order of the elements stays consistent.
         self.0
