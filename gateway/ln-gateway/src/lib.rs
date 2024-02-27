@@ -1,10 +1,10 @@
 pub mod client;
-pub mod db;
+mod db;
 pub mod envs;
 pub mod lightning;
 pub mod rpc;
 pub mod state_machine;
-pub mod types;
+mod types;
 pub mod utils;
 
 pub mod gateway_lnrpc {
@@ -91,10 +91,10 @@ use crate::state_machine::GatewayExtPayStates;
 
 /// This initial SCID is considered invalid by LND HTLC interceptor,
 /// So we should always increment the value before assigning a new SCID.
-pub const INITIAL_SCID: u64 = 0;
+const INITIAL_SCID: u64 = 0;
 
 /// How long a gateway announcement stays valid
-pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
+const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 
 const ROUTE_HINT_RETRIES: usize = 30;
 const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
@@ -119,7 +119,7 @@ const DEFAULT_MODULE_KINDS: [(ModuleInstanceId, &ModuleKind); 2] = [
 ];
 
 #[derive(Parser)]
-pub struct GatewayOpts {
+struct GatewayOpts {
     #[clap(subcommand)]
     mode: LightningMode,
 
@@ -225,8 +225,8 @@ impl Display for GatewayState {
     }
 }
 
-pub type ScidToFederationMap = Arc<RwLock<BTreeMap<u64, FederationId>>>;
-pub type FederationToClientMap =
+type ScidToFederationMap = Arc<RwLock<BTreeMap<u64, FederationId>>>;
+type FederationToClientMap =
     Arc<RwLock<BTreeMap<FederationId, Spanned<fedimint_client::ClientArc>>>>;
 
 /// Represents an active connection to the lightning node.
@@ -1203,7 +1203,7 @@ impl Gateway {
     /// - `GatewayConfiguration` is read from the database.
     /// - All cli or environment variables are set such that we can create a
     ///   `GatewayConfiguration`
-    pub async fn get_gateway_configuration(&self) -> Option<GatewayConfiguration> {
+    async fn get_gateway_configuration(&self) -> Option<GatewayConfiguration> {
         let mut dbtx = self.gateway_db.begin_transaction().await;
 
         // Always use the gateway configuration from the database if it exists.
@@ -1578,7 +1578,8 @@ impl IntoResponse for GatewayError {
     }
 }
 
-pub struct PrettyInterceptHtlcRequest<'a>(&'a crate::gateway_lnrpc::InterceptHtlcRequest);
+struct PrettyInterceptHtlcRequest<'a>(&'a crate::gateway_lnrpc::InterceptHtlcRequest);
+
 impl Display for PrettyInterceptHtlcRequest<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let PrettyInterceptHtlcRequest(htlc_request) = self;

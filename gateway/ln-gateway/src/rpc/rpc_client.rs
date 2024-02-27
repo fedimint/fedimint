@@ -3,7 +3,6 @@ use std::result::Result;
 use bitcoin::Address;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, TransactionId};
-pub use reqwest::{Error, Response};
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::Serialize;

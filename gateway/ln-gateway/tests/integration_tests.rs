@@ -144,7 +144,7 @@ where
     Ok(())
 }
 
-pub fn sha256(data: &[u8]) -> sha256::Hash {
+fn sha256(data: &[u8]) -> sha256::Hash {
     bitcoin::hashes::sha256::Hash::hash(data)
 }
 
@@ -1415,7 +1415,7 @@ async fn verify_gateway_rpc_failure<Fut, T>(
     }
 }
 
-pub async fn connect_federations(
+async fn connect_federations(
     rpc: &GatewayRpcClient,
     feds: &[FederationTest],
 ) -> anyhow::Result<()> {

@@ -17,7 +17,7 @@ use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Settle};
 use crate::gateway_lnrpc::InterceptHtlcResponse;
 
 #[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
-pub enum CompleteHtlcError {
+enum CompleteHtlcError {
     #[error("Incoming contract was not funded")]
     IncomingContractNotFunded,
     #[error("Failed to complete HTLC")]
@@ -149,7 +149,7 @@ impl WaitForPreimageState {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-pub enum HtlcOutcome {
+enum HtlcOutcome {
     Success(Preimage),
     Failure(String),
 }
