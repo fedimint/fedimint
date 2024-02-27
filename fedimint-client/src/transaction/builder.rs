@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, KeyPair, ModuleInstanceId};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
-use fedimint_core::Amount;
 use itertools::multiunzip;
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1_zkp::Secp256k1;
@@ -137,13 +136,6 @@ impl TransactionBuilder {
 
         (transaction, states)
     }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub(crate) enum TransactionBuilderBalance {
-    Underfunded(Amount),
-    Balanced,
-    Overfunded(Amount),
 }
 
 fn state_gen_to_dyn<S>(
