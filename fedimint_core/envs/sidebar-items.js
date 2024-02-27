@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["FEDIMINT_BUILD_CODE_VERSION_ENV"]};
+window.SIDEBAR_ITEMS = {"constant":["FEDIMINT_BUILD_CODE_VERSION_ENV","FM_USE_UNKNOWN_MODULE_ENV"],"fn":["is_env_var_set"]};

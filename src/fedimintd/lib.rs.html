@@ -82,6 +82,21 @@
 <a href="#82" id="82">82</a>
 <a href="#83" id="83">83</a>
 <a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::config::ServerModuleConfigGenParamsRegistry;
@@ -97,6 +112,10 @@
 <span class="kw">use </span>fedimint_ln_server::LightningInit;
 <span class="kw">use </span>fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 <span class="kw">use </span>fedimint_mint_server::MintInit;
+<span class="kw">use </span>fedimint_unknown_common::config::{
+    UnknownGenParams, UnknownGenParamsConsensus, UnknownGenParamsLocal,
+};
+<span class="kw">use </span>fedimint_unknown_server::UnknownInit;
 <span class="kw">use </span>fedimint_wallet_server::common::config::{
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };
@@ -147,6 +166,17 @@
         );
 }
 
+<span class="kw">pub fn </span>attach_unknown_module_init_params(
+    module_init_params: <span class="kw-2">&amp;mut </span>ServerModuleConfigGenParamsRegistry,
+) {
+    module_init_params.append_config_gen_params(
+        UnknownInit::kind(),
+        UnknownGenParams {
+            local: UnknownGenParamsLocal,
+            consensus: UnknownGenParamsConsensus,
+        },
+    );
+}
 <span class="kw">pub fn </span>default_esplora_server(network: Network) -&gt; BitcoinRpcConfig {
     <span class="kw">let </span>url = <span class="kw">match </span>network {
         Network::Bitcoin =&gt; SafeUrl::parse(<span class="string">&quot;https://blockstream.info/api/&quot;</span>)

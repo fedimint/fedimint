@@ -773,6 +773,7 @@
 <a href="#773" id="773">773</a>
 <a href="#774" id="774">774</a>
 <a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -783,6 +784,7 @@
 <span class="kw">use </span>std::{env, unreachable};
 
 <span class="kw">use </span>anyhow::{anyhow, bail, format_err, Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>fedimint_core::envs::is_env_var_set;
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, block_in_place};
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>futures::executor::block_on;
@@ -1516,7 +1518,7 @@
 
 <span class="doccomment">/// Returns true if running backwards-compatibility tests
 </span><span class="kw">pub fn </span>is_backwards_compatibility_test() -&gt; bool {
-    std::env::var(<span class="string">&quot;FM_BACKWARDS_COMPATIBILITY_TEST&quot;</span>).is_ok_and(|x| x == <span class="string">&quot;1&quot;</span>)
+    is_env_var_set(<span class="string">&quot;FM_BACKWARDS_COMPATIBILITY_TEST&quot;</span>)
 }
 
 <span class="doccomment">/// Parses a version string returned from clap

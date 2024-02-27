@@ -332,6 +332,18 @@
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
 <a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -346,6 +358,7 @@
 };
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::envs::{is_env_var_set, FM_USE_UNKNOWN_MODULE_ENV};
 <span class="kw">use </span>fedimint_core::module::ServerModuleInit;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::timing;
@@ -356,12 +369,13 @@
 <span class="kw">use </span>fedimint_server::config::api::ConfigGenSettings;
 <span class="kw">use </span>fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
 <span class="kw">use </span>fedimint_server::FedimintServer;
+<span class="kw">use </span>fedimint_unknown_server::UnknownInit;
 <span class="kw">use </span>fedimint_wallet_server::WalletInit;
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>tokio::select;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
-<span class="kw">use </span><span class="kw">crate</span>::attach_default_module_init_params;
+<span class="kw">use crate</span>::{attach_default_module_init_params, attach_unknown_module_init_params};
 
 <span class="doccomment">/// Time we will wait before forcefully shutting down tasks
 </span><span class="kw">const </span>SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(<span class="number">10</span>);
@@ -516,9 +530,16 @@
 
     <span class="doccomment">/// Attach default server modules to Fedimintd instance
     </span><span class="kw">pub fn </span>with_default_modules(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.with_module(LightningInit)
+        <span class="kw">let </span>s = <span class="self">self
+            </span>.with_module(LightningInit)
             .with_module(MintInit)
-            .with_module(WalletInit)
+            .with_module(WalletInit);
+
+        <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
+            s.with_module(UnknownInit)
+        } <span class="kw">else </span>{
+            s
+        }
     }
 
     <span class="doccomment">/// Block thread and run a Fedimintd server
@@ -609,6 +630,9 @@
         opts.network,
         opts.finality_delay,
     );
+    <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
+        attach_unknown_module_init_params(<span class="kw-2">&amp;mut </span>module_inits_params);
+    }
 
     <span class="kw">let </span>module_kinds = module_inits_params
         .iter_modules()

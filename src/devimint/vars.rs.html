@@ -186,6 +186,9 @@
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
 <a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
@@ -265,6 +268,7 @@
     <span class="prelude-val">Ok</span>(dir)
 }
 
+<span class="kw">use </span>fedimint_core::envs::FM_USE_UNKNOWN_MODULE_ENV;
 <span class="kw">use </span>fedimint_portalloc::port_alloc;
 <span class="kw">use </span>fedimint_server::config::ConfigGenParams;
 <span class="kw">use </span>format <span class="kw">as </span>f;
@@ -276,6 +280,8 @@
 <span class="macro">declare_vars! </span>{
     Global = (test_dir: <span class="kw-2">&amp;</span>Path, fed_size: usize, offline_nodes: usize) =&gt;
     {
+        FM_USE_UNKNOWN_MODULE : String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|<span class="kw">_</span>| <span class="string">&quot;1&quot;</span>.into());
+
         FM_FED_SIZE: usize = fed_size;
         FM_OFFLINE_NODES: usize = offline_nodes;
         FM_TMP_DIR: PathBuf = mkdir(test_dir.into()).<span class="kw">await</span><span class="question-mark">?</span>;

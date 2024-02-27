@@ -2265,6 +2265,10 @@
 <a href="#2265" id="2265">2265</a>
 <a href="#2266" id="2266">2266</a>
 <a href="#2267" id="2267">2267</a>
+<a href="#2268" id="2268">2268</a>
+<a href="#2269" id="2269">2269</a>
+<a href="#2270" id="2270">2270</a>
+<a href="#2271" id="2271">2271</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3521,7 +3525,11 @@
                         <span class="kw-2">*</span>instance_id,
                         JsonWithKind::new(
                             kind.clone(),
-                            config.clone().expect_decoded().to_json().into(),
+                            config
+                                .clone()
+                                .decoded()
+                                .map(|decoded| decoded.to_json().into())
+                                .unwrap_or(serde_json::Value::Null),
                         ),
                     )
                 })

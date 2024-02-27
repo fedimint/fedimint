@@ -1034,6 +1034,14 @@
 <a href="#1034" id="1034">1034</a>
 <a href="#1035" id="1035">1035</a>
 <a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
+<a href="#1039" id="1039">1039</a>
+<a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a>
+<a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a>
+<a href="#1044" id="1044">1044</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1625,11 +1633,19 @@
         kind: ModuleKind,
         gen: T,
     ) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
-        <span class="self">self</span>.register_module(
-            id,
-            kind,
-            ConfigGenModuleParams::from_typed(gen).expect(<span class="string">&quot;Invalid config gen params for {kind}&quot;</span>),
-        );
+        <span class="kw">let </span>params = ConfigGenModuleParams::from_typed(gen)
+            .unwrap_or_else(|err| <span class="macro">panic!</span>(<span class="string">&quot;Invalid config gen params for {kind}: {err}&quot;</span>));
+        <span class="self">self</span>.register_module(id, kind, params);
+        <span class="self">self
+    </span>}
+    <span class="kw">pub fn </span>append_config_gen_params&lt;T: ModuleInitParams&gt;(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        kind: ModuleKind,
+        gen: T,
+    ) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="kw">let </span>params = ConfigGenModuleParams::from_typed(gen)
+            .unwrap_or_else(|err| <span class="macro">panic!</span>(<span class="string">&quot;Invalid config gen params for {kind}: {err}&quot;</span>));
+        <span class="self">self</span>.append_module(kind, params);
         <span class="self">self
     </span>}
 }

@@ -5,6 +5,7 @@
 "fedimint_ln_server":[["impl ModuleInit for <a class=\"struct\" href=\"fedimint_ln_server/struct.LightningInit.html\" title=\"struct fedimint_ln_server::LightningInit\">LightningInit</a>"]],
 "fedimint_mint_client":[["impl ModuleInit for <a class=\"struct\" href=\"fedimint_mint_client/struct.MintClientInit.html\" title=\"struct fedimint_mint_client::MintClientInit\">MintClientInit</a>"]],
 "fedimint_mint_server":[["impl ModuleInit for <a class=\"struct\" href=\"fedimint_mint_server/struct.MintInit.html\" title=\"struct fedimint_mint_server::MintInit\">MintInit</a>"]],
+"fedimint_unknown_server":[["impl ModuleInit for <a class=\"struct\" href=\"fedimint_unknown_server/struct.UnknownInit.html\" title=\"struct fedimint_unknown_server::UnknownInit\">UnknownInit</a>"]],
 "fedimint_wallet_client":[["impl ModuleInit for <a class=\"struct\" href=\"fedimint_wallet_client/struct.WalletClientInit.html\" title=\"struct fedimint_wallet_client::WalletClientInit\">WalletClientInit</a>"]],
 "fedimint_wallet_server":[["impl ModuleInit for <a class=\"struct\" href=\"fedimint_wallet_server/struct.WalletInit.html\" title=\"struct fedimint_wallet_server::WalletInit\">WalletInit</a>"]],
 "ln_gateway":[["impl ModuleInit for <a class=\"struct\" href=\"ln_gateway/state_machine/struct.GatewayClientInit.html\" title=\"struct ln_gateway::state_machine::GatewayClientInit\">GatewayClientInit</a>"]]
