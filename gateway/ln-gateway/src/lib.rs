@@ -41,7 +41,8 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::{
-    apply_migrations_server, Database, DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped,
+    apply_migrations_server, Database, DatabaseTransaction, DatabaseValue,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::CommonModuleInit;
@@ -617,15 +618,15 @@ impl Gateway {
         &self,
         htlc_request: &InterceptHtlcRequest,
     ) -> Option<FederationId> {
-        // If the client generated the invoice, the short channel ID of the final hop should
-        // correspond to the federation ID.
+        // If the client generated the invoice, the short channel ID of the final hop
+        // should correspond to the federation ID.
         let scid_to_feds = self.scid_to_federation.read().await;
         if let Some(federation_id) = scid_to_feds.get(&htlc_request.short_channel_id) {
             return Some(federation_id.clone());
         }
 
-        // If the gateway generated the invoice, the payment hash should correspond to the
-        // federation ID.
+        // If the gateway generated the invoice, the payment hash should correspond to
+        // the federation ID.
         self.payment_hash_to_federation
             .read()
             .await

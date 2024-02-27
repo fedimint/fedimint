@@ -169,7 +169,7 @@ pub enum LightningMode {
         #[arg(long = "ldk-esplora-server-url", env = "FM_LDK_ESPLORA_SERVER_URL")]
         esplora_server_url: String,
 
-        /// LDK network (detaults to mainnet if not provided)
+        /// LDK network (defaults to mainnet if not provided)
         #[arg(long = "ldk-network", env = "FM_LDK_NETWORK")]
         network_or: Option<CliNetwork>,
     },

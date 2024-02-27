@@ -58,7 +58,8 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
     // Send a coin to LDK wallet.
     // bitcoind
     //     .send_to(
-    //         String::from("03c964ca4d2eed93720809be7c8779ed602f80ba308e474d03bcb81b9bad807477"),
+    //         String::from("
+    // 03c964ca4d2eed93720809be7c8779ed602f80ba308e474d03bcb81b9bad807477"),
     //         100_000_000,
     //     )
     //     .await?;

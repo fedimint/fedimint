@@ -664,7 +664,8 @@ pub async fn open_channel_with_ldk(
 pub enum LightningNode {
     Cln(Lightningd),
     Lnd(Lnd),
-    // No need to store LDK since it runs entirely inside of gatewayd and doesn't have its own daemon.
+    // No need to store LDK since it runs entirely inside of gatewayd and doesn't have its own
+    // daemon.
     Ldk,
 }
 
