@@ -22,7 +22,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationI
 use fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion, TransactionItemAmount};
-use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId, TransactionId};
+use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
@@ -38,7 +38,6 @@ use fedimint_ln_common::{
 };
 use futures::StreamExt;
 use lightning_invoice::RoutingFees;
-use secp256k1::schnorr::Signature;
 use secp256k1::{KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -390,14 +389,14 @@ impl GatewayClientModule {
             .await?;
 
         let fed_public_key = self.cfg.threshold_pub_key;
-        let mut signatures: BTreeMap<PeerId, Signature> = BTreeMap::new();
-        for (peer_id, challenge) in challenges {
-            if let Some(challenge) = challenge {
-                let msg = create_gateway_remove_message(fed_public_key, peer_id, challenge);
+        let signatures = challenges
+            .into_iter()
+            .filter_map(|(peer_id, challenge)| {
+                let msg = create_gateway_remove_message(fed_public_key, peer_id, challenge?);
                 let signature = gateway_keypair.sign_schnorr(msg);
-                signatures.insert(peer_id, signature);
-            }
-        }
+                Some((peer_id, signature))
+            })
+            .collect::<BTreeMap<_, _>>();
 
         let remove_gateway_request = RemoveGatewayRequest {
             gateway_id,
