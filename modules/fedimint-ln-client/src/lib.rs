@@ -813,6 +813,19 @@ impl LightningClientModule {
         ))
     }
 
+    /// Selects a Lightning Gateway from a given `gateway_id`
+    pub async fn select_gateway(
+        &self,
+        gateway_id: &secp256k1::PublicKey,
+    ) -> Option<LightningGateway> {
+        self.fetch_registered_gateways()
+            .await
+            .ok()?
+            .into_iter()
+            .find(|g| g.info.gateway_id == *gateway_id)
+            .map(|g| g.info)
+    }
+
     pub async fn select_active_gateway_opt(&self) -> Option<LightningGateway> {
         match self.select_active_gateway().await {
             Ok(gw) => Some(gw),
