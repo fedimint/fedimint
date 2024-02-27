@@ -12,6 +12,7 @@ use fedimint_logging::LOG_NET_API;
 use futures::Future;
 use jsonrpsee_core::JsonValue;
 use serde::{Deserialize, Serialize};
+use threshold_crypto::G1Projective;
 use tracing::instrument;
 
 // TODO: Make this module public and remove the wildcard `pub use` below
@@ -51,17 +52,39 @@ pub struct InputMeta {
 /// * For **inputs** the amount is funding the transaction while the fee is
 ///   consuming funding
 /// * For **outputs** the amount and the fee consume funding
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct TransactionItemAmount {
-    pub amount: Amount,
+    pub amount: ItemAmount,
     pub fee: Amount,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ItemAmount {
+    Public(Amount),
+    Confidential(G1Projective),
+}
+
+impl ItemAmount {
+    pub fn to_public(self) -> Option<Amount> {
+        match self {
+            ItemAmount::Public(amount) => Some(amount),
+            ItemAmount::Confidential(..) => None,
+        }
+    }
 }
 
 impl TransactionItemAmount {
     pub const ZERO: TransactionItemAmount = TransactionItemAmount {
-        amount: Amount::ZERO,
+        amount: ItemAmount::Public(Amount::ZERO),
         fee: Amount::ZERO,
     };
+
+    pub fn public(amount: Amount, fee: Amount) -> Self {
+        Self {
+            amount: ItemAmount::Public(amount),
+            fee,
+        }
+    }
 }
 
 /// All requests from client to server contain these fields

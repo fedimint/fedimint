@@ -866,7 +866,12 @@ impl Client {
             let item_amount = module.input_amount(&input.input).expect(
                 "We only build transactions with input versions that are supported by the module",
             );
-            in_amount += item_amount.amount;
+
+            in_amount += item_amount
+                .amount
+                .to_public()
+                .expect("We can not finalize a transaction with confidential inputs");
+
             fee_amount += item_amount.fee;
         }
 
@@ -875,7 +880,12 @@ impl Client {
             let item_amount = module.output_amount(&output.output).expect(
                 "We only build transactions with output versions that are supported by the module",
             );
-            out_amount += item_amount.amount;
+
+            out_amount += item_amount
+                .amount
+                .to_public()
+                .expect("We can not finalize a transaction with confidential inputs");
+
             fee_amount += item_amount.fee;
         }
 

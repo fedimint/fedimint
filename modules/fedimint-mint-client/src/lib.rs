@@ -531,10 +531,10 @@ impl ClientModule for MintClientModule {
         input: &<Self::Common as ModuleCommon>::Input,
     ) -> Option<TransactionItemAmount> {
         let input = input.maybe_v0_ref()?;
-        Some(TransactionItemAmount {
-            amount: input.amount,
-            fee: self.cfg.fee_consensus.note_spend_abs,
-        })
+        Some(TransactionItemAmount::public(
+            input.amount,
+            self.cfg.fee_consensus.note_spend_abs,
+        ))
     }
 
     fn output_amount(
@@ -543,10 +543,10 @@ impl ClientModule for MintClientModule {
     ) -> Option<TransactionItemAmount> {
         let output = output.maybe_v0_ref()?;
 
-        Some(TransactionItemAmount {
-            amount: output.amount,
-            fee: self.cfg.fee_consensus.note_issuance_abs,
-        })
+        Some(TransactionItemAmount::public(
+            output.amount,
+            self.cfg.fee_consensus.note_issuance_abs,
+        ))
     }
 
     async fn handle_cli_command(

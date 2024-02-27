@@ -19,6 +19,7 @@ path = "src/lib.rs"
 
 [dependencies]
 fedimint-aead = { version = "0.3.0-alpha", path = "../crypto/aead" }
+bls12_381 = { version = "0.7.1", features = [ "zeroize", "groups" ] }
 anyhow = "1.0.66"
 async-channel = "1.8.0"
 async-trait = "0.1.73"
