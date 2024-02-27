@@ -769,6 +769,13 @@ impl LightningClientModule {
 
         // Validate that the invoice gateway created an invoice with the parameters we
         // requested.
+        if invoice.payment_hash() != &payment_hash {
+            bail!(
+                "Gateway created invoice with incorrect payment hash: expected={}, got={}",
+                payment_hash.to_hex(),
+                invoice.payment_hash().to_hex()
+            );
+        }
         if invoice.amount_milli_satoshis() != Some(amount.msats) {
             bail!(
                 "Gateway created invoice with incorrect amount: expected={}, got={}",
