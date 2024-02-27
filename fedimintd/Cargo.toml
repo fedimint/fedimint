@@ -45,6 +45,8 @@ fedimint-mint-server = { version = "0.3.0-alpha", path = "../modules/fedimint-mi
 fedimint-rocksdb = { version = "0.3.0-alpha", path = "../fedimint-rocksdb" }
 fedimint-server = { version = "0.3.0-alpha", path = "../fedimint-server" }
 fedimint-wallet-server = { version = "0.3.0-alpha", path = "../modules/fedimint-wallet-server" }
+fedimint-unknown-server = { version = "0.3.0-alpha", path = "../modules/fedimint-unknown-server" }
+fedimint-unknown-common = { version = "0.3.0-alpha", path = "../modules/fedimint-unknown-common" }
 rand = "0.8"
 rcgen = "=0.10.0"
 secp256k1-zkp = { version = "0.7.0", features = [ "global-context", "bitcoin_hashes" ] }

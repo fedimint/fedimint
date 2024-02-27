@@ -8,6 +8,7 @@ use std::time::Duration;
 use std::{env, unreachable};
 
 use anyhow::{anyhow, bail, format_err, Context, Result};
+use fedimint_core::envs::is_env_var_set;
 use fedimint_core::task::{self, block_in_place};
 use fedimint_logging::LOG_DEVIMINT;
 use futures::executor::block_on;
@@ -741,7 +742,7 @@ fn to_command(cli: Vec<String>) -> Command {
 
 /// Returns true if running backwards-compatibility tests
 pub fn is_backwards_compatibility_test() -> bool {
-    std::env::var("FM_BACKWARDS_COMPATIBILITY_TEST").is_ok_and(|x| x == "1")
+    is_env_var_set("FM_BACKWARDS_COMPATIBILITY_TEST")
 }
 
 /// Parses a version string returned from clap

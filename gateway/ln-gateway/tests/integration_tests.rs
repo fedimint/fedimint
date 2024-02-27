@@ -39,6 +39,8 @@ use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::{GatewayTest, LightningNodeType, DEFAULT_GATEWAY_PASSWORD};
 use fedimint_testing::ln::LightningTest;
+use fedimint_unknown_common::config::UnknownGenParams;
+use fedimint_unknown_server::UnknownInit;
 use futures::Future;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use ln_gateway::gateway_lnrpc::GetNodeInfoResponse;
@@ -66,7 +68,8 @@ async fn pay_invoice(
 
 fn fixtures() -> Fixtures {
     info!(target: LOG_TEST, "Setting up fixtures");
-    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
+    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default())
+        .with_server_only_module(UnknownInit, UnknownGenParams::default());
     let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
     fixtures.with_module(LightningClientInit, LightningInit, ln_params)
 }

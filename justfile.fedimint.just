@@ -23,7 +23,7 @@ test-count:
   ./scripts/tests/test-cov.sh
 
 test-compatibility *VERSIONS:
-  ./scripts/tests/test-ci-all.sh {{VERSIONS}}
+  ./scripts/tests/test-ci-all-backcompat.sh {{VERSIONS}}
 
 # `cargo udeps` check
 udeps:

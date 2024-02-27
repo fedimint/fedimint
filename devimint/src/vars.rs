@@ -77,6 +77,7 @@ async fn mkdir(dir: PathBuf) -> anyhow::Result<PathBuf> {
     Ok(dir)
 }
 
+use fedimint_core::envs::FM_USE_UNKNOWN_MODULE_ENV;
 use fedimint_portalloc::port_alloc;
 use fedimint_server::config::ConfigGenParams;
 use format as f;
@@ -88,6 +89,8 @@ pub fn utf8(path: &Path) -> &str {
 declare_vars! {
     Global = (test_dir: &Path, fed_size: usize, offline_nodes: usize) =>
     {
+        FM_USE_UNKNOWN_MODULE : String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|_| "1".into());
+
         FM_FED_SIZE: usize = fed_size;
         FM_OFFLINE_NODES: usize = offline_nodes;
         FM_TMP_DIR: PathBuf = mkdir(test_dir.into()).await?;

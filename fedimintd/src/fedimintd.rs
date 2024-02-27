@@ -12,6 +12,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
+use fedimint_core::envs::{is_env_var_set, FM_USE_UNKNOWN_MODULE_ENV};
 use fedimint_core::module::ServerModuleInit;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::timing;
@@ -22,12 +23,13 @@ use fedimint_mint_server::MintInit;
 use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
 use fedimint_server::FedimintServer;
+use fedimint_unknown_server::UnknownInit;
 use fedimint_wallet_server::WalletInit;
 use futures::FutureExt;
 use tokio::select;
 use tracing::{debug, error, info, warn};
 
-use crate::attach_default_module_init_params;
+use crate::{attach_default_module_init_params, attach_unknown_module_init_params};
 
 /// Time we will wait before forcefully shutting down tasks
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
@@ -182,9 +184,16 @@ impl Fedimintd {
 
     /// Attach default server modules to Fedimintd instance
     pub fn with_default_modules(self) -> Self {
-        self.with_module(LightningInit)
+        let s = self
+            .with_module(LightningInit)
             .with_module(MintInit)
-            .with_module(WalletInit)
+            .with_module(WalletInit);
+
+        if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
+            s.with_module(UnknownInit)
+        } else {
+            s
+        }
     }
 
     /// Block thread and run a Fedimintd server
@@ -275,6 +284,9 @@ async fn run(
         opts.network,
         opts.finality_delay,
     );
+    if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
+        attach_unknown_module_init_params(&mut module_inits_params);
+    }
 
     let module_kinds = module_inits_params
         .iter_modules()

@@ -1755,6 +1755,8 @@ dependencies = [
  "fedimint-testing",
  "fedimint-threshold-crypto",
  "fedimint-tonic-lnd",
+ "fedimint-unknown-common",
+ "fedimint-unknown-server",
  "fedimint-wallet-client",
  "futures",
  "lightning 0.0.118",
@@ -2220,6 +2222,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-unknown-common"
+version = "0.3.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin_hashes 0.11.0",
+ "erased-serde",
+ "fedimint-core",
+ "futures",
+ "rand",
+ "serde",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-unknown-server"
+version = "0.3.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "erased-serde",
+ "fedimint-core",
+ "fedimint-unknown-common",
+ "futures",
+ "rand",
+ "serde",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-wallet-client"
 version = "0.3.0-alpha"
 dependencies = [
@@ -2384,6 +2421,8 @@ dependencies = [
  "fedimint-server",
  "fedimint-tbs",
  "fedimint-threshold-crypto",
+ "fedimint-unknown-common",
+ "fedimint-unknown-server",
  "fedimint-wallet-server",
  "futures",
  "http",

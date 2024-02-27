@@ -113,6 +113,19 @@ impl Fixtures {
         self
     }
 
+    pub fn with_server_only_module(
+        mut self,
+        server: impl IServerModuleInit + MaybeSend + MaybeSync + 'static,
+        params: impl ModuleInitParams,
+    ) -> Self {
+        self.params
+            .attach_config_gen_params(self.id, server.module_kind(), params);
+        self.servers.push(DynServerModuleInit::from(server));
+        self.id += 1;
+
+        self
+    }
+
     /// Starts a new federation with default number of peers for testing
     pub async fn new_fed(&self) -> FederationTest {
         self.new_fed_with_peers(self.num_peers, self.num_offline)
