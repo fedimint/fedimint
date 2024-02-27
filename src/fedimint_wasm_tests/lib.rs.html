@@ -302,6 +302,14 @@
 <a href="#302" id="302">302</a>
 <a href="#303" id="303">303</a>
 <a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::Client;
@@ -356,7 +364,11 @@
         <span class="kw">let </span>resp = gloo_net::http::Request::get(<span class="string">&quot;http://localhost:15243/connect-string&quot;</span>)
             .send()
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(resp.text().<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="kw">if </span>resp.ok() {
+            <span class="prelude-val">Ok</span>(resp.text().<span class="kw">await</span><span class="question-mark">?</span>)
+        } <span class="kw">else </span>{
+            <span class="macro">anyhow::bail!</span>(resp.text().<span class="kw">await</span><span class="question-mark">?</span>);
+        }
     }
 
     <span class="kw">pub async fn </span>pay_invoice(invoice: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;()&gt; {
@@ -375,7 +387,11 @@
         <span class="kw">let </span>resp = gloo_net::http::Request::get(<span class="string">&quot;http://localhost:15243/gateway-api&quot;</span>)
             .send()
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(resp.text().<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="kw">if </span>resp.ok() {
+            <span class="prelude-val">Ok</span>(resp.text().<span class="kw">await</span><span class="question-mark">?</span>)
+        } <span class="kw">else </span>{
+            <span class="macro">anyhow::bail!</span>(resp.text().<span class="kw">await</span><span class="question-mark">?</span>);
+        }
     }
 
     <span class="kw">pub async fn </span>generate_invoice(amt: u64) -&gt; anyhow::Result&lt;String&gt; {
