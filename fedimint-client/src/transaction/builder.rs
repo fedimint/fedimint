@@ -151,13 +151,6 @@ impl TransactionBuilder {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub(crate) enum TransactionBuilderBalance {
-    Underfunded(Amount),
-    Balanced,
-    Overfunded(Amount),
-}
-
 fn state_gen_to_dyn<S>(
     state_gen: StateGenerator<S>,
     module_instance: ModuleInstanceId,

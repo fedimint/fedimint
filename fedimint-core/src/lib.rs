@@ -183,6 +183,12 @@ impl Amount {
         }
     }
 
+    pub fn mul_u64(self, other: u64) -> Self {
+        Amount {
+            msats: self.msats * other,
+        }
+    }
+
     // Makes sure we're dealing with a precision of satoshi or higher
     pub fn ensure_sats_precision(&self) -> anyhow::Result<()> {
         if self.msats % 1000 != 0 {
