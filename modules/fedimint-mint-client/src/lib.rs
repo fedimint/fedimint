@@ -625,23 +625,34 @@ impl ClientModule for MintClientModule {
         true
     }
 
-    async fn create_sufficient_input(
+    async fn create_final_inputs_and_outputs(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
-        min_amount: Amount,
-    ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
-        self.create_input(dbtx, operation_id, min_amount).await
-    }
+        input_amount: Amount,
+        output_amount: Amount,
+    ) -> anyhow::Result<(
+        Vec<ClientInput<MintInput, MintClientStateMachines>>,
+        Vec<ClientOutput<MintOutput, MintClientStateMachines>>,
+    )> {
+        let (inputs, added_input_amount) = self
+            .create_sufficient_input(
+                dbtx,
+                operation_id,
+                output_amount.saturating_sub(input_amount),
+            )
+            .await?;
 
-    async fn create_exact_output(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        operation_id: OperationId,
-        amount: Amount,
-    ) -> Vec<ClientOutput<MintOutput, MintClientStateMachines>> {
-        // FIXME: don't hardcode notes per denomination
-        self.create_output(dbtx, operation_id, 2, amount).await
+        let outputs = self
+            .create_exact_output(
+                dbtx,
+                operation_id,
+                2,
+                (input_amount + added_input_amount) - output_amount,
+            )
+            .await;
+
+        Ok((inputs, outputs))
     }
 
     async fn await_primary_module_output(
@@ -697,6 +708,89 @@ impl ClientModule for MintClientModule {
 }
 
 impl MintClientModule {
+    async fn create_sufficient_input(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        min_amount: Amount,
+    ) -> anyhow::Result<(Vec<ClientInput<MintInput, MintClientStateMachines>>, Amount)> {
+        if min_amount == Amount::ZERO {
+            return Ok((Vec::new(), Amount::ZERO));
+        }
+
+        let notes = Self::select_notes(dbtx, &SelectNotesWithAtleastAmount, min_amount).await?;
+
+        let selected_amount = notes.total_amount();
+
+        for (amount, note) in notes.iter_items() {
+            dbtx.remove_entry(&NoteKey {
+                amount,
+                nonce: note.nonce(),
+            })
+            .await;
+        }
+
+        let inputs = self.create_input_from_notes(operation_id, notes).await?;
+
+        assert!(!inputs.is_empty());
+
+        Ok((inputs, selected_amount))
+    }
+
+    pub async fn create_exact_output(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        notes_per_denomination: u16,
+        exact_amount: Amount,
+    ) -> Vec<ClientOutput<MintOutput, MintClientStateMachines>> {
+        if exact_amount == Amount::ZERO {
+            return Vec::new();
+        }
+
+        let denominations = TieredSummary::represent_amount(
+            exact_amount,
+            &self.get_wallet_summary(dbtx).await,
+            &self.cfg.tbs_pks,
+            notes_per_denomination,
+        );
+
+        let mut outputs = Vec::new();
+
+        for (amount, num) in denominations.iter() {
+            for _ in 0..num {
+                let (issuance_request, blind_nonce) = self.new_ecash_note(amount, dbtx).await;
+
+                let state_generator = Arc::new(move |txid, out_idx| {
+                    vec![MintClientStateMachines::Output(MintOutputStateMachine {
+                        common: MintOutputCommon {
+                            operation_id,
+                            out_point: OutPoint { txid, out_idx },
+                        },
+                        state: MintOutputStates::Created(MintOutputStatesCreated {
+                            amount,
+                            issuance_request,
+                        }),
+                    })]
+                });
+
+                debug!(
+                    %amount,
+                    "Generated issuance request"
+                );
+
+                outputs.push(ClientOutput {
+                    output: MintOutput::new_v0(amount, blind_nonce),
+                    state_machines: state_generator,
+                });
+            }
+        }
+
+        assert!(!outputs.is_empty());
+
+        outputs
+    }
+
     /// Returns the number of held e-cash notes per denomination
     pub async fn get_wallet_summary(&self, dbtx: &mut DatabaseTransaction<'_>) -> TieredSummary {
         dbtx.find_by_prefix(&NoteKeyPrefix)
@@ -802,34 +896,6 @@ impl MintClientModule {
         pin_mut!(stream);
 
         stream.next_or_pending().await
-    }
-
-    // FIXME: use lazy e-cash note loading implemented in #2183
-    /// Creates a mint input of at least `min_amount`.
-    pub async fn create_input(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        operation_id: OperationId,
-        min_amount: Amount,
-    ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
-        assert!(
-            min_amount > Amount::ZERO,
-            "zero-amount inputs are not supported"
-        );
-
-        let spendable_selected_notes =
-            Self::select_notes(dbtx, &SelectNotesWithAtleastAmount, min_amount).await?;
-
-        for (amount, note) in spendable_selected_notes.iter_items() {
-            dbtx.remove_entry(&NoteKey {
-                amount,
-                nonce: note.nonce(),
-            })
-            .await;
-        }
-
-        self.create_input_from_notes(operation_id, spendable_selected_notes)
-            .await
     }
 
     /// Create a mint input from external, potentially untrusted notes
