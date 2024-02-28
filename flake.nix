@@ -9,7 +9,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flakebox = {
-      url = "github:dpc/flakebox?rev=db74cf9715c2e21c59f7a0bcb2002ae87ad5068a";
+      url = "github:dpc/flakebox?rev=49117df15209701f3e13ba2bcf514b550955e7b4";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.fenix.follows = "fenix";
     };
@@ -69,9 +69,9 @@
                 "rustc"
                 "cargo"
                 "clippy"
-                "rust-analysis"
+                "rust-analyzer"
                 "rust-src"
-                "llvm-tools-preview"
+                "llvm-tools"
               ];
 
               motd = {
