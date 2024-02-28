@@ -25,6 +25,9 @@ test-count:
 test-compatibility *VERSIONS:
   ./scripts/tests/test-ci-all-backcompat.sh {{VERSIONS}}
 
+test-full-compatibility *VERSIONS:
+  env FM_FULL_VERSION_MATRIX=1 ./scripts/tests/test-ci-all-backcompat.sh {{VERSIONS}}
+
 # `cargo udeps` check
 udeps:
   nix build -L .#debug.workspaceCargoUdeps

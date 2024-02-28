@@ -150,27 +150,17 @@ tagged_versions=("$@")
 num_versions="$#"
 versions=( "current" "${tagged_versions[@]}" )
 if [[ "$num_versions" == "0" ]]; then
-  current_binaries_count=3
+  mapfile -t version_matrix < <(generate_current_only_matrix "${versions[@]}")
 else
   # precompile binaries
   binaries=( "fedimintd" "fedimint-cli" "gateway-cli" "gatewayd" )
   parallel nix_build_binary_for_version "{1}" "{2}" ::: "${binaries[@]}" ::: "${tagged_versions[@]}"
-  # we only need to try everything against one element being in a different version
-  current_binaries_count=2
+  if [ -n "${FM_FULL_VERSION_MATRIX:-}" ]; then
+    mapfile -t version_matrix < <(generate_full_matrix "${versions[@]}")
+  else
+    mapfile -t version_matrix < <(generate_partial_matrix "${versions[@]}")
+  fi
 fi
-
-version_matrix=()
-for fed_version in "${versions[@]}"; do
-  for client_version in "${versions[@]}"; do
-    for gateway_version in "${versions[@]}"; do
-      if [ "$(filter_count "current" "$fed_version" "$client_version" "$gateway_version")" != "$current_binaries_count" ]; then
-         continue
-      fi
-
-      version_matrix+=("$fed_version $client_version $gateway_version")
-    done
-  done
-done
 
 # NOTE: try to keep the slowest tests first, except 'always_success_test',
 # as it's used for failure test
