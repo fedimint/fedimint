@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
 
-use bitcoin_hashes::sha256::Hash as Sha256Hash;
+use bitcoin_hashes::sha256::{self, Hash as Sha256Hash};
 use fedimint_core::api::{
     FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
 };
@@ -9,13 +9,17 @@ use fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
     GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
-    REGISTER_GATEWAY_ENDPOINT,
+    REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::query::UnionResponses;
+use fedimint_core::query::{AllOrDeadline, UnionResponses};
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{apply, async_trait_maybe_send, NumPeers};
+use fedimint_core::{apply, async_trait_maybe_send, NumPeers, PeerId};
 use itertools::Itertools;
+use secp256k1::schnorr::Signature;
+use secp256k1::PublicKey;
+use serde::{Deserialize, Serialize};
+use tracing::{info, warn};
 
 use crate::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 use crate::contracts::outgoing::OutgoingContractAccount;
@@ -25,33 +29,59 @@ use crate::{ContractAccount, LightningGateway, LightningGatewayAnnouncement};
 #[apply(async_trait_maybe_send!)]
 pub trait LnFederationApi {
     async fn fetch_consensus_block_count(&self) -> FederationResult<Option<u64>>;
+
     async fn fetch_contract(
         &self,
         contract: ContractId,
     ) -> FederationResult<Option<ContractAccount>>;
+
     async fn wait_contract(&self, contract: ContractId) -> FederationResult<ContractAccount>;
+
     async fn wait_block_height(&self, block_height: u64) -> FederationResult<()>;
+
     async fn wait_outgoing_contract_cancelled(
         &self,
         contract: ContractId,
     ) -> FederationResult<ContractAccount>;
+
     async fn get_decrypted_preimage_status(
         &self,
         contract: ContractId,
     ) -> FederationResult<(IncomingContractAccount, DecryptedPreimageStatus)>;
+
     async fn wait_preimage_decrypted(
         &self,
         contract: ContractId,
     ) -> FederationResult<(IncomingContractAccount, Option<Preimage>)>;
+
     async fn fetch_offer(
         &self,
         payment_hash: Sha256Hash,
     ) -> FederationResult<IncomingContractOffer>;
+
     async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGatewayAnnouncement>>;
+
     async fn register_gateway(
         &self,
         gateway: &LightningGatewayAnnouncement,
     ) -> FederationResult<()>;
+
+    /// Retrieves the map of gateway remove challenges from the server. Each
+    /// challenge needs to be signed by the gateway's private key in order
+    /// for the registration record to be removed.
+    async fn get_remove_gateway_challenge(
+        &self,
+        gateway_id: PublicKey,
+    ) -> FederationResult<BTreeMap<PeerId, Option<sha256::Hash>>>;
+
+    /// Removes the gateway's registration record. First checks the provided
+    /// signature to verify the gateway authorized the removal of the
+    /// registration.
+    async fn remove_gateway(
+        &self,
+        remove_gateway_request: RemoveGatewayRequest,
+    ) -> FederationResult<()>;
+
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool>;
 
     async fn get_incoming_contract(
@@ -177,6 +207,48 @@ where
         .await
     }
 
+    async fn get_remove_gateway_challenge(
+        &self,
+        gateway_id: PublicKey,
+    ) -> FederationResult<BTreeMap<PeerId, Option<sha256::Hash>>> {
+        // Only wait a second since removing a gateway is "best effort"
+        let deadline = fedimint_core::time::now() + Duration::from_secs(1);
+        let responses = self
+            .request_with_strategy(
+                AllOrDeadline::<Option<sha256::Hash>>::new(self.all_peers().total(), deadline),
+                REMOVE_GATEWAY_CHALLENGE_ENDPOINT.to_string(),
+                ApiRequestErased::new(gateway_id),
+            )
+            .await?;
+        Ok(responses)
+    }
+
+    async fn remove_gateway(
+        &self,
+        remove_gateway_request: RemoveGatewayRequest,
+    ) -> FederationResult<()> {
+        // Only wait a second since removing a gateway is "best effort"
+        let gateway_id = remove_gateway_request.gateway_id;
+        let deadline = fedimint_core::time::now() + Duration::from_secs(1);
+        let responses = self
+            .request_with_strategy(
+                AllOrDeadline::<bool>::new(self.all_peers().total(), deadline),
+                REMOVE_GATEWAY_ENDPOINT.to_string(),
+                ApiRequestErased::new(remove_gateway_request),
+            )
+            .await?;
+
+        for (peer_id, response) in responses.into_iter() {
+            if response {
+                info!("Successfully removed {gateway_id} gateway from peer: {peer_id}",);
+            } else {
+                warn!("Unable to remove gateway {gateway_id} registration from peer: {peer_id}");
+            }
+        }
+
+        Ok(())
+    }
+
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool> {
         Ok(self
             .request_current_consensus::<Option<IncomingContractOffer>>(
@@ -218,6 +290,16 @@ where
             ))),
         }
     }
+}
+
+/// Request sent to the federation that requests the removal of a gateway
+/// registration. Each peer is expected to check the `signatures` map for the
+/// signature that validates the gateway authorized the removal of this
+/// registration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoveGatewayRequest {
+    pub gateway_id: PublicKey,
+    pub signatures: BTreeMap<PeerId, Signature>,
 }
 
 /// Filter out duplicate gateways. This is necessary because different guardians

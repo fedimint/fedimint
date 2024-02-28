@@ -28,11 +28,15 @@ use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Amount};
+use fedimint_core::{
+    extensible_associated_module_type, plugin_types_trait_impl_common, Amount, PeerId,
+};
 use lightning::util::ser::{WithoutLength, Writeable};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
+use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use threshold_crypto::PublicKey;
 use tracing::error;
 pub use {bitcoin, lightning_invoice};
 
@@ -701,4 +705,24 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
             expiry_timestamp,
         })
     }
+}
+
+/// Creates a message to be signed by the Gateway's private key for the purpose
+/// of removing the gateway's registration record. Message is defined as:
+///
+/// msg = sha256(tag + federation_public_key + peer_id + challenge)
+///
+/// Tag is always `remove_gateway`. Challenge is unique for the registration
+/// record and acquired from each guardian prior to the removal request.
+pub fn create_gateway_remove_message(
+    federation_public_key: PublicKey,
+    peer_id: PeerId,
+    challenge: sha256::Hash,
+) -> Message {
+    let mut message_preimage = "remove-gateway".as_bytes().to_vec();
+    message_preimage.append(&mut federation_public_key.consensus_encode_to_vec());
+    let guardian_id: u16 = peer_id.into();
+    message_preimage.append(&mut guardian_id.consensus_encode_to_vec());
+    message_preimage.append(&mut challenge.consensus_encode_to_vec());
+    Message::from_hashed_data::<sha256::Hash>(message_preimage.as_slice())
 }
