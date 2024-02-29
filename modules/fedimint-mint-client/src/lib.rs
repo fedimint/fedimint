@@ -817,10 +817,15 @@ impl MintClientModule {
             "zero-amount inputs are not supported"
         );
 
-        let spendable_selected_notes =
-            Self::select_notes(dbtx, &SelectNotesWithAtleastAmount, min_amount).await?;
+        let selected_notes = Self::select_notes(
+            dbtx,
+            &SelectNotesWithAtleastAmount,
+            min_amount,
+            self.cfg.fee_consensus.note_spend_abs,
+        )
+        .await?;
 
-        for (amount, note) in spendable_selected_notes.iter_items() {
+        for (amount, note) in selected_notes.iter_items() {
             dbtx.remove_entry(&NoteKey {
                 amount,
                 nonce: note.nonce(),
@@ -828,7 +833,7 @@ impl MintClientModule {
             .await;
         }
 
-        self.create_input_from_notes(operation_id, spendable_selected_notes)
+        self.create_input_from_notes(operation_id, selected_notes)
             .await
     }
 
@@ -881,7 +886,7 @@ impl MintClientModule {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         notes_selector: &impl NotesSelector<SpendableNote>,
-        requested_amount: Amount,
+        amount: Amount,
         try_cancel_after: Duration,
     ) -> anyhow::Result<(
         OperationId,
@@ -889,16 +894,15 @@ impl MintClientModule {
         TieredMulti<SpendableNote>,
     )> {
         ensure!(
-            requested_amount > Amount::ZERO,
+            amount > Amount::ZERO,
             "zero-amount out-of-band spends are not supported"
         );
 
-        let spendable_selected_notes =
-            Self::select_notes(dbtx, notes_selector, requested_amount).await?;
+        let selected_notes = Self::select_notes(dbtx, notes_selector, amount, Amount::ZERO).await?;
 
-        let operation_id = spendable_notes_to_operation_id(&spendable_selected_notes);
+        let operation_id = spendable_notes_to_operation_id(&selected_notes);
 
-        for (amount, note) in spendable_selected_notes.iter_items() {
+        for (amount, note) in selected_notes.iter_items() {
             dbtx.remove_entry(&NoteKey {
                 amount,
                 nonce: note.nonce(),
@@ -908,7 +912,7 @@ impl MintClientModule {
 
         let mut state_machines = Vec::new();
 
-        for (amount, spendable_note) in spendable_selected_notes.clone() {
+        for (amount, spendable_note) in selected_notes.clone() {
             state_machines.push(MintClientStateMachines::OOB(MintOOBStateMachine {
                 operation_id,
                 state: MintOOBStates::Created(MintOOBStatesCreated {
@@ -919,7 +923,7 @@ impl MintClientModule {
             }));
         }
 
-        Ok((operation_id, state_machines, spendable_selected_notes))
+        Ok((operation_id, state_machines, selected_notes))
     }
 
     pub async fn await_spend_oob_refund(&self, operation_id: OperationId) -> SpendOOBRefund {
@@ -954,13 +958,15 @@ impl MintClientModule {
         dbtx: &mut DatabaseTransaction<'_>,
         notes_selector: &impl NotesSelector<SpendableNote>,
         requested_amount: Amount,
+        fee_per_note_input: Amount,
     ) -> anyhow::Result<TieredMulti<SpendableNote>> {
         let note_stream = dbtx
             .find_by_prefix_sorted_descending(&NoteKeyPrefix)
             .await
             .map(|(key, note)| (key.amount, note));
+
         notes_selector
-            .select_notes(note_stream, requested_amount)
+            .select_notes(note_stream, requested_amount, fee_per_note_input)
             .await
     }
 
@@ -1408,6 +1414,7 @@ pub trait NotesSelector<Note>: Send + Sync {
         #[cfg(not(target_family = "wasm"))] stream: impl futures::Stream<Item = (Amount, Note)> + Send,
         #[cfg(target_family = "wasm")] stream: impl futures::Stream<Item = (Amount, Note)>,
         requested_amount: Amount,
+        fee_per_note_input: Amount,
     ) -> anyhow::Result<TieredMulti<Note>>;
 }
 
@@ -1425,8 +1432,9 @@ impl<Note: Send> NotesSelector<Note> for SelectNotesWithAtleastAmount {
         #[cfg(not(target_family = "wasm"))] stream: impl futures::Stream<Item = (Amount, Note)> + Send,
         #[cfg(target_family = "wasm")] stream: impl futures::Stream<Item = (Amount, Note)>,
         requested_amount: Amount,
+        fee_per_note_input: Amount,
     ) -> anyhow::Result<TieredMulti<Note>> {
-        Ok(select_notes_from_stream(stream, requested_amount).await?)
+        Ok(select_notes_from_stream(stream, requested_amount, fee_per_note_input).await?)
     }
 }
 
@@ -1442,8 +1450,9 @@ impl<Note: Send> NotesSelector<Note> for SelectNotesWithExactAmount {
         #[cfg(not(target_family = "wasm"))] stream: impl futures::Stream<Item = (Amount, Note)> + Send,
         #[cfg(target_family = "wasm")] stream: impl futures::Stream<Item = (Amount, Note)>,
         requested_amount: Amount,
+        note_fee: Amount,
     ) -> anyhow::Result<TieredMulti<Note>> {
-        let notes = select_notes_from_stream(stream, requested_amount).await?;
+        let notes = select_notes_from_stream(stream, requested_amount, note_fee).await?;
 
         if notes.total_amount() != requested_amount {
             bail!(
@@ -1465,6 +1474,7 @@ impl<Note: Send> NotesSelector<Note> for SelectNotesWithExactAmount {
 async fn select_notes_from_stream<Note>(
     stream: impl futures::Stream<Item = (Amount, Note)>,
     requested_amount: Amount,
+    fee_per_note_input: Amount,
 ) -> Result<TieredMulti<Note>, InsufficientBalanceError> {
     if requested_amount == Amount::ZERO {
         return Ok(TieredMulti::default());
@@ -1485,9 +1495,15 @@ async fn select_notes_from_stream<Note>(
                 "notes are not sorted in descending order"
             );
             previous_amount = Some(note_amount);
-            match note_amount.cmp(&pending_amount) {
+
+            if note_amount <= fee_per_note_input {
+                continue;
+            }
+
+            match note_amount.cmp(&(pending_amount + fee_per_note_input)) {
                 Ordering::Less => {
                     // keep adding notes until we have enough
+                    pending_amount += fee_per_note_input;
                     pending_amount -= note_amount;
                     selected.push((note_amount, note))
                 }
@@ -1500,7 +1516,16 @@ async fn select_notes_from_stream<Note>(
                 Ordering::Equal => {
                     // exactly enough notes, return
                     selected.push((note_amount, note));
-                    return Ok(selected.into_iter().collect());
+
+                    let notes: TieredMulti<Note> = selected.into_iter().collect();
+
+                    assert!(
+                        notes.total_amount().msats
+                            >= requested_amount.msats
+                                + notes.count_items() as u64 * fee_per_note_input.msats
+                    );
+
+                    return Ok(notes);
                 }
             }
         } else {
@@ -1511,8 +1536,17 @@ async fn select_notes_from_stream<Note>(
                 selected.truncate(checkpoint);
                 // and use the big note to cover it
                 selected.push((big_note_amount, big_note));
+
+                let notes: TieredMulti<Note> = selected.into_iter().collect();
+
+                assert!(
+                    notes.total_amount().msats
+                        >= requested_amount.msats
+                            + notes.count_items() as u64 * fee_per_note_input.msats
+                );
+
                 // so now we have enough to cover the requested amount, return
-                return Ok(selected.into_iter().collect());
+                return Ok(notes);
             } else {
                 let total_amount = requested_amount - pending_amount;
                 // not enough notes, return
@@ -1734,8 +1768,12 @@ mod tests {
         let mut total_notes = 0;
         for multiplier in 1..100 {
             let stream = reverse_sorted_note_stream(tiered.iter().collect());
-            let select =
-                select_notes_from_stream(stream, Amount::from_sats(multiplier * 1000)).await;
+            let select = select_notes_from_stream(
+                stream,
+                Amount::from_sats(multiplier * 1000),
+                Amount::ZERO,
+            )
+            .await;
             total_notes += select.unwrap().into_iter_items().count();
         }
         assert_eq!(total_notes / 100, 10);
@@ -1751,13 +1789,13 @@ mod tests {
             ])
         };
         assert_eq!(
-            select_notes_from_stream(f(), Amount::from_sats(7))
+            select_notes_from_stream(f(), Amount::from_sats(7), Amount::ZERO)
                 .await
                 .unwrap(),
             notes(vec![(Amount::from_sats(1), 2), (Amount::from_sats(5), 1)])
         );
         assert_eq!(
-            select_notes_from_stream(f(), Amount::from_sats(20))
+            select_notes_from_stream(f(), Amount::from_sats(20), Amount::ZERO)
                 .await
                 .unwrap(),
             notes(vec![(Amount::from_sats(20), 1)])
@@ -1772,7 +1810,7 @@ mod tests {
             (Amount::from_sats(20), 5),
         ]);
         assert_eq!(
-            select_notes_from_stream(stream, Amount::from_sats(7))
+            select_notes_from_stream(stream, Amount::from_sats(7), Amount::ZERO)
                 .await
                 .unwrap(),
             notes(vec![(Amount::from_sats(5), 2)])
@@ -1787,7 +1825,7 @@ mod tests {
             (Amount::from_sats(20), 2),
         ]);
         assert_eq!(
-            select_notes_from_stream(stream, Amount::from_sats(39))
+            select_notes_from_stream(stream, Amount::from_sats(39), Amount::ZERO)
                 .await
                 .unwrap(),
             notes(vec![(Amount::from_sats(20), 2)])
@@ -1797,7 +1835,7 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn select_notes_returns_error_if_amount_is_too_large() {
         let stream = reverse_sorted_note_stream(vec![(Amount::from_sats(10), 1)]);
-        let error = select_notes_from_stream(stream, Amount::from_sats(100))
+        let error = select_notes_from_stream(stream, Amount::from_sats(100), Amount::ZERO)
             .await
             .unwrap_err();
         assert_eq!(error.total_amount, Amount::from_sats(10));
