@@ -1,6 +1,6 @@
 # Setting up a Federation + Lightning Gateway
 
-This is a guide for setting up a 3/4 federation + lightning gateway, a test network for bitcoin with 30 second block times. You can run this same setup on a different test network or on mainnet with real bitcoin,
+This is a guide for setting up a 3/4 federation + lightning gateway. You can run this same setup on a different test network or on mainnet with real bitcoin,
 
 > [!WARNING]  
 > Fedimint 0.2 is alpha software released under an MIT License. It is ready for reckless use.
@@ -286,7 +286,7 @@ The setup leader inputs an additional couple parameters beyond his name and pass
 - Number of Guardians: the n of the t/n, so 4 for a 3/4 federation
 - Network: use signet (mutinynet is a fork of signet with 30 second blocktimes)
 - Block Confirmations: Fedimint's consensus CANNOT handle bitcoin block reorganizations (it's impossible to invalidate or distinguish e-cash once issued) so we recommend at least 6 confirmations (meaning the fedimint's consensus blockheight will be current blockheight - 6) for any mainnet or production use, but if you're just using this for development you can set it to 1 or 2
-- Meta Fields: these are arbitrary key/value pairs that can be used to store any information you want about your federation. Client apps can use this information to attach chat servers, a federation icon, a welcome message, or anything else you want to display to the user when they first connect to the federation.
+- Meta Fields: these are arbitrary key/value pairs that can be used to store any information you want about your federation. Client apps can use this information to attach chat servers, a federation icon, a welcome message, or anything else you want to display to the user when they first connect to the federation. See https://github.com/fedimint/fedimint/tree/master/docs/meta_fields for supported fields.
 
 <p align="center">
 <img src="setup-docs-assets/leader.png" alt="Leader" width="500">
