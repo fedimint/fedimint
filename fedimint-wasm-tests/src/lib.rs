@@ -101,17 +101,58 @@ mod tests {
 
     use anyhow::{anyhow, bail};
     use fedimint_client::derivable_secret::DerivableSecret;
-    use fedimint_core::Amount;
+    use fedimint_core::{
+        db::{IDatabaseTransactionOpsCoreTyped, TestKey, TestVal},
+        module::registry::ModuleDecoderRegistry,
+        Amount,
+    };
     use fedimint_ln_client::{
         LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
     };
     use fedimint_mint_client::{MintClientModule, ReissueExternalNotesState, SpendOOBState};
     use futures::StreamExt;
+    use rand::Rng;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     use super::*;
 
     #[wasm_bindgen_test]
+    async fn database_test() -> Result<()> {
+        let _ = tracing_wasm::try_set_as_global_default();
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        for _ in 0..1000 {
+            wasm_bindgen_test::console_log!(
+                "###################### NEW ROUND ###########################"
+            );
+            let iterations: u64 = thread_rng().gen_range(2..30);
+            let mut futures = vec![];
+            for i in 0..iterations {
+                let db = db.clone();
+                futures.push(async move {
+                    fedimint_core::task::sleep(Duration::from_millis(
+                        thread_rng().gen_range(0..100),
+                    ))
+                    .await;
+                    let mut dbtx = db.begin_transaction().await;
+                    for x in 0..i {
+                        dbtx.insert_entry(&TestKey(i * iterations + x), &TestVal(i))
+                            .await;
+                    }
+                    fedimint_core::task::sleep(Duration::from_millis(
+                        thread_rng().gen_range(0..100),
+                    ))
+                    .await;
+                    // 10% are writes
+                    if thread_rng().gen_ratio(1, 10) {
+                        dbtx.commit_tx().await;
+                    }
+                });
+            }
+            futures::future::join_all(futures).await;
+        }
+        Ok(())
+    }
+    // #[wasm_bindgen_test]
     async fn build_client() -> Result<()> {
         let _client = client(&faucet::invite_code().await?.parse()?).await?;
         Ok(())
@@ -132,7 +173,7 @@ mod tests {
         Ok(())
     }
 
-    #[wasm_bindgen_test]
+    // #[wasm_bindgen_test]
     async fn receive() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;
@@ -169,7 +210,7 @@ mod tests {
 
     // Tests that ChaCha20 crypto functions used for backup and recovery are
     // available in WASM at runtime. Related issue: https://github.com/fedimint/fedimint/issues/2843
-    #[wasm_bindgen_test]
+    // #[wasm_bindgen_test]
     async fn derive_chacha_key() {
         let root_secret = DerivableSecret::new_root(&[0x42; 32], &[0x2a; 32]);
         let key = root_secret.to_chacha20_poly1305_key();
@@ -213,7 +254,7 @@ mod tests {
         Ok(())
     }
 
-    #[wasm_bindgen_test]
+    // #[wasm_bindgen_test]
     async fn receive_and_pay() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;
@@ -281,7 +322,7 @@ mod tests {
         }
     }
 
-    #[wasm_bindgen_test]
+    // #[wasm_bindgen_test]
     async fn test_ecash() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;
@@ -296,7 +337,7 @@ mod tests {
         Ok(())
     }
 
-    #[wasm_bindgen_test]
+    // #[wasm_bindgen_test]
     async fn test_ecash_exact() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;

@@ -1,10 +1,14 @@
 use std::fmt::Debug;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use anyhow::Result;
 use bitcoin_hashes::hex::ToHex;
 use futures::{stream, StreamExt};
 use imbl::OrdMap;
 use macro_rules_attribute::apply;
+use rand::Rng;
+use tracing::info;
 
 use super::{
     IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
@@ -67,7 +71,16 @@ impl MemDatabase {
 impl IRawDatabase for MemDatabase {
     type Transaction<'a> = MemTransaction<'a>;
     async fn begin_transaction<'a>(&'a self) -> MemTransaction<'a> {
-        let db_copy = self.data.read().await.clone();
+        let id = ID.fetch_add(1, Ordering::Relaxed);
+        info!("### LOCK READ WAIT ACQUIRE - {}", id);
+        let db_lock = self.data.read().await;
+        info!("### LOCK READ ACQUIRED - {}", id);
+        let db_copy = db_lock.clone();
+        if rand::thread_rng().gen_bool(0.8) {
+            fedimint_core::task::sleep(Duration::from_millis(5 * (id % 5))).await;
+        }
+        drop(db_lock);
+        info!("### LOCK READ RELEASED - {}", id);
         let mut memtx = MemTransaction {
             operations: Vec::new(),
             tx_data: db_copy.clone(),
@@ -175,10 +188,17 @@ impl<'a> IDatabaseTransactionOps for MemTransaction<'a> {
     }
 }
 
+static ID: AtomicU64 = AtomicU64::new(0);
 #[apply(async_trait_maybe_send!)]
 impl<'a> IRawDatabaseTransaction for MemTransaction<'a> {
     async fn commit_tx(self) -> Result<()> {
+        let id = ID.fetch_add(1, Ordering::Relaxed);
+        info!("### LOCK WRITE WAIT ACQUIRE - {}", id);
         let mut data = self.db.data.write().await;
+        info!("### LOCK WRITE ACQUIRED - {}", id);
+        if rand::thread_rng().gen_bool(0.8) {
+            fedimint_core::task::sleep(Duration::from_millis(5 * (id % 20))).await;
+        }
         let mut data_copy = data.clone();
         for op in self.operations {
             match op {
@@ -197,6 +217,9 @@ impl<'a> IRawDatabaseTransaction for MemTransaction<'a> {
             }
         }
         *data = data_copy;
+        info!("### LOCK WRITE RELEASING - {}", id);
+        drop(data);
+        info!("### LOCK WRITE RELEASED - {}", id);
         Ok(())
     }
 }
