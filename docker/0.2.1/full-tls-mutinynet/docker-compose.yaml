@@ -196,7 +196,7 @@ services:
           {levels = {min = "info"}, to = "console"};
         }
 
-        data_path = "/var/lib/prosody"
+        data_path = "/prosody_data"
         plugin_paths = {
         }
 
