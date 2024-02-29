@@ -53,7 +53,7 @@ function run_test_for_versions() {
     export FM_BACKWARDS_COMPATIBILITY_TEST=1
     # run back-compat tests with 4/4 setup
     export FM_OFFLINE_NODES=0
-    export FM_RUN_TEST_VERSIONS="$fed_version $client_version $gateway_version"
+    export FM_RUN_TEST_VERSIONS="FM: $fed_version, CLI: $client_version, GW: $gateway_version"
   else
     # default to run current tests in 3/4 setup
     export FM_OFFLINE_NODES=1
