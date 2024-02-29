@@ -896,6 +896,19 @@ impl LightningClientModule {
         Ok(())
     }
 
+    /// Overrides the active gateway with an explicit `announcement`. This
+    /// should only be used for testing.
+    pub async fn override_active_gateway(
+        &self,
+        announcement: LightningGatewayAnnouncement,
+    ) -> anyhow::Result<()> {
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        dbtx.insert_entry(&LightningGatewayKey, &announcement.anchor())
+            .await;
+        dbtx.commit_tx_result().await?;
+        Ok(())
+    }
+
     /// Fetches the metadata overrides for a given federation
     ///
     /// # Arguments

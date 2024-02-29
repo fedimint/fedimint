@@ -48,6 +48,9 @@ use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcR
 use ln_gateway::rpc::{
     BalancePayload, ConnectFedPayload, LeaveFedPayload, SetConfigurationPayload,
 };
+use ln_gateway::state_machine::pay::{
+    OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
+};
 use ln_gateway::state_machine::{
     GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates, GatewayExtReceiveStates,
     GatewayMeta, Htlc,
@@ -330,6 +333,119 @@ async fn test_can_change_routing_fees() -> anyhow::Result<()> {
                 sats(1000 - 250) - fee_amount
             );
             assert_eq!(gateway_client.get_balance().await, sats(250) + fee_amount);
+
+            Ok(())
+        },
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
+    single_federation_test(
+        |gateway, other_lightning_client, fed, user_client, _| async move {
+            let rpc_client = gateway
+                .get_rpc()
+                .await
+                .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
+            // Print money for user_client
+            let dummy_module = user_client.get_first_module::<DummyClientModule>();
+            let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
+            dummy_module.receive_money(outpoint).await?;
+            assert_eq!(user_client.get_balance().await, sats(1000));
+
+            // Change the fees of the gateway
+            let fee = "10,10000".to_string();
+            let set_configuration_payload = SetConfigurationPayload {
+                password: None,
+                num_route_hints: None,
+                routing_fees: Some(fee.clone()),
+                network: None,
+            };
+            verify_gateway_rpc_success("set_configuration", || {
+                rpc_client.set_configuration(set_configuration_payload.clone())
+            })
+            .await;
+
+            // Fetch the gateway registration record
+            let gateway_id = gateway.gateway.gateway_id;
+            let user_lightning_module = user_client.get_first_module::<LightningClientModule>();
+            let gateways = user_lightning_module.fetch_registered_gateways().await?;
+            let mut current_gateway = gateways
+                .into_iter()
+                .find(|g| g.info.gateway_id == gateway_id)
+                .expect("No gateway found for gateway id {gateway_id}");
+
+            // Modify the current gateway so that the fees do not match
+            info!("### Overriding active gateway");
+            current_gateway.info.fees = RoutingFees {
+                base_msat: 0,
+                proportional_millionths: 0,
+            };
+            user_lightning_module
+                .override_active_gateway(current_gateway.clone())
+                .await?;
+
+            let gateway_client = gateway.remove_client_hack(&fed).await;
+
+            let invoice_amount = sats(250);
+            let invoice = other_lightning_client.invoice(invoice_amount, None).await?;
+
+            // Try to pay an invoice, this should fail since the client will not set the
+            // gateway's fees.
+            info!("### Overriding user client paying invoice");
+            let OutgoingLightningPayment {
+                payment_type,
+                contract_id,
+                fee: _,
+            } = user_lightning_module
+                .pay_bolt11_invoice(Some(current_gateway.info), invoice.clone(), ())
+                .await
+                .expect("No Lightning Payment was started");
+            match payment_type {
+                PayType::Lightning(pay_op) => {
+                    let mut pay_sub = user_lightning_module
+                        .subscribe_ln_pay(pay_op)
+                        .await?
+                        .into_stream();
+                    assert_eq!(pay_sub.ok().await?, LnPayState::Created);
+                    let funded = pay_sub.ok().await?;
+                    assert_matches!(funded, LnPayState::Funded);
+                    info!("### User client funded contract");
+
+                    let payload = PayInvoicePayload {
+                        federation_id: user_client.federation_id(),
+                        contract_id,
+                        payment_data: PaymentData::Invoice(invoice),
+                        preimage_auth: Hash::hash(&[0; 32]),
+                    };
+
+                    let gw_pay_op = gateway_client
+                        .get_first_module::<GatewayClientModule>()
+                        .gateway_pay_bolt11_invoice(payload)
+                        .await?;
+                    let mut gw_pay_sub = gateway_client
+                        .get_first_module::<GatewayClientModule>()
+                        .gateway_subscribe_ln_pay(gw_pay_op)
+                        .await?
+                        .into_stream();
+                    assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
+                    info!("### Gateway client started payment");
+                    assert_matches!(
+                        gw_pay_sub.ok().await?,
+                        GatewayExtPayStates::Canceled {
+                            error: OutgoingPaymentError {
+                                error_type: OutgoingPaymentErrorType::InvalidOutgoingContract {
+                                    error: OutgoingContractError::Underfunded(_, _)
+                                },
+                                ..
+                            }
+                        }
+                    );
+                    info!("### Gateway client canceled payment");
+                }
+                _ => panic!("Expected Lightning payment!"),
+            }
 
             Ok(())
         },
