@@ -13,7 +13,7 @@ use anyhow::{bail, ensure, format_err, Context};
 use async_stream::stream;
 use bitcoin::{KeyPair, Network};
 use bitcoin_hashes::{sha256, Hash};
-use db::{DbKeyPrefix, LightningGatewayKey, PaymentResult, PaymentResultKey};
+use db::{DbKeyPrefix, PaymentResult, PaymentResultKey};
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
@@ -56,14 +56,13 @@ use incoming::IncomingSmError;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
 };
-use rand::seq::IteratorRandom;
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::{PublicKey, ThirtyTwoByteHash};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use thiserror::Error;
-use tracing::{debug, error, warn};
+use tracing::{debug, error};
 
 use crate::db::{
     LightningGatewayKeyPrefix, MetaOverrides, MetaOverridesKey, MetaOverridesPrefix,
@@ -826,89 +825,6 @@ impl LightningClientModule {
             .map(|g| g.info)
     }
 
-    pub async fn select_active_gateway_opt(&self) -> Option<LightningGateway> {
-        match self.select_active_gateway().await {
-            Ok(gw) => Some(gw),
-            Err(e) => {
-                warn!(?e, "Could not select a gateway");
-                None
-            }
-        }
-    }
-
-    /// The set active gateway, or a random one if none has been set
-    pub async fn select_active_gateway(&self) -> anyhow::Result<LightningGateway> {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-        match dbtx.get_value(&LightningGatewayKey).await {
-            Some(active_gateway) => Ok(active_gateway.info),
-            None => {
-                let gateways = self.fetch_registered_gateways().await?;
-                let num_gateways = gateways.len();
-
-                let vetted = gateways
-                    .clone()
-                    .into_iter()
-                    .filter(|g| g.vetted)
-                    .collect::<Vec<_>>();
-                if !vetted.is_empty() {
-                    let chosen_gateway = vetted
-                        .into_iter()
-                        .map(|gw| gw.info)
-                        .choose(&mut rand::thread_rng())
-                        .expect("vetted is non-empty");
-                    debug!(gateway_id = %chosen_gateway.gateway_id, num_gateways, "Choosing a vetted gateway");
-                    Ok(chosen_gateway)
-                } else {
-                    let chosen_gateway = gateways
-                        .into_iter()
-                        .map(|gw| gw.info)
-                        .choose(&mut rand::thread_rng())
-                        .ok_or(anyhow::anyhow!("Could not choose a gateway"))?;
-                    debug!(gateway_id = %chosen_gateway.gateway_id, num_gateways, "Choosing a random gateway");
-                    Ok(chosen_gateway)
-                }
-            }
-        }
-    }
-
-    /// Sets the gateway to be used by all other operations
-    pub async fn set_active_gateway(
-        &self,
-        gateway_id: &secp256k1::PublicKey,
-    ) -> anyhow::Result<()> {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        let gateways = self.fetch_registered_gateways().await?;
-        if gateways.is_empty() {
-            debug!("Could not find any gateways");
-            return Err(anyhow::anyhow!("Could not find any gateways"));
-        };
-        let gateway = gateways
-            .into_iter()
-            .find(|g| &g.info.gateway_id == gateway_id)
-            .ok_or_else(|| {
-                anyhow::anyhow!("Could not find gateway with gateway id {:?}", gateway_id)
-            })?;
-
-        dbtx.insert_entry(&LightningGatewayKey, &gateway.anchor())
-            .await;
-        dbtx.commit_tx_result().await?;
-        Ok(())
-    }
-
-    /// Overrides the active gateway with an explicit `announcement`. This
-    /// should only be used for testing.
-    pub async fn override_active_gateway(
-        &self,
-        announcement: LightningGatewayAnnouncement,
-    ) -> anyhow::Result<()> {
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-        dbtx.insert_entry(&LightningGatewayKey, &announcement.anchor())
-            .await;
-        dbtx.commit_tx_result().await?;
-        Ok(())
-    }
-
     /// Fetches the metadata overrides for a given federation
     ///
     /// # Arguments
@@ -1081,7 +997,7 @@ impl LightningClientModule {
     /// supplied only internal payments are possible.
     ///
     /// The `gateway` can be acquired by calling
-    /// [`LightningClientModule::select_active_gateway`].
+    /// [`LightningClientModule::select_gateway`].
     pub async fn pay_bolt11_invoice<M: Serialize + MaybeSend + MaybeSync>(
         &self,
         maybe_gateway: Option<LightningGateway>,
@@ -1346,15 +1262,16 @@ impl LightningClientModule {
         description: String,
         expiry_time: Option<u64>,
         extra_meta: M,
+        gateway: Option<LightningGateway>,
     ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
-        let (src_node_id, short_channel_id, route_hints) = match self.select_active_gateway().await
-        {
-            Ok(active_gateway) => (
-                active_gateway.node_pub_key,
-                active_gateway.mint_channel_id,
-                active_gateway.route_hints,
+        let (src_node_id, short_channel_id, route_hints) = match gateway {
+            Some(current_gateway) => (
+                current_gateway.node_pub_key,
+                current_gateway.mint_channel_id,
+                current_gateway.route_hints,
             ),
-            Err(_) => {
+            None => {
+                // If no gateway is provided, this is assumed to be an internal payment.
                 let markers = self.client_ctx.get_internal_payment_markers()?;
                 (markers.0, markers.1, vec![])
             }

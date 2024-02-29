@@ -139,18 +139,6 @@ impl Client {
             .unwrap())
     }
 
-    pub async fn use_gateway(&self, gw: &super::gatewayd::Gatewayd) -> Result<()> {
-        let gateway_id = gw.gateway_id().await?;
-        cmd!(self, "switch-gateway", gateway_id.clone())
-            .run()
-            .await?;
-        info!(
-            "Using {name} gateway",
-            name = gw.ln.as_ref().unwrap().name()
-        );
-        Ok(())
-    }
-
     pub async fn cmd(&self) -> Command {
         cmd!(
             crate::util::get_fedimint_cli_path(),

@@ -18,6 +18,7 @@ use fedimint_core::{Amount, OutPoint, TieredSummary};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LnPayState, OutgoingLightningPayment,
 };
+use fedimint_ln_common::LightningGateway;
 use fedimint_mint_client::{MintClientInit, MintClientModule, MintCommonInit, OOBNotes};
 use fedimint_wallet_client::WalletClientInit;
 use futures::StreamExt;
@@ -217,16 +218,17 @@ pub async fn gateway_pay_invoice(
     client: &ClientHandle,
     invoice: Bolt11Invoice,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
+    ln_gateway: Option<LightningGateway>,
 ) -> anyhow::Result<()> {
     let m = fedimint_core::time::now();
     let lightning_module = &client.get_first_module::<LightningClientModule>();
-    let gateway = lightning_module.select_active_gateway_opt().await;
+    //let gateway = lightning_module.select_active_gateway_opt().await;
     let OutgoingLightningPayment {
         payment_type,
         contract_id: _,
         fee: _,
     } = lightning_module
-        .pay_bolt11_invoice(gateway, invoice, ())
+        .pay_bolt11_invoice(ln_gateway, invoice, ())
         .await?;
     let operation_id = match payment_type {
         fedimint_ln_client::PayType::Internal(_) => bail!("Internal payment not expected"),
@@ -323,7 +325,8 @@ pub async fn cln_wait_invoice_payment(label: &str) -> anyhow::Result<()> {
     }
 }
 
-pub async fn switch_default_gateway(client: &ClientHandle, gateway_id: &str) -> anyhow::Result<()> {
+/*
+pub async fn switch_default_gateway(client: &ClientArc, gateway_id: &str) -> anyhow::Result<()> {
     let gateway_id = parse_gateway_id(gateway_id)?;
     client
         .get_first_module::<LightningClientModule>()
@@ -331,6 +334,7 @@ pub async fn switch_default_gateway(client: &ClientHandle, gateway_id: &str) -> 
         .await?;
     Ok(())
 }
+*/
 
 pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
     secp256k1::PublicKey::from_str(s)
