@@ -4,6 +4,7 @@ use anyhow::bail;
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_core::config::ClientModuleConfig;
 use fedimint_core::core::{IntoDynInstance, ModuleKind, OperationId};
+use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::{sats, Amount, OutPoint};
 use fedimint_dummy_client::states::DummyStateMachine;
@@ -57,7 +58,7 @@ async fn client_ignores_unknown_module() {
     cfg.modules.insert(2142, extra_mod);
 
     // Test that building the client worked
-    let _client = fed.new_client_with_config(cfg).await;
+    let _client = fed.new_client_with(cfg, MemDatabase::new().into()).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
