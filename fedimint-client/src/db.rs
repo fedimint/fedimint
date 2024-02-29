@@ -38,6 +38,26 @@ pub enum DbKeyPrefix {
     ClientInviteCode = 0x30,
     ClientInitState = 0x31,
     ClientMetadata = 0x32,
+    /// Arbitrary data of the applications integrating Fedimint client and
+    /// wanting to store some Federation-specific data in Fedimint client
+    /// database.
+    ///
+    /// New users are encouraged to use this single prefix only.
+    //
+    // TODO: https://github.com/fedimint/fedimint/issues/4444
+    //       in the future, we should make all global access to the db private
+    //       and only expose a getter returning isolated database.
+    UserData = 0xb0,
+    /// Prefixes between 0xb1..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    ExternalReservedStart = 0xb1,
+    /// Prefixes between 0xb1..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    ExternalReservedEnd = 0xcf,
+    /// 0xd0.. reserved for Fedimint internal use
+    InternalReservedStart = 0xd0,
+    /// Per-module instance data
+    ModuleGlobalPrefix = 0xff,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
