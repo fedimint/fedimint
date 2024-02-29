@@ -198,16 +198,30 @@ impl ClientConfig {
     }
 
     /// Get the value of a given meta field
-    pub fn meta<V: serde::de::DeserializeOwned>(
+    pub fn meta<V: serde::de::DeserializeOwned + 'static>(
         &self,
         key: &str,
     ) -> Result<Option<V>, anyhow::Error> {
         let Some(str_value) = self.global.meta.get(key) else {
             return Ok(None);
         };
-        serde_json::from_str(str_value)
+        let res = serde_json::from_str(str_value)
             .map(Some)
-            .context(format!("Decoding meta field '{key}' failed"))
+            .context(format!("Decoding meta field '{key}' failed"));
+
+        // In the past we encoded some string fields as "just a string" without quotes,
+        // this code ensures that old meta values still parse since config is hard to
+        // change
+        if res.is_err() && std::any::TypeId::of::<V>() == std::any::TypeId::of::<String>() {
+            let string_ret = Box::new(str_value.clone());
+            let ret: Box<V> = unsafe {
+                // We can transmute a String to V because we know that V==String
+                std::mem::transmute(string_ret)
+            };
+            Ok(Some(*ret))
+        } else {
+            res
+        }
     }
 
     /// Create an invite code with the api endpoint of the given peer which can
@@ -1040,5 +1054,56 @@ pub mod serde_binary_human_readable {
         } else {
             Deserialize::deserialize(d)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fedimint_core::config::{ClientConfig, GlobalClientConfig};
+
+    use crate::module::CoreConsensusVersion;
+
+    #[test]
+    fn test_dcode_meta() {
+        let config = ClientConfig {
+            global: GlobalClientConfig {
+                api_endpoints: Default::default(),
+                consensus_version: CoreConsensusVersion { major: 0, minor: 0 },
+                meta: vec![
+                    ("foo".to_string(), "bar".to_string()),
+                    ("baz".to_string(), "\"bam\"".to_string()),
+                    ("arr".to_string(), "[\"1\", \"2\"]".to_string()),
+                ]
+                .into_iter()
+                .collect(),
+            },
+            modules: Default::default(),
+        };
+
+        assert_eq!(
+            config
+                .meta::<String>("foo")
+                .expect("parsing legacy string failed"),
+            Some("bar".to_string())
+        );
+        assert_eq!(
+            config.meta::<String>("baz").expect("parsing string failed"),
+            Some("bam".to_string())
+        );
+        assert_eq!(
+            config
+                .meta::<Vec<String>>("arr")
+                .expect("parsing array failed"),
+            Some(vec!["1".to_string(), "2".to_string()])
+        );
+
+        assert!(config.meta::<Vec<String>>("foo").is_err());
+        assert!(config.meta::<Vec<String>>("baz").is_err());
+        assert_eq!(
+            config
+                .meta::<String>("arr")
+                .expect("parsing via legacy fallback failed"),
+            Some("[\"1\", \"2\"]".to_string())
+        );
     }
 }
