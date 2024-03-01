@@ -76,6 +76,14 @@ pub enum ClientCmd {
         #[clap(long)]
         include_invite: bool,
     },
+    SmallestRepresentation {
+        /// Minimum amount to generate a representation for
+        #[clap(long)]
+        min_amount: Amount,
+        /// Maximum amount to generate a representation for
+        #[clap(long)]
+        max_amount: Amount,
+    },
     /// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
     Validate { oob_notes: OOBNotes },
@@ -251,6 +259,19 @@ pub async fn handle_command(
 
             Ok(json!({
                 "notes": notes,
+            }))
+        }
+        ClientCmd::SmallestRepresentation {
+            min_amount,
+            max_amount,
+        } => {
+            let (amount, num_notes) = client
+                .get_first_module::<MintClientModule>()
+                .smallest_representation(min_amount, max_amount);
+
+            Ok(json!({
+                "amount_msat": amount.msats,
+                "num_notes": num_notes,
             }))
         }
         ClientCmd::Validate { oob_notes } => {

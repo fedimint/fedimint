@@ -50,7 +50,7 @@ impl<T> Tiered<T> {
         self.0.keys()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (Amount, &T)> {
+    pub fn iter(&self) -> impl Iterator<Item = (Amount, &T)> + DoubleEndedIterator {
         self.0.iter().map(|(amt, key)| (*amt, key))
     }
 

@@ -1381,6 +1381,33 @@ impl MintClientModule {
 
         Ok(operation)
     }
+
+    /// Returns `num` amounts between `min_amount` and `max_amount` (inclusive)
+    /// that have the smallest optimal representation as e-cash.
+    pub fn smallest_representation(
+        &self,
+        min_amount: Amount,
+        max_amount: Amount,
+    ) -> (Amount, usize) {
+        assert!(min_amount <= max_amount, "The range specified is empty");
+
+        let mut selected_amount = Amount::ZERO;
+        let num_notes = TieredSummary::represent_amount_minimal(max_amount, &self.cfg.tbs_pks)
+            .iter()
+            .rev()
+            .flat_map(|(amount, num_notes)| std::iter::repeat(amount).take(num_notes))
+            .take_while(|amount| {
+                if selected_amount < min_amount {
+                    selected_amount += *amount;
+                    true
+                } else {
+                    false
+                }
+            })
+            .count();
+
+        (selected_amount, num_notes)
+    }
 }
 
 pub fn spendable_notes_to_operation_id(

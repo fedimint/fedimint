@@ -305,11 +305,27 @@ impl TieredSummary {
         denominations
     }
 
+    /// Returns the minimal representation of the given `amount`.
+    pub fn represent_amount_minimal<K>(amount: Amount, tiers: &Tiered<K>) -> TieredSummary {
+        let mut remaining_amount = amount;
+        let mut summary = TieredSummary::default();
+        for &tier in tiers.tiers().rev() {
+            while remaining_amount >= tier {
+                remaining_amount -= tier;
+                *summary.0.entry(tier).or_default() += 1;
+            }
+        }
+
+        assert_eq!(amount, summary.total_amount());
+
+        summary
+    }
+
     pub fn inc(&mut self, tier: Amount, n: usize) {
         *self.0.get_mut_or_default(tier) += n;
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (Amount, usize)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (Amount, usize)> + DoubleEndedIterator + '_ {
         self.0.iter().map(|(k, v)| (k, *v))
     }
 
@@ -390,6 +406,19 @@ mod test {
                 (Amount::from_sats(4), 1)
             ])
         );
+    }
+
+    #[test]
+    fn represent_amount_minimal() {
+        let tiers = vec![1, 2, 4, 8, 16, 32]
+            .into_iter()
+            .map(|amount_msat| (Amount::from_msats(amount_msat), ()))
+            .collect::<Tiered<()>>();
+
+        assert_eq!(
+            TieredSummary::represent_amount_minimal(Amount::from_msats(5), &tiers),
+            denominations(vec![(Amount::from_msats(4), 1), (Amount::from_msats(1), 1)])
+        )
     }
 
     fn notes(notes: Vec<(Amount, usize)>) -> TieredMulti<usize> {
