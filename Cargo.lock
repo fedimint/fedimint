@@ -1780,6 +1780,7 @@ dependencies = [
  "axum",
  "axum-macros",
  "bitcoin 0.29.2",
+ "bitcoin 0.30.2",
  "bitcoin_hashes 0.11.0",
  "clap",
  "cln-plugin",

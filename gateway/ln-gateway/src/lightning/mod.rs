@@ -7,6 +7,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bitcoin30::Network;
 use bitcoin_hashes::sha256;
 use clap::Subcommand;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -169,43 +170,10 @@ pub enum LightningMode {
         #[arg(long = "ldk-esplora-server-url", env = "FM_LDK_ESPLORA_SERVER_URL")]
         esplora_server_url: String,
 
-        /// LDK network (defaults to mainnet if not provided)
+        /// LDK network (defaults to regtest if not provided)
         #[arg(long = "ldk-network", env = "FM_LDK_NETWORK")]
-        network_or: Option<CliNetwork>,
+        network_or: Option<Network>,
     },
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub enum CliNetwork {
-    Mainnet,
-    Testnet,
-    Signet,
-    Regtest,
-}
-
-impl FromStr for CliNetwork {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "mainnet" => Ok(CliNetwork::Mainnet),
-            "testnet" => Ok(CliNetwork::Testnet),
-            "signet" => Ok(CliNetwork::Signet),
-            "regtest" => Ok(CliNetwork::Regtest),
-            _ => Err(format!("Invalid network: {}", s)),
-        }
-    }
-}
-
-impl CliNetwork {
-    fn to_network(&self) -> ldk_node::Network {
-        match self {
-            CliNetwork::Mainnet => ldk_node::Network::Bitcoin,
-            CliNetwork::Testnet => ldk_node::Network::Testnet,
-            CliNetwork::Signet => ldk_node::Network::Signet,
-            CliNetwork::Regtest => ldk_node::Network::Regtest,
-        }
-    }
 }
 
 #[async_trait]
@@ -236,15 +204,22 @@ impl LightningBuilder for GatewayLightningBuilder {
                 storage_dir_path_or,
                 esplora_server_url,
                 network_or,
-            } => Box::new(
-                ldk::GatewayLdkClient::new(
-                    storage_dir_path_or,
-                    esplora_server_url,
-                    network_or.unwrap_or(CliNetwork::Regtest).to_network(),
+            } => {
+                // Default to regtest if network is not provided.
+                let network = network_or.unwrap_or(Network::Regtest);
+
+                Box::new(
+                    ldk::GatewayLdkClient::new(
+                        storage_dir_path_or,
+                        esplora_server_url,
+                        network
+                            .try_into()
+                            .expect(&format!("Invalid network: {}", network)),
+                    )
+                    .await
+                    .unwrap(),
                 )
-                .await
-                .unwrap(),
-            ),
+            }
         }
     }
 }
