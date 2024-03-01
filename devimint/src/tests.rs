@@ -1436,7 +1436,6 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     // Drop references to cln and lnd gateways so the test can kill them
     drop(gw_cln);
     drop(gw_lnd);
-    // TODO: Finish wiring LDK up in this test.
     drop(gw_ldk);
 
     // Verify that making a payment while the gateways are down does not result in
@@ -1462,9 +1461,10 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
 
     // Reboot gateways with the same Lightning node instances
     info!("Rebooting gateways...");
-    let (new_gw_cln, new_gw_lnd) = tokio::try_join!(
+    let (new_gw_cln, new_gw_lnd, new_gw_ldk) = tokio::try_join!(
         Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
-        Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone()))
+        Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
+        Gatewayd::new(process_mgr, LightningNode::Ldk),
     )?;
 
     let cln_info: GatewayInfo = serde_json::from_value(cln_value)?;
@@ -1500,6 +1500,26 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
                 info!(target: LOG_DEVIMINT, "LND Gateway restarted, with auto-rejoin to federation");
                 // Assert that the gateway info is the same as before the reboot
                 assert_eq!(lnd_info, reboot_info);
+                return Ok(());
+            }
+            Err(ControlFlow::Continue(anyhow!("gateway not running")))
+        },
+    )
+    .await?;
+
+    let ldk_info: GatewayInfo = serde_json::from_value(ldk_value)?;
+    poll(
+        "Waiting for LDK Gateway Running state after reboot",
+        10,
+        || async {
+            let mut new_ldk_cmd = cmd!(new_gw_ldk, "info");
+            let ldk_value = new_ldk_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+            let reboot_info: GatewayInfo = serde_json::from_value(ldk_value).context("json invalid").map_err(ControlFlow::Break)?;
+
+            if reboot_info.gateway_state == "Running" {
+                info!(target: LOG_DEVIMINT, "LDK Gateway restarted, with auto-rejoin to federation");
+                // Assert that the gateway info is the same as before the reboot
+                assert_eq!(ldk_info, reboot_info);
                 return Ok(());
             }
             Err(ControlFlow::Continue(anyhow!("gateway not running")))
