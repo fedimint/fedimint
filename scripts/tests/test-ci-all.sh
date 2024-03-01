@@ -89,6 +89,12 @@ function latency_test_restore() {
 }
 export -f latency_test_restore
 
+function guardian_backup() {
+  # guardian-backup-test runs a degraded federation, so we need to override FM_OFFLINE_NODES
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/guardian-backup.sh
+}
+export -f guardian_backup
+
 function devimint_cli_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-cli-test.sh
 }
@@ -183,6 +189,7 @@ tests_to_run_in_parallel=(
   "devimint_cli_test_single"
   "load_test_tool_test"
   "recoverytool_tests"
+  "guardian_backup"
 )
 
 tests_with_versions=()

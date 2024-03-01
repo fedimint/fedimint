@@ -37,7 +37,7 @@ pub const DB_FILE: &str = "database";
 
 pub const JSON_EXT: &str = "json";
 
-const ENCRYPTED_EXT: &str = "encrypt";
+pub const ENCRYPTED_EXT: &str = "encrypt";
 
 /// Temporary directiry where server configs are stored / removed through the
 /// setup process On setup complete, the configs are moved to the server config

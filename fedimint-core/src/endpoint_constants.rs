@@ -1,6 +1,7 @@
 pub const ACCOUNT_ENDPOINT: &str = "account";
 pub const ADD_CONFIG_GEN_PEER_ENDPOINT: &str = "add_config_gen_peer";
 pub const AUDIT_ENDPOINT: &str = "audit";
+pub const GUARDIAN_CONFIG_BACKUP_ENDPOINT: &str = "download_guardian_backup";
 pub const AUTH_ENDPOINT: &str = "auth";
 pub const AWAIT_OUTPUT_OUTCOME_ENDPOINT: &str = "await_output_outcome";
 pub const BACKUP_ENDPOINT: &str = "backup";

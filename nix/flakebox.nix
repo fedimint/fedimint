@@ -357,6 +357,12 @@ rec {
     buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/tests/latency-test.sh";
   };
 
+  guardianBackupTest = craneLibTests.mkCargoDerivation {
+    pname = "${commonCliTestArgs.pname}-guardian-backp";
+    cargoArtifacts = workspaceBuild;
+    buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/tests/guardian-backup.sh";
+  };
+
   devimintCliTest = craneLibTests.mkCargoDerivation {
     pname = "${commonCliTestArgs.pname}-cli";
     cargoArtifacts = workspaceBuild;

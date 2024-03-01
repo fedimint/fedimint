@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use bitcoin_hashes::sha256;
+use fedimint_core::api::GuardianConfigBackup;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::task::MaybeSend;
 use fedimint_core::util::SafeUrl;
@@ -13,9 +14,10 @@ use crate::config::ServerModuleConfigGenParamsRegistry;
 use crate::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
     CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
-    RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
-    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
-    STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
+    GUARDIAN_CONFIG_BACKUP_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT,
+    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
+    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
+    VERIFY_CONFIG_HASH_ENDPOINT,
 };
 use crate::module::{ApiAuth, ApiRequestErased};
 use crate::PeerId;
@@ -185,6 +187,18 @@ impl WsAdminClient {
     pub async fn audit(&self, auth: ApiAuth) -> FederationResult<AuditSummary> {
         self.request(AUDIT_ENDPOINT, ApiRequestErased::default().with_auth(auth))
             .await
+    }
+
+    /// Download the guardian config to back it up
+    pub async fn guardian_config_backup(
+        &self,
+        auth: ApiAuth,
+    ) -> FederationResult<GuardianConfigBackup> {
+        self.request(
+            GUARDIAN_CONFIG_BACKUP_ENDPOINT,
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .await
     }
 
     /// Check auth credentials

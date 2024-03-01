@@ -27,6 +27,7 @@ bitcoin = "0.29.2"
 bitcoin_hashes = "0.11.0"
 bytes = "1.4.0"
 futures = "0.3.24"
+hex = "0.4.3"
 itertools = "0.10.5"
 fedimint-core = { version = "0.3.0-alpha", path = "../fedimint-core" }
 fedimint-logging = { version = "0.3.0-alpha", path = "../fedimint-logging" }
@@ -39,6 +40,7 @@ serde_json = "1.0.91"
 sha3 = "0.10.5"
 strum = "0.24"
 strum_macros = "0.24"
+tar = "0.4.40"
 tbs = { package = "fedimint-tbs", version = "0.3.0-alpha", path = "../crypto/tbs" }
 thiserror = "1.0.39"
 tracing ="0.1.37"

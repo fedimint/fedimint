@@ -354,6 +354,9 @@ enum AdminCmd {
 
     /// Show an audit across all modules
     Audit,
+
+    /// Download guardian config to back it up
+    GuardianConfigBackup,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -678,6 +681,18 @@ impl FedimintCli {
                 let status = cli.admin_client(client.get_config())?.status().await?;
                 Ok(CliOutput::Raw(
                     serde_json::to_value(status)
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
+                ))
+            }
+            Command::Admin(AdminCmd::GuardianConfigBackup) => {
+                let client = self.client_open(&cli).await?;
+
+                let guardian_config_backup = cli
+                    .admin_client(client.get_config())?
+                    .guardian_config_backup(cli.auth()?)
+                    .await?;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(guardian_config_backup)
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
                 ))
             }
