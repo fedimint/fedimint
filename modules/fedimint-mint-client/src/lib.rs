@@ -170,6 +170,44 @@ impl OOBNotes {
             Some(InviteCode::new(api, peer_id, *federation_id))
         })
     }
+
+    pub fn parse_json(&self) -> Result<serde_json::Value, serde_json::Error> {
+        let mut map = serde_json::Map::new();
+        for notes in self.0.iter() {
+            match notes {
+                OOBNotesData::Notes(notes) => {
+                    let notes_json = serde_json::to_value(notes).expect("serialization can't fail");
+                    map.insert("notes".to_string(), notes_json);
+                }
+                OOBNotesData::FederationIdPrefix(prefix) => {
+                    map.insert(
+                        "federation_id_prefix".to_string(),
+                        serde_json::to_value(prefix)?,
+                    );
+                }
+                OOBNotesData::Invite {
+                    peer_apis,
+                    federation_id,
+                } => {
+                    let (peer_id, api) = peer_apis
+                        .first()
+                        .cloned()
+                        .expect("Decoding makes sure peer_apis isn't empty");
+                    map.insert(
+                        "invite".to_string(),
+                        serde_json::to_value(InviteCode::new(api, peer_id, *federation_id))?,
+                    );
+                }
+                OOBNotesData::Default { variant, bytes } => {
+                    map.insert(
+                        format!("default_{}", variant),
+                        serde_json::to_value(bytes).expect("serialization can't fail"),
+                    );
+                }
+            }
+        }
+        Ok(serde_json::to_value(map).expect("serialization can't fail"))
+    }
 }
 
 impl Decodable for OOBNotes {

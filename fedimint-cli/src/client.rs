@@ -59,6 +59,8 @@ pub enum ClientCmd {
     Info,
     /// Reissue notes received from a third party to avoid double spends
     Reissue { oob_notes: OOBNotes },
+    /// Parse notes from a string and return them as JSON
+    ParseJson { oob_notes: OOBNotes },
     /// Prepare notes to send to a third party as a payment
     Spend {
         /// The amount of e-cash to spend
@@ -184,6 +186,10 @@ pub async fn handle_command(
 ) -> anyhow::Result<serde_json::Value> {
     match command {
         ClientCmd::Info => get_note_summary(&client).await,
+        ClientCmd::ParseJson { oob_notes } => {
+            let notes = oob_notes.parse_json()?;
+            Ok(serde_json::to_value(notes)?)
+        }
         ClientCmd::Reissue { oob_notes } => {
             let amount = oob_notes.total_amount();
 
