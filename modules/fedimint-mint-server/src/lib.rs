@@ -23,8 +23,8 @@ use fedimint_core::{
 use fedimint_metrics::{histogram_opts, lazy_static, prometheus, register_histogram, Histogram};
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
-    FeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal,
-    MintConfigPrivate, MintGenParams,
+    MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate,
+    MintGenParams,
 };
 use fedimint_mint_common::db::{
     DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix, MintAuditItemKey,
@@ -214,7 +214,7 @@ impl ServerModuleInit for MintInit {
                                 (key_peer, keys)
                             })
                             .collect(),
-                        fee_consensus: FeeConsensus::default(),
+                        fee_consensus: params.consensus.fee_consensus(),
                         max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
                     },
                     private: MintConfigPrivate {
@@ -278,7 +278,7 @@ impl ServerModuleInit for MintInit {
                         (*peer, pks)
                     })
                     .collect(),
-                fee_consensus: Default::default(),
+                fee_consensus: params.consensus.fee_consensus(),
                 max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
             },
         };
@@ -706,7 +706,7 @@ mod test {
             &peers,
             &ConfigGenModuleParams::from_typed(MintGenParams {
                 local: Default::default(),
-                consensus: MintGenParamsConsensus::new(2),
+                consensus: MintGenParamsConsensus::new(2, FeeConsensus::default()),
             })
             .unwrap(),
         );

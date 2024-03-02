@@ -19,6 +19,7 @@ pub struct MintGenParams {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MintGenParamsConsensus {
     denomination_base: u16,
+    fee_consensus: FeeConsensus,
 }
 
 // The maximum size of an E-Cash note (1,000,000 coins)
@@ -27,12 +28,19 @@ pub struct MintGenParamsConsensus {
 const MAX_DENOMINATION_SIZE: Amount = Amount::from_bitcoins(1_000_000);
 
 impl MintGenParamsConsensus {
-    pub fn new(denomination_base: u16) -> Self {
-        Self { denomination_base }
+    pub fn new(denomination_base: u16, fee_consensus: FeeConsensus) -> Self {
+        Self {
+            denomination_base,
+            fee_consensus,
+        }
     }
 
     pub fn denomination_base(&self) -> u16 {
         self.denomination_base
+    }
+
+    pub fn fee_consensus(&self) -> FeeConsensus {
+        self.fee_consensus.clone()
     }
 
     pub fn gen_denominations(&self) -> Vec<Amount> {
@@ -46,7 +54,7 @@ impl MintGenParamsConsensus {
 impl Default for MintGenParams {
     fn default() -> Self {
         MintGenParams {
-            consensus: MintGenParamsConsensus::new(2),
+            consensus: MintGenParamsConsensus::new(2, FeeConsensus::default()),
             local: EmptyGenParams {},
         }
     }

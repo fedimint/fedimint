@@ -11,7 +11,7 @@ use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
 use fedimint_ln_server::LightningInit;
-use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
+use fedimint_mint_server::common::config::{FeeConsensus, MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_server::MintInit;
 use fedimint_unknown_common::config::{
     UnknownGenParams, UnknownGenParamsConsensus, UnknownGenParamsLocal,
@@ -54,7 +54,7 @@ pub fn attach_default_module_init_params(
             MintInit::kind(),
             MintGenParams {
                 local: Default::default(),
-                consensus: MintGenParamsConsensus::new(2),
+                consensus: MintGenParamsConsensus::new(2, FeeConsensus::default()),
             },
         )
         .attach_config_gen_params(
