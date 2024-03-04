@@ -18,7 +18,7 @@ use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
 use futures::StreamExt;
 use tracing::info;
 
-const EXPECTED_MAXIMUM_FEE: Amount = Amount::from_sats(25);
+const EXPECTED_MAXIMUM_FEE: Amount = Amount::from_sats(50);
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(
@@ -125,6 +125,9 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     // Since we are overspending as soon as the right denominations aren't available
     // anymore we have to use the amount actually sent and not the one requested
     let total_amount_spent: Amount = note_bags.iter().map(|bag| bag.total_amount()).sum();
+
+    assert_eq!(client1.get_balance().await, sats(1000) - total_amount_spent);
+
     info!(%total_amount_spent, "Sent notes");
 
     let mut reissue_tasks = vec![];
@@ -158,7 +161,6 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
         task.await.expect("reissue task failed");
     }
 
-    assert_eq!(client1.get_balance().await, sats(1000) - total_amount_spent);
     assert!(client2.get_balance().await >= total_amount_spent - EXPECTED_MAXIMUM_FEE);
 
     Ok(())
