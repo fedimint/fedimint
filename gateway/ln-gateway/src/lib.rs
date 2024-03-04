@@ -483,17 +483,18 @@ impl Gateway {
                     .await
                     .expect("Failed to start webserver");
                     info!("Successfully started webserver");
-                    tokio::select! {
-                        _ = wait_for_new_password(&gateway_db, gateway_config) => {
+                    let result = handle
+                        .cancel_on_shutdown(async {
+                            wait_for_new_password(&gateway_db, gateway_config).await;
                             info!("GatewayConfiguration has been updated, restarting webserver...");
                             if let Err(e) = webserver_group.shutdown_join_all(None).await {
                                 panic!("Error shutting down server: {e:?}");
                             }
-                        },
-                        _ = handle.make_shutdown_rx().await => {
-                            info!("Received shutdown signal, exiting....");
-                            break;
-                        }
+                        })
+                        .await;
+                    if result.is_err() {
+                        info!("Received shutdown signal, exiting....");
+                        break;
                     }
                 }
             })
@@ -565,11 +566,11 @@ impl Gateway {
                                         }).await;
 
                                         // Blocks until the connection to the lightning node breaks or we receive the shutdown signal
-                                        tokio::select! {
-                                            _ = self_copy.handle_htlc_stream(stream, handle.clone()) => {
+                                        match handle.cancel_on_shutdown(self_copy.handle_htlc_stream(stream, handle.clone())).await {
+                                            Ok(_) => {
                                                 warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
                                             },
-                                            _ = handle.make_shutdown_rx().await => {
+                                            Err(_) => {
                                                 info!("Received shutdown signal");
                                                 self_copy.handle_disconnect(htlc_task_group).await;
                                                 break;
@@ -1381,11 +1382,8 @@ impl Gateway {
                 // If the loop is interrupted while in the middle of registering clients,
                 // start_gateway will spawn another task to register clients once a connection
                 // with the LN node is reestablished.
-                tokio::select! {
-                    _ = handle.make_shutdown_rx().await => {
-                        info!("register clients task received shutdown signal")
-                    }
-                    _ = registration_loop => {}
+                if handle.cancel_on_shutdown(registration_loop).await.is_err() {
+                    info!("register clients task received shutdown signal");
                 }
             })
             .await;
