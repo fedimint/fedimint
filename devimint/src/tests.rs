@@ -1820,6 +1820,8 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
 
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
     let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+
+    // TODO(support:v0.2): remove
     if VersionReq::parse("<0.3.0-alpha")?.matches(&fedimint_cli_version)
         || VersionReq::parse("<0.3.0-alpha")?.matches(&fedimintd_version)
     {
@@ -1900,7 +1902,10 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
     };
 
     write_file("backup.tar", &backup_tar);
-    write_file("password.private", "pass".as_bytes());
+    write_file(
+        fedimint_server::config::io::PLAINTEXT_PASSWORD,
+        "pass".as_bytes(),
+    );
 
     assert_eq!(
         std::process::Command::new("tar")
