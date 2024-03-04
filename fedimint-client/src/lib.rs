@@ -1877,6 +1877,21 @@ impl ClientBuilder {
             .await
     }
 
+    /// Download most recent valid backup found from the Federation
+    pub async fn download_backup_from_federation(
+        &self,
+        root_secret: &DerivableSecret,
+        config: &ClientConfig,
+    ) -> anyhow::Result<Option<ClientBackup>> {
+        let api = DynGlobalApi::from_config(config);
+        Client::download_backup_from_federation_static(
+            &api,
+            &Self::federation_root_secret(root_secret, config),
+            &self.decoders(config),
+        )
+        .await
+    }
+
     /// Join a (possibly) previous joined Federation
     ///
     /// Unlike [`Self::join`], `recover` will run client module recovery for
@@ -1892,22 +1907,15 @@ impl ClientBuilder {
         root_secret: DerivableSecret,
         config: ClientConfig,
         invite_code: InviteCode,
+        backup: Option<ClientBackup>,
     ) -> anyhow::Result<ClientArc> {
-        let api = DynGlobalApi::from_config(&config);
-        let snapshot = Client::download_backup_from_federation_static(
-            &api,
-            &Self::federation_root_secret(&root_secret, &config),
-            &self.decoders(&config),
-        )
-        .await?;
-
         let client = self
             .init(
                 root_secret,
                 config,
                 invite_code,
                 InitMode::Recover {
-                    snapshot: snapshot.clone(),
+                    snapshot: backup.clone(),
                 },
             )
             .await?;
