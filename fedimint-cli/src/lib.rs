@@ -596,15 +596,16 @@ impl FedimintCli {
             }
         }
 
+        let root_secret = get_default_client_secret(
+            &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
+            &client_config.federation_id(),
+        );
+        let backup = builder
+            .download_backup_from_federation(&root_secret, &client_config)
+            .await
+            .map_err_cli_general()?;
         builder
-            .recover(
-                get_default_client_secret(
-                    &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
-                    &client_config.federation_id(),
-                ),
-                client_config.to_owned(),
-                invite_code,
-            )
+            .recover(root_secret, client_config.to_owned(), invite_code, backup)
             .await
             .map_err_cli_general()
     }
