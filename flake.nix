@@ -9,7 +9,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flakebox = {
-      url = "github:dpc/flakebox?rev=49117df15209701f3e13ba2bcf514b550955e7b4";
+      url = "github:dpc/flakebox?rev=27ecbf8f2b252dd843d0f58d45658eb56bb5e223";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.fenix.follows = "fenix";
     };
@@ -104,56 +104,51 @@
             stdenv = pkgs.clang11Stdenv;
           };
 
-          # all standard toolchains provided by flakebox
-          toolchainsStd =
-            flakeboxLib.mkStdFenixToolchains toolchainArgs;
+          stdTargets = flakeboxLib.mkStdTargets { };
+          stdToolchains = flakeboxLib.mkStdToolchains toolchainArgs;
+
 
           # toolchains for the native build (default shell)
-          toolchainsNative = (pkgs.lib.getAttrs
-            [
-              "default"
-            ]
-            toolchainsStd
-          );
+          toolchainNative = flakeboxLib.mkFenixToolchain (toolchainArgs
+          // {
+            targets = (pkgs.lib.getAttrs
+              [
+                "default"
+              ]
+              stdTargets
+            );
+          });
 
-          # toolchains for the `cross` shell
-          toolchainsCross = (pkgs.lib.getAttrs
-            ([
-              "default"
-              "nightly"
-              "aarch64-android"
-              "x86_64-android"
-              "arm-android"
-              "armv7-android"
-              "wasm32-unknown"
-            ] ++ lib.optionals pkgs.stdenv.isDarwin [
-              "aarch64-ios"
-              "aarch64-ios-sim"
-              "x86_64-ios"
-            ])
-            toolchainsStd
-          );
+          # toolchains for the native + wasm build
+          toolchainWasm = flakeboxLib.mkFenixToolchain (toolchainArgs
+          // {
+            targets = (pkgs.lib.getAttrs
+              [
+                "default"
+                "wasm32-unknown"
+              ]
+              stdTargets
+            );
+          });
 
-          # toolchains for the wasm build (`crossWasm` shell)
-          toolchainsWasm = (pkgs.lib.getAttrs
-            [
-              "default"
-              "wasm32-unknown"
-            ]
-            toolchainsStd
-          );
-
-          toolchainNative = flakeboxLib.mkFenixMultiToolchain {
-            toolchains = toolchainsNative;
-          };
-
-          toolchainAll = flakeboxLib.mkFenixMultiToolchain {
-            toolchains = toolchainsCross;
-          };
-          toolchainWasm = flakeboxLib.mkFenixMultiToolchain {
-            toolchains = toolchainsWasm;
-          };
-
+          # toolchains for the native + wasm build
+          toolchainAll = flakeboxLib.mkFenixToolchain (toolchainArgs
+          // {
+            targets = (pkgs.lib.getAttrs
+              ([
+                "default"
+                "aarch64-android"
+                "x86_64-android"
+                "arm-android"
+                "armv7-android"
+                "wasm32-unknown"
+              ] ++ lib.optionals pkgs.stdenv.isDarwin [
+                "aarch64-ios"
+                "aarch64-ios-sim"
+                "x86_64-ios"
+              ])
+              stdTargets);
+          });
           # Replace placeholder git hash in a binary
           #
           # To avoid impurity, we use a git hash placeholder when building binaries
@@ -198,7 +193,7 @@
             # to it.
             inherit craneMultiBuild;
 
-            toolchains = toolchainsCross;
+            toolchains = stdToolchains // { "wasm32-unknown" = toolchainWasm; };
             profiles = [ "dev" "ci" "test" "release" ];
           };
 
