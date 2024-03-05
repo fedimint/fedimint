@@ -197,6 +197,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
                     )?;
+                    std::env::set_var("FM_INVITE_CODE", dev_fed.fed.invite_code()?);
                     let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
 
                     if let Some(exec) = exec {
