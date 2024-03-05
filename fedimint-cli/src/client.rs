@@ -121,6 +121,8 @@ pub enum ClientCmd {
     AwaitLnPay { operation_id: OperationId },
     /// List registered gateways
     ListGateways,
+    /// Re-downloads the registered gateways from the federation
+    UpdateGatewayCache,
     /// Generate a new deposit address, funds sent to it can later be claimed
     DepositAddress {
         /// How long the client should watch the address for incoming
@@ -408,6 +410,16 @@ pub async fn handle_command(
         }
         ClientCmd::ListGateways => {
             let lightning_module = client.get_first_module::<LightningClientModule>();
+            let gateways = lightning_module.list_gateways().await;
+            if gateways.is_empty() {
+                return Ok(serde_json::to_value(Vec::<String>::new()).unwrap());
+            }
+
+            Ok(json!(&gateways))
+        }
+        ClientCmd::UpdateGatewayCache => {
+            let lightning_module = client.get_first_module::<LightningClientModule>();
+            lightning_module.update_gateway_cache(true).await?;
             let gateways = lightning_module.list_gateways().await;
             if gateways.is_empty() {
                 return Ok(serde_json::to_value(Vec::<String>::new()).unwrap());

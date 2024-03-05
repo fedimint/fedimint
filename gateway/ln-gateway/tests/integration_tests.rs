@@ -993,7 +993,6 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
             tracing::info!("Creating federation with gateway type {gateway_type}. Number of route hints: {num_route_hints}");
 
             let fed = fixtures.new_fed().await;
-            let user_client = fed.new_client().await;
             let mut gateway = fixtures
                 .new_gateway(
                     gateway_ln,
@@ -1002,6 +1001,7 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
                 )
                 .await;
             gateway.connect_fed(&fed).await;
+            let user_client = fed.new_client().await;
 
             let invoice_amount = sats(100);
             let gateway_id = gateway.gateway.gateway_id;

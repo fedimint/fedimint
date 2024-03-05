@@ -391,7 +391,11 @@ impl LightningClientModule {
             client_ctx: args.context(),
         };
 
-        ln_module.update_gateway_cache(false).await?;
+        // Only initialize the gateway cache if it is empty
+        let gateways = ln_module.list_gateways().await;
+        if gateways.is_empty() {
+            ln_module.update_gateway_cache(false).await?;
+        }
 
         Ok(ln_module)
     }
