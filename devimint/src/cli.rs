@@ -137,27 +137,25 @@ pub async fn cleanup_on_exit<T>(
     main_process: impl futures::Future<Output = Result<T>>,
     task_group: TaskGroup,
 ) -> Result<()> {
-    // This select makes it possible to exit earlier if a signal is received before
-    // the main process is finished
-    tokio::select! {
-        _ = task_group.make_handle().make_shutdown_rx().await => {
+    match task_group
+        .make_handle()
+        .cancel_on_shutdown(main_process)
+        .await
+    {
+        Err(_) => {
             info!("Received shutdown signal before finishing main process, exiting early");
             Ok(())
         }
-        result = main_process => {
-            match result {
-                Ok(v) => {
-                    info!("Main process finished successfully, will wait for shutdown signal");
-                    task_group.make_handle().make_shutdown_rx().await.await;
-                    info!("Received shutdown signal, shutting down");
-                    drop(v); // execute destructors
-                    Ok(())
-                },
-                Err(e) => {
-                    warn!("Main process failed with {e:?}, will shutdown");
-                    Err(e)
-                }
-            }
+        Ok(Ok(v)) => {
+            info!("Main process finished successfully, will wait for shutdown signal");
+            task_group.make_handle().make_shutdown_rx().await.await;
+            info!("Received shutdown signal, shutting down");
+            drop(v); // execute destructors
+            Ok(())
+        }
+        Ok(Err(e)) => {
+            warn!("Main process failed with {e:?}, will shutdown");
+            Err(e)
         }
     }
 }

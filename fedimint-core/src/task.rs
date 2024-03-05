@@ -2,7 +2,7 @@
 
 use std::collections::VecDeque;
 use std::future::Future;
-use std::pin::Pin;
+use std::pin::{pin, Pin};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -11,6 +11,7 @@ use fedimint_core::time::now;
 use fedimint_logging::{LOG_TASK, LOG_TEST};
 #[cfg(target_family = "wasm")]
 use futures::channel::oneshot;
+use futures::future::{self, Either};
 use futures::lock::Mutex;
 pub use imp::*;
 use thiserror::Error;
@@ -22,7 +23,7 @@ use tokio::task::{JoinError, JoinHandle};
 use tracing::{error, info, warn};
 
 #[cfg(target_family = "wasm")]
-type JoinHandle<T> = futures::future::Ready<anyhow::Result<T>>;
+type JoinHandle<T> = future::Ready<anyhow::Result<T>>;
 #[cfg(target_family = "wasm")]
 type JoinError = anyhow::Error;
 
@@ -359,6 +360,11 @@ pub struct TaskHandle {
     inner: Arc<TaskGroupInner>,
 }
 
+#[derive(thiserror::Error, Debug, Clone)]
+#[error("Task group is shutting down")]
+#[non_exhaustive]
+pub struct ShuttingDownError {}
+
 impl TaskHandle {
     /// Is task group shutting down?
     ///
@@ -373,6 +379,18 @@ impl TaskHandle {
     /// signal during otherwise blocking operation.
     pub async fn make_shutdown_rx(&self) -> TaskShutdownToken {
         TaskShutdownToken::new(self.inner.on_shutdown_rx.clone())
+    }
+
+    /// Run the future or cancel it if the [`TaskGroup`] shuts down.
+    pub async fn cancel_on_shutdown<F: Future>(
+        &self,
+        fut: F,
+    ) -> Result<F::Output, ShuttingDownError> {
+        let rx = TaskShutdownToken::new(self.inner.on_shutdown_rx.clone());
+        match future::select(pin!(rx), pin!(fut)).await {
+            Either::Left(((), _)) => Err(ShuttingDownError {}),
+            Either::Right((value, _)) => Ok(value),
+        }
     }
 }
 
