@@ -65,6 +65,8 @@ pub enum Commands {
     LeaveFed {
         #[clap(long)]
         federation_id: FederationId,
+        #[clap(long, help = "Leave the federation without requiring zero balance.")]
+        forced: Option<bool>,
     },
     /// Make a backup of snapshot of all ecash
     Backup {
@@ -159,9 +161,15 @@ async fn main() -> anyhow::Result<()> {
 
             print_response(response).await;
         }
-        Commands::LeaveFed { federation_id } => {
+        Commands::LeaveFed {
+            federation_id,
+            forced,
+        } => {
             let response = client()
-                .leave_federation(LeaveFedPayload { federation_id })
+                .leave_federation(LeaveFedPayload {
+                    federation_id,
+                    force_leave: forced,
+                })
                 .await?;
             print_response(response).await;
         }

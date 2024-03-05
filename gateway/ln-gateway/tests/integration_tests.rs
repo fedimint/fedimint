@@ -820,6 +820,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     verify_gateway_rpc_success("leave_federation", || {
         rpc_client.leave_federation(LeaveFedPayload {
             federation_id: fed.id(),
+            force_leave: Some(false),
         })
     })
     .await;
@@ -1279,7 +1280,7 @@ async fn test_gateway_can_leave_connected_federations() -> anyhow::Result<()> {
     multi_federation_test(
         LightningNodeType::Lnd,
         |gateway, rpc, fed1, fed2, _| async move {
-            assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
+            assert_eq!(rpc.get_info().await.expect("Could not get gateway info.").federations.len(), 0);
 
             let invite1 = fed1.invite_code();
             let invite2 = fed2.invite_code();
@@ -1287,7 +1288,9 @@ async fn test_gateway_can_leave_connected_federations() -> anyhow::Result<()> {
             let id1 = invite1.federation_id();
             let id2 = invite2.federation_id();
 
-            connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
+            connect_federations(&rpc, &[fed1, fed2])
+                .await
+                .unwrap_or_else(|_| panic!("Could not connect to federations {id1} and {id2}."));
 
             let info = rpc.get_info().await.unwrap();
             assert_eq!(info.federations.len(), 2);
@@ -1302,9 +1305,12 @@ async fn test_gateway_can_leave_connected_federations() -> anyhow::Result<()> {
 
             // remove first connected federation
             let fed_info = rpc
-                .leave_federation(LeaveFedPayload { federation_id: id1 })
+                .leave_federation(LeaveFedPayload {
+                    federation_id: id1,
+                    force_leave: Some(false),
+                })
                 .await
-                .unwrap();
+                .unwrap_or_else(|_| panic!("Could not leave federation {id1}."));
             assert_eq!(fed_info.federation_id, id1);
             assert_eq!(fed_info.channel_id, Some(1));
 
@@ -1314,15 +1320,18 @@ async fn test_gateway_can_leave_connected_federations() -> anyhow::Result<()> {
                     invite_code: invite1.to_string(),
                 })
                 .await
-                .unwrap();
+                .unwrap_or_else(|_| panic!("Could not connect to federation {id1}."));
             assert_eq!(fed_info.federation_id, id1);
             assert_eq!(fed_info.channel_id, Some(3));
 
             // remove second connected federation
             let fed_info = rpc
-                .leave_federation(LeaveFedPayload { federation_id: id2 })
+                .leave_federation(LeaveFedPayload {
+                    federation_id: id2,
+                    force_leave: Some(false),
+                })
                 .await
-                .unwrap();
+                .unwrap_or_else(|_| panic!("Could not leave federation {id2}."));
             assert_eq!(fed_info.federation_id, id2);
             assert_eq!(fed_info.channel_id, Some(2));
 
@@ -1332,15 +1341,85 @@ async fn test_gateway_can_leave_connected_federations() -> anyhow::Result<()> {
                     invite_code: invite2.to_string(),
                 })
                 .await
-                .unwrap();
+                .unwrap_or_else(|_| panic!("Could not connect to federation {id2}."));
             assert_eq!(fed_info.federation_id, id2);
             assert_eq!(fed_info.channel_id, Some(4));
 
-            let info = rpc.get_info().await.unwrap();
+            let info = rpc.get_info().await.expect("Could not get gateway info.");
             assert_eq!(info.federations.len(), 2);
             assert_eq!(
-                info.channels.unwrap().keys().cloned().collect::<Vec<u64>>(),
+                info.channels.expect("Could not get channels.").keys().cloned().collect::<Vec<u64>>(),
                 vec![3, 4]
+            );
+
+            // send sats to first federation
+            info!("Sending sats to federation {id1}.");
+            send_msats_to_gateway(&gateway, id1, 5_000).await;
+            let fed1_balance = rpc.get_balance(BalancePayload {federation_id: id1})
+                .await
+                .unwrap_or_else(|_| panic!("Could not query balance for federation {id1}."));
+            assert_ne!(fed1_balance.msats, 0u64);
+
+            // attempt to leave first federation while having a balance, unforced
+            rpc
+                .leave_federation(LeaveFedPayload {
+                    federation_id: id1,
+                    force_leave: Some(false),
+                })
+                .await
+                .expect_err("Should have errored, gateway is trying to leave with a non-zero balance without the --forced flag.");
+
+            info!("attempt to leave the first federation while having a balance, forced");
+            rpc
+                .leave_federation(LeaveFedPayload {
+                    federation_id: id1,
+                    force_leave: Some(true),
+                })
+                .await.expect("Should have been able to leave federation even though the gateway has a balance since the forced flag was passed.");
+
+            // send sats to second federation
+            send_msats_to_gateway(&gateway, id2, 5_000).await;
+            let fed2_balance = rpc.get_balance(BalancePayload {federation_id: id2})
+                .await
+                .unwrap_or_else(|_| panic!("Could not query balance for federation {id2}."));
+            assert_ne!(fed2_balance.msats, 0u64);
+
+            // attempt to leave second federation while having a balance, unforced
+            rpc
+                .leave_federation(LeaveFedPayload {
+                    federation_id: id2,
+                    force_leave: Some(false),
+                })
+                .await
+                .expect_err("Should have errored, gateway is trying to leave with a non-zero balance without the --forced flag.");
+
+            // attempt to leave the second federation while having a balance, forced
+            rpc
+                .leave_federation(LeaveFedPayload {
+                    federation_id: id2,
+                    force_leave: Some(true),
+                })
+                .await.expect("Should have been able to leave federation even though the gateway has a balance since the forced flag was passed.");
+
+            rpc
+                .connect_federation(ConnectFedPayload {
+                    invite_code: invite1.to_string(),
+                })
+                .await
+                .unwrap_or_else(|_| panic!("Could not connect to federation {id1}."));
+            rpc
+                .connect_federation(ConnectFedPayload {
+                    invite_code: invite2.to_string(),
+                })
+                .await
+                .unwrap_or_else(|_| panic!("Could connect to federation {id2}."));
+
+
+            let info = rpc.get_info().await.expect("Could not get Gateway info.");
+            assert_eq!(info.federations.len(), 2);
+            assert_eq!(
+                info.channels.expect("Could not get channels.").keys().cloned().collect::<Vec<u64>>(),
+                vec![5, 6]
             );
 
             drop(gateway); // keep until the end to avoid the gateway shutting down too early

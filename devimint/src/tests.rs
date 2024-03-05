@@ -1530,6 +1530,95 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     Ok(())
 }
 
+async fn gw_leave_fed_test_one_gw(fed: &Federation, gw: &Gatewayd, gw_name: &str) -> Result<()> {
+    let fed_id = fed.calculate_federation_id().await;
+
+    let gateway_balance = cmd!(gw, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+
+    assert_eq!(
+        gateway_balance, 0u64,
+        "Balance should have been zero for {gw_name} gateway."
+    );
+
+    info!(
+        LOG_DEVIMINT,
+        "{gw_name} attempting to leave federation unforced while having a zero balance."
+    );
+    cmd!(gw, "leave-fed", "--federation-id={fed_id}")
+        .run()
+        .await?;
+    info!(LOG_DEVIMINT, "{gw_name} leave successful.");
+
+    info!("Reconnecting {gw_name} gateway to federation.");
+    gw.connect_fed(fed).await?;
+
+    info!("Adding payment to {gw_name} gateway.");
+    fed.pegin_gateway(99_999, gw).await?;
+
+    let gateway_balance = cmd!(gw, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+
+    assert_ne!(
+        gateway_balance, 0u64,
+        "{gw_name} balance should have been non-zero."
+    );
+    info!(LOG_DEVIMINT, "{gw_name} balance is non-zero.");
+
+    info!(
+        LOG_DEVIMINT,
+        "{gw_name} attempting to leave federation unforced while having a non-zero balance."
+    );
+    cmd!(gw, "leave-fed", "--federation-id={fed_id}")
+        .run()
+        .await
+        .expect_err("{gw_name} should have errored, gateway is trying to leave with a non-zero balance without the --forced flag.");
+    info!(
+        LOG_DEVIMINT,
+        "{gw_name} gateway did not leave federation since it has a non-zero balance and the --forced flag was not used."
+    );
+
+    info!(
+        LOG_DEVIMINT,
+        "{gw_name} attempting to leave federation forced while having a non-zero balance."
+    );
+    cmd!(gw, "leave-fed", "--federation-id={fed_id}", "--forced=true")
+        .run()
+        .await?;
+    info!(
+        LOG_DEVIMINT,
+        "{gw_name} successfully left federation forced while having a non-zero balance."
+    );
+
+    Ok(())
+}
+
+pub async fn gw_leave_fed_test(dev_fed: DevFed) -> Result<()> {
+    #[allow(unused_variables)]
+    let DevFed {
+        bitcoind,
+        cln,
+        lnd,
+        fed,
+        gw_cln,
+        gw_lnd,
+        electrs,
+        esplora,
+    } = dev_fed;
+
+    info!(LOG_DEVIMINT, "starting gw_leave_fed_test");
+    gw_leave_fed_test_one_gw(&fed, &gw_cln, "CLN").await?;
+    gw_leave_fed_test_one_gw(&fed, &gw_lnd, "LND").await?;
+    info!(LOG_DEVIMINT, "gw_leave_fed_test: success");
+    Ok(())
+}
+
 pub async fn do_try_create_and_pay_invoice(
     gw: &Gatewayd,
     client: &Client,
@@ -2175,6 +2264,8 @@ pub enum TestCmd {
     /// `devfed` then reboot gateway daemon for both CLN and LND. Test
     /// afterward.
     GatewayRebootTest,
+    /// `devfed` then attempts to leave with funds
+    GatewayLeaveFedTest,
     /// `devfed` then tests if the recovery tool is able to do a basic recovery
     RecoverytoolTests,
     /// `devfed` then spawns faucet for wasm tests
@@ -2256,6 +2347,14 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             gw_reboot_test(dev_fed, &process_mgr).await?;
+        }
+        TestCmd::GatewayLeaveFedTest => {
+            let fedimint_gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+            if VersionReq::parse(">=0.3.0-alpha")?.matches(&fedimint_gatewayd_version) {
+                let (process_mgr, _) = setup(common_args).await?;
+                let dev_fed = dev_fed(&process_mgr).await?;
+                gw_leave_fed_test(dev_fed).await?;
+            }
         }
         TestCmd::RecoverytoolTests => {
             let (process_mgr, _) = setup(common_args).await?;

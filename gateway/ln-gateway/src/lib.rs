@@ -965,6 +965,9 @@ impl Gateway {
         Err(GatewayError::Disconnected)
     }
 
+    /// Attempt to leave the federation. If the gateway balance is non-zero and
+    /// the `LeaveFedPayload.force_leave` flag is not set, a
+    /// `GatewayError::NonZeroBalanceLeaveError` error will be returned.
     pub async fn handle_leave_federation(
         &mut self,
         payload: LeaveFedPayload,
@@ -977,6 +980,10 @@ impl Gateway {
             let federation_info = self
                 .make_federation_info(client.value(), payload.federation_id)
                 .await;
+
+            if payload.force_leave != Some(true) && federation_info.balance_msat.msats != 0u64 {
+                return Err(GatewayError::NonZeroBalanceLeaveError);
+            }
 
             let keypair = dbtx
                 .get_value(&GatewayPublicKey)
@@ -1543,6 +1550,8 @@ pub enum GatewayError {
     InsufficientFunds,
     #[error("Federation already connected")]
     FederationAlreadyConnected,
+    #[error("Gateway has non-zero balance")]
+    NonZeroBalanceLeaveError,
 }
 
 impl IntoResponse for GatewayError {
@@ -1559,6 +1568,10 @@ impl IntoResponse for GatewayError {
             GatewayError::Disconnected => (
                 "The gateway is disconnected from the Lightning Node".to_string(),
                 StatusCode::NOT_FOUND,
+            ),
+            GatewayError::NonZeroBalanceLeaveError => (
+                "Gateway has non-zero balance".to_string(),
+                StatusCode::EXPECTATION_FAILED,
             ),
             _ => (
                 "An internal gateway error occurred".to_string(),
