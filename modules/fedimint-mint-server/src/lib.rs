@@ -436,8 +436,9 @@ impl ServerModule for Mint {
         let amount = input.amount;
         let fee = self.cfg.consensus.fee_consensus.note_spend_abs;
         calculate_mint_redeemed_ecash_metrics(dbtx, amount, fee);
+
         Ok(InputMeta {
-            amount: TransactionItemAmount { amount, fee },
+            amount: TransactionItemAmount::public(amount, fee),
             pub_key: *input.note.spend_key(),
         })
     }
@@ -466,7 +467,8 @@ impl ServerModule for Mint {
         let amount = output.amount;
         let fee = self.cfg.consensus.fee_consensus.note_issuance_abs;
         calculate_mint_issued_ecash_metrics(dbtx, amount, fee);
-        Ok(TransactionItemAmount { amount, fee })
+
+        Ok(TransactionItemAmount::public(amount, fee))
     }
 
     async fn output_status(

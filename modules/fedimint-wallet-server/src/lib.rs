@@ -561,7 +561,7 @@ impl ServerModule for Wallet {
         let fee = self.cfg.consensus.fee_consensus.peg_in_abs;
         calculate_pegin_metrics(dbtx, amount, fee);
         Ok(InputMeta {
-            amount: TransactionItemAmount { amount, fee },
+            amount: TransactionItemAmount::public(amount, fee),
             pub_key: *input.tweak_contract_key(),
         })
     }
@@ -637,7 +637,8 @@ impl ServerModule for Wallet {
         let amount: fedimint_core::Amount = output.amount().into();
         let fee = self.cfg.consensus.fee_consensus.peg_out_abs;
         calculate_pegout_metrics(dbtx, amount, fee);
-        Ok(TransactionItemAmount { amount, fee })
+
+        Ok(TransactionItemAmount::public(amount, fee))
     }
 
     async fn output_status(

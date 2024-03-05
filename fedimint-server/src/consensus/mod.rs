@@ -3,9 +3,10 @@
 pub mod debug;
 pub mod server;
 
+use bls12_381::{G1Projective, Scalar};
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::registry::ServerModuleRegistry;
-use fedimint_core::module::TransactionItemAmount;
+use fedimint_core::module::{ItemAmount, TransactionItemAmount};
 use fedimint_core::transaction::{Transaction, TransactionError};
 use fedimint_core::{Amount, OutPoint};
 
@@ -56,29 +57,45 @@ pub async fn process_transaction_with_dbtx(
 }
 
 pub struct FundingVerifier {
-    input_amount: Amount,
-    output_amount: Amount,
+    public_input: Amount,
+    public_output: Amount,
+    confidential_input: G1Projective,
+    confidential_output: G1Projective,
     fee_amount: Amount,
 }
 
 impl FundingVerifier {
     pub fn add_input(&mut self, input_amount: TransactionItemAmount) {
-        self.input_amount += input_amount.amount;
+        match input_amount.amount {
+            ItemAmount::Public(amount) => self.public_input += amount,
+            ItemAmount::Confidential(amount) => self.confidential_input += amount,
+        }
+
         self.fee_amount += input_amount.fee;
     }
 
     pub fn add_output(&mut self, output_amount: TransactionItemAmount) {
-        self.output_amount += output_amount.amount;
+        match output_amount.amount {
+            ItemAmount::Public(amount) => self.public_output += amount,
+            ItemAmount::Confidential(amount) => self.confidential_output += amount,
+        }
+
         self.fee_amount += output_amount.fee;
     }
 
     pub fn verify_funding(self) -> Result<(), TransactionError> {
-        if self.input_amount == (self.output_amount + self.fee_amount) {
+        let public_input = Scalar::from(self.public_input.msats);
+        let public_output = Scalar::from(self.public_output.msats + self.fee_amount.msats);
+
+        let input = public_input * G1Projective::generator() + self.confidential_input;
+        let output = public_output * G1Projective::generator() + self.confidential_output;
+
+        if input - output == G1Projective::identity() {
             Ok(())
         } else {
             Err(TransactionError::UnbalancedTransaction {
-                inputs: self.input_amount,
-                outputs: self.output_amount,
+                inputs: self.public_input,
+                outputs: self.public_output,
                 fee: self.fee_amount,
             })
         }
@@ -88,8 +105,10 @@ impl FundingVerifier {
 impl Default for FundingVerifier {
     fn default() -> Self {
         FundingVerifier {
-            input_amount: Amount::ZERO,
-            output_amount: Amount::ZERO,
+            public_input: Amount::ZERO,
+            public_output: Amount::ZERO,
+            confidential_input: G1Projective::identity(),
+            confidential_output: G1Projective::identity(),
             fee_amount: Amount::ZERO,
         }
     }

@@ -534,8 +534,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     ///
     /// If it does it must implement:
     ///
-    /// * [`Self::create_sufficient_input`]
-    /// * [`Self::create_exact_output`]
+    /// * [`Self::create_final_inputs_and_outputs`]
     /// * [`Self::await_primary_module_output`]
     /// * [`Self::get_balance`]
     /// * [`Self::subscribe_balance_changes`]
@@ -543,52 +542,22 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         false
     }
 
-    /// Creates an input of **at least** a given `min_amount` from the holdings
-    /// managed by the module.
-    ///
-    /// If successful it returns:
-    /// * A set of private keys belonging to the input for signing the
-    ///   transaction
-    /// * The input of **at least** `min_amount`, the actual amount might be
-    ///   larger, the caller has to handle this case and possibly generate
-    ///   change using `create_change_output`.
-    /// * A closure that generates states belonging to the input. This closure
-    ///   takes the transaction id of the transaction in which the input was
-    ///   used and the input index as input since these cannot be known at time
-    ///   of calling `create_funding_input` and have to be injected later.
-    ///
-    /// The function returns an error if the client's funds are not sufficient
-    /// to create the requested input.
-    async fn create_sufficient_input(
+    async fn create_final_inputs_and_outputs(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
         _operation_id: OperationId,
-        _min_amount: Amount,
-    ) -> anyhow::Result<Vec<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>>> {
-        unimplemented!()
-    }
-
-    /// Creates an output of **exactly** `amount` that will pay into the
-    /// holdings managed by the module.
-    ///
-    /// It returns:
-    /// * The output of **exactly** `amount`.
-    /// * A closure that generates states belonging to the output. This closure
-    ///   takes the transaction id of the transaction in which the output was
-    ///   used and the output index as input since these cannot be known at time
-    ///   of calling `create_change_output` and have to be injected later.
-    async fn create_exact_output(
-        &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
-        _operation_id: OperationId,
-        _amount: Amount,
-    ) -> Vec<ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>> {
+        _input_amount: Amount,
+        _output_amount: Amount,
+    ) -> anyhow::Result<(
+        Vec<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>>,
+        Vec<ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>>,
+    )> {
         unimplemented!()
     }
 
     /// Waits for the funds from an output created by
-    /// [`Self::create_exact_output`] to become available. This function
-    /// returning typically implies a change in the output of
+    /// [`Self::create_final_inputs_and_outputs`] to become available. This
+    /// function returning typically implies a change in the output of
     /// [`Self::get_balance`].
     async fn await_primary_module_output(
         &self,
@@ -693,21 +662,14 @@ pub trait IClientModule: Debug {
 
     fn supports_being_primary(&self) -> bool;
 
-    async fn create_sufficient_input(
+    async fn create_final_inputs_and_outputs(
         &self,
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
-        min_amount: Amount,
-    ) -> anyhow::Result<Vec<ClientInput>>;
-
-    async fn create_exact_output(
-        &self,
-        module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
-        operation_id: OperationId,
-        amount: Amount,
-    ) -> Vec<ClientOutput>;
+        input_amount: Amount,
+        output_amount: Amount,
+    ) -> anyhow::Result<(Vec<ClientInput>, Vec<ClientOutput>)>;
 
     async fn await_primary_module_output(
         &self,
@@ -786,42 +748,34 @@ where
         <T as ClientModule>::supports_being_primary(self)
     }
 
-    async fn create_sufficient_input(
+    async fn create_final_inputs_and_outputs(
         &self,
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
-        min_amount: Amount,
-    ) -> anyhow::Result<Vec<ClientInput>> {
-        Ok(<T as ClientModule>::create_sufficient_input(
+        input_amount: Amount,
+        output_amount: Amount,
+    ) -> anyhow::Result<(Vec<ClientInput>, Vec<ClientOutput>)> {
+        let (inputs, outputs) = <T as ClientModule>::create_final_inputs_and_outputs(
             self,
             &mut dbtx.to_ref_with_prefix_module_id(module_instance),
             operation_id,
-            min_amount,
+            input_amount,
+            output_amount,
         )
-        .await?
-        .into_iter()
-        .map(|input| input.into_dyn(module_instance))
-        .collect())
-    }
+        .await?;
 
-    async fn create_exact_output(
-        &self,
-        module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
-        operation_id: OperationId,
-        amount: Amount,
-    ) -> Vec<ClientOutput> {
-        <T as ClientModule>::create_exact_output(
-            self,
-            &mut dbtx.to_ref_with_prefix_module_id(module_instance),
-            operation_id,
-            amount,
-        )
-        .await
-        .into_iter()
-        .map(|output| output.into_dyn(module_instance))
-        .collect()
+        let inputs = inputs
+            .into_iter()
+            .map(|input| input.into_dyn(module_instance))
+            .collect::<Vec<ClientInput>>();
+
+        let outputs = outputs
+            .into_iter()
+            .map(|output| output.into_dyn(module_instance))
+            .collect::<Vec<ClientOutput>>();
+
+        Ok((inputs, outputs))
     }
 
     async fn await_primary_module_output(

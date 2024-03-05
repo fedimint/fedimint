@@ -643,10 +643,10 @@ impl ServerModule for Lightning {
         }
 
         Ok(InputMeta {
-            amount: TransactionItemAmount {
-                amount: input.amount,
-                fee: self.cfg.consensus.fee_consensus.contract_input,
-            },
+            amount: TransactionItemAmount::public(
+                input.amount,
+                self.cfg.consensus.fee_consensus.contract_input,
+            ),
             pub_key,
         })
     }
@@ -742,10 +742,10 @@ impl ServerModule for Lightning {
                     dbtx.remove_entry(&OfferKey(offer.hash)).await;
                 }
 
-                Ok(TransactionItemAmount {
-                    amount: contract.amount,
-                    fee: self.cfg.consensus.fee_consensus.contract_output,
-                })
+                Ok(TransactionItemAmount::public(
+                    contract.amount,
+                    self.cfg.consensus.fee_consensus.contract_output,
+                ))
             }
             LightningOutputV0::Offer(offer) => {
                 if !offer.encrypted_preimage.0.verify() {
@@ -1480,10 +1480,7 @@ mod tests {
             .await
             .expect("should process valid incoming contract");
         let expected_input_meta = InputMeta {
-            amount: TransactionItemAmount {
-                amount,
-                fee: Amount { msats: 0 },
-            },
+            amount: TransactionItemAmount::public(amount, Amount { msats: 0 }),
             pub_key: preimage
                 .to_public_key()
                 .expect("should create Schnorr pubkey from preimage"),
@@ -1535,10 +1532,7 @@ mod tests {
             .expect("should process valid outgoing contract");
 
         let expected_input_meta = InputMeta {
-            amount: TransactionItemAmount {
-                amount,
-                fee: Amount { msats: 0 },
-            },
+            amount: TransactionItemAmount::public(amount, Amount { msats: 0 }),
             pub_key: gateway_key,
         };
 

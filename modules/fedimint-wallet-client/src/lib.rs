@@ -239,10 +239,10 @@ impl ClientModule for WalletClientModule {
     ) -> Option<TransactionItemAmount> {
         let input = input.maybe_v0_ref()?;
 
-        Some(TransactionItemAmount {
-            amount: Amount::from_sats(input.0.tx_output().value),
-            fee: self.cfg.fee_consensus.peg_in_abs,
-        })
+        Some(TransactionItemAmount::public(
+            Amount::from_sats(input.0.tx_output().value),
+            self.cfg.fee_consensus.peg_in_abs,
+        ))
     }
 
     fn output_amount(
@@ -251,10 +251,10 @@ impl ClientModule for WalletClientModule {
     ) -> Option<TransactionItemAmount> {
         let output = output.maybe_v0_ref()?;
 
-        Some(TransactionItemAmount {
-            amount: output.amount().into(),
-            fee: self.cfg.fee_consensus.peg_out_abs,
-        })
+        Some(TransactionItemAmount::public(
+            output.amount().into(),
+            self.cfg.fee_consensus.peg_out_abs,
+        ))
     }
 }
 

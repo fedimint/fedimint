@@ -210,10 +210,10 @@ impl ClientModule for GatewayClientModule {
     ) -> Option<TransactionItemAmount> {
         let input = input.maybe_v0_ref()?;
 
-        Some(TransactionItemAmount {
-            amount: input.amount,
-            fee: self.cfg.fee_consensus.contract_input,
-        })
+        Some(TransactionItemAmount::public(
+            input.amount,
+            self.cfg.fee_consensus.contract_input,
+        ))
     }
 
     fn output_amount(
@@ -223,15 +223,12 @@ impl ClientModule for GatewayClientModule {
         let output = output.maybe_v0_ref()?;
 
         let amt = match output {
-            LightningOutputV0::Contract(account_output) => TransactionItemAmount {
-                amount: account_output.amount,
-                fee: self.cfg.fee_consensus.contract_output,
-            },
+            LightningOutputV0::Contract(account_output) => TransactionItemAmount::public(
+                account_output.amount,
+                self.cfg.fee_consensus.contract_output,
+            ),
             LightningOutputV0::Offer(_) | LightningOutputV0::CancelOutgoing { .. } => {
-                TransactionItemAmount {
-                    amount: Amount::ZERO,
-                    fee: Amount::ZERO,
-                }
+                TransactionItemAmount::public(Amount::ZERO, Amount::ZERO)
             }
         };
         Some(amt)

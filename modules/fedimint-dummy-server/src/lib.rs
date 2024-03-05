@@ -240,10 +240,7 @@ impl ServerModule for Dummy {
             .await;
 
         Ok(InputMeta {
-            amount: TransactionItemAmount {
-                amount: input.amount,
-                fee: self.cfg.consensus.tx_fee,
-            },
+            amount: TransactionItemAmount::public(input.amount, self.cfg.consensus.tx_fee),
             // IMPORTANT: include the pubkey to validate the user signed this tx
             pub_key: input.account,
         })
@@ -266,10 +263,10 @@ impl ServerModule for Dummy {
         dbtx.insert_entry(&DummyOutcomeKey(out_point), &outcome)
             .await;
 
-        Ok(TransactionItemAmount {
-            amount: output.amount,
-            fee: self.cfg.consensus.tx_fee,
-        })
+        Ok(TransactionItemAmount::public(
+            output.amount,
+            self.cfg.consensus.tx_fee,
+        ))
     }
 
     async fn output_status(
