@@ -1714,7 +1714,7 @@ impl ClientBuilder {
             for (module_id, module_cfg) in client_config.modules {
                 let kind = module_cfg.kind.clone();
                 let Some(init) = self.module_inits.get(&kind) else {
-                    warn!("Detected configuration for unsupported module id: {module_id}, kind: {kind}");
+                    debug!("Detected configuration for unsupported module id: {module_id}, kind: {kind}");
                     continue;
                 };
 
@@ -1979,7 +1979,7 @@ impl ClientBuilder {
             for (module_instance_id, module_config) in config.modules.clone() {
                 let kind = module_config.kind().clone();
                 let Some(module_init) = self.module_inits.get(&kind).cloned() else {
-                    warn!("Module kind {kind} of instance {module_instance_id} not found in module gens, skipping");
+                    debug!("Module kind {kind} of instance {module_instance_id} not found in module gens, skipping");
                     continue;
                 };
 
