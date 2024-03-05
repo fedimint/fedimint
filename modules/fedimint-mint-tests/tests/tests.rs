@@ -2,6 +2,7 @@ use std::io::Cursor;
 use std::time::Duration;
 
 use fedimint_client::backup::{ClientBackup, Metadata};
+use fedimint_core::config::EmptyGenParams;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
@@ -11,14 +12,30 @@ use fedimint_dummy_server::DummyInit;
 use fedimint_mint_client::{
     MintClientInit, MintClientModule, OOBNotes, ReissueExternalNotesState, SpendOOBState,
 };
-use fedimint_mint_common::config::MintGenParams;
+use fedimint_mint_common::config::{FeeConsensus, MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_server::MintInit;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
 use futures::StreamExt;
 use tracing::info;
 
+const EXPECTED_MAXIMUM_FEE: Amount = Amount::from_sats(50);
+
 fn fixtures() -> Fixtures {
-    let fixtures = Fixtures::new_primary(MintClientInit, MintInit, MintGenParams::default());
+    let fixtures = Fixtures::new_primary(
+        MintClientInit,
+        MintInit,
+        MintGenParams {
+            consensus: MintGenParamsConsensus::new(
+                2,
+                FeeConsensus {
+                    note_issuance_abs: Amount::ZERO,
+                    note_spend_abs: Amount::from_sats(1),
+                },
+            ),
+            local: EmptyGenParams {},
+        },
+    );
+
     fixtures.with_module(DummyClientInit, DummyInit, DummyGenParams::default())
 }
 
@@ -55,8 +72,8 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     assert_eq!(sub1.ok().await?, SpendOOBState::Success);
     info!("### REISSUE: DONE");
 
-    assert_eq!(client1.get_balance().await, sats(250));
-    assert_eq!(client2.get_balance().await, sats(750));
+    assert!(client1.get_balance().await >= sats(250) - EXPECTED_MAXIMUM_FEE);
+    assert!(client2.get_balance().await >= sats(750) - EXPECTED_MAXIMUM_FEE);
     Ok(())
 }
 
@@ -108,6 +125,9 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     // Since we are overspending as soon as the right denominations aren't available
     // anymore we have to use the amount actually sent and not the one requested
     let total_amount_spent: Amount = note_bags.iter().map(|bag| bag.total_amount()).sum();
+
+    assert_eq!(client1.get_balance().await, sats(1000) - total_amount_spent);
+
     info!(%total_amount_spent, "Sent notes");
 
     let mut reissue_tasks = vec![];
@@ -141,8 +161,8 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
         task.await.expect("reissue task failed");
     }
 
-    assert_eq!(client1.get_balance().await, sats(1000) - total_amount_spent);
-    assert_eq!(client2.get_balance().await, total_amount_spent);
+    assert!(client2.get_balance().await >= total_amount_spent - EXPECTED_MAXIMUM_FEE);
+
     Ok(())
 }
 
@@ -196,7 +216,7 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
     // FIXME: UserCanceledSuccess should mean the money is in our wallet
     for _ in 0..200 {
         sleep_in_test("sats not in wallet yet", Duration::from_millis(100)).await;
-        if client.get_balance().await == sats(1000) {
+        if client.get_balance().await >= sats(1000) - EXPECTED_MAXIMUM_FEE {
             return Ok(());
         }
     }
