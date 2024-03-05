@@ -117,3 +117,7 @@ backport-pr pr:
 # sign a release (git tag)
 sign-release tag:
   ./scripts/release/sign.sh {{tag}}
+
+# benchmark compilation times
+bench-compilation:
+  ./scripts/bench-compilation.sh
