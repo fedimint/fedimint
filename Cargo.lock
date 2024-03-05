@@ -1436,7 +1436,7 @@ dependencies = [
  "itertools 0.10.5",
  "js-sys",
  "jsonrpsee-core 0.21.0",
- "jsonrpsee-types 0.21.0",
+ "jsonrpsee-types 0.22.2",
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
  "lightning 0.0.118",
@@ -1867,7 +1867,7 @@ dependencies = [
  "fedimint-wallet-client",
  "futures",
  "jsonrpsee-core 0.21.0",
- "jsonrpsee-types 0.21.0",
+ "jsonrpsee-types 0.22.2",
  "jsonrpsee-ws-client",
  "lightning-invoice 0.26.0",
  "rand",
@@ -3338,6 +3338,19 @@ name = "jsonrpsee-types"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3266dfb045c9174b24c77c2dfe0084914bb23a6b2597d70c9dc6018392e1cd1b"
+dependencies = [
+ "anyhow",
+ "beef",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "jsonrpsee-types"
+version = "0.22.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3467fd35feeee179f71ab294516bdf3a81139e7aeebdd860e46897c12e1a3368"
 dependencies = [
  "anyhow",
  "beef",
