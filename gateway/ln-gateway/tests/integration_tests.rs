@@ -99,11 +99,11 @@ where
 
     for (gateway_ln, other_node) in [(lnd1, cln1), (cln2, lnd2)] {
         let fed = fixtures.new_fed().await;
-        let user_client = fed.new_client().await;
         let mut gateway = fixtures
             .new_gateway(gateway_ln, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
             .await;
         gateway.connect_fed(&fed).await;
+        let user_client = fed.new_client().await;
         let bitcoin = fixtures.bitcoin();
         f(gateway, other_node, fed, user_client, bitcoin).await?;
     }
@@ -313,6 +313,10 @@ async fn test_can_change_routing_fees() -> anyhow::Result<()> {
                 rpc_client.set_configuration(set_configuration_payload.clone())
             })
             .await;
+
+            // Update the gateway cache since the fees have changed
+            let ln_module = user_client.get_first_module::<LightningClientModule>();
+            ln_module.update_gateway_cache(true).await?;
 
             // Create test invoice
             let invoice_amount = sats(250);
@@ -848,7 +852,8 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
         proportional_millionths: 0,
     };
     let lightning_module = user_client.get_first_module::<LightningClientModule>();
-    let gateways = lightning_module.fetch_registered_gateways().await?;
+    lightning_module.update_gateway_cache(true).await?;
+    let gateways = lightning_module.list_gateways().await;
     assert!(!gateways.is_empty());
     assert!(gateways
         .into_iter()
@@ -866,13 +871,15 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     })
     .await;
 
-    let gateways = lightning_module.fetch_registered_gateways().await?;
+    lightning_module.update_gateway_cache(true).await?;
+    let gateways = lightning_module.list_gateways().await;
     assert!(gateways.is_empty());
 
     // Reconnect the federation and verify that the gateway has registered.
     gateway_test.connect_fed(&fed).await;
 
-    let gateways = lightning_module.fetch_registered_gateways().await?;
+    lightning_module.update_gateway_cache(true).await?;
+    let gateways = lightning_module.list_gateways().await;
     assert!(!gateways.is_empty());
     assert!(gateways
         .into_iter()
@@ -1431,12 +1438,14 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
             let id1 = fed1.invite_code().federation_id();
             let id2 = fed2.invite_code().federation_id();
 
-            let client1 = fed1.new_client().await;
-            let client2 = fed2.new_client().await;
-
-            connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
+            connect_federations(&rpc, &[fed1.clone(), fed2.clone()])
+                .await
+                .unwrap();
             send_msats_to_gateway(&gateway, id1, 10_000).await;
             send_msats_to_gateway(&gateway, id2, 10_000).await;
+
+            let client1 = fed1.new_client().await;
+            let client2 = fed2.new_client().await;
 
             // Check gateway balances before facilitating direct swap between federations
             let pre_balances = get_balances(&rpc, &[id1, id2]).await;

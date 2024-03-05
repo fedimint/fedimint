@@ -46,10 +46,10 @@ use fedimint_ln_common::contracts::{
     Contract, ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract, Preimage,
     PreimageKey,
 };
+use fedimint_ln_common::db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_ln_common::{
     ContractOutput, LightningClientContext, LightningCommonInit, LightningGateway,
-    LightningGatewayAnnouncement, LightningGatewayRegistration, LightningModuleTypes,
-    LightningOutput, LightningOutputV0,
+    LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 use futures::StreamExt;
 use incoming::IncomingSmError;
@@ -64,10 +64,7 @@ use strum::IntoEnumIterator;
 use thiserror::Error;
 use tracing::{debug, error};
 
-use crate::db::{
-    LightningGatewayKeyPrefix, MetaOverrides, MetaOverridesKey, MetaOverridesPrefix,
-    PaymentResultPrefix,
-};
+use crate::db::{MetaOverrides, MetaOverridesKey, MetaOverridesPrefix, PaymentResultPrefix};
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
 };
@@ -173,7 +170,7 @@ pub enum LnReceiveState {
     Claimed,
 }
 
-async fn invoice_has_internal_payment_markers(
+fn invoice_has_internal_payment_markers(
     invoice: &Bolt11Invoice,
     markers: (secp256k1::PublicKey, u64),
 ) -> bool {
@@ -187,7 +184,7 @@ async fn invoice_has_internal_payment_markers(
         == Some(markers)
 }
 
-async fn invoice_routes_back_to_federation(
+fn invoice_routes_back_to_federation(
     invoice: &Bolt11Invoice,
     gateways: Vec<LightningGateway>,
 ) -> bool {
@@ -249,16 +246,6 @@ impl ModuleInit for LightningClientInit {
 
         for table in filtered_prefixes {
             match table {
-                DbKeyPrefix::LightningGateway => {
-                    push_db_pair_items!(
-                        dbtx,
-                        LightningGatewayKeyPrefix,
-                        LightningGatewayKey,
-                        LightningGatewayRegistration,
-                        ln_client_items,
-                        "Lightning Gateways"
-                    );
-                }
                 DbKeyPrefix::PaymentResult => {
                     push_db_pair_items!(
                         dbtx,
@@ -303,22 +290,7 @@ impl ClientModuleInit for LightningClientInit {
     }
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
-        let secp = Secp256k1::new();
-        Ok(LightningClientModule {
-            cfg: args.cfg().clone(),
-            notifier: args.notifier().clone(),
-            redeem_key: args
-                .module_root_secret()
-                .child_key(ChildId(LightningChildKeys::RedeemKey as u64))
-                .to_secp_key(&secp),
-            module_api: args.module_api().clone(),
-            preimage_auth: args
-                .module_root_secret()
-                .child_key(ChildId(LightningChildKeys::PreimageAuthentication as u64))
-                .to_secp_key(&secp),
-            secp,
-            client_ctx: args.context(),
-        })
+        Ok(LightningClientModule::new(args).await?)
     }
 }
 
@@ -399,6 +371,31 @@ enum PayError {
 }
 
 impl LightningClientModule {
+    async fn new(
+        args: &ClientModuleInitArgs<LightningClientInit>,
+    ) -> anyhow::Result<LightningClientModule> {
+        let secp = Secp256k1::new();
+        let ln_module = LightningClientModule {
+            cfg: args.cfg().clone(),
+            notifier: args.notifier().clone(),
+            redeem_key: args
+                .module_root_secret()
+                .child_key(ChildId(LightningChildKeys::RedeemKey as u64))
+                .to_secp_key(&secp),
+            module_api: args.module_api().clone(),
+            preimage_auth: args
+                .module_root_secret()
+                .child_key(ChildId(LightningChildKeys::PreimageAuthentication as u64))
+                .to_secp_key(&secp),
+            secp,
+            client_ctx: args.context(),
+        };
+
+        ln_module.update_gateway_cache(false).await?;
+
+        Ok(ln_module)
+    }
+
     async fn get_prev_payment_result(
         &self,
         payment_hash: &sha256::Hash,
@@ -812,17 +809,53 @@ impl LightningClientModule {
         ))
     }
 
-    /// Selects a Lightning Gateway from a given `gateway_id`
+    /// Selects a Lightning Gateway from a given `gateway_id` from the gateway
+    /// cache.
     pub async fn select_gateway(
         &self,
         gateway_id: &secp256k1::PublicKey,
     ) -> Option<LightningGateway> {
-        self.fetch_registered_gateways()
+        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+        let gateways = dbtx
+            .find_by_prefix(&LightningGatewayKeyPrefix)
             .await
-            .ok()?
-            .into_iter()
-            .find(|g| g.info.gateway_id == *gateway_id)
-            .map(|g| g.info)
+            .collect::<Vec<_>>()
+            .await;
+        gateways.into_iter().find_map(|(_, registration)| {
+            if registration.info.gateway_id == *gateway_id {
+                Some(registration.info)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Updates the gateway cache by fetching the latest registered gateways
+    /// from the federation.
+    pub async fn update_gateway_cache(&self, apply_meta: bool) -> anyhow::Result<()> {
+        let gateways = self.fetch_registered_gateways(apply_meta).await?;
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+
+        // Remove all previous gateway entries
+        dbtx.remove_by_prefix(&LightningGatewayKeyPrefix).await;
+
+        for gw in gateways.into_iter() {
+            dbtx.insert_entry(&LightningGatewayKey(gw.info.gateway_id), &gw.anchor())
+                .await;
+        }
+        dbtx.commit_tx().await;
+
+        Ok(())
+    }
+
+    /// Returns all gateways that are currently in the gateway cache.
+    pub async fn list_gateways(&self) -> Vec<LightningGatewayAnnouncement> {
+        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+        dbtx.find_by_prefix(&LightningGatewayKeyPrefix)
+            .await
+            .map(|(_, gw)| gw.unanchor())
+            .collect::<Vec<_>>()
+            .await
     }
 
     /// Fetches the metadata overrides for a given federation
@@ -922,12 +955,13 @@ impl LightningClientModule {
 
     /// Fetches gateways registered with the fed and applies gateway vetting
     /// from 'vetted_gateways` meta field if configured
-    pub async fn fetch_registered_gateways(
+    async fn fetch_registered_gateways(
         &self,
+        apply_meta: bool,
     ) -> anyhow::Result<Vec<LightningGatewayAnnouncement>> {
         let mut gateways = self.module_api.fetch_gateways().await?;
 
-        if !gateways.is_empty() {
+        if apply_meta && !gateways.is_empty() {
             let config = self.client_ctx.get_config().clone();
             let global_meta: BTreeMap<String, String> = config.global.meta.clone();
             let federation_id = config.global.calculate_federation_id();
@@ -1036,20 +1070,19 @@ impl LightningClientModule {
         )
         .await;
 
-        let is_internal_payment = invoice_has_internal_payment_markers(
+        let mut is_internal_payment = invoice_has_internal_payment_markers(
             &invoice,
             self.client_ctx.get_internal_payment_markers()?,
-        )
-        .await
-            || invoice_routes_back_to_federation(
-                &invoice,
-                self.fetch_registered_gateways()
-                    .await?
-                    .into_iter()
-                    .map(|gw| gw.info)
-                    .collect(),
-            )
-            .await;
+        );
+        if !is_internal_payment {
+            let gateways = dbtx
+                .find_by_prefix(&LightningGatewayKeyPrefix)
+                .await
+                .map(|(_, gw)| gw.info)
+                .collect::<Vec<_>>()
+                .await;
+            is_internal_payment = invoice_routes_back_to_federation(&invoice, gateways);
+        }
 
         let (pay_type, client_output, contract_id) = if is_internal_payment {
             let (output, contract_id) = self

@@ -408,7 +408,7 @@ pub async fn handle_command(
         }
         ClientCmd::ListGateways => {
             let lightning_module = client.get_first_module::<LightningClientModule>();
-            let gateways = lightning_module.fetch_registered_gateways().await?;
+            let gateways = lightning_module.list_gateways().await;
             if gateways.is_empty() {
                 return Ok(serde_json::to_value(Vec::<String>::new()).unwrap());
             }

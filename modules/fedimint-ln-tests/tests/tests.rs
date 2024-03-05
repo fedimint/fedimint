@@ -186,8 +186,8 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
 async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
-    let (client1, client2) = fed.two_clients().await;
     let gw = gateway(&fixtures, &fed).await;
+    let (client1, client2) = fed.two_clients().await;
     let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
     let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
 
@@ -254,8 +254,8 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
 async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
-    let client = fed.new_client().await;
     let gw = gateway(&fixtures, &fed).await;
+    let client = fed.new_client().await;
     let dummy_module = client.get_first_module::<DummyClientModule>();
 
     // Print money for client
@@ -413,8 +413,8 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
 async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
-    let client1 = fed.new_client().await;
     let gw = gateway(&fixtures, &fed).await;
+    let client1 = fed.new_client().await;
 
     // Signet invoice should fail on regtest
     let signet_invoice = Bolt11Invoice::from_str(
@@ -667,11 +667,8 @@ mod fedimint_migration_tests {
             valid_until: fedimint_core::time::now(),
         };
 
-        dbtx.insert_new_entry(
-            &fedimint_ln_client::db::LightningGatewayKey,
-            &lightning_gateway_registration,
-        )
-        .await;
+        dbtx.insert_new_entry(&LightningGatewayKey(pk), &lightning_gateway_registration)
+            .await;
 
         dbtx.insert_new_entry(
             &PaymentResultKey {
@@ -872,19 +869,6 @@ mod fedimint_migration_tests {
 
                 for prefix in fedimint_ln_client::db::DbKeyPrefix::iter() {
                     match prefix {
-                        fedimint_ln_client::db::DbKeyPrefix::LightningGateway => {
-                            let gateways = dbtx
-                                .find_by_prefix(&fedimint_ln_client::db::LightningGatewayKeyPrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_gateways = gateways.len();
-                            ensure!(
-                                num_gateways > 0,
-                                "validate_migrations was not able to read any LightningGateways"
-                            );
-                            info!("Validated LightningGateways");
-                        }
                         fedimint_ln_client::db::DbKeyPrefix::PaymentResult => {
                             let payment_results = dbtx
                                 .find_by_prefix(&PaymentResultPrefix)

@@ -120,7 +120,7 @@ mod tests {
 
     async fn get_gateway(client: &fedimint_client::ClientHandle) -> anyhow::Result<LightningGateway> {
         let lightning_module = client.get_first_module::<LightningClientModule>();
-        let gws = lightning_module.fetch_registered_gateways().await?;
+        let gws = lightning_module.list_gateways().await;
         let gw_api = faucet::gateway_api().await?;
         let lnd_gw = gws
             .into_iter()
