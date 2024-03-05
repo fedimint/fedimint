@@ -22,4 +22,4 @@ function run_tmuxinator {
 }
 export -f run_tmuxinator
 
-SHELL=$(which bash) devimint  --link-test-dir ./target/devimint dev-fed --exec bash -c run_tmuxinator
+SHELL=$(which bash) devimint  --link-test-dir "${CARGO_BUILD_TARGET_DIR:-$PWD/target}/devimint" dev-fed --exec bash -c run_tmuxinator
