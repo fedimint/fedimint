@@ -37,6 +37,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-23.11
           extra_nix_config: |
             connect-timeout = 15
+            stalled-download-timeout = 15
       - uses: cachix/cachix-action@v14
         with:
           name: fedimint
