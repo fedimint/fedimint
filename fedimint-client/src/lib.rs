@@ -1470,7 +1470,7 @@ impl Client {
             .client_recovery_progress_receiver
             .borrow()
             .iter()
-            .any(|(_id, progress)| !progress.is_done())
+            .all(|(_id, progress)| progress.is_done())
     }
 
     /// Wait for all module recoveries to finish
