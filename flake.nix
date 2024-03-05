@@ -249,6 +249,8 @@
                 ];
 
                 shellHook = ''
+                  root="$(git rev-parse --show-toplevel)"
+
                   # workaround https://github.com/rust-lang/cargo/issues/11020
                   cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
                   if (( ''${#cargo_cmd_bins[@]} != 0 )); then
@@ -279,6 +281,7 @@
                   fi
 
                   export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache
+                  export CARGO_BUILD_TARGET_DIR="''${CARGO_BUILD_TARGET_DIR:-''${root}/target-nix}"
                 '';
               };
             in

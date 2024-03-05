@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 
 function add_target_dir_to_path() {
-  export PATH="$PWD/target/${CARGO_PROFILE:-debug}:$PATH"
+  export PATH="${CARGO_BUILD_TARGET_DIR:-$PWD/target}/${CARGO_PROFILE:-debug}:$PATH"
 }
 
 function build_workspace() {
