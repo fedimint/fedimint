@@ -38,6 +38,7 @@ pub enum DbKeyPrefix {
     ClientInviteCode = 0x30,
     ClientInitState = 0x31,
     ClientMetadata = 0x32,
+    ClientLastBackup = 0x33,
     /// Arbitrary data of the applications integrating Fedimint client and
     /// wanting to store some Federation-specific data in Fedimint client
     /// database.
@@ -297,6 +298,19 @@ impl_db_record!(
 impl_db_lookup!(
     key = ClientModuleRecovery,
     query_prefix = ClientModuleRecoveryPrefix
+);
+
+/// Last valid backup the client attempted to make
+///
+/// Can be used to find previous valid versions of
+/// module backup.
+#[derive(Debug, Encodable, Decodable)]
+pub struct LastBackupKey;
+
+impl_db_record!(
+    key = LastBackupKey,
+    value = ClientBackup,
+    db_prefix = DbKeyPrefix::ClientLastBackup
 );
 
 /// `ClientMigrationFn` is a function that modules can implement to "migrate"

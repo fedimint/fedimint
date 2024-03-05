@@ -16,7 +16,7 @@ use fedimint_core::api::{
 };
 use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
 use fedimint_core::config::{ClientConfig, JsonWithKind};
-use fedimint_core::core::backup::SignedBackupRequest;
+use fedimint_core::core::backup::{SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -350,6 +350,9 @@ impl ConsensusApi {
             .verify_valid(SECP256K1)
             .map_err(|_| ApiError::bad_request("invalid request".into()))?;
 
+        if request.payload.len() > BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES {
+            return Err(ApiError::bad_request("snapshot too large".into()));
+        }
         debug!(target: LOG_NET_API, id = %request.id, len = request.payload.len(), "Received client backup request");
         if let Some(prev) = dbtx.get_value(&ClientBackupKey(request.id)).await {
             if request.timestamp <= prev.timestamp {
