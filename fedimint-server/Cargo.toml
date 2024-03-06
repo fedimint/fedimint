@@ -60,7 +60,7 @@ parity-scale-codec = "3.5.0"
 
 
 [dev-dependencies]
-tempfile = "3.4.0"
+tempfile = "3.10.1"
 fedimint-dummy-common = { path = "../modules/fedimint-dummy-common" }
 fedimint-dummy-server = { path = "../modules/fedimint-dummy-server" }
 fedimint-testing = { path = "../fedimint-testing" }
