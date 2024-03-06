@@ -9,7 +9,7 @@ use bitcoin::{secp256k1, Network};
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use fedimint_client::backup::Metadata;
-use fedimint_client::ClientArc;
+use fedimint_client::ClientHandle;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
@@ -180,7 +180,7 @@ pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Erro
 
 pub async fn handle_command(
     command: ClientCmd,
-    client: ClientArc,
+    client: ClientHandle,
 ) -> anyhow::Result<serde_json::Value> {
     match command {
         ClientCmd::Info => get_note_summary(&client).await,
@@ -658,7 +658,7 @@ async fn get_invoice(
 }
 
 async fn wait_for_ln_payment(
-    client: &ClientArc,
+    client: &ClientHandle,
     payment_type: PayType,
     contract_id: ContractId,
     return_on_funding: bool,
@@ -747,7 +747,7 @@ async fn wait_for_ln_payment(
     bail!("Lightning Payment failed")
 }
 
-async fn get_note_summary(client: &ClientArc) -> anyhow::Result<serde_json::Value> {
+async fn get_note_summary(client: &ClientHandle) -> anyhow::Result<serde_json::Value> {
     let mint_client = client.get_first_module::<MintClientModule>();
     let wallet_client = client.get_first_module::<WalletClientModule>();
     let summary = mint_client

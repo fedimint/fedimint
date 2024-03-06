@@ -33,7 +33,7 @@ use db::{
     GATEWAYD_DATABASE_VERSION,
 };
 use fedimint_client::module::init::ClientModuleInitRegistry;
-use fedimint_client::ClientArc;
+use fedimint_client::ClientHandle;
 use fedimint_core::api::{FederationError, InviteCode};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
@@ -227,7 +227,7 @@ impl Display for GatewayState {
 
 type ScidToFederationMap = Arc<RwLock<BTreeMap<u64, FederationId>>>;
 type FederationToClientMap =
-    Arc<RwLock<BTreeMap<FederationId, Spanned<fedimint_client::ClientArc>>>>;
+    Arc<RwLock<BTreeMap<FederationId, Spanned<fedimint_client::ClientHandle>>>>;
 
 /// Represents an active connection to the lightning node.
 #[derive(Clone, Debug)]
@@ -1285,7 +1285,7 @@ impl Gateway {
     pub async fn remove_client_hack(
         &self,
         federation_id: FederationId,
-    ) -> Result<Spanned<fedimint_client::ClientArc>> {
+    ) -> Result<Spanned<fedimint_client::ClientHandle>> {
         let client = self.clients.write().await.remove(&federation_id).ok_or(
             GatewayError::InvalidMetadata(format!("No federation with id {federation_id}")),
         )?;
@@ -1295,7 +1295,7 @@ impl Gateway {
     pub async fn select_client(
         &self,
         federation_id: FederationId,
-    ) -> Result<Spanned<fedimint_client::ClientArc>> {
+    ) -> Result<Spanned<fedimint_client::ClientHandle>> {
         self.clients
             .read()
             .await
@@ -1445,7 +1445,7 @@ impl Gateway {
 
     async fn make_federation_info(
         &self,
-        client: &ClientArc,
+        client: &ClientHandle,
         federation_id: FederationId,
     ) -> FederationInfo {
         let balance_msat = client.get_balance().await;

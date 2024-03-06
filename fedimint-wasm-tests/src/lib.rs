@@ -33,7 +33,7 @@ fn make_client_builder() -> fedimint_client::ClientBuilder {
     builder
 }
 
-async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientArc> {
+async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandle> {
     let client_config = ClientConfig::download_from_invite_code(invite_code).await?;
     let mut builder = make_client_builder();
     let client_secret = load_or_generate_mnemonic(builder.db()).await?;
@@ -117,7 +117,7 @@ mod tests {
         Ok(())
     }
 
-    async fn set_gateway(client: &fedimint_client::ClientArc) -> anyhow::Result<()> {
+    async fn set_gateway(client: &fedimint_client::ClientHandle) -> anyhow::Result<()> {
         let lightning_module = client.get_first_module::<LightningClientModule>();
         let gws = lightning_module.fetch_registered_gateways().await?;
         let gw_api = faucet::gateway_api().await?;
@@ -144,7 +144,7 @@ mod tests {
         Ok(())
     }
 
-    async fn receive_once(client: fedimint_client::ClientArc, amount: Amount) -> Result<()> {
+    async fn receive_once(client: fedimint_client::ClientHandle, amount: Amount) -> Result<()> {
         let lightning_module = client.get_first_module::<LightningClientModule>();
         let (opid, invoice, _) = lightning_module
             .create_bolt11_invoice(amount, "test".to_string(), None, ())
@@ -179,7 +179,7 @@ mod tests {
         assert!(format!("key: {key:?}").len() > 8);
     }
 
-    async fn pay_once(client: fedimint_client::ClientArc) -> Result<(), anyhow::Error> {
+    async fn pay_once(client: fedimint_client::ClientHandle) -> Result<(), anyhow::Error> {
         let lightning_module = client.get_first_module::<LightningClientModule>();
         let bolt11 = faucet::generate_invoice(11).await?;
         let gateway = lightning_module.select_active_gateway_opt().await;
@@ -229,7 +229,7 @@ mod tests {
     }
 
     async fn send_and_recv_ecash_once(
-        client: fedimint_client::ClientArc,
+        client: fedimint_client::ClientHandle,
     ) -> Result<(), anyhow::Error> {
         let mint = client.get_first_module::<MintClientModule>();
         let (_, notes) = mint
@@ -256,7 +256,7 @@ mod tests {
     }
 
     async fn send_ecash_exact(
-        client: fedimint_client::ClientArc,
+        client: fedimint_client::ClientHandle,
         amount: Amount,
     ) -> Result<(), anyhow::Error> {
         let mint = client.get_first_module::<MintClientModule>();

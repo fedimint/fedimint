@@ -12,7 +12,7 @@ use common::{
 };
 use devimint::cmd;
 use devimint::util::{GatewayClnCli, GatewayLndCli};
-use fedimint_client::ClientArc;
+use fedimint_client::ClientHandle;
 use fedimint_core::api::InviteCode;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
@@ -487,7 +487,7 @@ async fn run_load_test(
 async fn get_notes_for_users(
     users: u16,
     notes_per_user: u16,
-    coordinator: ClientArc,
+    coordinator: ClientHandle,
     note_denomination: Amount,
 ) -> anyhow::Result<HashMap<u16, Vec<OOBNotes>>> {
     let mut users_notes = HashMap::new();
@@ -508,7 +508,7 @@ async fn get_users_clients(
     db_path: Option<PathBuf>,
     invite_code: Option<InviteCode>,
     gateway_id: Option<String>,
-) -> anyhow::Result<Vec<ClientArc>> {
+) -> anyhow::Result<Vec<ClientHandle>> {
     let mut users_clients = Vec::with_capacity(n.into());
     for u in 0..n {
         let (client, _) = get_user_client(u, &db_path, &invite_code, &gateway_id).await?;
@@ -522,7 +522,7 @@ async fn get_user_client(
     db_path: &Option<PathBuf>,
     invite_code: &Option<InviteCode>,
     gateway_id: &Option<String>,
-) -> anyhow::Result<(ClientArc, Option<InviteCode>)> {
+) -> anyhow::Result<(ClientHandle, Option<InviteCode>)> {
     let user_db = db_path
         .as_ref()
         .map(|db_path| db_path.join(format!("user_{user_index}.db")));
@@ -538,7 +538,7 @@ async fn get_user_client(
     Ok((client, invite_code))
 }
 
-async fn print_coordinator_notes(coordinator: &ClientArc) -> anyhow::Result<()> {
+async fn print_coordinator_notes(coordinator: &ClientHandle) -> anyhow::Result<()> {
     info!("Note summary:");
     let summary = get_note_summary(coordinator).await?;
     for (k, v) in summary.iter() {
@@ -548,7 +548,7 @@ async fn print_coordinator_notes(coordinator: &ClientArc) -> anyhow::Result<()> 
 }
 
 async fn get_required_notes(
-    coordinator: &ClientArc,
+    coordinator: &ClientHandle,
     minimum_amount_required: Amount,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
@@ -572,7 +572,7 @@ async fn get_required_notes(
 
 async fn reissue_initial_notes(
     initial_notes: Option<OOBNotes>,
-    coordinator: &ClientArc,
+    coordinator: &ClientHandle,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
     if let Some(notes) = initial_notes {
@@ -586,7 +586,7 @@ async fn reissue_initial_notes(
 async fn get_coordinator_client(
     db_path: &Option<PathBuf>,
     invite_code: &Option<InviteCode>,
-) -> anyhow::Result<(ClientArc, Option<InviteCode>)> {
+) -> anyhow::Result<(ClientHandle, Option<InviteCode>)> {
     let (client, invite_code) = if let Some(db_path) = db_path {
         let coordinator_db = db_path.join("coordinator.db");
         if coordinator_db.exists() {
@@ -622,7 +622,7 @@ fn get_db_path(archive_dir: Option<PathBuf>) -> Option<PathBuf> {
 #[allow(clippy::too_many_arguments)]
 async fn do_load_test_user_task(
     prefix: String,
-    client: ClientArc,
+    client: ClientHandle,
     oob_notes: Vec<OOBNotes>,
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
@@ -749,7 +749,7 @@ async fn run_ln_circular_load_test(
 #[allow(clippy::too_many_arguments)]
 async fn do_ln_circular_test_user_task(
     prefix: String,
-    client: ClientArc,
+    client: ClientHandle,
     invite_code: Option<InviteCode>,
     oob_notes: Vec<OOBNotes>,
     test_duration: Duration,
@@ -824,7 +824,7 @@ async fn run_two_gateways_strategy(
     invoice_generation: &mut LnInvoiceGeneration,
     invoice_amount: &Amount,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
-    client: &ClientArc,
+    client: &ClientHandle,
 ) -> Result<(), anyhow::Error> {
     let create_invoice_time = fedimint_core::time::now();
     match *invoice_generation {
@@ -884,7 +884,7 @@ async fn run_two_gateways_strategy(
 
 async fn do_self_payment(
     prefix: &str,
-    client: &ClientArc,
+    client: &ClientHandle,
     invoice_amount: Amount,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
@@ -910,8 +910,8 @@ async fn do_self_payment(
 
 async fn do_partner_ping_pong(
     prefix: &str,
-    client: &ClientArc,
-    partner: &ClientArc,
+    client: &ClientHandle,
+    partner: &ClientHandle,
     invoice_amount: Amount,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
@@ -957,7 +957,7 @@ async fn do_partner_ping_pong(
 async fn wait_invoice_payment(
     prefix: &str,
     gateway_name: &str,
-    client: &ClientArc,
+    client: &ClientHandle,
     operation_id: fedimint_core::core::OperationId,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
     pay_invoice_time: std::time::SystemTime,
@@ -1005,7 +1005,7 @@ async fn wait_invoice_payment(
 }
 
 async fn client_create_invoice(
-    client: &ClientArc,
+    client: &ClientHandle,
     invoice_amount: Amount,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<(fedimint_core::core::OperationId, Bolt11Invoice)> {

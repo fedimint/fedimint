@@ -45,7 +45,7 @@ impl GatewayClientBuilder {
         &self,
         config: FederationConfig,
         gateway: Gateway,
-    ) -> Result<fedimint_client::ClientArc> {
+    ) -> Result<fedimint_client::ClientHandle> {
         let FederationConfig {
             invite_code,
             mint_channel_id,

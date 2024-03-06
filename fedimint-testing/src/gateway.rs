@@ -6,7 +6,7 @@ use std::time::Duration;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_client::module::init::ClientModuleInitRegistry;
-use fedimint_client::ClientArc;
+use fedimint_client::ClientHandle;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
@@ -60,7 +60,7 @@ impl GatewayTest {
     /// Note: this makes the database opened, which can lead to gateway
     /// wanting to rejoin it. Better get your own client instead of being
     /// lazy here.
-    pub async fn remove_client_hack(&self, fed: &FederationTest) -> ClientArc {
+    pub async fn remove_client_hack(&self, fed: &FederationTest) -> ClientHandle {
         self.gateway
             .remove_client_hack(fed.id())
             .await
@@ -68,7 +68,7 @@ impl GatewayTest {
             .into_value()
     }
 
-    pub async fn select_client(&self, federation_id: FederationId) -> ClientArc {
+    pub async fn select_client(&self, federation_id: FederationId) -> ClientHandle {
         self.gateway
             .select_client(federation_id)
             .await

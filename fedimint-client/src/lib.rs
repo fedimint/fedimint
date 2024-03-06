@@ -72,7 +72,6 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::ops::{self, Range};
 use std::pin::Pin;
-use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -508,33 +507,40 @@ fn states_add_instance(
     })
 }
 
-/// Atomically-counted ([`Arc`]) handle to [`Client`]
+/// Shared, inner data of [`ClientHandle`]
 ///
-/// Notably it `deref`-s to the [`Client`] where most
-/// methods live.
-#[derive(Debug)]
-pub struct ClientArc {
-    // Use [`ClientArc::new`] instead
+/// The primary responsibility of this struct (and two levels of Arc),
+/// is shutting down `Client` on the drop of last [`ClientHandle`]. See
+/// [`ClientHandleShared::drop`] for details.
+#[derive(Debug, Clone)]
+struct ClientHandleShared {
     inner: Option<Arc<Client>>,
-
-    __use_constructor_to_create: (),
 }
 
-impl ClientArc {
+/// User handle to [`Client`]
+///
+/// Clonable. On the drop of last [`ClientHandle`] the client
+/// will be shut-down, and resources it used freed.
+///
+/// Notably it [`ops::Deref`]s to the [`Client`] where most
+/// methods live.
+#[derive(Debug, Clone)]
+pub struct ClientHandle {
+    inner: Arc<ClientHandleShared>,
+}
+
+impl ClientHandle {
     /// Create
     fn new(inner: Arc<Client>) -> Self {
-        inner
-            .client_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Self {
-            inner: Some(inner),
-            // this is the constructor
-            __use_constructor_to_create: (),
+            inner: Arc::new(ClientHandleShared {
+                inner: inner.into(),
+            }),
         }
     }
 
     fn as_inner(&self) -> &Arc<Client> {
-        self.inner.as_ref().expect("Inner always set")
+        self.inner.inner.as_ref().expect("Inner always set")
     }
 
     pub async fn start_executor(&self) {
@@ -563,37 +569,50 @@ impl ClientArc {
     }
 }
 
-impl ops::Deref for ClientArc {
+impl ops::Deref for ClientHandle {
     type Target = Client;
 
     fn deref(&self) -> &Self::Target {
-        self.inner.as_ref().expect("Must have inner client set")
+        self.inner
+            .inner
+            .as_ref()
+            .expect("Must have inner client set")
     }
 }
 
-impl ClientArc {
-    pub fn downgrade(&self) -> ClientWeak {
+impl ClientHandle {
+    pub(crate) fn downgrade(&self) -> ClientWeak {
         ClientWeak {
-            inner: Arc::downgrade(self.inner.as_ref().expect("Inner always set")),
+            inner: Arc::downgrade(self.inner.inner.as_ref().expect("Inner always set")),
         }
     }
 }
 
-impl Clone for ClientArc {
-    fn clone(&self) -> Self {
-        ClientArc::new(self.inner.clone().expect("Must have inner client set"))
+/// Internal self-reference to [`Client`]
+#[derive(Debug, Clone)]
+pub(crate) struct ClientStrong {
+    inner: Arc<Client>,
+}
+
+impl ops::Deref for ClientStrong {
+    type Target = Client;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.deref()
     }
 }
 
-/// Like [`ClientArc`] but using a [`Weak`] handle to [`Client`]
+/// Like [`ClientStrong`] but using a [`Weak`] handle to [`Client`]
+///
+/// This is not meant to be used by external code.
 #[derive(Debug, Clone)]
-pub struct ClientWeak {
+pub(crate) struct ClientWeak {
     inner: Weak<Client>,
 }
 
 impl ClientWeak {
-    pub fn upgrade(&self) -> Option<ClientArc> {
-        Weak::upgrade(&self.inner).map(ClientArc::new)
+    pub fn upgrade(&self) -> Option<ClientStrong> {
+        Weak::upgrade(&self.inner).map(|inner| ClientStrong { inner })
     }
 }
 
@@ -602,33 +621,23 @@ impl ClientWeak {
 /// `ExecutorInner` should already take care of that. The reason is that as long
 /// as the executor task is active there may be a cycle in the
 /// `Arc<Client>`s such that at least one `Executor` never gets dropped.
-impl Drop for ClientArc {
+impl Drop for ClientHandleShared {
     fn drop(&mut self) {
-        // Not sure if Ordering::SeqCst is strictly needed here, but better safe than
-        // sorry.
-        let client_count = self
-            .as_inner()
-            .client_count
-            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        debug!(target: LOG_CLIENT, "Shutting down the Client on last handle drop");
+        let inner = self.inner.take().expect("Must have inner client set");
+        inner.executor.stop_executor();
 
-        // `fetch_sub` returns previous value, so if it is 1, it means this is the last
-        // client reference
-        if client_count == 1 {
-            debug!(target: LOG_CLIENT, "Dropping last handle to Client - shutting down the Client");
-            let inner = self.inner.take().expect("Must have inner client set");
-            inner.executor.stop_executor();
+        #[cfg(not(target_family = "wasm"))]
+        {
+            if RuntimeHandle::current().runtime_flavor() == RuntimeFlavor::CurrentThread {
+                // We can't use block_on in single-threaded mode
+                return;
+            }
 
-            #[cfg(not(target_family = "wasm"))]
-            {
-                if RuntimeHandle::current().runtime_flavor() == RuntimeFlavor::CurrentThread {
-                    // We can't use block_on in single-threaded mode
-                    return;
-                }
+            let db = inner.db.clone();
 
-                let db = inner.db.clone();
-
-                tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(async {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
                         // futures::executor::block_on(async {
                         debug!(target: LOG_CLIENT, "Waiting for client task group to shut down");
                         if let Err(err) = inner
@@ -640,22 +649,21 @@ impl Drop for ClientArc {
                             warn!(target: LOG_CLIENT, %err, "Error waiting for client task group to shut down");
                         }
                     });
-                });
+            });
 
-                let client_strong_count = Arc::strong_count(&inner);
-                debug!(target: LOG_CLIENT, "Dropping last handle to Client");
-                // We are sure that no background tasks are running in the client anymore, so we
-                // can drop the (usually) last inner reference.
-                drop(inner);
+            let client_strong_count = Arc::strong_count(&inner);
+            debug!(target: LOG_CLIENT, "Dropping last handle to Client");
+            // We are sure that no background tasks are running in the client anymore, so we
+            // can drop the (usually) last inner reference.
+            drop(inner);
 
-                if client_strong_count != 1 {
-                    debug!(target: LOG_CLIENT, count = client_strong_count - 1, LOG_CLIENT, "External Client references remaining after last handle dropped");
-                }
+            if client_strong_count != 1 {
+                debug!(target: LOG_CLIENT, count = client_strong_count - 1, LOG_CLIENT, "External Client references remaining after last handle dropped");
+            }
 
-                let db_strong_count = db.strong_count();
-                if db_strong_count != 1 {
-                    debug!(target:  LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
-                }
+            let db_strong_count = db.strong_count();
+            if db_strong_count != 1 {
+                debug!(target:  LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
             }
         }
     }
@@ -708,13 +716,6 @@ pub struct Client {
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
 
     task_group: TaskGroup,
-    /// Number of [`ClientArc`] instances using this `Client`.
-    ///
-    /// The `Client` struct is both used for the client itself as well as
-    /// for the global context used in the state machine executor. This means we
-    /// cannot rely on the reference count of the `Arc<Client>` to
-    /// determine if the client should shut down.
-    client_count: AtomicUsize,
 
     /// Updates about client recovery progress
     client_recovery_progress_receiver:
@@ -1763,7 +1764,7 @@ impl ClientBuilder {
         config: ClientConfig,
         invite_code: InviteCode,
         init_mode: InitMode,
-    ) -> anyhow::Result<ClientArc> {
+    ) -> anyhow::Result<ClientHandle> {
         if Client::is_initialized(&self.db).await {
             bail!("Client database already initialized")
         }
@@ -1884,7 +1885,7 @@ impl ClientBuilder {
         root_secret: DerivableSecret,
         config: ClientConfig,
         invite_code: InviteCode,
-    ) -> anyhow::Result<ClientArc> {
+    ) -> anyhow::Result<ClientHandle> {
         self.init(root_secret, config, invite_code, InitMode::Fresh)
             .await
     }
@@ -1920,7 +1921,7 @@ impl ClientBuilder {
         config: ClientConfig,
         invite_code: InviteCode,
         backup: Option<ClientBackup>,
-    ) -> anyhow::Result<ClientArc> {
+    ) -> anyhow::Result<ClientHandle> {
         let client = self
             .init(
                 root_secret,
@@ -1935,7 +1936,7 @@ impl ClientBuilder {
         Ok(client)
     }
 
-    pub async fn open(self, root_secret: DerivableSecret) -> anyhow::Result<ClientArc> {
+    pub async fn open(self, root_secret: DerivableSecret) -> anyhow::Result<ClientHandle> {
         let Some(config) = Client::get_config_from_db(&self.db).await else {
             bail!("Client database not initialized")
         };
@@ -1953,7 +1954,7 @@ impl ClientBuilder {
         self,
         root_secret: DerivableSecret,
         config: ClientConfig,
-    ) -> anyhow::Result<ClientArc> {
+    ) -> anyhow::Result<ClientHandle> {
         let decoders = self.decoders(&config);
         let config = Self::config_decoded(config, &decoders)?;
         let db = self.db.with_decoders(decoders.clone());
@@ -2173,11 +2174,10 @@ impl ClientBuilder {
             root_secret,
             task_group,
             operation_log: OperationLog::new(db),
-            client_count: Default::default(),
             client_recovery_progress_receiver,
         });
 
-        let client_arc = ClientArc::new(client_inner);
+        let client_arc = ClientHandle::new(client_inner);
 
         final_client.set(client_arc.downgrade());
 
