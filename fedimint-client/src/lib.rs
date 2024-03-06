@@ -113,7 +113,7 @@ use fedimint_core::{
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
-use fedimint_logging::LOG_CLIENT;
+use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_RECOVERY};
 use futures::{Future, StreamExt};
 use module::recovery::RecoveryProgress;
 use module::{DynClientModule, FinalClient};
@@ -614,7 +614,7 @@ impl Drop for ClientArc {
         // `fetch_sub` returns previous value, so if it is 1, it means this is the last
         // client reference
         if client_count == 1 {
-            info!("Last client reference dropped, shutting down client task group");
+            debug!(target: LOG_CLIENT, "Dropping last handle to Client - shutting down the Client");
             let inner = self.inner.take().expect("Must have inner client set");
             inner.executor.stop_executor();
 
@@ -626,29 +626,35 @@ impl Drop for ClientArc {
                 }
 
                 let db = inner.db.clone();
-                let federation_id = inner.federation_id();
 
+                tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(async {
+                        // futures::executor::block_on(async {
+                        debug!(target: LOG_CLIENT, "Waiting for client task group to shut down");
+                        if let Err(err) = inner
+                            .task_group
+                            .clone()
+                            .shutdown_join_all(Some(Duration::from_secs(30)))
+                            .await
+                        {
+                            warn!(target: LOG_CLIENT, %err, "Error waiting for client task group to shut down");
+                        }
+                    });
+                });
+
+                let client_strong_count = Arc::strong_count(&inner);
+                debug!(target: LOG_CLIENT, "Dropping last handle to Client");
+                // We are sure that no background tasks are running in the client anymore, so we
+                // can drop the (usually) last inner reference.
                 drop(inner);
 
-                // wait until `self.inner.db` is the only strong reference
-                for attempt in 0u64.. {
-                    let strong_count = db.strong_count();
-                    if strong_count <= 1 {
-                        break;
-                    }
-                    tokio::task::block_in_place(|| {
-                        futures::executor::block_on(async {
-                            // we want to retry fast, give feedback, but not spam
-                            if attempt % 100 == 0 {
-                                info!(
-                                    %federation_id,
-                                    strong_count,
-                                    "Waiting for client database to stop being used"
-                                );
-                            }
-                            fedimint_core::task::sleep(Duration::from_millis(10)).await;
-                        });
-                    });
+                if client_strong_count != 1 {
+                    debug!(target: LOG_CLIENT, count = client_strong_count - 1, LOG_CLIENT, "External Client references remaining after last handle dropped");
+                }
+
+                let db_strong_count = db.strong_count();
+                if db_strong_count != 1 {
+                    debug!(target:  LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
                 }
             }
         }
@@ -1634,6 +1640,7 @@ impl Client {
                 v.insert(module_instance_id, progress);
             });
         }
+        debug!(target: LOG_CLIENT_RECOVERY, "Recovery executor stopped");
     }
 }
 
@@ -2124,6 +2131,7 @@ impl ClientBuilder {
             dbtx.commit_tx().await;
         }
 
+        let task_group = TaskGroup::new();
         let executor = {
             let mut executor_builder = Executor::builder();
             executor_builder
@@ -2137,7 +2145,9 @@ impl ClientBuilder {
                 executor_builder.with_valid_module_id(*module_instance_id);
             }
 
-            executor_builder.build(db.clone(), notifier).await
+            executor_builder
+                .build(db.clone(), notifier, task_group.clone())
+                .await
         };
 
         let recovery_receiver_init_val = BTreeMap::from_iter(
@@ -2161,7 +2171,7 @@ impl ClientBuilder {
             api,
             secp_ctx: Secp256k1::new(),
             root_secret,
-            task_group: TaskGroup::new(),
+            task_group,
             operation_log: OperationLog::new(db),
             client_count: Default::default(),
             client_recovery_progress_receiver,
