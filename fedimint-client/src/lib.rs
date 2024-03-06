@@ -520,9 +520,6 @@ pub struct ClientArc {
 impl ClientArc {
     /// Create
     fn new(inner: Arc<Client>) -> Self {
-        inner
-            .client_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Self {
             inner: Some(inner),
             // this is the constructor
@@ -601,18 +598,9 @@ impl ClientWeak {
 /// `Arc<Client>`s such that at least one `Executor` never gets dropped.
 impl Drop for ClientArc {
     fn drop(&mut self) {
-        // Not sure if Ordering::SeqCst is strictly needed here, but better safe than
-        // sorry.
-        let client_count = self
-            .as_inner()
-            .client_count
-            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-
-        // `fetch_sub` returns previous value, so if it is 1, it means this is the last
-        // client reference
-        if client_count == 1 {
+        if let Some(inner) = Arc::into_inner(self.inner.take().expect("Must have inner client set"))
+        {
             info!("Last client reference dropped, shutting down client task group");
-            let inner = self.inner.take().expect("Must have inner client set");
             inner.executor.stop_executor();
 
             #[cfg(not(target_family = "wasm"))]
@@ -699,13 +687,6 @@ pub struct Client {
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
 
     task_group: TaskGroup,
-    /// Number of [`ClientArc`] instances using this `Client`.
-    ///
-    /// The `Client` struct is both used for the client itself as well as
-    /// for the global context used in the state machine executor. This means we
-    /// cannot rely on the reference count of the `Arc<Client>` to
-    /// determine if the client should shut down.
-    client_count: AtomicUsize,
 
     /// Updates about client recovery progress
     client_recovery_progress_receiver:
@@ -2158,7 +2139,6 @@ impl ClientBuilder {
             root_secret,
             task_group: TaskGroup::new(),
             operation_log: OperationLog::new(db),
-            client_count: Default::default(),
             client_recovery_progress_receiver,
         });
 
