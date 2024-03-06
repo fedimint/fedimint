@@ -249,7 +249,7 @@ rec {
     preConfigure = ''
       export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -D warnings'
     '';
-    buildPhaseCargoCommand = "cargo doc --workspace --no-deps --document-private-items";
+    buildPhaseCargoCommand = "cargoWithProfile doc --locked --workspace --no-deps --document-private-items";
     doInstallCargoArtifacts = false;
     postInstall = ''
       cp -a target/doc/ $out
@@ -265,7 +265,7 @@ rec {
     preConfigure = ''
       export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -Z unstable-options --enable-index-page -D warnings'
     '';
-    buildPhaseCargoCommand = "cargo doc --workspace --no-deps --document-private-items";
+    buildPhaseCargoCommand = "cargoWithProfile doc --locked --workspace --no-deps --document-private-items";
     doInstallCargoArtifacts = false;
     installPhase = ''
       cp -a target/doc/ $out
