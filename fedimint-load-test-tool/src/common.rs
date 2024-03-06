@@ -362,7 +362,7 @@ pub async fn remint_denomination(
     let operation_id = OperationId::new_random();
     for _ in 0..quantity {
         let outputs = mint_client
-            .create_output(
+            .create_outputs(
                 &mut module_transaction.to_ref_nc(),
                 operation_id,
                 1,

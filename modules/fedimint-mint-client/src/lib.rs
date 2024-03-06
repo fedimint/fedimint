@@ -634,14 +634,14 @@ impl ClientModule for MintClientModule {
         self.create_input(dbtx, operation_id, min_amount).await
     }
 
-    async fn create_exact_output(
+    async fn create_exact_outputs(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         amount: Amount,
     ) -> Vec<ClientOutput<MintOutput, MintClientStateMachines>> {
         // FIXME: don't hardcode notes per denomination
-        self.create_output(dbtx, operation_id, 2, amount).await
+        self.create_outputs(dbtx, operation_id, 2, amount).await
     }
 
     async fn await_primary_module_output(
@@ -715,7 +715,7 @@ impl MintClientModule {
     /// Creates a mint output with exactly the given `amount`, issuing e-cash
     /// notes such that the client holds `notes_per_denomination` notes of each
     /// e-cash note denomination held.
-    pub async fn create_output(
+    pub async fn create_outputs(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
@@ -738,34 +738,49 @@ impl MintClientModule {
 
         for (amount, num) in denominations.iter() {
             for _ in 0..num {
-                let (issuance_request, blind_nonce) = self.new_ecash_note(amount, dbtx).await;
-
-                let state_generator = Arc::new(move |txid, out_idx| {
-                    vec![MintClientStateMachines::Output(MintOutputStateMachine {
-                        common: MintOutputCommon {
-                            operation_id,
-                            out_point: OutPoint { txid, out_idx },
-                        },
-                        state: MintOutputStates::Created(MintOutputStatesCreated {
-                            amount,
-                            issuance_request,
-                        }),
-                    })]
-                });
-
-                debug!(
-                    %amount,
-                    "Generated issuance request"
-                );
-
-                outputs.push(ClientOutput {
-                    output: MintOutput::new_v0(amount, blind_nonce),
-                    state_machines: state_generator,
-                });
+                outputs.push(self.create_single_output(dbtx, operation_id, amount).await);
             }
         }
 
         outputs
+    }
+
+    async fn create_single_output(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        denomination: Amount,
+    ) -> ClientOutput<MintOutput, MintClientStateMachines> {
+        assert!(
+            self.cfg.tbs_pks.get(denomination).is_some(),
+            "Denomination doesn't exist: {}",
+            denomination
+        );
+
+        let (issuance_request, blind_nonce) = self.new_ecash_note(denomination, dbtx).await;
+
+        let state_generator = Arc::new(move |txid, out_idx| {
+            vec![MintClientStateMachines::Output(MintOutputStateMachine {
+                common: MintOutputCommon {
+                    operation_id,
+                    out_point: OutPoint { txid, out_idx },
+                },
+                state: MintOutputStates::Created(MintOutputStatesCreated {
+                    amount: denomination,
+                    issuance_request,
+                }),
+            })]
+        });
+
+        debug!(
+            %denomination,
+            "Generated issuance request"
+        );
+
+        ClientOutput {
+            output: MintOutput::new_v0(denomination, blind_nonce),
+            state_machines: state_generator,
+        }
     }
 
     /// Wait for the e-cash notes to be retrieved. If this is not possible

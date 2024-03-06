@@ -120,7 +120,7 @@ impl ClientModule for DummyClientModule {
         }])
     }
 
-    async fn create_exact_output(
+    async fn create_exact_outputs(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
         id: OperationId,

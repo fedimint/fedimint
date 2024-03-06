@@ -577,7 +577,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     ///   takes the transaction id of the transaction in which the output was
     ///   used and the output index as input since these cannot be known at time
     ///   of calling `create_change_output` and have to be injected later.
-    async fn create_exact_output(
+    async fn create_exact_outputs(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
         _operation_id: OperationId,
@@ -812,7 +812,7 @@ where
         operation_id: OperationId,
         amount: Amount,
     ) -> Vec<ClientOutput> {
-        <T as ClientModule>::create_exact_output(
+        <T as ClientModule>::create_exact_outputs(
             self,
             &mut dbtx.to_ref_with_prefix_module_id(module_instance),
             operation_id,
