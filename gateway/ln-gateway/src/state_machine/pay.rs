@@ -13,6 +13,7 @@ use fedimint_core::util::Spanned;
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_common::api::LnFederationApi;
+use fedimint_ln_common::config::FeeToAmount;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract, Preimage};
 use fedimint_ln_common::{LightningInput, LightningOutput};
@@ -23,11 +24,11 @@ use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn, Instrument};
 
 use super::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
-use crate::db::PreimageAuthentication;
+use crate::db::{FederationIdKey, PreimageAuthentication};
 use crate::gateway_lnrpc::{PayInvoiceRequest, PayInvoiceResponse};
 use crate::lightning::LightningRpcError;
 use crate::state_machine::GatewayClientModule;
-use crate::GatewayState;
+use crate::{GatewayState, RoutingFees};
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that executes the Lightning payment on behalf of
@@ -143,7 +144,7 @@ pub enum OutgoingContractError {
 #[derive(
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
 )]
-enum OutgoingPaymentErrorType {
+pub enum OutgoingPaymentErrorType {
     #[error("OutgoingContract does not exist {contract_id}")]
     OutgoingContractDoesNotExist { contract_id: ContractId },
     #[error("An error occurred while paying the lightning invoice.")]
@@ -154,13 +155,15 @@ enum OutgoingPaymentErrorType {
     SwapFailed { swap_error: String },
     #[error("Invoice has already been paid")]
     InvoiceAlreadyPaid,
+    #[error("No federation configuration")]
+    InvalidFederationConfiguration,
 }
 
 #[derive(
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
 )]
 pub struct OutgoingPaymentError {
-    error_type: OutgoingPaymentErrorType,
+    pub error_type: OutgoingPaymentErrorType,
     contract_id: ContractId,
     contract: Option<OutgoingContractAccount>,
 }
@@ -206,6 +209,7 @@ impl GatewayPayInvoice {
             context.clone(),
             pay_invoice_payload.contract_id,
             pay_invoice_payload.payment_data.clone(),
+            pay_invoice_payload.federation_id,
         )
         .await
         {
@@ -294,6 +298,7 @@ impl GatewayPayInvoice {
         context: GatewayClientContext,
         contract_id: ContractId,
         payment_data: PaymentData,
+        federation_id: FederationId,
     ) -> Result<(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError> {
         debug!("Await payment parameters for outgoing contract {contract_id:?}");
         let account = global_context
@@ -335,12 +340,24 @@ impl GatewayPayInvoice {
                 });
             }
 
+            let mut gateway_dbtx = context.gateway.gateway_db.begin_transaction_nc().await;
+            let config = gateway_dbtx
+                .get_value(&FederationIdKey { id: federation_id })
+                .await
+                .ok_or(OutgoingPaymentError {
+                    error_type: OutgoingPaymentErrorType::InvalidFederationConfiguration,
+                    contract_id,
+                    contract: Some(outgoing_contract_account.clone()),
+                })?;
+            let routing_fees = config.fees;
+
             let payment_parameters = Self::validate_outgoing_account(
                 &outgoing_contract_account,
                 context.redeem_key,
                 context.timelock_delta,
                 consensus_block_count.unwrap(),
                 &payment_data,
+                routing_fees,
             )
             .await
             .map_err(|e| {
@@ -558,6 +575,7 @@ impl GatewayPayInvoice {
         timelock_delta: u64,
         consensus_block_count: u64,
         payment_data: &PaymentData,
+        routing_fees: RoutingFees,
     ) -> Result<PaymentParameters, OutgoingContractError> {
         let our_pub_key = secp256k1::PublicKey::from_keypair(&redeem_key);
 
@@ -573,9 +591,11 @@ impl GatewayPayInvoice {
             .amount()
             .ok_or(OutgoingContractError::InvoiceMissingAmount)?;
 
-        if account.amount < payment_amount {
+        let gateway_fee = routing_fees.to_amount(&payment_amount);
+        let necessary_contract_amount = payment_amount + gateway_fee;
+        if account.amount < necessary_contract_amount {
             return Err(OutgoingContractError::Underfunded(
-                payment_amount,
+                necessary_contract_amount,
                 account.amount,
             ));
         }
