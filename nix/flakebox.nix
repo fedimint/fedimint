@@ -424,12 +424,6 @@ rec {
         # here doesn't make any sense, and `wasm32-unknown-unknown` toolchain is used
         # mostly to opt-in into wasm tests
         unset CARGO_BUILD_TARGET
-
-        # TODO: hack, remove
-        echo "target"
-        ls ./target/pkgs
-        echo "target/wa..."
-        ls ./target/pkgs/fedimint-wasm-tests
       '' +
       lib.concatStringsSep "\n" (
         lib.replicate times ''
@@ -461,7 +455,7 @@ rec {
     cargoArtifacts = craneMultiBuild.default.${craneLib.cargoProfile or "release"}.workspaceBuild;
     nativeBuildInputs = commonCliTestArgs.nativeBuildInputs ++ [ pkgs.firefox pkgs.wasm-bindgen-cli pkgs.geckodriver pkgs.wasm-pack ];
     buildPhaseCargoCommand = ''
-      inheritCargoArtifacts ${craneMultiBuild.wasm32-unknown.${craneLib.cargoProfile or "release"}.workspaceBuildWasmTest}
+      inheritCargoArtifacts ${craneMultiBuild.wasm32-unknown.${craneLib.cargoProfile or "release"}.workspaceBuildWasmTest} "target/pkgs/fedimint-wasm-tests"
       patchShebangs ./scripts; SKIP_CARGO_BUILD=1 ./scripts/tests/wasm-test.sh'';
   };
 
