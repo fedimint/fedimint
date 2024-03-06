@@ -14,6 +14,7 @@ use clap::Subcommand;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use fedimint_cli::LnInvoiceResponse;
 use fedimint_core::encoding::Decodable;
+use fedimint_core::Amount;
 use fedimint_logging::LOG_DEVIMINT;
 use ln_gateway::rpc::GatewayInfo;
 use semver::VersionReq;
@@ -116,6 +117,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
     let p90_median_factor = 7;
 
     let client = fed.new_joined_client("latency-tests-client").await?;
+    client.use_gateway(&gw_cln).await?;
     fed.pegin_client(10_000_000, &client).await?;
 
     // LN operations take longer, we need less iterations
@@ -166,9 +168,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
                 let invoice = add_invoice.payment_request;
                 let payment_hash = add_invoice.r_hash;
                 let start_time = Instant::now();
-                cmd!(client, "ln-pay", invoice, "--gateway-id", cln_gw_id.clone())
-                    .run()
-                    .await?;
+                ln_pay(&client, invoice, cln_gw_id.clone(), false).await?;
                 let invoice_status = lnd
                     .lightning_client_lock()
                     .await?
@@ -207,24 +207,17 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
                 .into_inner();
 
             let invoice = add_invoice.payment_request;
-            cmd!(client, "ln-pay", invoice, "--gateway-id", cln_gw_id.clone())
-                .run()
-                .await?;
+            ln_pay(&client, invoice, cln_gw_id.clone(), false).await?;
 
             for _ in 0..iterations {
-                let invoice = cmd!(
-                    client,
-                    "ln-invoice",
-                    "--amount=100000msat",
-                    "--description=incoming-over-lnd-gw",
-                    "--gateway-id",
+                let invoice = ln_invoice(
+                    &client,
+                    Amount::from_msats(100000),
+                    "latency-over-cln-gw".to_string(),
                     cln_gw_id.clone(),
                 )
-                .out_json()
-                .await?["invoice"]
-                    .as_str()
-                    .context("invoice must be string")?
-                    .to_owned();
+                .await?
+                .invoice;
 
                 let start_time = Instant::now();
                 let payment = lnd
@@ -369,6 +362,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     } = dev_fed;
 
     let client = fed.new_joined_client("cli-tests-client").await?;
+    client.use_gateway(&gw_cln).await?;
     let cln_gw_id = gw_cln.gateway_id().await?;
     let lnd_gw_id = gw_lnd.gateway_id().await?;
 
@@ -642,10 +636,11 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // finish this payment at the end
     info!("Testing fedimint-cli pays LND HOLD invoice via CLN gateway");
     let (hold_invoice_preimage, hold_invoice_hash, hold_invoice_operation_id) =
-        start_hold_invoice_payment(&client, &gw_cln, &lnd).await?;
+        start_hold_invoice_payment(&client, &gw_cln, cln_gw_id.clone(), &lnd).await?;
 
     // OUTGOING: fedimint-cli pays LND via CLN gateway
     info!("Testing fedimint-cli pays LND via CLN gateway");
+    client.use_gateway(&gw_cln).await?;
 
     let initial_client_balance = client.balance().await?;
     let initial_cln_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
@@ -664,9 +659,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .into_inner();
     let invoice = add_invoice.payment_request;
     let payment_hash = add_invoice.r_hash;
-    cmd!(client, "ln-pay", invoice, "--gateway-id", cln_gw_id.clone())
-        .run()
-        .await?;
+    ln_pay(&client, invoice, cln_gw_id.clone(), false).await?;
 
     let invoice_status = lnd
         .lightning_client_lock()
@@ -700,17 +693,13 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         final_cln_outgoing_gateway_balance - initial_cln_gateway_balance
     );
 
-    let ln_response_val = cmd!(
-        client,
-        "ln-invoice",
-        "--amount=1100000msat",
-        "--description='incoming-over-cln-gw'",
-        "--gateway-id",
-        cln_gw_id,
+    let ln_invoice_response = ln_invoice(
+        &client,
+        Amount::from_msats(1100000),
+        "incoming-over-cln-gw".to_string(),
+        cln_gw_id.clone(),
     )
-    .out_json()
     .await?;
-    let ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)?;
     let invoice = ln_invoice_response.invoice;
     let payment = lnd
         .lightning_client_lock()
@@ -762,6 +751,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // LND gateway tests
     info!("Testing LND gateway");
+    client.use_gateway(&gw_lnd).await?;
 
     // OUTGOING: fedimint-cli pays CLN via LND gateaway
     info!("Testing outgoing payment from client to CLN via LND gateway");
@@ -784,15 +774,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .await?
         .bolt11;
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
-    cmd!(
-        client,
-        "ln-pay",
-        invoice.clone(),
-        "--gateway-id",
-        lnd_gw_id.clone()
-    )
-    .run()
-    .await?;
+    ln_pay(&client, invoice.clone(), lnd_gw_id.clone(), false).await?;
     let fed_id = fed.calculate_federation_id().await;
 
     let invoice_status = cln
@@ -827,18 +809,14 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // INCOMING: fedimint-cli receives from CLN via LND gateway
     info!("Testing incoming payment from CLN to client via LND gateway");
-    let ln_response_val = cmd!(
-        client,
-        "ln-invoice",
-        "--amount=1300000msat",
-        "--description='incoming-over-lnd-gw'",
-        "--gateway-id",
+    let recv = ln_invoice(
+        &client,
+        Amount::from_msats(1300000),
+        "incoming-over-lnd-gw".to_string(),
         lnd_gw_id,
     )
-    .out_json()
     .await?;
-    let ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)?;
-    let invoice = ln_invoice_response.invoice;
+    let invoice = recv.invoice;
     let invoice_status = cln
         .request(cln_rpc::model::requests::PayRequest {
             bolt11: invoice,
@@ -863,7 +841,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // Receive the ecash notes
     info!("Testing receiving ecash notes");
-    let operation_id = ln_invoice_response.operation_id;
+    let operation_id = recv.operation_id;
     cmd!(client, "await-invoice", operation_id).run().await?;
 
     // Assert balances changed by 1_300_000 msat
@@ -959,8 +937,10 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 pub async fn start_hold_invoice_payment(
     client: &Client,
     gw_cln: &Gatewayd,
+    gw_cln_id: String,
     lnd: &Lnd,
 ) -> anyhow::Result<([u8; 32], cln_rpc::primitives::Sha256, String)> {
+    client.use_gateway(gw_cln).await?;
     let preimage = rand::random::<[u8; 32]>();
     let hash = {
         use fedimint_core::BitcoinHash;
@@ -979,19 +959,7 @@ pub async fn start_hold_invoice_payment(
         .await?
         .into_inner()
         .payment_request;
-    let operation_id = cmd!(
-        client,
-        "ln-pay",
-        payment_request,
-        "--finish-in-background",
-        "--gateway-id",
-        gw_cln.gateway_id().await?
-    )
-    .out_json()
-    .await?["operation_id"]
-        .as_str()
-        .context("missing operation id")?
-        .to_owned();
+    let operation_id = ln_pay(client, payment_request, gw_cln_id, true).await?;
     Ok((preimage, hash, operation_id))
 }
 
@@ -1362,6 +1330,7 @@ pub async fn lightning_gw_reconnect_test(
     let client = fed
         .new_joined_client("lightning-gw-reconnect-test-client")
         .await?;
+    client.use_gateway(&gw_cln).await?;
 
     info!("Pegging-in both gateways");
     fed.pegin_gateway(99_999, &gw_cln).await?;
@@ -1443,6 +1412,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     } = dev_fed;
 
     let client = fed.new_joined_client("gw-reboot-test-client").await?;
+    client.use_gateway(&gw_cln).await?;
     fed.pegin_client(10_000, &client).await?;
 
     // Query current gateway infos
@@ -1469,8 +1439,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         .await?
         .into_inner();
     let invoice = add_invoice.payment_request;
-    cmd!(client, "ln-pay", invoice, "--gateway-id", cln_gateway_id)
-        .run()
+    ln_pay(&client, invoice, cln_gateway_id, false)
         .await
         .expect_err("Expected ln-pay to return error because the gateway is not online");
     let new_client_balance = client.balance().await?;
@@ -1551,18 +1520,15 @@ pub async fn do_try_create_and_pay_invoice(
     .await?;
 
     tracing::info!("Creating invoice....");
-    let ln_response_val = cmd!(
+    client.use_gateway(gw).await?;
+    let invoice = ln_invoice(
         client,
-        "ln-invoice",
-        "--amount=1000msat",
-        "--description='incoming-over-cln-gw'",
-        "--gateway-id",
+        Amount::from_msats(1000),
+        "incoming-over-cln-gw".to_string(),
         gw.gateway_id().await?,
     )
-    .out_json()
-    .await?;
-    let ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)?;
-    let invoice = ln_invoice_response.invoice;
+    .await?
+    .invoice;
 
     match gw.ln.as_ref() {
         Some(LightningNode::Cln(_cln)) => {
@@ -1622,6 +1588,84 @@ pub async fn do_try_create_and_pay_invoice(
         }
     }
     Ok(())
+}
+
+async fn ln_pay(
+    client: &Client,
+    invoice: String,
+    gw_id: String,
+    finish_in_background: bool,
+) -> anyhow::Result<String> {
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+
+    // TODO(support:v0.2): remove
+    let value = if VersionReq::parse("<0.3.0-alpha")?.matches(&fedimint_cli_version) {
+        if finish_in_background {
+            cmd!(client, "ln-pay", invoice, "--finish-in-background",)
+                .out_json()
+                .await?
+        } else {
+            cmd!(client, "ln-pay", invoice,).out_json().await?
+        }
+    } else if finish_in_background {
+        cmd!(
+            client,
+            "ln-pay",
+            invoice,
+            "--finish-in-background",
+            "--gateway-id",
+            gw_id,
+        )
+        .out_json()
+        .await?
+    } else {
+        cmd!(client, "ln-pay", invoice, "--gateway-id", gw_id,)
+            .out_json()
+            .await?
+    };
+
+    let operation_id = value["operation_id"]
+        .as_str()
+        .expect("missing operation id")
+        .to_string();
+    Ok(operation_id)
+}
+
+async fn ln_invoice(
+    client: &Client,
+    amount: Amount,
+    description: String,
+    gw_id: String,
+) -> anyhow::Result<LnInvoiceResponse> {
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    // TODO(support:v0.2): remove
+    let ln_response_val = if VersionReq::parse("<0.3.0-alpha")?.matches(&fedimint_cli_version) {
+        cmd!(
+            client,
+            "ln-invoice",
+            "--amount",
+            amount.msats,
+            format!("--description='{description}'"),
+        )
+        .out_json()
+        .await?
+    } else {
+        cmd!(
+            client,
+            "ln-invoice",
+            "--amount",
+            amount.msats,
+            format!("--description='{description}'"),
+            "--gateway-id",
+            gw_id,
+        )
+        .out_json()
+        .await?
+    };
+
+    let ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)?;
+
+    Ok(ln_invoice_response)
 }
 
 pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {

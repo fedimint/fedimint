@@ -823,15 +823,10 @@ impl LightningClientModule {
         let gateways = dbtx
             .find_by_prefix(&LightningGatewayKeyPrefix)
             .await
+            .map(|(_, gw)| gw.info)
             .collect::<Vec<_>>()
             .await;
-        gateways.into_iter().find_map(|(_, registration)| {
-            if registration.info.gateway_id == *gateway_id {
-                Some(registration.info)
-            } else {
-                None
-            }
-        })
+        gateways.into_iter().find(|g| g.gateway_id == *gateway_id)
     }
 
     /// Updates the gateway cache by fetching the latest registered gateways
@@ -843,10 +838,14 @@ impl LightningClientModule {
         // Remove all previous gateway entries
         dbtx.remove_by_prefix(&LightningGatewayKeyPrefix).await;
 
-        for gw in gateways.into_iter() {
-            dbtx.insert_entry(&LightningGatewayKey(gw.info.gateway_id), &gw.anchor())
-                .await;
+        for gw in gateways.iter() {
+            dbtx.insert_entry(
+                &LightningGatewayKey(gw.info.gateway_id),
+                &gw.clone().anchor(),
+            )
+            .await;
         }
+
         dbtx.commit_tx().await;
 
         Ok(())
