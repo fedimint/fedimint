@@ -367,27 +367,47 @@ jobs:
 
       - name: Build fedimintd container
         run: |
-          nix build -L .#container.fedimintd
+          if [ "$GITHUB_EVENT_NAME" == "pull_request" ] || [ "$GITHUB_EVENT_NAME" == "merge_group" ]; then
+            nix build -L .#ci.container.fedimintd
+          else
+            nix build -L .#container.fedimintd
+          fi
           echo "fedimintd_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Build fedimint-cli container
         run: |
-          nix build -L .#container.fedimint-cli
+          if [ "$GITHUB_EVENT_NAME" == "pull_request" ] || [ "$GITHUB_EVENT_NAME" == "merge_group" ]; then
+            nix build -L .#ci.container.fedimint-cli
+          else
+            nix build -L .#container.fedimint-cli
+          fi
           echo "fedimint_cli_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Build gatewayd container
         run: |
-          nix build -L .#container.gatewayd
+          if [ "$GITHUB_EVENT_NAME" == "pull_request" ] || [ "$GITHUB_EVENT_NAME" == "merge_group" ]; then
+            nix build -L .#ci.container.gatewayd
+          else
+            nix build -L .#container.gatewayd
+          fi
           echo "gatewayd_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Build gateway-cli container
         run: |
-          nix build -L .#container.gateway-cli
+          if [ "$GITHUB_EVENT_NAME" == "pull_request" ] || [ "$GITHUB_EVENT_NAME" == "merge_group" ]; then
+            nix build -L .#ci.container.gateway-cli
+          else
+            nix build -L .#container.gateway-cli
+          fi
           echo "gateway-cli_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Build devtools container
         run: |
-          nix build -L .#container.devtools
+          if [ "$GITHUB_EVENT_NAME" == "pull_request" ] || [ "$GITHUB_EVENT_NAME" == "merge_group" ]; then
+            nix build -L .#ci.container.devtools
+          else
+            nix build -L .#container.devtools
+          fi
           echo "devtools_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Login to Docker Hub
