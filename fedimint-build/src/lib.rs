@@ -66,7 +66,7 @@ fn set_code_version_inner() -> Result<(), String> {
         // state by replacing the middle with 0s. This should
         // be noticeable enough, while letting find out the
         // root commit anyway.
-        format!("{}00000000{}", &hash[0..16], &hash[26..40])
+        format!("{}00000000{}", &hash[0..16], &hash[(40 - 16)..40])
     } else {
         hash
     };
