@@ -346,6 +346,16 @@ impl Display for FederationId {
     }
 }
 
+impl FromStr for FederationIdPrefix {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(Vec::from_hex(s)?.try_into().map_err(
+            |bytes: Vec<u8>| hex::Error::InvalidLength(4, bytes.len()),
+        )?))
+    }
+}
+
 /// Display as a hex encoding
 impl FederationId {
     /// Random dummy id for testing

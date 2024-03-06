@@ -352,7 +352,6 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
 }
 
 pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
-    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
     log_binary_versions().await?;
     let data_dir = env::var("FM_DATA_DIR")?;
 
@@ -419,10 +418,29 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     let fed_id = fed.calculate_federation_id().await;
     let invite = fed.invite_code()?;
-    let invite_code = cmd!(client, "dev", "decode-invite-code", invite.clone())
-        .out_json()
-        .await?;
-    anyhow::ensure!(
+
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    let version_req = VersionReq::parse(">=0.3.0-alpha")?;
+
+    let invite_code = if version_req.matches(&fedimint_cli_version) {
+        cmd!(client, "dev", "decode", "invite-code", invite.clone())
+    } else {
+        cmd!(client, "dev", "decode-invite-code", invite.clone())
+    }
+    .out_json()
+    .await?;
+
+    let encode_invite_output = if version_req.matches(&fedimint_cli_version) {
+        cmd!(
+            client,
+            "dev",
+            "encode",
+            "invite-code",
+            format!("--url={}", invite_code["url"].as_str().unwrap()),
+            "--federation_id={fed_id}",
+            "--peer=0"
+        )
+    } else {
         cmd!(
             client,
             "dev",
@@ -431,10 +449,14 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
             "--federation_id={fed_id}",
             "--peer=0"
         )
-        .out_json()
-        .await?["invite_code"]
+    }
+    .out_json()
+    .await?;
+
+    anyhow::ensure!(
+        encode_invite_output["invite_code"]
             .as_str()
-            .unwrap()
+            .expect("invite_code must be a string")
             == invite,
         "failed to decode and encode the client invite code",
     );
