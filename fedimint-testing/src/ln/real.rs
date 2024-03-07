@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::{env, fmt};
 
 use async_trait::async_trait;
-use bitcoin::{secp256k1, Network};
+use bitcoin::Network;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::{model, ClnRpc, Request, Response};
 use fedimint_core::task::TaskGroup;

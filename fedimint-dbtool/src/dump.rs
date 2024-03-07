@@ -11,7 +11,6 @@ use fedimint_core::db::{
     Database, DatabaseVersionKey, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::Encodable;
-use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::push_db_pair_items_no_serde;
 use fedimint_rocksdb::RocksDbReadOnly;

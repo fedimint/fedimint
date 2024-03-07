@@ -1,6 +1,5 @@
 //! Adapter that implements a message based protocol on top of a stream based
 //! one
-use std::convert::TryInto;
 use std::fmt::Debug;
 use std::io::{Read, Write};
 use std::marker::PhantomData;
@@ -226,9 +225,8 @@ where
         if src.len() < (length as usize) + 8 {
             trace!(length, buffern_len = src.len(), "Received partial message");
             return Ok(None);
-        } else {
-            trace!(length, "Received full message");
         }
+        trace!(length, "Received full message");
 
         src.reader()
             .read_exact(&mut [0u8; 8][..])

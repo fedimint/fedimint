@@ -3,7 +3,7 @@ use std::time::Duration;
 use anyhow::{bail, Context};
 use assert_matches::assert_matches;
 use bitcoin::secp256k1::rand::rngs::OsRng;
-use bitcoin::secp256k1::{self, Secp256k1};
+use bitcoin::secp256k1::Secp256k1;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientArc;

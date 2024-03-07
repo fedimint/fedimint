@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::convert::{Infallible, TryInto};
+use std::convert::Infallible;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
 

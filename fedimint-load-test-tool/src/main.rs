@@ -392,9 +392,8 @@ async fn main() -> anyhow::Result<()> {
     }
     if len_failures > 0 {
         bail!("Finished with failures");
-    } else {
-        info!("Finished successfully")
     }
+    info!("Finished successfully");
     Ok(())
 }
 
@@ -1191,6 +1190,7 @@ async fn handle_metrics_summary(
             tokio::fs::OpenOptions::new()
                 .write(true)
                 .create(true)
+                .truncate(true)
                 .open(metrics_json_output)
                 .await?,
         ))

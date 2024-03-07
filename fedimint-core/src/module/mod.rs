@@ -36,8 +36,7 @@ use crate::net::peers::MuxPeerConnections;
 use crate::server::DynServerModule;
 use crate::task::{MaybeSend, TaskGroup};
 use crate::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
-    OutPoint, PeerId,
+    apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync, Amount, OutPoint, PeerId,
 };
 
 #[derive(Debug, PartialEq)]

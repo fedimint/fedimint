@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, HashMap};
-use std::iter::FromIterator;
 
 use anyhow::bail;
 use fedimint_core::config::{
