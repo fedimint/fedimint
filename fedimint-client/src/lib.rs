@@ -553,24 +553,49 @@ impl ClientHandle {
         self.as_inner().start_executor().await
     }
 
-    /// Block for the `client` to no longer contain any strong references.
-    ///
-    /// Some parts of the code can temporarily clone client to perform some
-    /// actions. No further strong references guarantees that the `client`
-    /// is no longer used inside the system.
-    pub async fn wait_until_fully_dropped(self) {
-        let weak = self.downgrade();
-        drop(self);
+    /// Shutdown the client.
+    /// Returns false if there are other clones of [`ClientHandle`].
+    pub async fn shutdown(self) -> bool {
+        if let Some(mut inner) = Arc::into_inner(self.inner) {
+            inner.shutdown().await;
+            true
+        } else {
+            false
+        }
+    }
+}
 
-        for attempt in 0u64.. {
-            if Weak::strong_count(&weak.inner) == 0 {
-                break;
-            }
-            // we want to retry fast, give feedback, but not spam
-            if attempt % 100 == 0 {
-                info!("Waiting for ArcClient to stop being used");
-            }
-            fedimint_core::task::sleep(Duration::from_millis(10)).await;
+impl ClientHandleShared {
+    async fn shutdown(&mut self) {
+        let Some(inner) = self.inner.take() else {
+            error!("ClientHandleShared::shutdown called twice");
+            return;
+        };
+        inner.executor.stop_executor();
+        let db = inner.db.clone();
+        debug!(target: LOG_CLIENT, "Waiting for client task group to shut down");
+        if let Err(err) = inner
+            .task_group
+            .clone()
+            .shutdown_join_all(Some(Duration::from_secs(30)))
+            .await
+        {
+            warn!(target: LOG_CLIENT, %err, "Error waiting for client task group to shut down");
+        }
+
+        let client_strong_count = Arc::strong_count(&inner);
+        debug!(target: LOG_CLIENT, "Dropping last handle to Client");
+        // We are sure that no background tasks are running in the client anymore, so we
+        // can drop the (usually) last inner reference.
+        drop(inner);
+
+        if client_strong_count != 1 {
+            debug!(target: LOG_CLIENT, count = client_strong_count - 1, LOG_CLIENT, "External Client references remaining after last handle dropped");
+        }
+
+        let db_strong_count = db.strong_count();
+        if db_strong_count != 1 {
+            debug!(target:  LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
         }
     }
 }
@@ -629,49 +654,31 @@ impl ClientWeak {
 /// `Arc<Client>`s such that at least one `Executor` never gets dropped.
 impl Drop for ClientHandleShared {
     fn drop(&mut self) {
-        debug!(target: LOG_CLIENT, "Shutting down the Client on last handle drop");
-        let inner = self.inner.take().expect("Must have inner client set");
-        inner.executor.stop_executor();
-
-        #[cfg(not(target_family = "wasm"))]
-        {
-            if RuntimeHandle::current().runtime_flavor() == RuntimeFlavor::CurrentThread {
-                // We can't use block_on in single-threaded mode
-                return;
-            }
-
-            let db = inner.db.clone();
-
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(async {
-                        // futures::executor::block_on(async {
-                        debug!(target: LOG_CLIENT, "Waiting for client task group to shut down");
-                        if let Err(err) = inner
-                            .task_group
-                            .clone()
-                            .shutdown_join_all(Some(Duration::from_secs(30)))
-                            .await
-                        {
-                            warn!(target: LOG_CLIENT, %err, "Error waiting for client task group to shut down");
-                        }
-                    });
-            });
-
-            let client_strong_count = Arc::strong_count(&inner);
-            debug!(target: LOG_CLIENT, "Dropping last handle to Client");
-            // We are sure that no background tasks are running in the client anymore, so we
-            // can drop the (usually) last inner reference.
-            drop(inner);
-
-            if client_strong_count != 1 {
-                debug!(target: LOG_CLIENT, count = client_strong_count - 1, LOG_CLIENT, "External Client references remaining after last handle dropped");
-            }
-
-            let db_strong_count = db.strong_count();
-            if db_strong_count != 1 {
-                debug!(target:  LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
-            }
+        if self.inner.is_none() {
+            return;
         }
+
+        // We can't use block_on in single-threaded mode or wasm
+        #[cfg(target_family = "wasm")]
+        let can_block = false;
+        #[cfg(not(target_family = "wasm"))]
+        let can_block = RuntimeHandle::current().runtime_flavor() != RuntimeFlavor::CurrentThread;
+        if !can_block {
+            let inner = self.inner.take().expect("Must have inner client set");
+            inner.executor.stop_executor();
+            if cfg!(target_family = "wasm") {
+                error!(target: LOG_CLIENT, "Automatic client shutdown is not possible on wasm, call ClientHandle::shutdown manually.");
+            } else {
+                error!(target: LOG_CLIENT, "Automatic client shutdown is not possible on current thread runtime, call ClientHandle::shutdown manually.");
+            }
+            return;
+        }
+
+        debug!(target: LOG_CLIENT, "Shutting down the Client on last handle drop");
+        #[cfg(not(target_family = "wasm"))]
+        tokio::task::block_in_place(|| {
+            RuntimeHandle::current().block_on(self.shutdown());
+        });
     }
 }
 
