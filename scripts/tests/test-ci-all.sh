@@ -180,7 +180,10 @@ fi
 tests_to_run_in_parallel=(
   "always_success_test"
   "rust_unit_tests"
-  "wasm_test"
+  # TODO: unfortunately it seems like something about headless firefox is broken when
+  # running in xarg -P or gnu parallel. Try re-enabling in the future and see if it works.
+  # Other than this problem, everything about it is working.
+  # "wasm_test"
   "backend_test_bitcoind"
   "backend_test_bitcoind_ln_gateway"
   "backend_test_electrs"

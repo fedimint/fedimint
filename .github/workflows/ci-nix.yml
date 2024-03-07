@@ -181,6 +181,10 @@ jobs:
         run: |
           nix build -L .#wasm32-unknown.ci.ciTestAll5Times --keep-failed
 
+      - name: Wasm Tests
+        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests && (matrix.host != 'macos')
+        run: nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --option keep-failed true --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).wasm32-unknown.ci.wasmTest
+
       - name: Prepare failed test build dirs
         if: always()
         run:  |
