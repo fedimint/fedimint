@@ -36,7 +36,7 @@ jobs:
       - name: Build and push mutinynet-bitcoind
         uses: docker/build-push-action@v5
         with:
-          file: docker/mutinynet-bitcoind-docker/Dockerfile
+          file: docker/latest/mutinynet-bitcoind-docker/Dockerfile
           push: true
           tags: ${{ steps.meta-mutinynet-bitcoind.outputs.tags }}
           labels: ${{ steps.meta-mutinynet-bitcoind.outputs.labels }}
