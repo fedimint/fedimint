@@ -81,6 +81,8 @@
                 "llvm-tools"
               ];
 
+              toolchain.channel = "latest";
+
               motd = {
                 enable = true;
                 command = ''
