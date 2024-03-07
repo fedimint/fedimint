@@ -38,7 +38,9 @@ use fedimint_mint_client::{MintClientInit, MintClientModule, SpendableNote};
 use fedimint_server::config::io::SALT_FILE;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
-use rand::thread_rng;
+use rand::distributions::Alphanumeric;
+use rand::seq::IteratorRandom;
+use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
@@ -282,10 +284,10 @@ impl Opts {
     }
 
     fn auth(&self) -> CliResult<ApiAuth> {
-        let password = self
-            .password
-            .clone()
-            .ok_or_cli_msg(CliErrorKind::MissingAuth, "CLI needs password set")?;
+        let password = match &self.password {
+            Some(pass) => pass.clone(),
+            None => generate_random_password(),
+        };
         Ok(ApiAuth(password))
     }
 
@@ -318,6 +320,20 @@ async fn load_or_generate_mnemonic(db: &Database) -> Result<Mnemonic, CliError> 
             }
         },
     )
+}
+
+fn generate_random_password() -> String {
+    const PASSWORD_LENGTH: usize = 16;
+    const ALLOWED_CHARS: &[char] = &[
+        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'u',
+        'v', 'w', 'x', 'y', 'z',
+    ];
+
+    let mut rng = thread_rng();
+    let password: String = (0..PASSWORD_LENGTH)
+        .map(|_| ALLOWED_CHARS[rng.gen_range(0..ALLOWED_CHARS.len())])
+        .collect();
+    password
 }
 
 #[derive(Subcommand, Clone)]

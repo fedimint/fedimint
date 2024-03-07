@@ -300,9 +300,6 @@ async fn run(
     // TODO: Fedimintd should use the config gen API
     // on each run we want to pass the currently passed password, so we need to
     // overwrite
-    if let Some(password) = opts.password {
-        write_overwrite(opts.data_dir.join(PLAINTEXT_PASSWORD), password)?;
-    };
     let default_params = ConfigGenParamsRequest {
         meta: opts.extra_dkg_meta.clone(),
         modules: module_inits_params,
