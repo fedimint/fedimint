@@ -2,11 +2,13 @@
 /target-nix/
 /hfuzz_target/
 /hfuzz_workspace/
+/target-comp-bench/
 # in case it's a symlink
 /target
 /target-nix
 /hfuzz_target
 /hfuzz_workspace
+/target-comp-bench
 
 /result
 .idea
