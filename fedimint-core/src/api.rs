@@ -497,6 +497,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     async fn discover_api_version_set(
         &self,
         client_versions: &SupportedApiVersionsSummary,
+        timeout: Duration,
     ) -> FederationResult<ApiVersionSet>;
 }
 
@@ -746,8 +747,8 @@ where
     async fn discover_api_version_set(
         &self,
         client_versions: &SupportedApiVersionsSummary,
+        timeout: Duration,
     ) -> FederationResult<ApiVersionSet> {
-        let timeout = Duration::from_secs(5);
         self.request_with_strategy(
             DiscoverApiVersionSet::new(
                 self.all_peers().len(),

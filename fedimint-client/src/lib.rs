@@ -84,6 +84,7 @@ use db::{
     ClientConfigKeyPrefix, ClientInitStateKey, ClientInviteCodeKey, ClientInviteCodeKeyPrefix,
     ClientModuleRecovery, EncodedClientSecretKey, InitMode,
 };
+use envs::get_discover_api_version_timeout;
 use fedimint_core::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi, InviteCode,
 };
@@ -148,6 +149,8 @@ use crate::transaction::{
 pub mod backup;
 /// Database keys used by the client
 pub mod db;
+/// Environment variables
+pub mod envs;
 /// Module client interface definitions
 pub mod module;
 /// Operation log subsystem of the client
@@ -1316,6 +1319,7 @@ impl Client {
             .discover_api_version_set(
                 &Self::supported_api_versions_summary_static(self.get_config(), &self.module_inits)
                     .await,
+                get_discover_api_version_timeout(),
             )
             .await?)
     }
@@ -1330,6 +1334,7 @@ impl Client {
         Ok(api
             .discover_api_version_set(
                 &Self::supported_api_versions_summary_static(config, client_module_init).await,
+                get_discover_api_version_timeout(),
             )
             .await?)
     }

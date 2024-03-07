@@ -57,6 +57,7 @@ function run_test_for_versions() {
   else
     # default to run current tests in 3/4 setup
     export FM_OFFLINE_NODES=1
+    export FM_DISCOVER_API_VERSION_TIMEOUT=5
     unset FM_RUN_TEST_VERSIONS
   fi
 
