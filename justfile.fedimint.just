@@ -121,3 +121,45 @@ sign-release tag:
 # benchmark compilation times
 bench-compilation:
   ./scripts/bench-compilation.sh
+
+fuzz-target TARGET="" *ARGS="--exit_upon_crash":
+  #!/usr/bin/env bash
+  set -euo pipefail
+
+  if [ -z "{{TARGET}}" ]; then
+    >&2 echo "Available targets:"
+    >&2 echo ""
+    ls fuzz/src/bin/ | sed -e 's/.rs$//g'
+    exit 1
+  fi
+  # reference: https://github.com/google/honggfuzz/blob/master/docs/USAGE.md#usage
+  export HFUZZ_RUN_ARGS="{{ARGS}}"
+  # notes:
+  # * TODO: make flakebox set CC, as hfuzz seems to ignore CC_<target>
+  # * TODO: make flakebox set RUSTFLAGS, as hfuzz seems to ignore CARGO_BUILD_<target>_RUSTFLAGS
+  # * can't be run with sccache, so just disable here
+  env -u RUSTC_WRAPPER CC=clang RUSTFLAGS="--cfg tokio_unstable" cargo hfuzz run {{TARGET}}
+
+fuzz-target-debug TARGET="" CRASH="" *ARGS="--exit_upon_crash":
+  #!/usr/bin/env bash
+  set -euo pipefail
+
+  if [ -z "{{TARGET}}" ]; then
+    >&2 echo "Available targets:"
+    >&2 echo ""
+    ls fuzz/src/bin/ | sed -e 's/.rs$//g'
+    exit 1
+  fi
+  # reference: https://github.com/google/honggfuzz/blob/master/docs/USAGE.md#usage
+  export HFUZZ_RUN_ARGS="{{ARGS}}"
+
+  export HFUZZ_DEBUGGER=${HFUZZ_DEBUGGER:-gdb}
+  crash="CRASH"
+  if [ -z "${CRASH:-}" ]; then
+    CRASH="hfuzz_workspace/{{TARGET}}/*.fuzz"
+  fi
+  # notes:
+  # * TODO: make flakebox set CC, as hfuzz seems to ignore CC_<target>
+  # * TODO: make flakebox set RUSTFLAGS, as hfuzz seems to ignore CARGO_BUILD_<target>_RUSTFLAGS
+  # * can't be run with sccache, so just disable here
+  env -u RUSTC_WRAPPER CC=clang RUSTFLAGS="--cfg tokio_unstable" cargo hfuzz run-debug {{TARGET}} ${CRASH}

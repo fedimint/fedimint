@@ -21,6 +21,7 @@ members = [
     "fedimint-server",
     "fedimint-testing",
     "fedimint-wasm-tests",
+    "fuzz",
     "modules/fedimint-dummy-common",
     "modules/fedimint-dummy-client",
     "modules/fedimint-dummy-server",

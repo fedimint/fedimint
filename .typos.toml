@@ -5,4 +5,8 @@ wel = "wel"
 
 
 [files]
-extend-exclude = ["db/**"]
+extend-exclude = [
+  "db/**",
+  "hfuzz_target/**",
+  "hfuzz_workspace/**",
+]

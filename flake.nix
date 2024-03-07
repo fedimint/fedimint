@@ -293,6 +293,17 @@
               # the settings and tools necessary to build and work with the codebase.
               default = flakeboxLib.mkDevShell (commonShellArgs // { });
 
+              fuzz = flakeboxLib.mkDevShell (commonShellArgs // {
+                nativeBuildInputs = with pkgs; [
+                  cargo-hongfuzz
+                  libbfd_2_38
+                  libunwind.dev
+                  libopcodes_2_38
+                  libblocksruntime
+                  lldb
+                ];
+              });
+
               lint = flakeboxLib.mkLintShell { };
 
               # Shell with extra stuff to support cross-compilation with `cargo build --target <target>`
