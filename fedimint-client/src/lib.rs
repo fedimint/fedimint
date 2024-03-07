@@ -1607,14 +1607,18 @@ impl Client {
         while let Some((module_instance_id, progress)) = futures.next().await {
             let mut dbtx = db.begin_transaction().await;
 
-            let progress = if let Some(progress) = progress {
+            let prev_progress = *recovery_sender
+                .borrow()
+                .get(&module_instance_id)
+                .expect("existing progress must be present");
+
+            let progress = if prev_progress.is_done() {
+                // since updates might be out of order, once done, stick with it
+                prev_progress
+            } else if let Some(progress) = progress {
                 progress
             } else {
-                recovery_sender
-                    .borrow()
-                    .get(&module_instance_id)
-                    .expect("existing progress must be present")
-                    .to_complete()
+                prev_progress.to_complete()
             };
 
             info!(
