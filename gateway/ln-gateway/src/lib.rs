@@ -1272,7 +1272,9 @@ impl Gateway {
             )))?
             .into_value();
 
-        client.wait_until_fully_dropped().await;
+        if client.shutdown().await.is_err() {
+            warn!("failed to shutdown client");
+        }
 
         // Remove previously assigned scid from `scid_to_federation` map
         self.scid_to_federation
