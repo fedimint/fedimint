@@ -79,6 +79,7 @@
                 "rust-analyzer"
                 "rust-src"
                 "llvm-tools"
+                "rustc-codegen-cranelift-preview"
               ];
 
               toolchain.channel = "latest";
