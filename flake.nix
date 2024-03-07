@@ -35,6 +35,7 @@
             (import ./nix/overlays/esplora-electrs.nix)
             (import ./nix/overlays/clightning.nix)
             (import ./nix/overlays/darwin-compile-fixes.nix)
+            (import ./nix/overlays/cargo-honggfuzz.nix)
           ];
     in
     {
@@ -45,6 +46,7 @@
         all = overlayAll;
         wasm-bindgen = import ./nix/overlays/wasm-bindgen.nix;
         darwin-compile-fixes = import ./nix/overlays/darwin-compile-fixes.nix;
+        cargo-honggfuzz = import ./nix/overlays/cargo-honggfuzz.nix;
       };
 
       bundlers = bundlers.bundlers;
