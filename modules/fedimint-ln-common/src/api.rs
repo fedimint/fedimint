@@ -12,7 +12,7 @@ use fedimint_core::endpoint_constants::{
     REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::query::{AllOrDeadline, UnionResponses};
+use fedimint_core::query::{ThresholdOrDeadline, UnionResponses};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeers, PeerId};
 use itertools::Itertools;
@@ -215,7 +215,10 @@ where
         let deadline = fedimint_core::time::now() + Duration::from_secs(1);
         let responses = self
             .request_with_strategy(
-                AllOrDeadline::<Option<sha256::Hash>>::new(self.all_peers().total(), deadline),
+                ThresholdOrDeadline::<Option<sha256::Hash>>::new(
+                    self.all_peers().total(),
+                    deadline,
+                ),
                 REMOVE_GATEWAY_CHALLENGE_ENDPOINT.to_string(),
                 ApiRequestErased::new(gateway_id),
             )
@@ -232,7 +235,7 @@ where
         let deadline = fedimint_core::time::now() + Duration::from_secs(1);
         let responses = self
             .request_with_strategy(
-                AllOrDeadline::<bool>::new(self.all_peers().total(), deadline),
+                ThresholdOrDeadline::<bool>::new(self.all_peers().total(), deadline),
                 REMOVE_GATEWAY_ENDPOINT.to_string(),
                 ApiRequestErased::new(remove_gateway_request),
             )
