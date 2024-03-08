@@ -405,7 +405,7 @@ where
             self.api().clone(),
             *self.core_api_version(),
             client_ctx.decoders(),
-            common_state.next_session..common_state.end_session,
+            block_stream_session_range,
         );
         let client_ctx = self.context();
 
