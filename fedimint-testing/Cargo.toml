@@ -37,6 +37,7 @@ ln-gateway = { version = "0.3.0-alpha", package = "fedimint-ln-gateway", path = 
 ldk-node = { package = "fedimint-ldk-node", version = "0.1.0" }
 futures = "0.3"
 lightning-invoice = "0.26.0"
+lightning-invoice29 = { package = "lightning-invoice", version = "0.29.0" }
 tempfile = "3.4.0"
 secp256k1 = "0.24.2"
 secp256k1-zkp = { version = "0.7.0", features = [ "global-context", "bitcoin_hashes" ] }

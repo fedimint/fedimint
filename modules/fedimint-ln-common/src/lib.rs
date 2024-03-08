@@ -362,6 +362,10 @@ pub struct LightningGateway {
     pub gateway_id: secp256k1::PublicKey,
     /// Indicates if the gateway supports private payments
     pub supports_private_payments: bool,
+    /// Indicates that this gateway cannot register invoices that are generated
+    /// by a client. Instead, the gateway accepts a payment hash for a preimage
+    /// that it will later purchase from the client.
+    pub gateway_must_create_invoices: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]

@@ -1,16 +1,21 @@
 pub mod cln;
+pub mod ldk;
 pub mod lnd;
 
 use std::fmt::Debug;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bitcoin30::Network;
+use bitcoin_hashes::sha256;
 use clap::Subcommand;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::Amount;
 use fedimint_ln_common::PrunedInvoice;
+use ldk_node::lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -43,6 +48,8 @@ pub enum LightningRpcError {
     FailedToOpenChannel { failure_reason: String },
     #[error("Failed to get Invoice: {failure_reason}")]
     FailedToGetInvoice { failure_reason: String },
+    #[error("Failed to create Invoice: {failure_reason}")]
+    FailedToCreateInvoice { failure_reason: String },
 }
 
 /// A trait that the gateway uses to interact with a lightning node. This allows
@@ -108,6 +115,28 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         &self,
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError>;
+
+    async fn create_invoice_for_hash(
+        &self,
+        amount_msat: u64,
+        description: String,
+        expiry_secs: u64,
+        payment_hash: sha256::Hash,
+    ) -> Result<Bolt11Invoice, LightningRpcError>;
+
+    /// Returns true if the lightning gateway supports HTLC interception.
+    ///
+    /// If this returns true, then:
+    /// * Invoices must be created by Federation clients.
+    /// * [`ILnRpcClient::route_htlcs`] must stream intercepted HTLCs.
+    /// * [`ILnRpcClient::create_invoice_for_hash`] will not be called.
+    ///
+    /// If this returns false, then:
+    /// * Invoices must be created by calling
+    ///   [`ILnRpcClient::create_invoice_for_hash`].
+    /// * [`ILnRpcClient::route_htlcs`] must stream all incoming payments from
+    ///   invoices created by [`ILnRpcClient::create_invoice_for_hash`].
+    fn supports_htlc_interception(&self) -> bool;
 }
 
 #[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]
@@ -130,6 +159,20 @@ pub enum LightningMode {
     Cln {
         #[arg(long = "cln-extension-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
         cln_extension_addr: SafeUrl,
+    },
+    #[clap(name = "ldk")]
+    Ldk {
+        /// LDK storage directory path
+        #[arg(long = "ldk-storage-dir", env = "FM_LDK_STORAGE_DIR")]
+        storage_dir_path_or: Option<String>,
+
+        /// LDK storage directory path
+        #[arg(long = "ldk-esplora-server-url", env = "FM_LDK_ESPLORA_SERVER_URL")]
+        esplora_server_url: String,
+
+        /// LDK network (defaults to regtest if not provided)
+        #[arg(long = "ldk-network", env = "FM_LDK_NETWORK")]
+        network_or: Option<Network>,
     },
 }
 
@@ -157,6 +200,26 @@ impl LightningBuilder for GatewayLightningBuilder {
             } => Box::new(
                 GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, None).await,
             ),
+            LightningMode::Ldk {
+                storage_dir_path_or,
+                esplora_server_url,
+                network_or,
+            } => {
+                // Default to regtest if network is not provided.
+                let network = network_or.unwrap_or(Network::Regtest);
+
+                Box::new(
+                    ldk::GatewayLdkClient::new(
+                        storage_dir_path_or,
+                        esplora_server_url,
+                        network
+                            .try_into()
+                            .expect(&format!("Invalid network: {}", network)),
+                    )
+                    .await
+                    .unwrap(),
+                )
+            }
         }
     }
 }

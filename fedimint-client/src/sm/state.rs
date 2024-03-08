@@ -32,6 +32,8 @@ pub trait State:
     /// Additional resources made available in this module's state transitions
     type ModuleContext: Context;
 
+    // TODO: Add a gateway URL, or some way to talk to the gateway.
+
     /// All possible transitions from the current state to other states. See
     /// [`StateTransition`] for details.
     fn transitions(

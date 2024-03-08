@@ -41,7 +41,8 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::{
-    apply_migrations_server, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    apply_migrations_server, Database, DatabaseTransaction, DatabaseValue,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::CommonModuleInit;
@@ -52,6 +53,7 @@ use fedimint_core::{
     fedimint_build_code_version_env, push_db_pair_items, Amount, BitcoinAmountOrAll,
 };
 use fedimint_ln_client::pay::PayInvoicePayload;
+use fedimint_ln_client::receive::RegisterPaymentHashPayload;
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
@@ -62,9 +64,12 @@ use fedimint_wallet_client::{
 };
 use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::Action;
-use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
+use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcRequest, InterceptHtlcResponse};
+use ldk_node::bitcoin::hashes::Hash;
+use ldk_node::lightning::ln::PaymentHash;
+use ldk_node::lightning_invoice::Bolt11Invoice as LdkBolt11Invoice;
 use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
-use lightning_invoice::RoutingFees;
+use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::rngs::OsRng;
 use rpc::{
     FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, SetConfigurationPayload,
@@ -273,6 +278,8 @@ pub struct Gateway {
     // handling incoming HTLCs.
     scid_to_federation: ScidToFederationMap,
 
+    payment_hash_to_federation: Arc<RwLock<BTreeMap<Vec<u8>, FederationId>>>,
+
     // A public key representing the identity of the gateway. Private key is not used.
     pub gateway_id: secp256k1::PublicKey,
 
@@ -391,6 +398,7 @@ impl Gateway {
             gateway_db,
             clients: Arc::new(RwLock::new(BTreeMap::new())),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
+            payment_hash_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
             client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
         })
     }
@@ -524,6 +532,7 @@ impl Gateway {
                         }
 
                         let mut htlc_task_group = tg.make_subgroup().await;
+                        // LDK client is created here
                         let lnrpc_route = self_copy.lightning_builder.build().await;
 
                         debug!("Will try to intercept HTLC stream...");
@@ -606,6 +615,26 @@ impl Gateway {
         }
     }
 
+    async fn get_federation_from_htlc_request(
+        &self,
+        htlc_request: &InterceptHtlcRequest,
+    ) -> Option<FederationId> {
+        // If the client generated the invoice, the short channel ID of the final hop
+        // should correspond to the federation ID.
+        let scid_to_feds = self.scid_to_federation.read().await;
+        if let Some(federation_id) = scid_to_feds.get(&htlc_request.short_channel_id) {
+            return Some(federation_id.clone());
+        }
+
+        // If the gateway generated the invoice, the payment hash should correspond to
+        // the federation ID.
+        self.payment_hash_to_federation
+            .read()
+            .await
+            .get(&htlc_request.payment_hash)
+            .cloned()
+    }
+
     pub async fn handle_htlc_stream(&self, mut stream: RouteHtlcStream<'_>, handle: TaskHandle) {
         let GatewayState::Running { lightning_context } = self.state.read().await.clone() else {
             panic!("Gateway isn't in a running state")
@@ -620,13 +649,19 @@ impl Gateway {
                     if handle.is_shutting_down() {
                         break;
                     }
-                    let scid_to_feds = self.scid_to_federation.read().await;
-                    let federation_id = scid_to_feds.get(&htlc_request.short_channel_id);
+                    let federation_id = self.get_federation_from_htlc_request(&htlc_request).await;
+
+                    println!(
+                        "Retrieved federation '{}' for payment hash '{:?}'.",
+                        htlc_request.payment_hash.to_hex(),
+                        federation_id
+                    );
+
                     // Just forward the HTLC if we do not have a federation that
                     // corresponds to the short channel id
                     if let Some(federation_id) = federation_id {
                         let clients = self.clients.read().await;
-                        let client = clients.get(federation_id);
+                        let client = clients.get(&federation_id);
                         // Just forward the HTLC if we do not have a client that
                         // corresponds to the federation id
                         if let Some(client) = client {
@@ -885,6 +920,46 @@ impl Gateway {
             return Err(GatewayError::UnexpectedState(
                 "Ran out of state updates while paying invoice".to_string(),
             ));
+        }
+
+        warn!("Gateway is not connected, cannot handle {payload:?}");
+        Err(GatewayError::Disconnected)
+    }
+
+    async fn handle_register_payment_hash_msg(
+        &self,
+        payload: RegisterPaymentHashPayload,
+    ) -> Result<Bolt11Invoice> {
+        if let GatewayState::Running { lightning_context } = self.state.read().await.clone() {
+            let invoice: LdkBolt11Invoice = lightning_context
+                .lnrpc
+                .create_invoice_for_hash(
+                    payload.amount.msats,
+                    payload.description,
+                    payload.expiry_time.as_secs(),
+                    payload.payment_hash,
+                )
+                .await
+                .map_err(|err| GatewayError::LightningRpcError(err))?;
+
+            println!(
+                "Linking payment hash '{}' to federation '{}'.",
+                payload.payment_hash, payload.federation_id
+            );
+
+            // Save which federation this payment hash is associated with so we
+            // can route the payment to the correct federation when it comes in.
+            self.payment_hash_to_federation
+                .write()
+                .await
+                .insert(payload.payment_hash.to_bytes(), payload.federation_id);
+
+            return Bolt11Invoice::from_str(&invoice.to_string())
+                .map_err(|err| GatewayError::UnexpectedState(err.to_string()));
+
+            // return Err(GatewayError::UnexpectedState(
+            //     "Ran out of state updates while paying invoice".to_string(),
+            // ));
         }
 
         warn!("Gateway is not connected, cannot handle {payload:?}");
@@ -1406,9 +1481,9 @@ impl Gateway {
         lnrpc: Arc<dyn ILnRpcClient>,
         num_route_hints: u32,
     ) -> Result<Vec<RouteHint>> {
-        if num_route_hints == 0 {
-            return Ok(vec![]);
-        }
+        // if num_route_hints == 0 {
+        return Ok(vec![]);
+        // }
 
         for num_retries in 0.. {
             let route_hints = match Self::fetch_lightning_route_hints_try(

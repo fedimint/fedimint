@@ -34,6 +34,7 @@ axum = "0.6.4"
 axum-macros = "0.3.1"
 aquamarine = "0.3.0"
 bitcoin = { version = "0.29.2", features = ["serde"] }
+bitcoin30 = { package = "bitcoin", version = "0.30.0" }
 bitcoin_hashes = "0.11.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
 cln-plugin = "0.1.5"
@@ -49,6 +50,7 @@ fedimint-dummy-client = { version = "0.3.0-alpha", path = "../../modules/fedimin
 fedimint-wallet-client = { version = "0.3.0-alpha", path = "../../modules/fedimint-wallet-client" }
 futures = "0.3.24"
 erased-serde = "0.3"
+ldk-node = { git = "https://github.com/tvolk131/ldk-node.git", branch = "lightning_gateway_ldk_latest" }
 lightning-invoice = "0.26.0"
 prost = "0.12.1"
 rand = "0.8"

@@ -257,6 +257,10 @@ impl GatewayClientModule {
                 fees,
                 gateway_id: self.gateway.gateway_id,
                 supports_private_payments: lightning_context.lnrpc.supports_private_payments(),
+                // TODO: CRITICAL - We need to set this based on the gateway's
+                // configuration (i.e. whether it's running on LDK or not) and
+                // not just blindly set it to true.
+                gateway_must_create_invoices: true,
             },
             ttl,
             vetted: false,
@@ -410,6 +414,7 @@ impl GatewayClientModule {
     }
 
     /// Attempt fulfill HTLC by buying preimage from the federation
+    /// This is being triggered on invoice creation for some reason
     pub async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
         debug!("Handling intercepted HTLC {htlc:?}");
         let (operation_id, client_output) = self

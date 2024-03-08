@@ -17,7 +17,11 @@ use futures::executor::block_on;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tonic_lnd::lnrpc::policy_update_request::Scope;
-use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, PolicyUpdateRequest};
+use tonic_lnd::lnrpc::{
+    ChanInfoRequest, ConnectPeerRequest, GetInfoRequest, ListChannelsRequest, NewAddressRequest,
+    OpenChannelRequest, PolicyUpdateRequest,
+};
+use tonic_lnd::walletrpc::AddrRequest;
 use tonic_lnd::Client as LndClient;
 use tracing::{debug, info, trace, warn};
 
@@ -452,8 +456,20 @@ pub async fn open_channel(
         .await?
         .bech32
         .context("bech32 should be present")?;
+    let lnd_addr = lnd
+        .lightning_client_lock()
+        .await?
+        .new_address(NewAddressRequest {
+            r#type: 4,
+            account: "".to_string(),
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .address;
 
-    bitcoind.send_to(cln_addr, 100_000_000).await?;
+    bitcoind.send_to(cln_addr, 1_000_000_000).await?;
+    bitcoind.send_to(lnd_addr, 1_000_000_000).await?;
     bitcoind.mine_blocks(10).await?;
 
     let lnd_pubkey = lnd.pub_key().await?;
@@ -575,10 +591,82 @@ pub async fn open_channel(
     Ok(())
 }
 
+pub async fn open_channel_with_ldk(
+    process_mgr: &ProcessManager,
+    bitcoind: &Bitcoind,
+    lnd: &Lnd,
+) -> Result<()> {
+    // TODO: Is there a way to also wait for LDK to be synced & ready?
+    lnd.await_block_processing().await?;
+    info!(target: LOG_DEVIMINT, "block sync done");
+    let lnd_addr = lnd
+        .client
+        .lock()
+        .await
+        .wallet()
+        .next_addr(AddrRequest {
+            account: "".to_string(),
+            r#type: 4, // 4 = TAPROOT_PUBKEY.
+            change: false,
+        })
+        .await
+        .unwrap()
+        .get_ref()
+        .addr
+        .to_string();
+
+    bitcoind.send_to(lnd_addr, 1_000_000_000).await?;
+    bitcoind.mine_blocks(10).await?;
+
+    let lnd_pubkey = lnd.pub_key().await?;
+    // let ldk_pubkey = std::env::var("DEVIMINT_LDK_NODE_PUBKEY")
+    //     .context("DEVIMINT_LDK_NODE_PUBKEY env var not set")?;
+    let ldk_pubkey =
+        String::from("03c964ca4d2eed93720809be7c8779ed602f80ba308e474d03bcb81b9bad807477");
+
+    // TODO: Use LND to connect to LDK and then open a channel with it.
+    lnd.client
+        .lock()
+        .await
+        .lightning()
+        .connect_peer(ConnectPeerRequest {
+            addr: Some(tonic_lnd::lnrpc::LightningAddress {
+                pubkey: ldk_pubkey.clone(),
+                // TODO: We're using the same port when starting LDK.
+                // Let's move it into a shared constant in `process_mgr`.
+                host: format!("127.0.0.1:{}", 15151),
+            }),
+            perm: false,
+            timeout: 20,
+        })
+        .await
+        .unwrap();
+
+    lnd.await_block_processing().await?;
+
+    let mut open_channel_request = OpenChannelRequest::default();
+    open_channel_request.node_pubkey = ldk_pubkey.into_bytes();
+    open_channel_request.local_funding_amount = 10_000_000;
+    open_channel_request.push_sat = 5_000_000;
+    lnd.client
+        .lock()
+        .await
+        .lightning()
+        .open_channel(open_channel_request)
+        .await?;
+
+    bitcoind.mine_blocks(10).await?;
+
+    Ok(())
+}
+
 #[derive(Clone)]
 pub enum LightningNode {
     Cln(Lightningd),
     Lnd(Lnd),
+    // No need to store LDK since it runs entirely inside of gatewayd and doesn't have its own
+    // daemon.
+    Ldk,
 }
 
 impl LightningNode {
@@ -586,6 +674,7 @@ impl LightningNode {
         match self {
             LightningNode::Cln(_) => LightningNodeType::Cln,
             LightningNode::Lnd(_) => LightningNodeType::Lnd,
+            LightningNode::Ldk => LightningNodeType::Ldk,
         }
     }
 }
