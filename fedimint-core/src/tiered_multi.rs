@@ -191,11 +191,13 @@ impl<C> Decodable for TieredMulti<C>
 where
     C: Decodable + 'static,
 {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_from_finite_reader<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(TieredMulti(BTreeMap::consensus_decode(d, modules)?))
+        Ok(TieredMulti(BTreeMap::consensus_decode_from_finite_reader(
+            d, modules,
+        )?))
     }
 }
 
