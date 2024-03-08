@@ -33,7 +33,7 @@ use crate::config::api::ConfigGenParamsLocal;
 use crate::config::distributedgen::{DkgRunner, PeerHandleOps};
 use crate::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 use crate::fedimint_core::encoding::Encodable;
-use crate::fedimint_core::NumPeers;
+use crate::fedimint_core::NumPeersExt;
 use crate::multiplexed::PeerConnectionMultiplexer;
 use crate::net::connect::{dns_sanitize, Connector, TlsConfig};
 use crate::net::peers::{DelayCalculator, NetworkConfig};

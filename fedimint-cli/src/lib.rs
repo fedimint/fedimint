@@ -21,7 +21,7 @@ use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::module::ClientModule as _;
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
-use fedimint_client::{Client, ClientBuilder, ClientHandle};
+use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandle};
 use fedimint_core::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, InviteCode, WsFederationApi,
 };
@@ -33,6 +33,7 @@ use fedimint_core::util::{handle_version_hash_command, SafeUrl};
 use fedimint_core::{fedimint_build_code_version_env, task, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{TracingSetup, LOG_CLIENT};
+use fedimint_meta_client::MetaClientInit;
 use fedimint_mint_client::{MintClientInit, MintClientModule, SpendableNote};
 use fedimint_server::config::io::SALT_FILE;
 use fedimint_wallet_client::api::WalletFederationApi;
@@ -499,6 +500,7 @@ impl FedimintCli {
         self.with_module(LightningClientInit)
             .with_module(MintClientInit)
             .with_module(WalletClientInit::default())
+            .with_module(MetaClientInit)
     }
 
     pub async fn run(&mut self) {
@@ -549,7 +551,14 @@ impl FedimintCli {
     }
 
     async fn client_open(&mut self, cli: &Opts) -> CliResult<ClientHandle> {
-        let client_builder = self.make_client_builder(cli).await?;
+        let mut client_builder = self.make_client_builder(cli).await?;
+
+        if let Some(our_id) = cli.our_id {
+            client_builder.set_admin_creds(AdminCreds {
+                peer_id: our_id,
+                auth: cli.auth()?,
+            });
+        }
 
         let mnemonic = Mnemonic::from_entropy(
             &Client::load_decodable_client_secret::<Vec<u8>>(client_builder.db())

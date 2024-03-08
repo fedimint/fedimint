@@ -580,7 +580,6 @@ pub async fn handle_command(
                     .get_first_instance(&kind)
                     .context("No module with this kind found")?,
             };
-
             client
                 .get_module_client_dyn(module_instance_id)
                 .context("Module not found")?

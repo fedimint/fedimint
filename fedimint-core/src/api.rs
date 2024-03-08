@@ -26,8 +26,8 @@ use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
 use fedimint_core::time::now;
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, ModuleDecoderRegistry, NumPeers, OutPoint,
-    PeerId, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, ModuleDecoderRegistry, NumPeersExt,
+    OutPoint, PeerId, TransactionId,
 };
 use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
 use futures::stream::FuturesUnordered;

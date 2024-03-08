@@ -19,6 +19,7 @@ use fedimint_core::timing;
 use fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::TracingSetup;
+use fedimint_meta_server::MetaInit;
 use fedimint_mint_server::MintInit;
 use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
@@ -187,7 +188,8 @@ impl Fedimintd {
         let s = self
             .with_module(LightningInit)
             .with_module(MintInit)
-            .with_module(WalletInit);
+            .with_module(WalletInit)
+            .with_module(MetaInit);
 
         if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
             s.with_module(UnknownInit)

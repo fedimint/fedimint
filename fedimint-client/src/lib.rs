@@ -98,7 +98,7 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    ApiVersion, MultiApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions,
+    ApiAuth, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions,
     SupportedModuleApiVersions,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
@@ -106,7 +106,7 @@ use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
-    maybe_add_send, maybe_add_send_sync, Amount, OutPoint, TransactionId,
+    maybe_add_send, maybe_add_send_sync, Amount, NumPeers, OutPoint, PeerId, TransactionId,
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
@@ -1725,9 +1725,15 @@ impl TransactionUpdates {
     }
 }
 
+pub struct AdminCreds {
+    pub peer_id: PeerId,
+    pub auth: ApiAuth,
+}
+
 pub struct ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
+    admin_creds: Option<AdminCreds>,
     db: Database,
     stopped: bool,
 }
@@ -1737,6 +1743,7 @@ impl ClientBuilder {
         ClientBuilder {
             module_inits: Default::default(),
             primary_module_instance: Default::default(),
+            admin_creds: None,
             db,
             stopped: false,
         }
@@ -1812,6 +1819,10 @@ impl ClientBuilder {
         };
 
         Ok(config)
+    }
+
+    pub fn set_admin_creds(&mut self, creds: AdminCreds) {
+        self.admin_creds = Some(creds);
     }
 
     async fn init(
@@ -1998,6 +2009,17 @@ impl ClientBuilder {
         Ok(client)
     }
 
+    fn admin_api_from_id(id: PeerId, cfg: &ClientConfig) -> anyhow::Result<DynGlobalApi> {
+        let url = cfg
+            .global
+            .api_endpoints
+            .get(&id)
+            .ok_or_else(|| anyhow::format_err!("Invalid admin peer_id"))?
+            .url
+            .clone();
+        Ok(DynGlobalApi::from_single_endpoint(id, url))
+    }
+
     /// Build a [`Client`] but do not start the executor
     async fn build_stopped(
         self,
@@ -2008,7 +2030,11 @@ impl ClientBuilder {
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
         let db = self.db.with_decoders(decoders.clone());
-        let api = DynGlobalApi::from_config(&config);
+        let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
+            Self::admin_api_from_id(admin_creds.peer_id, &config)?
+        } else {
+            DynGlobalApi::from_config(&config)
+        };
         let task_group = TaskGroup::new();
 
         // Migrate the database before interacting with it in case any on-disk data
@@ -2067,11 +2093,13 @@ impl ClientBuilder {
                 let start_module_recover_fn =
                     |snapshot: Option<ClientBackup>, progress: RecoveryProgress| {
                         let module_config = module_config.clone();
+                        let num_peers = NumPeers::from(config.global.api_endpoints.len());
                         let db = db.clone();
                         let kind = kind.clone();
                         let notifier = notifier.clone();
                         let api = api.clone();
                         let root_secret = root_secret.clone();
+                        let admin_auth = self.admin_creds.as_ref().map(|creds| creds.auth.clone());
                         let final_client = final_client.clone();
                         let (progress_tx, progress_rx) = tokio::sync::watch::channel(progress);
                         let module_init = module_init.clone();
@@ -2081,6 +2109,7 @@ impl ClientBuilder {
                                         .recover(
                                             final_client.clone(),
                                             fed_id,
+                                        num_peers,
                                             module_config.clone(),
                                             db.clone(),
                                             module_instance_id,
@@ -2089,6 +2118,7 @@ impl ClientBuilder {
                                             root_secret.derive_module_secret(module_instance_id),
                                             notifier.clone(),
                                             api.clone(),
+                                        admin_auth,
                                             snapshot.as_ref().and_then(|s| s.modules.get(&module_instance_id).to_owned()),
                                             progress_tx,
                                         )
@@ -2149,6 +2179,7 @@ impl ClientBuilder {
                         .init(
                             final_client.clone(),
                             fed_id,
+                            config.global.api_endpoints.len(),
                             module_config,
                             db.clone(),
                             module_instance_id,
@@ -2161,6 +2192,7 @@ impl ClientBuilder {
                             root_secret.derive_module_secret(module_instance_id),
                             notifier.clone(),
                             api.clone(),
+                            self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
                         )
                         .await?;
 

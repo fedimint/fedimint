@@ -13,7 +13,7 @@ use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::query::FilterMapThreshold;
 use fedimint_core::task::sleep;
-use fedimint_core::{Amount, NumPeers, OutPoint, PeerId, Tiered};
+use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce};
 use secp256k1::{KeyPair, Secp256k1, Signing};

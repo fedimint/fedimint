@@ -42,6 +42,7 @@ fedimint-ln-server = { version = "0.3.0-alpha", path = "../modules/fedimint-ln-s
 fedimint-logging = { version = "0.3.0-alpha", path = "../fedimint-logging", features = ["telemetry"] }
 fedimint-metrics = { version = "0.3.0-alpha", path = "../fedimint-metrics" }
 fedimint-mint-server = { version = "0.3.0-alpha", path = "../modules/fedimint-mint-server" }
+fedimint-meta-server = { version = "0.3.0-alpha", path = "../modules/fedimint-meta-server" }
 fedimint-rocksdb = { version = "0.3.0-alpha", path = "../fedimint-rocksdb" }
 fedimint-server = { version = "0.3.0-alpha", path = "../fedimint-server" }
 fedimint-wallet-server = { version = "0.3.0-alpha", path = "../modules/fedimint-wallet-server" }

@@ -250,38 +250,58 @@ pub enum ParseAmountError {
     WrongBitcoinAmount(#[from] bitcoin::util::amount::ParseAmountError),
 }
 
-impl<T> NumPeers for BTreeMap<PeerId, T> {
+impl<T> NumPeersExt for BTreeMap<PeerId, T> {
     fn total(&self) -> usize {
         self.len()
     }
 }
 
-impl NumPeers for &[PeerId] {
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct NumPeers(usize);
+
+impl From<usize> for NumPeers {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+impl NumPeers {
+    pub fn as_usize(self) -> usize {
+        self.0
+    }
+}
+
+impl NumPeersExt for NumPeers {
+    fn total(&self) -> usize {
+        self.0
+    }
+}
+
+impl NumPeersExt for &[PeerId] {
     fn total(&self) -> usize {
         self.len()
     }
 }
 
-impl NumPeers for Vec<PeerId> {
+impl NumPeersExt for Vec<PeerId> {
     fn total(&self) -> usize {
         self.len()
     }
 }
 
-impl NumPeers for Vec<PeerUrl> {
+impl NumPeersExt for Vec<PeerUrl> {
     fn total(&self) -> usize {
         self.len()
     }
 }
 
-impl NumPeers for BTreeSet<PeerId> {
+impl NumPeersExt for BTreeSet<PeerId> {
     fn total(&self) -> usize {
         self.len()
     }
 }
 
 /// for consensus-related calculations given the number of peers
-pub trait NumPeers {
+pub trait NumPeersExt {
     fn total(&self) -> usize;
 
     /// number of peers that can be evil without disrupting the federation

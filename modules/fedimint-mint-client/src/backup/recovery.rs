@@ -9,7 +9,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{
-    apply, async_trait_maybe_send, Amount, NumPeers, OutPoint, PeerId, Tiered, TieredMulti,
+    apply, async_trait_maybe_send, Amount, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti,
 };
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::LOG_CLIENT_RECOVERY_MINT;

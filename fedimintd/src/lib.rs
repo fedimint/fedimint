@@ -11,6 +11,7 @@ use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
 use fedimint_ln_server::LightningInit;
+use fedimint_meta_server::{MetaGenParams, MetaGenParamsConsensus, MetaGenParamsLocal, MetaInit};
 use fedimint_mint_server::common::config::{FeeConsensus, MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_server::MintInit;
 use fedimint_unknown_common::config::{
@@ -63,6 +64,13 @@ pub fn attach_default_module_init_params(
             LightningGenParams {
                 local: LightningGenParamsLocal { bitcoin_rpc },
                 consensus: LightningGenParamsConsensus { network },
+            },
+        )
+        .append_config_gen_params(
+            MetaInit::kind(),
+            MetaGenParams {
+                local: MetaGenParamsLocal,
+                consensus: MetaGenParamsConsensus,
             },
         );
 }

@@ -21,11 +21,13 @@ pub const LOG_TEST: &str = "test";
 pub const LOG_TIMING: &str = "timing";
 pub const LOG_WALLET: &str = "wallet";
 pub const LOG_CLIENT: &str = "client";
+pub const LOG_SERVER_MODULE_META: &str = "server::module::meta";
 pub const LOG_CLIENT_REACTOR: &str = "client::reactor";
 pub const LOG_CLIENT_NET_API: &str = "client::net::api";
 pub const LOG_CLIENT_BACKUP: &str = "client::backup";
 pub const LOG_CLIENT_RECOVERY: &str = "client::recovery";
 pub const LOG_CLIENT_RECOVERY_MINT: &str = "client::recovery::mint";
+pub const LOG_CLIENT_MODULE_META: &str = "client::module::meta";
 
 /// Consolidates the setup of server tracing into a helper
 #[derive(Default)]

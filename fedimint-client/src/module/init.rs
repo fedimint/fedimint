@@ -10,10 +10,10 @@ use fedimint_core::config::{ClientModuleConfig, FederationId, ModuleInitRegistry
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseVersion};
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, IDynCommonModuleInit, ModuleInit, MultiApiVersion,
+    ApiAuth, ApiVersion, CommonModuleInit, IDynCommonModuleInit, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
+use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, NumPeers};
 use fedimint_derive_secret::DerivableSecret;
 use tokio::sync::watch;
 use tracing::warn;
@@ -31,6 +31,7 @@ where
     C: ClientModuleInit,
 {
     federation_id: FederationId,
+    peer_num: usize,
     cfg: <<C as ModuleInit>::Common as CommonModuleInit>::ClientConfig,
     db: Database,
     core_api_version: ApiVersion,
@@ -38,6 +39,7 @@ where
     module_root_secret: DerivableSecret,
     notifier: ModuleNotifier<<<C as ClientModuleInit>::Module as ClientModule>::States>,
     api: DynGlobalApi,
+    admin_auth: Option<ApiAuth>,
     module_api: DynModuleApi,
     context: ClientContext<<C as ClientModuleInit>::Module>,
 }
@@ -48,6 +50,10 @@ where
 {
     pub fn federation_id(&self) -> &FederationId {
         &self.federation_id
+    }
+
+    pub fn peer_num(&self) -> usize {
+        self.peer_num
     }
 
     pub fn cfg(&self) -> &<<C as ModuleInit>::Common as CommonModuleInit>::ClientConfig {
@@ -85,6 +91,10 @@ where
         &self.api
     }
 
+    pub fn admin_auth(&self) -> Option<&ApiAuth> {
+        self.admin_auth.as_ref()
+    }
+
     pub fn module_api(&self) -> &DynModuleApi {
         &self.module_api
     }
@@ -107,6 +117,7 @@ where
     C: ClientModuleInit,
 {
     federation_id: FederationId,
+    num_peers: NumPeers,
     cfg: <<C as ModuleInit>::Common as CommonModuleInit>::ClientConfig,
     db: Database,
     core_api_version: ApiVersion,
@@ -114,6 +125,7 @@ where
     module_root_secret: DerivableSecret,
     notifier: ModuleNotifier<<<C as ClientModuleInit>::Module as ClientModule>::States>,
     api: DynGlobalApi,
+    admin_auth: Option<ApiAuth>,
     module_api: DynModuleApi,
     context: ClientContext<<C as ClientModuleInit>::Module>,
     progress_tx: tokio::sync::watch::Sender<RecoveryProgress>,
@@ -125,6 +137,10 @@ where
 {
     pub fn federation_id(&self) -> &FederationId {
         &self.federation_id
+    }
+
+    pub fn num_peers(&self) -> NumPeers {
+        self.num_peers
     }
 
     pub fn cfg(&self) -> &<<C as ModuleInit>::Common as CommonModuleInit>::ClientConfig {
@@ -160,6 +176,10 @@ where
 
     pub fn api(&self) -> &DynGlobalApi {
         &self.api
+    }
+
+    pub fn admin_auth(&self) -> Option<&ApiAuth> {
+        self.admin_auth.as_ref()
     }
 
     pub fn module_api(&self) -> &DynModuleApi {
@@ -241,6 +261,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
         &self,
         final_client: FinalClient,
         federation_id: FederationId,
+        num_peers: NumPeers,
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
@@ -249,6 +270,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
         module_root_secret: DerivableSecret,
         notifier: Notifier,
         api: DynGlobalApi,
+        admin_auth: Option<ApiAuth>,
         snapshot: Option<&DynModuleBackup>,
         progress_tx: watch::Sender<RecoveryProgress>,
     ) -> anyhow::Result<()>;
@@ -258,6 +280,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
         &self,
         final_client: FinalClient,
         federation_id: FederationId,
+        peer_num: usize,
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
@@ -266,6 +289,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
         module_root_secret: DerivableSecret,
         notifier: Notifier,
         api: DynGlobalApi,
+        admin_auth: Option<ApiAuth>,
     ) -> anyhow::Result<DynClientModule>;
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn>;
@@ -296,6 +320,7 @@ where
         &self,
         final_client: FinalClient,
         federation_id: FederationId,
+        num_peers: NumPeers,
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
@@ -305,6 +330,7 @@ where
         // TODO: make dyn type for notifier
         notifier: Notifier,
         api: DynGlobalApi,
+        admin_auth: Option<ApiAuth>,
         snapshot: Option<&DynModuleBackup>,
         progress_tx: watch::Sender<RecoveryProgress>,
     ) -> anyhow::Result<()> {
@@ -320,6 +346,7 @@ where
             .recover(
                 &ClientModuleRecoverArgs {
                     federation_id,
+                    num_peers,
                     cfg: typed_cfg.clone(),
                     db: db.with_prefix_module_id(instance_id),
                     core_api_version,
@@ -327,6 +354,7 @@ where
                     module_root_secret,
                     notifier: notifier.module_notifier(instance_id),
                     api: api.clone(),
+                    admin_auth,
                     module_api: api.with_module(instance_id),
                     context: ClientContext {
                         client: final_client,
@@ -345,6 +373,7 @@ where
         &self,
         final_client: FinalClient,
         federation_id: FederationId,
+        peer_num: usize,
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
@@ -354,11 +383,13 @@ where
         // TODO: make dyn type for notifier
         notifier: Notifier,
         api: DynGlobalApi,
+        admin_auth: Option<ApiAuth>,
     ) -> anyhow::Result<DynClientModule> {
         let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
         Ok(self
             .init(&ClientModuleInitArgs {
                 federation_id,
+                peer_num,
                 cfg: typed_cfg.clone(),
                 db: db.with_prefix_module_id(instance_id),
                 core_api_version,
@@ -366,6 +397,7 @@ where
                 module_root_secret,
                 notifier: notifier.module_notifier(instance_id),
                 api: api.clone(),
+                admin_auth,
                 module_api: api.with_module(instance_id),
                 context: ClientContext {
                     client: final_client,
