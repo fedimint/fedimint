@@ -326,7 +326,7 @@ impl Federation {
 
     pub async fn pegin_gateway(&self, amount: u64, gw: &super::gatewayd::Gatewayd) -> Result<()> {
         info!(amount, "Pegging-in gateway funds");
-        let fed_id = self.federation_id().await;
+        let fed_id = self.calculate_federation_id().await;
         let pegin_addr = cmd!(gw, "address", "--federation-id={fed_id}")
             .out_json()
             .await?
@@ -348,12 +348,12 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn federation_id(&self) -> String {
+    pub async fn calculate_federation_id(&self) -> String {
         self.client_config()
             .await
             .unwrap()
             .global
-            .federation_id()
+            .calculate_federation_id()
             .to_string()
     }
 

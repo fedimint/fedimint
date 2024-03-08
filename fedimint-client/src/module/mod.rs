@@ -445,7 +445,7 @@ where
         InviteCode::new(
             any_guardian_url.url.clone(),
             *any_guardian_id,
-            cfg.federation_id(),
+            cfg.calculate_federation_id(),
         )
     }
 

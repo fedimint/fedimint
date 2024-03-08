@@ -356,7 +356,11 @@ impl GatewayClientModule {
             self.to_gateway_registration_info(route_hints, time_to_live, fees, lightning_context);
         let gateway_id = registration_info.info.gateway_id;
 
-        let federation_id = self.client_ctx.get_config().global.federation_id();
+        let federation_id = self
+            .client_ctx
+            .get_config()
+            .global
+            .calculate_federation_id();
         self.module_api.register_gateway(&registration_info).await?;
         debug!("Successfully registered gateway {gateway_id} with federation {federation_id}");
         Ok(())
@@ -371,7 +375,11 @@ impl GatewayClientModule {
         // fails
         if let Err(e) = self.remove_from_federation_inner(gateway_keypair).await {
             let gateway_id = gateway_keypair.public_key();
-            let federation_id = self.client_ctx.get_config().global.federation_id();
+            let federation_id = self
+                .client_ctx
+                .get_config()
+                .global
+                .calculate_federation_id();
             warn!("Failed to remove gateway {gateway_id} from federation {federation_id}: {e:?}");
         }
     }
