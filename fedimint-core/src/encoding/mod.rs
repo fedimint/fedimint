@@ -7,6 +7,7 @@
 //! See [`Encodable`] and [`Decodable`] for two main traits.
 
 pub mod as_hex;
+mod bls12_381;
 mod btc;
 mod secp256k1;
 mod tbs;
