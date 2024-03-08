@@ -838,7 +838,7 @@ where
 
 impl<K, V> Decodable for BTreeMap<K, V>
 where
-    K: Decodable + Ord,
+    K: Decodable + Ord + Clone,
     V: Decodable,
 {
     fn consensus_decode_from_finite_reader<D: std::io::Read>(
@@ -846,11 +846,20 @@ where
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let mut res = BTreeMap::new();
+        let mut prev_key = None;
         let len = u64::consensus_decode_from_finite_reader(d, modules)?;
         for _ in 0..len {
-            let amt = K::consensus_decode_from_finite_reader(d, modules)?;
+            let k = K::consensus_decode_from_finite_reader(d, modules)?;
+            if prev_key
+                .as_ref()
+                .map(|prev_key| &k <= prev_key)
+                .unwrap_or_default()
+            {
+                return Err(DecodeError::from_str("Non-canonical encoding"));
+            }
+            prev_key = Some(k.clone());
             let v = V::consensus_decode_from_finite_reader(d, modules)?;
-            if res.insert(amt, v).is_some() {
+            if res.insert(k, v).is_some() {
                 return Err(DecodeError(format_err!("Duplicate key")));
             }
         }
@@ -874,7 +883,7 @@ where
 
 impl<K> Decodable for BTreeSet<K>
 where
-    K: Decodable + Ord,
+    K: Decodable + Ord + Clone,
 {
     fn consensus_decode_from_finite_reader<D: std::io::Read>(
         d: &mut D,
@@ -882,8 +891,17 @@ where
     ) -> Result<Self, DecodeError> {
         let mut res = BTreeSet::new();
         let len = u64::consensus_decode_from_finite_reader(d, modules)?;
+        let mut prev_key = None;
         for _ in 0..len {
             let k = K::consensus_decode_from_finite_reader(d, modules)?;
+            if prev_key
+                .as_ref()
+                .map(|prev_key| &k <= prev_key)
+                .unwrap_or_default()
+            {
+                return Err(DecodeError::from_str("Non-canonical encoding"));
+            }
+            prev_key = Some(k.clone());
             if !res.insert(k) {
                 return Err(DecodeError(format_err!("Duplicate key")));
             }
