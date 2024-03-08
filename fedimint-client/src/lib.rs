@@ -1835,7 +1835,7 @@ impl ClientBuilder {
             // Save config to DB
             dbtx.insert_new_entry(
                 &ClientConfigKey {
-                    id: config.federation_id(),
+                    id: config.calculate_federation_id(),
                 },
                 &config,
             )
@@ -2015,6 +2015,7 @@ impl ClientBuilder {
     ) -> anyhow::Result<ClientHandle> {
         let decoders = self.decoders(&config);
         let config = Self::config_decoded(config, &decoders)?;
+        let fed_id = config.calculate_federation_id();
         let db = self.db.with_decoders(decoders.clone());
         let api = DynGlobalApi::from_config(&config);
         let task_group = TaskGroup::new();
@@ -2074,7 +2075,6 @@ impl ClientBuilder {
                 // the recovery call is extracted here.
                 let start_module_recover_fn =
                     |snapshot: Option<ClientBackup>, progress: RecoveryProgress| {
-                        let config = config.clone();
                         let module_config = module_config.clone();
                         let db = db.clone();
                         let kind = kind.clone();
@@ -2089,7 +2089,7 @@ impl ClientBuilder {
                                 module_init
                                         .recover(
                                             final_client.clone(),
-                                            config.global.federation_id(),
+                                            fed_id,
                                             module_config.clone(),
                                             db.clone(),
                                             module_instance_id,
@@ -2157,7 +2157,7 @@ impl ClientBuilder {
                     let module = module_init
                         .init(
                             final_client.clone(),
-                            config.global.federation_id(),
+                            fed_id,
                             module_config,
                             db.clone(),
                             module_instance_id,
@@ -2222,7 +2222,7 @@ impl ClientBuilder {
             config: config.clone(),
             decoders,
             db: db.clone(),
-            federation_id: config.global.federation_id(),
+            federation_id: fed_id,
             federation_meta: config.global.meta,
             primary_module_instance,
             modules,
@@ -2297,7 +2297,7 @@ impl ClientBuilder {
         root_secret: &DerivableSecret,
         config: &ClientConfig,
     ) -> DerivableSecret {
-        root_secret.federation_key(&config.global.federation_id())
+        root_secret.federation_key(&config.global.calculate_federation_id())
     }
 }
 

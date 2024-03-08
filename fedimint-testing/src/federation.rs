@@ -99,7 +99,7 @@ impl FederationTest {
             .to_client_config(&self.server_init)
             .unwrap()
             .global
-            .federation_id()
+            .calculate_federation_id()
     }
 
     #[allow(clippy::too_many_arguments)]

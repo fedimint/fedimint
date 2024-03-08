@@ -536,7 +536,7 @@ impl FedimintCli {
             .join(
                 get_default_client_secret(
                     &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
-                    &client_config.global.federation_id(),
+                    &client_config.global.calculate_federation_id(),
                 ),
                 client_config.clone(),
                 invite_code,
@@ -560,7 +560,7 @@ impl FedimintCli {
             .await
             .map_err_cli_general()?;
 
-        let federation_id = config.federation_id();
+        let federation_id = config.calculate_federation_id();
 
         client_builder
             .open(get_default_client_secret(
@@ -602,7 +602,7 @@ impl FedimintCli {
 
         let root_secret = get_default_client_secret(
             &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
-            &client_config.federation_id(),
+            &client_config.calculate_federation_id(),
         );
         let backup = builder
             .download_backup_from_federation(&root_secret, &client_config)

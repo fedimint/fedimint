@@ -167,7 +167,7 @@ pub struct GlobalClientConfig {
 }
 
 impl GlobalClientConfig {
-    pub fn federation_id(&self) -> FederationId {
+    pub fn calculate_federation_id(&self) -> FederationId {
         FederationId(self.api_endpoints.consensus_hash())
     }
 
@@ -193,8 +193,8 @@ impl ClientConfig {
         })
     }
 
-    pub fn federation_id(&self) -> FederationId {
-        self.global.federation_id()
+    pub fn calculate_federation_id(&self) -> FederationId {
+        self.global.calculate_federation_id()
     }
 
     /// Get the value of a given meta field
@@ -227,10 +227,9 @@ impl ClientConfig {
     /// Create an invite code with the api endpoint of the given peer which can
     /// be used to download this client config
     pub fn invite_code(&self, peer: &PeerId) -> Option<InviteCode> {
-        self.global
-            .api_endpoints
-            .get(peer)
-            .map(|peer_url| InviteCode::new(peer_url.url.clone(), *peer, self.federation_id()))
+        self.global.api_endpoints.get(peer).map(|peer_url| {
+            InviteCode::new(peer_url.url.clone(), *peer, self.calculate_federation_id())
+        })
     }
 
     /// Tries to download the client config from the federation,
@@ -292,7 +291,7 @@ impl ClientConfig {
             )
             .await?;
 
-        if client_config.federation_id() != federation_id {
+        if client_config.calculate_federation_id() != federation_id {
             bail!("Obtained client config has different federation id");
         }
 

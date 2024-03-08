@@ -1014,7 +1014,7 @@ impl LightningClientModule {
         if !gateways.is_empty() {
             let config = self.client_ctx.get_config().clone();
             let global_meta: BTreeMap<String, String> = config.global.meta.clone();
-            let federation_id = config.global.federation_id();
+            let federation_id = config.global.calculate_federation_id();
 
             let meta = match config.meta::<String>(META_OVERRIDE_URL_KEY)? {
                 Some(override_src) => {
@@ -1147,7 +1147,10 @@ impl LightningClientModule {
                     operation_id,
                     invoice.clone(),
                     gateway,
-                    self.client_ctx.get_config().global.federation_id(),
+                    self.client_ctx
+                        .get_config()
+                        .global
+                        .calculate_federation_id(),
                     rand::rngs::OsRng,
                 )
                 .await?;

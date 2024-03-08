@@ -408,7 +408,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     fed.pegin_gateway(10_000_000, &gw_cln).await?;
 
-    let fed_id = fed.federation_id().await;
+    let fed_id = fed.calculate_federation_id().await;
     let invite = fed.invite_code()?;
     let invite_code = cmd!(client, "dev", "decode-invite-code", invite.clone())
         .out_json()
@@ -775,7 +775,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .bolt11;
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
     cmd!(client, "ln-pay", invoice.clone()).run().await?;
-    let fed_id = fed.federation_id().await;
+    let fed_id = fed.calculate_federation_id().await;
 
     let invoice_status = cln
         .request(cln_rpc::model::requests::WaitanyinvoiceRequest {
