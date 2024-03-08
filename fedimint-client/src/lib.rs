@@ -113,7 +113,7 @@ use fedimint_core::{
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_RECOVERY};
-use futures::{Future, StreamExt};
+use futures::{Future, Stream, StreamExt};
 use module::recovery::RecoveryProgress;
 use module::{DynClientModule, FinalClient};
 use rand::thread_rng;
@@ -123,6 +123,7 @@ use thiserror::Error;
 #[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
 use tokio::sync::watch;
+use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, error, info, warn};
 
 use crate::backup::Metadata;
@@ -1504,6 +1505,17 @@ impl Client {
             .context("Recovery task completed and update receiver disconnected, but some modules failed to recover")?;
 
         Ok(())
+    }
+
+    /// Subscribe to recover progress for all the modules.
+    ///
+    /// This stream can contain duplicate progress for a module.
+    /// Don't use this stream for detecting completion of recovery.
+    pub fn subscribe_to_recovery_progress(
+        &self,
+    ) -> impl Stream<Item = (ModuleInstanceId, RecoveryProgress)> {
+        WatchStream::new(self.client_recovery_progress_receiver.clone())
+            .flat_map(futures::stream::iter)
     }
 
     pub async fn wait_for_module_kind_recovery(
