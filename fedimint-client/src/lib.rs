@@ -1489,9 +1489,9 @@ impl Client {
         let mut recovery_receiver = self.client_recovery_progress_receiver.clone();
         recovery_receiver
             .wait_for(|in_progress| {
-                !in_progress
+                in_progress
                     .iter()
-                    .any(|(_id, progress)| !progress.is_done())
+                    .all(|(_id, progress)| progress.is_done())
             })
             .await
             .context("Recovery task completed and update receiver disconnected, but some modules failed to recover")?;
