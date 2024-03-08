@@ -1406,6 +1406,7 @@ impl Client {
         module_inits: &ModuleInitRegistry<DynClientModuleInit>,
         api: &DynGlobalApi,
         db: &Database,
+        task_group: &TaskGroup,
     ) -> anyhow::Result<ApiVersionSet> {
         if let Some(v) = db
             .begin_transaction()
@@ -1420,20 +1421,30 @@ impl Client {
             let db = db.clone();
             // Separate task group, because we actually don't want to be waiting for this to
             // finish, and it's just best effort.
-            TaskGroup::new()
-                .spawn("refresh_common_api_version_static", |_| async move {
-                    if let Err(e) = Self::refresh_common_api_version_static(
-                        &config,
-                        &module_inits,
-                        &api,
-                        &db,
-                        DiscoverCommonApiVersionMode::Full,
-                    )
-                    .await
-                    {
-                        warn!("Failed to discover common api versions: {e}");
-                    }
-                })
+            task_group
+                .spawn(
+                    "refresh_common_api_version_static",
+                    |task_handle| async move {
+                        let ok_or_canceled = task_handle
+                            .cancel_on_shutdown(async {
+                                if let Err(e) = Self::refresh_common_api_version_static(
+                                    &config,
+                                    &module_inits,
+                                    &api,
+                                    &db,
+                                    DiscoverCommonApiVersionMode::Full,
+                                )
+                                .await
+                                {
+                                    warn!("Failed to discover common api versions: {e}");
+                                }
+                            })
+                            .await;
+                        if ok_or_canceled.is_err() {
+                            debug!("Refreshing common api task version canceled");
+                        };
+                    },
+                )
                 .await;
 
             return Ok(v.0);
@@ -1994,6 +2005,7 @@ impl ClientBuilder {
         let config = Self::config_decoded(config, &decoders)?;
         let db = self.db.with_decoders(decoders.clone());
         let api = DynGlobalApi::from_config(&config);
+        let task_group = TaskGroup::new();
 
         // Migrate the database before interacting with it in case any on-disk data
         // structures have changed.
@@ -2012,6 +2024,7 @@ impl ClientBuilder {
             &self.module_inits,
             &api,
             &db,
+            &task_group,
         )
         .await?;
 
@@ -2167,7 +2180,6 @@ impl ClientBuilder {
             dbtx.commit_tx().await;
         }
 
-        let task_group = TaskGroup::new();
         let executor = {
             let mut executor_builder = Executor::builder();
             executor_builder
