@@ -223,6 +223,7 @@ rec {
     cargoArtifacts = workspaceBuild;
     cargoExtraArgs = "--workspace --all-targets --locked";
 
+    FM_DISCOVER_API_VERSION_TIMEOUT = "10";
     FM_CARGO_DENY_COMPILATION = "1";
   };
 
@@ -323,6 +324,9 @@ rec {
   workspaceTestCovBase = { times }: craneLib.buildPackage {
     pname = "fedimint-workspace-lcov";
     cargoArtifacts = workspaceCov;
+
+    FM_DISCOVER_API_VERSION_TIMEOUT = "10";
+
     buildPhaseCargoCommand = (''
       source <(cargo llvm-cov show-env --export-prefix)
     '' +
@@ -390,6 +394,8 @@ rec {
   ciTestAllBase = { times }: craneLibTests.mkCargoDerivation {
     pname = "${commonCliTestArgs.pname}-all";
     cargoArtifacts = workspaceBuild;
+
+    FM_DISCOVER_API_VERSION_TIMEOUT = "10";
 
     # One normal run, then if succeeded, modify the "always success test" to fail,
     # and make sure we detect it (happened too many times that we didn't).
