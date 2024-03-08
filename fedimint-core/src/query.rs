@@ -337,24 +337,24 @@ impl<R: Debug + Eq + Clone> QueryStrategy<R, Vec<R>> for UnionResponsesSingle<R>
     }
 }
 
-/// Query strategy that returns when all peers responded or a deadline passed
-pub struct AllOrDeadline<R> {
+/// Query strategy that returns when enough peers responded or a deadline passed
+pub struct ThresholdOrDeadline<R> {
     deadline: SystemTime,
-    num_peers: usize,
+    threshold: usize,
     responses: BTreeMap<PeerId, R>,
 }
 
-impl<R> AllOrDeadline<R> {
-    pub fn new(num_peers: usize, deadline: SystemTime) -> Self {
+impl<R> ThresholdOrDeadline<R> {
+    pub fn new(threshold: usize, deadline: SystemTime) -> Self {
         Self {
             deadline,
-            num_peers,
+            threshold,
             responses: BTreeMap::default(),
         }
     }
 }
 
-impl<R> QueryStrategy<R, BTreeMap<PeerId, R>> for AllOrDeadline<R> {
+impl<R> QueryStrategy<R, BTreeMap<PeerId, R>> for ThresholdOrDeadline<R> {
     fn process(
         &mut self,
         peer: PeerId,
@@ -364,7 +364,7 @@ impl<R> QueryStrategy<R, BTreeMap<PeerId, R>> for AllOrDeadline<R> {
             Ok(response) => {
                 assert!(self.responses.insert(peer, response).is_none());
 
-                if self.responses.len() == self.num_peers || self.deadline <= now() {
+                if self.threshold <= self.responses.len() || self.deadline <= now() {
                     QueryStep::Success(mem::take(&mut self.responses))
                 } else {
                     QueryStep::Continue
@@ -385,18 +385,18 @@ impl<R> QueryStrategy<R, BTreeMap<PeerId, R>> for AllOrDeadline<R> {
 /// Query for supported api versions from all the guardians (with a deadline)
 /// and calculate the best versions to use for each component (core + modules).
 pub struct DiscoverApiVersionSet {
-    inner: AllOrDeadline<SupportedApiVersionsSummary>,
+    inner: ThresholdOrDeadline<SupportedApiVersionsSummary>,
     client_versions: SupportedApiVersionsSummary,
 }
 
 impl DiscoverApiVersionSet {
     pub fn new(
-        num_peers: usize,
+        threshold: usize,
         deadline: SystemTime,
         client_versions: SupportedApiVersionsSummary,
     ) -> Self {
         Self {
-            inner: AllOrDeadline::new(num_peers, deadline),
+            inner: ThresholdOrDeadline::new(threshold, deadline),
             client_versions,
         }
     }

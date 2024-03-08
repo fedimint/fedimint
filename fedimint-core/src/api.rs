@@ -498,6 +498,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         &self,
         client_versions: &SupportedApiVersionsSummary,
         timeout: Duration,
+        num_responses_required: Option<usize>,
     ) -> FederationResult<ApiVersionSet>;
 }
 
@@ -748,10 +749,13 @@ where
         &self,
         client_versions: &SupportedApiVersionsSummary,
         timeout: Duration,
+        num_responses_required: Option<usize>,
     ) -> FederationResult<ApiVersionSet> {
         self.request_with_strategy(
             DiscoverApiVersionSet::new(
-                self.all_peers().len(),
+                num_responses_required
+                    .unwrap_or(self.all_peers().len())
+                    .min(self.all_peers().len()),
                 now().add(timeout),
                 client_versions.clone(),
             ),

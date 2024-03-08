@@ -585,7 +585,7 @@ pub async fn handle_command(
             unreachable!("Update stream ended without outcome");
         }
         ClientCmd::DiscoverVersion => {
-            Ok(json!({ "versions": client.discover_common_api_version().await? }))
+            Ok(json!({ "versions": client.discover_common_api_version(None).await? }))
         }
         ClientCmd::Module { module, args } => {
             let module_instance_id = match module {
