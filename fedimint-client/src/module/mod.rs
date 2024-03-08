@@ -26,7 +26,7 @@ use self::init::ClientModuleInit;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use crate::{oplog, AddStateMachinesResult, ClientArc, ClientWeak, TransactionUpdates};
+use crate::{oplog, AddStateMachinesResult, ClientStrong, ClientWeak, TransactionUpdates};
 
 pub mod init;
 pub mod recovery;
@@ -42,12 +42,12 @@ pub type ClientModuleRegistry = ModuleRegistry<DynClientModule>;
 pub struct FinalClient(Arc<std::sync::OnceLock<ClientWeak>>);
 
 impl FinalClient {
-    /// Get a temporary [`ClientArc`]
+    /// Get a temporary [`ClientStrong`]
     ///
     /// Care must be taken to not let the user take ownership of this value,
     /// and not store it elsewhere permanently either, as it could prevent
     /// the cleanup of the Client.
-    pub(crate) fn get(&self) -> ClientArc {
+    pub(crate) fn get(&self) -> ClientStrong {
         self.0
             .get()
             .expect("client must be already set")
@@ -85,7 +85,9 @@ impl<M> Clone for ClientContext<M> {
 /// A reference back to itself that the module cacn get from the
 /// [`ClientContext`]
 pub struct ClientContextSelfRef<'s, M> {
-    client: ClientArc,
+    // we are OK storing `ClientStrong` here, because of the `'s` preventing `Self` from being
+    // stored permanently somewhere
+    client: ClientStrong,
     module_instance_id: ModuleInstanceId,
     _marker: marker::PhantomData<&'s M>,
 }

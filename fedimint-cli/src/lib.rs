@@ -21,7 +21,7 @@ use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::module::ClientModule as _;
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
-use fedimint_client::{get_invite_code_from_db, Client, ClientArc, ClientBuilder};
+use fedimint_client::{get_invite_code_from_db, Client, ClientBuilder, ClientHandle};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
     FederationApiExt, FederationError, IRawFederationApi, InviteCode, WsFederationApi,
@@ -519,7 +519,11 @@ impl FedimintCli {
         Ok(client_builder)
     }
 
-    async fn client_join(&mut self, cli: &Opts, invite_code: InviteCode) -> CliResult<ClientArc> {
+    async fn client_join(
+        &mut self,
+        cli: &Opts,
+        invite_code: InviteCode,
+    ) -> CliResult<ClientHandle> {
         let client_config = ClientConfig::download_from_invite_code(&invite_code)
             .await
             .map_err_cli_general()?;
@@ -541,7 +545,7 @@ impl FedimintCli {
             .map_err_cli_general()
     }
 
-    async fn client_open(&mut self, cli: &Opts) -> CliResult<ClientArc> {
+    async fn client_open(&mut self, cli: &Opts) -> CliResult<ClientHandle> {
         let client_builder = self.make_client_builder(cli).await?;
 
         let mnemonic = Mnemonic::from_entropy(
@@ -572,7 +576,7 @@ impl FedimintCli {
         cli: &Opts,
         mnemonic: Mnemonic,
         invite_code: InviteCode,
-    ) -> CliResult<ClientArc> {
+    ) -> CliResult<ClientHandle> {
         let builder = self.make_client_builder(cli).await?;
 
         let client_config = ClientConfig::download_from_invite_code(&invite_code)

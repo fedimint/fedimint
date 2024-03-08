@@ -15,7 +15,7 @@ use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::fmt_utils::AbbreviateJson;
 use fedimint_core::maybe_add_send_sync;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::spawn;
+use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxFuture;
 use fedimint_logging::LOG_CLIENT_REACTOR;
 use futures::future::{self, select_all};
@@ -67,6 +67,7 @@ struct ExecutorInner {
     /// was created), it's must be sent through this channel for it to notice.
     sm_update_tx: mpsc::UnboundedSender<DynState>,
     sm_update_rx: Mutex<Option<mpsc::UnboundedReceiver<DynState>>>,
+    client_task_group: TaskGroup,
 }
 
 /// Builder to which module clients can be attached and used to build an
@@ -278,13 +279,17 @@ impl Executor {
         );
 
         let task_runner_inner = self.inner.clone();
-        let _handle = spawn("state machine executor", async move {
+        let _handle = self.inner.client_task_group.spawn("state machine executor", |task_handle| async move {
             let executor_runner = task_runner_inner.run(context_gen, sm_update_rx);
+            let task_group_shutdown_rx = task_handle.make_shutdown_rx().await;
             select! {
+                _ = task_group_shutdown_rx => {
+                    info!("Shutting down state machine executor runner due to task group shutdown signal");
+                },
                 shutdown_happened_sender = shutdown_receiver => {
                     match shutdown_happened_sender {
                         Ok(()) => {
-                            info!("Shutting down state machine executor runner due to shutdown signal");
+                            info!("Shutting down state machine executor runner due to explicit shutdown signal");
                         },
                         Err(_) => {
                             error!("Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)");
@@ -295,7 +300,7 @@ impl Executor {
                     error!("State machine executor runner exited unexpectedly!");
                 },
             };
-        });
+        }).await;
     }
 
     /// Stops the background task that runs the state machines.
@@ -779,7 +784,12 @@ impl ExecutorBuilder {
     /// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    pub async fn build(self, db: Database, notifier: Notifier) -> Executor {
+    pub async fn build(
+        self,
+        db: Database,
+        notifier: Notifier,
+        client_task_group: TaskGroup,
+    ) -> Executor {
         let (sm_update_tx, sm_update_rx) = tokio::sync::mpsc::unbounded_channel();
 
         let inner = Arc::new(ExecutorInner {
@@ -791,6 +801,7 @@ impl ExecutorBuilder {
             shutdown_executor: Default::default(),
             sm_update_tx,
             sm_update_rx: Mutex::new(Some(sm_update_rx)),
+            client_task_group,
         });
 
         debug!(
@@ -1164,7 +1175,7 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::task;
+    use fedimint_core::task::{self, TaskGroup};
     use tokio::sync::broadcast::Sender;
     use tracing::{info, trace};
 
@@ -1289,7 +1300,7 @@ mod tests {
             },
         );
         let executor = executor_builder
-            .build(db.clone(), Notifier::new(db.clone()))
+            .build(db.clone(), Notifier::new(db.clone()), TaskGroup::new())
             .await;
         executor
             .start_executor(Arc::new(|_, _| DynGlobalClientContext::new_fake()))
