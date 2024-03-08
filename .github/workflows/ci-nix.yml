@@ -242,7 +242,7 @@ jobs:
     if: github.repository == 'fedimint/fedimint'
     name: "Code coverage"
     runs-on: buildjet-8vcpu-ubuntu-2004
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v25
