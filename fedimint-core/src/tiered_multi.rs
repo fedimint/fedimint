@@ -1,6 +1,5 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
-use std::iter::FromIterator;
 use std::marker::PhantomData;
 
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -334,7 +333,6 @@ impl FromIterator<(Amount, usize)> for TieredSummary {
 
 #[cfg(test)]
 mod test {
-    use fedimint_core::Amount;
 
     use super::*;
 

@@ -186,6 +186,7 @@ pub fn write_overwrite<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> 
     fs::File::options()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(path)?
         .write_all(contents.as_ref())
 }
@@ -198,6 +199,7 @@ pub async fn write_overwrite_async<P: AsRef<Path>, C: AsRef<[u8]>>(
     tokio::fs::OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(path)
         .await?
         .write_all(contents.as_ref())

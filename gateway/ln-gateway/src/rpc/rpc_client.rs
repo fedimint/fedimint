@@ -1,5 +1,3 @@
-use std::result::Result;
-
 use bitcoin::Address;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, TransactionId};

@@ -212,9 +212,8 @@ impl LightningReceiveConfirmedInvoice {
                     const CLOCK_SKEW_TOLERANCE: Duration = Duration::from_secs(60);
                     if has_invoice_expired(&invoice, now_epoch, CLOCK_SKEW_TOLERANCE) {
                         return Err(LightningReceiveError::Timeout);
-                    } else {
-                        debug!("Still waiting preimage decryption for contract {contract_id}");
                     }
+                    debug!("Still waiting preimage decryption for contract {contract_id}");
                 }
                 Err(error) => {
                     error.report_if_important();
@@ -364,10 +363,9 @@ impl LightningReceiveFunded {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
 
     use bitcoin_hashes::{sha256, Hash};
-    use lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret};
+    use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
     use secp256k1::SecretKey;
 
     use super::*;

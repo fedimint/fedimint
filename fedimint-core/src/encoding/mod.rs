@@ -1021,12 +1021,9 @@ mod tests {
     use std::fmt::Debug;
     use std::io::Cursor;
 
-    use bitcoin_hashes::hex::FromHex;
-
     use super::*;
     use crate::db::DatabaseValue;
     use crate::encoding::{Decodable, Encodable};
-    use crate::ModuleDecoderRegistry;
 
     pub(crate) fn test_roundtrip<T>(value: T)
     where

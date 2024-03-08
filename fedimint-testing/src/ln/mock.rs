@@ -5,7 +5,7 @@ use async_stream::stream;
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
-use bitcoin::{secp256k1, KeyPair};
+use bitcoin::KeyPair;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
 use fedimint_core::Amount;

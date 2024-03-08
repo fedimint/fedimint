@@ -995,9 +995,8 @@ pub async fn finish_hold_invoice_payment(
             Ok(Some(Ok(invoice))) => {
                 if invoice.state() == tonic_lnd::lnrpc::invoice::InvoiceState::Accepted {
                     break;
-                } else {
-                    debug!("hold invoice payment state: {:?}", invoice.state());
                 }
+                debug!("hold invoice payment state: {:?}", invoice.state());
             }
             Ok(Some(Err(e))) => {
                 bail!("error in invoice subscription: {e:?}");
@@ -1380,8 +1379,8 @@ pub async fn lightning_gw_reconnect_test(
                 Err(e) => {
                     if i == MAX_RETRIES - 1 {
                         return Err(e);
-                    } else {
-                        tracing::debug!(
+                    }
+                    tracing::debug!(
                             "Pay invoice for gateway {} failed with {e:?}, retrying in {} seconds (try {}/{MAX_RETRIES})",
                             gw.ln
                                 .as_ref()
@@ -1390,12 +1389,11 @@ pub async fn lightning_gw_reconnect_test(
                             RETRY_INTERVAL.as_secs(),
                             i + 1,
                         );
-                        fedimint_core::task::sleep_in_test(
-                            "paying invoice for gateway failed",
-                            RETRY_INTERVAL,
-                        )
-                        .await;
-                    }
+                    fedimint_core::task::sleep_in_test(
+                        "paying invoice for gateway failed",
+                        RETRY_INTERVAL,
+                    )
+                    .await;
                 }
             }
         }
@@ -1794,12 +1792,11 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         let outputs = output.as_array().context("expected an array")?;
         if outputs.len() >= fed_utxos_sats.len() {
             break outputs.clone();
-        } else if now.elapsed()? > Duration::from_secs(180) {
-            // 3 minutes should be enough to finish one or two sessions
-            bail!("recoverytool epochs method timed out");
-        } else {
-            fedimint_core::task::sleep_in_test("recovery failed", Duration::from_secs(1)).await
         }
+        if now.elapsed()? > Duration::from_secs(180) {
+            bail!("recoverytool epochs method timed out");
+        }
+        fedimint_core::task::sleep_in_test("recovery failed", Duration::from_secs(1)).await
     };
     let epochs_descriptors = outputs
         .iter()
@@ -1895,6 +1892,7 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
         let mut file = std::fs::File::options()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(data_dir.join(name))
             .expect("could not open file");
         file.write_all(data).expect("could not write file");

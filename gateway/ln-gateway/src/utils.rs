@@ -1,5 +1,4 @@
 use std::future::Future;
-use std::result::Result;
 use std::time::Duration;
 
 use fedimint_core::task;

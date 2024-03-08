@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::iter::FromIterator;
 
 use fedimint_core::Amount;
 use serde::{Deserialize, Serialize};
