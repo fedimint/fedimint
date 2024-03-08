@@ -25,7 +25,7 @@ fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
 fedimint-dummy-common = { version = "0.3.0-alpha", path = "../fedimint-dummy-common" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
-secp256k1 = "0.24.2"
+secp256k1 = "0.27.0"
 strum = "0.24"
 strum_macros = "0.24"
 thiserror = "1.0.39"

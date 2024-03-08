@@ -33,7 +33,7 @@ fedimint-derive-secret = { version = "0.3.0-alpha", path = "../../crypto/derive-
 fedimint-mint-common ={ version = "0.3.0-alpha", path = "../fedimint-mint-common" }
 fedimint-logging = { version = "0.3.0-alpha", path = "../../fedimint-logging" }
 rand = "0.8"
-secp256k1 = "0.24.2"
+secp256k1 = "0.27.0"
 secp256k1-zkp = "0.7.0"
 serde = { version = "1.0.149", features = [ "derive" ] }
 serde-big-array = "0.5.1"

@@ -29,7 +29,7 @@ miniscript = { version = "10.0.0", features = [ "compiler", "serde" ] }
 miniscript9 = { package = "miniscript", version = "9.0.2" }
 impl-tools = "0.8.0"
 rand = "0.8"
-secp256k1 = { version = "0.24.2", features = [ "serde" ] }
+secp256k1 = { version = "0.27.0", features = [ "serde" ] }
 serde = { version = "1.0.149", features = [ "derive" ] }
 strum = "0.24"
 strum_macros = "0.24"
