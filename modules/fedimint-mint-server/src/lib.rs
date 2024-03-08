@@ -620,7 +620,12 @@ impl Mint {
             .values()
             .all(|pk| pk.structural_eq(&cfg.private.tbs_sks)));
 
-        let ref_pub_key = cfg.private.tbs_sks.to_public();
+        let ref_pub_key = Tiered::from_iter(
+            cfg.private
+                .tbs_sks
+                .iter()
+                .map(|(amt, key)| (amt, key.to_pub_key_share())),
+        );
 
         // Find our key index and make sure we know the private key for all our public
         // key shares

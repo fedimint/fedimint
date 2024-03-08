@@ -50,6 +50,8 @@ pub mod api;
 pub mod backup;
 /// Gradual bitcoin dependency migration helpers
 pub mod bitcoin_migration;
+/// Legacy serde encoding for bls12_381
+pub mod bls12_381_serde;
 /// Federation configuration
 pub mod config;
 /// Fundamental types

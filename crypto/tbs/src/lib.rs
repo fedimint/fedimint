@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 
 use bls12_381::{pairing, G1Affine, G1Projective, G2Affine, G2Projective};
 pub use bls12_381::{G1Affine as MessagePoint, G2Affine as PubKeyPoint, Scalar};
+use fedimint_core::encoding::{Decodable, Encodable};
 use ff::Field;
 use group::{Curve, Group};
 use rand::rngs::OsRng;
@@ -15,6 +16,9 @@ use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
 use sha3::Digest;
 
+// this is a legacy encoding that we need to keep for tbs; everywhere else we
+// want to upstream serde support for bls12_381 such das non-human-readable
+// encoding encode the points as byte arrays instead of byte vectors
 pub mod serde_impl;
 
 const HASH_TAG: &[u8] = b"TBS_BLS12-381_";
@@ -30,39 +34,38 @@ fn hash_bytes_to_g1(data: &[u8]) -> G1Projective {
     G1Projective::random(&mut prng)
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct SecretKeyShare(#[serde(with = "serde_impl::scalar")] pub Scalar);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct PublicKeyShare(#[serde(with = "serde_impl::g2")] pub G2Affine);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct AggregatePublicKey(#[serde(with = "serde_impl::g2")] pub G2Affine);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct Message(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct BlindingKey(#[serde(with = "serde_impl::scalar")] pub Scalar);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct BlindedMessage(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct BlindedSignatureShare(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct BlindedSignature(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct Signature(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
 macro_rules! point_hash_impl {
     ($type:ty) => {
         impl std::hash::Hash for $type {
             fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                let serialized = self.0.to_compressed();
-                state.write(&serialized);
+                self.0.to_compressed().hash(state);
             }
         }
     };

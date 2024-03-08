@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use fedimint_core::Amount;
 use serde::{Deserialize, Serialize};
-use tbs::{PublicKeyShare, SecretKeyShare};
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
@@ -81,16 +80,6 @@ impl<T> Tiered<T> {
 
     pub fn as_map(&self) -> &BTreeMap<Amount, T> {
         &self.0
-    }
-}
-
-impl Tiered<SecretKeyShare> {
-    pub fn to_public(&self) -> Tiered<PublicKeyShare> {
-        Tiered(
-            self.iter()
-                .map(|(amt, key)| (amt, key.to_pub_key_share()))
-                .collect(),
-        )
     }
 }
 

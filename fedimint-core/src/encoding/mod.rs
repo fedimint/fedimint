@@ -10,7 +10,7 @@ pub mod as_hex;
 mod bls12_381;
 mod btc;
 mod secp256k1;
-mod tbs;
+mod threshold_crypto;
 
 #[cfg(not(target_family = "wasm"))]
 mod tls;

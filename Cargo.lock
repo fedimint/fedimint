@@ -1430,7 +1430,6 @@ dependencies = [
  "erased-serde",
  "fedimint-derive",
  "fedimint-logging",
- "fedimint-tbs",
  "fedimint-threshold-crypto",
  "futures",
  "getrandom",
@@ -2248,6 +2247,7 @@ version = "0.3.0-alpha"
 dependencies = [
  "bitcoin_hashes 0.11.0",
  "bls12_381",
+ "fedimint-core",
  "ff",
  "group",
  "rand",

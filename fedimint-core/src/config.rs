@@ -11,6 +11,7 @@ use bitcoin::secp256k1;
 use bitcoin_hashes::hex::{format_hex, FromHex};
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin_hashes::{hex, sha256};
+use bls12_381::Scalar;
 use fedimint_core::api::{FederationApiExt, InviteCode, WsFederationApi};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{DynRawFallback, Encodable};
@@ -24,7 +25,6 @@ use fedimint_logging::LOG_CORE;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use tbs::{serde_impl, Scalar};
 use thiserror::Error;
 use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective};
@@ -37,7 +37,7 @@ use crate::module::{
     ModuleConsensusVersion,
 };
 use crate::query::FilterMap;
-use crate::{maybe_add_send_sync, PeerId};
+use crate::{bls12_381_serde, maybe_add_send_sync, PeerId};
 
 // TODO: make configurable
 /// This limits the RAM consumption of a AlephBFT Unit to roughly 50kB
@@ -941,8 +941,8 @@ pub enum DkgMessage<G: DkgGroup> {
     HashedCommit(Sha256),
     Commit(#[serde(with = "serde_commit")] Vec<G>),
     Share(
-        #[serde(with = "serde_impl::scalar")] Scalar,
-        #[serde(with = "serde_impl::scalar")] Scalar,
+        #[serde(with = "bls12_381_serde::scalar")] Scalar,
+        #[serde(with = "bls12_381_serde::scalar")] Scalar,
     ),
     Extract(#[serde(with = "serde_commit")] Vec<G>),
 }
@@ -993,21 +993,21 @@ pub trait SGroup: Sized {
 
 impl SGroup for G2Projective {
     fn serialize2<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        serde_impl::g2::serialize(&self.to_affine(), s)
+        bls12_381_serde::g2::serialize(&self.to_affine(), s)
     }
 
     fn deserialize2<'d, D: Deserializer<'d>>(d: D) -> Result<Self, D::Error> {
-        serde_impl::g2::deserialize(d).map(G2Projective::from)
+        bls12_381_serde::g2::deserialize(d).map(G2Projective::from)
     }
 }
 
 impl SGroup for G1Projective {
     fn serialize2<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        serde_impl::g1::serialize(&self.to_affine(), s)
+        bls12_381_serde::g1::serialize(&self.to_affine(), s)
     }
 
     fn deserialize2<'d, D: Deserializer<'d>>(d: D) -> Result<Self, D::Error> {
-        serde_impl::g1::deserialize(d).map(G1Projective::from)
+        bls12_381_serde::g1::deserialize(d).map(G1Projective::from)
     }
 }
 
