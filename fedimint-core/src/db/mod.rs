@@ -2036,7 +2036,7 @@ mod test_utils {
     }
 
     #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
-    pub(super) struct TestKey(pub u64);
+    pub struct TestKey(pub u64);
 
     #[derive(Debug, Encodable, Decodable)]
     struct DbPrefixTestPrefix;
@@ -2089,7 +2089,7 @@ mod test_utils {
 
     impl_db_lookup!(key = PercentTestKey, query_prefix = PercentPrefixTestPrefix);
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq, PartialOrd, Ord)]
-    pub(super) struct TestVal(pub u64);
+    pub struct TestVal(pub u64);
 
     const TEST_MODULE_PREFIX: u16 = 1;
     const ALT_MODULE_PREFIX: u16 = 2;

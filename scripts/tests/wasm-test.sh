@@ -15,7 +15,7 @@ function run_tests() {
 
   echo Funding LND gateway e-cash wallet ...
 
-  WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --firefox --headless fedimint-wasm-tests
+  WASM_BINDGEN_TEST_TIMEOUT=100 wasm-pack test --firefox fedimint-wasm-tests
 }
 export -f run_tests
 
