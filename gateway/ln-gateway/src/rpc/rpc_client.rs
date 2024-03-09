@@ -7,9 +7,9 @@ use serde::Serialize;
 use thiserror::Error;
 
 use super::{
-    BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
-    FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, RestorePayload,
-    SetConfigurationPayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, ConnectToPeerPayload,
+    DepositAddressPayload, FederationInfo, GatewayFedConfig, GatewayInfo, GetFundingAddressPayload,
+    LeaveFedPayload, OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
 };
 
 pub struct GatewayRpcClient {
@@ -105,6 +105,33 @@ impl GatewayRpcClient {
         let url = self
             .base_url
             .join("/set_configuration")
+            .expect("invalid base url");
+        self.call_post(url, payload).await
+    }
+
+    pub async fn connect_to_peer(&self, payload: ConnectToPeerPayload) -> GatewayRpcResult<()> {
+        let url = self
+            .base_url
+            .join("/connect_to_peer")
+            .expect("invalid base url");
+        self.call_post(url, payload).await
+    }
+
+    pub async fn get_funding_address(
+        &self,
+        payload: GetFundingAddressPayload,
+    ) -> GatewayRpcResult<Address> {
+        let url = self
+            .base_url
+            .join("/get_funding_address")
+            .expect("invalid base url");
+        self.call_post(url, payload).await
+    }
+
+    pub async fn open_channel(&self, payload: OpenChannelPayload) -> GatewayRpcResult<()> {
+        let url = self
+            .base_url
+            .join("/open_channel")
             .expect("invalid base url");
         self.call_post(url, payload).await
     }

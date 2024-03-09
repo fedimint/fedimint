@@ -22,9 +22,10 @@ use ln_gateway::gateway_lnrpc::gateway_lightning_server::{
 use ln_gateway::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use ln_gateway::gateway_lnrpc::{
-    CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetNodeInfoResponse,
-    GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest, InterceptHtlcResponse,
-    PayInvoiceRequest, PayInvoiceResponse,
+    ConnectToPeerRequest, CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse,
+    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelRequest, PayInvoiceRequest,
+    PayInvoiceResponse,
 };
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
@@ -512,6 +513,102 @@ impl GatewayLightning for ClnRpcService {
         Err(Status::internal(
             "Invoice creation is not implemented for CLN",
         ))
+    }
+
+    async fn connect_to_peer(
+        &self,
+        request: tonic::Request<ConnectToPeerRequest>,
+    ) -> Result<tonic::Response<EmptyResponse>, Status> {
+        let request_inner = request.into_inner();
+
+        self.rpc_client()
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+            .call(cln_rpc::Request::Connect(model::requests::ConnectRequest {
+                id: format!("{}@{}", request_inner.pubkey, request_inner.host),
+                host: None,
+                port: None,
+            }))
+            .await
+            .map_err(|e| {
+                error!("cln connect rpc returned error {:?}", e);
+                tonic::Status::internal(e.to_string())
+            })?;
+
+        Ok(tonic::Response::new(EmptyResponse {}))
+    }
+
+    async fn get_funding_address(
+        &self,
+        _request: tonic::Request<EmptyRequest>,
+    ) -> Result<tonic::Response<GetFundingAddressResponse>, Status> {
+        let address_or = self
+            .rpc_client()
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+            .call(cln_rpc::Request::NewAddr(model::requests::NewaddrRequest {
+                addresstype: Some(cln_rpc::model::requests::NewaddrAddresstype::BECH32),
+            }))
+            .await
+            .map(|response| match response {
+                cln_rpc::Response::NewAddr(model::responses::NewaddrResponse {
+                    bech32, ..
+                }) => Ok(bech32),
+                _ => Err(ClnExtensionError::RpcWrongResponse),
+            })
+            .map_err(|e| {
+                error!("cln newaddr rpc returned error {:?}", e);
+                tonic::Status::internal(e.to_string())
+            })?
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        match address_or {
+            Some(address) => Ok(tonic::Response::new(GetFundingAddressResponse { address })),
+            None => Err(Status::internal("cln newaddr rpc returned no address")),
+        }
+    }
+
+    async fn open_channel(
+        &self,
+        request: tonic::Request<OpenChannelRequest>,
+    ) -> Result<tonic::Response<EmptyResponse>, Status> {
+        let request_inner = request.into_inner();
+
+        self.rpc_client()
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+            .call(cln_rpc::Request::FundChannel(
+                model::requests::FundchannelRequest {
+                    id: cln_rpc::primitives::PublicKey::from_str(&request_inner.pubkey).map_err(
+                        |e| {
+                            error!("cln fundchannel pubkey parse error {:?}", e);
+                            tonic::Status::invalid_argument(e.to_string())
+                        },
+                    )?,
+                    amount: cln_rpc::primitives::AmountOrAll::Amount(
+                        cln_rpc::primitives::Amount::from_sat(request_inner.channel_size_sats),
+                    ),
+                    feerate: None,
+                    announce: None,
+                    minconf: None,
+                    push_msat: Some(cln_rpc::primitives::Amount::from_sat(
+                        request_inner.push_amount_sats,
+                    )),
+                    close_to: None,
+                    request_amt: None,
+                    compact_lease: None,
+                    utxos: None,
+                    mindepth: None,
+                    reserve: None,
+                },
+            ))
+            .await
+            .map_err(|e| {
+                error!("cln fundchannel rpc returned error {:?}", e);
+                tonic::Status::internal(e.to_string())
+            })?;
+
+        Ok(tonic::Response::new(EmptyResponse {}))
     }
 }
 

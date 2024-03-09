@@ -56,14 +56,19 @@ $ gateway-cli help
 Usage: gateway-cli [OPTIONS] <COMMAND>
 
 Commands:
-  version-hash     Display CLI version hash
-  info             Display high-level information about the Gateway
-  balance          Check gateway balance
-  address          Generate a new peg-in address, funds sent to it can later be claimed
-  deposit          Deposit funds into a gateway federation
-  withdraw         Claim funds from a gateway federation
-  connect-fed      Connect federation with the gateway
-  help             Print this message or the help of the given subcommand(s)
+  version-hash          Display CLI version hash
+  info                  Display high-level information about the Gateway
+  balance               Check gateway balance
+  address               Generate a new peg-in address, funds sent to it can later be claimed
+  deposit               Deposit funds into a gateway federation
+  withdraw              Claim funds from a gateway federation
+  connect-fed           Connect federation with the gateway
+  help                  Print this message or the help of the given subcommand(s)
+  lightning
+    connect-to-peer     Connect to another lightning node from the gateway\'s underlying lightning node
+    get-funding-address Generate a new address belonging to the on-chain wallet of the gateway\'s underlying lightning node
+    open-channel        Open a lightning channel to another lighting node from the gateway\'s underlying lightning node
+    wait-for-chain-sync Wait for the gateway\'s underlying lightning node to sync to the blockchain at a given height
 
 Options:
   -a, --address <ADDRESS>          The address of the gateway webserver [default: http://127.0.0.1:8175]
@@ -97,7 +102,7 @@ As described in [Running Fedimint for dev testing](./tutorial.md#using-the-gatew
 ### Deploy a gateway-lnrpc-extension
 
 - [gateway-cln-extension](../gateway/ln-gateway/src/bin/cln_extension.rs): **TODO:** Add docs here
-- other _gateway-lnrpc-extension_:  **TODO:** Add docs here
+- other _gateway-lnrpc-extension_: **TODO:** Add docs here
 
 ### Configure and deploy gatewayd
 

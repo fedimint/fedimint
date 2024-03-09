@@ -82,6 +82,14 @@ pub struct GatewayInfo {
     pub gateway_id: secp256k1::PublicKey,
     pub gateway_state: String,
     pub network: Option<Network>,
+    // TODO: This is here to allow for backwards compatibility with old versions of this struct. We
+    // should be able to remove it once 0.4.0 is released.
+    #[serde(default)]
+    pub block_height: Option<u32>,
+    // TODO: This is here to allow for backwards compatibility with old versions of this struct. We
+    // should be able to remove it once 0.4.0 is released.
+    #[serde(default)]
+    pub synced_to_chain: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -132,4 +140,20 @@ pub struct SetConfigurationPayload {
     pub routing_fees: Option<FederationRoutingFees>,
     pub network: Option<Network>,
     pub per_federation_routing_fees: Option<Vec<(FederationId, FederationRoutingFees)>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ConnectToPeerPayload {
+    pub pubkey: secp256k1::PublicKey,
+    pub host: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetFundingAddressPayload;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OpenChannelPayload {
+    pub pubkey: secp256k1::PublicKey,
+    pub channel_size_sats: u64,
+    pub push_amount_sats: u64,
 }

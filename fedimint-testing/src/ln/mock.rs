@@ -19,8 +19,9 @@ use lightning_invoice::{
     SignedRawBolt11Invoice, DEFAULT_EXPIRY_TIME,
 };
 use ln_gateway::gateway_lnrpc::{
-    self, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetNodeInfoResponse,
-    GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    self, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetFundingAddressResponse,
+    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
+    PayInvoiceResponse,
 };
 use ln_gateway::lightning::cln::{HtlcResult, RouteHtlcStream};
 use ln_gateway::lightning::{ILnRpcClient, LightningRpcError};
@@ -206,5 +207,26 @@ impl ILnRpcClient for FakeLightningTest {
         Ok(CreateInvoiceResponse {
             invoice: invoice.to_string(),
         })
+    }
+
+    async fn connect_to_peer(
+        &self,
+        _pubkey: bitcoin::secp256k1::PublicKey,
+        _host: String,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        unimplemented!("FakeLightningTest does not support connecting to peers")
+    }
+
+    async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError> {
+        unimplemented!("FakeLightningTest does not support getting a funding address")
+    }
+
+    async fn open_channel(
+        &self,
+        _pubkey: bitcoin::secp256k1::PublicKey,
+        _channel_size_sats: u64,
+        _push_amount_sats: u64,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        unimplemented!("FakeLightningTest does not support opening channels")
     }
 }
