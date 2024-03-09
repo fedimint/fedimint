@@ -14,8 +14,9 @@ use tower_http::validate_request::ValidateRequestHeaderLayer;
 use tracing::{error, instrument};
 
 use super::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, InfoPayload,
-    LeaveFedPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
+    BackupPayload, BalancePayload, ConnectFedPayload, ConnectToPeerPayload, DepositAddressPayload,
+    InfoPayload, LeaveFedPayload, OpenChannelPayload, RestorePayload, SetConfigurationPayload,
+    WaitForChainSyncPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 use crate::db::GatewayConfiguration;
 use crate::rpc::ConfigPayload;
@@ -71,6 +72,10 @@ fn v1_routes(config: Option<GatewayConfiguration>, gateway: Gateway) -> Router {
             .route("/backup", post(backup))
             .route("/restore", post(restore))
             .route("/set_configuration", post(set_configuration))
+            .route("/connect_to_peer", post(connect_to_peer))
+            .route("/get_funding_address", get(get_funding_address))
+            .route("/open_channel", post(open_channel))
+            .route("/wait_for_chain_sync", post(wait_for_chain_sync))
             .layer(ValidateRequestHeaderLayer::bearer(&gateway_config.password));
         (public_routes, admin_routes)
     } else {
@@ -213,6 +218,41 @@ async fn set_configuration(
     Json(payload): Json<SetConfigurationPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     gateway.handle_set_configuration_msg(payload).await?;
+    Ok(Json(json!(())))
+}
+
+#[instrument(skip_all, err, fields(?payload))]
+async fn connect_to_peer(
+    Extension(gateway): Extension<Gateway>,
+    Json(payload): Json<ConnectToPeerPayload>,
+) -> Result<impl IntoResponse, GatewayError> {
+    gateway.handle_connect_to_peer_msg(payload).await?;
+    Ok(Json(json!(())))
+}
+
+#[instrument(skip_all, err)]
+async fn get_funding_address(
+    Extension(gateway): Extension<Gateway>,
+) -> Result<impl IntoResponse, GatewayError> {
+    let address = gateway.handle_get_funding_address_msg().await?;
+    Ok(Json(json!(address.to_string())))
+}
+
+#[instrument(skip_all, err, fields(?payload))]
+async fn open_channel(
+    Extension(gateway): Extension<Gateway>,
+    Json(payload): Json<OpenChannelPayload>,
+) -> Result<impl IntoResponse, GatewayError> {
+    gateway.handle_open_channel_msg(payload).await?;
+    Ok(Json(json!(())))
+}
+
+#[instrument(skip_all, err)]
+async fn wait_for_chain_sync(
+    Extension(gateway): Extension<Gateway>,
+    Json(payload): Json<WaitForChainSyncPayload>,
+) -> Result<impl IntoResponse, GatewayError> {
+    gateway.handle_wait_for_chain_sync_msg(payload).await?;
     Ok(Json(json!(())))
 }
 

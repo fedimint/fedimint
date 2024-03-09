@@ -13,8 +13,10 @@ use tracing::info;
 use super::{ILnRpcClient, LightningRpcError};
 use crate::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gateway_lnrpc::{
-    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    ConnectToPeerRequest, EmptyRequest, EmptyResponse, GetFundingAddressResponse,
+    GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, OpenChannelRequest, PayInvoiceRequest, PayInvoiceResponse,
+    WaitForChainSyncRequest,
 };
 use crate::lightning::MAX_LIGHTNING_RETRIES;
 pub type HtlcResult = std::result::Result<InterceptHtlcRequest, tonic::Status>;
@@ -137,6 +139,82 @@ impl ILnRpcClient for NetworkLnRpcClient {
                 failure_reason: status.message().to_string(),
             }
         })?;
+        Ok(res.into_inner())
+    }
+
+    async fn connect_to_peer(
+        &self,
+        pubkey: secp256k1::PublicKey,
+        host: String,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        let mut client = Self::connect(self.connection_url.clone()).await?;
+        let res = client
+            .connect_to_peer(ConnectToPeerRequest {
+                pubkey: pubkey.to_string(),
+                host,
+            })
+            .await
+            .map_err(|status| LightningRpcError::FailedToConnectToPeer {
+                failure_reason: status.message().to_string(),
+            })?;
+        Ok(res.into_inner())
+    }
+
+    async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError> {
+        let mut client = Self::connect(self.connection_url.clone()).await?;
+        let res = client
+            .get_funding_address(EmptyRequest {})
+            .await
+            .map_err(|status| LightningRpcError::FailedToGetFundingAddress {
+                failure_reason: status.message().to_string(),
+            })?;
+        Ok(res.into_inner())
+    }
+
+    async fn open_channel(
+        &self,
+        pubkey: String,
+        channel_size_sats: u64,
+        push_amount_sats: u64,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        let mut client = Self::connect(self.connection_url.clone()).await?;
+        let res = client
+            .open_channel(OpenChannelRequest {
+                pubkey,
+                channel_size_sats,
+                push_amount_sats,
+            })
+            .await
+            .map_err(|status| LightningRpcError::FailedToOpenChannel {
+                failure_reason: status.message().to_string(),
+            })?;
+        Ok(res.into_inner())
+    }
+
+    async fn wait_for_chain_sync(
+        &self,
+        block_height: u32,
+        max_retries: u32,
+        retry_delay: Duration,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        let mut client = Self::connect(self.connection_url.clone()).await?;
+        let res = client
+            .wait_for_chain_sync(WaitForChainSyncRequest {
+                block_height,
+                max_retries,
+                retry_delay: Some(prost_types::Duration::try_from(retry_delay).map_err(|e| {
+                    LightningRpcError::FailedToWaitForChainSync {
+                        failure_reason: format!(
+                            "Failed to convert std Duration to prost Duration: {}",
+                            e
+                        ),
+                    }
+                })?),
+            })
+            .await
+            .map_err(|status| LightningRpcError::FailedToWaitForChainSync {
+                failure_reason: status.message().to_string(),
+            })?;
         Ok(res.into_inner())
     }
 }
