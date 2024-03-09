@@ -17,8 +17,8 @@ use serde::{Deserialize, Serialize};
 use sha3::Digest;
 
 // this is a legacy encoding that we need to keep for tbs; everywhere else we
-// want to upstream serde support for bls12_381 such das non-human-readable
-// encoding encode the points as byte arrays instead of byte vectors
+// want to upstream serde support for bls12_381 such that the non-human-readable
+// encoding encodes the points as byte arrays instead of byte vectors
 pub mod serde_impl;
 
 const HASH_TAG: &[u8] = b"TBS_BLS12-381_";

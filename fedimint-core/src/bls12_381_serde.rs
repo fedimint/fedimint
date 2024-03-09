@@ -23,20 +23,15 @@ pub mod scalar {
         };
 
         if bytes.len() != 32 {
-            return Err(D::Error::invalid_length(bytes.len(), &"32 bytes"));
+            return Err(Error::invalid_length(bytes.len(), &"32 bytes"));
         }
 
         let mut byte_array = [0u8; 32];
 
         byte_array.copy_from_slice(&bytes);
 
-        let scalar = Scalar::from_bytes(&byte_array);
-        // FIXME: probably safe with public data, but doesn't look nice
-        if scalar.is_some().into() {
-            Ok(scalar.unwrap())
-        } else {
-            Err(D::Error::custom("Could not decode compressed G1Affine"))
-        }
+        Option::from(Scalar::from_bytes(&byte_array))
+            .ok_or_else(|| Error::custom("Could not decode compressed G1Affine"))
     }
 }
 
@@ -66,17 +61,13 @@ macro_rules! impl_serde_g {
             if bytes.len() != $len {
                 return Err(D::Error::invalid_length(bytes.len(), &"48 bytes"));
             }
+
             let mut byte_array = [0u8; $len];
+
             byte_array.copy_from_slice(&bytes);
 
-            let g = <$g>::from_compressed(&byte_array);
-            if g.is_some().into() {
-                Ok(g.unwrap())
-            } else {
-                Err(D::Error::custom(
-                    "Could not decode compressed group element",
-                ))
-            }
+            Option::from(<$g>::from_compressed(&byte_array))
+                .ok_or_else(|| Error::custom("Could not decode compressed group element"))
         }
     };
 }

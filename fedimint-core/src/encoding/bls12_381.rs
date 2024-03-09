@@ -1,6 +1,6 @@
 use bls12_381::{G1Affine, G2Affine, Scalar};
 
-use crate::encoding::{Decodable, Encodable};
+use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
 impl Encodable for Scalar {
@@ -12,22 +12,12 @@ impl Encodable for Scalar {
 impl Decodable for Scalar {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        _modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, crate::encoding::DecodeError> {
-        let mut bytes = [0u8; 32];
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let byte_array = <[u8; 32]>::consensus_decode(d, modules)?;
 
-        d.read_exact(&mut bytes)
-            .map_err(crate::encoding::DecodeError::from_err)?;
-
-        let scalar = Scalar::from_bytes(&bytes);
-
-        if scalar.is_some().unwrap_u8() == 1 {
-            Ok(scalar.unwrap())
-        } else {
-            Err(crate::encoding::DecodeError::from_str(
-                "Error decoding Scalar",
-            ))
-        }
+        Option::from(Scalar::from_bytes(&byte_array))
+            .ok_or(DecodeError::from_str("Error decoding Scalar"))
     }
 }
 
@@ -40,22 +30,12 @@ impl Encodable for G1Affine {
 impl Decodable for G1Affine {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        _modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, crate::encoding::DecodeError> {
-        let mut bytes = [0u8; 48];
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let byte_array = <[u8; 48]>::consensus_decode(d, modules)?;
 
-        d.read_exact(&mut bytes)
-            .map_err(crate::encoding::DecodeError::from_err)?;
-
-        let point = G1Affine::from_compressed(&bytes);
-
-        if point.is_some().unwrap_u8() == 1 {
-            Ok(point.unwrap())
-        } else {
-            Err(crate::encoding::DecodeError::from_str(
-                "Error decoding compressed G1Affine",
-            ))
-        }
+        Option::from(G1Affine::from_compressed(&byte_array))
+            .ok_or(DecodeError::from_str("Error decoding G1Affine"))
     }
 }
 
@@ -68,21 +48,11 @@ impl Encodable for G2Affine {
 impl Decodable for G2Affine {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        _modules: &crate::module::registry::ModuleDecoderRegistry,
-    ) -> Result<Self, crate::encoding::DecodeError> {
-        let mut bytes = [0u8; 96];
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let byte_array = <[u8; 96]>::consensus_decode(d, modules)?;
 
-        d.read_exact(&mut bytes)
-            .map_err(crate::encoding::DecodeError::from_err)?;
-
-        let point = G2Affine::from_compressed(&bytes);
-
-        if point.is_some().unwrap_u8() == 1 {
-            Ok(point.unwrap())
-        } else {
-            Err(crate::encoding::DecodeError::from_str(
-                "Error decoding compressed G2Affine",
-            ))
-        }
+        Option::from(G2Affine::from_compressed(&byte_array))
+            .ok_or(DecodeError::from_str("Error decoding G2Affine"))
     }
 }
