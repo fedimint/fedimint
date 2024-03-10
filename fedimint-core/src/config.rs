@@ -493,8 +493,11 @@ impl ConfigGenModuleParams {
         name: &str,
         json: Option<serde_json::Value>,
     ) -> anyhow::Result<P> {
-        let json = json.ok_or(format_err!("{name} config gen params missing"))?;
-        serde_json::from_value(json).context("Schema mismatch")
+        // Note: `Some(Value::Null)` will become just `None` after a round-trip of
+        // serialization and deserialization to json. For this reason, make `None`
+        // act as `Null`.
+        let json = json.unwrap_or(serde_json::Value::Null);
+        serde_json::from_value(json).with_context(|| format!("Schema mismatch for {name} argument"))
     }
 
     pub fn from_typed<P: ModuleInitParams>(p: P) -> anyhow::Result<Self> {
