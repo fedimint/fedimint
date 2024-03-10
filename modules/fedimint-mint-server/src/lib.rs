@@ -782,18 +782,21 @@ mod test {
     #[test_log::test(tokio::test)]
     async fn test_detect_double_spends() {
         let (mint_server_cfg, _) = build_configs();
-        // TODO - Extract this from the config so we don't assume we're using base-2
-        // denominations
-        let even_denomination_amount = Amount::from_msats(1024);
-
         let mint = Mint::new(mint_server_cfg[0].to_typed().unwrap());
-        let (_, note) = issue_note(&mint_server_cfg, even_denomination_amount);
+        let (_, tiered) = mint
+            .cfg
+            .consensus
+            .peer_tbs_pks
+            .first_key_value()
+            .expect("mint has peers");
+        let highest_denomination = *tiered.max_tier();
+        let (_, note) = issue_note(&mint_server_cfg, highest_denomination);
 
         // Normal spend works
         let db = Database::new(MemDatabase::new(), Default::default());
-        let input = MintInput::new_v0(even_denomination_amount, note);
+        let input = MintInput::new_v0(highest_denomination, note);
 
-        // Double spend in same epoch is detected
+        // Double spend in same session is detected
         let mut dbtx = db.begin_transaction().await;
         mint.process_input(&mut dbtx.to_ref_with_prefix_module_id(42).into_nc(), &input)
             .await
