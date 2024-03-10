@@ -22,9 +22,8 @@ use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::module::ClientModule as _;
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 use fedimint_client::{Client, ClientBuilder, ClientHandle};
-use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
-    FederationApiExt, FederationError, IRawFederationApi, InviteCode, WsFederationApi,
+    DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, InviteCode, WsFederationApi,
 };
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::OperationId;
@@ -266,19 +265,22 @@ impl Opts {
         Ok(dir)
     }
 
-    fn admin_client(&self, cfg: &ClientConfig) -> CliResult<WsAdminClient> {
-        let our_id = &self
+    fn admin_client(&self, cfg: &ClientConfig) -> CliResult<DynGlobalApi> {
+        let our_id = self
             .our_id
             .ok_or_cli_msg(CliErrorKind::MissingAuth, "Admin client needs our-id set")?;
+        Self::admin_client_from_id(our_id, cfg)
+    }
 
+    fn admin_client_from_id(id: PeerId, cfg: &ClientConfig) -> CliResult<DynGlobalApi> {
         let url = cfg
             .global
             .api_endpoints
-            .get(our_id)
+            .get(&id)
             .expect("Endpoint exists")
             .url
             .clone();
-        Ok(WsAdminClient::new(url))
+        Ok(DynGlobalApi::from_single_endpoint(id, url))
     }
 
     fn auth(&self) -> CliResult<ApiAuth> {
