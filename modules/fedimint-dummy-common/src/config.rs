@@ -14,7 +14,7 @@ pub struct DummyGenParams {
 
 /// Local parameters for config generation
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DummyGenParamsLocal(pub String);
+pub struct DummyGenParamsLocal;
 
 /// Consensus parameters for config generation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,7 +25,7 @@ pub struct DummyGenParamsConsensus {
 impl Default for DummyGenParams {
     fn default() -> Self {
         Self {
-            local: DummyGenParamsLocal("example".to_string()),
+            local: DummyGenParamsLocal,
             consensus: DummyGenParamsConsensus {
                 tx_fee: Amount::ZERO,
             },
@@ -50,9 +50,7 @@ pub struct DummyClientConfig {
 
 /// Locally unencrypted config unique to each member
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-pub struct DummyConfigLocal {
-    pub example: String,
-}
+pub struct DummyConfigLocal;
 
 /// Will be the same for every federation member
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
