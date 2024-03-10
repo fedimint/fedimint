@@ -212,7 +212,13 @@ done
 
 parsed_test_commands=$(printf "%s\n" "${tests_with_versions[@]}")
 
-export parallel_jobs='+0'
+delay=$((64 / $(nproc) + 1))
+parallel_args=()
+export parallel_jobs='0'
+
+if [ -z "${CI:-}" ]; then
+  parallel_args+=(--eta)
+fi
 
 tmpdir=$(mktemp --tmpdir -d XXXXX)
 trap 'rm -r $tmpdir' EXIT
@@ -229,11 +235,13 @@ echo "$parsed_test_commands" | if parallel \
   --halt-on-error 1 \
   --joblog "$joblog" \
   --timeout 600 \
-  --load 1000% \
-  --delay 5 \
+  --load 2000% \
+  --noswap \
+  --delay "$delay" \
   --jobs "$parallel_jobs" \
   --memfree 1G \
-  --nice 15 ; then
+  --nice 15 \
+  "${parallel_args[@]}" ; then
   >&2 echo "All tests successful"
 else
   >&2 echo "Some tests failed. Full job log:"
