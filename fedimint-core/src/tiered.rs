@@ -95,7 +95,7 @@ impl Tiered<SecretKeyShare> {
 }
 
 impl Tiered<()> {
-    /// Generates denominations of a give base up to and including `max`
+    /// Generates denominations of a given base up to and including `max`
     pub fn gen_denominations(denomination_base: u16, max: Amount) -> Tiered<()> {
         let mut amounts = vec![];
 

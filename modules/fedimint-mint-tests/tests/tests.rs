@@ -90,7 +90,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     // We currently have a limit on DB retries, if this number is increased too much
     // we might hit it
     const NUM_PAR: u64 = 10;
-    // Tests are prety slow in CI, using the default 10s timeout worked locall but
+    // Tests are prety slow in CI, using the default 10s timeout worked locally but
     // failed in CI
     const ECASH_TIMEOUT: Duration = Duration::from_secs(60);
 
