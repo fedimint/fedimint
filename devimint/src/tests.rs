@@ -346,6 +346,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
 }
 
 pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
     log_binary_versions().await?;
     let data_dir = env::var("FM_DATA_DIR")?;
 
@@ -616,18 +617,23 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_str()
         .map(|s| s.to_owned())
         .unwrap();
-    let client_reissue_amt = cmd!(
-        client,
-        "module",
-        "--module",
-        "mint",
-        "reissue",
-        reissue_notes
-    )
-    .out_json()
-    .await?
-    .as_u64()
-    .unwrap();
+    let client_reissue_amt =
+        if VersionReq::parse(">=0.3.0-alpha")?.matches(&fedimint_cli_version) {
+            cmd!(client, "module", "mint", "reissue", reissue_notes)
+        } else {
+            cmd!(
+                client,
+                "module",
+                "--module",
+                "mint",
+                "reissue",
+                reissue_notes
+            )
+        }
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
     assert_eq!(client_reissue_amt, reissue_amount);
 
     // Before doing a normal payment, let's start with a HOLD invoice and only
