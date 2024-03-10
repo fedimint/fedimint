@@ -175,9 +175,11 @@ else
   fi
 fi
 
+tests_to_run_in_parallel=()
+for _ in $(seq "${FM_TEST_CI_ALL_TIMES:-1}"); do
 # NOTE: try to keep the slowest tests first, except 'always_success_test',
 # as it's used for failure test
-tests_to_run_in_parallel=(
+tests_to_run_in_parallel+=(
   "always_success_test"
   "rust_unit_tests"
   # TODO: unfortunately it seems like something about headless firefox is broken when
@@ -202,6 +204,7 @@ tests_to_run_in_parallel=(
   "recoverytool_tests"
   "guardian_backup"
 )
+done
 
 tests_with_versions=()
 for test in "${tests_to_run_in_parallel[@]}"; do

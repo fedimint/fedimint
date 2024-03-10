@@ -413,31 +413,28 @@ rec {
     # and make sure we detect it (happened too many times that we didn't).
     # Thanks to early termination, this should be all very quick, as we actually
     # won't start other tests.
-    buildPhaseCargoCommand =
-      ''
-        # when running on a wasm32-unknown toolchain...
-        if [ "$CARGO_BUILD_TARGET" == "wasm32-unknown-unknown" ]; then
-          # import pre-built wasm32-unknown wasm test artifacts
-          # notably, they are extracted to target's sub-directory, where wasm-test.sh expects them
-          inheritCargoArtifacts ${craneMultiBuild.wasm32-unknown.${craneLib.cargoProfile or "release"}.workspaceBuildWasmTest} "target/pkgs/fedimint-wasm-tests"
-        fi
-        # default to building for native; running test for cross-compilation targets
-        # here doesn't make any sense, and `wasm32-unknown-unknown` toolchain is used
-        # mostly to opt-in into wasm tests
-        unset CARGO_BUILD_TARGET
-      '' +
-      lib.concatStringsSep "\n" (
-        lib.replicate times ''
-          patchShebangs ./scripts
-          export FM_CARGO_DENY_COMPILATION=1
-          ./scripts/tests/test-ci-all.sh || exit 1
-          cp scripts/tests/always-success-test.sh scripts/tests/always-success-test.sh.bck
-          sed -i -e 's/exit 0/exit 1/g' scripts/tests/always-success-test.sh
-          echo "Verifying failure detection..."
-          ./scripts/tests/test-ci-all.sh 1>/dev/null 2>/dev/null && exit 1
-          cp -f scripts/tests/always-success-test.sh.bck scripts/tests/always-success-test.sh
-        ''
-      );
+    buildPhaseCargoCommand = ''
+      # when running on a wasm32-unknown toolchain...
+      if [ "$CARGO_BUILD_TARGET" == "wasm32-unknown-unknown" ]; then
+        # import pre-built wasm32-unknown wasm test artifacts
+        # notably, they are extracted to target's sub-directory, where wasm-test.sh expects them
+        inheritCargoArtifacts ${craneMultiBuild.wasm32-unknown.${craneLib.cargoProfile or "release"}.workspaceBuildWasmTest} "target/pkgs/fedimint-wasm-tests"
+      fi
+      # default to building for native; running test for cross-compilation targets
+      # here doesn't make any sense, and `wasm32-unknown-unknown` toolchain is used
+      # mostly to opt-in into wasm tests
+      unset CARGO_BUILD_TARGET
+
+      patchShebangs ./scripts
+      export FM_CARGO_DENY_COMPILATION=1
+      export FM_TEST_CI_ALL_TIMES=${builtins.toString times}
+      ./scripts/tests/test-ci-all.sh || exit 1
+      cp scripts/tests/always-success-test.sh scripts/tests/always-success-test.sh.bck
+      sed -i -e 's/exit 0/exit 1/g' scripts/tests/always-success-test.sh
+      echo "Verifying failure detection..."
+      ./scripts/tests/test-ci-all.sh 1>/dev/null 2>/dev/null && exit 1
+      cp -f scripts/tests/always-success-test.sh.bck scripts/tests/always-success-test.sh
+    '';
   };
 
   ciTestAll = ciTestAllBase { times = 1; };
