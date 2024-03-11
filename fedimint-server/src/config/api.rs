@@ -1085,7 +1085,7 @@ mod tests {
                 0,
                 DummyInit::kind(),
                 DummyGenParams {
-                    local: DummyGenParamsLocal(self.name.clone()),
+                    local: DummyGenParamsLocal,
                     consensus: DummyGenParamsConsensus {
                         tx_fee: self.amount,
                     },
@@ -1354,7 +1354,6 @@ mod tests {
             let cfg = peer.read_config(true); // read temporary configs from staging dir
             let dummy: DummyConfig = cfg.get_module_config_typed(0).unwrap();
             assert_eq!(dummy.consensus.tx_fee, leader_amount);
-            assert_eq!(dummy.local.example, peer.name);
             assert_eq!(cfg.consensus.meta["\"test\""], leader_name);
         }
 
@@ -1377,7 +1376,6 @@ mod tests {
             let cfg = peer.read_config(false); // read persisted configs
             let dummy: DummyConfig = cfg.get_module_config_typed(0).unwrap();
             assert_eq!(dummy.consensus.tx_fee, leader_amount);
-            assert_eq!(dummy.local.example, peer.name);
             assert_eq!(cfg.consensus.meta["\"test\""], leader_name);
         }
     }

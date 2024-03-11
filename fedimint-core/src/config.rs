@@ -469,14 +469,14 @@ impl<M> Default for ModuleInitRegistry<M> {
 /// during config gen
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ConfigGenModuleParams {
-    pub local: Option<serde_json::Value>,
-    pub consensus: Option<serde_json::Value>,
+    pub local: serde_json::Value,
+    pub consensus: serde_json::Value,
 }
 
 pub type ServerModuleInitRegistry = ModuleInitRegistry<DynServerModuleInit>;
 
 impl ConfigGenModuleParams {
-    pub fn new(local: Option<serde_json::Value>, consensus: Option<serde_json::Value>) -> Self {
+    pub fn new(local: serde_json::Value, consensus: serde_json::Value) -> Self {
         Self { local, consensus }
     }
 
@@ -489,19 +489,15 @@ impl ConfigGenModuleParams {
         ))
     }
 
-    fn parse<P: DeserializeOwned>(
-        name: &str,
-        json: Option<serde_json::Value>,
-    ) -> anyhow::Result<P> {
-        let json = json.ok_or(format_err!("{name} config gen params missing"))?;
-        serde_json::from_value(json).context("Schema mismatch")
+    fn parse<P: DeserializeOwned>(name: &str, json: serde_json::Value) -> anyhow::Result<P> {
+        serde_json::from_value(json).with_context(|| format!("Schema mismatch for {name} argument"))
     }
 
     pub fn from_typed<P: ModuleInitParams>(p: P) -> anyhow::Result<Self> {
         let (local, consensus) = p.to_parts();
         Ok(Self {
-            local: Some(serde_json::to_value(local)?),
-            consensus: Some(serde_json::to_value(consensus)?),
+            local: serde_json::to_value(local)?,
+            consensus: serde_json::to_value(consensus)?,
         })
     }
 }
