@@ -36,9 +36,9 @@ function make_fm_test_marker() {
 
 function run_test_for_versions() {
   fn_name=$1
-  fed_version=$2
-  client_version=$3
-  gateway_version=$4
+  fed_version=$3
+  client_version=$5
+  gateway_version=$7
 
   use_fed_binaries_for_version "$fed_version"
   use_client_binaries_for_version "$client_version"
@@ -144,7 +144,7 @@ function generate_matrix() {
         if "$filter_fn" "$fed_version" "$client_version" "$gateway_version"; then
           # bash doesn't allow returning arrays, however we can mimic the
           # behavior of returning an array by echoing each element
-          echo "$fed_version $client_version $gateway_version"
+          echo "FM: $fed_version CLI: $client_version GW: $gateway_version"
         fi
       done
     done
