@@ -3,11 +3,16 @@ use std::fmt::Debug;
 
 use fedimint_core::util::SafeUrl;
 use serde::{Deserialize, Serialize};
-use tokio_rustls::rustls;
+#[cfg(not(target_family = "wasm"))]
+use tokio_rustls::rustls::Certificate as RustlsCertificate;
 
 use crate::api::ServerStatus;
 use crate::config::ServerModuleConfigGenParamsRegistry;
 use crate::PeerId;
+
+#[cfg(target_family = "wasm")]
+#[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+struct RustlsCertificate(pub Vec<u8>);
 
 /// Sent by admin user to the API
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,7 +29,7 @@ pub struct ConfigGenConnectionsRequest {
 pub struct PeerServerParams {
     /// TLS cert is necessary for P2P auth during DKG and  consensus
     #[serde(with = "serde_tls_cert")]
-    pub cert: rustls::Certificate,
+    pub cert: RustlsCertificate,
     /// P2P is the network for running DKG and consensus
     pub p2p_url: SafeUrl,
     /// API for secure websocket requests
@@ -71,9 +76,10 @@ mod serde_tls_cert {
     use bitcoin_hashes::hex::{FromHex, ToHex};
     use serde::de::Error;
     use serde::{Deserialize, Deserializer, Serializer};
-    use tokio_rustls::rustls;
 
-    pub fn serialize<S>(certs: &rustls::Certificate, serializer: S) -> Result<S::Ok, S::Error>
+    use super::RustlsCertificate;
+
+    pub fn serialize<S>(certs: &RustlsCertificate, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -81,12 +87,12 @@ mod serde_tls_cert {
         serializer.serialize_str(&hex_str)
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<rustls::Certificate, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<RustlsCertificate, D::Error>
     where
         D: Deserializer<'de>,
     {
         let value: Cow<str> = Deserialize::deserialize(deserializer)?;
-        Ok(rustls::Certificate(
+        Ok(RustlsCertificate(
             Vec::from_hex(&value).map_err(D::Error::custom)?,
         ))
     }
