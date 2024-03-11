@@ -166,7 +166,6 @@ pub enum ClientCmd {
     /// Call a module subcommand
     Module {
         /// Module selector (either module id or module kind)
-        #[clap(long)]
         module: ModuleSelector,
         args: Vec<ffi::OsString>,
     },
