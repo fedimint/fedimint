@@ -238,6 +238,6 @@ echo "$parsed_test_commands" | if parallel \
 else
   >&2 echo "Some tests failed. Full job log:"
   cat "$joblog"
-  >&2 echo "Search for '## FAILED' to find the end of the failing test"
+  >&2 echo "Search for '## FAIL' to find the end of the failing test"
   exit 1
 fi
