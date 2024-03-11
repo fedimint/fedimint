@@ -11,15 +11,17 @@ if [ -z "$test_name" ]; then
 fi
 
 version_str="${FM_RUN_TEST_VERSIONS:+ ($FM_RUN_TEST_VERSIONS)}"
-out_path="$(mktemp --tmpdir fm-XXXXX)"
+test_out_path="$(mktemp --tmpdir fm-XXXXX)"
+time_out_path="$(mktemp --tmpdir fm-XXXXX)"
+time_fmt='%e\t%M\t%w\t%c'
 export FM_TEST_NAME="$test_name"
 
-echo "## START: $test_name$version_str"
+echo "## RUN:  $test_name$version_str"
 
 on_error() {
-  echo "## FAILED: $test_name$version_str; OUT:"
-  cat "$out_path"
-  echo "## FAILED: $test_name$version_str; END"
+  echo "## OUT:  $test_name$version_str"
+  cat "$test_out_path"
+  echo "## FAIL: $test_name$version_str"
 }
 
 on_exit() {
@@ -27,6 +29,7 @@ on_exit() {
 }
 trap on_error ERR
 
-"$@" 2>&1 | ts -s > "$out_path"
+command time -q --format="$time_fmt" -o "$time_out_path" "$@" 2>&1 | ts -s > "$test_out_path"
 
-echo "## COMPLETE: $test_name$version_str"
+awk 'BEGIN {FS="\t"} {printf "## STAT: %8.2fs %8dB %8dW %8dc\n", $1, $2, $3, $4}' < "$time_out_path"
+echo "## DONE: $test_name$version_str"

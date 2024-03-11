@@ -159,6 +159,7 @@ let
       cargo-nextest
       moreutils-ts
       parallel
+      time
     ] ++ builtins.attrValues {
       inherit (pkgs) cargo-nextest;
     };
