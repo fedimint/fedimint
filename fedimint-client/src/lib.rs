@@ -2014,7 +2014,7 @@ impl ClientBuilder {
             .global
             .api_endpoints
             .get(&id)
-            .ok_or_else(|| anyhow::format_err!("Invalid admin peer_id"))?
+            .ok_or_else(|| anyhow::format_err!("Invalid admin peer_id: {id}"))?
             .url
             .clone();
         Ok(DynGlobalApi::from_single_endpoint(id, url))

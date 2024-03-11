@@ -58,7 +58,7 @@ pub struct MetaInit;
 #[async_trait]
 impl ModuleInit for MetaInit {
     type Common = MetaCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     /// Dumps all database items for debugging
     async fn dump_database(

@@ -265,7 +265,7 @@ impl From<usize> for NumPeers {
     }
 }
 impl NumPeers {
-    pub fn as_usize(self) -> usize {
+    pub fn as_usize(&self) -> usize {
         self.0
     }
 }
