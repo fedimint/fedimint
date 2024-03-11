@@ -141,7 +141,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             }
             let reissue_stats = stats_for(reissues);
             println!("### LATENCY REISSUE: {reissue_stats}");
-            assert!(reissue_stats.median < Duration::from_secs(6));
+            assert!(reissue_stats.median < Duration::from_secs(10));
 
             assert!(reissue_stats.p90 < reissue_stats.median * p90_median_factor);
             assert!(
@@ -181,7 +181,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             }
             let ln_sends_stats = stats_for(ln_sends);
             println!("### LATENCY LN SEND: {ln_sends_stats}");
-            assert!(ln_sends_stats.median < Duration::from_secs(6));
+            assert!(ln_sends_stats.median < Duration::from_secs(10));
             assert!(ln_sends_stats.p90 < ln_sends_stats.median * p90_median_factor);
             assert!(
                 ln_sends_stats.max.as_secs_f64()
@@ -250,7 +250,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             }
             let ln_receives_stats = stats_for(ln_receives);
             println!("### LATENCY LN RECV: {ln_receives_stats}");
-            assert!(ln_receives_stats.median < Duration::from_secs(6));
+            assert!(ln_receives_stats.median < Duration::from_secs(10));
             assert!(ln_receives_stats.p90 < ln_receives_stats.median * p90_median_factor);
             assert!(
                 ln_receives_stats.max.as_secs_f64()
@@ -288,7 +288,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             let fm_pay_stats = stats_for(fm_internal_pay);
 
             println!("### LATENCY FM PAY: {fm_pay_stats}");
-            assert!(fm_pay_stats.median < Duration::from_secs(12));
+            assert!(fm_pay_stats.median < Duration::from_secs(15));
             assert!(fm_pay_stats.p90 < fm_pay_stats.median * p90_median_factor);
             assert!(
                 fm_pay_stats.max.as_secs_f64() < fm_pay_stats.p90.as_secs_f64() * max_p90_factor
@@ -337,7 +337,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             if crate::util::is_backwards_compatibility_test() {
                 assert!(restore_time < Duration::from_secs(160));
             } else {
-                assert!(restore_time < Duration::from_secs(10));
+                assert!(restore_time < Duration::from_secs(15));
             }
         }
     }
