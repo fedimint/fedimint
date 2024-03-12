@@ -52,7 +52,8 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, Feerate,
     NumPeers, OutPoint, PeerId, ServerModule,
 };
-use fedimint_metrics::{histogram_opts, lazy_static, prometheus, register_histogram, Histogram};
+use fedimint_metrics::prometheus::register_histogram_with_registry;
+use fedimint_metrics::{histogram_opts, lazy_static, prometheus, Histogram, REGISTRY};
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
@@ -87,29 +88,41 @@ lazy_static! {
         10000000.0,
         100000000.0
     ];
-    static ref WALLET_PEGIN_SATS: Histogram = register_histogram!(histogram_opts!(
-        "wallet_pegin_sats",
-        "Value of peg-in transactions in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref WALLET_PEGIN_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "wallet_pegin_sats",
+            "Value of peg-in transactions in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    static ref WALLET_PEGIN_FEES_SATS: Histogram = register_histogram!(histogram_opts!(
-        "wallet_pegin_fees_sats",
-        "Value of peg-in fees in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref WALLET_PEGIN_FEES_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "wallet_pegin_fees_sats",
+            "Value of peg-in fees in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    static ref WALLET_PEGOUT_SATS: Histogram = register_histogram!(histogram_opts!(
-        "wallet_pegout_sats",
-        "Value of peg-out transactions in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref WALLET_PEGOUT_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "wallet_pegout_sats",
+            "Value of peg-out transactions in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    static ref WALLET_PEGOUT_FEES_SATS: Histogram = register_histogram!(histogram_opts!(
-        "wallet_pegout_fees_sats",
-        "Value of peg-out fees in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref WALLET_PEGOUT_FEES_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "wallet_pegout_fees_sats",
+            "Value of peg-out fees in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
     static ref ALL_METRICS: [Box<dyn prometheus::core::Collector>; 4] = [
         Box::new(WALLET_PEGIN_SATS.clone()),

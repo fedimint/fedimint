@@ -19,7 +19,8 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeers,
     OutPoint, PeerId, ServerModule, Tiered, TieredMultiZip,
 };
-use fedimint_metrics::{histogram_opts, lazy_static, prometheus, register_histogram, Histogram};
+use fedimint_metrics::prometheus::register_histogram_with_registry;
+use fedimint_metrics::{histogram_opts, lazy_static, prometheus, Histogram, REGISTRY};
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
     MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate,
@@ -64,29 +65,41 @@ lazy_static! {
         10000000.0,
         100000000.0
     ];
-    static ref MINT_REDEEMED_ECASH_SATS: Histogram = register_histogram!(histogram_opts!(
-        "mint_redeemed_ecash_sats",
-        "Value of redeemed e-cash notes in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref MINT_REDEEMED_ECASH_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "mint_redeemed_ecash_sats",
+            "Value of redeemed e-cash notes in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    static ref MINT_REDEEMED_ECASH_FEES_SATS: Histogram = register_histogram!(histogram_opts!(
-        "mint_redeemed_ecash_fees_sats",
-        "Value of e-cash fees during reissue in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref MINT_REDEEMED_ECASH_FEES_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "mint_redeemed_ecash_fees_sats",
+            "Value of e-cash fees during reissue in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    static ref MINT_ISSUED_ECASH_SATS: Histogram = register_histogram!(histogram_opts!(
-        "mint_issued_ecash_sats",
-        "Value of issued e-cash notes in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref MINT_ISSUED_ECASH_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "mint_issued_ecash_sats",
+            "Value of issued e-cash notes in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    static ref MINT_ISSUED_ECASH_FEES_SATS: Histogram = register_histogram!(histogram_opts!(
-        "mint_issued_ecash_fees_sats",
-        "Value of e-cash fees during issue in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref MINT_ISSUED_ECASH_FEES_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "mint_issued_ecash_fees_sats",
+            "Value of e-cash fees during issue in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
     static ref ALL_METRICS: [Box<dyn prometheus::core::Collector>; 4] = [
         Box::new(MINT_REDEEMED_ECASH_SATS.clone()),
