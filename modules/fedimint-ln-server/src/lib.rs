@@ -16,8 +16,9 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
-    GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
-    REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+    GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT,
+    LIST_UNSPENT_INCOMING_CONTRACTS_ENDPOINT, OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT,
+    REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -882,6 +883,13 @@ impl ServerModule for Lightning {
                 }
             },
             api_endpoint! {
+                LIST_UNSPENT_INCOMING_CONTRACTS_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |module: &Lightning, context, _v: ()| -> Vec<sha256::Hash> {
+                    Ok(module.list_unspent_incoming_contracts(&mut context.dbtx().into_nc()).await)
+                }
+            },
+            api_endpoint! {
                 AWAIT_ACCOUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> ContractAccount {
@@ -1061,6 +1069,29 @@ impl Lightning {
         contract_id: ContractId,
     ) -> Option<ContractAccount> {
         dbtx.get_value(&ContractKey(contract_id)).await
+    }
+
+    async fn list_unspent_incoming_contracts(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Vec<sha256::Hash> {
+        dbtx.find_by_prefix(&ContractKeyPrefix)
+            .await
+            // We only want incoming contracts that have value > 0
+            .filter_map(|(_, contract)| async move {
+                match contract.contract {
+                    FundedContract::Incoming(incoming) => {
+                        if contract.amount == Amount::ZERO {
+                            None
+                        } else {
+                            Some(incoming.contract.hash)
+                        }
+                    }
+                    _ => None,
+                }
+            })
+            .collect::<Vec<_>>()
+            .await
     }
 
     async fn wait_contract_account(

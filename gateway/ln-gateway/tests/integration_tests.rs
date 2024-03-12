@@ -545,6 +545,81 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_client_list_unspent_incoming_contracts() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, user_client, _| async move {
+        let gateway = gateway.remove_client_hack(&fed).await;
+        // Print money for gateway client
+        let initial_gateway_balance = sats(1000);
+        let dummy_module = gateway.get_first_module::<DummyClientModule>();
+        let (_, outpoint) = dummy_module.print_money(initial_gateway_balance).await?;
+        dummy_module.receive_money(outpoint).await?;
+        assert_eq!(gateway.get_balance().await, sats(1000));
+
+        // Create a new invoice using a client that falls out of scope, so it does not
+        // execute the state machine to claim the funds
+        let invoice_amount = sats(100);
+        let invoice = {
+            let new_user = fed.new_client().await;
+            let (_invoice_op, invoice, _) = new_user
+                .get_first_module::<LightningClientModule>()
+                .create_bolt11_invoice(
+                    invoice_amount,
+                    "description".into(),
+                    None,
+                    "test intercept valid HTLC",
+                )
+                .await?;
+            invoice
+        };
+
+        // Run gateway state machine
+        let htlc = Htlc {
+            payment_hash: *invoice.payment_hash(),
+            incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
+            outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
+            incoming_expiry: u32::MAX,
+            short_channel_id: 1,
+            incoming_chan_id: 2,
+            htlc_id: 1,
+        };
+        let intercept_op = gateway
+            .get_first_module::<GatewayClientModule>()
+            .gateway_handle_intercepted_htlc(htlc)
+            .await?;
+        let mut intercept_sub = gateway
+            .get_first_module::<GatewayClientModule>()
+            .gateway_subscribe_ln_receive(intercept_op)
+            .await?
+            .into_stream();
+        assert_eq!(intercept_sub.ok().await?, GatewayExtReceiveStates::Funding);
+        assert_matches!(
+            intercept_sub.ok().await?,
+            GatewayExtReceiveStates::Preimage { .. }
+        );
+        assert_eq!(
+            initial_gateway_balance - invoice_amount,
+            gateway.get_balance().await
+        );
+
+        let hashes = user_client
+            .get_first_module::<LightningClientModule>()
+            .get_unspent_incoming_contract_hashes()
+            .await?;
+        let unspent_hash = hashes
+            .first()
+            .expect("Unspent incoming hashes should have one entry");
+        assert_eq!(
+            unspent_hash,
+            invoice.payment_hash(),
+            "The unspent payment hash and the invoice hash do not match"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, user_client, _| async move {
         let gateway = gateway.remove_client_hack(&fed).await;

@@ -1457,6 +1457,10 @@ impl LightningClientModule {
             }
         }))
     }
+
+    pub async fn get_unspent_incoming_contract_hashes(&self) -> anyhow::Result<Vec<sha256::Hash>> {
+        Ok(self.module_api.get_unspent_incoming_contracts().await?)
+    }
 }
 
 #[allow(clippy::large_enum_variant)]

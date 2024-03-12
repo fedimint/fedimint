@@ -1,4 +1,5 @@
 pub const ACCOUNT_ENDPOINT: &str = "account";
+pub const LIST_UNSPENT_INCOMING_CONTRACTS_ENDPOINT: &str = "list_unspent_incoming_contracts";
 pub const ADD_CONFIG_GEN_PEER_ENDPOINT: &str = "add_config_gen_peer";
 pub const AUDIT_ENDPOINT: &str = "audit";
 pub const GUARDIAN_CONFIG_BACKUP_ENDPOINT: &str = "download_guardian_backup";
