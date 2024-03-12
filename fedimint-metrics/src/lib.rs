@@ -15,6 +15,19 @@ use tracing::error;
 
 lazy_static! {
     pub static ref REGISTRY: Registry = Registry::new_custom(Some("fm".into()), None).unwrap();
+    pub static ref AMOUNTS_BUCKETS_SATS: Vec<f64> = vec![
+        0.0,
+        0.1,
+        1.0,
+        10.0,
+        100.0,
+        1000.0,
+        10000.0,
+        100000.0,
+        1000000.0,
+        10000000.0,
+        100000000.0
+    ];
 }
 
 async fn get_metrics() -> (StatusCode, String) {

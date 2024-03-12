@@ -20,7 +20,9 @@ use fedimint_core::{
     OutPoint, PeerId, ServerModule, Tiered, TieredMultiZip,
 };
 use fedimint_metrics::prometheus::register_histogram_with_registry;
-use fedimint_metrics::{histogram_opts, lazy_static, prometheus, Histogram, REGISTRY};
+use fedimint_metrics::{
+    histogram_opts, lazy_static, prometheus, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY,
+};
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
     MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate,
@@ -52,19 +54,6 @@ use threshold_crypto::{G2Projective, Scalar};
 use tracing::{debug, info};
 
 lazy_static! {
-    static ref AMOUNTS_BUCKETS_SATS: Vec<f64> = vec![
-        0.0,
-        0.1,
-        1.0,
-        10.0,
-        100.0,
-        1000.0,
-        10000.0,
-        100000.0,
-        1000000.0,
-        10000000.0,
-        100000000.0
-    ];
     static ref MINT_REDEEMED_ECASH_SATS: Histogram = register_histogram_with_registry!(
         histogram_opts!(
             "mint_redeemed_ecash_sats",

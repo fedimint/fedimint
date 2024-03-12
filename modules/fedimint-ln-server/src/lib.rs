@@ -58,7 +58,7 @@ use fedimint_ln_common::{
 use fedimint_metrics::prometheus::register_int_counter_with_registry;
 use fedimint_metrics::{
     histogram_opts, lazy_static, opts, prometheus, register_histogram_with_registry, Histogram,
-    IntCounter, REGISTRY,
+    IntCounter, AMOUNTS_BUCKETS_SATS, REGISTRY,
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
@@ -98,19 +98,6 @@ lazy_static! {
         REGISTRY
     )
     .unwrap();
-    static ref AMOUNTS_BUCKETS_SATS: Vec<f64> = vec![
-        0.0,
-        0.1,
-        1.0,
-        10.0,
-        100.0,
-        1000.0,
-        10000.0,
-        100000.0,
-        1000000.0,
-        10000000.0,
-        100000000.0
-    ];
     static ref LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS: Histogram =
         register_histogram_with_registry!(
             histogram_opts!(

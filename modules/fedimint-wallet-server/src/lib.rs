@@ -53,7 +53,9 @@ use fedimint_core::{
     NumPeers, OutPoint, PeerId, ServerModule,
 };
 use fedimint_metrics::prometheus::register_histogram_with_registry;
-use fedimint_metrics::{histogram_opts, lazy_static, prometheus, Histogram, REGISTRY};
+use fedimint_metrics::{
+    histogram_opts, lazy_static, prometheus, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY,
+};
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
@@ -75,19 +77,6 @@ use strum::IntoEnumIterator;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 lazy_static! {
-    static ref AMOUNTS_BUCKETS_SATS: Vec<f64> = vec![
-        0.0,
-        0.1,
-        1.0,
-        10.0,
-        100.0,
-        1000.0,
-        10000.0,
-        100000.0,
-        1000000.0,
-        10000000.0,
-        100000000.0
-    ];
     static ref WALLET_PEGIN_SATS: Histogram = register_histogram_with_registry!(
         histogram_opts!(
             "wallet_pegin_sats",
