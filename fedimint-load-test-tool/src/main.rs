@@ -531,9 +531,6 @@ async fn get_user_client(
         invite_code.clone()
     };
     let (client, invite_code) = build_client(user_invite_code, user_db.as_ref()).await?;
-    //if let Some(gateway_id) = gateway_id {
-    //    switch_default_gateway(&client, gateway_id).await?;
-    //}
     Ok((client, invite_code))
 }
 
@@ -619,7 +616,7 @@ fn get_db_path(archive_dir: Option<PathBuf>) -> Option<PathBuf> {
 }
 
 async fn get_lightning_gateway(
-    client: &ClientArc,
+    client: &ClientHandle,
     gateway_id: Option<String>,
 ) -> Option<LightningGateway> {
     let gateway_id = parse_gateway_id(gateway_id.or(None)?.as_str()).expect("Invalid gateway id");
@@ -822,7 +819,6 @@ async fn do_ln_circular_test_user_task(
             while still_ontime().await {
                 let gateway_id = get_gateway_id(invoice_generation).await?;
                 let ln_gateway = get_lightning_gateway(&client, Some(gateway_id)).await;
-                //switch_default_gateway(&client, &gateway_id).await?;
                 run_two_gateways_strategy(
                     &prefix,
                     &mut invoice_generation,

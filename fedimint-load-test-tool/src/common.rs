@@ -222,7 +222,6 @@ pub async fn gateway_pay_invoice(
 ) -> anyhow::Result<()> {
     let m = fedimint_core::time::now();
     let lightning_module = &client.get_first_module::<LightningClientModule>();
-    //let gateway = lightning_module.select_active_gateway_opt().await;
     let OutgoingLightningPayment {
         payment_type,
         contract_id: _,
@@ -324,17 +323,6 @@ pub async fn cln_wait_invoice_payment(label: &str) -> anyhow::Result<()> {
         bail!("Got status {status} for invoice {label}")
     }
 }
-
-/*
-pub async fn switch_default_gateway(client: &ClientArc, gateway_id: &str) -> anyhow::Result<()> {
-    let gateway_id = parse_gateway_id(gateway_id)?;
-    client
-        .get_first_module::<LightningClientModule>()
-        .set_active_gateway(&gateway_id)
-        .await?;
-    Ok(())
-}
-*/
 
 pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
     secp256k1::PublicKey::from_str(s)

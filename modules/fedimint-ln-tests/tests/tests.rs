@@ -667,8 +667,11 @@ mod fedimint_migration_tests {
             valid_until: fedimint_core::time::now(),
         };
 
-        dbtx.insert_new_entry(&LightningGatewayKey(pk), &lightning_gateway_registration)
-            .await;
+        dbtx.insert_new_entry(
+            &fedimint_ln_client::db::LightningGatewayKey,
+            &lightning_gateway_registration,
+        )
+        .await;
 
         dbtx.insert_new_entry(
             &PaymentResultKey {
@@ -869,6 +872,16 @@ mod fedimint_migration_tests {
 
                 for prefix in fedimint_ln_client::db::DbKeyPrefix::iter() {
                     match prefix {
+                        fedimint_ln_client::db::DbKeyPrefix::ActiveGateway => {
+                            // Active gateway is deprecated, there should be no records
+                            let active_gateway = dbtx
+                                .get_value(&fedimint_ln_client::db::LightningGatewayKey)
+                                .await;
+                            ensure!(
+                                active_gateway.is_none(),
+                                "validate migrations found an active gateway"
+                            );
+                        }
                         fedimint_ln_client::db::DbKeyPrefix::PaymentResult => {
                             let payment_results = dbtx
                                 .find_by_prefix(&PaymentResultPrefix)

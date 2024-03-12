@@ -757,7 +757,7 @@ async fn get_note_summary(client: &ClientHandle) -> anyhow::Result<serde_json::V
 }
 
 async fn get_gateway(
-    client: &ClientArc,
+    client: &ClientHandle,
     gateway_id: Option<secp256k1::PublicKey>,
 ) -> Option<LightningGateway> {
     let lightning_module = client.get_first_module::<LightningClientModule>();

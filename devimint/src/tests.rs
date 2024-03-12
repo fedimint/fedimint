@@ -1598,7 +1598,8 @@ async fn ln_pay(
 ) -> anyhow::Result<String> {
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
 
-    // TODO(support:v0.2): remove
+    // TODO(support:v0.2): 0.3 removed the active gateway concept and requires a
+    // `gateway-id` parameter for lightning sends
     let value = if VersionReq::parse("<0.3.0-alpha")?.matches(&fedimint_cli_version) {
         if finish_in_background {
             cmd!(client, "ln-pay", invoice, "--finish-in-background",)
@@ -1638,7 +1639,8 @@ async fn ln_invoice(
     gw_id: String,
 ) -> anyhow::Result<LnInvoiceResponse> {
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-    // TODO(support:v0.2): remove
+    // TODO(support:v0.2): 0.3 removed the active gateway concept and requires a
+    // `gateway-id` parameter for lightning receives
     let ln_response_val = if VersionReq::parse("<0.3.0-alpha")?.matches(&fedimint_cli_version) {
         cmd!(
             client,

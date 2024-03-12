@@ -14,6 +14,7 @@ use async_stream::stream;
 use bitcoin::{KeyPair, Network};
 use bitcoin_hashes::{sha256, Hash};
 use db::{DbKeyPrefix, PaymentResult, PaymentResultKey};
+use fedimint_client::db::ClientMigrationFn;
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
@@ -49,7 +50,8 @@ use fedimint_ln_common::contracts::{
 use fedimint_ln_common::db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_ln_common::{
     ContractOutput, LightningClientContext, LightningCommonInit, LightningGateway,
-    LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    LightningGatewayAnnouncement, LightningGatewayRegistration, LightningModuleTypes,
+    LightningOutput, LightningOutputV0,
 };
 use futures::StreamExt;
 use incoming::IncomingSmError;
@@ -231,7 +233,7 @@ pub struct LightningClientInit;
 #[apply(async_trait_maybe_send!)]
 impl ModuleInit for LightningClientInit {
     type Common = LightningCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
     async fn dump_database(
         &self,
@@ -244,8 +246,15 @@ impl ModuleInit for LightningClientInit {
             prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
         });
 
+        let filtered_prefixes_common = fedimint_ln_common::db::DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+
         for table in filtered_prefixes {
             match table {
+                DbKeyPrefix::ActiveGateway => {
+                    // Active gateway is deprecated
+                }
                 DbKeyPrefix::PaymentResult => {
                     push_db_pair_items!(
                         dbtx,
@@ -266,6 +275,19 @@ impl ModuleInit for LightningClientInit {
                         "Meta Overrides"
                     );
                 }
+            }
+        }
+
+        for table in filtered_prefixes_common {
+            if let fedimint_ln_common::db::DbKeyPrefix::LightningGateway = table {
+                push_db_pair_items!(
+                    dbtx,
+                    LightningGatewayKeyPrefix,
+                    LightningGatewayKey,
+                    LightningGatewayRegistration,
+                    ln_client_items,
+                    "Lightning Gateways"
+                );
             }
         }
 
@@ -291,6 +313,18 @@ impl ClientModuleInit for LightningClientInit {
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         Ok(LightningClientModule::new(args).await?)
+    }
+
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
+        let mut migrations: BTreeMap<DatabaseVersion, ClientMigrationFn> = BTreeMap::new();
+        migrations.insert(DatabaseVersion(0), move |dbtx, _, _, _, _| {
+            Box::pin(async {
+                dbtx.remove_entry(&crate::db::LightningGatewayKey).await;
+                Ok(None)
+            })
+        });
+
+        migrations
     }
 }
 
