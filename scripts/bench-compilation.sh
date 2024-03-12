@@ -2,6 +2,14 @@
 
 set -euo pipefail
 
+root="$(git rev-parse --show-toplevel)"
+
+# Use a custom target dir, not to interfere
+export CARGO_BUILD_TARGET_DIR="${root}/target-comp-bench"
+
+# Disable sccache
+unset RUSTC_WRAPPER
+
 cmd_out_path="$CARGO_BUILD_TARGET_DIR/cmd.out"
 
 on_error() {
@@ -18,16 +26,8 @@ on_exit() {
 trap on_error ERR
 trap on_exit EXIT
 
-root="$(git rev-parse --show-toplevel)"
-
-# Use a custom target dir, not to interfere
-export CARGO_BUILD_TARGET_DIR="${root}/target-comp-bench"
-
-# Disable sccache
-unset RUSTC_WRAPPER
 
 cargo fetch
-
 
 nix run nixpkgs#neofetch -- --stdout
 
