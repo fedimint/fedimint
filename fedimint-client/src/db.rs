@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::pin::Pin;
 
 use fedimint_core::api::{ApiVersionSet, InviteCode};
 use fedimint_core::config::{ClientConfig, FederationId};
@@ -10,6 +9,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::util::BoxFuture;
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_DB;
 use futures::StreamExt;
@@ -315,19 +315,14 @@ impl_db_record!(
 
 /// `ClientMigrationFn` is a function that modules can implement to "migrate"
 /// the database to the next database version.
-pub type ClientMigrationFn = for<'r, 'tx> fn(
-    &'r mut DatabaseTransaction<'tx>,
-    ModuleInstanceId,
-    Vec<(Vec<u8>, OperationId)>, // active states
-    Vec<(Vec<u8>, OperationId)>, // inactive states
-    ModuleDecoderRegistry,
-) -> Pin<
-    Box<
-        dyn futures::Future<Output = anyhow::Result<Option<(Vec<DynState>, Vec<DynState>)>>>
-            + Send
-            + 'r,
-    >,
->;
+pub type ClientMigrationFn =
+    for<'r, 'tx> fn(
+        &'r mut DatabaseTransaction<'tx>,
+        ModuleInstanceId,
+        Vec<(Vec<u8>, OperationId)>, // active states
+        Vec<(Vec<u8>, OperationId)>, // inactive states
+        ModuleDecoderRegistry,
+    ) -> BoxFuture<'r, anyhow::Result<Option<(Vec<DynState>, Vec<DynState>)>>>;
 
 /// `apply_migrations_client` iterates from the on disk database version for the
 /// client module up to `target_db_version` and executes all of the migrations

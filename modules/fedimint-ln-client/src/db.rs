@@ -12,7 +12,10 @@ use crate::OutgoingLightningPayment;
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
-    LightningGateway = 0x28,
+    // Deprecated
+    // Lightning Gateway cache records are stored the same way as the server, using 0x45
+    // [`fedimint_ln_common::db::DbKeyPrefix::LightningGateway`].
+    ActiveGateway = 0x28,
     PaymentResult = 0x29,
     MetaOverrides = 0x30,
 }
@@ -32,7 +35,7 @@ pub struct LightningGatewayKeyPrefix;
 impl_db_record!(
     key = LightningGatewayKey,
     value = LightningGatewayRegistration,
-    db_prefix = DbKeyPrefix::LightningGateway,
+    db_prefix = DbKeyPrefix::ActiveGateway,
 );
 impl_db_lookup!(
     key = LightningGatewayKey,
