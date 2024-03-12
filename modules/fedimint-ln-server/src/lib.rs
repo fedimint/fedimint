@@ -118,14 +118,6 @@ lazy_static! {
             REGISTRY
         )
         .unwrap();
-    static ref ALL_METRICS: [Box<dyn prometheus::core::Collector>; 6] = [
-        Box::new(LN_INCOMING_OFFER.clone()),
-        Box::new(LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.clone()),
-        Box::new(LN_FUNDED_CONTRACT_INCOMING.clone()),
-        Box::new(LN_FUNDED_CONTRACT_OUTGOING.clone()),
-        Box::new(LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS.clone()),
-        Box::new(LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS.clone()),
-    ];
 }
 
 #[derive(Debug, Clone)]
@@ -259,10 +251,6 @@ impl ServerModuleInit for LightningInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        // Ensure all metrics are initialized
-        for metric in ALL_METRICS.iter() {
-            metric.collect();
-        }
         Ok(Lightning::new(
             args.cfg().to_typed()?,
             &mut args.task_group().clone(),

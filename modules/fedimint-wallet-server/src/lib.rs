@@ -113,12 +113,6 @@ lazy_static! {
         REGISTRY
     )
     .unwrap();
-    static ref ALL_METRICS: [Box<dyn prometheus::core::Collector>; 4] = [
-        Box::new(WALLET_PEGIN_SATS.clone()),
-        Box::new(WALLET_PEGIN_FEES_SATS.clone()),
-        Box::new(WALLET_PEGOUT_SATS.clone()),
-        Box::new(WALLET_PEGOUT_FEES_SATS.clone()),
-    ];
 }
 
 #[derive(Debug, Clone)]
@@ -241,10 +235,6 @@ impl ServerModuleInit for WalletInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        // Ensure all metrics are initialized
-        for metric in ALL_METRICS.iter() {
-            metric.collect();
-        }
         Ok(Wallet::new(
             args.cfg().to_typed()?,
             args.db().clone(),
