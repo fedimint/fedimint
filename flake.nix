@@ -289,6 +289,8 @@
                   export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache
                   export CARGO_BUILD_TARGET_DIR="''${CARGO_BUILD_TARGET_DIR:-''${root}/target-nix}"
                   export FM_DISCOVER_API_VERSION_TIMEOUT=10
+
+                  [ -f "$root/.shrc.local" ] && source "$root/.shrc.local"
                 '';
               };
             in
