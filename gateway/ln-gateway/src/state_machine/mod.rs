@@ -23,18 +23,19 @@ use fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion, TransactionItemAmount};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
+use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{create_incoming_contract_output, LightningClientInit};
-use fedimint_ln_common::api::{LnFederationApi, RemoveGatewayRequest};
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
     create_gateway_remove_message, LightningClientContext, LightningCommonInit, LightningGateway,
-    LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0, KIND,
+    LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    RemoveGatewayRequest, KIND,
 };
 use futures::StreamExt;
 use lightning_invoice::RoutingFees;

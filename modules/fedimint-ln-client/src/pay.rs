@@ -11,7 +11,6 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::{Amount, OutPoint, TransactionId};
-use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 use fedimint_ln_common::contracts::{ContractId, IdentifiableContract};
 use fedimint_ln_common::route_hints::RouteHint;
@@ -23,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, warn};
 
+use crate::api::LnFederationApi;
 use crate::{set_payment_result, LightningClientStateMachines, PayType};
 
 const GATEWAY_API_TIMEOUT: Duration = Duration::from_secs(30);

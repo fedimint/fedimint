@@ -19,13 +19,13 @@ use fedimint_core::{msats, sats, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
+use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LightningClientStateMachines,
     LightningOperationMeta, LightningOperationMetaVariant, LnPayState, LnReceiveState,
     OutgoingLightningPayment, PayType,
 };
-use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::{FeeToAmount, GatewayFee, LightningGenParams};
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;

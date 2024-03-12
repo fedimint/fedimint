@@ -31,7 +31,6 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId,
     ServerModule,
 };
-use fedimint_ln_common::api::RemoveGatewayRequest;
 use fedimint_ln_common::config::{
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
     LightningConfigLocal, LightningConfigPrivate, LightningGenParams,
@@ -54,7 +53,7 @@ use fedimint_ln_common::{
     create_gateway_remove_message, ContractAccount, LightningCommonInit, LightningConsensusItem,
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
     LightningInputError, LightningModuleTypes, LightningOutput, LightningOutputError,
-    LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0,
+    LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, RemoveGatewayRequest,
 };
 use fedimint_metrics::{
     histogram_opts, lazy_static, opts, prometheus, register_histogram, register_int_counter,

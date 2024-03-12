@@ -9,7 +9,6 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::{OutPoint, TransactionId};
-use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 use fedimint_ln_common::contracts::{DecryptedPreimage, FundedContract};
 use fedimint_ln_common::{LightningClientContext, LightningInput};
@@ -18,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info};
 
+use crate::api::LnFederationApi;
 use crate::LightningClientStateMachines;
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);

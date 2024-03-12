@@ -1,3 +1,4 @@
+pub mod api;
 pub mod db;
 pub mod incoming;
 pub mod pay;
@@ -10,6 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{bail, ensure, format_err, Context};
+use api::LnFederationApi;
 use async_stream::stream;
 use bitcoin::{KeyPair, Network};
 use bitcoin_hashes::{sha256, Hash};
@@ -36,7 +38,6 @@ use fedimint_core::time::now;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
 };
-use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
 use fedimint_ln_common::contracts::outgoing::{
