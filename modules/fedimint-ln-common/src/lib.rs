@@ -22,7 +22,7 @@ use bitcoin_hashes::sha256;
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::sm::Context;
-use fedimint_client::ClientHandle;
+use fedimint_client::ClientHandleArc;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -632,7 +632,7 @@ pub enum LightningOutputError {
 }
 
 pub async fn ln_operation(
-    client: &ClientHandle,
+    client: &ClientHandleArc,
     operation_id: OperationId,
 ) -> anyhow::Result<OperationLogEntry> {
     let operation = client

@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::{Client, ClientHandle};
+use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::api::InviteCode;
 use fedimint_core::config::{
@@ -39,12 +40,12 @@ pub struct FederationTest {
 
 impl FederationTest {
     /// Create two clients, useful for send/receive tests
-    pub async fn two_clients(&self) -> (ClientHandle, ClientHandle) {
+    pub async fn two_clients(&self) -> (ClientHandleArc, ClientHandleArc) {
         (self.new_client().await, self.new_client().await)
     }
 
     /// Create a client connected to this fed
-    pub async fn new_client(&self) -> ClientHandle {
+    pub async fn new_client(&self) -> ClientHandleArc {
         let client_config = self.configs[&PeerId::from(0)]
             .consensus
             .to_client_config(&self.server_init)
@@ -55,7 +56,7 @@ impl FederationTest {
     }
 
     /// Create a client connected to this fed but using RocksDB instead of MemDB
-    pub async fn new_client_rocksdb(&self) -> ClientHandle {
+    pub async fn new_client_rocksdb(&self) -> ClientHandleArc {
         let client_config = self.configs[&PeerId::from(0)]
             .consensus
             .to_client_config(&self.server_init)
@@ -70,7 +71,11 @@ impl FederationTest {
         .await
     }
 
-    pub async fn new_client_with(&self, client_config: ClientConfig, db: Database) -> ClientHandle {
+    pub async fn new_client_with(
+        &self,
+        client_config: ClientConfig,
+        db: Database,
+    ) -> ClientHandleArc {
         info!(target: LOG_TEST, "Setting new client with config");
         let mut client_builder = Client::builder(db);
         client_builder.with_module_inits(self.client_init.clone());
@@ -84,6 +89,7 @@ impl FederationTest {
                 client_config,
             )
             .await
+            .map(Arc::new)
             .expect("Failed to build client")
     }
 
