@@ -35,6 +35,7 @@ use crate::net::api::{ConsensusApi, RpcHandlerCtx};
 use crate::net::connect::TlsTcpConnector;
 
 pub mod envs;
+pub mod metrics;
 
 pub mod atomic_broadcast;
 

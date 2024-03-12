@@ -9,6 +9,8 @@ use fedimint_core::module::TransactionItemAmount;
 use fedimint_core::transaction::{Transaction, TransactionError};
 use fedimint_core::{Amount, OutPoint};
 
+use crate::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};
+
 pub async fn process_transaction_with_dbtx(
     modules: ServerModuleRegistry,
     dbtx: &mut DatabaseTransaction<'_>,
@@ -17,7 +19,13 @@ pub async fn process_transaction_with_dbtx(
     let txid = transaction.tx_hash();
     let mut funding_verifier = FundingVerifier::default();
     let mut public_keys = Vec::new();
+    let in_count = transaction.inputs.len();
+    let out_count = transaction.outputs.len();
 
+    dbtx.on_commit(move || {
+        CONSENSUS_TX_PROCESSED_INPUTS.observe(in_count as f64);
+        CONSENSUS_TX_PROCESSED_OUTPUTS.observe(out_count as f64);
+    });
     for input in transaction.inputs.iter() {
         let meta = modules
             .get_expect(input.module_instance_id())

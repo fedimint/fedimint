@@ -53,9 +53,7 @@ use fedimint_core::{
     NumPeers, OutPoint, PeerId, ServerModule,
 };
 use fedimint_metrics::prometheus::register_histogram_with_registry;
-use fedimint_metrics::{
-    histogram_opts, lazy_static, prometheus, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY,
-};
+use fedimint_metrics::{histogram_opts, lazy_static, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY};
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};

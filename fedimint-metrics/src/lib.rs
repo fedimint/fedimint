@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::net::SocketAddr;
 
 use axum::http::StatusCode;
@@ -9,7 +8,8 @@ pub use lazy_static::lazy_static;
 use prometheus::Registry;
 pub use prometheus::{
     self, histogram_opts, opts, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, Encoder, Histogram, IntCounter, TextEncoder,
+    register_int_counter_vec_with_registry, Encoder, Gauge, GaugeVec, Histogram, HistogramVec,
+    IntCounter, IntCounterVec, TextEncoder,
 };
 use tracing::error;
 

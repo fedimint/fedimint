@@ -20,9 +20,7 @@ use fedimint_core::{
     OutPoint, PeerId, ServerModule, Tiered, TieredMultiZip,
 };
 use fedimint_metrics::prometheus::register_histogram_with_registry;
-use fedimint_metrics::{
-    histogram_opts, lazy_static, prometheus, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY,
-};
+use fedimint_metrics::{histogram_opts, lazy_static, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY};
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
     MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate,

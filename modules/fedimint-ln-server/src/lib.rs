@@ -57,8 +57,8 @@ use fedimint_ln_common::{
 };
 use fedimint_metrics::prometheus::register_int_counter_with_registry;
 use fedimint_metrics::{
-    histogram_opts, lazy_static, opts, prometheus, register_histogram_with_registry, Histogram,
-    IntCounter, AMOUNTS_BUCKETS_SATS, REGISTRY,
+    histogram_opts, lazy_static, opts, register_histogram_with_registry, Histogram, IntCounter,
+    AMOUNTS_BUCKETS_SATS, REGISTRY,
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
