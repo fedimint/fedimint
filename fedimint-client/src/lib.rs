@@ -554,6 +554,7 @@ impl ClientHandle {
     }
 
     /// Shutdown the client.
+    ///
     /// Returns false if there are other clones of [`ClientHandle`].
     pub async fn shutdown(self) -> bool {
         if let Some(mut inner) = Arc::into_inner(self.inner) {
@@ -561,6 +562,21 @@ impl ClientHandle {
             true
         } else {
             false
+        }
+    }
+
+    /// Restart the client
+    ///
+    /// Returns false if there are other clones of [`ClientHandle`], or starting
+    /// the client again failed for some reason.
+    ///
+    /// Notably it will re-use the original [`Database`] handle, and not attempt
+    /// to open it again.
+    pub async fn restart(self) -> anyhow::Result<ClientHandle> {
+        if let Some(inner) = Arc::into_inner(self.inner) {
+            inner.restart().await
+        } else {
+            bail!("Can't restart: other handles still exist")
         }
     }
 }
@@ -597,6 +613,22 @@ impl ClientHandleShared {
         if db_strong_count != 1 {
             debug!(target:  LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
         }
+    }
+    async fn restart(mut self) -> anyhow::Result<ClientHandle> {
+        let (builder, config, root_secret) = {
+            let client = self
+                .inner
+                .as_ref()
+                .ok_or_else(|| anyhow::format_err!("Already stopped"))?;
+            let builder = ClientBuilder::from_existing(client);
+            let config = client.config.clone();
+            let root_secret = client.root_secret.clone();
+
+            (builder, config, root_secret)
+        };
+        self.shutdown().await;
+
+        builder.build(root_secret, config, false).await
     }
 }
 
@@ -1749,6 +1781,14 @@ impl ClientBuilder {
         }
     }
 
+    fn from_existing(client: &Client) -> Self {
+        ClientBuilder {
+            module_inits: client.module_inits.clone(),
+            primary_module_instance: Some(client.primary_module_instance),
+            db: client.db.clone(),
+            stopped: false,
+        }
+    }
     /// Replace module generator registry entirely
     pub fn with_module_inits(&mut self, module_inits: ClientModuleInitRegistry) {
         self.module_inits = module_inits;
@@ -1858,13 +1898,9 @@ impl ClientBuilder {
 
             dbtx.commit_tx_result().await?;
         }
-        let stopped = self.stopped;
 
-        let client = self.build_stopped(root_secret, config).await?;
-        if !stopped {
-            client.as_inner().start_executor().await;
-        }
-        Ok(client)
+        let stopped = self.stopped;
+        self.build(root_secret, config, stopped).await
     }
 
     /// Join a new Federation
@@ -2002,6 +2038,21 @@ impl ClientBuilder {
         if !stopped {
             client.as_inner().start_executor().await;
         }
+        Ok(client)
+    }
+
+    /// Build a [`Client`] but do not start the executor
+    async fn build(
+        self,
+        root_secret: DerivableSecret,
+        config: ClientConfig,
+        stopped: bool,
+    ) -> anyhow::Result<ClientHandle> {
+        let client = self.build_stopped(root_secret, config).await?;
+        if !stopped {
+            client.as_inner().start_executor().await;
+        }
+
         Ok(client)
     }
 
