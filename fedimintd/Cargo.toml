@@ -65,7 +65,7 @@ threshold_crypto = { workspace = true }
 # setup dependencies
 axum = { version = "0.6.4", default-features = false, features = [ "form", "tokio" ] }
 http = "1.1"
-http-body = "0.4"
+http-body = "1.0"
 hyper = { version = "0.14", features = ["full"] }
 tower = { version = "0.4", features = ["util"] }
 console-subscriber = "0.1.8"
