@@ -1103,7 +1103,11 @@ impl Client {
                         *instance_id,
                         JsonWithKind::new(
                             kind.clone(),
-                            config.clone().expect_decoded().to_json().into(),
+                            config
+                                .clone()
+                                .decoded()
+                                .map(|decoded| decoded.to_json().into())
+                                .unwrap_or(serde_json::Value::Null),
                         ),
                     )
                 })
