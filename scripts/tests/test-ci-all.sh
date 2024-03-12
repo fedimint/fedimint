@@ -215,7 +215,8 @@ done
 
 parsed_test_commands=$(printf "%s\n" "${tests_with_versions[@]}")
 
-delay=$((64 / $(nproc) + 1))
+delay="${FM_TEST_CI_ALL_DELAY:-$((64 / $(nproc) + 1))}"
+load="${FM_TEST_CI_ALL_MAX_LOAD:-1000}"
 parallel_args=()
 export parallel_jobs='0'
 
@@ -238,7 +239,7 @@ echo "$parsed_test_commands" | if parallel \
   --halt-on-error 1 \
   --joblog "$joblog" \
   --timeout 600 \
-  --load 2000% \
+  --load "${load}%" \
   --noswap \
   --delay "$delay" \
   --jobs "$parallel_jobs" \

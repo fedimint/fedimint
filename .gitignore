@@ -11,6 +11,7 @@
 /target-comp-bench
 
 /result
+/.shrc.local
 .idea
 .tmpenv
 .direnv
