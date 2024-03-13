@@ -52,8 +52,12 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, Feerate,
     NumPeers, OutPoint, PeerId, ServerModule,
 };
-use fedimint_metrics::prometheus::register_histogram_with_registry;
-use fedimint_metrics::{histogram_opts, lazy_static, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY};
+use fedimint_metrics::prometheus::{
+    register_histogram_with_registry, register_int_gauge_with_registry, IntGauge,
+};
+use fedimint_metrics::{
+    histogram_opts, lazy_static, opts, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY,
+};
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
@@ -107,6 +111,14 @@ lazy_static! {
             "wallet_pegout_fees_sats",
             "Value of peg-out fees in sats",
             AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
+    .unwrap();
+    static ref WALLET_BLOCK_COUNT: IntGauge = register_int_gauge_with_registry!(
+        opts!(
+            "wallet_block_count",
+            "Blockchain block count as monitored by wallet module",
         ),
         REGISTRY
     )
@@ -391,6 +403,7 @@ impl ServerModule for Wallet {
                 "Proposing block count"
             );
 
+            WALLET_BLOCK_COUNT.set(block_count_vote as i64);
             items.push(WalletConsensusItem::BlockCount(block_count_vote));
         }
 
