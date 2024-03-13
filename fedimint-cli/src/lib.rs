@@ -21,7 +21,7 @@ use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::module::ClientModule as _;
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
-use fedimint_client::{get_invite_code_from_db, Client, ClientBuilder, ClientHandle};
+use fedimint_client::{Client, ClientBuilder, ClientHandle};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
     FederationApiExt, FederationError, IRawFederationApi, InviteCode, WsFederationApi,
@@ -335,7 +335,9 @@ enum Command {
     Dev(DevCmd),
 
     /// Config enabling client to establish websocket connection to federation
-    InviteCode,
+    InviteCode {
+        peer: PeerId,
+    },
 
     /// Join a federation using it's InviteCode
     JoinFederation {
@@ -539,7 +541,6 @@ impl FedimintCli {
                     &client_config.global.calculate_federation_id(),
                 ),
                 client_config.clone(),
-                invite_code,
             )
             .await
             .map_err_cli_general()
@@ -609,18 +610,23 @@ impl FedimintCli {
             .await
             .map_err_cli_general()?;
         builder
-            .recover(root_secret, client_config.to_owned(), invite_code, backup)
+            .recover(root_secret, client_config.to_owned(), backup)
             .await
             .map_err_cli_general()
     }
 
     async fn handle_command(&mut self, cli: Opts) -> CliOutputResult {
         match cli.command.clone() {
-            Command::InviteCode => {
+            Command::InviteCode { peer } => {
                 let db = cli.load_rocks_db().await?;
-                let invite_code = get_invite_code_from_db(&db)
+                let client_config = Client::get_config_from_db(&db)
                     .await
-                    .ok_or_cli_msg(CliErrorKind::GeneralFailure, "invite code not found")?;
+                    .ok_or_cli_msg(CliErrorKind::GeneralFailure, "client config code not found")?;
+
+                let invite_code = client_config
+                    .invite_code(&peer)
+                    .ok_or_cli_msg(CliErrorKind::GeneralFailure, "peer not found")?;
+
                 Ok(CliOutput::InviteCode { invite_code })
             }
             Command::JoinFederation { invite_code } => {

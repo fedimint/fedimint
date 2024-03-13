@@ -82,7 +82,6 @@ impl FederationTest {
             .join(
                 PlainRootSecretStrategy::to_root_secret(&client_secret),
                 client_config,
-                self.invite_code(),
             )
             .await
             .expect("Failed to build client")

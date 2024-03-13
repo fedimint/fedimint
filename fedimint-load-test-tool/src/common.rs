@@ -154,7 +154,7 @@ pub async fn build_client(
         if let Some(invite_code) = &invite_code {
             let client_config = ClientConfig::download_from_invite_code(invite_code).await?;
             client_builder
-                .join(root_secret, client_config.clone(), invite_code.clone())
+                .join(root_secret, client_config.clone())
                 .await
         } else {
             bail!("Database not initialize and invite code not provided");
