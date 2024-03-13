@@ -23,8 +23,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::PeerId;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use futures::FutureExt;
-use jsonrpsee::server::{ServerBuilder, ServerHandle};
-use jsonrpsee::types::error::CallError;
+use jsonrpsee::server::{PingConfig, ServerBuilder, ServerHandle};
 use jsonrpsee::types::ErrorObject;
 use jsonrpsee::RpcModule;
 use tokio::runtime::Runtime;
@@ -190,7 +189,7 @@ impl FedimintServer {
     ) -> FedimintApiHandler {
         let mut builder = ServerBuilder::new()
             .max_connections(max_connections)
-            .ping_interval(Duration::from_secs(10));
+            .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(10)));
 
         let runtime = if force_shutdown {
             let runtime = Runtime::new().expect("Creates runtime");
@@ -206,8 +205,7 @@ impl FedimintServer {
             .context(format!("Bind address: {api_bind}"))
             .context(format!("API name: {name}"))
             .expect("Could not build API server")
-            .start(module)
-            .expect("Could not start API server");
+            .start(module);
         info!(target: LOG_NET_API, "Starting api on ws://{api_bind}");
 
         FedimintApiHandler { handle, runtime }
@@ -265,20 +263,15 @@ impl FedimintServer {
                             target: LOG_NET_API,
                             path, "API handler panicked, DO NOT IGNORE, FIX IT!!!"
                         );
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            500,
-                            "API handler panicked",
-                            None::<()>,
-                        )))
+                        ErrorObject::owned(500, "API handler panicked", None::<()>)
                     })?
                     .map_err(|tokio::time::error::Elapsed { .. }| {
-                        jsonrpsee::core::Error::RequestTimeout
+                        // TODO: find a better error for this, the error we used before:
+                        // jsonrpsee::core::Error::RequestTimeout
+                        // was moved to be client-side only
+                        ErrorObject::owned(-32000, "Request timeout", None::<()>)
                     })?
-                    .map_err(|e| {
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            e.code, e.message, None::<()>,
-                        )))
-                    })
+                    .map_err(|e| ErrorObject::owned(e.code, e.message, None::<()>))
                 })
                 .expect("Failed to register async method");
         }

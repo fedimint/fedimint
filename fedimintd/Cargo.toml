@@ -34,7 +34,7 @@ bytes = "1.4.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
 futures = "0.3.24"
 itertools = "0.10.5"
-jsonrpsee = { version = "0.16.2", features = ["server"] }
+jsonrpsee = { version = "0.22.1", features = ["server"] }
 fedimint-bitcoind = { version = "0.3.0-alpha", path = "../fedimint-bitcoind" }
 fedimint-core = { version = "0.3.0-alpha", path = "../fedimint-core" }
 fedimint-ln-common = { version = "0.3.0-alpha", path = "../modules/fedimint-ln-common" }
