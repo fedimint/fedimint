@@ -31,6 +31,7 @@ use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::consensus::server::ConsensusServer;
+use crate::metrics::initialize_gauge_metrics;
 use crate::net::api::{ConsensusApi, RpcHandlerCtx};
 use crate::net::connect::TlsTcpConnector;
 
@@ -88,6 +89,9 @@ impl FedimintServer {
     /// After configs are generated, start `ConsensusApi` and `ConsensusServer`
     pub async fn run(&mut self, mut task_group: TaskGroup) -> anyhow::Result<()> {
         info!(target: LOG_CONSENSUS, "Starting config gen");
+
+        initialize_gauge_metrics(&self.db).await;
+
         let cfg = self
             .run_config_gen(task_group.make_subgroup().await)
             .await?;

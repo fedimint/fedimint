@@ -1,5 +1,7 @@
 pub(crate) mod jsonrpsee;
 
+use fedimint_core::backup::ClientBackupKeyPrefix;
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_metrics::prometheus::{
     register_histogram_vec_with_registry, register_int_gauge_with_registry, HistogramVec,
     IntCounterVec, IntGauge,
@@ -8,6 +10,7 @@ use fedimint_metrics::{
     histogram_opts, opts, register_histogram_with_registry, register_int_counter_vec_with_registry,
     Histogram, REGISTRY,
 };
+use futures::StreamExt as _;
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -91,4 +94,31 @@ lazy_static! {
         REGISTRY
     )
     .unwrap();
+    pub(crate) static ref BACKUP_WRITE_SIZE_BYTES: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "backup_write_size_bytes",
+            "Size of every backup being written",
+            vec![1.0, 10., 100., 1_000., 5_000., 10_000., 50_000., 100_000., 1_000_000.]
+        ),
+        REGISTRY
+    )
+    .unwrap();
+    pub(crate) static ref STORED_BACKUPS_COUNT: IntGauge = register_int_gauge_with_registry!(
+        opts!("stored_backups_count", "Total amount of backups stored",),
+        REGISTRY
+    )
+    .unwrap();
+}
+
+/// Initialize gauges or other metrics that need eager initialization on start,
+/// e.g. because they are triggered infrequently.
+pub(crate) async fn initialize_gauge_metrics(db: &Database) {
+    STORED_BACKUPS_COUNT.set(
+        db.begin_transaction_nc()
+            .await
+            .find_by_prefix(&ClientBackupKeyPrefix)
+            .await
+            .count()
+            .await as i64,
+    )
 }
