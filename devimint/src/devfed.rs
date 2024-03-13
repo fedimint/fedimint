@@ -52,8 +52,8 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
 
     info!(target: LOG_DEVIMINT, "federation and gateways started");
 
-    std::env::set_var("GWID_CLN", gw_cln.gateway_id().await?);
-    std::env::set_var("GWID_LND", gw_lnd.gateway_id().await?);
+    std::env::set_var("FM_GWID_CLN", gw_cln.gateway_id().await?);
+    std::env::set_var("FM_GWID_LND", gw_lnd.gateway_id().await?);
     info!(target: LOG_DEVIMINT, "Setup gateway environment variables");
 
     tokio::try_join!(gw_cln.connect_fed(&fed), gw_lnd.connect_fed(&fed), async {
