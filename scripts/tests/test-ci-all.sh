@@ -95,6 +95,11 @@ function guardian_backup() {
 }
 export -f guardian_backup
 
+function cannot_replay_tx() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/cannot-replay-tx.sh
+}
+export -f cannot_replay_tx
+
 function devimint_cli_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-cli-test.sh
 }
@@ -201,6 +206,7 @@ tests_to_run_in_parallel=(
   "load_test_tool_test"
   "recoverytool_tests"
   "guardian_backup"
+  "cannot_replay_tx"
 )
 
 tests_with_versions=()
