@@ -251,6 +251,9 @@ impl ServerModuleInit for LightningInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
+        // Eagerly initialize metrics that trigger infrequently
+        LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.get();
+
         Ok(Lightning::new(
             args.cfg().to_typed()?,
             &mut args.task_group().clone(),

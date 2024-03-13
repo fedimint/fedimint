@@ -233,6 +233,12 @@ impl ServerModuleInit for WalletInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
+        // Eagerly initialize metrics that trigger infrequently
+        WALLET_PEGIN_FEES_SATS.get_sample_count();
+        WALLET_PEGIN_SATS.get_sample_count();
+        WALLET_PEGOUT_SATS.get_sample_count();
+        WALLET_PEGOUT_FEES_SATS.get_sample_count();
+
         Ok(Wallet::new(
             args.cfg().to_typed()?,
             args.db().clone(),
