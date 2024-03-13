@@ -36,7 +36,8 @@ aquamarine = "0.3.0"
 bitcoin = { version = "0.29.2", features = ["serde"] }
 bitcoin_hashes = "0.11.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
-cln-plugin = "0.1.5"
+# cln-plugin made semver incompatible change
+cln-plugin = "=0.1.7"
 cln-rpc = { workspace = true }
 fedimint-client = { version = "0.3.0-alpha", path = "../../fedimint-client" }
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
