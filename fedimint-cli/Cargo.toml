@@ -23,7 +23,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1.0.81"
 async-trait = "0.1.77"
-base64 = "0.21.7"
+base64 = "0.22.0"
 bip39 = { version = "2.0.0", features = ["rand"] }
 bitcoin = "0.29.2"
 bitcoin_hashes = "0.11.0"
@@ -54,7 +54,7 @@ tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
 serde_json = { version = "1.0.114", features = ["preserve_order"] }
 url = { version = "2.5.0", features = ["serde"] }
 clap_complete = "4.5.1"
-lnurl-rs = { version = "0.3.2", features = ["async"], default-features = false }
+lnurl-rs = { version = "0.4.1", features = ["async"], default-features = false }
 reqwest = { version = "0.11.26", features = [ "json", "rustls-tls" ], default-features = false }
 
 [build-dependencies]

@@ -18,14 +18,14 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1.0.81"
 async-trait = "0.1.77"
-erased-serde = "0.3"
+erased-serde = "0.4"
 futures = "0.3"
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
 fedimint-unknown-common = { version = "0.3.0-alpha", path = "../fedimint-unknown-common" }
 rand = "0.8"
 serde = { version = "1.0.197", features = [ "derive" ] }
-strum = "0.24"
-strum_macros = "0.24"
+strum = "0.26"
+strum_macros = "0.26"
 thiserror = "1.0.58"
 tracing = "0.1.40"
 tokio = { version = "1.36.0", features = ["sync"] }

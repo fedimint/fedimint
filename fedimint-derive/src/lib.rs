@@ -14,7 +14,7 @@ fn do_not_ignore(field: &Field) -> bool {
     !field
         .attrs
         .iter()
-        .any(|attr| attr.path.is_ident("encodable_ignore"))
+        .any(|attr| attr.path().is_ident("encodable_ignore"))
 }
 
 fn panic_if_ignored(field: &Field) -> bool {
@@ -28,7 +28,7 @@ fn is_default_variant_enforce_valid(variant: &Variant) -> bool {
     let is_default = variant
         .attrs
         .iter()
-        .any(|attr| attr.path.is_ident("encodable_default"));
+        .any(|attr| attr.path().is_ident("encodable_default"));
 
     if is_default {
         assert_eq!(
