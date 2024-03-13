@@ -18,16 +18,16 @@ path = "src/lib.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.66"
-async-trait = "0.1.73"
+anyhow = "1.0.81"
+async-trait = "0.1.77"
 fedimint-core = { version = "0.3.0-alpha", path = "../fedimint-core" }
-futures = "0.3.24"
+futures = "0.3.30"
 rocksdb = { version = "0.22.0" }
-tracing = "0.1.37"
+tracing = "0.1.40"
 
 [dev-dependencies]
 tempfile = "3.10.1"
-tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
+tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
-tokio = { version = "1.26.0", features = ["rt", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1.36.0", features = ["rt", "rt-multi-thread", "sync", "time"] }

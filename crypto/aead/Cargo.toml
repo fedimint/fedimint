@@ -16,8 +16,8 @@ name = "fedimint_aead"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.65"
-argon2 = { version = "0.5.0", features = ["password-hash", "alloc"] }
-ring = "0.17.5"
+anyhow = "1.0.81"
+argon2 = { version = "0.5.3", features = ["password-hash", "alloc"] }
+ring = "0.17.8"
 hex = "0.4.3"
 rand = "0.8"

@@ -17,10 +17,10 @@ name = "fedimint_mint_server"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.66"
+anyhow = "1.0.81"
 assert_matches = "1.5.0"
-async-trait = "0.1.73"
-bincode = "1.3.1"
+async-trait = "0.1.77"
+bincode = "1.3.3"
 bitcoin_hashes = "0.11.0"
 erased-serde = "0.3"
 futures = "0.3"
@@ -29,19 +29,19 @@ fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
 fedimint-metrics = { version = "0.3.0-alpha", path = "../../fedimint-metrics" }
 fedimint-mint-common = { version = "0.3.0-alpha", path = "../fedimint-mint-common" }
 rand = "0.8"
-secp256k1 = "0.24.2"
+secp256k1 = "0.24.3"
 secp256k1-zkp = "0.7.0"
-serde = { version = "1.0.149", features = [ "derive" ] }
+serde = { version = "1.0.197", features = [ "derive" ] }
 strum = "0.24"
 strum_macros = "0.24"
 tbs = { package = "fedimint-tbs", version = "0.3.0-alpha", path = "../../crypto/tbs" }
-thiserror = "1.0.39"
+thiserror = "1.0.58"
 threshold_crypto = { workspace = true }
-tracing ="0.1.37"
+tracing ="0.1.40"
 fedimint-server = { version = "0.3.0-alpha", path = "../../fedimint-server" }
 
 [dev-dependencies]
 rand = "0.8"
-tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
-tokio = {version = "1.26.0", features = [ "full" ] }
+tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
+tokio = {version = "1.36.0", features = [ "full" ] }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
