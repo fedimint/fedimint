@@ -30,6 +30,7 @@ use futures::FutureExt;
 use tokio::select;
 use tracing::{debug, error, info, warn};
 
+use crate::envs::FM_DISABLE_META_MODULE_ENV;
 use crate::{attach_default_module_init_params, attach_unknown_module_init_params};
 
 /// Time we will wait before forcefully shutting down tasks
@@ -188,8 +189,13 @@ impl Fedimintd {
         let s = self
             .with_module(LightningInit)
             .with_module(MintInit)
-            .with_module(WalletInit)
-            .with_module(MetaInit);
+            .with_module(WalletInit);
+
+        let s = if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
+            s.with_module(MetaInit)
+        } else {
+            s
+        };
 
         if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
             s.with_module(UnknownInit)
