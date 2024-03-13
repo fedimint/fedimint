@@ -1,3 +1,5 @@
+pub(crate) mod jsonrpsee;
+
 use fedimint_metrics::prometheus::{
     register_histogram_vec_with_registry, HistogramVec, IntCounterVec,
 };
@@ -57,6 +59,26 @@ lazy_static! {
                 "Duration of processing a consensus item",
             ),
             &["module_id", "module_kind"],
+            REGISTRY
+        )
+        .unwrap();
+    pub(crate) static ref JSONRPC_API_REQUEST_DURATION_SECONDS: HistogramVec =
+        register_histogram_vec_with_registry!(
+            histogram_opts!(
+                "jsonrpc_api_request_duration_seconds",
+                "Duration of processing an rpc request",
+            ),
+            &["method"],
+            REGISTRY
+        )
+        .unwrap();
+    pub(crate) static ref JSONRPC_API_REQUEST_RESPONSE_CODE: IntCounterVec =
+        register_int_counter_vec_with_registry!(
+            opts!(
+                "jsonrpc_api_request_response_code_total",
+                "Count of response counts and types",
+            ),
+            &["method", "code", "type"],
             REGISTRY
         )
         .unwrap();

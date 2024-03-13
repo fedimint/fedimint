@@ -23,7 +23,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::PeerId;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use futures::FutureExt;
-use jsonrpsee::server::{PingConfig, ServerBuilder, ServerHandle};
+use jsonrpsee::server::{PingConfig, RpcServiceBuilder, ServerBuilder, ServerHandle};
 use jsonrpsee::types::ErrorObject;
 use jsonrpsee::RpcModule;
 use tokio::runtime::Runtime;
@@ -190,7 +190,8 @@ impl FedimintServer {
     ) -> FedimintApiHandler {
         let mut builder = ServerBuilder::new()
             .max_connections(max_connections)
-            .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(10)));
+            .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(10)))
+            .set_rpc_middleware(RpcServiceBuilder::new().layer(metrics::jsonrpsee::MetricsLayer));
 
         let runtime = if force_shutdown {
             let runtime = Runtime::new().expect("Creates runtime");
