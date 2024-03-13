@@ -48,7 +48,7 @@ use crate::db::{
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{
     CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
-    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS,
+    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_SESSION_COUNT,
 };
 use crate::net::api::{ConsensusApi, ExpiringCache};
 use crate::net::connect::{Connector, TlsTcpConnector};
@@ -231,6 +231,7 @@ impl ConsensusServer {
 
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
+            CONSENSUS_SESSION_COUNT.set(session_index as i64);
 
             let mut item_index = self.pending_accepted_items().await.len() as u64;
 
@@ -294,6 +295,7 @@ impl ConsensusServer {
 
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
+            CONSENSUS_SESSION_COUNT.set(session_index as i64);
 
             self.run_session(session_index).await?;
 

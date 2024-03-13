@@ -1,7 +1,8 @@
 pub(crate) mod jsonrpsee;
 
 use fedimint_metrics::prometheus::{
-    register_histogram_vec_with_registry, HistogramVec, IntCounterVec,
+    register_histogram_vec_with_registry, register_int_gauge_with_registry, HistogramVec,
+    IntCounterVec, IntGauge,
 };
 use fedimint_metrics::{
     histogram_opts, opts, register_histogram_with_registry, register_int_counter_vec_with_registry,
@@ -82,4 +83,12 @@ lazy_static! {
             REGISTRY
         )
         .unwrap();
+    pub(crate) static ref CONSENSUS_SESSION_COUNT: IntGauge = register_int_gauge_with_registry!(
+        opts!(
+            "consensus_session_count",
+            "Fedimint consensus session count",
+        ),
+        REGISTRY
+    )
+    .unwrap();
 }
