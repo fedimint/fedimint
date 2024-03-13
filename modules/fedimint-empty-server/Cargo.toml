@@ -1,0 +1,29 @@
+[package]
+name = "fedimint-empty-server"
+version = "0.3.0-alpha"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "fedimint-empty is a empty fedimint module, good template for a new module."
+license = "MIT"
+readme = "../../README.md"
+repository = "https://github.com/fedimint/fedimint"
+
+[package.emptydata.docs.rs]
+rustc-args = ["--cfg", "tokio_unstable"]
+
+[lib]
+name = "fedimint_empty_server"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0.66"
+async-trait = "0.1.73"
+erased-serde = "0.3"
+futures = "0.3"
+fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
+fedimint-empty-common = { version = "0.3.0-alpha", path = "../fedimint-empty-common" }
+serde = { version = "1.0.149", features = [ "derive" ] }
+strum = "0.24"
+strum_macros = "0.24"
+thiserror = "1.0.39"
+tracing = "0.1.37"

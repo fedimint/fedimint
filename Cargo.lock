@@ -1517,6 +1517,57 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-empty-client"
+version = "0.3.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "erased-serde",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-empty-common",
+ "futures",
+ "serde",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-empty-common"
+version = "0.3.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "erased-serde",
+ "fedimint-core",
+ "futures",
+ "serde",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-empty-server"
+version = "0.3.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "erased-serde",
+ "fedimint-core",
+ "fedimint-empty-common",
+ "futures",
+ "serde",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-fuzz"
 version = "0.3.0-alpha"
 dependencies = [
