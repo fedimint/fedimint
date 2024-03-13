@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -eo pipefail
+
 test_name="$1"
 shift 1
 
@@ -9,14 +11,25 @@ if [ -z "$test_name" ]; then
 fi
 
 version_str="${FM_RUN_TEST_VERSIONS:+ ($FM_RUN_TEST_VERSIONS)}"
-
-set -eo pipefail # pipefail must be set manually again
-trap 'echo "## FAILED: $test_name$version_str"' ERR
-
-echo "## START: $test_name$version_str"
-
+test_out_path="$(mktemp --tmpdir fm-XXXXX)"
+time_out_path="$(mktemp --tmpdir fm-XXXXX)"
+time_fmt='%e\t%M\t%w\t%c'
 export FM_TEST_NAME="$test_name"
 
-"$@" 2>&1 | ts -s
+echo "## RUN:  $test_name$version_str"
 
-echo "## COMPLETE: $test_name$version_str"
+on_error() {
+  echo "## OUT:  $test_name$version_str"
+  cat "$test_out_path"
+  echo "## FAIL: $test_name$version_str"
+}
+
+on_exit() {
+    rm -Rf "$CARGO_BUILD_TARGET_DIR"
+}
+trap on_error ERR
+
+command time -q --format="$time_fmt" -o "$time_out_path" "$@" 2>&1 | ts -s > "$test_out_path"
+
+awk 'BEGIN {FS="\t"} {printf "## STAT: %8.2fs %8dB %8dW %8dc\n", $1, $2, $3, $4}' < "$time_out_path"
+echo "## DONE: $test_name$version_str"

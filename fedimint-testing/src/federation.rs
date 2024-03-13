@@ -28,6 +28,7 @@ use tokio_rustls::rustls;
 use tracing::info;
 
 /// Test fixture for a running fedimint federation
+#[derive(Clone)]
 pub struct FederationTest {
     configs: BTreeMap<PeerId, ServerConfig>,
     server_init: ServerModuleInitRegistry,

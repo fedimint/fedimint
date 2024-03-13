@@ -29,6 +29,7 @@
       overlayAll =
         nixpkgs.lib.composeManyExtensions
           [
+            (import ./nix/overlays/rocksdb.nix)
             (import ./nix/overlays/wasm-bindgen.nix)
             (import ./nix/overlays/cargo-nextest.nix)
             (import ./nix/overlays/cargo-llvm-cov.nix)
@@ -273,8 +274,15 @@
                     fi
                   fi
 
+                  export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache
+                  export CARGO_BUILD_TARGET_DIR="''${CARGO_BUILD_TARGET_DIR:-''${root}/target-nix}"
+                  export FM_DISCOVER_API_VERSION_TIMEOUT=10
+                  [ -f "$root/.shrc.local" ] && source "$root/.shrc.local"
+
                   if [ ''${#TMPDIR} -ge 40 ]; then
-                      >&2 echo "⚠️  TMPDIR too long. This might lead to problems running tests and regtest fed. Are you nesting 'nix develop' invocations?"
+                      >&2 echo "⚠️  TMPDIR too long. This might lead to problems running tests and regtest fed. Will try to use /tmp/ instead"
+                      # Note: this seems to work fine in `nix develop`, but doesn't work on some `direnv` implementations (doesn't work for dpc at least)
+                      export TMPDIR="/tmp"
                   fi
 
                   if [ "$(ulimit -Sn)" -lt "1024" ]; then
@@ -284,10 +292,6 @@
                   if [ -z "$(git config --global merge.ours.driver)" ]; then
                       >&2 echo "⚠️  Recommended to run 'git config --global merge.ours.driver true' to enable better lock file handling. See https://blog.aspect.dev/easier-merges-on-lockfiles for more info"
                   fi
-
-                  export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache
-                  export CARGO_BUILD_TARGET_DIR="''${CARGO_BUILD_TARGET_DIR:-''${root}/target-nix}"
-                  export FM_DISCOVER_API_VERSION_TIMEOUT=10
                 '';
               };
             in

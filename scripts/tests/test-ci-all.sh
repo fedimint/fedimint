@@ -175,9 +175,11 @@ else
   fi
 fi
 
+tests_to_run_in_parallel=()
+for _ in $(seq "${FM_TEST_CI_ALL_TIMES:-1}"); do
 # NOTE: try to keep the slowest tests first, except 'always_success_test',
 # as it's used for failure test
-tests_to_run_in_parallel=(
+tests_to_run_in_parallel+=(
   "always_success_test"
   "rust_unit_tests"
   # TODO: unfortunately it seems like something about headless firefox is broken when
@@ -202,6 +204,7 @@ tests_to_run_in_parallel=(
   "recoverytool_tests"
   "guardian_backup"
 )
+done
 
 tests_with_versions=()
 for test in "${tests_to_run_in_parallel[@]}"; do
@@ -212,7 +215,14 @@ done
 
 parsed_test_commands=$(printf "%s\n" "${tests_with_versions[@]}")
 
-export parallel_jobs='+0'
+delay="${FM_TEST_CI_ALL_DELAY:-$((64 / $(nproc) + 1))}"
+load="${FM_TEST_CI_ALL_MAX_LOAD:-1000}"
+parallel_args=()
+export parallel_jobs='0'
+
+if [ -z "${CI:-}" ]; then
+  parallel_args+=(--eta)
+fi
 
 tmpdir=$(mktemp --tmpdir -d XXXXX)
 trap 'rm -r $tmpdir' EXIT
@@ -229,15 +239,17 @@ echo "$parsed_test_commands" | if parallel \
   --halt-on-error 1 \
   --joblog "$joblog" \
   --timeout 600 \
-  --load 1000% \
-  --delay 5 \
+  --load "${load}%" \
+  --noswap \
+  --delay "$delay" \
   --jobs "$parallel_jobs" \
   --memfree 1G \
-  --nice 15 ; then
+  --nice 15 \
+  "${parallel_args[@]}" ; then
   >&2 echo "All tests successful"
 else
   >&2 echo "Some tests failed. Full job log:"
   cat "$joblog"
-  >&2 echo "Search for '## FAILED' to find the end of the failing test"
+  >&2 echo "Search for '## FAIL' to find the end of the failing test"
   exit 1
 fi

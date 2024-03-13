@@ -236,7 +236,6 @@ impl Drop for GatewayTest {
 pub enum LightningNodeType {
     Cln,
     Lnd,
-    Ldk,
 }
 
 impl Display for LightningNodeType {
@@ -244,7 +243,6 @@ impl Display for LightningNodeType {
         match self {
             LightningNodeType::Cln => write!(f, "cln"),
             LightningNodeType::Lnd => write!(f, "lnd"),
-            LightningNodeType::Ldk => write!(f, "ldk"),
         }
     }
 }
@@ -260,9 +258,6 @@ impl LightningBuilder for RealLightningBuilder {
         match &self.node_type {
             LightningNodeType::Cln => Box::new(ClnLightningTest::new().await),
             LightningNodeType::Lnd => Box::new(LndLightningTest::new().await),
-            _ => {
-                unimplemented!("Unsupported Lightning implementation");
-            }
         }
     }
 }

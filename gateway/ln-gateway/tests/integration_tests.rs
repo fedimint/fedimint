@@ -19,13 +19,13 @@ use fedimint_core::{msats, sats, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
+use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LightningClientStateMachines,
     LightningOperationMeta, LightningOperationMetaVariant, LnPayState, LnReceiveState,
     OutgoingLightningPayment, PayType,
 };
-use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::{FeeToAmount, GatewayFee, LightningGenParams};
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
@@ -99,11 +99,11 @@ where
 
     for (gateway_ln, other_node) in [(lnd1, cln1), (cln2, lnd2)] {
         let fed = fixtures.new_fed().await;
-        let user_client = fed.new_client().await;
         let mut gateway = fixtures
             .new_gateway(gateway_ln, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
             .await;
         gateway.connect_fed(&fed).await;
+        let user_client = fed.new_client().await;
         let bitcoin = fixtures.bitcoin();
         f(gateway, other_node, fed, user_client, bitcoin).await?;
     }
@@ -131,9 +131,6 @@ where
     let lightning = match lightning_node_type {
         LightningNodeType::Lnd => fixtures.lnd().await,
         LightningNodeType::Cln => fixtures.cln().await,
-        _ => {
-            panic!("Unsupported lightning implementation");
-        }
     };
 
     let gateway = fixtures
@@ -212,51 +209,6 @@ async fn pay_valid_invoice(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore] // TODO: resolve in https://github.com/fedimint/fedimint/pull/4354
-async fn test_gateway_can_pay_ldk_node() -> anyhow::Result<()> {
-    // Running LDK Node with the mock services doesnt provide any additional
-    // coverage, since `FakeLightningTest` does not open any channels.
-    if !Fixtures::is_real_test() {
-        return Ok(());
-    }
-
-    single_federation_test(|gateway, _, fed, user_client, bitcoin| async move {
-        let ldk = Fixtures::spawn_ldk(bitcoin.clone()).await;
-
-        ldk.open_channel(
-            Amount::from_msats(5_000_000_000),
-            gateway.node_pub_key,
-            gateway.listening_addr.clone(),
-            bitcoin.lock_exclusive().await,
-        )
-        .await?;
-
-        let gateway_client = gateway.remove_client_hack(&fed).await;
-        // Print money for user_client
-        let dummy_module = user_client.get_first_module::<DummyClientModule>();
-        let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
-        dummy_module.receive_money(outpoint).await?;
-        assert_eq!(user_client.get_balance().await, sats(1000));
-
-        // Create test invoice
-        let invoice = ldk.invoice(sats(250), None).await?;
-        pay_valid_invoice(
-            invoice,
-            &user_client,
-            &gateway_client,
-            &gateway.gateway.gateway_id,
-        )
-        .await?;
-
-        assert_eq!(user_client.get_balance().await, sats(1000 - 250));
-        assert_eq!(gateway_client.get_balance().await, sats(250));
-
-        Ok(())
-    })
-    .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
@@ -314,6 +266,10 @@ async fn test_can_change_routing_fees() -> anyhow::Result<()> {
             })
             .await;
 
+            // Update the gateway cache since the fees have changed
+            let ln_module = user_client.get_first_module::<LightningClientModule>();
+            ln_module.update_gateway_cache(true).await?;
+
             // Create test invoice
             let invoice_amount = sats(250);
             let invoice = other_lightning_client.invoice(invoice_amount, None).await?;
@@ -343,8 +299,8 @@ async fn test_can_change_routing_fees() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
     single_federation_test(
-        |gateway, other_lightning_client, fed, user_client, _| async move {
-            let rpc_client = gateway
+        |gateway_test, other_lightning_client, fed, user_client, _| async move {
+            let rpc_client = gateway_test
                 .get_rpc()
                 .await
                 .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
@@ -366,40 +322,25 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                 rpc_client.set_configuration(set_configuration_payload.clone())
             })
             .await;
+            info!("### Changed gateway routing fees");
 
-            // Fetch the gateway registration record
-            let gateway_id = gateway.gateway.gateway_id;
             let user_lightning_module = user_client.get_first_module::<LightningClientModule>();
-            let gateways = user_lightning_module.fetch_registered_gateways().await?;
-            let mut current_gateway = gateways
-                .into_iter()
-                .find(|g| g.info.gateway_id == gateway_id)
-                .expect("No gateway found for gateway id {gateway_id}");
-
-            // Modify the current gateway so that the fees do not match
-            info!("### Overriding active gateway");
-            current_gateway.info.fees = RoutingFees {
-                base_msat: 0,
-                proportional_millionths: 0,
-            };
-            user_lightning_module
-                .override_active_gateway(current_gateway.clone())
-                .await?;
-
-            let gateway_client = gateway.remove_client_hack(&fed).await;
+            let gateway_id = gateway_test.gateway.gateway_id;
+            let gateway = user_lightning_module.select_gateway(&gateway_id).await;
+            let gateway_client = gateway_test.remove_client_hack(&fed).await;
 
             let invoice_amount = sats(250);
             let invoice = other_lightning_client.invoice(invoice_amount, None).await?;
 
             // Try to pay an invoice, this should fail since the client will not set the
             // gateway's fees.
-            info!("### Overriding user client paying invoice");
+            info!("### User client paying invoice");
             let OutgoingLightningPayment {
                 payment_type,
                 contract_id,
                 fee: _,
             } = user_lightning_module
-                .pay_bolt11_invoice(Some(current_gateway.info), invoice.clone(), ())
+                .pay_bolt11_invoice(gateway, invoice.clone(), ())
                 .await
                 .expect("No Lightning Payment was started");
             match payment_type {
@@ -595,6 +536,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, user_client, _| async move {
+        let gateway_id = gateway.gateway.gateway_id;
         let gateway = gateway.remove_client_hack(&fed).await;
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
@@ -605,13 +547,15 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
 
         // User client creates invoice in federation
         let invoice_amount = sats(100);
-        let (_invoice_op, invoice, _) = user_client
-            .get_first_module::<LightningClientModule>()
+        let ln_module = user_client.get_first_module::<LightningClientModule>();
+        let ln_gateway = ln_module.select_gateway(&gateway_id).await;
+        let (_invoice_op, invoice, _) = ln_module
             .create_bolt11_invoice(
                 invoice_amount,
                 "description".into(),
                 None,
                 "test intercept valid HTLC",
+                ln_gateway,
             )
             .await?;
 
@@ -690,15 +634,18 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, user_client, _| async move {
+        let gateway_id = gateway.gateway.gateway_id;
         let gateway = gateway.remove_client_hack(&fed).await;
         // User client creates invoice in federation
-        let (_invoice_op, invoice, _) = user_client
-            .get_first_module::<LightningClientModule>()
+        let ln_module = user_client.get_first_module::<LightningClientModule>();
+        let ln_gateway = ln_module.select_gateway(&gateway_id).await;
+        let (_invoice_op, invoice, _) = ln_module
             .create_bolt11_invoice(
                 sats(100),
                 "description".into(),
                 None,
                 "test intercept htlc but with no funds",
+                ln_gateway,
             )
             .await?;
 
@@ -857,7 +804,8 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
         proportional_millionths: 0,
     };
     let lightning_module = user_client.get_first_module::<LightningClientModule>();
-    let gateways = lightning_module.fetch_registered_gateways().await?;
+    lightning_module.update_gateway_cache(true).await?;
+    let gateways = lightning_module.list_gateways().await;
     assert!(!gateways.is_empty());
     assert!(gateways
         .into_iter()
@@ -875,13 +823,15 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     })
     .await;
 
-    let gateways = lightning_module.fetch_registered_gateways().await?;
+    lightning_module.update_gateway_cache(true).await?;
+    let gateways = lightning_module.list_gateways().await;
     assert!(gateways.is_empty());
 
     // Reconnect the federation and verify that the gateway has registered.
     gateway_test.connect_fed(&fed).await;
 
-    let gateways = lightning_module.fetch_registered_gateways().await?;
+    lightning_module.update_gateway_cache(true).await?;
+    let gateways = lightning_module.list_gateways().await;
     assert!(!gateways.is_empty());
     assert!(gateways
         .into_iter()
@@ -986,7 +936,6 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
             let gateway_ln = match gateway_type {
                 LightningNodeType::Cln => fixtures.cln().await,
                 LightningNodeType::Lnd => fixtures.lnd().await,
-                LightningNodeType::Ldk => unimplemented!("LDK Node is not supported as a gateway"),
             };
 
             let GetNodeInfoResponse { pub_key, .. } = gateway_ln.info().await?;
@@ -995,7 +944,6 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
             tracing::info!("Creating federation with gateway type {gateway_type}. Number of route hints: {num_route_hints}");
 
             let fed = fixtures.new_fed().await;
-            let user_client = fed.new_client().await;
             let mut gateway = fixtures
                 .new_gateway(
                     gateway_ln,
@@ -1004,8 +952,12 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
                 )
                 .await;
             gateway.connect_fed(&fed).await;
+            let user_client = fed.new_client().await;
 
             let invoice_amount = sats(100);
+            let gateway_id = gateway.gateway.gateway_id;
+            let ln_module = user_client.get_first_module::<LightningClientModule>();
+            let ln_gateway = ln_module.select_gateway(&gateway_id).await;
             let (_invoice_op, invoice, _) = user_client
                 .get_first_module::<LightningClientModule>()
                 .create_bolt11_invoice(
@@ -1015,6 +967,7 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
                     format!(
                         "gateway type: {gateway_type} number of route hints: {num_route_hints}"
                     ),
+                    ln_gateway,
                 )
                 .await?;
             let route_hints = invoice.route_hints();
@@ -1436,12 +1389,14 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
             let id1 = fed1.invite_code().federation_id();
             let id2 = fed2.invite_code().federation_id();
 
-            let client1 = fed1.new_client().await;
-            let client2 = fed2.new_client().await;
-
-            connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
+            connect_federations(&rpc, &[fed1.clone(), fed2.clone()])
+                .await
+                .unwrap();
             send_msats_to_gateway(&gateway, id1, 10_000).await;
             send_msats_to_gateway(&gateway, id2, 10_000).await;
+
+            let client1 = fed1.new_client().await;
+            let client2 = fed2.new_client().await;
 
             // Check gateway balances before facilitating direct swap between federations
             let pre_balances = get_balances(&rpc, &[id1, id2]).await;
@@ -1456,17 +1411,18 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
 
             // User creates invoice in federation 2
             let invoice_amt = msats(2_500);
-            let (receive_op, invoice, _) = client2
-                .get_first_module::<LightningClientModule>()
+            let ln_module = client2.get_first_module::<LightningClientModule>();
+            let ln_gateway = ln_module.select_gateway(&gateway_id).await;
+            let (receive_op, invoice, _) = ln_module
                 .create_bolt11_invoice(
                     invoice_amt,
                     "description".into(),
                     None,
                     "test gw swap between federations",
+                    ln_gateway,
                 )
                 .await?;
-            let mut receive_sub = client2
-                .get_first_module::<LightningClientModule>()
+            let mut receive_sub = ln_module
                 .subscribe_ln_receive(receive_op)
                 .await?
                 .into_stream();

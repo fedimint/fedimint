@@ -15,16 +15,17 @@ use fedimint_core::module::ApiRequestErased;
 use fedimint_core::query::{ThresholdOrDeadline, UnionResponses};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeers, PeerId};
+use fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
+use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
+use fedimint_ln_common::contracts::{
+    ContractId, DecryptedPreimageStatus, FundedContract, Preimage,
+};
+use fedimint_ln_common::{
+    ContractAccount, LightningGateway, LightningGatewayAnnouncement, RemoveGatewayRequest,
+};
 use itertools::Itertools;
-use secp256k1::schnorr::Signature;
 use secp256k1::PublicKey;
-use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
-
-use crate::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
-use crate::contracts::outgoing::OutgoingContractAccount;
-use crate::contracts::{ContractId, DecryptedPreimageStatus, FundedContract, Preimage};
-use crate::{ContractAccount, LightningGateway, LightningGatewayAnnouncement};
 
 #[apply(async_trait_maybe_send!)]
 pub trait LnFederationApi {
@@ -293,16 +294,6 @@ where
             ))),
         }
     }
-}
-
-/// Request sent to the federation that requests the removal of a gateway
-/// registration. Each peer is expected to check the `signatures` map for the
-/// signature that validates the gateway authorized the removal of this
-/// registration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RemoveGatewayRequest {
-    pub gateway_id: PublicKey,
-    pub signatures: BTreeMap<PeerId, Signature>,
 }
 
 /// Filter out duplicate gateways. This is necessary because different guardians

@@ -9,11 +9,11 @@
 
 extern crate core;
 
-pub mod api;
 pub mod config;
 pub mod contracts;
 pub mod db;
 
+use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind, Read, Write};
 use std::time::{Duration, SystemTime};
 
@@ -33,6 +33,7 @@ use fedimint_core::{
 };
 use lightning::util::ser::{WithoutLength, Writeable};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
+use secp256k1::schnorr::Signature;
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -705,6 +706,16 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
             expiry_timestamp,
         })
     }
+}
+
+/// Request sent to the federation that requests the removal of a gateway
+/// registration. Each peer is expected to check the `signatures` map for the
+/// signature that validates the gateway authorized the removal of this
+/// registration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoveGatewayRequest {
+    pub gateway_id: secp256k1::PublicKey,
+    pub signatures: BTreeMap<PeerId, Signature>,
 }
 
 /// Creates a message to be signed by the Gateway's private key for the purpose

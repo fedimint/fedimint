@@ -25,6 +25,7 @@ use fedimintd::fedimintd::FM_EXTRA_DKG_META_VAR;
 use fs_lock::FileLock;
 use futures::future::join_all;
 use rand::Rng;
+use semver::VersionReq;
 use tracing::{debug, info};
 
 use super::external::Bitcoind;
@@ -139,15 +140,20 @@ impl Client {
             .unwrap())
     }
 
+    // TODO(support:v0.2): remove
     pub async fn use_gateway(&self, gw: &super::gatewayd::Gatewayd) -> Result<()> {
-        let gateway_id = gw.gateway_id().await?;
-        cmd!(self, "switch-gateway", gateway_id.clone())
-            .run()
-            .await?;
-        info!(
-            "Using {name} gateway",
-            name = gw.ln.as_ref().unwrap().name()
-        );
+        let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+        if VersionReq::parse("<0.3.0-alpha")?.matches(&fedimint_cli_version) {
+            let gateway_id = gw.gateway_id().await?;
+            cmd!(self, "switch-gateway", gateway_id.clone())
+                .run()
+                .await?;
+            info!(
+                "Using {name} gateway",
+                name = gw.ln.as_ref().unwrap().name()
+            );
+        }
+
         Ok(())
     }
 
@@ -386,8 +392,15 @@ impl Federation {
     }
 
     pub async fn await_gateways_registered(&self) -> Result<()> {
+        let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+        let command = if VersionReq::parse("<0.3.0-alpha")?.matches(&fedimint_cli_version) {
+            "list-gateways"
+        } else {
+            "update-gateway-cache"
+        };
+
         poll("gateways registered", None, || async {
-            let num_gateways = cmd!(self.client, "list-gateways")
+            let num_gateways = cmd!(self.client, command)
                 .out_json()
                 .await
                 .map_err(ControlFlow::Continue)?

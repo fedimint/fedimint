@@ -18,7 +18,6 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
-use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::{LightningInput, LightningOutputOutcome};
@@ -27,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info, warn};
 
+use crate::api::LnFederationApi;
 use crate::{set_payment_result, LightningClientContext, PayType};
 
 #[cfg_attr(doc, aquamarine::aquamarine)]

@@ -105,6 +105,7 @@ mod tests {
     use fedimint_ln_client::{
         LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
     };
+    use fedimint_ln_common::LightningGateway;
     use fedimint_mint_client::{MintClientModule, ReissueExternalNotesState, SpendOOBState};
     use futures::StreamExt;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -117,37 +118,41 @@ mod tests {
         Ok(())
     }
 
-    async fn set_gateway(client: &fedimint_client::ClientHandle) -> anyhow::Result<()> {
+    async fn get_gateway(
+        client: &fedimint_client::ClientHandle,
+    ) -> anyhow::Result<LightningGateway> {
         let lightning_module = client.get_first_module::<LightningClientModule>();
-        let gws = lightning_module.fetch_registered_gateways().await?;
+        let gws = lightning_module.list_gateways().await;
         let gw_api = faucet::gateway_api().await?;
         let lnd_gw = gws
             .into_iter()
             .find(|x| x.info.api.to_string() == gw_api)
             .expect("no gateway with api");
 
-        lightning_module
-            .set_active_gateway(&lnd_gw.info.gateway_id)
-            .await?;
-        Ok(())
+        Ok(lnd_gw.info)
     }
 
     #[wasm_bindgen_test]
     async fn receive() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;
-        set_gateway(&client).await?;
+        let ln_gateway = get_gateway(&client).await?;
         futures::future::try_join_all(
-            (0..10).map(|_| receive_once(client.clone(), Amount::from_sats(21))),
+            (0..10)
+                .map(|_| receive_once(client.clone(), Amount::from_sats(21), ln_gateway.clone())),
         )
         .await?;
         Ok(())
     }
 
-    async fn receive_once(client: fedimint_client::ClientHandle, amount: Amount) -> Result<()> {
+    async fn receive_once(
+        client: fedimint_client::ClientHandle,
+        amount: Amount,
+        gateway: LightningGateway,
+    ) -> Result<()> {
         let lightning_module = client.get_first_module::<LightningClientModule>();
         let (opid, invoice, _) = lightning_module
-            .create_bolt11_invoice(amount, "test".to_string(), None, ())
+            .create_bolt11_invoice(amount, "test".to_string(), None, (), Some(gateway))
             .await?;
         faucet::pay_invoice(&invoice.to_string()).await?;
 
@@ -179,16 +184,18 @@ mod tests {
         assert!(format!("key: {key:?}").len() > 8);
     }
 
-    async fn pay_once(client: fedimint_client::ClientHandle) -> Result<(), anyhow::Error> {
+    async fn pay_once(
+        client: fedimint_client::ClientHandle,
+        ln_gateway: LightningGateway,
+    ) -> Result<(), anyhow::Error> {
         let lightning_module = client.get_first_module::<LightningClientModule>();
         let bolt11 = faucet::generate_invoice(11).await?;
-        let gateway = lightning_module.select_active_gateway_opt().await;
         let OutgoingLightningPayment {
             payment_type,
             contract_id: _,
             fee: _,
         } = lightning_module
-            .pay_bolt11_invoice(gateway, bolt11.parse()?, ())
+            .pay_bolt11_invoice(Some(ln_gateway), bolt11.parse()?, ())
             .await?;
         let PayType::Lightning(operation_id) = payment_type else {
             unreachable!("paying invoice over lightning");
@@ -217,13 +224,17 @@ mod tests {
     async fn receive_and_pay() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;
-        set_gateway(&client).await?;
+        let ln_gateway = get_gateway(&client).await?;
 
         futures::future::try_join_all(
-            (0..10).map(|_| receive_once(client.clone(), Amount::from_sats(21))),
+            (0..10)
+                .map(|_| receive_once(client.clone(), Amount::from_sats(21), ln_gateway.clone())),
         )
         .await?;
-        futures::future::try_join_all((0..10).map(|_| pay_once(client.clone()))).await?;
+        futures::future::try_join_all(
+            (0..10).map(|_| pay_once(client.clone(), ln_gateway.clone())),
+        )
+        .await?;
 
         Ok(())
     }
@@ -285,10 +296,11 @@ mod tests {
     async fn test_ecash() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;
-        set_gateway(&client).await?;
+        let ln_gateway = get_gateway(&client).await?;
 
         futures::future::try_join_all(
-            (0..10).map(|_| receive_once(client.clone(), Amount::from_sats(21))),
+            (0..10)
+                .map(|_| receive_once(client.clone(), Amount::from_sats(21), ln_gateway.clone())),
         )
         .await?;
         futures::future::try_join_all((0..10).map(|_| send_and_recv_ecash_once(client.clone())))
@@ -300,9 +312,9 @@ mod tests {
     async fn test_ecash_exact() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;
-        set_gateway(&client).await?;
+        let ln_gateway = get_gateway(&client).await?;
 
-        receive_once(client.clone(), Amount::from_sats(100)).await?;
+        receive_once(client.clone(), Amount::from_sats(100), ln_gateway).await?;
         futures::future::try_join_all(
             (0..3).map(|_| send_ecash_exact(client.clone(), Amount::from_sats(1))),
         )
