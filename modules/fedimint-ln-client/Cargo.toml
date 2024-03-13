@@ -22,34 +22,34 @@ name = "fedimint_ln_client"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.66"
-async-trait = "0.1.73"
+anyhow = "1.0.81"
+async-trait = "0.1.77"
 async-stream = "0.3.5"
-aquamarine = "0.3.0"
+aquamarine = "0.3.3"
 bincode = "1"
 bitcoin = "0.29.2"
 bitcoin_hashes = "0.11.0"
 erased-serde = "0.3"
-futures = "0.3.24"
+futures = "0.3.30"
 itertools = "0.10.5"
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
 fedimint-client = { version = "0.3.0-alpha", path = "../../fedimint-client" }
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
 fedimint-ln-common = { version = "0.3.0-alpha", path = "../fedimint-ln-common" }
-secp256k1 = { version="0.24.2", default-features=false }
+secp256k1 = { version="0.24.3", default-features=false }
 secp256k1-zkp = { version = "0.7.0", features = [ "serde", "bitcoin_hashes" ] }
-serde = {version = "1.0.149", features = [ "derive" ] }
-serde_json = "1.0.91"
+serde = {version = "1.0.197", features = [ "derive" ] }
+serde_json = "1.0.114"
 strum = "0.24"
 strum_macros = "0.24"
-thiserror = "1.0.39"
+thiserror = "1.0.58"
 threshold_crypto = { workspace = true }
-tokio = { version = "1.26.0", features = ["macros"] }
-tracing = "0.1.37"
+tokio = { version = "1.36.0", features = ["macros"] }
+tracing = "0.1.40"
 rand = "0.8"
-reqwest = { version = "0.11.14", features = [ "json", "rustls-tls" ], default-features = false }
-url = { version = "2.3.1", features = ["serde"] }
+reqwest = { version = "0.11.26", features = [ "json", "rustls-tls" ], default-features = false }
+url = { version = "2.5.0", features = ["serde"] }
 
 [dev-dependencies]
-tokio = {version = "1.26.0", features = [ "full" ] }
-tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
+tokio = {version = "1.36.0", features = [ "full" ] }
+tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }

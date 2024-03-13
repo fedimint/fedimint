@@ -16,10 +16,10 @@ name = "fedimint_wallet_client"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.66"
-aquamarine = "0.3.1"
+anyhow = "1.0.81"
+aquamarine = "0.3.3"
 async-stream = "0.3.5"
-async-trait = "0.1.73"
+async-trait = "0.1.77"
 bitcoin = { version = "0.29.2", features = [ "rand", "serde"] }
 erased-serde = "0.3"
 fedimint-bitcoind = { version = "0.3.0-alpha", path = "../../fedimint-bitcoind", default-features = false, features = ["esplora-client", "bitcoincore-rpc"] }
@@ -30,16 +30,16 @@ futures = "0.3"
 miniscript = { version = "10.0.0", features = [ "compiler", "serde" ] }
 impl-tools = "0.8.0"
 rand = "0.8"
-secp256k1 = { version = "0.24.2", features = [ "serde" ] }
-serde = { version = "1.0.149", features = [ "derive" ] }
-serde_json = "1.0.108"
+secp256k1 = { version = "0.24.3", features = [ "serde" ] }
+serde = { version = "1.0.197", features = [ "derive" ] }
+serde_json = "1.0.114"
 strum = "0.24"
 strum_macros = "0.24"
-thiserror = "1.0.39"
-tokio = { version = "1.26.0", features = ["sync", "rt"] }
-tracing ="0.1.37"
-url = "2.3.1"
+thiserror = "1.0.58"
+tokio = { version = "1.36.0", features = ["sync", "rt"] }
+tracing ="0.1.40"
+url = "2.5.0"
 validator = { version = "0.16", features = ["derive"] }
 
 [dev-dependencies]
-tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
+tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }

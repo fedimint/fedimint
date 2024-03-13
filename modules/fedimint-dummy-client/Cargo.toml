@@ -16,18 +16,18 @@ name = "fedimint_dummy_client"
 path = "src/lib.rs"
 
 [dependencies]
-async-trait = "0.1.73"
-anyhow = "1.0.66"
+async-trait = "0.1.77"
+anyhow = "1.0.81"
 fedimint-dummy-common = { version = "0.3.0-alpha", path = "../fedimint-dummy-common" }
 fedimint-client = { version = "0.3.0-alpha", path = "../../fedimint-client" }
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
 futures = "0.3"
 erased-serde = "0.3"
 rand = "0.8.5"
-secp256k1 = "0.24.2"
-serde = {version = "1.0.149", features = [ "derive" ] }
+secp256k1 = "0.24.3"
+serde = {version = "1.0.197", features = [ "derive" ] }
 strum = "0.24"
 strum_macros = "0.24"
-tracing = "0.1.37"
-thiserror = "1.0.39"
+tracing = "0.1.40"
+thiserror = "1.0.58"
 threshold_crypto = { workspace = true }

@@ -12,9 +12,9 @@ name = "fedimint_wasm_tests"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.69"
-futures = "0.3.26"
-ring = { version = "0.17.5", features = ["wasm32_unknown_unknown_js"] }
+anyhow = "1.0.81"
+futures = "0.3.30"
+ring = { version = "0.17.8", features = ["wasm32_unknown_unknown_js"] }
 fedimint-client = { path = "../fedimint-client" }
 fedimint-core = { path = "../fedimint-core" }
 fedimint-mint-client = { path = "../modules/fedimint-mint-client" }
@@ -22,9 +22,9 @@ fedimint-mint-common = { path = "../modules/fedimint-mint-common" }
 fedimint-ln-common = { path = "../modules/fedimint-ln-common" }
 fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
-js-sys = "0.3.61"
-wasm-bindgen = "=0.2.89" # must match the nix provided wasm-bindgen-cli version
-wasm-bindgen-futures = "0.4.34"
-wasm-bindgen-test = "0.3.34"
+js-sys = "0.3.69"
+wasm-bindgen = "=0.2.92" # must match the nix provided wasm-bindgen-cli version
+wasm-bindgen-futures = "0.4.42"
+wasm-bindgen-test = "0.3.42"
 gloo-net = "0.2.6"
 rand = "0.8.5"

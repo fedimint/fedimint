@@ -16,9 +16,9 @@ name = "recoverytool"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.69"
+anyhow = "1.0.81"
 bitcoin = "0.29.2"
-clap = { version = "4.4.7", features = [ "derive", "env" ] }
+clap = { version = "4.5.2", features = [ "derive", "env" ] }
 fedimint-aead = { version = "0.3.0-alpha", path = "../crypto/aead" }
 fedimint-core = { version = "0.3.0-alpha", path = "../fedimint-core" }
 fedimint-rocksdb = { version = "0.3.0-alpha", path = "../fedimint-rocksdb" }
@@ -28,14 +28,14 @@ fedimint-logging = { version = "0.3.0-alpha", path = "../fedimint-logging" }
 fedimint-ln-common = { version = "0.3.0-alpha", path = "../modules/fedimint-ln-common" }
 fedimint-ln-server = { version = "0.3.0-alpha", path = "../modules/fedimint-ln-server" }
 fedimint-mint-server = { version = "0.3.0-alpha", path = "../modules/fedimint-mint-server" }
-futures = "0.3.26"
+futures = "0.3.30"
 miniscript = { version = "10.0.0" }
 secp256k1 = { version = "0.24.3", features = [ "serde", "global-context" ] }
-serde = { version = "1.0.152", features = [ "derive" ] }
-serde_json = "1.0.93"
-tokio = { version = "1.26.0", features = [ "rt-multi-thread", "macros" ] }
-tracing = "0.1.37"
-tracing-subscriber = "0.3.16"
+serde = { version = "1.0.197", features = [ "derive" ] }
+serde_json = "1.0.114"
+tokio = { version = "1.36.0", features = [ "rt-multi-thread", "macros" ] }
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
 
 [dev-dependencies]
 rand = "0.8.5"

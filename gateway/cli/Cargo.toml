@@ -17,22 +17,22 @@ name = "gateway-cli"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.66"
-async-trait = "0.1.64"
-axum = "0.6.4"
-axum-macros = "0.3.1"
+anyhow = "1.0.81"
+async-trait = "0.1.77"
+axum = "0.6.20"
+axum-macros = "0.3.8"
 bitcoin = { version = "0.29.2", features = ["serde"] }
-clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
+clap = { version = "4.5.2", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
 ln-gateway = { version = "0.3.0-alpha", package = "fedimint-ln-gateway", path= "../ln-gateway" }
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
 fedimint-logging = { version = "0.3.0-alpha", path = "../../fedimint-logging" }
-reqwest = { version = "0.11.14", features = [ "json", "rustls-tls" ], default-features = false }
+reqwest = { version = "0.11.26", features = [ "json", "rustls-tls" ], default-features = false }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.91"
-tokio = {version = "1.26", features = ["full"]}
-tracing = { version = "0.1.37", default-features = false, features= ["log", "attributes", "std"] }
-url = { version = "2.3.1", features = ["serde"] }
-clap_complete = "4.3.1"
+serde_json = "1.0.114"
+tokio = {version = "1.36", features = ["full"]}
+tracing = { version = "0.1.40", default-features = false, features= ["log", "attributes", "std"] }
+url = { version = "2.5.0", features = ["serde"] }
+clap_complete = "4.5.1"
 
 [build-dependencies]
 fedimint-build = { version = "0.3.0-alpha", path = "../../fedimint-build" }

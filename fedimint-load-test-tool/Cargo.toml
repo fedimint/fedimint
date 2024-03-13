@@ -15,7 +15,7 @@ path = "src/main.rs"
 anyhow = "1"
 base64 = "0.21.7"
 bitcoin = "0.29.2"
-clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env" ], default-features = false }
+clap = { version = "4.5.2", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env" ], default-features = false }
 devimint = { version = "0.3.0-alpha", path = "../devimint" }
 fedimint-client = { version = "0.3.0-alpha", path = "../fedimint-client" }
 fedimint-core = { version = "0.3.0-alpha", path = "../fedimint-core" }
@@ -30,11 +30,11 @@ jsonrpsee-core = { version = "0.21.0", features = [ "client" ] }
 jsonrpsee-types = { version = "0.22.2" }
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
 rand = "0.8"
-serde = { version = "1.0.149", features = [ "derive" ] }
-serde_json = "1.0.91"
+serde = { version = "1.0.197", features = [ "derive" ] }
+serde_json = "1.0.114"
 tokio = { version = "1", features = ["full", "tracing"] }
 tracing = "0.1"
-url = { version = "2.3.1", features = ["serde"] }
+url = { version = "2.5.0", features = ["serde"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = { version = "0.21.0", features = ["webpki-tls"], default-features = false }

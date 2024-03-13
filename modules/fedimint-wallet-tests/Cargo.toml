@@ -12,9 +12,9 @@ name = "fedimint_wallet_tests"
 path = "tests/tests.rs"
 
 [dependencies]
-anyhow = "1.0.66"
+anyhow = "1.0.81"
 assert_matches = "1.5.0"
-async-trait = "0.1.73"
+async-trait = "0.1.77"
 bitcoin = "0.29.2"
 erased-serde = "0.3"
 fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
@@ -29,11 +29,11 @@ fedimint-testing ={ path = "../../fedimint-testing" }
 fedimint-wallet-client = { path = "../fedimint-wallet-client" }
 fedimint-wallet-common = { path = "../fedimint-wallet-common" }
 fedimint-wallet-server = { path = "../fedimint-wallet-server" }
-futures = "0.3.28"
+futures = "0.3.30"
 miniscript = { version = "10.0.0" }
-tokio = { version = "1.26.0", features = ["sync"] }
-tracing = "0.1.37"
-secp256k1 = { version = "0.24.2", features = [ "serde" ] }
+tokio = { version = "1.36.0", features = ["sync"] }
+tracing = "0.1.40"
+secp256k1 = { version = "0.24.3", features = [ "serde" ] }
 rand = "0.8"
 strum = "0.24"
 strum_macros = "0.24"
