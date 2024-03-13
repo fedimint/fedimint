@@ -215,14 +215,26 @@ done
 
 parsed_test_commands=$(printf "%s\n" "${tests_with_versions[@]}")
 
-delay="${FM_TEST_CI_ALL_DELAY:-$((64 / $(nproc) + 1))}"
-load="${FM_TEST_CI_ALL_MAX_LOAD:-1000}"
 parallel_args=()
-export parallel_jobs='0'
+export parallel_jobs='1'
 
 if [ -z "${CI:-}" ]; then
   parallel_args+=(--eta)
 fi
+
+if [ -n "${FM_TEST_CI_ALL_JOBS:-}" ]; then
+  # when specifically set, use the env var
+  parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS}")
+elif [ -n "${CI:-}" ]; then
+  # in CI, we know number of cpus works OK
+  parallel_args+=(--jobs +0)
+else
+  # on dev computers default to `num_cpus / 4 + 1` max parallel jobs
+  parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 4 + 1))}")
+fi
+parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-1000}")
+# --delay to let nix start extracting and bump the load
+parallel_args+=(--delay "${FM_TEST_CI_ALL_DELAY:-$((64 / $(nproc) + 1))}")
 
 tmpdir=$(mktemp --tmpdir -d XXXXX)
 trap 'rm -r $tmpdir' EXIT
@@ -231,19 +243,14 @@ joblog="$tmpdir/joblog"
 PATH="$(pwd)/scripts/dev/run-test/:$PATH"
 
 >&2 echo "## Starting all tests in parallel..."
-# --load to keep the load under-control, especially during target dir extraction
-# --delay to let nix start extracting and bump the load
 # --memfree to make sure tests have enough memory to run
 # --nice to let you browse twitter without lag while the tests are running
 echo "$parsed_test_commands" | if parallel \
   --halt-on-error 1 \
   --joblog "$joblog" \
   --timeout 600 \
-  --load "${load}%" \
   --noswap \
-  --delay "$delay" \
-  --jobs "$parallel_jobs" \
-  --memfree 1G \
+  --memfree 2G \
   --nice 15 \
   "${parallel_args[@]}" ; then
   >&2 echo "All tests successful"
