@@ -106,6 +106,15 @@ exit-mprocs:
 tmuxinator:
   ./scripts/dev/tmuxinator/run.sh
 
+devimint-env *PARAMS:
+  ./scripts/dev/devimint-env.sh {{PARAMS}}
+
+devimint-env-tmux *PARAMS:
+  ./scripts/dev/tmuxinator/run.sh {{PARAMS}}
+
+devimint-env-mprocs *PARAMS:
+  ./scripts/dev/mprocs/run.sh {{PARAMS}}
+
 # exit tmuxinator session
 exit-tmuxinator:
   tmux kill-session -t fedimint-dev
