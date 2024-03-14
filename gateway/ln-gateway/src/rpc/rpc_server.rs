@@ -8,6 +8,7 @@ use bitcoin_hashes::hex::ToHex;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use serde_json::json;
+use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 use tower_http::validate_request::ValidateRequestHeaderLayer;
 use tracing::{error, instrument};
@@ -25,7 +26,7 @@ pub async fn run_webserver(
     bind_addr: SocketAddr,
     gateway: Gateway,
     task_group: &mut TaskGroup,
-) -> axum::response::Result<()> {
+) -> anyhow::Result<()> {
     let v1_routes = v1_routes(config, gateway.clone());
     let api_v1 = Router::new()
         .nest(&format!("/{V1_API_ENDPOINT}"), v1_routes.clone())
@@ -34,10 +35,11 @@ pub async fn run_webserver(
 
     let handle = task_group.make_handle();
     let shutdown_rx = handle.make_shutdown_rx().await;
-    let server = axum::Server::bind(&bind_addr).serve(api_v1.into_make_service());
+    let listener = TcpListener::bind(&bind_addr).await?;
+    let serve = axum::serve(listener, api_v1.into_make_service());
     task_group
         .spawn("Gateway Webserver", move |_| async move {
-            let graceful = server.with_graceful_shutdown(async {
+            let graceful = serve.with_graceful_shutdown(async {
                 shutdown_rx.await;
             });
 

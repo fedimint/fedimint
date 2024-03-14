@@ -9,6 +9,7 @@ pub use prometheus::{
     self, histogram_opts, opts, register_histogram, register_int_counter, Encoder, Histogram,
     IntCounter, TextEncoder,
 };
+use tokio::net::TcpListener;
 use tracing::error;
 
 async fn get_metrics() -> (StatusCode, String) {
@@ -30,13 +31,14 @@ pub async fn run_api_server(
     task_group: &mut TaskGroup,
 ) -> anyhow::Result<TaskShutdownToken> {
     let app = Router::new().route("/metrics", get(get_metrics));
-    let server = axum::Server::bind(bind_address).serve(app.into_make_service());
+    let listener = TcpListener::bind(bind_address).await?;
+    let serve = axum::serve(listener, app.into_make_service());
 
     let handle = task_group.make_handle();
     let shutdown_rx = handle.make_shutdown_rx().await;
     task_group
         .spawn("Metrics Api", move |_| async move {
-            let graceful = server.with_graceful_shutdown(async {
+            let graceful = serve.with_graceful_shutdown(async {
                 shutdown_rx.await;
             });
 

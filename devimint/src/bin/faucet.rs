@@ -11,6 +11,7 @@ use cln_rpc::primitives::{Amount as ClnAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::V1_API_ENDPOINT;
+use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 
@@ -155,8 +156,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(CorsLayer::permissive())
         .with_state(faucet);
 
-    axum::Server::bind(&cmd.bind_addr.parse()?)
-        .serve(router.into_make_service())
-        .await?;
+    let listener = TcpListener::bind(&cmd.bind_addr).await?;
+    axum::serve(listener, router.into_make_service()).await?;
     Ok(())
 }
