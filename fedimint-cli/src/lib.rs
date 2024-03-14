@@ -40,9 +40,9 @@ use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use thiserror::Error;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use utils::parse_peer_id;
 
 use crate::client::ClientCmd;
@@ -98,23 +98,6 @@ impl fmt::Display for CliOutput {
     }
 }
 
-/// Types of error the cli return
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum CliErrorKind {
-    NetworkError,
-    IOError,
-    InvalidValue,
-    OSError,
-    GeneralFederationError,
-    AlreadySpent,
-    Timeout,
-    InsufficientBalance,
-    SerializationError,
-    GeneralFailure,
-    MissingAuth,
-}
-
 /// `Result` with `CliError` as `Error`
 type CliResult<E> = Result<E, CliError>;
 
@@ -125,73 +108,45 @@ type CliOutputResult = Result<CliOutput, CliError>;
 #[derive(Serialize, Error)]
 #[serde(tag = "error", rename_all(serialize = "snake_case"))]
 struct CliError {
-    kind: CliErrorKind,
-    message: String,
-    #[serde(skip_serializing)]
-    #[source]
-    raw_error: Option<anyhow::Error>,
+    error: String,
 }
 
 /// Extension trait making turning Results/Errors into
 /// [`CliError`]/[`CliOutputResult`] easier
 trait CliResultExt<O, E> {
-    /// Map error into `CliError` of [`CliErrorKind::GeneralFailure`] kind, use
-    /// the error message as the message
-    fn map_err_cli_general(self) -> Result<O, CliError>;
-    /// Map error into `CliError` of [`CliErrorKind::IOError`] kind, use the
-    /// error message as the message
-    fn map_err_cli_io(self) -> Result<O, CliError>;
-    /// Map error into `CliError` of `kind` and use custom `msg`
-    fn map_err_cli_msg(self, kind: CliErrorKind, msg: impl Into<String>) -> Result<O, CliError>;
+    /// Map error into `CliError` wrapping the original error message
+    fn map_err_cli(self) -> Result<O, CliError>;
+    /// Map error into `CliError` using custom error message `msg`
+    fn map_err_cli_msg(self, msg: impl Into<String>) -> Result<O, CliError>;
 }
 
 impl<O, E> CliResultExt<O, E> for result::Result<O, E>
 where
     E: Into<anyhow::Error>,
 {
-    fn map_err_cli_io(self) -> Result<O, CliError> {
+    fn map_err_cli(self) -> Result<O, CliError> {
         self.map_err(|e| {
             let e = e.into();
             CliError {
-                kind: CliErrorKind::IOError,
-                message: e.to_string(),
-                raw_error: Some(e),
-            }
-        })
-    }
-    fn map_err_cli_general(self) -> Result<O, CliError> {
-        self.map_err(|e| {
-            let e = e.into();
-            CliError {
-                kind: CliErrorKind::GeneralFailure,
-                message: e.to_string(),
-                raw_error: Some(e),
+                error: e.to_string(),
             }
         })
     }
 
-    fn map_err_cli_msg(self, kind: CliErrorKind, msg: impl Into<String>) -> Result<O, CliError> {
-        self.map_err(|e| CliError {
-            kind,
-            message: msg.into(),
-            raw_error: Some(e.into()),
-        })
+    fn map_err_cli_msg(self, msg: impl Into<String>) -> Result<O, CliError> {
+        self.map_err(|_| CliError { error: msg.into() })
     }
 }
 
 /// Extension trait to make turning `Option`s into
 /// [`CliError`]/[`CliOutputResult`] easier
 trait CliOptionExt<O> {
-    fn ok_or_cli_msg(self, kind: CliErrorKind, msg: impl Into<String>) -> Result<O, CliError>;
+    fn ok_or_cli_msg(self, msg: impl Into<String>) -> Result<O, CliError>;
 }
 
 impl<O> CliOptionExt<O> for Option<O> {
-    fn ok_or_cli_msg(self, kind: CliErrorKind, msg: impl Into<String>) -> Result<O, CliError> {
-        self.ok_or_else(|| CliError {
-            kind,
-            message: msg.into(),
-            raw_error: None,
-        })
+    fn ok_or_cli_msg(self, msg: impl Into<String>) -> Result<O, CliError> {
+        self.ok_or_else(|| CliError { error: msg.into() })
     }
 }
 
@@ -199,9 +154,7 @@ impl<O> CliOptionExt<O> for Option<O> {
 impl From<FederationError> for CliError {
     fn from(e: FederationError) -> Self {
         CliError {
-            kind: CliErrorKind::GeneralFederationError,
-            message: "Failed API call".into(),
-            raw_error: Some(e.into()),
+            error: e.to_string(),
         }
     }
 }
@@ -209,20 +162,17 @@ impl From<FederationError> for CliError {
 impl Debug for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CliError")
-            .field("kind", &self.kind)
-            .field("message", &self.message)
-            .field("raw_error", &self.raw_error)
+            .field("error", &self.error)
             .finish()
     }
 }
 
 impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut json = serde_json::to_value(self).unwrap();
-        if let Some(err) = &self.raw_error {
-            json["raw_error"] = json!(*err.to_string())
-        }
-        write!(f, "{}", serde_json::to_string_pretty(&json).unwrap())
+        let json = serde_json::to_value(self).expect("CliError is valid json");
+        let json_as_string =
+            serde_json::to_string_pretty(&json).expect("valid json is serializable");
+        write!(f, "{}", json_as_string)
     }
 }
 
@@ -254,22 +204,20 @@ impl Opts {
     fn data_dir(&self) -> CliResult<&PathBuf> {
         self.data_dir
             .as_ref()
-            .ok_or_cli_msg(CliErrorKind::IOError, "`--data-dir=` argument not set.")
+            .ok_or_cli_msg("`--data-dir=` argument not set.")
     }
 
     /// Get and create if doesn't exist the data dir
     async fn data_dir_create(&self) -> CliResult<&PathBuf> {
         let dir = self.data_dir()?;
 
-        tokio::fs::create_dir_all(&dir).await.map_err_cli_io()?;
+        tokio::fs::create_dir_all(&dir).await.map_err_cli()?;
 
         Ok(dir)
     }
 
     fn admin_client(&self, cfg: &ClientConfig) -> CliResult<DynGlobalApi> {
-        let our_id = self
-            .our_id
-            .ok_or_cli_msg(CliErrorKind::MissingAuth, "Admin client needs our-id set")?;
+        let our_id = self.our_id.ok_or_cli_msg("Admin client needs our-id set")?;
         Self::admin_client_from_id(our_id, cfg)
     }
 
@@ -288,7 +236,7 @@ impl Opts {
         let password = self
             .password
             .clone()
-            .ok_or_cli_msg(CliErrorKind::MissingAuth, "CLI needs password set")?;
+            .ok_or_cli_msg("CLI needs password set")?;
         Ok(ApiAuth(password))
     }
 
@@ -298,10 +246,10 @@ impl Opts {
         let lock_path = db_path.with_extension("db.lock");
         Ok(LockedBuilder::new(&lock_path)
             .await
-            .map_err_cli_msg(CliErrorKind::IOError, "could not lock database")?
+            .map_err_cli_msg("could not lock database")?
             .with_db(
                 fedimint_rocksdb::RocksDb::open(db_path)
-                    .map_err_cli_msg(CliErrorKind::IOError, "could not open database")?,
+                    .map_err_cli_msg("could not open database")?,
             )
             .into())
     }
@@ -310,13 +258,13 @@ impl Opts {
 async fn load_or_generate_mnemonic(db: &Database) -> Result<Mnemonic, CliError> {
     Ok(
         match Client::load_decodable_client_secret::<Vec<u8>>(db).await {
-            Ok(entropy) => Mnemonic::from_entropy(&entropy).map_err_cli_general()?,
+            Ok(entropy) => Mnemonic::from_entropy(&entropy).map_err_cli()?,
             Err(_) => {
                 info!("Generating mnemonic and writing entropy to client storage");
                 let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut thread_rng());
                 Client::store_encodable_client_secret(db, mnemonic.to_entropy())
                     .await
-                    .map_err_cli_general()?;
+                    .map_err_cli()?;
                 mnemonic
             }
         },
@@ -511,7 +459,8 @@ impl FedimintCli {
                 let _ = writeln!(std::io::stdout(), "{output}");
             }
             Err(err) => {
-                let _ = writeln!(std::io::stderr(), "{err}");
+                error!("{}", err.error);
+                let _ = writeln!(std::io::stdout(), "{err}");
                 exit(1);
             }
         }
@@ -533,7 +482,7 @@ impl FedimintCli {
     ) -> CliResult<ClientHandleArc> {
         let client_config = ClientConfig::download_from_invite_code(&invite_code)
             .await
-            .map_err_cli_general()?;
+            .map_err_cli()?;
 
         let client_builder = self.make_client_builder(cli).await?;
 
@@ -549,7 +498,7 @@ impl FedimintCli {
             )
             .await
             .map(Arc::new)
-            .map_err_cli_general()
+            .map_err_cli()
     }
 
     async fn client_open(&mut self, cli: &Opts) -> CliResult<ClientHandleArc> {
@@ -565,14 +514,11 @@ impl FedimintCli {
         let mnemonic = Mnemonic::from_entropy(
             &Client::load_decodable_client_secret::<Vec<u8>>(client_builder.db())
                 .await
-                .map_err_cli_general()?,
+                .map_err_cli()?,
         )
-        .map_err_cli_general()?;
+        .map_err_cli()?;
 
-        let config = client_builder
-            .load_existing_config()
-            .await
-            .map_err_cli_general()?;
+        let config = client_builder.load_existing_config().await.map_err_cli()?;
 
         let federation_id = config.calculate_federation_id();
 
@@ -583,7 +529,7 @@ impl FedimintCli {
             ))
             .await
             .map(Arc::new)
-            .map_err_cli_general()
+            .map_err_cli()
     }
 
     async fn client_recover(
@@ -596,22 +542,21 @@ impl FedimintCli {
 
         let client_config = ClientConfig::download_from_invite_code(&invite_code)
             .await
-            .map_err_cli_general()?;
+            .map_err_cli()?;
 
         match Client::load_decodable_client_secret_opt::<Vec<u8>>(builder.db())
             .await
-            .map_err_cli_io()?
+            .map_err_cli()?
         {
             Some(existing) => {
                 if existing != mnemonic.to_entropy() {
-                    Err(anyhow::anyhow!("Previously set mnemonic does not match"))
-                        .map_err_cli_general()?;
+                    Err(anyhow::anyhow!("Previously set mnemonic does not match")).map_err_cli()?;
                 }
             }
             None => {
                 Client::store_encodable_client_secret(builder.db(), mnemonic.to_entropy())
                     .await
-                    .map_err_cli_io()?;
+                    .map_err_cli()?;
             }
         }
 
@@ -622,12 +567,12 @@ impl FedimintCli {
         let backup = builder
             .download_backup_from_federation(&root_secret, &client_config)
             .await
-            .map_err_cli_general()?;
+            .map_err_cli()?;
         builder
             .recover(root_secret, client_config.to_owned(), backup)
             .await
             .map(Arc::new)
-            .map_err_cli_general()
+            .map_err_cli()
     }
 
     async fn handle_command(&mut self, cli: Opts) -> CliOutputResult {
@@ -636,18 +581,18 @@ impl FedimintCli {
                 let db = cli.load_rocks_db().await?;
                 let client_config = Client::get_config_from_db(&db)
                     .await
-                    .ok_or_cli_msg(CliErrorKind::GeneralFailure, "client config code not found")?;
+                    .ok_or_cli_msg("client config code not found")?;
 
                 let invite_code = client_config
                     .invite_code(&peer)
-                    .ok_or_cli_msg(CliErrorKind::GeneralFailure, "peer not found")?;
+                    .ok_or_cli_msg("peer not found")?;
 
                 Ok(CliOutput::InviteCode { invite_code })
             }
             Command::JoinFederation { invite_code } => {
                 {
                     let invite_code: InviteCode = InviteCode::from_str(&invite_code)
-                        .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid invite code")?;
+                        .map_err_cli_msg("invalid invite code")?;
 
                     // Build client and store config in DB
                     let _client = self.client_join(&cli, invite_code).await?;
@@ -664,9 +609,9 @@ impl FedimintCli {
                 mnemonic,
                 invite_code,
             }) => {
-                let invite_code: InviteCode = InviteCode::from_str(&invite_code)
-                    .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid invite code")?;
-                let mnemonic = Mnemonic::from_str(&mnemonic).map_err_cli_general()?;
+                let invite_code: InviteCode =
+                    InviteCode::from_str(&invite_code).map_err_cli_msg("invalid invite code")?;
+                let mnemonic = Mnemonic::from_str(&mnemonic).map_err_cli()?;
                 let client = self.client_recover(&cli, mnemonic, invite_code).await?;
 
                 // TODO: until we implement recovery for other modules we can't really wait
@@ -675,7 +620,7 @@ impl FedimintCli {
                 client
                     .wait_for_module_kind_recovery(MintClientModule::kind())
                     .await
-                    .map_err_cli_general()?;
+                    .map_err_cli()?;
 
                 debug!("Recovery complete");
 
@@ -686,7 +631,7 @@ impl FedimintCli {
                 Ok(CliOutput::Raw(
                     client::handle_command(command, client)
                         .await
-                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
+                        .map_err_cli()?,
                 ))
             }
             Command::Admin(AdminCmd::Audit) => {
@@ -697,8 +642,7 @@ impl FedimintCli {
                     .audit(cli.auth()?)
                     .await?;
                 Ok(CliOutput::Raw(
-                    serde_json::to_value(audit)
-                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
+                    serde_json::to_value(audit).map_err_cli_msg("invalid response")?,
                 ))
             }
             Command::Admin(AdminCmd::Status) => {
@@ -706,8 +650,7 @@ impl FedimintCli {
 
                 let status = cli.admin_client(client.get_config())?.status().await?;
                 Ok(CliOutput::Raw(
-                    serde_json::to_value(status)
-                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
+                    serde_json::to_value(status).map_err_cli_msg("invalid response")?,
                 ))
             }
             Command::Admin(AdminCmd::GuardianConfigBackup) => {
@@ -719,7 +662,7 @@ impl FedimintCli {
                     .await?;
                 Ok(CliOutput::Raw(
                     serde_json::to_value(guardian_config_backup)
-                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
+                        .map_err_cli_msg("invalid response")?,
                 ))
             }
             Command::Dev(DevCmd::Api {
@@ -750,11 +693,11 @@ impl FedimintCli {
                     Some(peer_id) => ws_api
                         .request_raw(peer_id.into(), &method, &[params.to_json()])
                         .await
-                        .map_err_cli_general()?,
+                        .map_err_cli()?,
                     None => ws_api
                         .request_current_consensus(method, params)
                         .await
-                        .map_err_cli_general()?,
+                        .map_err_cli()?,
                 };
 
                 Ok(CliOutput::UntypedApiOutput { value: response })
@@ -776,14 +719,14 @@ impl FedimintCli {
                     }
                 })
                 .await
-                .map_err_cli_msg(CliErrorKind::Timeout, "reached timeout")?
+                .map_err_cli_msg("reached timeout")?
             }
             Command::Dev(DevCmd::WaitComplete) => {
                 let client = self.client_open(&cli).await?;
                 client
                     .wait_for_all_active_state_machines()
                     .await
-                    .map_err_cli_general()?;
+                    .map_err_cli()?;
                 Ok(CliOutput::Raw(serde_json::Value::Null))
             }
             Command::Dev(DevCmd::DecodeInviteCode { invite_code }) => {
@@ -811,18 +754,16 @@ impl FedimintCli {
                 password,
             }) => {
                 let salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(&in_file));
-                let salt = fs::read_to_string(salt_file).map_err_cli_general()?;
-                let key = get_encryption_key(&password, &salt).map_err_cli_general()?;
-                let decrypted_bytes = encrypted_read(&key, in_file).map_err_cli_general()?;
+                let salt = fs::read_to_string(salt_file).map_err_cli()?;
+                let key = get_encryption_key(&password, &salt).map_err_cli()?;
+                let decrypted_bytes = encrypted_read(&key, in_file).map_err_cli()?;
 
                 let mut out_file_handle = fs::File::options()
                     .create_new(true)
                     .write(true)
                     .open(out_file)
                     .expect("Could not create output cfg file");
-                out_file_handle
-                    .write_all(&decrypted_bytes)
-                    .map_err_cli_general()?;
+                out_file_handle.write_all(&decrypted_bytes).map_err_cli()?;
                 Ok(CliOutput::ConfigDecrypt)
             }
             Command::Dev(DevCmd::ConfigEncrypt {
@@ -837,25 +778,19 @@ impl FedimintCli {
                 in_file_handle.read_to_end(&mut plaintext_bytes).unwrap();
 
                 let salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(&out_file));
-                let salt = fs::read_to_string(salt_file).map_err_cli_general()?;
-                let key = get_encryption_key(&password, &salt).map_err_cli_general()?;
-                encrypted_write(plaintext_bytes, &key, out_file).map_err_cli_general()?;
+                let salt = fs::read_to_string(salt_file).map_err_cli()?;
+                let key = get_encryption_key(&password, &salt).map_err_cli()?;
+                encrypted_write(plaintext_bytes, &key, out_file).map_err_cli()?;
                 Ok(CliOutput::ConfigEncrypt)
             }
             Command::Dev(DevCmd::DecodeTransaction { hex_string }) => {
                 let bytes: Vec<u8> = bitcoin_hashes::hex::FromHex::from_hex(&hex_string)
-                    .map_err_cli_msg(
-                        CliErrorKind::SerializationError,
-                        "failed to decode transaction",
-                    )?;
+                    .map_err_cli_msg("failed to decode transaction")?;
 
                 let client = self.client_open(&cli).await?;
                 let tx =
                     fedimint_core::transaction::Transaction::from_bytes(&bytes, client.decoders())
-                        .map_err_cli_msg(
-                            CliErrorKind::SerializationError,
-                            "failed to decode transaction",
-                        )?;
+                        .map_err_cli_msg("failed to decode transaction")?;
 
                 Ok(CliOutput::DecodeTransaction {
                     transaction: (format!("{tx:?}")),
@@ -906,7 +841,7 @@ fn metadata_from_clap_cli(metadata: Vec<String>) -> Result<BTreeMap<String, Stri
             }
         })
         .collect::<anyhow::Result<_>>()
-        .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid metadata")?;
+        .map_err_cli_msg("invalid metadata")?;
     Ok(metadata)
 }
 
