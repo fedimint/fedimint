@@ -467,7 +467,6 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore] // TODO: https://github.com/fedimint/fedimint/issues/4293
 async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
