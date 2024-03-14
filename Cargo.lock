@@ -370,6 +370,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
+name = "base64"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9475866fec1451be56a3c2400fd081ff546538961565ccb5b7142cbd22bc7a51"
+
+[[package]]
 name = "base64-compat"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1237,7 +1243,7 @@ version = "0.3.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64 0.21.7",
+ "base64 0.22.0",
  "bip39",
  "bitcoin 0.29.2",
  "bitcoin_hashes 0.11.0",
@@ -1799,7 +1805,7 @@ name = "fedimint-load-test-tool"
 version = "0.3.0-alpha"
 dependencies = [
  "anyhow",
- "base64 0.21.7",
+ "base64 0.22.0",
  "bitcoin 0.29.2",
  "clap",
  "devimint",
@@ -1859,7 +1865,7 @@ dependencies = [
  "aquamarine",
  "async-stream",
  "async-trait",
- "base64 0.21.7",
+ "base64 0.22.0",
  "bincode",
  "bitcoin_hashes 0.11.0",
  "erased-serde",

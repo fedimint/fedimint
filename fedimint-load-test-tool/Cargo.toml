@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1"
-base64 = "0.21.7"
+base64 = "0.22.0"
 bitcoin = "0.29.2"
 clap = { version = "4.5.2", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env" ], default-features = false }
 devimint = { version = "0.3.0-alpha", path = "../devimint" }
