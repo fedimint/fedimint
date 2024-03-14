@@ -2032,6 +2032,7 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
 
 pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
 
     #[allow(unused_variables)]
     let DevFed {
@@ -2096,10 +2097,25 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
         CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
     );
 
-    cmd!(double_spend_client, "reissue", double_spend_notes)
-        .run()
-        .await
-        .expect_err("double spend must fail");
+    // TODO(support:v0.2): remove
+    if VersionReq::parse(">=0.3.0-alpha")?.matches(&fedimint_cli_version) {
+        let reissue_error = cmd!(double_spend_client, "reissue", double_spend_notes)
+            .expect_err_json()
+            .await?
+            .get("error")
+            .expect("json error contains error field")
+            .as_str()
+            .context("not a string")?
+            .to_owned();
+
+        assert!(reissue_error.contains("The transaction had an invalid input"));
+    } else {
+        // v0.2 clients don't write json errors to stdout, so we can't parse
+        cmd!(double_spend_client, "reissue", double_spend_notes)
+            .run()
+            .await
+            .expect_err("double spend must fail");
+    }
 
     let double_spend_client_post_spend_balance = double_spend_client.balance().await?;
     assert_eq!(
