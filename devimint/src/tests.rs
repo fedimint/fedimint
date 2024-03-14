@@ -2030,6 +2030,86 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
     Ok(())
 }
 
+pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
+    log_binary_versions().await?;
+
+    #[allow(unused_variables)]
+    let DevFed {
+        bitcoind,
+        cln,
+        lnd,
+        fed,
+        gw_cln,
+        gw_lnd,
+        electrs,
+        esplora,
+    } = dev_fed;
+
+    let client = fed.new_joined_client("cannot-replay-client").await?;
+
+    // Make the start and spend amount the same so we spend all ecash
+    const CLIENT_START_AMOUNT: u64 = 5_000_000_000;
+    const CLIENT_SPEND_AMOUNT: u64 = 5_000_000_000;
+
+    let initial_client_balance = client.balance().await?;
+    assert_eq!(initial_client_balance, 0);
+
+    fed.pegin_client(CLIENT_START_AMOUNT / 1000, &client)
+        .await?;
+
+    // Fork client before spending ecash so we can later attempt a double spend
+    let double_spend_client = client.new_forked("double-spender").await?;
+
+    // Spend and reissue all ecash from the client
+    let notes = cmd!(client, "spend", CLIENT_SPEND_AMOUNT)
+        .out_json()
+        .await?
+        .get("notes")
+        .expect("Output didn't contain e-cash notes")
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let client_post_spend_balance = client.balance().await?;
+    assert_eq!(
+        client_post_spend_balance,
+        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
+    );
+
+    cmd!(client, "reissue", notes).out_json().await?;
+    let client_post_reissue_balance = client.balance().await?;
+    assert_eq!(client_post_reissue_balance, CLIENT_START_AMOUNT);
+
+    // Attempt to spend the same ecash from the forked client
+    let double_spend_notes = cmd!(double_spend_client, "spend", CLIENT_SPEND_AMOUNT)
+        .out_json()
+        .await?
+        .get("notes")
+        .expect("Output didn't contain e-cash notes")
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let double_spend_client_post_spend_balance = double_spend_client.balance().await?;
+    assert_eq!(
+        double_spend_client_post_spend_balance,
+        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
+    );
+
+    cmd!(double_spend_client, "reissue", double_spend_notes)
+        .run()
+        .await
+        .expect_err("double spend must fail");
+
+    let double_spend_client_post_spend_balance = double_spend_client.balance().await?;
+    assert_eq!(
+        double_spend_client_post_spend_balance,
+        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
+    );
+
+    Ok(())
+}
+
 #[derive(Subcommand)]
 pub enum LatencyTest {
     Reissue,
@@ -2070,6 +2150,8 @@ pub enum TestCmd {
     },
     /// Restore guardian from downloaded backup
     GuardianBackup,
+    /// `devfed` then tests that spent ecash cannot be double spent
+    CannotReplayTransaction,
 }
 
 pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()> {
@@ -2150,6 +2232,11 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             guardian_backup_test(dev_fed, &process_mgr).await?;
+        }
+        TestCmd::CannotReplayTransaction => {
+            let (process_mgr, _) = setup(common_args).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
+            cannot_replay_tx_test(dev_fed).await?;
         }
     }
     Ok(())
