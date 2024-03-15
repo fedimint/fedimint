@@ -595,7 +595,7 @@ pub mod serde_option_routing_fees {
 
 #[derive(Debug, Error, Eq, PartialEq, Encodable, Decodable, Hash, Clone)]
 pub enum LightningInputError {
-    #[error("The the input contract {0} does not exist")]
+    #[error("The input contract {0} does not exist")]
     UnknownContract(ContractId),
     #[error("The input contract has too little funds, got {0}, input spends {1}")]
     InsufficientFunds(Amount, Amount),
@@ -611,7 +611,7 @@ pub enum LightningInputError {
 
 #[derive(Debug, Error, Eq, PartialEq, Encodable, Decodable, Hash, Clone)]
 pub enum LightningOutputError {
-    #[error("The the input contract {0} does not exist")]
+    #[error("The input contract {0} does not exist")]
     UnknownContract(ContractId),
     #[error("Output contract value may not be zero unless it's an offer output")]
     ZeroOutput,

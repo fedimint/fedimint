@@ -95,7 +95,7 @@ pub struct ModuleNotifier<S> {
     /// Database used to load all states that happened before subscribing, see
     /// [`Notifier`]
     db: Database,
-    /// `S` limits the type of state that can be subscribed to to the one
+    /// `S` limits the type of state that can be subscribed to the one
     /// associated with the module instance
     _pd: PhantomData<S>,
 }

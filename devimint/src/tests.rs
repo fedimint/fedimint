@@ -1851,7 +1851,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     let diff = balances_after.mine.immature + balances_after.mine.trusted
         - balances_before.mine.immature
         - balances_before.mine.trusted;
-    // Funds from descriptors should match the the fed's utxos
+    // Funds from descriptors should match the fed's utxos
     assert_eq!(diff.to_sat(), total_fed_sats);
     info!("Recovering using epochs method");
     let outputs = loop {

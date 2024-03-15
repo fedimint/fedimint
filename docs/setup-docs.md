@@ -198,7 +198,7 @@ The install script lets you install one or all of:
 
 1. Fedimintd: The fedimint daemon, this is the only thing we're installing right now.
 2. LND + Gateway: A lightning node with fedimint gateway for intercepting HTLCs to provide lightning services for the federation
-3. RTL: Ride the Lightning web interface for the the lightning node
+3. RTL: Ride the Lightning web interface for the lightning node
 
 and it'll start the services on the following ports:
 
