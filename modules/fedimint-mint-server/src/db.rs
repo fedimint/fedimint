@@ -2,10 +2,9 @@ use std::time::SystemTime;
 
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint};
+use fedimint_mint_common::{MintOutputOutcome, Nonce};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
-
-use crate::{MintOutputOutcome, Nonce};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]

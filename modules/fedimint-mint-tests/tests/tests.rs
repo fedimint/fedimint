@@ -295,12 +295,12 @@ mod fedimint_migration_tests {
     };
     use fedimint_mint_client::output::NoteIssuanceRequest;
     use fedimint_mint_client::{MintClientInit, MintClientModule, NoteIndex, SpendableNote};
-    use fedimint_mint_common::db::{
+    use fedimint_mint_common::{MintCommonInit, MintOutputOutcome, Nonce};
+    use fedimint_mint_server::db::{
         DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix,
         MintAuditItemKey, MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix,
         NonceKey, NonceKeyPrefix,
     };
-    use fedimint_mint_common::{MintCommonInit, MintOutputOutcome, Nonce};
     use fedimint_testing::db::{
         snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
         validate_migrations_server, BYTE_32, BYTE_8,
