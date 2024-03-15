@@ -15,17 +15,23 @@ function devimint_env {
   export RUST_LOG=info
   export RUST_BACKTRACE=1
 
-  if [ -n "${PS1:-}" ]; then
-    PS1="[devimint] $PS1"
+  >&2 echo "Devimint Env Started"
+  if [ "$SHELL" == "fish" ] || [[ "$SHELL" == */fish ]]; then
+    "${SHELL}"
   else
-    PS1="[devimint]"
-  fi
+    if [ -n "${PS1:-}" ]; then
+      PS1="[devimint] $PS1"
+    else
+      PS1="[devimint]"
+    fi
 
-  >&2 echo "Devimint Env Shell"
-  "${SHELL}"
+    "${SHELL}"
+  fi
 }
 export -f devimint_env
 
 env RUST_LOG="${RUST_LOG:-info,jsonrpsee-client=off}" \
   devimint --link-test-dir "${CARGO_BUILD_TARGET_DIR:-$PWD/target}/devimint" "$@" dev-fed \
     --exec bash -c devimint_env
+
+>&2 echo "Devimint Env Ended"
