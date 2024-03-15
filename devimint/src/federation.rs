@@ -5,10 +5,8 @@ use std::{env, fs};
 
 use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin::Network;
-use fedimint_core::admin_client::{
-    ConfigGenConnectionsRequest, ConfigGenParamsRequest, WsAdminClient,
-};
-use fedimint_core::api::ServerStatus;
+use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
+use fedimint_core::api::{DynGlobalApi, ServerStatus};
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::config::{load_from_file, ClientConfig, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
@@ -181,7 +179,7 @@ impl Federation {
             ServerModuleConfigGenParamsRegistry::default(),
         )?;
 
-        let mut admin_clients: BTreeMap<PeerId, WsAdminClient> = BTreeMap::new();
+        let mut admin_clients: BTreeMap<PeerId, DynGlobalApi> = BTreeMap::new();
         for (peer, peer_params) in &params {
             let peer_env_vars =
                 vars::Fedimintd::init(&process_mgr.globals, peer_params.to_owned()).await?;
@@ -195,7 +193,8 @@ impl Federation {
                 )
                 .await?,
             );
-            let admin_client = WsAdminClient::new(SafeUrl::parse(&peer_env_vars.FM_API_URL)?);
+            let admin_client =
+                DynGlobalApi::from_pre_peer_id_endpoint(SafeUrl::parse(&peer_env_vars.FM_API_URL)?);
             admin_clients.insert(*peer, admin_client);
             peer_to_env_vars_map.insert(peer.to_usize(), peer_env_vars);
         }
@@ -491,7 +490,7 @@ impl Fedimintd {
 }
 
 pub async fn run_dkg(
-    admin_clients: BTreeMap<PeerId, WsAdminClient>,
+    admin_clients: BTreeMap<PeerId, DynGlobalApi>,
     params: HashMap<PeerId, ConfigGenParams>,
 ) -> Result<()> {
     let auth_for = |peer: &PeerId| -> ApiAuth { params[peer].local.api_auth.clone() };
@@ -563,7 +562,17 @@ pub async fn run_dkg(
             .set_config_gen_connections(
                 ConfigGenConnectionsRequest {
                     our_name: name.clone(),
-                    leader_api_url: Some(leader.url.clone()),
+                    leader_api_url: Some(
+                        params
+                            .get(leader_id)
+                            .expect("Must have leader configs")
+                            .consensus
+                            .peers
+                            .get(leader_id)
+                            .expect("Must have leader api_endpoint")
+                            .api_url
+                            .clone(),
+                    ),
                 },
                 auth_for(peer_id),
             )
@@ -631,7 +640,7 @@ pub async fn run_dkg(
 }
 
 async fn set_config_gen_params(
-    client: &WsAdminClient,
+    client: &DynGlobalApi,
     auth: ApiAuth,
     mut server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -> Result<()> {
@@ -661,7 +670,7 @@ async fn set_config_gen_params(
     Ok(())
 }
 
-async fn wait_server_status(client: &WsAdminClient, expected_status: ServerStatus) -> Result<()> {
+async fn wait_server_status(client: &DynGlobalApi, expected_status: ServerStatus) -> Result<()> {
     const RETRIES: usize = 60;
     poll("waiting-server-status", RETRIES, || async {
         let server_status = client

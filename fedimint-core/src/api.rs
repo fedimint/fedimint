@@ -43,15 +43,25 @@ use thiserror::Error;
 use tokio::sync::OnceCell;
 use tracing::{debug, error, instrument, trace, warn};
 
+use crate::admin_client::{
+    ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
+};
 use crate::backup::ClientBackupSnapshot;
 use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::encoding::DecodeError;
 use crate::endpoint_constants::{
-    AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, RECOVER_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
+    AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
+    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
+    GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT,
+    RUN_DKG_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
+    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+    VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
 };
-use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
+use crate::module::audit::AuditSummary;
+use crate::module::{ApiAuth, ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use crate::query::{
     DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
 };
@@ -396,6 +406,43 @@ pub trait FederationApiExt: IRawFederationApi {
         )
         .await
     }
+
+    async fn request_admin<Ret>(
+        &self,
+        method: &str,
+        params: ApiRequestErased,
+        auth: ApiAuth,
+    ) -> FederationResult<Ret>
+    where
+        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+    {
+        // We would never want to accidentally send our password to everyone
+        assert_eq!(
+            self.all_peers().len(),
+            1,
+            "attempted to broadcast admin password?!"
+        );
+        self.request_current_consensus(method.into(), params.with_auth(auth))
+            .await
+    }
+
+    async fn request_admin_no_auth<Ret>(
+        &self,
+        method: &str,
+        params: ApiRequestErased,
+    ) -> FederationResult<Ret>
+    where
+        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+    {
+        // There is no auth involved, but still - it should only ever be called on a
+        // single endpoint
+        assert_eq!(
+            self.all_peers().len(),
+            1,
+            "attempted to broadcast an admin request?!"
+        );
+        self.request_current_consensus(method.into(), params).await
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -421,6 +468,16 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 }
 
 impl DynGlobalApi {
+    pub fn from_pre_peer_id_endpoint(url: SafeUrl) -> Self {
+        // PeerIds are used only for informational purposes, but just in case, make a
+        // big number so it stands out
+        GlobalFederationApiWithCache::new(WsFederationApi::new(vec![(PeerId::from(1024), url)]))
+            .into()
+    }
+
+    pub fn from_single_endpoint(peer: PeerId, url: SafeUrl) -> Self {
+        GlobalFederationApiWithCache::new(WsFederationApi::new(vec![(peer, url)])).into()
+    }
     pub fn from_endpoints(peers: Vec<(PeerId, SafeUrl)>) -> Self {
         GlobalFederationApiWithCache::new(WsFederationApi::new(peers)).into()
     }
@@ -500,6 +557,98 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         timeout: Duration,
         num_responses_required: Option<usize>,
     ) -> FederationResult<ApiVersionSet>;
+
+    /// Sets the password used to decrypt the configs and authenticate
+    ///
+    /// Must be called first before any other calls to the API
+    async fn set_password(&self, auth: ApiAuth) -> FederationResult<()>;
+
+    /// During config gen, sets the server connection containing our endpoints
+    ///
+    /// Optionally sends our server info to the config gen leader using
+    /// `add_config_gen_peer`
+    async fn set_config_gen_connections(
+        &self,
+        info: ConfigGenConnectionsRequest,
+        auth: ApiAuth,
+    ) -> FederationResult<()>;
+
+    /// During config gen, used for an API-to-API call that adds a peer's server
+    /// connection info to the leader.
+    ///
+    /// Note this call will fail until the leader has their API running and has
+    /// `set_server_connections` so clients should retry.
+    ///
+    /// This call is not authenticated because it's guardian-to-guardian
+    async fn add_config_gen_peer(&self, peer: PeerServerParams) -> FederationResult<()>;
+
+    /// During config gen, gets all the server connections we've received from
+    /// peers using `add_config_gen_peer`
+    ///
+    /// Could be called on the leader, so it's not authenticated
+    async fn get_config_gen_peers(&self) -> FederationResult<Vec<PeerServerParams>>;
+
+    /// Gets the default config gen params which can be configured by the
+    /// leader, gives them a template to modify
+    async fn get_default_config_gen_params(
+        &self,
+        auth: ApiAuth,
+    ) -> FederationResult<ConfigGenParamsRequest>;
+
+    /// Leader sets the consensus params, everyone sets the local params
+    ///
+    /// After calling this `ConfigGenParams` can be created for DKG
+    async fn set_config_gen_params(
+        &self,
+        requested: ConfigGenParamsRequest,
+        auth: ApiAuth,
+    ) -> FederationResult<()>;
+
+    /// Returns the consensus config gen params, followers will delegate this
+    /// call to the leader.  Once this endpoint returns successfully we can run
+    /// DKG.
+    async fn consensus_config_gen_params(&self) -> FederationResult<ConfigGenParamsResponse>;
+
+    /// Runs DKG, can only be called once after configs have been generated in
+    /// `get_consensus_config_gen_params`.  If DKG fails this returns a 500
+    /// error and config gen must be restarted.
+    async fn run_dkg(&self, auth: ApiAuth) -> FederationResult<()>;
+
+    /// After DKG, returns the hash of the consensus config tweaked with our id.
+    /// We need to share this with all other peers to complete verification.
+    async fn get_verify_config_hash(
+        &self,
+        auth: ApiAuth,
+    ) -> FederationResult<BTreeMap<PeerId, sha256::Hash>>;
+
+    /// Updates local state and notify leader that we have verified configs.
+    /// This allows for a synchronization point, before we start consensus.
+    async fn verified_configs(
+        &self,
+        auth: ApiAuth,
+    ) -> FederationResult<BTreeMap<PeerId, sha256::Hash>>;
+
+    /// Reads the configs from the disk, starts the consensus server, and shuts
+    /// down the config gen API to start the Fedimint API
+    ///
+    /// Clients may receive an error due to forced shutdown, should call the
+    /// `server_status` to see if consensus has started.
+    async fn start_consensus(&self, auth: ApiAuth) -> FederationResult<()>;
+
+    /// Returns the status of the server
+    async fn status(&self) -> FederationResult<StatusResponse>;
+
+    /// Show an audit across all modules
+    async fn audit(&self, auth: ApiAuth) -> FederationResult<AuditSummary>;
+
+    /// Download the guardian config to back it up
+    async fn guardian_config_backup(&self, auth: ApiAuth)
+        -> FederationResult<GuardianConfigBackup>;
+
+    /// Check auth credentials
+    async fn auth(&self, auth: ApiAuth) -> FederationResult<()>;
+
+    async fn restart_federation_setup(&self, auth: ApiAuth) -> FederationResult<()>;
 }
 
 pub fn deserialize_outcome<R>(
@@ -761,6 +910,133 @@ where
             ),
             VERSION_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
+        )
+        .await
+    }
+
+    async fn set_password(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request_admin(SET_PASSWORD_ENDPOINT, ApiRequestErased::default(), auth)
+            .await
+    }
+
+    async fn set_config_gen_connections(
+        &self,
+        info: ConfigGenConnectionsRequest,
+        auth: ApiAuth,
+    ) -> FederationResult<()> {
+        self.request_admin(
+            SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
+            ApiRequestErased::new(info),
+            auth,
+        )
+        .await
+    }
+
+    async fn add_config_gen_peer(&self, peer: PeerServerParams) -> FederationResult<()> {
+        self.request_admin_no_auth(ADD_CONFIG_GEN_PEER_ENDPOINT, ApiRequestErased::new(peer))
+            .await
+    }
+
+    async fn get_config_gen_peers(&self) -> FederationResult<Vec<PeerServerParams>> {
+        self.request_admin_no_auth(CONFIG_GEN_PEERS_ENDPOINT, ApiRequestErased::default())
+            .await
+    }
+
+    async fn get_default_config_gen_params(
+        &self,
+        auth: ApiAuth,
+    ) -> FederationResult<ConfigGenParamsRequest> {
+        self.request_admin(
+            DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
+            ApiRequestErased::default(),
+            auth,
+        )
+        .await
+    }
+
+    async fn set_config_gen_params(
+        &self,
+        requested: ConfigGenParamsRequest,
+        auth: ApiAuth,
+    ) -> FederationResult<()> {
+        self.request_admin(
+            SET_CONFIG_GEN_PARAMS_ENDPOINT,
+            ApiRequestErased::new(requested),
+            auth,
+        )
+        .await
+    }
+
+    async fn consensus_config_gen_params(&self) -> FederationResult<ConfigGenParamsResponse> {
+        self.request_admin_no_auth(
+            CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
+            ApiRequestErased::default(),
+        )
+        .await
+    }
+
+    async fn run_dkg(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request_admin(RUN_DKG_ENDPOINT, ApiRequestErased::default(), auth)
+            .await
+    }
+
+    async fn get_verify_config_hash(
+        &self,
+        auth: ApiAuth,
+    ) -> FederationResult<BTreeMap<PeerId, sha256::Hash>> {
+        self.request_admin(
+            VERIFY_CONFIG_HASH_ENDPOINT,
+            ApiRequestErased::default(),
+            auth,
+        )
+        .await
+    }
+
+    async fn verified_configs(
+        &self,
+        auth: ApiAuth,
+    ) -> FederationResult<BTreeMap<PeerId, sha256::Hash>> {
+        self.request_admin(VERIFIED_CONFIGS_ENDPOINT, ApiRequestErased::default(), auth)
+            .await
+    }
+
+    async fn start_consensus(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request_admin(START_CONSENSUS_ENDPOINT, ApiRequestErased::default(), auth)
+            .await
+    }
+
+    async fn status(&self) -> FederationResult<StatusResponse> {
+        self.request_admin_no_auth(STATUS_ENDPOINT, ApiRequestErased::default())
+            .await
+    }
+
+    async fn audit(&self, auth: ApiAuth) -> FederationResult<AuditSummary> {
+        self.request_admin(AUDIT_ENDPOINT, ApiRequestErased::default(), auth)
+            .await
+    }
+
+    async fn guardian_config_backup(
+        &self,
+        auth: ApiAuth,
+    ) -> FederationResult<GuardianConfigBackup> {
+        self.request_admin(
+            GUARDIAN_CONFIG_BACKUP_ENDPOINT,
+            ApiRequestErased::default(),
+            auth,
+        )
+        .await
+    }
+
+    async fn auth(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request_admin(AUTH_ENDPOINT, ApiRequestErased::default(), auth)
+            .await
+    }
+
+    async fn restart_federation_setup(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request_admin(
+            RESTART_FEDERATION_SETUP_ENDPOINT,
+            ApiRequestErased::default(),
+            auth,
         )
         .await
     }

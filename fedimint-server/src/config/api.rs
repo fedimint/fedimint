@@ -10,9 +10,9 @@ use bitcoin_hashes::sha256;
 use fedimint_aead::random_salt;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
-    ConfigGenParamsResponse, PeerServerParams, WsAdminClient,
+    ConfigGenParamsResponse, PeerServerParams,
 };
-use fedimint_core::api::{ServerStatus, StatusResponse};
+use fedimint_core::api::{DynGlobalApi, ServerStatus, StatusResponse};
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
@@ -133,7 +133,7 @@ impl ConfigGenApi {
         let local = state.local.clone();
 
         if let Some(url) = local.and_then(|local| local.leader_api_url) {
-            WsAdminClient::new(url)
+            DynGlobalApi::from_pre_peer_id_endpoint(url)
                 .add_config_gen_peer(state.our_peer_info()?)
                 .await
                 .map_err(|_| ApiError::not_found("Unable to connect to the leader".to_string()))?;
@@ -193,7 +193,7 @@ impl ConfigGenApi {
 
         let consensus = match local.and_then(|local| local.leader_api_url) {
             Some(leader_url) => {
-                let client = WsAdminClient::new(leader_url.clone());
+                let client = DynGlobalApi::from_pre_peer_id_endpoint(leader_url.clone());
                 let response = client.consensus_config_gen_params().await;
                 response
                     .map_err(|_| ApiError::not_found("Cannot get leader params".to_string()))?
@@ -230,10 +230,11 @@ impl ConfigGenApi {
                 "Update config gen status to 'Ready for config gen'"
             );
             // Create a WSClient for the leader
-            state
-                .local
-                .clone()
-                .and_then(|local| local.leader_api_url.map(WsAdminClient::new))
+            state.local.clone().and_then(|local| {
+                local
+                    .leader_api_url
+                    .map(DynGlobalApi::from_pre_peer_id_endpoint)
+            })
         };
 
         self.update_leader().await?;
@@ -456,10 +457,11 @@ impl ConfigGenApi {
                 "Update config gen status to 'Setup restarted'"
             );
             // Create a WSClient for the leader
-            state
-                .local
-                .clone()
-                .and_then(|local| local.leader_api_url.map(WsAdminClient::new))
+            state.local.clone().and_then(|local| {
+                local
+                    .leader_api_url
+                    .map(DynGlobalApi::from_pre_peer_id_endpoint)
+            })
         };
 
         self.update_leader().await?;
@@ -471,7 +473,7 @@ impl ConfigGenApi {
         sub_group
             .spawn("restart", move |_handle| async move {
                 if let Some(client) = leader {
-                    self_clone.await_leader_restart(client).await?;
+                    self_clone.await_leader_restart(&client).await?;
                 } else {
                     self_clone.await_peer_restart().await;
                 }
@@ -488,7 +490,7 @@ impl ConfigGenApi {
     }
 
     // Followers wait for leader to signal that all peers have restarted setup
-    async fn await_leader_restart(&self, client: WsAdminClient) -> ApiResult<()> {
+    async fn await_leader_restart(&self, client: &DynGlobalApi) -> ApiResult<()> {
         let mut retries = 0;
         loop {
             match client.status().await {
@@ -904,8 +906,8 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use fedimint_core::admin_client::{ConfigGenParamsRequest, WsAdminClient};
-    use fedimint_core::api::{FederationResult, ServerStatus, StatusResponse};
+    use fedimint_core::admin_client::ConfigGenParamsRequest;
+    use fedimint_core::api::{DynGlobalApi, FederationResult, ServerStatus, StatusResponse};
     use fedimint_core::config::{ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::IRawDatabaseExt;
@@ -932,7 +934,7 @@ mod tests {
 
     /// Helper in config API tests for simulating a guardian's client and server
     struct TestConfigApi {
-        client: WsAdminClient,
+        client: DynGlobalApi,
         auth: ApiAuth,
         name: String,
         settings: ConfigGenSettings,
@@ -988,7 +990,7 @@ mod tests {
 
             // our id doesn't really exist at this point
             let auth = ApiAuth(format!("password-{port}"));
-            let client = WsAdminClient::new(api_url);
+            let client = DynGlobalApi::from_pre_peer_id_endpoint(api_url);
 
             (
                 TestConfigApi {
