@@ -23,7 +23,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::PeerId;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use futures::FutureExt;
-use jsonrpsee::server::{PingConfig, ServerBuilder, ServerHandle};
+use jsonrpsee::server::{PingConfig, RpcServiceBuilder, ServerBuilder, ServerHandle};
 use jsonrpsee::types::ErrorObject;
 use jsonrpsee::RpcModule;
 use tokio::runtime::Runtime;
@@ -31,10 +31,12 @@ use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::consensus::server::ConsensusServer;
+use crate::metrics::initialize_gauge_metrics;
 use crate::net::api::{ConsensusApi, RpcHandlerCtx};
 use crate::net::connect::TlsTcpConnector;
 
 pub mod envs;
+pub mod metrics;
 
 pub mod atomic_broadcast;
 
@@ -87,6 +89,9 @@ impl FedimintServer {
     /// After configs are generated, start `ConsensusApi` and `ConsensusServer`
     pub async fn run(&mut self, mut task_group: TaskGroup) -> anyhow::Result<()> {
         info!(target: LOG_CONSENSUS, "Starting config gen");
+
+        initialize_gauge_metrics(&self.db).await;
+
         let cfg = self
             .run_config_gen(task_group.make_subgroup().await)
             .await?;
@@ -189,7 +194,8 @@ impl FedimintServer {
     ) -> FedimintApiHandler {
         let mut builder = ServerBuilder::new()
             .max_connections(max_connections)
-            .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(10)));
+            .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(10)))
+            .set_rpc_middleware(RpcServiceBuilder::new().layer(metrics::jsonrpsee::MetricsLayer));
 
         let runtime = if force_shutdown {
             let runtime = Runtime::new().expect("Creates runtime");

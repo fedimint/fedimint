@@ -56,6 +56,7 @@ use crate::consensus::process_transaction_with_dbtx;
 use crate::consensus::server::{get_finished_session_count_static, LatestContributionByPeer};
 use crate::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::fedimint_core::encoding::Encodable;
+use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
 
 /// A state that has context for the API, passed to each rpc handler callback
@@ -362,14 +363,20 @@ impl ConsensusApi {
         }
 
         info!(target: LOG_NET_API, id = %request.id, len = request.payload.len(), "Storing new client backup");
-        dbtx.insert_entry(
-            &ClientBackupKey(request.id),
-            &ClientBackupSnapshot {
-                timestamp: request.timestamp,
-                data: request.payload.to_vec(),
-            },
-        )
-        .await;
+        let overwritten = dbtx
+            .insert_entry(
+                &ClientBackupKey(request.id),
+                &ClientBackupSnapshot {
+                    timestamp: request.timestamp,
+                    data: request.payload.to_vec(),
+                },
+            )
+            .await
+            .is_some();
+        BACKUP_WRITE_SIZE_BYTES.observe(request.payload.len() as f64);
+        if !overwritten {
+            dbtx.on_commit(|| STORED_BACKUPS_COUNT.inc());
+        }
 
         Ok(())
     }

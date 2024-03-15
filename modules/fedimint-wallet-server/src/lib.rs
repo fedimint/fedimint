@@ -52,7 +52,12 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, Feerate,
     NumPeers, OutPoint, PeerId, ServerModule,
 };
-use fedimint_metrics::{histogram_opts, lazy_static, prometheus, register_histogram, Histogram};
+use fedimint_metrics::prometheus::{
+    register_histogram_with_registry, register_int_gauge_with_registry, IntGauge,
+};
+use fedimint_metrics::{
+    histogram_opts, lazy_static, opts, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY,
+};
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
@@ -74,49 +79,50 @@ use strum::IntoEnumIterator;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 lazy_static! {
-    static ref AMOUNTS_BUCKETS_SATS: Vec<f64> = vec![
-        0.0,
-        0.1,
-        1.0,
-        10.0,
-        100.0,
-        1000.0,
-        10000.0,
-        100000.0,
-        1000000.0,
-        10000000.0,
-        100000000.0
-    ];
-    static ref WALLET_PEGIN_SATS: Histogram = register_histogram!(histogram_opts!(
-        "wallet_pegin_sats",
-        "Value of peg-in transactions in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref WALLET_PEGIN_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "wallet_pegin_sats",
+            "Value of peg-in transactions in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    static ref WALLET_PEGIN_FEES_SATS: Histogram = register_histogram!(histogram_opts!(
-        "wallet_pegin_fees_sats",
-        "Value of peg-in fees in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref WALLET_PEGIN_FEES_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "wallet_pegin_fees_sats",
+            "Value of peg-in fees in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    static ref WALLET_PEGOUT_SATS: Histogram = register_histogram!(histogram_opts!(
-        "wallet_pegout_sats",
-        "Value of peg-out transactions in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref WALLET_PEGOUT_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "wallet_pegout_sats",
+            "Value of peg-out transactions in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    static ref WALLET_PEGOUT_FEES_SATS: Histogram = register_histogram!(histogram_opts!(
-        "wallet_pegout_fees_sats",
-        "Value of peg-out fees in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref WALLET_PEGOUT_FEES_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "wallet_pegout_fees_sats",
+            "Value of peg-out fees in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    static ref ALL_METRICS: [Box<dyn prometheus::core::Collector>; 4] = [
-        Box::new(WALLET_PEGIN_SATS.clone()),
-        Box::new(WALLET_PEGIN_FEES_SATS.clone()),
-        Box::new(WALLET_PEGOUT_SATS.clone()),
-        Box::new(WALLET_PEGOUT_FEES_SATS.clone()),
-    ];
+    static ref WALLET_BLOCK_COUNT: IntGauge = register_int_gauge_with_registry!(
+        opts!(
+            "wallet_block_count",
+            "Blockchain block count as monitored by wallet module",
+        ),
+        REGISTRY
+    )
+    .unwrap();
 }
 
 #[derive(Debug, Clone)]
@@ -239,10 +245,12 @@ impl ServerModuleInit for WalletInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        // Ensure all metrics are initialized
-        for metric in ALL_METRICS.iter() {
-            metric.collect();
-        }
+        // Eagerly initialize metrics that trigger infrequently
+        WALLET_PEGIN_FEES_SATS.get_sample_count();
+        WALLET_PEGIN_SATS.get_sample_count();
+        WALLET_PEGOUT_SATS.get_sample_count();
+        WALLET_PEGOUT_FEES_SATS.get_sample_count();
+
         Ok(Wallet::new(
             args.cfg().to_typed()?,
             args.db().clone(),
@@ -395,6 +403,7 @@ impl ServerModule for Wallet {
                 "Proposing block count"
             );
 
+            WALLET_BLOCK_COUNT.set(block_count_vote as i64);
             items.push(WalletConsensusItem::BlockCount(block_count_vote));
         }
 

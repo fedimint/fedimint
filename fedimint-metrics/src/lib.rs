@@ -5,15 +5,34 @@ use axum::routing::get;
 use axum::Router;
 use fedimint_core::task::{TaskGroup, TaskShutdownToken};
 pub use lazy_static::lazy_static;
+use prometheus::Registry;
 pub use prometheus::{
-    self, histogram_opts, opts, register_histogram, register_int_counter, Encoder, Histogram,
-    IntCounter, TextEncoder,
+    self, histogram_opts, opts, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, Encoder, Gauge, GaugeVec, Histogram, HistogramVec,
+    IntCounter, IntCounterVec, TextEncoder,
 };
 use tokio::net::TcpListener;
 use tracing::error;
 
+lazy_static! {
+    pub static ref REGISTRY: Registry = Registry::new_custom(Some("fm".into()), None).unwrap();
+    pub static ref AMOUNTS_BUCKETS_SATS: Vec<f64> = vec![
+        0.0,
+        0.1,
+        1.0,
+        10.0,
+        100.0,
+        1000.0,
+        10000.0,
+        100000.0,
+        1000000.0,
+        10000000.0,
+        100000000.0
+    ];
+}
+
 async fn get_metrics() -> (StatusCode, String) {
-    let metric_families = prometheus::gather();
+    let metric_families = REGISTRY.gather();
     let result = || -> anyhow::Result<String> {
         let mut buffer = Vec::new();
         let encoder = TextEncoder::new();

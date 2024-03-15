@@ -31,6 +31,9 @@ hex = "0.4.3"
 itertools = "0.12.1"
 fedimint-core = { version = "0.3.0-alpha", path = "../fedimint-core" }
 fedimint-logging = { version = "0.3.0-alpha", path = "../fedimint-logging" }
+fedimint-metrics = { path = "../fedimint-metrics" }
+lazy_static = "1.4.0"
+pin-project = "1.1.5"
 rand = "0.8"
 rcgen = "=0.10.0"
 secp256k1-zkp = { version = "0.7.0", features = [ "global-context", "bitcoin_hashes" ] }
@@ -43,6 +46,7 @@ strum_macros = "0.26"
 tar = "0.4.40"
 tbs = { package = "fedimint-tbs", version = "0.3.0-alpha", path = "../crypto/tbs" }
 thiserror = "1.0.58"
+tower = { version = "0.4.13", default-features = false }
 tracing ="0.1.40"
 url = { version = "2.5.0", features = ["serde"] }
 threshold_crypto = { workspace = true }

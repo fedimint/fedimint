@@ -7,6 +7,7 @@ use anyhow::{anyhow, bail};
 use async_channel::{Receiver, Sender};
 use fedimint_core::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
 use fedimint_core::config::ServerModuleInitRegistry;
+use fedimint_core::core::MODULE_INSTANCE_ID_GLOBAL;
 use fedimint_core::db::{
     apply_migrations, apply_migrations_server, Database, DatabaseTransaction,
     IDatabaseTransactionOpsCoreTyped,
@@ -45,6 +46,10 @@ use crate::db::{
     AlephUnitsPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
 };
 use crate::fedimint_core::encoding::Encodable;
+use crate::metrics::{
+    CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
+    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_SESSION_COUNT,
+};
 use crate::net::api::{ConsensusApi, ExpiringCache};
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{DelayCalculator, PeerConnector, ReconnectPeerConnections};
@@ -226,6 +231,7 @@ impl ConsensusServer {
 
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
+            CONSENSUS_SESSION_COUNT.set(session_index as i64);
 
             let mut item_index = self.pending_accepted_items().await.len() as u64;
 
@@ -289,6 +295,7 @@ impl ConsensusServer {
 
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
+            CONSENSUS_SESSION_COUNT.set(session_index as i64);
 
             self.run_session(session_index).await?;
 
@@ -578,7 +585,11 @@ impl ConsensusServer {
         item: ConsensusItem,
         peer: PeerId,
     ) -> anyhow::Result<()> {
+        let peer_id_str = peer.to_string();
         let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item");
+        let timing_prom = CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS
+            .with_label_values(&[&peer_id_str])
+            .start_timer();
 
         debug!(%peer, item = ?FmtDbgConsensusItem(&item), "Processing consensus item");
 
@@ -617,9 +628,14 @@ impl ConsensusServer {
 
         let mut audit = Audit::default();
 
-        for (module_instance_id, _, module) in self.modules.iter_modules() {
+        for (module_instance_id, kind, module) in self.modules.iter_modules() {
             let _module_audit_timing =
                 TimeReporter::new(format!("audit module {module_instance_id}"));
+
+            let timing_prom = CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS
+                .with_label_values(&[&MODULE_INSTANCE_ID_GLOBAL.to_string(), kind.as_str()])
+                .start_timer();
+
             module
                 .audit(
                     &mut dbtx
@@ -628,7 +644,8 @@ impl ConsensusServer {
                     &mut audit,
                     module_instance_id,
                 )
-                .await
+                .await;
+            timing_prom.observe_duration();
         }
 
         if audit.net_assets().milli_sat < 0 {
@@ -638,6 +655,11 @@ impl ConsensusServer {
         dbtx.commit_tx_result()
             .await
             .expect("Committing consensus epoch failed");
+
+        CONSENSUS_ITEMS_PROCESSED_TOTAL
+            .with_label_values(&[&peer_id_str])
+            .inc();
+        timing_prom.observe_duration();
 
         Ok(())
     }

@@ -19,7 +19,8 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeers,
     OutPoint, PeerId, ServerModule, Tiered, TieredMultiZip,
 };
-use fedimint_metrics::{histogram_opts, lazy_static, prometheus, register_histogram, Histogram};
+use fedimint_metrics::prometheus::register_histogram_with_registry;
+use fedimint_metrics::{histogram_opts, lazy_static, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY};
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
     MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate,
@@ -51,49 +52,42 @@ use threshold_crypto::{G2Projective, Scalar};
 use tracing::{debug, info};
 
 lazy_static! {
-    static ref AMOUNTS_BUCKETS_SATS: Vec<f64> = vec![
-        0.0,
-        0.1,
-        1.0,
-        10.0,
-        100.0,
-        1000.0,
-        10000.0,
-        100000.0,
-        1000000.0,
-        10000000.0,
-        100000000.0
-    ];
-    static ref MINT_REDEEMED_ECASH_SATS: Histogram = register_histogram!(histogram_opts!(
-        "mint_redeemed_ecash_sats",
-        "Value of redeemed e-cash notes in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref MINT_REDEEMED_ECASH_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "mint_redeemed_ecash_sats",
+            "Value of redeemed e-cash notes in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    static ref MINT_REDEEMED_ECASH_FEES_SATS: Histogram = register_histogram!(histogram_opts!(
-        "mint_redeemed_ecash_fees_sats",
-        "Value of e-cash fees during reissue in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref MINT_REDEEMED_ECASH_FEES_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "mint_redeemed_ecash_fees_sats",
+            "Value of e-cash fees during reissue in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    static ref MINT_ISSUED_ECASH_SATS: Histogram = register_histogram!(histogram_opts!(
-        "mint_issued_ecash_sats",
-        "Value of issued e-cash notes in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref MINT_ISSUED_ECASH_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "mint_issued_ecash_sats",
+            "Value of issued e-cash notes in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    static ref MINT_ISSUED_ECASH_FEES_SATS: Histogram = register_histogram!(histogram_opts!(
-        "mint_issued_ecash_fees_sats",
-        "Value of e-cash fees during issue in sats",
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    static ref MINT_ISSUED_ECASH_FEES_SATS: Histogram = register_histogram_with_registry!(
+        histogram_opts!(
+            "mint_issued_ecash_fees_sats",
+            "Value of e-cash fees during issue in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    static ref ALL_METRICS: [Box<dyn prometheus::core::Collector>; 4] = [
-        Box::new(MINT_REDEEMED_ECASH_SATS.clone()),
-        Box::new(MINT_REDEEMED_ECASH_FEES_SATS.clone()),
-        Box::new(MINT_ISSUED_ECASH_SATS.clone()),
-        Box::new(MINT_ISSUED_ECASH_FEES_SATS.clone()),
-    ];
 }
 
 #[derive(Debug, Clone)]
@@ -169,10 +163,6 @@ impl ServerModuleInit for MintInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        // Ensure all metrics are initialized
-        for metric in ALL_METRICS.iter() {
-            metric.collect();
-        }
         Ok(Mint::new(args.cfg().to_typed()?).into())
     }
 
