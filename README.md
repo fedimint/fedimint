@@ -89,3 +89,6 @@ just mprocs
 You can then interact with the guardians and lightning gateway through the mprocs cli.
 
 If you want to run with UIs, see the [UI](https://github.com/fedimint/ui) repo for developer environment instructions.
+
+# Contributing
+For contribution guidelines, Areas of contributions and how to get involved, please refer to the [Contributing Guidelines](CONTRIBUTING.md).
