@@ -513,40 +513,32 @@ fn states_add_instance(
     })
 }
 
-/// Shared, inner data of [`ClientHandle`]
-///
-/// The primary responsibility of this struct (and two levels of Arc),
-/// is shutting down `Client` on the drop of last [`ClientHandle`]. See
-/// [`ClientHandleShared::drop`] for details.
-#[derive(Debug, Clone)]
-struct ClientHandleShared {
-    inner: Option<Arc<Client>>,
-}
-
 /// User handle to [`Client`]
 ///
-/// Clonable. On the drop of last [`ClientHandle`] the client
-/// will be shut-down, and resources it used freed.
+/// On the drop of [`ClientHandle`] the client will be shut-down, and resources
+/// it used freed.
 ///
 /// Notably it [`ops::Deref`]s to the [`Client`] where most
 /// methods live.
-#[derive(Debug, Clone)]
+///
+/// Put this in an Arc to clone it.
+#[derive(Debug)]
 pub struct ClientHandle {
-    inner: Arc<ClientHandleShared>,
+    inner: Option<Arc<Client>>,
 }
+
+pub type ClientHandleArc = Arc<ClientHandle>;
 
 impl ClientHandle {
     /// Create
     fn new(inner: Arc<Client>) -> Self {
-        Self {
-            inner: Arc::new(ClientHandleShared {
-                inner: inner.into(),
-            }),
+        ClientHandle {
+            inner: inner.into(),
         }
     }
 
     fn as_inner(&self) -> &Arc<Client> {
-        self.inner.inner.as_ref().expect("Inner always set")
+        self.inner.as_ref().expect("Inner always set")
     }
 
     pub async fn start_executor(&self) {
@@ -554,21 +546,11 @@ impl ClientHandle {
     }
 
     /// Shutdown the client.
-    ///
-    /// Returns Err if there are other clones of [`ClientHandle`].
-    pub async fn shutdown(self) -> Result<(), ClientHandle> {
-        match Arc::try_unwrap(self.inner) {
-            Ok(mut inner) => {
-                inner.shutdown().await;
-                Ok(())
-            }
-            Err(inner) => Err(Self { inner }),
-        }
+    pub async fn shutdown(mut self) {
+        self.shutdown_inner().await
     }
-}
 
-impl ClientHandleShared {
-    async fn shutdown(&mut self) {
+    async fn shutdown_inner(&mut self) {
         let Some(inner) = self.inner.take() else {
             error!("ClientHandleShared::shutdown called twice");
             return;
@@ -600,23 +582,44 @@ impl ClientHandleShared {
             debug!(target:  LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
         }
     }
+
+    /// Restart the client
+    ///
+    /// Returns false if there are other clones of [`ClientHandle`], or starting
+    /// the client again failed for some reason.
+    ///
+    /// Notably it will re-use the original [`Database`] handle, and not attempt
+    /// to open it again.
+    pub async fn restart(self) -> anyhow::Result<ClientHandle> {
+        let (builder, config, root_secret) = {
+            let client = self
+                .inner
+                .as_ref()
+                .ok_or_else(|| anyhow::format_err!("Already stopped"))?;
+            let builder = ClientBuilder::from_existing(client);
+            let config = client.config.clone();
+            let root_secret = client.root_secret.clone();
+
+            (builder, config, root_secret)
+        };
+        self.shutdown().await;
+
+        builder.build(root_secret, config, false).await
+    }
 }
 
 impl ops::Deref for ClientHandle {
     type Target = Client;
 
     fn deref(&self) -> &Self::Target {
-        self.inner
-            .inner
-            .as_ref()
-            .expect("Must have inner client set")
+        self.inner.as_ref().expect("Must have inner client set")
     }
 }
 
 impl ClientHandle {
     pub(crate) fn downgrade(&self) -> ClientWeak {
         ClientWeak {
-            inner: Arc::downgrade(self.inner.inner.as_ref().expect("Inner always set")),
+            inner: Arc::downgrade(self.inner.as_ref().expect("Inner always set")),
         }
     }
 }
@@ -654,7 +657,7 @@ impl ClientWeak {
 /// `ExecutorInner` should already take care of that. The reason is that as long
 /// as the executor task is active there may be a cycle in the
 /// `Arc<Client>`s such that at least one `Executor` never gets dropped.
-impl Drop for ClientHandleShared {
+impl Drop for ClientHandle {
     fn drop(&mut self) {
         if self.inner.is_none() {
             return;
@@ -679,7 +682,7 @@ impl Drop for ClientHandleShared {
         debug!(target: LOG_CLIENT, "Shutting down the Client on last handle drop");
         #[cfg(not(target_family = "wasm"))]
         tokio::task::block_in_place(|| {
-            RuntimeHandle::current().block_on(self.shutdown());
+            RuntimeHandle::current().block_on(self.shutdown_inner());
         });
     }
 }
@@ -1758,6 +1761,15 @@ impl ClientBuilder {
         }
     }
 
+    fn from_existing(client: &Client) -> Self {
+        ClientBuilder {
+            module_inits: client.module_inits.clone(),
+            primary_module_instance: Some(client.primary_module_instance),
+            admin_creds: None,
+            db: client.db.clone(),
+            stopped: false,
+        }
+    }
     /// Replace module generator registry entirely
     pub fn with_module_inits(&mut self, module_inits: ClientModuleInitRegistry) {
         self.module_inits = module_inits;
@@ -1871,13 +1883,9 @@ impl ClientBuilder {
 
             dbtx.commit_tx_result().await?;
         }
-        let stopped = self.stopped;
 
-        let client = self.build_stopped(root_secret, config).await?;
-        if !stopped {
-            client.as_inner().start_executor().await;
-        }
-        Ok(client)
+        let stopped = self.stopped;
+        self.build(root_secret, config, stopped).await
     }
 
     /// Join a new Federation
@@ -2027,6 +2035,21 @@ impl ClientBuilder {
             .url
             .clone();
         Ok(DynGlobalApi::from_single_endpoint(id, url))
+    }
+
+    /// Build a [`Client`] but do not start the executor
+    async fn build(
+        self,
+        root_secret: DerivableSecret,
+        config: ClientConfig,
+        stopped: bool,
+    ) -> anyhow::Result<ClientHandle> {
+        let client = self.build_stopped(root_secret, config).await?;
+        if !stopped {
+            client.as_inner().start_executor().await;
+        }
+
+        Ok(client)
     }
 
     /// Build a [`Client`] but do not start the executor

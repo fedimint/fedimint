@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
@@ -45,7 +46,7 @@ impl GatewayClientBuilder {
         &self,
         config: FederationConfig,
         gateway: Gateway,
-    ) -> Result<fedimint_client::ClientHandle> {
+    ) -> Result<fedimint_client::ClientHandleArc> {
         let FederationConfig {
             invite_code,
             mint_channel_id,
@@ -98,6 +99,7 @@ impl GatewayClientBuilder {
                 .join(root_secret, client_config.to_owned())
                 .await
         }
+        .map(Arc::new)
         .map_err(GatewayError::ClientStateMachineError)
     }
 

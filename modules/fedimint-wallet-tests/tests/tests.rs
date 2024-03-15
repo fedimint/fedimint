@@ -6,7 +6,7 @@ use bitcoin::secp256k1::rand::rngs::OsRng;
 use bitcoin::secp256k1::Secp256k1;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::ClientHandle;
+use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address,
 };
@@ -47,7 +47,7 @@ const PEG_OUT_AMOUNT_SATS: u64 = 1000;
 const PEG_IN_TIMEOUT: Duration = Duration::from_secs(60);
 
 async fn peg_in<'a>(
-    client: &'a ClientHandle,
+    client: &'a ClientHandleArc,
     bitcoin: &dyn BitcoinTest,
     dyn_bitcoin_rpc: &DynBitcoindRpc,
     finality_delay: u64,
@@ -84,7 +84,7 @@ async fn peg_in<'a>(
 }
 
 async fn await_consensus_to_catch_up(
-    client: &ClientHandle,
+    client: &ClientHandleArc,
     block_count: u64,
 ) -> anyhow::Result<u64> {
     let wallet = client.get_first_module::<WalletClientModule>();
