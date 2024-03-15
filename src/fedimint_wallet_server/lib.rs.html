@@ -1713,6 +1713,15 @@
 <a href="#1711" id="1711">1711</a>
 <a href="#1712" id="1712">1712</a>
 <a href="#1713" id="1713">1713</a>
+<a href="#1714" id="1714">1714</a>
+<a href="#1715" id="1715">1715</a>
+<a href="#1716" id="1716">1716</a>
+<a href="#1717" id="1717">1717</a>
+<a href="#1718" id="1718">1718</a>
+<a href="#1719" id="1719">1719</a>
+<a href="#1720" id="1720">1720</a>
+<a href="#1721" id="1721">1721</a>
+<a href="#1722" id="1722">1722</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::Infallible;
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
@@ -1767,7 +1776,12 @@
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, Feerate,
     NumPeers, OutPoint, PeerId, ServerModule,
 };
-<span class="kw">use </span>fedimint_metrics::{histogram_opts, lazy_static, prometheus, register_histogram, Histogram};
+<span class="kw">use </span>fedimint_metrics::prometheus::{
+    register_histogram_with_registry, register_int_gauge_with_registry, IntGauge,
+};
+<span class="kw">use </span>fedimint_metrics::{
+    histogram_opts, lazy_static, opts, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY,
+};
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
 <span class="kw">pub use </span>fedimint_wallet_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
@@ -1789,49 +1803,50 @@
 <span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
 
 <span class="macro">lazy_static! </span>{
-    <span class="kw">static </span><span class="kw-2">ref </span>AMOUNTS_BUCKETS_SATS: Vec&lt;f64&gt; = <span class="macro">vec!</span>[
-        <span class="number">0.0</span>,
-        <span class="number">0.1</span>,
-        <span class="number">1.0</span>,
-        <span class="number">10.0</span>,
-        <span class="number">100.0</span>,
-        <span class="number">1000.0</span>,
-        <span class="number">10000.0</span>,
-        <span class="number">100000.0</span>,
-        <span class="number">1000000.0</span>,
-        <span class="number">10000000.0</span>,
-        <span class="number">100000000.0
-    </span>];
-    <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGIN_SATS: Histogram = <span class="macro">register_histogram!</span>(<span class="macro">histogram_opts!</span>(
-        <span class="string">"wallet_pegin_sats"</span>,
-        <span class="string">"Value of peg-in transactions in sats"</span>,
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGIN_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
+        <span class="macro">histogram_opts!</span>(
+            <span class="string">"wallet_pegin_sats"</span>,
+            <span class="string">"Value of peg-in transactions in sats"</span>,
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGIN_FEES_SATS: Histogram = <span class="macro">register_histogram!</span>(<span class="macro">histogram_opts!</span>(
-        <span class="string">"wallet_pegin_fees_sats"</span>,
-        <span class="string">"Value of peg-in fees in sats"</span>,
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGIN_FEES_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
+        <span class="macro">histogram_opts!</span>(
+            <span class="string">"wallet_pegin_fees_sats"</span>,
+            <span class="string">"Value of peg-in fees in sats"</span>,
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGOUT_SATS: Histogram = <span class="macro">register_histogram!</span>(<span class="macro">histogram_opts!</span>(
-        <span class="string">"wallet_pegout_sats"</span>,
-        <span class="string">"Value of peg-out transactions in sats"</span>,
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGOUT_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
+        <span class="macro">histogram_opts!</span>(
+            <span class="string">"wallet_pegout_sats"</span>,
+            <span class="string">"Value of peg-out transactions in sats"</span>,
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGOUT_FEES_SATS: Histogram = <span class="macro">register_histogram!</span>(<span class="macro">histogram_opts!</span>(
-        <span class="string">"wallet_pegout_fees_sats"</span>,
-        <span class="string">"Value of peg-out fees in sats"</span>,
-        AMOUNTS_BUCKETS_SATS.clone()
-    ))
+    <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGOUT_FEES_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
+        <span class="macro">histogram_opts!</span>(
+            <span class="string">"wallet_pegout_fees_sats"</span>,
+            <span class="string">"Value of peg-out fees in sats"</span>,
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
     .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>ALL_METRICS: [Box&lt;<span class="kw">dyn </span>prometheus::core::Collector&gt;; <span class="number">4</span>] = [
-        Box::new(WALLET_PEGIN_SATS.clone()),
-        Box::new(WALLET_PEGIN_FEES_SATS.clone()),
-        Box::new(WALLET_PEGOUT_SATS.clone()),
-        Box::new(WALLET_PEGOUT_FEES_SATS.clone()),
-    ];
+    <span class="kw">static </span><span class="kw-2">ref </span>WALLET_BLOCK_COUNT: IntGauge = <span class="macro">register_int_gauge_with_registry!</span>(
+        <span class="macro">opts!</span>(
+            <span class="string">"wallet_block_count"</span>,
+            <span class="string">"Blockchain block count as monitored by wallet module"</span>,
+        ),
+        REGISTRY
+    )
+    .unwrap();
 }
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -1954,10 +1969,12 @@
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ServerModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;DynServerModule&gt; {
-        <span class="comment">// Ensure all metrics are initialized
-        </span><span class="kw">for </span>metric <span class="kw">in </span>ALL_METRICS.iter() {
-            metric.collect();
-        }
+        <span class="comment">// Eagerly initialize metrics that trigger infrequently
+        </span>WALLET_PEGIN_FEES_SATS.get_sample_count();
+        WALLET_PEGIN_SATS.get_sample_count();
+        WALLET_PEGOUT_SATS.get_sample_count();
+        WALLET_PEGOUT_FEES_SATS.get_sample_count();
+
         <span class="prelude-val">Ok</span>(Wallet::new(
             args.cfg().to_typed()<span class="question-mark">?</span>,
             args.db().clone(),
@@ -2110,6 +2127,7 @@
                 <span class="string">"Proposing block count"
             </span>);
 
+            WALLET_BLOCK_COUNT.set(block_count_vote <span class="kw">as </span>i64);
             items.push(WalletConsensusItem::BlockCount(block_count_vote));
         }
 

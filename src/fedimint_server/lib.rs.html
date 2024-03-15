@@ -322,6 +322,12 @@
 <a href="#320" id="320">320</a>
 <a href="#321" id="321">321</a>
 <a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -347,7 +353,7 @@
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 <span class="kw">use </span>futures::FutureExt;
-<span class="kw">use </span>jsonrpsee::server::{PingConfig, ServerBuilder, ServerHandle};
+<span class="kw">use </span>jsonrpsee::server::{PingConfig, RpcServiceBuilder, ServerBuilder, ServerHandle};
 <span class="kw">use </span>jsonrpsee::types::ErrorObject;
 <span class="kw">use </span>jsonrpsee::RpcModule;
 <span class="kw">use </span>tokio::runtime::Runtime;
@@ -355,10 +361,12 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::config::api::{ConfigGenApi, ConfigGenSettings};
 <span class="kw">use </span><span class="kw">crate</span>::consensus::server::ConsensusServer;
+<span class="kw">use </span><span class="kw">crate</span>::metrics::initialize_gauge_metrics;
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, RpcHandlerCtx};
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::TlsTcpConnector;
 
 <span class="kw">pub mod </span>envs;
+<span class="kw">pub mod </span>metrics;
 
 <span class="kw">pub mod </span>atomic_broadcast;
 
@@ -411,6 +419,9 @@
     /// After configs are generated, start `ConsensusApi` and `ConsensusServer`
     </span><span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw-2">mut </span>task_group: TaskGroup) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting config gen"</span>);
+
+        initialize_gauge_metrics(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await</span>;
+
         <span class="kw">let </span>cfg = <span class="self">self
             </span>.run_config_gen(task_group.make_subgroup().<span class="kw">await</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -513,7 +524,8 @@
     ) -&gt; FedimintApiHandler {
         <span class="kw">let </span><span class="kw-2">mut </span>builder = ServerBuilder::new()
             .max_connections(max_connections)
-            .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(<span class="number">10</span>)));
+            .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(<span class="number">10</span>)))
+            .set_rpc_middleware(RpcServiceBuilder::new().layer(metrics::jsonrpsee::MetricsLayer));
 
         <span class="kw">let </span>runtime = <span class="kw">if </span>force_shutdown {
             <span class="kw">let </span>runtime = Runtime::new().expect(<span class="string">"Creates runtime"</span>);

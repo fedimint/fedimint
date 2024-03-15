@@ -1543,12 +1543,6 @@
 <a href="#1541" id="1541">1541</a>
 <a href="#1542" id="1542">1542</a>
 <a href="#1543" id="1543">1543</a>
-<a href="#1544" id="1544">1544</a>
-<a href="#1545" id="1545">1545</a>
-<a href="#1546" id="1546">1546</a>
-<a href="#1547" id="1547">1547</a>
-<a href="#1548" id="1548">1548</a>
-<a href="#1549" id="1549">1549</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -1606,9 +1600,10 @@
     LightningInputError, LightningModuleTypes, LightningOutput, LightningOutputError,
     LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, RemoveGatewayRequest,
 };
+<span class="kw">use </span>fedimint_metrics::prometheus::register_int_counter_with_registry;
 <span class="kw">use </span>fedimint_metrics::{
-    histogram_opts, lazy_static, opts, prometheus, register_histogram, register_int_counter,
-    Histogram, IntCounter,
+    histogram_opts, lazy_static, opts, register_histogram_with_registry, Histogram, IntCounter,
+    AMOUNTS_BUCKETS_SATS, REGISTRY,
 };
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
 <span class="kw">use </span>futures::StreamExt;
@@ -1618,62 +1613,56 @@
 <span class="kw">use </span>tracing::{debug, error, info, info_span, trace, warn};
 
 <span class="macro">lazy_static! </span>{
-    <span class="kw">static </span><span class="kw-2">ref </span>LN_INCOMING_OFFER: IntCounter = <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
-        <span class="string">"ln_incoming_offer"</span>,
-        <span class="string">"contracts::IncomingContractOffer"
-    </span>))
+    <span class="kw">static </span><span class="kw-2">ref </span>LN_INCOMING_OFFER: IntCounter = <span class="macro">register_int_counter_with_registry!</span>(
+        <span class="macro">opts!</span>(<span class="string">"ln_incoming_offer"</span>, <span class="string">"contracts::IncomingContractOffer"</span>),
+        REGISTRY
+    )
     .unwrap();
     <span class="kw">static </span><span class="kw-2">ref </span>LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT: IntCounter =
-        <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
-            <span class="string">"ln_output_outcome_cancel_outgoing_contract"</span>,
-            <span class="string">"LightningOutputOutcome::CancelOutgoingContract"
-        </span>))
+        <span class="macro">register_int_counter_with_registry!</span>(
+            <span class="macro">opts!</span>(
+                <span class="string">"ln_output_outcome_cancel_outgoing_contract"</span>,
+                <span class="string">"LightningOutputOutcome::CancelOutgoingContract"
+            </span>),
+            REGISTRY
+        )
         .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_INCOMING: IntCounter = <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
-        <span class="string">"ln_funded_contract_incoming"</span>,
-        <span class="string">"contracts::FundedContract::Incoming"
-    </span>))
+    <span class="kw">static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_INCOMING: IntCounter = <span class="macro">register_int_counter_with_registry!</span>(
+        <span class="macro">opts!</span>(
+            <span class="string">"ln_funded_contract_incoming"</span>,
+            <span class="string">"contracts::FundedContract::Incoming"
+        </span>),
+        REGISTRY
+    )
     .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_OUTGOING: IntCounter = <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
-        <span class="string">"ln_funded_contract_outgoing"</span>,
-        <span class="string">"contracts::FundedContract::Outgoing"
-    </span>))
+    <span class="kw">static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_OUTGOING: IntCounter = <span class="macro">register_int_counter_with_registry!</span>(
+        <span class="macro">opts!</span>(
+            <span class="string">"ln_funded_contract_outgoing"</span>,
+            <span class="string">"contracts::FundedContract::Outgoing"
+        </span>),
+        REGISTRY
+    )
     .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>AMOUNTS_BUCKETS_SATS: Vec&lt;f64&gt; = <span class="macro">vec!</span>[
-        <span class="number">0.0</span>,
-        <span class="number">0.1</span>,
-        <span class="number">1.0</span>,
-        <span class="number">10.0</span>,
-        <span class="number">100.0</span>,
-        <span class="number">1000.0</span>,
-        <span class="number">10000.0</span>,
-        <span class="number">100000.0</span>,
-        <span class="number">1000000.0</span>,
-        <span class="number">10000000.0</span>,
-        <span class="number">100000000.0
-    </span>];
     <span class="kw">static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS: Histogram =
-        <span class="macro">register_histogram!</span>(<span class="macro">histogram_opts!</span>(
-            <span class="string">"ln_funded_contract_incoming_account_amounts_sats"</span>,
-            <span class="string">"contracts::FundedContract::Incoming account amount in sats"</span>,
-            AMOUNTS_BUCKETS_SATS.clone()
-        ))
+        <span class="macro">register_histogram_with_registry!</span>(
+            <span class="macro">histogram_opts!</span>(
+                <span class="string">"ln_funded_contract_incoming_account_amounts_sats"</span>,
+                <span class="string">"contracts::FundedContract::Incoming account amount in sats"</span>,
+                AMOUNTS_BUCKETS_SATS.clone()
+            ),
+            REGISTRY
+        )
         .unwrap();
     <span class="kw">static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS: Histogram =
-        <span class="macro">register_histogram!</span>(<span class="macro">histogram_opts!</span>(
-            <span class="string">"ln_funded_contract_outgoing_account_amounts_sats"</span>,
-            <span class="string">"contracts::FundedContract::Outgoing account amounts in sats"</span>,
-            AMOUNTS_BUCKETS_SATS.clone()
-        ))
+        <span class="macro">register_histogram_with_registry!</span>(
+            <span class="macro">histogram_opts!</span>(
+                <span class="string">"ln_funded_contract_outgoing_account_amounts_sats"</span>,
+                <span class="string">"contracts::FundedContract::Outgoing account amounts in sats"</span>,
+                AMOUNTS_BUCKETS_SATS.clone()
+            ),
+            REGISTRY
+        )
         .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>ALL_METRICS: [Box&lt;<span class="kw">dyn </span>prometheus::core::Collector&gt;; <span class="number">6</span>] = [
-        Box::new(LN_INCOMING_OFFER.clone()),
-        Box::new(LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.clone()),
-        Box::new(LN_FUNDED_CONTRACT_INCOMING.clone()),
-        Box::new(LN_FUNDED_CONTRACT_OUTGOING.clone()),
-        Box::new(LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS.clone()),
-        Box::new(LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS.clone()),
-    ];
 }
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -1807,10 +1796,9 @@
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ServerModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;DynServerModule&gt; {
-        <span class="comment">// Ensure all metrics are initialized
-        </span><span class="kw">for </span>metric <span class="kw">in </span>ALL_METRICS.iter() {
-            metric.collect();
-        }
+        <span class="comment">// Eagerly initialize metrics that trigger infrequently
+        </span>LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.get();
+
         <span class="prelude-val">Ok</span>(Lightning::new(
             args.cfg().to_typed()<span class="question-mark">?</span>,
             <span class="kw-2">&amp;mut </span>args.task_group().clone(),

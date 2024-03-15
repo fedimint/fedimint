@@ -802,6 +802,28 @@
 <a href="#800" id="800">800</a>
 <a href="#801" id="801">801</a>
 <a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -811,6 +833,7 @@
 <span class="kw">use </span>async_channel::{Receiver, Sender};
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
+<span class="kw">use </span>fedimint_core::core::MODULE_INSTANCE_ID_GLOBAL;
 <span class="kw">use </span>fedimint_core::db::{
     apply_migrations, apply_migrations_server, Database, DatabaseTransaction,
     IDatabaseTransactionOpsCoreTyped,
@@ -849,6 +872,10 @@
     AlephUnitsPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
 };
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
+<span class="kw">use </span><span class="kw">crate</span>::metrics::{
+    CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
+    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_SESSION_COUNT,
+};
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache};
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{DelayCalculator, PeerConnector, ReconnectPeerConnections};
@@ -1030,6 +1057,7 @@
 
         <span class="kw">while </span>!task_handle.is_shutting_down() {
             <span class="kw">let </span>session_index = <span class="self">self</span>.get_finished_session_count().<span class="kw">await</span>;
+            CONSENSUS_SESSION_COUNT.set(session_index <span class="kw">as </span>i64);
 
             <span class="kw">let </span><span class="kw-2">mut </span>item_index = <span class="self">self</span>.pending_accepted_items().<span class="kw">await</span>.len() <span class="kw">as </span>u64;
 
@@ -1093,6 +1121,7 @@
 
         <span class="kw">while </span>!task_handle.is_shutting_down() {
             <span class="kw">let </span>session_index = <span class="self">self</span>.get_finished_session_count().<span class="kw">await</span>;
+            CONSENSUS_SESSION_COUNT.set(session_index <span class="kw">as </span>i64);
 
             <span class="self">self</span>.run_session(session_index).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1382,7 +1411,11 @@
         item: ConsensusItem,
         peer: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>peer_id_str = peer.to_string();
         <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"process_consensus_item"</span>);
+        <span class="kw">let </span>timing_prom = CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>peer_id_str])
+            .start_timer();
 
         <span class="macro">debug!</span>(%peer, item = <span class="question-mark">?</span>FmtDbgConsensusItem(<span class="kw-2">&amp;</span>item), <span class="string">"Processing consensus item"</span>);
 
@@ -1421,9 +1454,14 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
 
-        <span class="kw">for </span>(module_instance_id, <span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
+        <span class="kw">for </span>(module_instance_id, kind, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             <span class="kw">let </span>_module_audit_timing =
                 TimeReporter::new(<span class="macro">format!</span>(<span class="string">"audit module {module_instance_id}"</span>));
+
+            <span class="kw">let </span>timing_prom = CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS
+                .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>MODULE_INSTANCE_ID_GLOBAL.to_string(), kind.as_str()])
+                .start_timer();
+
             module
                 .audit(
                     <span class="kw-2">&amp;mut </span>dbtx
@@ -1432,8 +1470,9 @@
                     <span class="kw-2">&amp;mut </span>audit,
                     module_instance_id,
                 )
-                .<span class="kw">await
-        </span>}
+                .<span class="kw">await</span>;
+            timing_prom.observe_duration();
+        }
 
         <span class="kw">if </span>audit.net_assets().milli_sat &lt; <span class="number">0 </span>{
             <span class="macro">panic!</span>(<span class="string">"Balance sheet of the fed has gone negative, this should never happen! {audit}"</span>)
@@ -1442,6 +1481,11 @@
         dbtx.commit_tx_result()
             .<span class="kw">await
             </span>.expect(<span class="string">"Committing consensus epoch failed"</span>);
+
+        CONSENSUS_ITEMS_PROCESSED_TOTAL
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>peer_id_str])
+            .inc();
+        timing_prom.observe_duration();
 
         <span class="prelude-val">Ok</span>(())
     }

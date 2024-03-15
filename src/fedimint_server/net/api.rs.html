@@ -664,6 +664,13 @@
 <a href="#662" id="662">662</a>
 <a href="#663" id="663">663</a>
 <a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -722,6 +729,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::consensus::server::{get_finished_session_count_static, LatestContributionByPeer};
 <span class="kw">use </span><span class="kw">crate</span>::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
+<span class="kw">use </span><span class="kw">crate</span>::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 <span class="kw">use crate</span>::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
 
 <span class="doccomment">/// A state that has context for the API, passed to each rpc handler callback
@@ -1028,14 +1036,20 @@
         }
 
         <span class="macro">info!</span>(target: LOG_NET_API, id = %request.id, len = request.payload.len(), <span class="string">"Storing new client backup"</span>);
-        dbtx.insert_entry(
-            <span class="kw-2">&amp;</span>ClientBackupKey(request.id),
-            <span class="kw-2">&amp;</span>ClientBackupSnapshot {
-                timestamp: request.timestamp,
-                data: request.payload.to_vec(),
-            },
-        )
-        .<span class="kw">await</span>;
+        <span class="kw">let </span>overwritten = dbtx
+            .insert_entry(
+                <span class="kw-2">&amp;</span>ClientBackupKey(request.id),
+                <span class="kw-2">&amp;</span>ClientBackupSnapshot {
+                    timestamp: request.timestamp,
+                    data: request.payload.to_vec(),
+                },
+            )
+            .<span class="kw">await
+            </span>.is_some();
+        BACKUP_WRITE_SIZE_BYTES.observe(request.payload.len() <span class="kw">as </span>f64);
+        <span class="kw">if </span>!overwritten {
+            dbtx.on_commit(|| STORED_BACKUPS_COUNT.inc());
+        }
 
         <span class="prelude-val">Ok</span>(())
     }
