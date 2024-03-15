@@ -57,11 +57,7 @@ use fedimint_ln_common::{
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
-use metrics::{
-    LN_FUNDED_CONTRACT_INCOMING, LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS,
-    LN_FUNDED_CONTRACT_OUTGOING, LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS,
-    LN_INCOMING_OFFER, LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT,
-};
+use metrics::{LN_CANCEL_OUTGOING_CONTRACTS, LN_FUNDED_CONTRACT_SATS, LN_INCOMING_OFFER};
 use rand::rngs::OsRng;
 use secp256k1::PublicKey;
 use strum::IntoEnumIterator;
@@ -201,7 +197,7 @@ impl ServerModuleInit for LightningInit {
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
         // Eagerly initialize metrics that trigger infrequently
-        LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.get();
+        LN_CANCEL_OUTGOING_CONTRACTS.get();
 
         Ok(Lightning::new(
             args.cfg().to_typed()?,
@@ -651,7 +647,7 @@ impl ServerModule for Lightning {
                     .is_none()
                 {
                     dbtx.on_commit(move || {
-                        record_funded_contract_metrics(updated_contract_account);
+                        record_funded_contract_metric(updated_contract_account);
                     })
                 }
 
@@ -776,7 +772,7 @@ impl ServerModule for Lightning {
                 .await;
 
                 dbtx.on_commit(move || {
-                    LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.inc();
+                    LN_CANCEL_OUTGOING_CONTRACTS.inc();
                 });
 
                 Ok(TransactionItemAmount::ZERO)
@@ -1219,19 +1215,13 @@ impl Lightning {
     }
 }
 
-fn record_funded_contract_metrics(updated_contract_account: ContractAccount) {
-    match updated_contract_account.contract {
-        FundedContract::Incoming(_) => {
-            LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS
-                .observe(updated_contract_account.amount.sats_f64());
-            LN_FUNDED_CONTRACT_INCOMING.inc();
-        }
-        FundedContract::Outgoing(_) => {
-            LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS
-                .observe(updated_contract_account.amount.sats_f64());
-            LN_FUNDED_CONTRACT_OUTGOING.inc();
-        }
-    }
+fn record_funded_contract_metric(updated_contract_account: ContractAccount) {
+    LN_FUNDED_CONTRACT_SATS
+        .with_label_values(&[match updated_contract_account.contract {
+            FundedContract::Incoming(_) => "incoming",
+            FundedContract::Outgoing(_) => "outgoing",
+        }])
+        .observe(updated_contract_account.amount.sats_f64());
 }
 
 #[cfg(test)]
