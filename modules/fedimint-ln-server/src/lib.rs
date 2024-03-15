@@ -55,70 +55,19 @@ use fedimint_ln_common::{
     LightningInputError, LightningModuleTypes, LightningOutput, LightningOutputError,
     LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, RemoveGatewayRequest,
 };
-use fedimint_metrics::prometheus::register_int_counter_with_registry;
-use fedimint_metrics::{
-    histogram_opts, lazy_static, opts, register_histogram_with_registry, Histogram, IntCounter,
-    AMOUNTS_BUCKETS_SATS, REGISTRY,
-};
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
+use metrics::{
+    LN_FUNDED_CONTRACT_INCOMING, LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS,
+    LN_FUNDED_CONTRACT_OUTGOING, LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS,
+    LN_INCOMING_OFFER, LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT,
+};
 use rand::rngs::OsRng;
 use secp256k1::PublicKey;
 use strum::IntoEnumIterator;
 use tracing::{debug, error, info, info_span, trace, warn};
 
-lazy_static! {
-    static ref LN_INCOMING_OFFER: IntCounter = register_int_counter_with_registry!(
-        opts!("ln_incoming_offer", "contracts::IncomingContractOffer"),
-        REGISTRY
-    )
-    .unwrap();
-    static ref LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT: IntCounter =
-        register_int_counter_with_registry!(
-            opts!(
-                "ln_output_outcome_cancel_outgoing_contract",
-                "LightningOutputOutcome::CancelOutgoingContract"
-            ),
-            REGISTRY
-        )
-        .unwrap();
-    static ref LN_FUNDED_CONTRACT_INCOMING: IntCounter = register_int_counter_with_registry!(
-        opts!(
-            "ln_funded_contract_incoming",
-            "contracts::FundedContract::Incoming"
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    static ref LN_FUNDED_CONTRACT_OUTGOING: IntCounter = register_int_counter_with_registry!(
-        opts!(
-            "ln_funded_contract_outgoing",
-            "contracts::FundedContract::Outgoing"
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    static ref LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS: Histogram =
-        register_histogram_with_registry!(
-            histogram_opts!(
-                "ln_funded_contract_incoming_account_amounts_sats",
-                "contracts::FundedContract::Incoming account amount in sats",
-                AMOUNTS_BUCKETS_SATS.clone()
-            ),
-            REGISTRY
-        )
-        .unwrap();
-    static ref LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS: Histogram =
-        register_histogram_with_registry!(
-            histogram_opts!(
-                "ln_funded_contract_outgoing_account_amounts_sats",
-                "contracts::FundedContract::Outgoing account amounts in sats",
-                AMOUNTS_BUCKETS_SATS.clone()
-            ),
-            REGISTRY
-        )
-        .unwrap();
-}
+mod metrics;
 
 #[derive(Debug, Clone)]
 pub struct LightningInit;
@@ -701,7 +650,9 @@ impl ServerModule for Lightning {
                     .await
                     .is_none()
                 {
-                    calculate_funded_contract_metrics(updated_contract_account, dbtx);
+                    dbtx.on_commit(move || {
+                        record_funded_contract_metrics(updated_contract_account);
+                    })
                 }
 
                 dbtx.insert_new_entry(
@@ -767,7 +718,9 @@ impl ServerModule for Lightning {
                 dbtx.insert_new_entry(&OfferKey(offer.hash), &(*offer).clone())
                     .await;
 
-                calculate_incoming_offer_metric(dbtx);
+                dbtx.on_commit(move || {
+                    LN_INCOMING_OFFER.inc();
+                });
 
                 Ok(TransactionItemAmount::ZERO)
             }
@@ -822,7 +775,9 @@ impl ServerModule for Lightning {
                 )
                 .await;
 
-                calculate_output_outcome_cancel_metrics(dbtx);
+                dbtx.on_commit(move || {
+                    LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.inc();
+                });
 
                 Ok(TransactionItemAmount::ZERO)
             }
@@ -1264,11 +1219,8 @@ impl Lightning {
     }
 }
 
-fn calculate_funded_contract_metrics(
-    updated_contract_account: ContractAccount,
-    dbtx: &mut DatabaseTransaction<'_>,
-) {
-    dbtx.on_commit(move || match updated_contract_account.contract {
+fn record_funded_contract_metrics(updated_contract_account: ContractAccount) {
+    match updated_contract_account.contract {
         FundedContract::Incoming(_) => {
             LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS
                 .observe(updated_contract_account.amount.sats_f64());
@@ -1279,19 +1231,7 @@ fn calculate_funded_contract_metrics(
                 .observe(updated_contract_account.amount.sats_f64());
             LN_FUNDED_CONTRACT_OUTGOING.inc();
         }
-    });
-}
-
-fn calculate_incoming_offer_metric(dbtx: &mut DatabaseTransaction<'_>) {
-    dbtx.on_commit(move || {
-        LN_INCOMING_OFFER.inc();
-    });
-}
-
-fn calculate_output_outcome_cancel_metrics(dbtx: &mut DatabaseTransaction<'_>) {
-    dbtx.on_commit(move || {
-        LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.inc();
-    });
+    }
 }
 
 #[cfg(test)]
