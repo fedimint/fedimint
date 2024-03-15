@@ -78,6 +78,7 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[ignore] // TODO: flaky https://github.com/fedimint/fedimint/issues/4508
 async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     // Print notes for client1
     let fed = fixtures().new_fed().await;
