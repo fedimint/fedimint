@@ -118,6 +118,36 @@ lazy_static! {
         REGISTRY
     )
     .unwrap();
+    pub(crate) static ref PEER_CONNECT_COUNT: IntCounterVec =
+        register_int_counter_vec_with_registry!(
+            opts!("peer_connect_total", "Number of times peer (re/)connected",),
+            &["self_id", "peer_id", "direction"],
+            REGISTRY
+        )
+        .unwrap();
+    pub(crate) static ref PEER_DISCONNECT_COUNT: IntCounterVec =
+        register_int_counter_vec_with_registry!(
+            opts!(
+                "peer_disconnect_total",
+                "Number of times peer (re/)connected",
+            ),
+            &["self_id", "peer_id"],
+            REGISTRY
+        )
+        .unwrap();
+    pub(crate) static ref PEER_MESSAGES_COUNT: IntCounterVec =
+        register_int_counter_vec_with_registry!(
+            opts!("peer_messages_total", "Messages with the peer",),
+            &["self_id", "peer_id", "direction"],
+            REGISTRY
+        )
+        .unwrap();
+    pub(crate) static ref PEER_BANS_COUNT: IntCounterVec = register_int_counter_vec_with_registry!(
+        opts!("peer_bans_total", "Peer bans",),
+        &["self_id", "peer_id"],
+        REGISTRY
+    )
+    .unwrap();
 }
 
 /// Initialize gauges or other metrics that need eager initialization on start,
