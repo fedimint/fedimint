@@ -31,6 +31,9 @@ use tokio::time::Instant;
 use tracing::{debug, info, instrument, trace, warn};
 
 use crate::atomic_broadcast::Recipient;
+use crate::metrics::{
+    PEER_BANS_COUNT, PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT,
+};
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
 
@@ -53,6 +56,7 @@ pub type PeerConnector<M> = AnyConnector<PeerMessage<M>>;
 #[derive(Clone)]
 pub struct ReconnectPeerConnections<T> {
     connections: HashMap<PeerId, PeerConnection<T>>,
+    self_id: PeerId,
 }
 
 #[derive(Clone)]
@@ -177,7 +181,9 @@ struct CommonPeerConnectionState<M> {
     incoming: async_channel::Sender<M>,
     outgoing: async_channel::Receiver<M>,
     our_id: PeerId,
+    our_id_str: String,
     peer_id: PeerId,
+    peer_id_str: String,
     peer_address: SafeUrl,
     delay_calculator: DelayCalculator,
     connect: SharedAnyConnector<PeerMessage<M>>,
@@ -219,6 +225,7 @@ where
         let mut connection_senders = HashMap::new();
         let mut status_query_senders = HashMap::new();
         let mut connections = HashMap::new();
+        let self_id = cfg.identity;
 
         for (peer, peer_address) in cfg.peers.iter().filter(|(&peer, _)| peer != cfg.identity) {
             let (connection_sender, connection_receiver) =
@@ -248,7 +255,10 @@ where
             })
             .await;
         (
-            ReconnectPeerConnections { connections },
+            ReconnectPeerConnections {
+                connections,
+                self_id,
+            },
             PeerStatusChannels(status_query_senders),
         )
     }
@@ -351,6 +361,9 @@ where
 
     async fn ban_peer(&mut self, peer: PeerId) {
         self.connections.remove(&peer);
+        PEER_BANS_COUNT
+            .with_label_values(&[&self.self_id.to_string(), &peer.to_string()])
+            .inc();
         warn!(target: LOG_NET_PEER, "Peer {} banned.", peer);
     }
 }
@@ -448,6 +461,7 @@ where
                 match message_res {
                     Ok(peer_message) => {
                         if let PeerMessage::Message(msg) = peer_message {
+                            PEER_MESSAGES_COUNT.with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"]).inc();
                             if self.incoming.try_send(msg).is_err(){
                                 debug!(target: LOG_NET_PEER, "Could not relay incoming message since the channel is full");
                             }
@@ -488,6 +502,9 @@ where
     }
 
     fn disconnect(&self, mut disconnect_count: u64) -> PeerConnectionState<M> {
+        PEER_DISCONNECT_COUNT
+            .with_label_values(&[&self.our_id_str, &self.peer_id_str])
+            .inc();
         disconnect_count += 1;
 
         let reconnect_at = {
@@ -523,6 +540,10 @@ where
         mut connected: ConnectedPeerConnectionState<M>,
         peer_message: PeerMessage<M>,
     ) -> PeerConnectionState<M> {
+        PEER_MESSAGES_COUNT
+            .with_label_values(&[&self.our_id_str, &self.peer_id_str, "outgoing"])
+            .inc();
+
         if let Err(e) = connected.connection.send(peer_message).await {
             return self.disconnect_err(e, 0);
         }
@@ -544,6 +565,8 @@ where
             new_connection_res = self.incoming_connections.recv() => {
                 match new_connection_res {
                     Some(new_connection) => {
+                        PEER_CONNECT_COUNT.with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"])
+                        .inc();
                         self.receive_connection(disconnected, new_connection).await
                     },
                     None => {
@@ -584,6 +607,9 @@ where
     ) -> PeerConnectionState<M> {
         match self.try_reconnect().await {
             Ok(conn) => {
+                PEER_CONNECT_COUNT
+                    .with_label_values(&[&self.our_id_str, &self.peer_id_str, "outgoing"])
+                    .inc();
                 self.connect(conn, disconnected.failed_reconnect_counter)
                     .await
             }
@@ -685,7 +711,9 @@ where
         let common = CommonPeerConnectionState {
             incoming,
             outgoing,
+            our_id_str: our_id.to_string(),
             our_id,
+            peer_id_str: peer_id.to_string(),
             peer_id,
             peer_address,
             delay_calculator,
