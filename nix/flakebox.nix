@@ -428,6 +428,7 @@ rec {
       patchShebangs ./scripts
       export FM_CARGO_DENY_COMPILATION=1
       export FM_TEST_CI_ALL_TIMES=${builtins.toString times}
+      export FM_TEST_CI_ALL_DISABLE_ETA=1
       ./scripts/tests/test-ci-all.sh || exit 1
       cp scripts/tests/always-success-test.sh scripts/tests/always-success-test.sh.bck
       sed -i -e 's/exit 0/exit 1/g' scripts/tests/always-success-test.sh
