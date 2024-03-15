@@ -15,10 +15,16 @@ function devimint_env {
   export RUST_LOG=info
   export RUST_BACKTRACE=1
 
+  # For starship users, we can actually make the prompt distinct so there's
+  # no confusion.
+  export STARSHIP_CONFIG="${REPO_ROOT}/scripts/dev/devimint-env/starship.toml"
+
   >&2 echo "Devimint Env Started"
   if [ "$SHELL" == "fish" ] || [[ "$SHELL" == */fish ]]; then
     "${SHELL}"
   else
+    # posix shell users can tell they are in devimint-env
+    # because we customize the prompt
     if [ -n "${PS1:-}" ]; then
       PS1="[devimint] $PS1"
     else
