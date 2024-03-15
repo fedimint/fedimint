@@ -309,6 +309,7 @@
                   libopcodes_2_38
                   libblocksruntime
                   lldb
+                  clang
                 ];
               });
 
