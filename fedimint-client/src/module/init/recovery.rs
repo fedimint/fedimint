@@ -72,7 +72,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
         common: &RecoveryFromHistoryCommon,
     );
 
-    /// Delete the the recovery state from the database
+    /// Delete the recovery state from the database
     ///
     /// See [`Self::load_dbtx`].
     async fn delete_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>);
@@ -206,7 +206,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
         Ok(())
     }
 
-    /// Finalize the recovery converting the tracked state to to final
+    /// Finalize the recovery converting the tracked state to final
     /// changes in the database.
     ///
     /// This is the only place during recovery where module gets a chance to

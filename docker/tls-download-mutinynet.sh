@@ -131,7 +131,7 @@ done
 echo
 read -p "Press enter after you have created the above DNS records " -r -n 1 < /dev/tty
 echo
-echo "DNS propagation may take a while and and caching may cause issues, so try to verify on another machine if the following is true:"
+echo "DNS propagation may take a while and caching may cause issues, so try to verify on another machine if the following is true:"
 echo "${host_name[*]} -> $EXTERNAL_IP"
 for service in $SERVICES; do
   echo "$service.${host_name[*]} -> $EXTERNAL_IP"
