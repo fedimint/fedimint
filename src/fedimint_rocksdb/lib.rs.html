@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-rocksdb/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_rocksdb" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_rocksdb/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-rocksdb/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_rocksdb" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_rocksdb/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -645,7 +647,7 @@
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>RocksDb(rocksdb::OptimisticTransactionDB);
 
-<span class="kw">pub struct </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt;(rocksdb::Transaction&lt;<span class="lifetime">&#39;a</span>, rocksdb::OptimisticTransactionDB&gt;);
+<span class="kw">pub struct </span>RocksDbTransaction&lt;<span class="lifetime">'a</span>&gt;(rocksdb::Transaction&lt;<span class="lifetime">'a</span>, rocksdb::OptimisticTransactionDB&gt;);
 
 <span class="kw">impl </span>RocksDb {
     <span class="kw">pub fn </span>open(db_path: <span class="kw">impl </span>AsRef&lt;Path&gt;) -&gt; anyhow::Result&lt;RocksDb&gt; {
@@ -678,13 +680,13 @@
 
 <span class="kw">fn </span>get_default_options() -&gt; anyhow::Result&lt;rocksdb::Options&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>opts = rocksdb::Options::default();
-    <span class="kw">const </span>VAR_NAME: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_ROCKSDB_WRITE_BUFFER_SIZE&quot;</span>;
+    <span class="kw">const </span>VAR_NAME: <span class="kw-2">&amp;</span>str = <span class="string">"FM_ROCKSDB_WRITE_BUFFER_SIZE"</span>;
     <span class="kw">if let </span><span class="prelude-val">Ok</span>(var) = std::env::var(VAR_NAME) {
-        <span class="macro">debug!</span>(var, <span class="string">&quot;Using custom write buffer size&quot;</span>);
+        <span class="macro">debug!</span>(var, <span class="string">"Using custom write buffer size"</span>);
         <span class="kw">let </span>size: usize =
-            FromStr::from_str(<span class="kw-2">&amp;</span>var).with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Could not parse {VAR_NAME}&quot;</span>))<span class="question-mark">?</span>;
+            FromStr::from_str(<span class="kw-2">&amp;</span>var).with_context(|| <span class="macro">format!</span>(<span class="string">"Could not parse {VAR_NAME}"</span>))<span class="question-mark">?</span>;
         <span class="kw">if </span>!is_power_of_two(size) {
-            <span class="macro">bail!</span>(<span class="string">&quot;{} is not a power of 2&quot;</span>, VAR_NAME);
+            <span class="macro">bail!</span>(<span class="string">"{} is not a power of 2"</span>, VAR_NAME);
         }
         opts.set_write_buffer_size(size);
     }
@@ -695,7 +697,7 @@
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>RocksDbReadOnly(rocksdb::DB);
 
-<span class="kw">pub struct </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>rocksdb::DB);
+<span class="kw">pub struct </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>rocksdb::DB);
 
 <span class="kw">impl </span>RocksDbReadOnly {
     <span class="kw">pub fn </span>open_read_only(db_path: <span class="kw">impl </span>AsRef&lt;Path&gt;) -&gt; anyhow::Result&lt;RocksDbReadOnly&gt; {
@@ -718,7 +720,7 @@
 }
 
 <span class="comment">// When finding by prefix iterating in Reverse order, we need to start from
-// &quot;prefix+1&quot; instead of &quot;prefix&quot;, using lexicographic ordering. See the tests
+// "prefix+1" instead of "prefix", using lexicographic ordering. See the tests
 // below.
 // Will return None if there is no next prefix (i.e prefix is already the last
 // possible/max one)
@@ -743,8 +745,8 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>IRawDatabase <span class="kw">for </span>RocksDb {
-    <span class="kw">type </span>Transaction&lt;<span class="lifetime">&#39;a</span>&gt; = RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt;;
-    <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; RocksDbTransaction {
+    <span class="kw">type </span>Transaction&lt;<span class="lifetime">'a</span>&gt; = RocksDbTransaction&lt;<span class="lifetime">'a</span>&gt;;
+    <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>) -&gt; RocksDbTransaction {
         <span class="kw">let </span><span class="kw-2">mut </span>optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(<span class="bool-val">true</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>rocksdb_tx = RocksDbTransaction(
@@ -754,7 +756,7 @@
         rocksdb_tx
             .set_tx_savepoint()
             .<span class="kw">await
-            </span>.expect(<span class="string">&quot;setting tx savepoint failed&quot;</span>);
+            </span>.expect(<span class="string">"setting tx savepoint failed"</span>);
 
         rocksdb_tx
     }
@@ -762,14 +764,14 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>IRawDatabase <span class="kw">for </span>RocksDbReadOnly {
-    <span class="kw">type </span>Transaction&lt;<span class="lifetime">&#39;a</span>&gt; = RocksDbReadOnlyTransaction&lt;<span class="lifetime">&#39;a</span>&gt;;
-    <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; RocksDbReadOnlyTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="kw">type </span>Transaction&lt;<span class="lifetime">'a</span>&gt; = RocksDbReadOnlyTransaction&lt;<span class="lifetime">'a</span>&gt;;
+    <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>) -&gt; RocksDbReadOnlyTransaction&lt;<span class="lifetime">'a</span>&gt; {
         RocksDbReadOnlyTransaction(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)
     }
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         fedimint_core::task::block_in_place(|| {
             <span class="kw">let </span>val = <span class="self">self</span>.<span class="number">0</span>.get(key).unwrap();
@@ -790,12 +792,12 @@
         })
     }
 
-    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
+    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">'_</span>&gt;&gt; {
         <span class="comment">// turn an `iter` into a `Stream` where every `next` is ran inside
         // `block_in_place` to offload the blocking calls
-        </span><span class="kw">fn </span>convert_to_async_stream&lt;<span class="lifetime">&#39;i</span>, I&gt;(iter: I) -&gt; <span class="kw">impl </span>futures::Stream&lt;Item = I::Item&gt;
+        </span><span class="kw">fn </span>convert_to_async_stream&lt;<span class="lifetime">'i</span>, I&gt;(iter: I) -&gt; <span class="kw">impl </span>futures::Stream&lt;Item = I::Item&gt;
         <span class="kw">where
-            </span>I: Iterator + Send + <span class="lifetime">&#39;i</span>,
+            </span>I: Iterator + Send + <span class="lifetime">'i</span>,
             I::Item: Send,
         {
             stream::unfold(iter, |<span class="kw-2">mut </span>iter| <span class="kw">async move </span>{
@@ -815,7 +817,7 @@
                 options,
             );
             <span class="kw">let </span>rocksdb_iter = iter.map_while(<span class="kw">move </span>|res| {
-                <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">&quot;Error reading from RocksDb&quot;</span>);
+                <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">"Error reading from RocksDb"</span>);
                 key_bytes
                     .starts_with(<span class="kw-2">&amp;</span>prefix)
                     .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
@@ -857,7 +859,7 @@
     <span class="kw">async fn </span>raw_find_by_prefix_sorted_descending(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         key_prefix: <span class="kw-2">&amp;</span>[u8],
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">'_</span>&gt;&gt; {
         <span class="kw">let </span>prefix = key_prefix.to_vec();
         <span class="kw">let </span>next_prefix = next_prefix(<span class="kw-2">&amp;</span>prefix);
         <span class="kw">let </span>iterator_mode = <span class="kw">if let </span><span class="prelude-val">Some</span>(next_prefix) = <span class="kw-2">&amp;</span>next_prefix {
@@ -870,7 +872,7 @@
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
             <span class="kw">let </span>iter = <span class="self">self</span>.<span class="number">0</span>.snapshot().iterator_opt(iterator_mode, options);
             <span class="kw">let </span>rocksdb_iter = iter.map_while(<span class="kw">move </span>|res| {
-                <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">&quot;Error reading from RocksDb&quot;</span>);
+                <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">"Error reading from RocksDb"</span>);
                 key_bytes
                     .starts_with(<span class="kw-2">&amp;</span>prefix)
                     .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
@@ -881,7 +883,7 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOps <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IDatabaseTransactionOps <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">async fn </span>rollback_tx_to_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="prelude-val">Ok</span>(fedimint_core::task::block_in_place(|| {
             <span class="self">self</span>.<span class="number">0</span>.rollback_to_savepoint()
@@ -896,7 +898,7 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IRawDatabaseTransaction <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IRawDatabaseTransaction <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">async fn </span>commit_tx(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         fedimint_core::task::block_in_place(|| {
             <span class="self">self</span>.<span class="number">0</span>.commit()<span class="question-mark">?</span>;
@@ -906,9 +908,9 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _key: <span class="kw-2">&amp;</span>[u8], _value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="macro">panic!</span>(<span class="string">&quot;Cannot insert into a read only transaction&quot;</span>);
+        <span class="macro">panic!</span>(<span class="string">"Cannot insert into a read only transaction"</span>);
     }
 
     <span class="kw">async fn </span>raw_get_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
@@ -916,17 +918,17 @@
     }
 
     <span class="kw">async fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="macro">panic!</span>(<span class="string">&quot;Cannot remove from a read only transaction&quot;</span>);
+        <span class="macro">panic!</span>(<span class="string">"Cannot remove from a read only transaction"</span>);
     }
 
-    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
+    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">'_</span>&gt;&gt; {
         <span class="prelude-val">Ok</span>(fedimint_core::task::block_in_place(|| {
             <span class="kw">let </span>prefix = key_prefix.to_vec();
             <span class="kw">let </span>rocksdb_iter = <span class="self">self
                 </span>.<span class="number">0
                 </span>.prefix_iterator(prefix.clone())
                 .map_while(<span class="kw">move </span>|res| {
-                    <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">&quot;Error reading from RocksDb&quot;</span>);
+                    <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">"Error reading from RocksDb"</span>);
                     key_bytes
                         .starts_with(<span class="kw-2">&amp;</span>prefix)
                         .then_some((key_bytes, value_bytes))
@@ -937,13 +939,13 @@
     }
 
     <span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="macro">panic!</span>(<span class="string">&quot;Cannot remove from a read only transaction&quot;</span>);
+        <span class="macro">panic!</span>(<span class="string">"Cannot remove from a read only transaction"</span>);
     }
 
     <span class="kw">async fn </span>raw_find_by_prefix_sorted_descending(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         key_prefix: <span class="kw-2">&amp;</span>[u8],
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">'_</span>&gt;&gt; {
         <span class="kw">let </span>prefix = key_prefix.to_vec();
         <span class="kw">let </span>next_prefix = next_prefix(<span class="kw-2">&amp;</span>prefix);
         <span class="kw">let </span>iterator_mode = <span class="kw">if let </span><span class="prelude-val">Some</span>(next_prefix) = <span class="kw-2">&amp;</span>next_prefix {
@@ -957,7 +959,7 @@
             <span class="kw">let </span>iter = <span class="self">self</span>.<span class="number">0</span>.snapshot().iterator_opt(iterator_mode, options);
             <span class="kw">let </span>rocksdb_iter = iter
                 .map_while(<span class="kw">move </span>|res| {
-                    <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">&quot;Error reading from RocksDb&quot;</span>);
+                    <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">"Error reading from RocksDb"</span>);
                     key_bytes
                         .starts_with(<span class="kw-2">&amp;</span>prefix)
                         .then_some((key_bytes, value_bytes))
@@ -969,20 +971,20 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOps <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IDatabaseTransactionOps <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">async fn </span>rollback_tx_to_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">panic!</span>(<span class="string">&quot;Cannot rollback a read only transaction&quot;</span>);
+        <span class="macro">panic!</span>(<span class="string">"Cannot rollback a read only transaction"</span>);
     }
 
     <span class="kw">async fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">panic!</span>(<span class="string">&quot;Cannot set a savepoint in a read only transaction&quot;</span>);
+        <span class="macro">panic!</span>(<span class="string">"Cannot set a savepoint in a read only transaction"</span>);
     }
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IRawDatabaseTransaction <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IRawDatabaseTransaction <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">async fn </span>commit_tx(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">panic!</span>(<span class="string">&quot;Cannot commit a read only transaction&quot;</span>);
+        <span class="macro">panic!</span>(<span class="string">"Cannot commit a read only transaction"</span>);
     }
 }
 
@@ -1008,98 +1010,98 @@
         )
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_dbtx_insert_elements() {
-        fedimint_core::db::verify_insert_elements(open_temp_db(<span class="string">&quot;fcb-rocksdb-test-insert-elements&quot;</span>))
+        fedimint_core::db::verify_insert_elements(open_temp_db(<span class="string">"fcb-rocksdb-test-insert-elements"</span>))
             .<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_dbtx_remove_nonexisting() {
         fedimint_core::db::verify_remove_nonexisting(open_temp_db(
-            <span class="string">&quot;fcb-rocksdb-test-remove-nonexisting&quot;</span>,
+            <span class="string">"fcb-rocksdb-test-remove-nonexisting"</span>,
         ))
         .<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_dbtx_remove_existing() {
-        fedimint_core::db::verify_remove_existing(open_temp_db(<span class="string">&quot;fcb-rocksdb-test-remove-existing&quot;</span>))
+        fedimint_core::db::verify_remove_existing(open_temp_db(<span class="string">"fcb-rocksdb-test-remove-existing"</span>))
             .<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_dbtx_read_own_writes() {
-        fedimint_core::db::verify_read_own_writes(open_temp_db(<span class="string">&quot;fcb-rocksdb-test-read-own-writes&quot;</span>))
+        fedimint_core::db::verify_read_own_writes(open_temp_db(<span class="string">"fcb-rocksdb-test-read-own-writes"</span>))
             .<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_dbtx_prevent_dirty_reads() {
         fedimint_core::db::verify_prevent_dirty_reads(open_temp_db(
-            <span class="string">&quot;fcb-rocksdb-test-prevent-dirty-reads&quot;</span>,
+            <span class="string">"fcb-rocksdb-test-prevent-dirty-reads"</span>,
         ))
         .<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_dbtx_find_by_prefix() {
-        fedimint_core::db::verify_find_by_prefix(open_temp_db(<span class="string">&quot;fcb-rocksdb-test-find-by-prefix&quot;</span>))
+        fedimint_core::db::verify_find_by_prefix(open_temp_db(<span class="string">"fcb-rocksdb-test-find-by-prefix"</span>))
             .<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_dbtx_commit() {
-        fedimint_core::db::verify_commit(open_temp_db(<span class="string">&quot;fcb-rocksdb-test-commit&quot;</span>)).<span class="kw">await</span>;
+        fedimint_core::db::verify_commit(open_temp_db(<span class="string">"fcb-rocksdb-test-commit"</span>)).<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_dbtx_prevent_nonrepeatable_reads() {
         fedimint_core::db::verify_prevent_nonrepeatable_reads(open_temp_db(
-            <span class="string">&quot;fcb-rocksdb-test-prevent-nonrepeatable-reads&quot;</span>,
+            <span class="string">"fcb-rocksdb-test-prevent-nonrepeatable-reads"</span>,
         ))
         .<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_dbtx_rollback_to_savepoint() {
         fedimint_core::db::verify_rollback_to_savepoint(open_temp_db(
-            <span class="string">&quot;fcb-rocksdb-test-rollback-to-savepoint&quot;</span>,
+            <span class="string">"fcb-rocksdb-test-rollback-to-savepoint"</span>,
         ))
         .<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_dbtx_phantom_entry() {
-        fedimint_core::db::verify_phantom_entry(open_temp_db(<span class="string">&quot;fcb-rocksdb-test-phantom-entry&quot;</span>))
+        fedimint_core::db::verify_phantom_entry(open_temp_db(<span class="string">"fcb-rocksdb-test-phantom-entry"</span>))
             .<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_dbtx_write_conflict() {
-        fedimint_core::db::expect_write_conflict(open_temp_db(<span class="string">&quot;fcb-rocksdb-test-write-conflict&quot;</span>))
+        fedimint_core::db::expect_write_conflict(open_temp_db(<span class="string">"fcb-rocksdb-test-write-conflict"</span>))
             .<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_dbtx_remove_by_prefix() {
         fedimint_core::db::verify_remove_by_prefix(open_temp_db(
-            <span class="string">&quot;fcb-rocksdb-test-remove-by-prefix&quot;</span>,
+            <span class="string">"fcb-rocksdb-test-remove-by-prefix"</span>,
         ))
         .<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_module_dbtx() {
-        fedimint_core::db::verify_module_prefix(open_temp_db(<span class="string">&quot;fcb-rocksdb-test-module-prefix&quot;</span>))
+        fedimint_core::db::verify_module_prefix(open_temp_db(<span class="string">"fcb-rocksdb-test-module-prefix"</span>))
             .<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_module_db() {
         <span class="kw">let </span>module_instance_id = <span class="number">1</span>;
         <span class="kw">let </span>path = tempfile::Builder::new()
-            .prefix(<span class="string">&quot;fcb-rocksdb-test-module-db-prefix&quot;</span>)
+            .prefix(<span class="string">"fcb-rocksdb-test-module-db-prefix"</span>)
             .tempdir()
             .unwrap();
 
@@ -1109,7 +1111,7 @@
         );
 
         fedimint_core::db::verify_module_db(
-            open_temp_db(<span class="string">&quot;fcb-rocksdb-test-module-db&quot;</span>),
+            open_temp_db(<span class="string">"fcb-rocksdb-test-module-db"</span>),
             module_db.with_prefix_module_id(module_instance_id),
         )
         .<span class="kw">await</span>;
@@ -1123,12 +1125,12 @@
         <span class="macro">assert_eq!</span>(next_prefix(<span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">254</span>]).unwrap(), <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">255</span>]);
         <span class="macro">assert_eq!</span>(next_prefix(<span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">255</span>]).unwrap(), <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">3</span>, <span class="number">0</span>]);
         <span class="macro">assert_eq!</span>(next_prefix(<span class="kw-2">&amp;</span>[<span class="number">1</span>, <span class="number">255</span>, <span class="number">255</span>]).unwrap(), <span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>]);
-        <span class="comment">// this is a &quot;max&quot; prefix
+        <span class="comment">// this is a "max" prefix
         </span><span class="macro">assert!</span>(next_prefix(<span class="kw-2">&amp;</span>[<span class="number">255</span>, <span class="number">255</span>, <span class="number">255</span>]).is_none());
         <span class="comment">// these are the common case
         </span><span class="macro">assert_eq!</span>(next_prefix(<span class="kw-2">&amp;</span>[<span class="number">0</span>]).unwrap(), <span class="macro">vec!</span>[<span class="number">1</span>]);
         <span class="macro">assert_eq!</span>(next_prefix(<span class="kw-2">&amp;</span>[<span class="number">254</span>]).unwrap(), <span class="macro">vec!</span>[<span class="number">255</span>]);
-        <span class="macro">assert!</span>(next_prefix(<span class="kw-2">&amp;</span>[<span class="number">255</span>]).is_none()); <span class="comment">// this is a &quot;max&quot; prefix
+        <span class="macro">assert!</span>(next_prefix(<span class="kw-2">&amp;</span>[<span class="number">255</span>]).is_none()); <span class="comment">// this is a "max" prefix
     </span>}
 
     <span class="attr">#[repr(u8)]
@@ -1172,10 +1174,10 @@
     );
     <span class="macro">impl_db_lookup!</span>(key = TestKey2, query_prefix = DbPrefixTestPrefixMax);
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_retrieve_descending_order() {
         <span class="kw">let </span>path = tempfile::Builder::new()
-            .prefix(<span class="string">&quot;fcb-rocksdb-test-descending-order&quot;</span>)
+            .prefix(<span class="string">"fcb-rocksdb-test-descending-order"</span>)
             .tempdir()
             .unwrap();
         {

@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/net/connect.rs`."><title>connect.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_server/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/net/connect.rs`."><title>connect.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_server/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1025,12 +1027,10 @@
 <a href="#1025" id="1025">1025</a>
 <a href="#1026" id="1026">1026</a>
 <a href="#1027" id="1027">1027</a>
-<a href="#1028" id="1028">1028</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple
 //! implementations
 
 </span><span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::convert::TryFrom;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::pin::Pin;
@@ -1050,17 +1050,17 @@
 <span class="kw">use </span><span class="kw">crate</span>::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
 
 <span class="doccomment">/// Shared [`Connector`] trait object
-</span><span class="kw">pub type </span>SharedAnyConnector&lt;M&gt; = Arc&lt;<span class="kw">dyn </span>Connector&lt;M&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>&gt;;
+</span><span class="kw">pub type </span>SharedAnyConnector&lt;M&gt; = Arc&lt;<span class="kw">dyn </span>Connector&lt;M&gt; + Send + Sync + Unpin + <span class="lifetime">'static</span>&gt;;
 
 <span class="doccomment">/// Owned [`Connector`] trait object
-</span><span class="kw">pub type </span>AnyConnector&lt;M&gt; = Box&lt;<span class="kw">dyn </span>Connector&lt;M&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>&gt;;
+</span><span class="kw">pub type </span>AnyConnector&lt;M&gt; = Box&lt;<span class="kw">dyn </span>Connector&lt;M&gt; + Send + Sync + Unpin + <span class="lifetime">'static</span>&gt;;
 
 <span class="doccomment">/// Result of a connection opening future
 </span><span class="kw">pub type </span>ConnectResult&lt;M&gt; = <span class="prelude-ty">Result</span>&lt;(PeerId, AnyFramedTransport&lt;M&gt;), anyhow::Error&gt;;
 
 <span class="doccomment">/// Owned trait object type for incoming connection listeners
 </span><span class="kw">pub type </span>ConnectionListener&lt;M&gt; =
-    Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = ConnectResult&lt;M&gt;&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt;&gt;;
+    Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = ConnectResult&lt;M&gt;&gt; + Send + Unpin + <span class="lifetime">'static</span>&gt;&gt;;
 
 <span class="doccomment">/// Allows to connect to peers and to listen for incoming connections
 ///
@@ -1078,7 +1078,7 @@
     /// of itself
     </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; AnyConnector&lt;M&gt;
     <span class="kw">where
-        </span><span class="self">Self</span>: Sized + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>,
+        </span><span class="self">Self</span>: Sized + Send + Sync + Unpin + <span class="lifetime">'static</span>,
     {
         Box::new(<span class="self">self</span>)
     }
@@ -1114,11 +1114,11 @@
         <span class="kw">for </span>(<span class="kw">_</span>, cert) <span class="kw">in </span>cfg.peer_certs.iter() {
             cert_store
                 .add(cert)
-                .expect(<span class="string">&quot;Could not add peer certificate&quot;</span>);
+                .expect(<span class="string">"Could not add peer certificate"</span>);
         }
 
         TlsTcpConnector {
-            our_certificate: cfg.peer_certs.get(<span class="kw-2">&amp;</span>our_id).expect(<span class="string">&quot;exists&quot;</span>).clone(),
+            our_certificate: cfg.peer_certs.get(<span class="kw-2">&amp;</span>our_id).expect(<span class="string">"exists"</span>).clone(),
             our_private_key: cfg.our_private_key,
             peer_certs: Arc::new(PeerCertStore::new(cfg.peer_certs)),
             cert_store,
@@ -1145,19 +1145,19 @@
         received: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[rustls::Certificate]&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PeerId, anyhow::Error&gt; {
         <span class="kw">let </span>cert_chain =
-            received.ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Peer did not authenticate itself&quot;</span>))<span class="question-mark">?</span>;
+            received.ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Peer did not authenticate itself"</span>))<span class="question-mark">?</span>;
 
         <span class="kw">if </span>cert_chain.len() != <span class="number">1 </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">&quot;Received certificate chain of len={}, expected=1&quot;</span>,
+                <span class="string">"Received certificate chain of len={}, expected=1"</span>,
                 cert_chain.len()
             ));
         }
 
-        <span class="kw">let </span>received_cert = cert_chain.first().expect(<span class="string">&quot;Checked above&quot;</span>);
+        <span class="kw">let </span>received_cert = cert_chain.first().expect(<span class="string">"Checked above"</span>);
 
         <span class="self">self</span>.get_peer_by_cert(received_cert)
-            .ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Unknown certificate&quot;</span>))
+            .ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Unknown certificate"</span>))
     }
 
     <span class="kw">async fn </span>accept_connection&lt;M&gt;(
@@ -1166,7 +1166,7 @@
         acceptor: <span class="kw-2">&amp;</span>TlsAcceptor,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(PeerId, AnyFramedTransport&lt;M&gt;), anyhow::Error&gt;
     <span class="kw">where
-        </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">&#39;static</span>,
+        </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">'static</span>,
     {
         <span class="kw">let </span>(connection, <span class="kw">_</span>) = listener.accept().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>tls_conn = acceptor.accept(connection).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1186,7 +1186,7 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl</span>&lt;M&gt; Connector&lt;M&gt; <span class="kw">for </span>TlsTcpConnector
 <span class="kw">where
-    </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">&#39;static</span>,
+    </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">'static</span>,
 {
     <span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: SafeUrl, peer: PeerId) -&gt; ConnectResult&lt;M&gt; {
         <span class="kw">let </span>cfg = rustls::ClientConfig::builder()
@@ -1196,11 +1196,11 @@
                 <span class="macro">vec!</span>[<span class="self">self</span>.our_certificate.clone()],
                 <span class="self">self</span>.our_private_key.clone(),
             )
-            .expect(<span class="string">&quot;Failed to create TLS config&quot;</span>);
+            .expect(<span class="string">"Failed to create TLS config"</span>);
 
         <span class="kw">let </span>fake_domain =
             rustls::ServerName::try_from(dns_sanitize(<span class="kw-2">&amp;</span><span class="self">self</span>.peer_names[<span class="kw-2">&amp;</span>peer]).as_str())
-                .expect(<span class="string">&quot;Always a valid DNS name&quot;</span>);
+                .expect(<span class="string">"Always a valid DNS name"</span>);
 
         <span class="kw">let </span>connector = TlsConnector::from(Arc::new(cfg));
         <span class="kw">let </span>tls_conn = connector
@@ -1216,7 +1216,7 @@
             .authenticate_peer(tls_session.peer_certificates())<span class="question-mark">?</span>;
 
         <span class="kw">if </span>auth_peer != peer {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Connected to unexpected peer&quot;</span>));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Connected to unexpected peer"</span>));
         }
 
         <span class="kw">let </span>framed =
@@ -1256,20 +1256,20 @@
 
 <span class="doccomment">/// Sanitizes name as valid domain name
 </span><span class="kw">pub fn </span>dns_sanitize(name: <span class="kw-2">&amp;</span>str) -&gt; String {
-    <span class="kw">let </span>sanitized = name.replace(|c: char| !c.is_ascii_alphanumeric(), <span class="string">&quot;_&quot;</span>);
-    <span class="macro">format!</span>(<span class="string">&quot;peer{sanitized}&quot;</span>)
+    <span class="kw">let </span>sanitized = name.replace(|c: char| !c.is_ascii_alphanumeric(), <span class="string">"_"</span>);
+    <span class="macro">format!</span>(<span class="string">"peer{sanitized}"</span>)
 }
 
 <span class="doccomment">/// Parses the host and port from a url
 </span><span class="kw">pub fn </span>parse_host_port(url: SafeUrl) -&gt; anyhow::Result&lt;String&gt; {
     <span class="kw">let </span>host = url
         .host_str()
-        .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Missing host in {url}&quot;</span>))<span class="question-mark">?</span>;
+        .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Missing host in {url}"</span>))<span class="question-mark">?</span>;
     <span class="kw">let </span>port = url
         .port()
-        .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Missing port in {url}&quot;</span>))<span class="question-mark">?</span>;
+        .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Missing port in {url}"</span>))<span class="question-mark">?</span>;
 
-    <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">&quot;{host}:{port}&quot;</span>))
+    <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"{host}:{port}"</span>))
 }
 
 <span class="doccomment">/// Fake network stack used in tests
@@ -1353,7 +1353,7 @@
             }
         }
 
-        <span class="kw">fn </span>poll_broken(<span class="kw-2">&amp;</span><span class="self">self</span>, cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; bool {
+        <span class="kw">fn </span>poll_broken(<span class="kw-2">&amp;</span><span class="self">self</span>, cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">'_</span>&gt;) -&gt; bool {
             <span class="kw">let </span>await_cancellation = <span class="self">self</span>.broken.cancelled();
             <span class="macro">pin_mut!</span>(await_cancellation);
             await_cancellation.poll(cx).is_ready()
@@ -1361,8 +1361,8 @@
     }
 
     <span class="kw">impl </span>Debug <span class="kw">for </span>UnreliableDuplexStream {
-        <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-            f.debug_struct(<span class="string">&quot;UnreliableDuplexStream&quot;</span>).finish()
+        <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+            f.debug_struct(<span class="string">"UnreliableDuplexStream"</span>).finish()
         }
     }
 
@@ -1385,7 +1385,7 @@
 
         <span class="kw">pub fn </span>generate(
             <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-            cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">&#39;_</span>&gt;,
+            cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">'_</span>&gt;,
         ) -&gt; std::task::Poll&lt;std::io::Result&lt;()&gt;&gt; {
             <span class="kw">let </span>sleep = <span class="self">self</span>.sleep_future.get_or_insert_with(|| {
                 Box::pin(
@@ -1401,12 +1401,12 @@
             }
             <span class="kw">if </span><span class="self">self</span>.failure_rate.random_fail() {
                 <span class="macro">tracing::debug!</span>(
-                    <span class="string">&quot;Returning random error on unreliable stream after {} successes&quot;</span>,
+                    <span class="string">"Returning random error on unreliable stream after {} successes"</span>,
                     <span class="self">self</span>.successes
                 );
                 std::task::Poll::Ready(<span class="prelude-val">Err</span>(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    <span class="string">&quot;Randomly failed&quot;</span>,
+                    <span class="string">"Randomly failed"</span>,
                 )))
             } <span class="kw">else </span>{
                 <span class="self">self</span>.successes += <span class="number">1</span>;
@@ -1418,13 +1418,13 @@
     <span class="kw">impl </span>AsyncRead <span class="kw">for </span>UnreliableDuplexStream {
         <span class="kw">fn </span>poll_read(
             <span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
-            cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">&#39;_</span>&gt;,
-            buf: <span class="kw-2">&amp;mut </span>tokio::io::ReadBuf&lt;<span class="lifetime">&#39;_</span>&gt;,
+            cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">'_</span>&gt;,
+            buf: <span class="kw-2">&amp;mut </span>tokio::io::ReadBuf&lt;<span class="lifetime">'_</span>&gt;,
         ) -&gt; std::task::Poll&lt;std::io::Result&lt;()&gt;&gt; {
             <span class="kw">if </span><span class="self">self</span>.poll_broken(cx) {
                 <span class="kw">return </span>std::task::Poll::Ready(<span class="prelude-val">Err</span>(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    <span class="string">&quot;Stream is broken&quot;</span>,
+                    <span class="string">"Stream is broken"</span>,
                 )));
             }
 
@@ -1444,13 +1444,13 @@
     <span class="kw">impl </span>AsyncWrite <span class="kw">for </span>UnreliableDuplexStream {
         <span class="kw">fn </span>poll_write(
             <span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
-            cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">&#39;_</span>&gt;,
+            cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">'_</span>&gt;,
             buf: <span class="kw-2">&amp;</span>[u8],
         ) -&gt; std::task::Poll&lt;<span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt;&gt; {
             <span class="kw">if </span><span class="self">self</span>.poll_broken(cx) {
                 <span class="kw">return </span>std::task::Poll::Ready(<span class="prelude-val">Err</span>(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    <span class="string">&quot;Stream is broken&quot;</span>,
+                    <span class="string">"Stream is broken"</span>,
                 )));
             }
 
@@ -1468,12 +1468,12 @@
 
         <span class="kw">fn </span>poll_flush(
             <span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
-            cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">&#39;_</span>&gt;,
+            cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">'_</span>&gt;,
         ) -&gt; std::task::Poll&lt;<span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt;&gt; {
             <span class="kw">if </span><span class="self">self</span>.poll_broken(cx) {
                 <span class="kw">return </span>std::task::Poll::Ready(<span class="prelude-val">Err</span>(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    <span class="string">&quot;Stream is broken&quot;</span>,
+                    <span class="string">"Stream is broken"</span>,
                 )));
             }
 
@@ -1491,12 +1491,12 @@
 
         <span class="kw">fn </span>poll_shutdown(
             <span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
-            cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">&#39;_</span>&gt;,
+            cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">'_</span>&gt;,
         ) -&gt; std::task::Poll&lt;<span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt;&gt; {
             <span class="kw">if </span><span class="self">self</span>.poll_broken(cx) {
                 <span class="kw">return </span>std::task::Poll::Ready(<span class="prelude-val">Err</span>(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    <span class="string">&quot;Stream is broken&quot;</span>,
+                    <span class="string">"Stream is broken"</span>,
                 )));
             }
 
@@ -1558,11 +1558,11 @@
                 min_millis: min
                     .as_millis()
                     .try_into()
-                    .expect(<span class="string">&quot;min duration as millis to fit in a u64&quot;</span>),
+                    .expect(<span class="string">"min duration as millis to fit in a u64"</span>),
                 max_millis: max
                     .as_millis()
                     .try_into()
-                    .expect(<span class="string">&quot;max duration as millis to fit in a u64&quot;</span>),
+                    .expect(<span class="string">"max duration as millis to fit in a u64"</span>),
             }
         }
 
@@ -1662,11 +1662,11 @@
     <span class="attr">#[async_trait::async_trait]
     </span><span class="kw">impl</span>&lt;M&gt; Connector&lt;M&gt; <span class="kw">for </span>MockConnector
     <span class="kw">where
-        </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">&#39;static</span>,
+        </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">'static</span>,
     {
         <span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: SafeUrl, _peer: PeerId) -&gt; ConnectResult&lt;M&gt; {
             <span class="kw">let </span><span class="kw-2">mut </span>clients_lock = <span class="self">self</span>.clients.try_lock().map_err(|e| {
-                <span class="macro">anyhow!</span>(<span class="string">&quot;Mock network mutex busy or poisoned, the network stack will re-try anyway: {e:?}&quot;</span>)
+                <span class="macro">anyhow!</span>(<span class="string">"Mock network mutex busy or poisoned, the network stack will re-try anyway: {e:?}"</span>)
             })<span class="question-mark">?</span>;
             <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = clients_lock.get_mut(<span class="kw-2">&amp;</span>parse_host_port(destination)<span class="question-mark">?</span>) {
                 <span class="kw">let </span>(stream_our, stream_theirs) = tokio::io::duplex(<span class="number">43_689</span>);
@@ -1682,14 +1682,14 @@
                 .into_dyn();
                 <span class="prelude-val">Ok</span>((peer, framed))
             } <span class="kw">else </span>{
-                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;can&#39;t connect&quot;</span>));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"can't connect"</span>));
             }
         }
 
         <span class="kw">async fn </span>listen(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             bind_addr: SocketAddr,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = ConnectResult&lt;M&gt;&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt;&gt;, Error&gt;
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = ConnectResult&lt;M&gt;&gt; + Send + Unpin + <span class="lifetime">'static</span>&gt;&gt;, Error&gt;
         {
             <span class="kw">let </span>(send, receive) = tokio::sync::mpsc::channel(<span class="number">16</span>);
 
@@ -1700,7 +1700,7 @@
                 </span>.insert(bind_addr.to_string(), send)
                 .is_some()
             {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Address already bound&quot;</span>));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Address already bound"</span>));
             }
 
             <span class="kw">let </span>our_id = <span class="self">self</span>.id;
@@ -1710,7 +1710,7 @@
                     <span class="kw">let </span>peer = <span class="kw">match </span>do_handshake(our_id, <span class="kw-2">&amp;mut </span>connection).<span class="kw">await </span>{
                         <span class="prelude-val">Ok</span>(peer) =&gt; peer,
                         <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="macro">tracing::debug!</span>(<span class="string">&quot;Error during handshake: {e:?}&quot;</span>);
+                            <span class="macro">tracing::debug!</span>(<span class="string">"Error during handshake: {e:?}"</span>);
                             <span class="kw">return </span><span class="prelude-val">Some</span>((<span class="prelude-val">Err</span>(e), receive));
                         }
                     };
@@ -1743,8 +1743,8 @@
 
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>test_mock_network() {
-        <span class="kw">let </span>bind_addr: SocketAddr = <span class="string">&quot;127.0.0.1:7000&quot;</span>.parse().unwrap();
-        <span class="kw">let </span>url: SafeUrl = <span class="string">&quot;ws://127.0.0.1:7000&quot;</span>.parse().unwrap();
+        <span class="kw">let </span>bind_addr: SocketAddr = <span class="string">"127.0.0.1:7000"</span>.parse().unwrap();
+        <span class="kw">let </span>url: SafeUrl = <span class="string">"ws://127.0.0.1:7000"</span>.parse().unwrap();
         <span class="kw">let </span>peer_a = PeerId::from(<span class="number">1</span>);
         <span class="kw">let </span>peer_b = PeerId::from(<span class="number">2</span>);
 
@@ -1753,10 +1753,10 @@
         <span class="kw">let </span>conn_b = net.connector(peer_b, StreamReliability::FullyReliable);
 
         <span class="kw">let </span><span class="kw-2">mut </span>listener = Connector::&lt;u64&gt;::listen(<span class="kw-2">&amp;</span>conn_a, bind_addr).<span class="kw">await</span>.unwrap();
-        <span class="kw">let </span>conn_a_fut = spawn(<span class="string">&quot;listener next await&quot;</span>, <span class="kw">async move </span>{
+        <span class="kw">let </span>conn_a_fut = spawn(<span class="string">"listener next await"</span>, <span class="kw">async move </span>{
             listener.next().<span class="kw">await</span>.unwrap().unwrap()
         })
-        .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
+        .expect(<span class="string">"some handle on non-wasm"</span>);
 
         <span class="kw">let </span>(auth_peer_b, <span class="kw-2">mut </span>conn_b) = Connector::&lt;u64&gt;::connect_framed(<span class="kw-2">&amp;</span>conn_b, url, peer_a)
             .<span class="kw">await
@@ -1818,8 +1818,8 @@
 
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>test_large_messages() {
-        <span class="kw">let </span>bind_addr: SocketAddr = <span class="string">&quot;127.0.0.1:7000&quot;</span>.parse().unwrap();
-        <span class="kw">let </span>url: SafeUrl = <span class="string">&quot;ws://127.0.0.1:7000&quot;</span>.parse().unwrap();
+        <span class="kw">let </span>bind_addr: SocketAddr = <span class="string">"127.0.0.1:7000"</span>.parse().unwrap();
+        <span class="kw">let </span>url: SafeUrl = <span class="string">"ws://127.0.0.1:7000"</span>.parse().unwrap();
         <span class="kw">let </span>peer_a = PeerId::from(<span class="number">1</span>);
         <span class="kw">let </span>peer_b = PeerId::from(<span class="number">2</span>);
 
@@ -1830,10 +1830,10 @@
         <span class="kw">let </span><span class="kw-2">mut </span>listener = Connector::&lt;Vec&lt;u8&gt;&gt;::listen(<span class="kw-2">&amp;</span>conn_a, bind_addr)
             .<span class="kw">await
             </span>.unwrap();
-        <span class="kw">let </span>conn_a_fut = spawn(<span class="string">&quot;listener next await&quot;</span>, <span class="kw">async move </span>{
+        <span class="kw">let </span>conn_a_fut = spawn(<span class="string">"listener next await"</span>, <span class="kw">async move </span>{
             listener.next().<span class="kw">await</span>.unwrap().unwrap()
         })
-        .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
+        .expect(<span class="string">"some handle on non-wasm"</span>);
 
         <span class="kw">let </span>(auth_peer_b, <span class="kw-2">mut </span>conn_b) = Connector::&lt;Vec&lt;u8&gt;&gt;::connect_framed(<span class="kw-2">&amp;</span>conn_b, url, peer_a)
             .<span class="kw">await
@@ -1877,7 +1877,7 @@
         <span class="kw">let </span>peer_keys = (<span class="number">0</span>..count)
             .map(|id| {
                 <span class="kw">let </span>peer = PeerId::from(id <span class="kw">as </span>u16);
-                gen_cert_and_key(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, peer.to_usize())).unwrap()
+                gen_cert_and_key(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"peer-{}"</span>, peer.to_usize())).unwrap()
             })
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
@@ -1893,7 +1893,7 @@
                 peer_names: peer_keys
                     .iter()
                     .enumerate()
-                    .map(|(peer, (<span class="kw">_</span>, <span class="kw">_</span>))| (PeerId::from(peer <span class="kw">as </span>u16), <span class="macro">format!</span>(<span class="string">&quot;peer-{peer}&quot;</span>)))
+                    .map(|(peer, (<span class="kw">_</span>, <span class="kw">_</span>))| (PeerId::from(peer <span class="kw">as </span>u16), <span class="macro">format!</span>(<span class="string">"peer-{peer}"</span>)))
                     .collect(),
             })
             .collect()
@@ -1901,10 +1901,10 @@
 
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>connect_success() {
-        <span class="comment">// FIXME: don&#39;t actually bind here, probably requires yet another Box&lt;dyn Trait&gt;
+        <span class="comment">// FIXME: don't actually bind here, probably requires yet another Box&lt;dyn Trait&gt;
         // layer :(
-        </span><span class="kw">let </span>bind_addr: SocketAddr = <span class="string">&quot;127.0.0.1:7000&quot;</span>.parse().unwrap();
-        <span class="kw">let </span>url: SafeUrl = <span class="string">&quot;ws://127.0.0.1:7000&quot;</span>.parse().unwrap();
+        </span><span class="kw">let </span>bind_addr: SocketAddr = <span class="string">"127.0.0.1:7000"</span>.parse().unwrap();
+        <span class="kw">let </span>url: SafeUrl = <span class="string">"ws://127.0.0.1:7000"</span>.parse().unwrap();
         <span class="kw">let </span>connectors = gen_connector_config(<span class="number">5</span>)
             .into_iter()
             .enumerate()
@@ -1913,7 +1913,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; = connectors[<span class="number">0</span>].listen(bind_addr).<span class="kw">await</span>.unwrap();
 
-        <span class="kw">let </span>server_task = spawn(<span class="string">&quot;server next await&quot;</span>, <span class="kw">async move </span>{
+        <span class="kw">let </span>server_task = spawn(<span class="string">"server next await"</span>, <span class="kw">async move </span>{
             <span class="kw">let </span>(peer, <span class="kw-2">mut </span>conn) = server.next().<span class="kw">await</span>.unwrap().unwrap();
             <span class="macro">assert_eq!</span>(peer.to_usize(), <span class="number">2</span>);
             <span class="kw">let </span>received = conn.next().<span class="kw">await</span>.unwrap().unwrap();
@@ -1921,7 +1921,7 @@
             conn.send(<span class="number">21</span>).<span class="kw">await</span>.unwrap();
             <span class="macro">assert!</span>(conn.next().<span class="kw">await</span>.unwrap().is_err());
         })
-        .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
+        .expect(<span class="string">"some handle on non-wasm"</span>);
 
         <span class="kw">let </span>(peer_of_a, <span class="kw-2">mut </span>client_a): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) = connectors[<span class="number">2</span>]
             .connect_framed(url.clone(), PeerId::from(<span class="number">0</span>))
@@ -1938,8 +1938,8 @@
 
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>connect_reject() {
-        <span class="kw">let </span>bind_addr: SocketAddr = <span class="string">&quot;127.0.0.1:7001&quot;</span>.parse().unwrap();
-        <span class="kw">let </span>url: SafeUrl = <span class="string">&quot;wss://127.0.0.1:7001&quot;</span>.parse().unwrap();
+        <span class="kw">let </span>bind_addr: SocketAddr = <span class="string">"127.0.0.1:7001"</span>.parse().unwrap();
+        <span class="kw">let </span>url: SafeUrl = <span class="string">"wss://127.0.0.1:7001"</span>.parse().unwrap();
         <span class="kw">let </span>cfg = gen_connector_config(<span class="number">5</span>);
 
         <span class="kw">let </span>honest = TlsTcpConnector::new(cfg[<span class="number">0</span>].clone(), PeerId::from(<span class="number">0</span>));
@@ -1952,14 +1952,14 @@
         </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; = honest.listen(bind_addr).<span class="kw">await</span>.unwrap();
 
-            <span class="kw">let </span>server_task = spawn(<span class="string">&quot;server next await&quot;</span>, <span class="kw">async move </span>{
+            <span class="kw">let </span>server_task = spawn(<span class="string">"server next await"</span>, <span class="kw">async move </span>{
                 <span class="kw">let </span>conn_res = server.next().<span class="kw">await</span>.unwrap();
                 <span class="macro">assert_eq!</span>(
                     conn_res.err().unwrap().to_string().as_str(),
-                    <span class="string">&quot;invalid peer certificate signature&quot;
+                    <span class="string">"invalid peer certificate signature"
                 </span>);
             })
-            .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
+            .expect(<span class="string">"some handle on non-wasm"</span>);
 
             <span class="kw">let </span>err_anytime = <span class="kw">async </span>{
                 <span class="kw">let </span>(_peer, <span class="kw-2">mut </span>conn): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) = malicious_wrong_key
@@ -1976,7 +1976,7 @@
             <span class="kw">let </span>conn_res = err_anytime.<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(
                 conn_res.err().unwrap().to_string().as_str(),
-                <span class="string">&quot;received fatal alert: AccessDenied&quot;
+                <span class="string">"received fatal alert: AccessDenied"
             </span>);
 
             server_task.<span class="kw">await</span>.unwrap();
@@ -1987,14 +1987,14 @@
             <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; =
                 malicious_wrong_key.listen(bind_addr).<span class="kw">await</span>.unwrap();
 
-            <span class="kw">let </span>server_task = spawn(<span class="string">&quot;server next await&quot;</span>, <span class="kw">async move </span>{
+            <span class="kw">let </span>server_task = spawn(<span class="string">"server next await"</span>, <span class="kw">async move </span>{
                 <span class="kw">let </span>conn_res = server.next().<span class="kw">await</span>.unwrap();
                 <span class="macro">assert_eq!</span>(
                     conn_res.err().unwrap().to_string().as_str(),
-                    <span class="string">&quot;received fatal alert: BadCertificate&quot;
+                    <span class="string">"received fatal alert: BadCertificate"
                 </span>);
             })
-            .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
+            .expect(<span class="string">"some handle on non-wasm"</span>);
 
             <span class="kw">let </span>err_anytime = <span class="kw">async </span>{
                 <span class="kw">let </span>(_peer, <span class="kw-2">mut </span>conn): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) =
@@ -2010,7 +2010,7 @@
             <span class="kw">let </span>conn_res = err_anytime.<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(
                 conn_res.err().unwrap().to_string().as_str(),
-                <span class="string">&quot;invalid peer certificate signature&quot;
+                <span class="string">"invalid peer certificate signature"
             </span>);
 
             server_task.<span class="kw">await</span>.unwrap();
@@ -2024,14 +2024,14 @@
                     .<span class="kw">await
                     </span>.unwrap();
 
-            <span class="kw">let </span>server_task = spawn(<span class="string">&quot;server next await&quot;</span>, <span class="kw">async move </span>{
+            <span class="kw">let </span>server_task = spawn(<span class="string">"server next await"</span>, <span class="kw">async move </span>{
                 <span class="kw">let </span>conn_res = server.next().<span class="kw">await</span>.unwrap();
                 <span class="macro">assert_eq!</span>(
                     conn_res.err().unwrap().to_string().as_str(),
-                    <span class="string">&quot;received fatal alert: BadCertificate&quot;
+                    <span class="string">"received fatal alert: BadCertificate"
                 </span>);
             })
-            .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
+            .expect(<span class="string">"some handle on non-wasm"</span>);
 
             <span class="kw">let </span>err_anytime = <span class="kw">async </span>{
                 <span class="kw">let </span>(_peer, <span class="kw-2">mut </span>conn): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) =
@@ -2047,7 +2047,7 @@
             <span class="kw">let </span>conn_res = err_anytime.<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(
                 conn_res.err().unwrap().to_string().as_str(),
-                <span class="string">&quot;invalid peer certificate contents: invalid peer certificate: CertNotValidForName&quot;
+                <span class="string">"invalid peer certificate contents: invalid peer certificate: CertNotValidForName"
             </span>);
 
             server_task.<span class="kw">await</span>.unwrap();

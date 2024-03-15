@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/bin/cln_extension.rs`."><title>cln_extension.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="gateway_cln_extension" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../gateway_cln_extension/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/bin/cln_extension.rs`."><title>cln_extension.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="gateway_cln_extension" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../gateway_cln_extension/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -637,8 +639,6 @@
 <a href="#637" id="637">637</a>
 <a href="#638" id="638">638</a>
 <a href="#639" id="639">639</a>
-<a href="#640" id="640">640</a>
-<a href="#641" id="641">641</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -679,10 +679,10 @@
 <span class="kw">const </span>MAX_HTLC_PROCESSING_DURATION: Duration = Duration::MAX;
 
 <span class="attr">#[derive(Parser)]
-</span><span class="kw">pub struct </span>ClnExtensionOpts {
+</span><span class="kw">struct </span>ClnExtensionOpts {
     <span class="doccomment">/// Gateway CLN extension service listen address
-    </span><span class="attr">#[arg(long = <span class="string">&quot;fm-gateway-listen&quot;</span>, env = FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV)]
-    </span><span class="kw">pub </span>fm_gateway_listen: SocketAddr,
+    </span><span class="attr">#[arg(long = <span class="string">"fm-gateway-listen"</span>, env = FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV)]
+    </span>fm_gateway_listen: SocketAddr,
 }
 
 <span class="attr">#[tokio::main]
@@ -691,17 +691,17 @@
 
     <span class="kw">let </span>(service, listen, plugin) = ClnRpcService::new()
         .<span class="kw">await
-        </span>.expect(<span class="string">&quot;Failed to create cln rpc service&quot;</span>);
+        </span>.expect(<span class="string">"Failed to create cln rpc service"</span>);
 
     <span class="macro">debug!</span>(
-        <span class="string">&quot;Starting gateway-cln-extension with listen address : {}&quot;</span>,
+        <span class="string">"Starting gateway-cln-extension with listen address : {}"</span>,
         listen
     );
 
     Server::builder()
         .add_service(GatewayLightningServer::new(service))
         .serve_with_shutdown(listen, <span class="kw">async </span>{
-            <span class="comment">// Wait for plugin to signal it&#39;s shutting down
+            <span class="comment">// Wait for plugin to signal it's shutting down
             // Shut down everything else via TaskGroup regardless of error
             </span><span class="kw">let _ </span>= plugin.join().<span class="kw">await</span>;
             <span class="comment">// lightningd needs to see exit code 0 to notice the plugin has
@@ -709,7 +709,7 @@
             </span>std::process::exit(<span class="number">0</span>);
         })
         .<span class="kw">await
-        </span>.map_err(|e| ClnExtensionError::Error(<span class="macro">anyhow!</span>(<span class="string">&quot;Failed to start server, {:?}&quot;</span>, e)))<span class="question-mark">?</span>;
+        </span>.map_err(|e| ClnExtensionError::Error(<span class="macro">anyhow!</span>(<span class="string">"Failed to start server, {:?}"</span>, e)))<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(())
 }
@@ -717,70 +717,68 @@
 <span class="comment">// TODO: upstream these structs to cln-plugin
 // See: https://github.com/ElementsProject/lightning/blob/master/doc/PLUGINS.md#htlc_accepted
 </span><span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
-</span><span class="kw">pub struct </span>Htlc {
-    <span class="kw">pub </span>amount_msat: Amount,
+</span><span class="kw">struct </span>Htlc {
+    amount_msat: Amount,
     <span class="comment">// TODO: use these to validate we can actually redeem the HTLC in time
-    </span><span class="kw">pub </span>cltv_expiry: u32,
-    <span class="kw">pub </span>cltv_expiry_relative: u32,
-    <span class="kw">pub </span>payment_hash: bitcoin_hashes::sha256::Hash,
+    </span>cltv_expiry: u32,
+    cltv_expiry_relative: u32,
+    payment_hash: bitcoin_hashes::sha256::Hash,
     <span class="comment">// The short channel id of the incoming channel
-    </span><span class="kw">pub </span>short_channel_id: String,
+    </span>short_channel_id: String,
     <span class="comment">// The ID of the HTLC
-    </span><span class="kw">pub </span>id: u64,
+    </span>id: u64,
 }
 
 <span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
-</span><span class="kw">pub struct </span>Onion {
+</span><span class="kw">struct </span>Onion {
     <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>short_channel_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    <span class="kw">pub </span>forward_msat: Amount,
+    </span>short_channel_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    forward_msat: Amount,
 }
 
 <span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
-</span><span class="kw">pub struct </span>HtlcAccepted {
-    <span class="kw">pub </span>htlc: Htlc,
-    <span class="kw">pub </span>onion: Onion,
+</span><span class="kw">struct </span>HtlcAccepted {
+    htlc: Htlc,
+    onion: Onion,
 }
-
-<span class="kw">pub struct </span>ClnRpcClient {}
 
 <span class="attr">#[allow(dead_code)]
-</span><span class="kw">pub struct </span>ClnRpcService {
+</span><span class="kw">struct </span>ClnRpcService {
     socket: PathBuf,
     interceptor: Arc&lt;ClnHtlcInterceptor&gt;,
     task_group: TaskGroup,
 }
 
 <span class="kw">impl </span>ClnRpcService {
-    <span class="kw">pub async fn </span>new(
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, SocketAddr, Plugin&lt;Arc&lt;ClnHtlcInterceptor&gt;&gt;), ClnExtensionError&gt; {
+    <span class="kw">async fn </span>new() -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, SocketAddr, Plugin&lt;Arc&lt;ClnHtlcInterceptor&gt;&gt;), ClnExtensionError&gt;
+    {
         <span class="kw">let </span>interceptor = Arc::new(ClnHtlcInterceptor::new());
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(plugin) = Builder::new(stdin(), stdout())
             .option(options::ConfigOption::new(
-                <span class="string">&quot;fm-gateway-listen&quot;</span>,
+                <span class="string">"fm-gateway-listen"</span>,
                 <span class="comment">// Set an invalid default address in the extension to force the extension plugin
                 // user to supply a valid address via an environment variable or
                 // cln plugin config option.
                 </span>options::Value::OptString,
-                <span class="string">&quot;fedimint gateway CLN extension listen address&quot;</span>,
+                <span class="string">"fedimint gateway CLN extension listen address"</span>,
             ))
             .hook(
-                <span class="string">&quot;htlc_accepted&quot;</span>,
+                <span class="string">"htlc_accepted"</span>,
                 |plugin: Plugin&lt;Arc&lt;ClnHtlcInterceptor&gt;&gt;, value: serde_json::Value| <span class="kw">async move </span>{
                     <span class="kw">let </span>payload: HtlcAccepted = serde_json::from_value(value)<span class="question-mark">?</span>;
                     <span class="prelude-val">Ok</span>(plugin.state().intercept_htlc(payload).<span class="kw">await</span>)
                 },
             )
             <span class="comment">// Shutdown the plugin when lightningd is shutting down or when the plugin is stopped
-            // via `plugin stop` command. There&#39;s a chance that the subscription is never called in
+            // via `plugin stop` command. There's a chance that the subscription is never called in
             // case lightningd crashes or aborts.
             // For details, see documentation for `shutdown` event notification:
             // https://lightning.readthedocs.io/PLUGINS.html?highlight=shutdown#shutdown
             </span>.subscribe(
-                <span class="string">&quot;shutdown&quot;</span>,
+                <span class="string">"shutdown"</span>,
                 |plugin: Plugin&lt;Arc&lt;ClnHtlcInterceptor&gt;&gt;, <span class="kw">_</span>: serde_json::Value| <span class="kw">async move </span>{
-                    <span class="macro">info!</span>(<span class="string">&quot;Received \&quot;shutdown\&quot; notification from lightningd ... requesting cln_plugin shutdown&quot;</span>);
+                    <span class="macro">info!</span>(<span class="string">"Received \"shutdown\" notification from lightningd ... requesting cln_plugin shutdown"</span>);
                     plugin.shutdown()
                 },
             )
@@ -796,14 +794,14 @@
                 <span class="prelude-val">Ok</span>(opts) =&gt; opts.fm_gateway_listen,
                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
 
-                    <span class="kw">let </span>listen_val = plugin.option(<span class="string">&quot;fm-gateway-listen&quot;</span>)
-                        .expect(<span class="string">&quot;Gateway CLN extension is missing a listen address configuration. 
+                    <span class="kw">let </span>listen_val = plugin.option(<span class="string">"fm-gateway-listen"</span>)
+                        .expect(<span class="string">"Gateway CLN extension is missing a listen address configuration. 
                         You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding 
-                        a --fm-gateway-listen config option to the CLN plugin.&quot;</span>);
+                        a --fm-gateway-listen config option to the CLN plugin."</span>);
                     <span class="kw">let </span>listen = listen_val.as_str()
-                        .expect(<span class="string">&quot;fm-gateway-listen isn&#39;t a string&quot;</span>);
+                        .expect(<span class="string">"fm-gateway-listen isn't a string"</span>);
 
-                    SocketAddr::from_str(listen).expect(<span class="string">&quot;invalid fm-gateway-listen address&quot;</span>)
+                    SocketAddr::from_str(listen).expect(<span class="string">"invalid fm-gateway-listen address"</span>)
                 }
             };
 
@@ -818,7 +816,7 @@
             ))
         } <span class="kw">else </span>{
             <span class="prelude-val">Err</span>(ClnExtensionError::Error(<span class="macro">anyhow!</span>(
-                <span class="string">&quot;Failed to start cln plugin - another instance of lightningd may already be running.&quot;
+                <span class="string">"Failed to start cln plugin - another instance of lightningd may already be running."
             </span>)))
         }
     }
@@ -830,13 +828,13 @@
     /// initialization.
     </span><span class="kw">async fn </span>rpc_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;cln_rpc::ClnRpc, ClnExtensionError&gt; {
         cln_rpc::ClnRpc::new(<span class="kw-2">&amp;</span><span class="self">self</span>.socket).<span class="kw">await</span>.map_err(|err| {
-            <span class="kw">let </span>e = <span class="macro">format!</span>(<span class="string">&quot;Could not connect to CLN RPC socket: {err}&quot;</span>);
+            <span class="kw">let </span>e = <span class="macro">format!</span>(<span class="string">"Could not connect to CLN RPC socket: {err}"</span>);
             <span class="macro">error!</span>(e);
             ClnExtensionError::Error(<span class="macro">anyhow!</span>(e))
         })
     }
 
-    <span class="kw">pub async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(PublicKey, String, String), ClnExtensionError&gt; {
+    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(PublicKey, String, String), ClnExtensionError&gt; {
         <span class="self">self</span>.rpc_client()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.call(cln_rpc::Request::Getinfo(
@@ -876,7 +874,7 @@
                 })
             })
             .map_err(|e| {
-                <span class="macro">error!</span>(<span class="string">&quot;cln getinfo returned error: {:?}&quot;</span>, e);
+                <span class="macro">error!</span>(<span class="string">"cln getinfo returned error: {:?}"</span>, e);
                 Status::internal(e.to_string())
             })
     }
@@ -927,7 +925,7 @@
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="macro">debug!</span>(
-            <span class="string">&quot;Found {} active channels to use as route hints&quot;</span>,
+            <span class="string">"Found {} active channels to use as route hints"</span>,
             active_peer_channels.len()
         );
 
@@ -943,7 +941,7 @@
                 .into_iter()
                 .map(|chan| (chan.peer_id, chan.amount_msat - chan.our_amount_msat))
                 .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;(),
-            err =&gt; <span class="macro">panic!</span>(<span class="string">&quot;CLN received unexpected response: {err:?}&quot;</span>),
+            err =&gt; <span class="macro">panic!</span>(<span class="string">"CLN received unexpected response: {err:?}"</span>),
         };
         active_peer_channels.sort_by(|a, b| {
             <span class="kw">let </span>a_incoming = pubkey_to_incoming_capacity.get(<span class="kw-2">&amp;</span>a.<span class="number">0</span>).unwrap().msat();
@@ -972,7 +970,7 @@
                         .into_iter()
                         .find(|chan| chan.destination == node_info.<span class="number">0</span>)
                     <span class="kw">else </span>{
-                        <span class="macro">warn!</span>(<span class="question-mark">?</span>scid, <span class="string">&quot;Channel not found in graph&quot;</span>);
+                        <span class="macro">warn!</span>(<span class="question-mark">?</span>scid, <span class="string">"Channel not found in graph"</span>);
                         <span class="kw">continue</span>;
                     };
                     <span class="prelude-val">Ok</span>(channel)
@@ -991,7 +989,7 @@
                 htlc_maximum_msat: channel.htlc_maximum_msat.map(|amt| amt.msat()),
             };
 
-            <span class="macro">debug!</span>(<span class="string">&quot;Constructed route hint {:?}&quot;</span>, route_hint_hop);
+            <span class="macro">debug!</span>(<span class="string">"Constructed route hint {:?}"</span>, route_hint_hop);
             route_hints.push(RouteHint {
                 hops: <span class="macro">vec!</span>[route_hint_hop],
             });
@@ -1039,7 +1037,7 @@
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
             })
             .map_err(|e| {
-                <span class="macro">error!</span>(<span class="string">&quot;cln pay rpc returned error {:?}&quot;</span>, e);
+                <span class="macro">error!</span>(<span class="string">"cln pay rpc returned error {:?}"</span>, e);
                 tonic::Status::internal(e.to_string())
             })<span class="question-mark">?
             </span>.map_err(|e| tonic::Status::internal(e.to_string()))<span class="question-mark">?</span>;
@@ -1059,7 +1057,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>sender = <span class="self">self</span>.interceptor.sender.lock().<span class="kw">await</span>;
         <span class="kw-2">*</span>sender = <span class="prelude-val">Some</span>(gatewayd_sender.clone());
-        <span class="macro">debug!</span>(<span class="string">&quot;Gateway channel sender replaced&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"Gateway channel sender replaced"</span>);
 
         <span class="prelude-val">Ok</span>(tonic::Response::new(ReceiverStream::new(gatewayd_receiver)))
     }
@@ -1089,7 +1087,7 @@
                     <span class="kw">let </span>assert_pk: <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], TryFromSliceError&gt; =
                         preimage.as_slice().try_into();
                     <span class="kw">if let </span><span class="prelude-val">Ok</span>(pk) = assert_pk {
-                        <span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;resolve&quot;</span>, <span class="string">&quot;payment_key&quot;</span>: pk.to_hex() })
+                        <span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"resolve"</span>, <span class="string">"payment_key"</span>: pk.to_hex() })
                     } <span class="kw">else </span>{
                         htlc_processing_failure()
                     }
@@ -1100,16 +1098,16 @@
                     </span>htlc_processing_failure()
                 }
                 <span class="prelude-val">Some</span>(Action::Forward(Forward {})) =&gt; {
-                    <span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot; </span>})
+                    <span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"continue" </span>})
                 }
                 <span class="prelude-val">None </span>=&gt; {
                     <span class="macro">error!</span>(
                         <span class="question-mark">?</span>incoming_chan_id,
                         <span class="question-mark">?</span>htlc_id,
-                        <span class="string">&quot;No action specified for intercepted htlc&quot;
+                        <span class="string">"No action specified for intercepted htlc"
                     </span>);
                     <span class="kw">return </span><span class="prelude-val">Err</span>(Status::internal(
-                        <span class="string">&quot;No action specified on this intercepted htlc&quot;</span>,
+                        <span class="string">"No action specified on this intercepted htlc"</span>,
                     ));
                 }
             };
@@ -1120,11 +1118,11 @@
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">error!</span>(
-                        <span class="string">&quot;Failed to send htlc_accepted response to interceptor: {:?}&quot;</span>,
+                        <span class="string">"Failed to send htlc_accepted response to interceptor: {:?}"</span>,
                         e
                     );
                     <span class="kw">return </span><span class="prelude-val">Err</span>(Status::internal(
-                        <span class="string">&quot;Failed to send htlc_accepted response to interceptor&quot;</span>,
+                        <span class="string">"Failed to send htlc_accepted response to interceptor"</span>,
                     ));
                 }
             };
@@ -1132,21 +1130,21 @@
             <span class="macro">error!</span>(
                 <span class="question-mark">?</span>incoming_chan_id,
                 <span class="question-mark">?</span>htlc_id,
-                <span class="string">&quot;No interceptor reference found for this processed htlc&quot;</span>,
+                <span class="string">"No interceptor reference found for this processed htlc"</span>,
             );
-            <span class="kw">return </span><span class="prelude-val">Err</span>(Status::internal(<span class="string">&quot;No interceptor reference found for htlc&quot;</span>));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(Status::internal(<span class="string">"No interceptor reference found for htlc"</span>));
         }
         <span class="prelude-val">Ok</span>(tonic::Response::new(EmptyResponse {}))
     }
 }
 
 <span class="attr">#[derive(Debug, Error)]
-</span><span class="kw">pub enum </span>ClnExtensionError {
-    <span class="attr">#[error(<span class="string">&quot;Gateway CLN Extension Error : {0:?}&quot;</span>)]
+</span><span class="kw">enum </span>ClnExtensionError {
+    <span class="attr">#[error(<span class="string">"Gateway CLN Extension Error : {0:?}"</span>)]
     </span>Error(<span class="attr">#[from] </span>anyhow::Error),
-    <span class="attr">#[error(<span class="string">&quot;Gateway CLN Extension Error : {0:?}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Gateway CLN Extension Error : {0:?}"</span>)]
     </span>RpcError(<span class="attr">#[from] </span>cln_rpc::RpcError),
-    <span class="attr">#[error(<span class="string">&quot;Gateway CLN Extension, CLN RPC Wrong Response&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Gateway CLN Extension, CLN RPC Wrong Response"</span>)]
     </span>RpcWrongResponse,
 }
 
@@ -1165,8 +1163,8 @@
 // processing fail reason
 </span><span class="kw">fn </span>htlc_processing_failure() -&gt; serde_json::Value {
     <span class="macro">serde_json::json!</span>({
-        <span class="string">&quot;result&quot;</span>: <span class="string">&quot;fail&quot;</span>,
-        <span class="string">&quot;failure_message&quot;</span>: <span class="string">&quot;1639&quot;
+        <span class="string">"result"</span>: <span class="string">"fail"</span>,
+        <span class="string">"failure_message"</span>: <span class="string">"1639"
     </span>})
 }
 
@@ -1176,8 +1174,8 @@
 <span class="doccomment">/// Functional structure to filter intercepted HTLCs into subscription streams.
 /// Used as a CLN plugin
 </span><span class="attr">#[derive(Clone)]
-</span><span class="kw">pub struct </span>ClnHtlcInterceptor {
-    <span class="kw">pub </span>outcomes: Arc&lt;Mutex&lt;BTreeMap&lt;(u64, u64), HtlcOutcomeSender&gt;&gt;&gt;,
+</span><span class="kw">struct </span>ClnHtlcInterceptor {
+    outcomes: Arc&lt;Mutex&lt;BTreeMap&lt;(u64, u64), HtlcOutcomeSender&gt;&gt;&gt;,
     sender: Arc&lt;Mutex&lt;<span class="prelude-ty">Option</span>&lt;HtlcInterceptionSender&gt;&gt;&gt;,
 }
 
@@ -1193,30 +1191,30 @@
         <span class="kw">match </span>ShortChannelId::from_str(scid) {
             <span class="prelude-val">Ok</span>(scid) =&gt; <span class="prelude-val">Ok</span>(scid_to_u64(scid)),
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">&quot;Received invalid short channel id: {:?}&quot;</span>,
+                <span class="string">"Received invalid short channel id: {:?}"</span>,
                 scid
             )),
         }
     }
 
     <span class="kw">async fn </span>intercept_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: HtlcAccepted) -&gt; serde_json::Value {
-        <span class="macro">info!</span>(<span class="question-mark">?</span>payload, <span class="string">&quot;Intercepted htlc with payload&quot;</span>);
+        <span class="macro">info!</span>(<span class="question-mark">?</span>payload, <span class="string">"Intercepted htlc with payload"</span>);
 
         <span class="kw">let </span>htlc_expiry = payload.htlc.cltv_expiry;
 
         <span class="kw">if </span>payload.onion.short_channel_id.is_none() {
             <span class="comment">// This is a HTLC terminating at the gateway node. DO NOT intercept
-            </span><span class="kw">return </span><span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot; </span>});
+            </span><span class="kw">return </span><span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"continue" </span>});
         }
 
         <span class="kw">let </span>short_channel_id = <span class="kw">match </span><span class="self">Self</span>::convert_short_channel_id(
             payload.onion.short_channel_id.unwrap().as_str(),
         ) {
             <span class="prelude-val">Ok</span>(scid) =&gt; scid,
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot; </span>}),
+            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"continue" </span>}),
         };
 
-        <span class="macro">info!</span>(<span class="question-mark">?</span>short_channel_id, <span class="string">&quot;Intercepted htlc with SCID&quot;</span>);
+        <span class="macro">info!</span>(<span class="question-mark">?</span>short_channel_id, <span class="string">"Intercepted htlc with SCID"</span>);
 
         <span class="comment">// Clone the sender to avoid holding the lock while sending the HTLC
         </span><span class="kw">let </span>sender = <span class="self">self</span>.sender.lock().<span class="kw">await</span>.clone();
@@ -1227,7 +1225,7 @@
                 <span class="kw">match </span><span class="self">Self</span>::convert_short_channel_id(payload.htlc.short_channel_id.as_str()) {
                     <span class="prelude-val">Ok</span>(scid) =&gt; scid,
                     <span class="comment">// Failed to parse incoming_chan_id, just forward the HTLC
-                    </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot; </span>}),
+                    </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"continue" </span>}),
                 };
 
             <span class="kw">let </span>htlc_ret = <span class="kw">match </span>sender
@@ -1254,18 +1252,18 @@
                     // Automatically respond with a failure message.
                     </span>tokio::time::timeout(MAX_HTLC_PROCESSING_DURATION, <span class="kw">async </span>{
                         receiver.<span class="kw">await</span>.unwrap_or_else(|e| {
-                            <span class="macro">error!</span>(<span class="string">&quot;Failed to receive outcome of intercepted htlc: {e:?}&quot;</span>);
+                            <span class="macro">error!</span>(<span class="string">"Failed to receive outcome of intercepted htlc: {e:?}"</span>);
                             htlc_processing_failure()
                         })
                     })
                     .<span class="kw">await
                     </span>.unwrap_or_else(|e| {
-                        <span class="macro">error!</span>(<span class="string">&quot;await_htlc_processing error {e:?}&quot;</span>);
+                        <span class="macro">error!</span>(<span class="string">"await_htlc_processing error {e:?}"</span>);
                         htlc_processing_failure()
                     })
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">error!</span>(<span class="string">&quot;Failed to send htlc to subscription: {e:?}&quot;</span>);
+                    <span class="macro">error!</span>(<span class="string">"Failed to send htlc to subscription: {e:?}"</span>);
                     htlc_processing_failure()
                 }
             };
@@ -1275,7 +1273,7 @@
 
         <span class="comment">// We have no subscription for this HTLC.
         // Ignore it by requesting the node to continue
-        </span><span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot; </span>})
+        </span><span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"continue" </span>})
     }
 
     <span class="comment">// TODO: Add a method to remove a HTLC subscriber

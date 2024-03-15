@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_client/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -2269,6 +2271,67 @@
 <a href="#2269" id="2269">2269</a>
 <a href="#2270" id="2270">2270</a>
 <a href="#2271" id="2271">2271</a>
+<a href="#2272" id="2272">2272</a>
+<a href="#2273" id="2273">2273</a>
+<a href="#2274" id="2274">2274</a>
+<a href="#2275" id="2275">2275</a>
+<a href="#2276" id="2276">2276</a>
+<a href="#2277" id="2277">2277</a>
+<a href="#2278" id="2278">2278</a>
+<a href="#2279" id="2279">2279</a>
+<a href="#2280" id="2280">2280</a>
+<a href="#2281" id="2281">2281</a>
+<a href="#2282" id="2282">2282</a>
+<a href="#2283" id="2283">2283</a>
+<a href="#2284" id="2284">2284</a>
+<a href="#2285" id="2285">2285</a>
+<a href="#2286" id="2286">2286</a>
+<a href="#2287" id="2287">2287</a>
+<a href="#2288" id="2288">2288</a>
+<a href="#2289" id="2289">2289</a>
+<a href="#2290" id="2290">2290</a>
+<a href="#2291" id="2291">2291</a>
+<a href="#2292" id="2292">2292</a>
+<a href="#2293" id="2293">2293</a>
+<a href="#2294" id="2294">2294</a>
+<a href="#2295" id="2295">2295</a>
+<a href="#2296" id="2296">2296</a>
+<a href="#2297" id="2297">2297</a>
+<a href="#2298" id="2298">2298</a>
+<a href="#2299" id="2299">2299</a>
+<a href="#2300" id="2300">2300</a>
+<a href="#2301" id="2301">2301</a>
+<a href="#2302" id="2302">2302</a>
+<a href="#2303" id="2303">2303</a>
+<a href="#2304" id="2304">2304</a>
+<a href="#2305" id="2305">2305</a>
+<a href="#2306" id="2306">2306</a>
+<a href="#2307" id="2307">2307</a>
+<a href="#2308" id="2308">2308</a>
+<a href="#2309" id="2309">2309</a>
+<a href="#2310" id="2310">2310</a>
+<a href="#2311" id="2311">2311</a>
+<a href="#2312" id="2312">2312</a>
+<a href="#2313" id="2313">2313</a>
+<a href="#2314" id="2314">2314</a>
+<a href="#2315" id="2315">2315</a>
+<a href="#2316" id="2316">2316</a>
+<a href="#2317" id="2317">2317</a>
+<a href="#2318" id="2318">2318</a>
+<a href="#2319" id="2319">2319</a>
+<a href="#2320" id="2320">2320</a>
+<a href="#2321" id="2321">2321</a>
+<a href="#2322" id="2322">2322</a>
+<a href="#2323" id="2323">2323</a>
+<a href="#2324" id="2324">2324</a>
+<a href="#2325" id="2325">2325</a>
+<a href="#2326" id="2326">2326</a>
+<a href="#2327" id="2327">2327</a>
+<a href="#2328" id="2328">2328</a>
+<a href="#2329" id="2329">2329</a>
+<a href="#2330" id="2330">2330</a>
+<a href="#2331" id="2331">2331</a>
+<a href="#2332" id="2332">2332</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2279,7 +2342,7 @@
 //! Module clients have to at least implement the [`module::ClientModule`] trait
 //! and a factory struct implementing [`module::init::ClientModuleInit`]. The
 //! `ClientModule` trait defines the module types (tx inputs, outputs, etc.) as
-//! well as the module&#39;s [state machines](sm::State).
+//! well as the module's [state machines](sm::State).
 //!
 //! ### State machines
 //! State machines are spawned when starting operations and drive them
@@ -2300,7 +2363,7 @@
 //! context](module::ClientModule::context).
 //!
 //! The global context provides access to the federation API and allows to claim
-//! module outputs (and transferring the value into the client&#39;s wallet), which
+//! module outputs (and transferring the value into the client's wallet), which
 //! can be used for refunds.
 //!
 //! The client-specific context can be used for other purposes, such as
@@ -2343,7 +2406,6 @@
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::ops::{<span class="self">self</span>, Range};
 <span class="kw">use </span>std::pin::Pin;
-<span class="kw">use </span>std::sync::atomic::AtomicUsize;
 <span class="kw">use </span>std::sync::{Arc, Weak};
 <span class="kw">use </span>std::time::Duration;
 
@@ -2352,12 +2414,11 @@
 <span class="kw">use </span>backup::ClientBackup;
 <span class="kw">use </span>db::{
     apply_migrations_client, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey,
-    ClientConfigKeyPrefix, ClientInitStateKey, ClientInviteCodeKey, ClientInviteCodeKeyPrefix,
-    ClientModuleRecovery, EncodedClientSecretKey, InitMode,
+    ClientConfigKeyPrefix, ClientInitStateKey, ClientModuleRecovery, EncodedClientSecretKey,
+    InitMode,
 };
-<span class="kw">use </span>fedimint_core::api::{
-    ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi, InviteCode,
-};
+<span class="kw">use </span>envs::get_discover_api_version_timeout;
+<span class="kw">use </span>fedimint_core::api::{ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi};
 <span class="kw">use </span>fedimint_core::config::{
     ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
     ModuleInitRegistry,
@@ -2383,17 +2444,18 @@
 };
 <span class="kw">pub use </span>fedimint_derive_secret <span class="kw">as </span>derivable_secret;
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
-<span class="kw">use </span>fedimint_logging::LOG_CLIENT;
-<span class="kw">use </span>futures::{Future, StreamExt};
+<span class="kw">use </span>fedimint_logging::{LOG_CLIENT, LOG_CLIENT_RECOVERY};
+<span class="kw">use </span>futures::{Future, Stream, StreamExt};
 <span class="kw">use </span>module::recovery::RecoveryProgress;
 <span class="kw">use </span>module::{DynClientModule, FinalClient};
 <span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>secp256k1_zkp::{PublicKey, Secp256k1};
 <span class="kw">use </span>secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy <span class="kw">as _</span>};
 <span class="kw">use </span>thiserror::Error;
-<span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+<span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">use </span>tokio::runtime::{Handle <span class="kw">as </span>RuntimeHandle, RuntimeFlavor};
 <span class="kw">use </span>tokio::sync::watch;
+<span class="kw">use </span>tokio_stream::wrappers::WatchStream;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::Metadata;
@@ -2419,6 +2481,8 @@
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used by the client
 </span><span class="kw">pub mod </span>db;
+<span class="doccomment">/// Environment variables
+</span><span class="kw">pub mod </span>envs;
 <span class="doccomment">/// Module client interface definitions
 </span><span class="kw">pub mod </span>module;
 <span class="doccomment">/// Operation log subsystem of the client
@@ -2431,34 +2495,41 @@
 </span><span class="kw">pub mod </span>transaction;
 
 <span class="kw">pub type </span>InstancelessDynClientInput = ClientInput&lt;
-    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IInput + <span class="lifetime">&#39;static</span>)&gt;,
-    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>)&gt;,
+    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IInput + <span class="lifetime">'static</span>)&gt;,
+    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;,
 &gt;;
 
 <span class="kw">pub type </span>InstancelessDynClientOutput = ClientOutput&lt;
-    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IOutput + <span class="lifetime">&#39;static</span>)&gt;,
-    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>)&gt;,
+    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IOutput + <span class="lifetime">'static</span>)&gt;,
+    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;,
 &gt;;
 
 <span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>AddStateMachinesError {
-    <span class="attr">#[error(<span class="string">&quot;State already exists in database&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"State already exists in database"</span>)]
     </span>StateAlreadyExists,
-    <span class="attr">#[error(<span class="string">&quot;Got {0}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Got {0}"</span>)]
     </span>Other(<span class="attr">#[from] </span>anyhow::Error),
+}
+
+<span class="kw">pub enum </span>DiscoverCommonApiVersionMode {
+    <span class="doccomment">/// Get the response from only a few peers, or until a timeout
+    </span>Fast,
+    <span class="doccomment">/// Try to get a reasponse from all peers, or until a timeout
+    </span>Full,
 }
 
 <span class="kw">pub type </span>AddStateMachinesResult = <span class="prelude-ty">Result</span>&lt;(), AddStateMachinesError&gt;;
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>IGlobalClientContext: Debug + MaybeSend + MaybeSync + <span class="lifetime">&#39;static </span>{
-    <span class="doccomment">/// Returned a reference client&#39;s module API client, so that module-specific
+</span><span class="kw">pub trait </span>IGlobalClientContext: Debug + MaybeSend + MaybeSync + <span class="lifetime">'static </span>{
+    <span class="doccomment">/// Returned a reference client's module API client, so that module-specific
     /// calls can be made
     </span><span class="kw">fn </span>module_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynModuleApi;
 
     <span class="kw">fn </span>client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig;
 
-    <span class="doccomment">/// Returns a reference to the client&#39;s federation API client. The provided
+    <span class="doccomment">/// Returns a reference to the client's federation API client. The provided
     /// interface [`IGlobalFederationApi`] typically does not provide the
     /// necessary functionality, for this extension traits like
     /// [`fedimint_core::api::IGlobalFederationApi`] have to be used.
@@ -2473,7 +2544,7 @@
     /// `OutPoint` that represents change if change was added.
     </span><span class="kw">async fn </span>claim_input_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         input: InstancelessDynClientInput,
     ) -&gt; (TransactionId, Vec&lt;OutPoint&gt;);
 
@@ -2483,14 +2554,14 @@
     /// `OutPoint` that represents change if change was added.
     </span><span class="kw">async fn </span>fund_output_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         output: InstancelessDynClientOutput,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;;
 
     <span class="doccomment">/// Adds a state machine to the executor.
     </span><span class="kw">async fn </span>add_state_machine_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState)&gt;,
     ) -&gt; AddStateMachinesResult;
 
@@ -2500,47 +2571,47 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>IGlobalClientContext <span class="kw">for </span>() {
     <span class="kw">fn </span>module_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynModuleApi {
-        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
 
     <span class="kw">fn </span>client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
-        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
 
     <span class="kw">fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynGlobalApi {
-        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
 
     <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
-        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
 
     <span class="kw">async fn </span>claim_input_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         _input: InstancelessDynClientInput,
     ) -&gt; (TransactionId, Vec&lt;OutPoint&gt;) {
-        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
 
     <span class="kw">async fn </span>fund_output_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         _output: InstancelessDynClientOutput,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
-        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
 
     <span class="kw">async fn </span>add_state_machine_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         _sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState)&gt;,
     ) -&gt; AddStateMachinesResult {
-        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
 
     <span class="kw">async fn </span>transaction_update_stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;OperationState&lt;TxSubmissionStates&gt;&gt; {
-        <span class="macro">unimplemented!</span>(<span class="string">&quot;fake implementation, only for tests&quot;</span>);
+        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
 }
 
@@ -2573,21 +2644,21 @@
     </span>}
 
     <span class="doccomment">/// Creates a transaction that with an output of the primary module,
-    /// claiming the given input and transferring its value into the client&#39;s
+    /// claiming the given input and transferring its value into the client's
     /// wallet.
     ///
     /// The transactions submission state machine as well as the state
     /// machines responsible for the generated output are generated
-    /// automatically. The caller is responsible for the input&#39;s state machines,
+    /// automatically. The caller is responsible for the input's state machines,
     /// should there be any required.
     </span><span class="kw">pub async fn </span>claim_input&lt;I, S&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         input: ClientInput&lt;I, S&gt;,
     ) -&gt; (TransactionId, Vec&lt;OutPoint&gt;)
     <span class="kw">where
-        </span>I: IInput + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-        S: IState + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        </span>I: IInput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
+        S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
     {
         <span class="self">self</span>.claim_input_dyn(
             dbtx,
@@ -2606,16 +2677,16 @@
     ///
     /// The transactions submission state machine as well as the state machines
     /// for the funding inputs are generated automatically. The caller is
-    /// responsible for the output&#39;s state machines, should there be any
+    /// responsible for the output's state machines, should there be any
     /// required.
     </span><span class="kw">pub async fn </span>fund_output&lt;O, S&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         output: ClientOutput&lt;O, S&gt;,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;
     <span class="kw">where
-        </span>O: IOutput + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-        S: IState + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        </span>O: IOutput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
+        S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
     {
         <span class="self">self</span>.fund_output_dyn(
             dbtx,
@@ -2632,19 +2703,19 @@
     /// machine from inside which it was spawned.
     </span><span class="kw">pub async fn </span>add_state_machine&lt;S&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         sm: S,
     ) -&gt; AddStateMachinesResult
     <span class="kw">where
-        </span>S: State + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        </span>S: State + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
     {
         <span class="self">self</span>.add_state_machine_dyn(dbtx, box_up_state(sm)).<span class="kw">await
     </span>}
 }
 
-<span class="kw">fn </span>states_to_instanceless_dyn&lt;S: IState + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>&gt;(
+<span class="kw">fn </span>states_to_instanceless_dyn&lt;S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>&gt;(
     state_gen: StateGenerator&lt;S&gt;,
-) -&gt; StateGenerator&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>)&gt;&gt; {
+) -&gt; StateGenerator&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;&gt; {
     Arc::new(<span class="kw">move </span>|txid, out_idx| {
         <span class="kw">let </span>states: Vec&lt;S&gt; = state_gen(txid, out_idx);
         states
@@ -2654,9 +2725,9 @@
     })
 }
 
-<span class="doccomment">/// Not sure why I couldn&#39;t just directly call `Box::new` ins
+<span class="doccomment">/// Not sure why I couldn't just directly call `Box::new` ins
 /// [`states_to_instanceless_dyn`], but this fixed it.
-</span><span class="kw">fn </span>box_up_state(state: <span class="kw">impl </span>IState + <span class="lifetime">&#39;static</span>) -&gt; Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>)&gt; {
+</span><span class="kw">fn </span>box_up_state(state: <span class="kw">impl </span>IState + <span class="lifetime">'static</span>) -&gt; Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt; {
     Box::new(state)
 }
 
@@ -2671,8 +2742,8 @@
 
 <span class="comment">// TODO: impl `Debug` for `Client` and derive here
 </span><span class="kw">impl </span>Debug <span class="kw">for </span>Client {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;Client&quot;</span>)
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"Client"</span>)
     }
 }
 
@@ -2706,7 +2777,7 @@
 
     <span class="kw">async fn </span>claim_input_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         input: InstancelessDynClientInput,
     ) -&gt; (TransactionId, Vec&lt;OutPoint&gt;) {
         <span class="kw">let </span>instance_input = ClientInput {
@@ -2722,12 +2793,12 @@
                 TransactionBuilder::new().with_input(instance_input),
             )
             .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Can only fail if additional funding is needed&quot;</span>)
+            </span>.expect(<span class="string">"Can only fail if additional funding is needed"</span>)
     }
 
     <span class="kw">async fn </span>fund_output_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         output: InstancelessDynClientOutput,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
         <span class="kw">let </span>instance_output = ClientOutput {
@@ -2746,7 +2817,7 @@
 
     <span class="kw">async fn </span>add_state_machine_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState)&gt;,
     ) -&gt; AddStateMachinesResult {
         <span class="kw">let </span>state = DynState::from_parts(<span class="self">self</span>.module_instance_id, sm);
@@ -2764,7 +2835,7 @@
 
 <span class="kw">fn </span>states_add_instance(
     module_instance_id: ModuleInstanceId,
-    state_gen: StateGenerator&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>)&gt;&gt;,
+    state_gen: StateGenerator&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;&gt;,
 ) -&gt; StateGenerator&lt;DynState&gt; {
     Arc::new(<span class="kw">move </span>|txid, out_idx| {
         <span class="kw">let </span>states = state_gen(txid, out_idx);
@@ -2776,33 +2847,40 @@
     })
 }
 
-<span class="doccomment">/// Atomically-counted ([`Arc`]) handle to [`Client`]
+<span class="doccomment">/// Shared, inner data of [`ClientHandle`]
 ///
-/// Notably it `deref`-s to the [`Client`] where most
-/// methods live.
-</span><span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>ClientArc {
-    <span class="comment">// Use [`ClientArc::new`] instead
-    </span>inner: <span class="prelude-ty">Option</span>&lt;Arc&lt;Client&gt;&gt;,
-
-    __use_constructor_to_create: (),
+/// The primary responsibility of this struct (and two levels of Arc),
+/// is shutting down `Client` on the drop of last [`ClientHandle`]. See
+/// [`ClientHandleShared::drop`] for details.
+</span><span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">struct </span>ClientHandleShared {
+    inner: <span class="prelude-ty">Option</span>&lt;Arc&lt;Client&gt;&gt;,
 }
 
-<span class="kw">impl </span>ClientArc {
+<span class="doccomment">/// User handle to [`Client`]
+///
+/// Clonable. On the drop of last [`ClientHandle`] the client
+/// will be shut-down, and resources it used freed.
+///
+/// Notably it [`ops::Deref`]s to the [`Client`] where most
+/// methods live.
+</span><span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>ClientHandle {
+    inner: Arc&lt;ClientHandleShared&gt;,
+}
+
+<span class="kw">impl </span>ClientHandle {
     <span class="doccomment">/// Create
     </span><span class="kw">fn </span>new(inner: Arc&lt;Client&gt;) -&gt; <span class="self">Self </span>{
-        inner
-            .client_count
-            .fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
         <span class="self">Self </span>{
-            inner: <span class="prelude-val">Some</span>(inner),
-            <span class="comment">// this is the constructor
-            </span>__use_constructor_to_create: (),
+            inner: Arc::new(ClientHandleShared {
+                inner: inner.into(),
+            }),
         }
     }
 
     <span class="kw">fn </span>as_inner(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Arc&lt;Client&gt; {
-        <span class="self">self</span>.inner.as_ref().expect(<span class="string">&quot;Inner always set&quot;</span>)
+        <span class="self">self</span>.inner.inner.as_ref().expect(<span class="string">"Inner always set"</span>)
     }
 
     <span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) {
@@ -2824,44 +2902,57 @@
             }
             <span class="comment">// we want to retry fast, give feedback, but not spam
             </span><span class="kw">if </span>attempt % <span class="number">100 </span>== <span class="number">0 </span>{
-                <span class="macro">info!</span>(<span class="string">&quot;Waiting for ArcClient to stop being used&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"Waiting for ArcClient to stop being used"</span>);
             }
             fedimint_core::task::sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
         }
     }
 }
 
-<span class="kw">impl </span>ops::Deref <span class="kw">for </span>ClientArc {
+<span class="kw">impl </span>ops::Deref <span class="kw">for </span>ClientHandle {
     <span class="kw">type </span>Target = Client;
 
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
-        <span class="self">self</span>.inner.as_ref().expect(<span class="string">&quot;Must have inner client set&quot;</span>)
+        <span class="self">self</span>.inner
+            .inner
+            .as_ref()
+            .expect(<span class="string">"Must have inner client set"</span>)
     }
 }
 
-<span class="kw">impl </span>ClientArc {
-    <span class="kw">pub fn </span>downgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientWeak {
+<span class="kw">impl </span>ClientHandle {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>downgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientWeak {
         ClientWeak {
-            inner: Arc::downgrade(<span class="self">self</span>.inner.as_ref().expect(<span class="string">&quot;Inner always set&quot;</span>)),
+            inner: Arc::downgrade(<span class="self">self</span>.inner.inner.as_ref().expect(<span class="string">"Inner always set"</span>)),
         }
     }
 }
 
-<span class="kw">impl </span>Clone <span class="kw">for </span>ClientArc {
-    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
-        ClientArc::new(<span class="self">self</span>.inner.clone().expect(<span class="string">&quot;Must have inner client set&quot;</span>))
+<span class="doccomment">/// Internal self-reference to [`Client`]
+</span><span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ClientStrong {
+    inner: Arc&lt;Client&gt;,
+}
+
+<span class="kw">impl </span>ops::Deref <span class="kw">for </span>ClientStrong {
+    <span class="kw">type </span>Target = Client;
+
+    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+        <span class="self">self</span>.inner.deref()
     }
 }
 
-<span class="doccomment">/// Like [`ClientArc`] but using a [`Weak`] handle to [`Client`]
+<span class="doccomment">/// Like [`ClientStrong`] but using a [`Weak`] handle to [`Client`]
+///
+/// This is not meant to be used by external code.
 </span><span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>ClientWeak {
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ClientWeak {
     inner: Weak&lt;Client&gt;,
 }
 
 <span class="kw">impl </span>ClientWeak {
-    <span class="kw">pub fn </span>upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ClientArc&gt; {
-        Weak::upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>.inner).map(ClientArc::new)
+    <span class="kw">pub fn </span>upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ClientStrong&gt; {
+        Weak::upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>.inner).map(|inner| ClientStrong { inner })
     }
 }
 
@@ -2870,54 +2961,49 @@
 /// `ExecutorInner` should already take care of that. The reason is that as long
 /// as the executor task is active there may be a cycle in the
 /// `Arc&lt;Client&gt;`s such that at least one `Executor` never gets dropped.
-</span><span class="kw">impl </span>Drop <span class="kw">for </span>ClientArc {
+</span><span class="kw">impl </span>Drop <span class="kw">for </span>ClientHandleShared {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="comment">// Not sure if Ordering::SeqCst is strictly needed here, but better safe than
-        // sorry.
-        </span><span class="kw">let </span>client_count = <span class="self">self
-            </span>.as_inner()
-            .client_count
-            .fetch_sub(<span class="number">1</span>, std::sync::atomic::Ordering::SeqCst);
+        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Shutting down the Client on last handle drop"</span>);
+        <span class="kw">let </span>inner = <span class="self">self</span>.inner.take().expect(<span class="string">"Must have inner client set"</span>);
+        inner.executor.stop_executor();
 
-        <span class="comment">// `fetch_sub` returns previous value, so if it is 1, it means this is the last
-        // client reference
-        </span><span class="kw">if </span>client_count == <span class="number">1 </span>{
-            <span class="macro">info!</span>(<span class="string">&quot;Last client reference dropped, shutting down client task group&quot;</span>);
-            <span class="kw">let </span>inner = <span class="self">self</span>.inner.take().expect(<span class="string">&quot;Must have inner client set&quot;</span>);
-            inner.executor.stop_executor();
+        <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+        </span>{
+            <span class="kw">if </span>RuntimeHandle::current().runtime_flavor() == RuntimeFlavor::CurrentThread {
+                <span class="comment">// We can't use block_on in single-threaded mode
+                </span><span class="kw">return</span>;
+            }
 
-            <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
-            </span>{
-                <span class="kw">if </span>RuntimeHandle::current().runtime_flavor() == RuntimeFlavor::CurrentThread {
-                    <span class="comment">// We can&#39;t use block_on in single-threaded mode
-                    </span><span class="kw">return</span>;
-                }
+            <span class="kw">let </span>db = inner.db.clone();
 
-                <span class="kw">let </span>db = inner.db.clone();
-                <span class="kw">let </span>federation_id = inner.federation_id();
-
-                drop(inner);
-
-                <span class="comment">// wait until `self.inner.db` is the only strong reference
-                </span><span class="kw">for </span>attempt <span class="kw">in </span><span class="number">0u64</span>.. {
-                    <span class="kw">let </span>strong_count = db.strong_count();
-                    <span class="kw">if </span>strong_count &lt;= <span class="number">1 </span>{
-                        <span class="kw">break</span>;
-                    }
-                    tokio::task::block_in_place(|| {
-                        futures::executor::block_on(<span class="kw">async </span>{
-                            <span class="comment">// we want to retry fast, give feedback, but not spam
-                            </span><span class="kw">if </span>attempt % <span class="number">100 </span>== <span class="number">0 </span>{
-                                <span class="macro">info!</span>(
-                                    %federation_id,
-                                    strong_count,
-                                    <span class="string">&quot;Waiting for client database to stop being used&quot;
-                                </span>);
-                            }
-                            fedimint_core::task::sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
-                        });
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(<span class="kw">async </span>{
+                        <span class="comment">// futures::executor::block_on(async {
+                        </span><span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Waiting for client task group to shut down"</span>);
+                        <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = inner
+                            .task_group
+                            .clone()
+                            .shutdown_join_all(<span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">30</span>)))
+                            .<span class="kw">await
+                        </span>{
+                            <span class="macro">warn!</span>(target: LOG_CLIENT, %err, <span class="string">"Error waiting for client task group to shut down"</span>);
+                        }
                     });
-                }
+            });
+
+            <span class="kw">let </span>client_strong_count = Arc::strong_count(<span class="kw-2">&amp;</span>inner);
+            <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Dropping last handle to Client"</span>);
+            <span class="comment">// We are sure that no background tasks are running in the client anymore, so we
+            // can drop the (usually) last inner reference.
+            </span>drop(inner);
+
+            <span class="kw">if </span>client_strong_count != <span class="number">1 </span>{
+                <span class="macro">debug!</span>(target: LOG_CLIENT, count = client_strong_count - <span class="number">1</span>, LOG_CLIENT, <span class="string">"External Client references remaining after last handle dropped"</span>);
+            }
+
+            <span class="kw">let </span>db_strong_count = db.strong_count();
+            <span class="kw">if </span>db_strong_count != <span class="number">1 </span>{
+                <span class="macro">debug!</span>(target:  LOG_CLIENT, count = db_strong_count - <span class="number">1</span>, <span class="string">"External DB references remaining after last handle dropped"</span>);
             }
         }
     }
@@ -2932,7 +3018,7 @@
 <span class="kw">pub type </span>ModuleGlobalContextGen = ContextGen;
 
 <span class="doccomment">/// Resources particular to a module instance
-</span><span class="kw">pub struct </span>ClientModuleInstance&lt;<span class="lifetime">&#39;m</span>, M: ClientModule&gt; {
+</span><span class="kw">pub struct </span>ClientModuleInstance&lt;<span class="lifetime">'m</span>, M: ClientModule&gt; {
     <span class="doccomment">/// Instance id of the module
     </span><span class="kw">pub </span>id: ModuleInstanceId,
     <span class="doccomment">/// Module-specific DB
@@ -2940,10 +3026,10 @@
     <span class="doccomment">/// Module-specific API
     </span><span class="kw">pub </span>api: DynModuleApi,
 
-    module: <span class="kw-2">&amp;</span><span class="lifetime">&#39;m </span>M,
+    module: <span class="kw-2">&amp;</span><span class="lifetime">'m </span>M,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;m</span>, M&gt; ops::Deref <span class="kw">for </span>ClientModuleInstance&lt;<span class="lifetime">&#39;m</span>, M&gt;
+<span class="kw">impl</span>&lt;<span class="lifetime">'m</span>, M&gt; ops::Deref <span class="kw">for </span>ClientModuleInstance&lt;<span class="lifetime">'m</span>, M&gt;
 <span class="kw">where
     </span>M: ClientModule,
 {
@@ -2970,13 +3056,6 @@
     secp_ctx: Secp256k1&lt;secp256k1_zkp::All&gt;,
 
     task_group: TaskGroup,
-    <span class="doccomment">/// Number of [`ClientArc`] instances using this `Client`.
-    ///
-    /// The `Client` struct is both used for the client itself as well as
-    /// for the global context used in the state machine executor. This means we
-    /// cannot rely on the reference count of the `Arc&lt;Client&gt;` to
-    /// determine if the client should shut down.
-    </span>client_count: AtomicUsize,
 
     <span class="doccomment">/// Updates about client recovery progress
     </span>client_recovery_progress_receiver:
@@ -2990,7 +3069,7 @@
         ClientBuilder::new(db)
     }
 
-    <span class="kw">pub fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IGlobalFederationApi + <span class="lifetime">&#39;static</span>) {
+    <span class="kw">pub fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IGlobalFederationApi + <span class="lifetime">'static</span>) {
         <span class="self">self</span>.api.as_ref()
     }
 
@@ -3016,9 +3095,9 @@
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
-        <span class="comment">// Don&#39;t overwrite an existing secret
+        <span class="comment">// Don't overwrite an existing secret
         </span><span class="kw">match </span>dbtx.get_value(<span class="kw-2">&amp;</span>EncodedClientSecretKey).<span class="kw">await </span>{
-            <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Encoded client secret already exists, cannot overwrite&quot;</span>),
+            <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">"Encoded client secret already exists, cannot overwrite"</span>),
             <span class="prelude-val">None </span>=&gt; {
                 <span class="kw">let </span>encoded_secret = T::consensus_encode_to_vec(<span class="kw-2">&amp;</span>secret);
                 dbtx.insert_entry(<span class="kw-2">&amp;</span>EncodedClientSecretKey, <span class="kw-2">&amp;</span>encoded_secret)
@@ -3031,7 +3110,7 @@
 
     <span class="kw">pub async fn </span>load_decodable_client_secret&lt;T: Decodable&gt;(db: <span class="kw-2">&amp;</span>Database) -&gt; anyhow::Result&lt;T&gt; {
         <span class="kw">let </span><span class="prelude-val">Some</span>(secret) = <span class="self">Self</span>::load_decodable_client_secret_opt(db).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
-            <span class="macro">bail!</span>(<span class="string">&quot;Encoded client secret not present in DB&quot;</span>)
+            <span class="macro">bail!</span>(<span class="string">"Encoded client secret not present in DB"</span>)
         };
 
         <span class="prelude-val">Ok</span>(secret)
@@ -3046,7 +3125,7 @@
         <span class="prelude-val">Ok</span>(<span class="kw">match </span>client_secret {
             <span class="prelude-val">Some</span>(client_secret) =&gt; <span class="prelude-val">Some</span>(
                 T::consensus_decode(<span class="kw-2">&amp;mut </span>client_secret.as_slice(), <span class="kw-2">&amp;</span>Default::default())
-                    .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;Decoding failed: {e}&quot;</span>))<span class="question-mark">?</span>,
+                    .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Decoding failed: {e}"</span>))<span class="question-mark">?</span>,
             ),
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
         })
@@ -3059,7 +3138,7 @@
                 <span class="kw">let </span>secret = PlainRootSecretStrategy::random(<span class="kw-2">&amp;mut </span>thread_rng());
                 <span class="self">Self</span>::store_encodable_client_secret(db, secret)
                     .<span class="kw">await
-                    </span>.expect(<span class="string">&quot;Storing client secret must work&quot;</span>);
+                    </span>.expect(<span class="string">"Storing client secret must work"</span>);
                 secret
             }
         };
@@ -3072,7 +3151,7 @@
 
     <span class="kw">pub async fn </span>start_executor(<span class="self">self</span>: <span class="kw-2">&amp;</span>Arc&lt;<span class="self">Self</span>&gt;) {
         <span class="macro">debug!</span>(
-            <span class="string">&quot;Starting fedimint client executor (version: {})&quot;</span>,
+            <span class="string">"Starting fedimint client executor (version: {})"</span>,
             <span class="macro">fedimint_build_code_version_env!</span>()
         );
         <span class="self">self</span>.executor.start_executor(<span class="self">self</span>.context_gen()).<span class="kw">await</span>;
@@ -3089,7 +3168,7 @@
                 client: client_inner
                     .clone()
                     .upgrade()
-                    .expect(<span class="string">&quot;ModuleGlobalContextGen called after client was dropped&quot;</span>),
+                    .expect(<span class="string">"ModuleGlobalContextGen called after client was dropped"</span>),
                 module_instance_id: module_instance,
                 operation,
             }
@@ -3108,7 +3187,7 @@
     <span class="doccomment">/// Returns a reference to the module, panics if not found
     </span><span class="kw">fn </span>get_module(<span class="kw-2">&amp;</span><span class="self">self</span>, instance: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule) {
         <span class="self">self</span>.try_get_module(instance)
-            .expect(<span class="string">&quot;Module instance not found&quot;</span>)
+            .expect(<span class="string">"Module instance not found"</span>)
     }
 
     <span class="kw">fn </span>try_get_module(
@@ -3135,7 +3214,7 @@
         <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>builder.inputs {
             <span class="kw">let </span>module = <span class="self">self</span>.get_module(input.input.module_instance_id());
             <span class="kw">let </span>item_amount = module.input_amount(<span class="kw-2">&amp;</span>input.input).expect(
-                <span class="string">&quot;We only build transactions with input versions that are supported by the module&quot;</span>,
+                <span class="string">"We only build transactions with input versions that are supported by the module"</span>,
             );
             in_amount += item_amount.amount;
             fee_amount += item_amount.fee;
@@ -3144,7 +3223,7 @@
         <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>builder.outputs {
             <span class="kw">let </span>module = <span class="self">self</span>.get_module(output.output.module_instance_id());
             <span class="kw">let </span>item_amount = module.output_amount(<span class="kw-2">&amp;</span>output.output).expect(
-                <span class="string">&quot;We only build transactions with output versions that are supported by the module&quot;</span>,
+                <span class="string">"We only build transactions with output versions that are supported by the module"</span>,
             );
             out_amount += item_amount.amount;
             fee_amount += item_amount.fee;
@@ -3175,7 +3254,7 @@
 
     <span class="kw">pub async fn </span>add_state_machines(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         states: Vec&lt;DynState&gt;,
     ) -&gt; AddStateMachinesResult {
         <span class="self">self</span>.executor.add_state_machines_dbtx(dbtx, states).<span class="kw">await
@@ -3206,7 +3285,7 @@
     <span class="doccomment">/// Adds funding to a transaction or removes over-funding via change.
     </span><span class="kw">async fn </span>finalize_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         operation_id: OperationId,
         <span class="kw-2">mut </span>partial_transaction: TransactionBuilder,
     ) -&gt; anyhow::Result&lt;(Transaction, Vec&lt;DynState&gt;, Range&lt;u64&gt;)&gt; {
@@ -3256,7 +3335,7 @@
                 <span class="self">self</span>.transaction_builder_balance(<span class="kw-2">&amp;</span>partial_transaction),
                 TransactionBuilderBalance::Balanced
             ),
-            <span class="string">&quot;Transaction is balanced after the previous two operations&quot;
+            <span class="string">"Transaction is balanced after the previous two operations"
         </span>);
 
         <span class="kw">let </span>(tx, states) = partial_transaction.build(<span class="kw-2">&amp;</span><span class="self">self</span>.secp_ctx, thread_rng());
@@ -3297,7 +3376,7 @@
                     <span class="kw">let </span>operation_meta = operation_meta.clone();
                     Box::pin(<span class="kw">async move </span>{
                         <span class="kw">if </span>Client::operation_exists(dbtx, operation_id).<span class="kw">await </span>{
-                            <span class="macro">bail!</span>(<span class="string">&quot;There already exists an operation with id {operation_id:?}&quot;</span>)
+                            <span class="macro">bail!</span>(<span class="string">"There already exists an operation with id {operation_id:?}"</span>)
                         }
 
                         <span class="kw">let </span>(txid, change) = <span class="self">self
@@ -3327,14 +3406,14 @@
                 attempts,
                 last_error,
             }) =&gt; <span class="macro">panic!</span>(
-                <span class="string">&quot;Failed to commit tx submission dbtx after {attempts} attempts: {last_error}&quot;
+                <span class="string">"Failed to commit tx submission dbtx after {attempts} attempts: {last_error}"
             </span>),
         }
     }
 
     <span class="kw">async fn </span>finalize_and_submit_transaction_inner(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
@@ -3344,7 +3423,7 @@
 
         <span class="macro">ensure!</span>(
             transaction.consensus_encode_to_vec().len() &lt;= Transaction::MAX_TX_SIZE,
-            <span class="string">&quot;The generated transaction would be rejected by the federation for being too large.&quot;
+            <span class="string">"The generated transaction would be rejected by the federation for being too large."
         </span>);
 
         <span class="kw">let </span>txid = transaction.tx_hash();
@@ -3370,7 +3449,7 @@
     <span class="kw">async fn </span>transaction_update_stream(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, OperationState&lt;TxSubmissionStates&gt;&gt; {
+    ) -&gt; BoxStream&lt;<span class="lifetime">'static</span>, OperationState&lt;TxSubmissionStates&gt;&gt; {
         <span class="self">self</span>.executor
             .notifier()
             .module_notifier::&lt;OperationState&lt;TxSubmissionStates&gt;&gt;(
@@ -3381,7 +3460,7 @@
     </span>}
 
     <span class="kw">async fn </span>operation_exists(
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         operation_id: OperationId,
     ) -&gt; bool {
         <span class="kw">let </span>active_state_exists = dbtx
@@ -3425,13 +3504,13 @@
         <span class="kw">let </span>module_kind = M::kind();
         <span class="kw">let </span>id = <span class="self">self
             </span>.get_first_instance(<span class="kw-2">&amp;</span>module_kind)
-            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">&quot;No modules found of kind {module_kind}&quot;</span>));
+            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"No modules found of kind {module_kind}"</span>));
         <span class="kw">let </span>module: <span class="kw-2">&amp;</span>M = <span class="self">self
             </span>.try_get_module(id)
-            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">&quot;Unknown module instance {id}&quot;</span>))
+            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"Unknown module instance {id}"</span>))
             .as_any()
             .downcast_ref::&lt;M&gt;()
-            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">&quot;Module is not of type {}&quot;</span>, std::any::type_name::&lt;M&gt;()));
+            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"Module is not of type {}"</span>, std::any::type_name::&lt;M&gt;()));
         ClientModuleInstance {
             id,
             db: <span class="self">self</span>.db().with_prefix_module_id(id),
@@ -3445,7 +3524,7 @@
         instance_id: ModuleInstanceId,
     ) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule)&gt; {
         <span class="self">self</span>.try_get_module(instance_id)
-            .ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Unknown module instance {}&quot;</span>, instance_id))
+            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Unknown module instance {}"</span>, instance_id))
     }
 
     <span class="kw">pub fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
@@ -3479,7 +3558,7 @@
             .map(|(instance_id, <span class="kw">_</span>, <span class="kw">_</span>)| instance_id)
     }
 
-    <span class="doccomment">/// Returns the data from which the client&#39;s root secret is derived (e.g.
+    <span class="doccomment">/// Returns the data from which the client's root secret is derived (e.g.
     /// BIP39 seed phrase struct).
     </span><span class="kw">pub async fn </span>root_secret_encoding&lt;T: Decodable&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;T&gt; {
         get_decoded_client_secret::&lt;T&gt;(<span class="self">self</span>.db()).<span class="kw">await
@@ -3541,7 +3620,7 @@
     </span><span class="kw">pub fn </span>primary_module(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynClientModule {
         <span class="self">self</span>.modules
             .get(<span class="self">self</span>.primary_module_instance)
-            .expect(<span class="string">&quot;primary module must be present&quot;</span>)
+            .expect(<span class="string">"primary module must be present"</span>)
     }
 
     <span class="doccomment">/// Balance available to the client for spending
@@ -3556,7 +3635,7 @@
 
     <span class="doccomment">/// Returns a stream that yields the current client balance every time it
     /// changes.
-    </span><span class="kw">pub async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, Amount&gt; {
+    </span><span class="kw">pub async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">'static</span>, Amount&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>balance_changes = <span class="self">self</span>.primary_module().subscribe_balance_changes().<span class="kw">await</span>;
         <span class="kw">let </span>initial_balance = <span class="self">self</span>.get_balance().<span class="kw">await</span>;
         <span class="kw">let </span>db = <span class="self">self</span>.db().clone();
@@ -3581,12 +3660,17 @@
         })
     }
 
-    <span class="kw">pub async fn </span>discover_common_api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
+    <span class="kw">pub async fn </span>discover_common_api_version(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        threshold: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+    ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.api()
             .discover_api_version_set(
                 <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(<span class="self">self</span>.get_config(), <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits)
                     .<span class="kw">await</span>,
+                get_discover_api_version_timeout(),
+                threshold,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>)
     }
@@ -3597,10 +3681,18 @@
         config: <span class="kw-2">&amp;</span>ClientConfig,
         client_module_init: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
         api: <span class="kw-2">&amp;</span>DynGlobalApi,
+        mode: DiscoverCommonApiVersionMode,
     ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
         <span class="prelude-val">Ok</span>(api
             .discover_api_version_set(
                 <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(config, client_module_init).<span class="kw">await</span>,
+                get_discover_api_version_timeout(),
+                <span class="kw">match </span>mode {
+                    DiscoverCommonApiVersionMode::Fast =&gt; {
+                        <span class="prelude-val">Some</span>((config.global.api_endpoints.len() / <span class="number">2</span>).min(<span class="number">1</span>))
+                    }
+                    DiscoverCommonApiVersionMode::Full =&gt; <span class="prelude-val">None</span>,
+                },
             )
             .<span class="kw">await</span><span class="question-mark">?</span>)
     }
@@ -3614,7 +3706,7 @@
             core: SupportedCoreApiVersions {
                 core_consensus: config.global.consensus_version,
                 api: MultiApiVersion::try_from_iter(SUPPORTED_CORE_API_VERSIONS.to_owned())
-                    .expect(<span class="string">&quot;must not have conflicting versions&quot;</span>),
+                    .expect(<span class="string">"must not have conflicting versions"</span>),
             },
             modules: config
                 .modules
@@ -3647,6 +3739,7 @@
         module_inits: <span class="kw-2">&amp;</span>ModuleInitRegistry&lt;DynClientModuleInit&gt;,
         api: <span class="kw-2">&amp;</span>DynGlobalApi,
         db: <span class="kw-2">&amp;</span>Database,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
     ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = db
             .begin_transaction()
@@ -3654,29 +3747,51 @@
             </span>.get_value(<span class="kw-2">&amp;</span>CachedApiVersionSetKey)
             .<span class="kw">await
         </span>{
-            <span class="macro">debug!</span>(<span class="string">&quot;Found existing cached common api versions&quot;</span>);
+            <span class="macro">debug!</span>(<span class="string">"Found existing cached common api versions"</span>);
             <span class="kw">let </span>config = config.clone();
             <span class="kw">let </span>module_inits = module_inits.clone();
             <span class="kw">let </span>api = api.clone();
             <span class="kw">let </span>db = db.clone();
-            <span class="comment">// Separate task group, because we actually don&#39;t want to be waiting for this to
-            // finish, and it&#39;s just best effort.
-            </span>TaskGroup::new()
-                .spawn(<span class="string">&quot;refresh_common_api_version_static&quot;</span>, |<span class="kw">_</span>| <span class="kw">async move </span>{
-                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) =
-                        <span class="self">Self</span>::refresh_common_api_version_static(<span class="kw-2">&amp;</span>config, <span class="kw-2">&amp;</span>module_inits, <span class="kw-2">&amp;</span>api, <span class="kw-2">&amp;</span>db)
-                            .<span class="kw">await
-                    </span>{
-                        <span class="macro">warn!</span>(<span class="string">&quot;Failed to discover common api versions: {e}&quot;</span>);
-                    }
-                })
+            <span class="comment">// Separate task group, because we actually don't want to be waiting for this to
+            // finish, and it's just best effort.
+            </span>task_group
+                .spawn(
+                    <span class="string">"refresh_common_api_version_static"</span>,
+                    |task_handle| <span class="kw">async move </span>{
+                        <span class="kw">let </span>ok_or_canceled = task_handle
+                            .cancel_on_shutdown(<span class="kw">async </span>{
+                                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">Self</span>::refresh_common_api_version_static(
+                                    <span class="kw-2">&amp;</span>config,
+                                    <span class="kw-2">&amp;</span>module_inits,
+                                    <span class="kw-2">&amp;</span>api,
+                                    <span class="kw-2">&amp;</span>db,
+                                    DiscoverCommonApiVersionMode::Full,
+                                )
+                                .<span class="kw">await
+                                </span>{
+                                    <span class="macro">warn!</span>(<span class="string">"Failed to discover common api versions: {e}"</span>);
+                                }
+                            })
+                            .<span class="kw">await</span>;
+                        <span class="kw">if </span>ok_or_canceled.is_err() {
+                            <span class="macro">debug!</span>(<span class="string">"Refreshing common api task version canceled"</span>);
+                        };
+                    },
+                )
                 .<span class="kw">await</span>;
 
             <span class="kw">return </span><span class="prelude-val">Ok</span>(v.<span class="number">0</span>);
         }
 
-        <span class="macro">debug!</span>(<span class="string">&quot;No existing cached common api versions found, waiting for initial discovery&quot;</span>);
-        <span class="self">Self</span>::refresh_common_api_version_static(config, module_inits, api, db).<span class="kw">await
+        <span class="macro">debug!</span>(<span class="string">"No existing cached common api versions found, waiting for initial discovery"</span>);
+        <span class="self">Self</span>::refresh_common_api_version_static(
+            config,
+            module_inits,
+            api,
+            db,
+            DiscoverCommonApiVersionMode::Fast,
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>refresh_common_api_version_static(
@@ -3684,15 +3799,16 @@
         module_inits: <span class="kw-2">&amp;</span>ModuleInitRegistry&lt;DynClientModuleInit&gt;,
         api: <span class="kw-2">&amp;</span>DynGlobalApi,
         db: <span class="kw-2">&amp;</span>Database,
+        mode: DiscoverCommonApiVersionMode,
     ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
-        <span class="macro">debug!</span>(<span class="string">&quot;Refreshing common api versions&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"Refreshing common api versions"</span>);
 
         <span class="kw">let </span>common_api_versions =
-            Client::discover_common_api_version_static(config, module_inits, api).<span class="kw">await</span><span class="question-mark">?</span>;
+            Client::discover_common_api_version_static(config, module_inits, api, mode).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">debug!</span>(
             value = <span class="question-mark">?</span>common_api_versions,
-            <span class="string">&quot;Updating the cached common api versions&quot;
+            <span class="string">"Updating the cached common api versions"
         </span>);
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let _ </span>= dbtx
@@ -3715,7 +3831,7 @@
             </span>.get_value(<span class="kw-2">&amp;</span>ClientMetadataKey)
             .<span class="kw">await
             </span>.unwrap_or_else(|| {
-                <span class="macro">warn!</span>(<span class="string">&quot;Missing existing metadata. This key should have been set on Client init&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">"Missing existing metadata. This key should have been set on Client init"</span>);
                 Metadata::empty()
             })
     }
@@ -3733,7 +3849,7 @@
                 <span class="prelude-val">None</span>,
             )
             .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Failed to autocommit metadata&quot;</span>)
+            </span>.expect(<span class="string">"Failed to autocommit metadata"</span>)
     }
 
     <span class="kw">pub async fn </span>has_pending_recoveries(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
@@ -3741,7 +3857,7 @@
             </span>.client_recovery_progress_receiver
             .borrow()
             .iter()
-            .any(|(_id, progress)| !progress.is_done())
+            .all(|(_id, progress)| progress.is_done())
     }
 
     <span class="doccomment">/// Wait for all module recoveries to finish
@@ -3755,14 +3871,25 @@
         <span class="kw">let </span><span class="kw-2">mut </span>recovery_receiver = <span class="self">self</span>.client_recovery_progress_receiver.clone();
         recovery_receiver
             .wait_for(|in_progress| {
-                !in_progress
+                in_progress
                     .iter()
-                    .any(|(_id, progress)| !progress.is_done())
+                    .all(|(_id, progress)| progress.is_done())
             })
             .<span class="kw">await
-            </span>.context(<span class="string">&quot;Recovery task completed and update receiver disconnected, but some modules failed to recover&quot;</span>)<span class="question-mark">?</span>;
+            </span>.context(<span class="string">"Recovery task completed and update receiver disconnected, but some modules failed to recover"</span>)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Subscribe to recover progress for all the modules.
+    ///
+    /// This stream can contain duplicate progress for a module.
+    /// Don't use this stream for detecting completion of recovery.
+    </span><span class="kw">pub fn </span>subscribe_to_recovery_progress(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+    ) -&gt; <span class="kw">impl </span>Stream&lt;Item = (ModuleInstanceId, RecoveryProgress)&gt; {
+        WatchStream::new(<span class="self">self</span>.client_recovery_progress_receiver.clone())
+            .flat_map(futures::stream::iter)
     }
 
     <span class="kw">pub async fn </span>wait_for_module_kind_recovery(
@@ -3780,7 +3907,7 @@
                     .any(|(_id, progress)| !progress.is_done())
             })
             .<span class="kw">await
-            </span>.context(<span class="string">&quot;Recovery task completed and update receiver disconnected, but the desired modules are still unavailable or failed to recover&quot;</span>)<span class="question-mark">?</span>;
+            </span>.context(<span class="string">"Recovery task completed and update receiver disconnected, but the desired modules are still unavailable or failed to recover"</span>)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -3796,7 +3923,7 @@
     }
 
     <span class="doccomment">/// Set the client [`Metadata`]
-    </span><span class="kw">pub async fn </span>set_metadata_dbtx(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, metadata: <span class="kw-2">&amp;</span>Metadata) {
+    </span><span class="kw">pub async fn </span>set_metadata_dbtx(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;, metadata: <span class="kw-2">&amp;</span>Metadata) {
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ClientMetadataKey, metadata).<span class="kw">await</span>;
     }
 
@@ -3814,7 +3941,7 @@
     ) {
         <span class="kw">let </span>db = <span class="self">self</span>.db.clone();
         <span class="self">self</span>.task_group
-            .spawn(<span class="string">&quot;module recoveries&quot;</span>, <span class="kw">move </span>|_task_handle| <span class="kw">async move </span>{
+            .spawn(<span class="string">"module recoveries"</span>, <span class="kw">move </span>|_task_handle| <span class="kw">async move </span>{
                 <span class="self">Self</span>::run_module_recoveries_task(
                     db,
                     recovery_sender,
@@ -3846,9 +3973,9 @@
                 <span class="kw">match </span>f.<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; (module_instance_id, <span class="prelude-val">None</span>),
                     <span class="prelude-val">Err</span>(err) =&gt; {
-                        <span class="macro">warn!</span>(%err, module_instance_id, <span class="string">&quot;Module recovery failed&quot;</span>);
+                        <span class="macro">warn!</span>(%err, module_instance_id, <span class="string">"Module recovery failed"</span>);
                         <span class="comment">// a module recovery that failed reports and error and
-                        // just never finishes, so we don&#39;t need a separate state
+                        // just never finishes, so we don't need a separate state
                         // for it
                         </span>futures::future::pending::&lt;<span class="prelude-ty">Option</span>&lt;RecoveryProgress&gt;&gt;().<span class="kw">await</span>;
                         <span class="macro">unreachable!</span>()
@@ -3873,20 +4000,24 @@
         <span class="kw">while let </span><span class="prelude-val">Some</span>((module_instance_id, progress)) = futures.next().<span class="kw">await </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
-            <span class="kw">let </span>progress = <span class="kw">if let </span><span class="prelude-val">Some</span>(progress) = progress {
+            <span class="kw">let </span>prev_progress = <span class="kw-2">*</span>recovery_sender
+                .borrow()
+                .get(<span class="kw-2">&amp;</span>module_instance_id)
+                .expect(<span class="string">"existing progress must be present"</span>);
+
+            <span class="kw">let </span>progress = <span class="kw">if </span>prev_progress.is_done() {
+                <span class="comment">// since updates might be out of order, once done, stick with it
+                </span>prev_progress
+            } <span class="kw">else if let </span><span class="prelude-val">Some</span>(progress) = progress {
                 progress
             } <span class="kw">else </span>{
-                recovery_sender
-                    .borrow()
-                    .get(<span class="kw-2">&amp;</span>module_instance_id)
-                    .expect(<span class="string">&quot;existing progress must be present&quot;</span>)
-                    .to_complete()
+                prev_progress.to_complete()
             };
 
             <span class="macro">info!</span>(
                 module_instance_id,
-                progress = <span class="macro">format!</span>(<span class="string">&quot;{}/{}&quot;</span>, progress.complete, progress.total),
-                <span class="string">&quot;Recovery progress&quot;
+                progress = <span class="macro">format!</span>(<span class="string">"{}/{}"</span>, progress.complete, progress.total),
+                <span class="string">"Recovery progress"
             </span>);
 
             dbtx.insert_entry(
@@ -3900,12 +4031,13 @@
                 v.insert(module_instance_id, progress);
             });
         }
+        <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, <span class="string">"Recovery executor stopped"</span>);
     }
 }
 
 <span class="doccomment">/// See [`Client::transaction_updates`]
 </span><span class="kw">pub struct </span>TransactionUpdates {
-    update_stream: BoxStream&lt;<span class="lifetime">&#39;static</span>, OperationState&lt;TxSubmissionStates&gt;&gt;,
+    update_stream: BoxStream&lt;<span class="lifetime">'static</span>, OperationState&lt;TxSubmissionStates&gt;&gt;,
 }
 
 <span class="kw">impl </span>TransactionUpdates {
@@ -3970,7 +4102,7 @@
             .is_some();
         <span class="macro">assert!</span>(
             !was_replaced,
-            <span class="string">&quot;Only one primary module can be given to the builder.&quot;
+            <span class="string">"Only one primary module can be given to the builder."
         </span>)
     }
 
@@ -3985,7 +4117,7 @@
             <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span>client_config.modules {
                 <span class="kw">let </span>kind = module_cfg.kind.clone();
                 <span class="kw">let </span><span class="prelude-val">Some</span>(init) = <span class="self">self</span>.module_inits.get(<span class="kw-2">&amp;</span>kind) <span class="kw">else </span>{
-                    <span class="macro">warn!</span>(<span class="string">&quot;Detected configuration for unsupported module id: {module_id}, kind: {kind}&quot;</span>);
+                    <span class="macro">debug!</span>(<span class="string">"Detected configuration for unsupported module id: {module_id}, kind: {kind}"</span>);
                     <span class="kw">continue</span>;
                 };
 
@@ -4010,7 +4142,7 @@
 
     <span class="kw">pub async fn </span>load_existing_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ClientConfig&gt; {
         <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await else </span>{
-            <span class="macro">bail!</span>(<span class="string">&quot;Client database not initialized&quot;</span>)
+            <span class="macro">bail!</span>(<span class="string">"Client database not initialized"</span>)
         };
 
         <span class="prelude-val">Ok</span>(config)
@@ -4020,28 +4152,25 @@
         <span class="self">self</span>,
         root_secret: DerivableSecret,
         config: ClientConfig,
-        invite_code: InviteCode,
         init_mode: InitMode,
-    ) -&gt; anyhow::Result&lt;ClientArc&gt; {
+    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
         <span class="kw">if </span>Client::is_initialized(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await </span>{
-            <span class="macro">bail!</span>(<span class="string">&quot;Client database already initialized&quot;</span>)
+            <span class="macro">bail!</span>(<span class="string">"Client database already initialized"</span>)
         }
 
-        <span class="comment">// Note: It&#39;s important all client initialization is performed as one big
+        <span class="comment">// Note: It's important all client initialization is performed as one big
         // transaction to avoid half-initialized client state.
         </span>{
-            <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">&quot;Initializing client database&quot;</span>);
+            <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Initializing client database"</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
             <span class="comment">// Save config to DB
             </span>dbtx.insert_new_entry(
                 <span class="kw-2">&amp;</span>ClientConfigKey {
-                    id: config.federation_id(),
+                    id: config.calculate_federation_id(),
                 },
                 <span class="kw-2">&amp;</span>config,
             )
             .<span class="kw">await</span>;
-            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ClientInviteCodeKey {}, <span class="kw-2">&amp;</span>invite_code)
-                .<span class="kw">await</span>;
 
             <span class="kw">let </span>init_state = InitState::Pending(init_mode);
             dbtx.insert_entry(<span class="kw-2">&amp;</span>ClientInitStateKey, <span class="kw-2">&amp;</span>init_state).<span class="kw">await</span>;
@@ -4079,10 +4208,10 @@
     /// This should be generally called only if the `root_secret` key is known
     /// not to have been used before (e.g. just randomly generated). For keys
     /// that might have been previous used (e.g. provided by the user),
-    /// it&#39;s safer to call [`Self::recover`] which will attempt to recover
+    /// it's safer to call [`Self::recover`] which will attempt to recover
     /// client module states for the Federation.
     ///
-    /// A typical &quot;join federation&quot; flow would look as follows:
+    /// A typical "join federation" flow would look as follows:
     /// ```no_run
     /// # use std::str::FromStr;
     /// # use fedimint_core::api::InviteCode;
@@ -4100,32 +4229,32 @@
     /// // let root_secret = …;
     ///
     /// // Get invite code from user
-    /// let invite_code = InviteCode::from_str(&quot;fed11qgqpw9thwvaz7te3xgmjuvpwxqhrzw3jxumrvvf0qqqjpetvlg8glnpvzcufhffgzhv8m75f7y34ryk7suamh8x7zetly8h0v9v0rm&quot;)
-    ///     .expect(&quot;Invalid invite code&quot;);
+    /// let invite_code = InviteCode::from_str("fed11qgqpw9thwvaz7te3xgmjuvpwxqhrzw3jxumrvvf0qqqjpetvlg8glnpvzcufhffgzhv8m75f7y34ryk7suamh8x7zetly8h0v9v0rm")
+    ///     .expect("Invalid invite code");
     /// let config = ClientConfig::download_from_invite_code(&amp;invite_code).await
-    ///     .expect(&quot;Error downloading config&quot;);
+    ///     .expect("Error downloading config");
     ///
     /// // Tell the user the federation name, bitcoin network
     /// // (e.g. from wallet module config), and other details
-    /// // that are typically contained in the federation&#39;s
+    /// // that are typically contained in the federation's
     /// // meta fields.
     ///
-    /// // let network = config.get_first_module_by_kind::&lt;WalletClientConfig&gt;(&quot;wallet&quot;)
-    /// //     .expect(&quot;Module not found&quot;)
+    /// // let network = config.get_first_module_by_kind::&lt;WalletClientConfig&gt;("wallet")
+    /// //     .expect("Module not found")
     /// //     .network;
     ///
     /// println!(
-    ///     &quot;The federation name is: {}&quot;,
+    ///     "The federation name is: {}",
     ///     config.meta::&lt;String&gt;(META_FEDERATION_NAME_KEY)
-    ///         .expect(&quot;Could not decode name field&quot;)
-    ///         .expect(&quot;Name isn&#39;t set&quot;)
+    ///         .expect("Could not decode name field")
+    ///         .expect("Name isn't set")
     /// );
     ///
-    /// // Open the client&#39;s database, using the federation ID
+    /// // Open the client's database, using the federation ID
     /// // as the DB name is a common pattern:
     ///
-    /// // let db_path = format!(&quot;./path/to/db/{}&quot;, config.federation_id());
-    /// // let db = RocksDb::open(db_path).expect(&quot;error opening DB&quot;);
+    /// // let db_path = format!("./path/to/db/{}", config.federation_id());
+    /// // let db = RocksDb::open(db_path).expect("error opening DB");
     /// # let db: Database = unimplemented!();
     ///
     /// let client = Client::builder(db)
@@ -4133,19 +4262,32 @@
     ///     // .with_module(LightningClientInit)
     ///     // .with_module(MintClientInit)
     ///     // .with_module(WalletClientInit::default())
-    ///     .join(root_secret, config, invite_code)
+    ///     .join(root_secret, config)
     ///     .await
-    ///     .expect(&quot;Error joining federation&quot;);
+    ///     .expect("Error joining federation");
     /// # }
     /// ```
     </span><span class="kw">pub async fn </span>join(
         <span class="self">self</span>,
         root_secret: DerivableSecret,
         config: ClientConfig,
-        invite_code: InviteCode,
-    ) -&gt; anyhow::Result&lt;ClientArc&gt; {
-        <span class="self">self</span>.init(root_secret, config, invite_code, InitMode::Fresh)
-            .<span class="kw">await
+    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
+        <span class="self">self</span>.init(root_secret, config, InitMode::Fresh).<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Download most recent valid backup found from the Federation
+    </span><span class="kw">pub async fn </span>download_backup_from_federation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        root_secret: <span class="kw-2">&amp;</span>DerivableSecret,
+        config: <span class="kw-2">&amp;</span>ClientConfig,
+    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;ClientBackup&gt;&gt; {
+        <span class="kw">let </span>api = DynGlobalApi::from_config(config);
+        Client::download_backup_from_federation_static(
+            <span class="kw-2">&amp;</span>api,
+            <span class="kw-2">&amp;</span><span class="self">Self</span>::federation_root_secret(root_secret, config),
+            <span class="kw-2">&amp;</span><span class="self">self</span>.decoders(config),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Join a (possibly) previous joined Federation
@@ -4162,23 +4304,14 @@
         <span class="self">self</span>,
         root_secret: DerivableSecret,
         config: ClientConfig,
-        invite_code: InviteCode,
-    ) -&gt; anyhow::Result&lt;ClientArc&gt; {
-        <span class="kw">let </span>api = DynGlobalApi::from_config(<span class="kw-2">&amp;</span>config);
-        <span class="kw">let </span>snapshot = Client::download_backup_from_federation_static(
-            <span class="kw-2">&amp;</span>api,
-            <span class="kw-2">&amp;</span><span class="self">Self</span>::federation_root_secret(<span class="kw-2">&amp;</span>root_secret, <span class="kw-2">&amp;</span>config),
-            <span class="kw-2">&amp;</span><span class="self">self</span>.decoders(<span class="kw-2">&amp;</span>config),
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-
+        backup: <span class="prelude-ty">Option</span>&lt;ClientBackup&gt;,
+    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
         <span class="kw">let </span>client = <span class="self">self
             </span>.init(
                 root_secret,
                 config,
-                invite_code,
                 InitMode::Recover {
-                    snapshot: snapshot.clone(),
+                    snapshot: backup.clone(),
                 },
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -4186,9 +4319,9 @@
         <span class="prelude-val">Ok</span>(client)
     }
 
-    <span class="kw">pub async fn </span>open(<span class="self">self</span>, root_secret: DerivableSecret) -&gt; anyhow::Result&lt;ClientArc&gt; {
+    <span class="kw">pub async fn </span>open(<span class="self">self</span>, root_secret: DerivableSecret) -&gt; anyhow::Result&lt;ClientHandle&gt; {
         <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await else </span>{
-            <span class="macro">bail!</span>(<span class="string">&quot;Client database not initialized&quot;</span>)
+            <span class="macro">bail!</span>(<span class="string">"Client database not initialized"</span>)
         };
         <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
 
@@ -4204,11 +4337,13 @@
         <span class="self">self</span>,
         root_secret: DerivableSecret,
         config: ClientConfig,
-    ) -&gt; anyhow::Result&lt;ClientArc&gt; {
+    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
         <span class="kw">let </span>decoders = <span class="self">self</span>.decoders(<span class="kw-2">&amp;</span>config);
         <span class="kw">let </span>config = <span class="self">Self</span>::config_decoded(config, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+        <span class="kw">let </span>fed_id = config.calculate_federation_id();
         <span class="kw">let </span>db = <span class="self">self</span>.db.with_decoders(decoders.clone());
         <span class="kw">let </span>api = DynGlobalApi::from_config(<span class="kw-2">&amp;</span>config);
+        <span class="kw">let </span>task_group = TaskGroup::new();
 
         <span class="comment">// Migrate the database before interacting with it in case any on-disk data
         // structures have changed.
@@ -4218,7 +4353,7 @@
 
         <span class="kw">let </span>primary_module_instance = <span class="self">self
             </span>.primary_module_instance
-            .ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No primary module instance id was provided&quot;</span>))<span class="question-mark">?</span>;
+            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"No primary module instance id was provided"</span>))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>notifier = Notifier::new(db.clone());
 
@@ -4227,10 +4362,11 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits,
             <span class="kw-2">&amp;</span>api,
             <span class="kw-2">&amp;</span>db,
+            <span class="kw-2">&amp;</span>task_group,
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="macro">debug!</span>(<span class="question-mark">?</span>common_api_versions, <span class="string">&quot;Completed api version negotiation&quot;</span>);
+        <span class="macro">debug!</span>(<span class="question-mark">?</span>common_api_versions, <span class="string">"Completed api version negotiation"</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>module_recoveries: BTreeMap&lt;
             ModuleInstanceId,
@@ -4250,13 +4386,13 @@
             <span class="kw">for </span>(module_instance_id, module_config) <span class="kw">in </span>config.modules.clone() {
                 <span class="kw">let </span>kind = module_config.kind().clone();
                 <span class="kw">let </span><span class="prelude-val">Some</span>(module_init) = <span class="self">self</span>.module_inits.get(<span class="kw-2">&amp;</span>kind).cloned() <span class="kw">else </span>{
-                    <span class="macro">warn!</span>(<span class="string">&quot;Module kind {kind} of instance {module_instance_id} not found in module gens, skipping&quot;</span>);
+                    <span class="macro">debug!</span>(<span class="string">"Module kind {kind} of instance {module_instance_id} not found in module gens, skipping"</span>);
                     <span class="kw">continue</span>;
                 };
 
                 <span class="kw">let </span><span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>api_version) = common_api_versions.modules.get(<span class="kw-2">&amp;</span>module_instance_id)
                 <span class="kw">else </span>{
-                    <span class="macro">warn!</span>(<span class="string">&quot;Module kind {kind} of instance {module_instance_id} has not compatible api version, skipping&quot;</span>);
+                    <span class="macro">warn!</span>(<span class="string">"Module kind {kind} of instance {module_instance_id} has not compatible api version, skipping"</span>);
                     <span class="kw">continue</span>;
                 };
 
@@ -4264,7 +4400,6 @@
                 // the recovery call is extracted here.
                 </span><span class="kw">let </span>start_module_recover_fn =
                     |snapshot: <span class="prelude-ty">Option</span>&lt;ClientBackup&gt;, progress: RecoveryProgress| {
-                        <span class="kw">let </span>config = config.clone();
                         <span class="kw">let </span>module_config = module_config.clone();
                         <span class="kw">let </span>db = db.clone();
                         <span class="kw">let </span>kind = kind.clone();
@@ -4279,7 +4414,7 @@
                                 module_init
                                         .recover(
                                             final_client.clone(),
-                                            config.global.federation_id(),
+                                            fed_id,
                                             module_config.clone(),
                                             db.clone(),
                                             module_instance_id,
@@ -4294,7 +4429,7 @@
                                         .<span class="kw">await
                                         </span>.map_err(|err| {
                                             <span class="macro">warn!</span>(
-                                                module_id = module_instance_id, %kind, %err, <span class="string">&quot;Module failed to recover&quot;
+                                                module_id = module_instance_id, %kind, %err, <span class="string">"Module failed to recover"
                                             </span>);
                                             err
                                         })
@@ -4313,7 +4448,7 @@
                         <span class="kw">if </span>module_recovery_state.is_done() {
                             <span class="macro">debug!</span>(
                                 id = %module_instance_id,
-                                %kind, <span class="string">&quot;Module recovery already complete&quot;
+                                %kind, <span class="string">"Module recovery already complete"
                             </span>);
                             <span class="prelude-val">None
                         </span>} <span class="kw">else </span>{
@@ -4321,7 +4456,7 @@
                                 id = %module_instance_id,
                                 %kind,
                                 progress = %module_recovery_state.progress,
-                                <span class="string">&quot;Starting module recovery with an existing progress&quot;
+                                <span class="string">"Starting module recovery with an existing progress"
                             </span>);
                             <span class="prelude-val">Some</span>(start_module_recover_fn(
                                 snapshot,
@@ -4331,7 +4466,7 @@
                     } <span class="kw">else </span>{
                         <span class="macro">debug!</span>(
                             id = %module_instance_id,
-                            %kind, <span class="string">&quot;Starting new module recovery&quot;
+                            %kind, <span class="string">"Starting new module recovery"
                         </span>);
                         <span class="prelude-val">Some</span>(start_module_recover_fn(snapshot, RecoveryProgress::none()))
                     }
@@ -4347,7 +4482,7 @@
                     <span class="kw">let </span>module = module_init
                         .init(
                             final_client.clone(),
-                            config.global.federation_id(),
+                            fed_id,
                             module_config,
                             db.clone(),
                             module_instance_id,
@@ -4366,7 +4501,7 @@
                     <span class="kw">if </span>primary_module_instance == module_instance_id
                         &amp;&amp; !module.supports_being_primary()
                     {
-                        <span class="macro">bail!</span>(<span class="string">&quot;Module instance {primary_module_instance} of kind {kind} does not support being a primary module&quot;</span>);
+                        <span class="macro">bail!</span>(<span class="string">"Module instance {primary_module_instance} of kind {kind} does not support being a primary module"</span>);
                     }
 
                     modules.register_module(module_instance_id, kind, module);
@@ -4395,7 +4530,9 @@
                 executor_builder.with_valid_module_id(<span class="kw-2">*</span>module_instance_id);
             }
 
-            executor_builder.build(db.clone(), notifier).<span class="kw">await
+            executor_builder
+                .build(db.clone(), notifier, task_group.clone())
+                .<span class="kw">await
         </span>};
 
         <span class="kw">let </span>recovery_receiver_init_val = BTreeMap::from_iter(
@@ -4410,7 +4547,7 @@
             config: config.clone(),
             decoders,
             db: db.clone(),
-            federation_id: config.global.federation_id(),
+            federation_id: fed_id,
             federation_meta: config.global.meta,
             primary_module_instance,
             modules,
@@ -4419,13 +4556,12 @@
             api,
             secp_ctx: Secp256k1::new(),
             root_secret,
-            task_group: TaskGroup::new(),
+            task_group,
             operation_log: OperationLog::new(db),
-            client_count: Default::default(),
             client_recovery_progress_receiver,
         });
 
-        <span class="kw">let </span>client_arc = ClientArc::new(client_inner);
+        <span class="kw">let </span>client_arc = ClientHandle::new(client_inner);
 
         final_client.set(client_arc.downgrade());
 
@@ -4449,7 +4585,7 @@
             </span>.unwrap_or_else(|| {
                 <span class="comment">// could be turned in a hard error in the future, but for now
                 // no need to break backward compat.
-                </span><span class="macro">warn!</span>(<span class="string">&quot;Client missing ClientRequiresRecovery: assuming complete&quot;</span>);
+                </span><span class="macro">warn!</span>(<span class="string">"Client missing ClientRequiresRecovery: assuming complete"</span>);
                 db::InitState::Complete(db::InitModeComplete::Fresh)
             })
     }
@@ -4465,7 +4601,7 @@
 
         decoders.register_module(
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
-            ModuleKind::from_static_str(<span class="string">&quot;tx_submission&quot;</span>),
+            ModuleKind::from_static_str(<span class="string">"tx_submission"</span>),
             tx_submission_sm_decoder(),
         );
 
@@ -4479,27 +4615,15 @@
         config.clone().redecode_raw(decoders)
     }
 
-    <span class="doccomment">/// Re-derive client&#39;s root_secret using the federation ID. This eliminates
+    <span class="doccomment">/// Re-derive client's root_secret using the federation ID. This eliminates
     /// the possibility of having the same client root_secret across
     /// multiple federations.
     </span><span class="kw">fn </span>federation_root_secret(
         root_secret: <span class="kw-2">&amp;</span>DerivableSecret,
         config: <span class="kw-2">&amp;</span>ClientConfig,
     ) -&gt; DerivableSecret {
-        root_secret.federation_key(<span class="kw-2">&amp;</span>config.global.federation_id())
+        root_secret.federation_key(<span class="kw-2">&amp;</span>config.global.calculate_federation_id())
     }
-}
-
-<span class="kw">pub async fn </span>get_invite_code_from_db(db: <span class="kw-2">&amp;</span>Database) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-    <span class="attr">#[allow(clippy::let_and_return)]
-    </span><span class="kw">let </span>invite = dbtx
-        .find_by_prefix(<span class="kw-2">&amp;</span>ClientInviteCodeKeyPrefix)
-        .<span class="kw">await
-        </span>.next()
-        .<span class="kw">await
-        </span>.map(|(<span class="kw">_</span>, invite)| invite);
-    invite
 }
 
 <span class="doccomment">/// Fetches the encoded client secret from the database and decodes it.
@@ -4513,20 +4637,20 @@
     <span class="kw">match </span>client_secret {
         <span class="prelude-val">Some</span>(client_secret) =&gt; {
             T::consensus_decode(<span class="kw-2">&amp;mut </span>client_secret.as_slice(), <span class="kw-2">&amp;</span>Default::default())
-                .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;Decoding failed: {e}&quot;</span>))
+                .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Decoding failed: {e}"</span>))
         }
-        <span class="prelude-val">None </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Encoded client secret not present in DB&quot;</span>),
+        <span class="prelude-val">None </span>=&gt; <span class="macro">bail!</span>(<span class="string">"Encoded client secret not present in DB"</span>),
     }
 }
 
-<span class="kw">pub fn </span>client_decoders&lt;<span class="lifetime">&#39;a</span>&gt;(
+<span class="kw">pub fn </span>client_decoders&lt;<span class="lifetime">'a</span>&gt;(
     registry: <span class="kw-2">&amp;</span>ModuleInitRegistry&lt;DynClientModuleInit&gt;,
-    module_kinds: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleKind)&gt;,
+    module_kinds: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ModuleKind)&gt;,
 ) -&gt; ModuleDecoderRegistry {
     <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
     <span class="kw">for </span>(id, kind) <span class="kw">in </span>module_kinds {
         <span class="kw">let </span><span class="prelude-val">Some</span>(init) = registry.get(kind) <span class="kw">else </span>{
-            <span class="macro">info!</span>(<span class="string">&quot;Detected configuration for unsupported module id: {id}, kind: {kind}&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">"Detected configuration for unsupported module id: {id}, kind: {kind}"</span>);
             <span class="kw">continue</span>;
         };
 
@@ -4534,7 +4658,7 @@
             id,
             (
                 kind.clone(),
-                IClientModuleInit::decoder(AsRef::&lt;<span class="kw">dyn </span>IClientModuleInit + <span class="lifetime">&#39;static</span>&gt;::as_ref(init)),
+                IClientModuleInit::decoder(AsRef::&lt;<span class="kw">dyn </span>IClientModuleInit + <span class="lifetime">'static</span>&gt;::as_ref(init)),
             ),
         );
     }

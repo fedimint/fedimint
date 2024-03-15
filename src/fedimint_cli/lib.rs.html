@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-cli/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_cli" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_cli/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-cli/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_cli" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_cli/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -884,6 +886,34 @@
 <a href="#884" id="884">884</a>
 <a href="#885" id="885">885</a>
 <a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
@@ -907,10 +937,9 @@
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 <span class="kw">use </span>fedimint_client::module::ClientModule <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
-<span class="kw">use </span>fedimint_client::{get_invite_code_from_db, Client, ClientArc, ClientBuilder};
-<span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
+<span class="kw">use </span>fedimint_client::{Client, ClientBuilder, ClientHandle};
 <span class="kw">use </span>fedimint_core::api::{
-    FederationApiExt, FederationError, IRawFederationApi, InviteCode, WsFederationApi,
+    DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, InviteCode, WsFederationApi,
 };
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::core::OperationId;
@@ -935,7 +964,7 @@
 
 <span class="doccomment">/// Type of output the cli produces
 </span><span class="attr">#[derive(Serialize)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 #[serde(untagged)]
 </span><span class="kw">enum </span>CliOutput {
     VersionHash {
@@ -979,14 +1008,14 @@
 }
 
 <span class="kw">impl </span>fmt::Display <span class="kw">for </span>CliOutput {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, serde_json::to_string_pretty(<span class="self">self</span>).unwrap())
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"{}"</span>, serde_json::to_string_pretty(<span class="self">self</span>).unwrap())
     }
 }
 
 <span class="doccomment">/// Types of error the cli return
 </span><span class="attr">#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">enum </span>CliErrorKind {
     NetworkError,
     IOError,
@@ -1009,7 +1038,7 @@
 
 <span class="doccomment">/// Cli error
 </span><span class="attr">#[derive(Serialize, Error)]
-#[serde(tag = <span class="string">&quot;error&quot;</span>, rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
+#[serde(tag = <span class="string">"error"</span>, rename_all(serialize = <span class="string">"snake_case"</span>))]
 </span><span class="kw">struct </span>CliError {
     kind: CliErrorKind,
     message: String,
@@ -1086,18 +1115,18 @@
     <span class="kw">fn </span>from(e: FederationError) -&gt; <span class="self">Self </span>{
         CliError {
             kind: CliErrorKind::GeneralFederationError,
-            message: <span class="string">&quot;Failed API call&quot;</span>.into(),
+            message: <span class="string">"Failed API call"</span>.into(),
             raw_error: <span class="prelude-val">Some</span>(e.into()),
         }
     }
 }
 
 <span class="kw">impl </span>Debug <span class="kw">for </span>CliError {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
-        f.debug_struct(<span class="string">&quot;CliError&quot;</span>)
-            .field(<span class="string">&quot;kind&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.kind)
-            .field(<span class="string">&quot;message&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.message)
-            .field(<span class="string">&quot;raw_error&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.raw_error)
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        f.debug_struct(<span class="string">"CliError"</span>)
+            .field(<span class="string">"kind"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.kind)
+            .field(<span class="string">"message"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.message)
+            .field(<span class="string">"raw_error"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.raw_error)
             .finish()
     }
 }
@@ -1106,9 +1135,9 @@
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
         <span class="kw">let </span><span class="kw-2">mut </span>json = serde_json::to_value(<span class="self">self</span>).unwrap();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(err) = <span class="kw-2">&amp;</span><span class="self">self</span>.raw_error {
-            json[<span class="string">&quot;raw_error&quot;</span>] = <span class="macro">json!</span>(<span class="kw-2">*</span>err.to_string())
+            json[<span class="string">"raw_error"</span>] = <span class="macro">json!</span>(<span class="kw-2">*</span>err.to_string())
         }
-        <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, serde_json::to_string_pretty(<span class="kw-2">&amp;</span>json).unwrap())
+        <span class="macro">write!</span>(f, <span class="string">"{}"</span>, serde_json::to_string_pretty(<span class="kw-2">&amp;</span>json).unwrap())
     }
 }
 
@@ -1116,20 +1145,20 @@
 #[command(version)]
 </span><span class="kw">struct </span>Opts {
     <span class="doccomment">/// The working directory of the client containing the config and db
-    </span><span class="attr">#[arg(long = <span class="string">&quot;data-dir&quot;</span>, env = <span class="string">&quot;FM_CLIENT_DIR&quot;</span>)]
+    </span><span class="attr">#[arg(long = <span class="string">"data-dir"</span>, env = <span class="string">"FM_CLIENT_DIR"</span>)]
     </span>data_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
 
     <span class="doccomment">/// Peer id of the guardian
-    </span><span class="attr">#[arg(env = <span class="string">&quot;FM_OUR_ID&quot;</span>, long, value_parser = parse_peer_id)]
+    </span><span class="attr">#[arg(env = <span class="string">"FM_OUR_ID"</span>, long, value_parser = parse_peer_id)]
     </span>our_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
 
     <span class="doccomment">/// Guardian password for authentication
-    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
+    </span><span class="attr">#[arg(long, env = <span class="string">"FM_PASSWORD"</span>)]
     </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
 
     <span class="doccomment">/// Activate more verbose logging, for full control use the RUST_LOG env
     /// variable
-    </span><span class="attr">#[arg(short = <span class="string">&#39;v&#39;</span>, long)]
+    </span><span class="attr">#[arg(short = <span class="string">'v'</span>, long)]
     </span>verbose: bool,
 
     <span class="attr">#[clap(subcommand)]
@@ -1140,10 +1169,10 @@
     <span class="kw">fn </span>data_dir(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;<span class="kw-2">&amp;</span>PathBuf&gt; {
         <span class="self">self</span>.data_dir
             .as_ref()
-            .ok_or_cli_msg(CliErrorKind::IOError, <span class="string">&quot;`--data-dir=` argument not set.&quot;</span>)
+            .ok_or_cli_msg(CliErrorKind::IOError, <span class="string">"`--data-dir=` argument not set."</span>)
     }
 
-    <span class="doccomment">/// Get and create if doesn&#39;t exist the data dir
+    <span class="doccomment">/// Get and create if doesn't exist the data dir
     </span><span class="kw">async fn </span>data_dir_create(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;<span class="kw-2">&amp;</span>PathBuf&gt; {
         <span class="kw">let </span>dir = <span class="self">self</span>.data_dir()<span class="question-mark">?</span>;
 
@@ -1152,39 +1181,42 @@
         <span class="prelude-val">Ok</span>(dir)
     }
 
-    <span class="kw">fn </span>admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, cfg: <span class="kw-2">&amp;</span>ClientConfig) -&gt; CliResult&lt;WsAdminClient&gt; {
-        <span class="kw">let </span>our_id = <span class="kw-2">&amp;</span><span class="self">self
+    <span class="kw">fn </span>admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, cfg: <span class="kw-2">&amp;</span>ClientConfig) -&gt; CliResult&lt;DynGlobalApi&gt; {
+        <span class="kw">let </span>our_id = <span class="self">self
             </span>.our_id
-            .ok_or_cli_msg(CliErrorKind::MissingAuth, <span class="string">&quot;Admin client needs our-id set&quot;</span>)<span class="question-mark">?</span>;
+            .ok_or_cli_msg(CliErrorKind::MissingAuth, <span class="string">"Admin client needs our-id set"</span>)<span class="question-mark">?</span>;
+        <span class="self">Self</span>::admin_client_from_id(our_id, cfg)
+    }
 
+    <span class="kw">fn </span>admin_client_from_id(id: PeerId, cfg: <span class="kw-2">&amp;</span>ClientConfig) -&gt; CliResult&lt;DynGlobalApi&gt; {
         <span class="kw">let </span>url = cfg
             .global
             .api_endpoints
-            .get(our_id)
-            .expect(<span class="string">&quot;Endpoint exists&quot;</span>)
+            .get(<span class="kw-2">&amp;</span>id)
+            .expect(<span class="string">"Endpoint exists"</span>)
             .url
             .clone();
-        <span class="prelude-val">Ok</span>(WsAdminClient::new(url))
+        <span class="prelude-val">Ok</span>(DynGlobalApi::from_single_endpoint(id, url))
     }
 
     <span class="kw">fn </span>auth(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;ApiAuth&gt; {
         <span class="kw">let </span>password = <span class="self">self
             </span>.password
             .clone()
-            .ok_or_cli_msg(CliErrorKind::MissingAuth, <span class="string">&quot;CLI needs password set&quot;</span>)<span class="question-mark">?</span>;
+            .ok_or_cli_msg(CliErrorKind::MissingAuth, <span class="string">"CLI needs password set"</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(ApiAuth(password))
     }
 
     <span class="kw">async fn </span>load_rocks_db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;Database&gt; {
-        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">&quot;Loading client database&quot;</span>);
-        <span class="kw">let </span>db_path = <span class="self">self</span>.data_dir_create().<span class="kw">await</span><span class="question-mark">?</span>.join(<span class="string">&quot;client.db&quot;</span>);
-        <span class="kw">let </span>lock_path = db_path.with_extension(<span class="string">&quot;db.lock&quot;</span>);
+        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Loading client database"</span>);
+        <span class="kw">let </span>db_path = <span class="self">self</span>.data_dir_create().<span class="kw">await</span><span class="question-mark">?</span>.join(<span class="string">"client.db"</span>);
+        <span class="kw">let </span>lock_path = db_path.with_extension(<span class="string">"db.lock"</span>);
         <span class="prelude-val">Ok</span>(LockedBuilder::new(<span class="kw-2">&amp;</span>lock_path)
             .<span class="kw">await
-            </span>.map_err_cli_msg(CliErrorKind::IOError, <span class="string">&quot;could not lock database&quot;</span>)<span class="question-mark">?
+            </span>.map_err_cli_msg(CliErrorKind::IOError, <span class="string">"could not lock database"</span>)<span class="question-mark">?
             </span>.with_db(
                 fedimint_rocksdb::RocksDb::open(db_path)
-                    .map_err_cli_msg(CliErrorKind::IOError, <span class="string">&quot;could not open database&quot;</span>)<span class="question-mark">?</span>,
+                    .map_err_cli_msg(CliErrorKind::IOError, <span class="string">"could not open database"</span>)<span class="question-mark">?</span>,
             )
             .into())
     }
@@ -1195,7 +1227,7 @@
         <span class="kw">match </span>Client::load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;(db).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(entropy) =&gt; Mnemonic::from_entropy(<span class="kw-2">&amp;</span>entropy).map_err_cli_general()<span class="question-mark">?</span>,
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                <span class="macro">info!</span>(<span class="string">&quot;Generating mnemonic and writing entropy to client storage&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"Generating mnemonic and writing entropy to client storage"</span>);
                 <span class="kw">let </span>mnemonic = Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::random(<span class="kw-2">&amp;mut </span>thread_rng());
                 Client::store_encodable_client_secret(db, mnemonic.to_entropy())
                     .<span class="kw">await
@@ -1221,9 +1253,11 @@
     </span>Dev(DevCmd),
 
     <span class="doccomment">/// Config enabling client to establish websocket connection to federation
-    </span>InviteCode,
+    </span>InviteCode {
+        peer: PeerId,
+    },
 
-    <span class="doccomment">/// Join a federation using it&#39;s InviteCode
+    <span class="doccomment">/// Join a federation using it's InviteCode
     </span>JoinFederation {
         invite_code: String,
     },
@@ -1240,6 +1274,9 @@
 
     <span class="doccomment">/// Show an audit across all modules
     </span>Audit,
+
+    <span class="doccomment">/// Download guardian config to back it up
+    </span>GuardianConfigBackup,
 }
 
 <span class="attr">#[derive(Debug, Clone, Subcommand)]
@@ -1247,11 +1284,11 @@
     <span class="doccomment">/// Send direct method call to the API. If you specify --peer-id, it will
     /// just ask one server, otherwise it will try to get consensus from all
     /// servers.
-    </span><span class="attr">#[command(after_long_help = <span class="string">r#&quot;
+    </span><span class="attr">#[command(after_long_help = <span class="string">r#"
 Examples:
 
-  fedimint-cli dev api --peer-id 0 config &#39;&quot;fed114znk7uk7ppugdjuytr8venqf2tkywd65cqvg3u93um64tu5cw4yr0n3fvn7qmwvm4g48cpndgnm4gqq4waen5te0xyerwt3s9cczuvf6xyurzde597s7crdvsk2vmyarjw9gwyqjdzj&quot;&#39;
-    &quot;#</span>)]
+  fedimint-cli dev api --peer-id 0 config '"fed114znk7uk7ppugdjuytr8venqf2tkywd65cqvg3u93um64tu5cw4yr0n3fvn7qmwvm4g48cpndgnm4gqq4waen5te0xyerwt3s9cczuvf6xyurzde597s7crdvsk2vmyarjw9gwyqjdzj"'
+    "#</span>)]
     </span>Api {
         <span class="doccomment">/// JSON-RPC method to call
         </span>method: String,
@@ -1259,14 +1296,14 @@ Examples:
         ///
         /// Note: single jsonrpc argument params string, which might require
         /// double-quotes (see example above).
-        </span><span class="attr">#[clap(default_value = <span class="string">&quot;null&quot;</span>)]
+        </span><span class="attr">#[clap(default_value = <span class="string">"null"</span>)]
         </span>params: String,
         <span class="doccomment">/// Which server to send request to
-        </span><span class="attr">#[clap(long = <span class="string">&quot;peer-id&quot;</span>)]
+        </span><span class="attr">#[clap(long = <span class="string">"peer-id"</span>)]
         </span>peer_id: <span class="prelude-ty">Option</span>&lt;u16&gt;,
         <span class="doccomment">/// Guardian password in case authenticated API endpoints are being
         /// called. Only use together with --peer-id.
-        </span><span class="attr">#[clap(long, requires = <span class="string">&quot;peer_id&quot;</span>)]
+        </span><span class="attr">#[clap(long, requires = <span class="string">"peer_id"</span>)]
         </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     },
 
@@ -1281,11 +1318,11 @@ Examples:
 
     <span class="doccomment">/// Encode connection info from its constituent parts
     </span>EncodeInviteCode {
-        <span class="attr">#[clap(long = <span class="string">&quot;url&quot;</span>)]
+        <span class="attr">#[clap(long = <span class="string">"url"</span>)]
         </span>url: SafeUrl,
-        <span class="attr">#[clap(long = <span class="string">&quot;federation_id&quot;</span>)]
+        <span class="attr">#[clap(long = <span class="string">"federation_id"</span>)]
         </span>federation_id: FederationId,
-        <span class="attr">#[clap(long = <span class="string">&quot;peer&quot;</span>)]
+        <span class="attr">#[clap(long = <span class="string">"peer"</span>)]
         </span>peer: PeerId,
     },
 
@@ -1294,33 +1331,33 @@ Examples:
 
     ConfigDecrypt {
         <span class="doccomment">/// Encrypted config file
-        </span><span class="attr">#[arg(long = <span class="string">&quot;in-file&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">"in-file"</span>)]
         </span>in_file: PathBuf,
         <span class="doccomment">/// Plaintext config file output
-        </span><span class="attr">#[arg(long = <span class="string">&quot;out-file&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">"out-file"</span>)]
         </span>out_file: PathBuf,
         <span class="doccomment">/// Encryption salt file, otherwise defaults to the salt file from the
         /// in_file directory
-        </span><span class="attr">#[arg(long = <span class="string">&quot;salt-file&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">"salt-file"</span>)]
         </span>salt_file: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
         <span class="doccomment">/// The password that encrypts the configs
-        </span><span class="attr">#[arg(env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
+        </span><span class="attr">#[arg(env = <span class="string">"FM_PASSWORD"</span>)]
         </span>password: String,
     },
 
     ConfigEncrypt {
         <span class="doccomment">/// Plaintext config file
-        </span><span class="attr">#[arg(long = <span class="string">&quot;in-file&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">"in-file"</span>)]
         </span>in_file: PathBuf,
         <span class="doccomment">/// Encrypted config file output
-        </span><span class="attr">#[arg(long = <span class="string">&quot;out-file&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">"out-file"</span>)]
         </span>out_file: PathBuf,
         <span class="doccomment">/// Encryption salt file, otherwise defaults to the salt file from the
         /// out_file directory
-        </span><span class="attr">#[arg(long = <span class="string">&quot;salt-file&quot;</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">"salt-file"</span>)]
         </span>salt_file: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
         <span class="doccomment">/// The password that encrypts the configs
-        </span><span class="attr">#[arg(env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
+        </span><span class="attr">#[arg(env = <span class="string">"FM_PASSWORD"</span>)]
         </span>password: String,
     },
 
@@ -1329,7 +1366,7 @@ Examples:
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">struct </span>PayRequest {
     notes: TieredMulti&lt;SpendableNote&gt;,
     invoice: lightning_invoice::Bolt11Invoice,
@@ -1346,19 +1383,19 @@ Examples:
         <span class="macro">assert_eq!</span>(
             <span class="macro">fedimint_build_code_version_env!</span>().len(),
             version_hash.len(),
-            <span class="string">&quot;version_hash must have an expected length&quot;
+            <span class="string">"version_hash must have an expected length"
         </span>);
 
         handle_version_hash_command(version_hash);
 
         <span class="kw">let </span>cli_args = Opts::parse();
-        <span class="kw">let </span>base_level = <span class="kw">if </span>cli_args.verbose { <span class="string">&quot;info&quot; </span>} <span class="kw">else </span>{ <span class="string">&quot;warn&quot; </span>};
+        <span class="kw">let </span>base_level = <span class="kw">if </span>cli_args.verbose { <span class="string">"info" </span>} <span class="kw">else </span>{ <span class="string">"warn" </span>};
         TracingSetup::default()
             .with_base_level(base_level)
             .init()
-            .expect(<span class="string">&quot;tracing initializes&quot;</span>);
+            .expect(<span class="string">"tracing initializes"</span>);
 
-        <span class="macro">debug!</span>(<span class="string">&quot;Starting fedimint-cli (version: {})&quot;</span>, version_hash);
+        <span class="macro">debug!</span>(<span class="string">"Starting fedimint-cli (version: {})"</span>, version_hash);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             module_inits: ClientModuleInitRegistry::new(),
@@ -1368,7 +1405,7 @@ Examples:
 
     <span class="kw">pub fn </span>with_module&lt;T&gt;(<span class="kw-2">mut </span><span class="self">self</span>, gen: T) -&gt; <span class="self">Self
     </span><span class="kw">where
-        </span>T: ClientModuleInit + <span class="lifetime">&#39;static </span>+ Send + Sync,
+        </span>T: ClientModuleInit + <span class="lifetime">'static </span>+ Send + Sync,
     {
         <span class="self">self</span>.module_inits.attach(gen);
         <span class="self">self
@@ -1383,11 +1420,11 @@ Examples:
     <span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">match </span><span class="self">self</span>.handle_command(<span class="self">self</span>.cli_args.clone()).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(output) =&gt; {
-                <span class="comment">// ignore if there&#39;s anyone reading the stuff we&#39;re writing out
-                </span><span class="kw">let _ </span>= <span class="macro">writeln!</span>(std::io::stdout(), <span class="string">&quot;{output}&quot;</span>);
+                <span class="comment">// ignore if there's anyone reading the stuff we're writing out
+                </span><span class="kw">let _ </span>= <span class="macro">writeln!</span>(std::io::stdout(), <span class="string">"{output}"</span>);
             }
             <span class="prelude-val">Err</span>(err) =&gt; {
-                <span class="kw">let _ </span>= <span class="macro">writeln!</span>(std::io::stderr(), <span class="string">&quot;{err}&quot;</span>);
+                <span class="kw">let _ </span>= <span class="macro">writeln!</span>(std::io::stderr(), <span class="string">"{err}"</span>);
                 exit(<span class="number">1</span>);
             }
         }
@@ -1402,7 +1439,11 @@ Examples:
         <span class="prelude-val">Ok</span>(client_builder)
     }
 
-    <span class="kw">async fn </span>client_join(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cli: <span class="kw-2">&amp;</span>Opts, invite_code: InviteCode) -&gt; CliResult&lt;ClientArc&gt; {
+    <span class="kw">async fn </span>client_join(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        cli: <span class="kw-2">&amp;</span>Opts,
+        invite_code: InviteCode,
+    ) -&gt; CliResult&lt;ClientHandle&gt; {
         <span class="kw">let </span>client_config = ClientConfig::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
             .<span class="kw">await
             </span>.map_err_cli_general()<span class="question-mark">?</span>;
@@ -1415,16 +1456,15 @@ Examples:
             .join(
                 get_default_client_secret(
                     <span class="kw-2">&amp;</span>Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::to_root_secret(<span class="kw-2">&amp;</span>mnemonic),
-                    <span class="kw-2">&amp;</span>client_config.global.federation_id(),
+                    <span class="kw-2">&amp;</span>client_config.global.calculate_federation_id(),
                 ),
                 client_config.clone(),
-                invite_code,
             )
             .<span class="kw">await
             </span>.map_err_cli_general()
     }
 
-    <span class="kw">async fn </span>client_open(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cli: <span class="kw-2">&amp;</span>Opts) -&gt; CliResult&lt;ClientArc&gt; {
+    <span class="kw">async fn </span>client_open(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cli: <span class="kw-2">&amp;</span>Opts) -&gt; CliResult&lt;ClientHandle&gt; {
         <span class="kw">let </span>client_builder = <span class="self">self</span>.make_client_builder(cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>mnemonic = Mnemonic::from_entropy(
@@ -1439,7 +1479,7 @@ Examples:
             .<span class="kw">await
             </span>.map_err_cli_general()<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>federation_id = config.federation_id();
+        <span class="kw">let </span>federation_id = config.calculate_federation_id();
 
         client_builder
             .open(get_default_client_secret(
@@ -1455,7 +1495,7 @@ Examples:
         cli: <span class="kw-2">&amp;</span>Opts,
         mnemonic: Mnemonic,
         invite_code: InviteCode,
-    ) -&gt; CliResult&lt;ClientArc&gt; {
+    ) -&gt; CliResult&lt;ClientHandle&gt; {
         <span class="kw">let </span>builder = <span class="self">self</span>.make_client_builder(cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>client_config = ClientConfig::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
@@ -1468,7 +1508,7 @@ Examples:
         </span>{
             <span class="prelude-val">Some</span>(existing) =&gt; {
                 <span class="kw">if </span>existing != mnemonic.to_entropy() {
-                    <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Previously set mnemonic does not match&quot;</span>))
+                    <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Previously set mnemonic does not match"</span>))
                         .map_err_cli_general()<span class="question-mark">?</span>;
                 }
             }
@@ -1479,32 +1519,38 @@ Examples:
             }
         }
 
+        <span class="kw">let </span>root_secret = get_default_client_secret(
+            <span class="kw-2">&amp;</span>Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::to_root_secret(<span class="kw-2">&amp;</span>mnemonic),
+            <span class="kw-2">&amp;</span>client_config.calculate_federation_id(),
+        );
+        <span class="kw">let </span>backup = builder
+            .download_backup_from_federation(<span class="kw-2">&amp;</span>root_secret, <span class="kw-2">&amp;</span>client_config)
+            .<span class="kw">await
+            </span>.map_err_cli_general()<span class="question-mark">?</span>;
         builder
-            .recover(
-                get_default_client_secret(
-                    <span class="kw-2">&amp;</span>Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::to_root_secret(<span class="kw-2">&amp;</span>mnemonic),
-                    <span class="kw-2">&amp;</span>client_config.federation_id(),
-                ),
-                client_config.to_owned(),
-                invite_code,
-            )
+            .recover(root_secret, client_config.to_owned(), backup)
             .<span class="kw">await
             </span>.map_err_cli_general()
     }
 
     <span class="kw">async fn </span>handle_command(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cli: Opts) -&gt; CliOutputResult {
         <span class="kw">match </span>cli.command.clone() {
-            Command::InviteCode =&gt; {
+            Command::InviteCode { peer } =&gt; {
                 <span class="kw">let </span>db = cli.load_rocks_db().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>invite_code = get_invite_code_from_db(<span class="kw-2">&amp;</span>db)
+                <span class="kw">let </span>client_config = Client::get_config_from_db(<span class="kw-2">&amp;</span>db)
                     .<span class="kw">await
-                    </span>.ok_or_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;invite code not found&quot;</span>)<span class="question-mark">?</span>;
+                    </span>.ok_or_cli_msg(CliErrorKind::GeneralFailure, <span class="string">"client config code not found"</span>)<span class="question-mark">?</span>;
+
+                <span class="kw">let </span>invite_code = client_config
+                    .invite_code(<span class="kw-2">&amp;</span>peer)
+                    .ok_or_cli_msg(CliErrorKind::GeneralFailure, <span class="string">"peer not found"</span>)<span class="question-mark">?</span>;
+
                 <span class="prelude-val">Ok</span>(CliOutput::InviteCode { invite_code })
             }
             Command::JoinFederation { invite_code } =&gt; {
                 {
                     <span class="kw">let </span>invite_code: InviteCode = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code)
-                        .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>;
+                        .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">"invalid invite code"</span>)<span class="question-mark">?</span>;
 
                     <span class="comment">// Build client and store config in DB
                     </span><span class="kw">let </span>_client = <span class="self">self</span>.client_join(<span class="kw-2">&amp;</span>cli, invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1522,19 +1568,19 @@ Examples:
                 invite_code,
             }) =&gt; {
                 <span class="kw">let </span>invite_code: InviteCode = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code)
-                    .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>;
+                    .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">"invalid invite code"</span>)<span class="question-mark">?</span>;
                 <span class="kw">let </span>mnemonic = Mnemonic::from_str(<span class="kw-2">&amp;</span>mnemonic).map_err_cli_general()<span class="question-mark">?</span>;
                 <span class="kw">let </span>client = <span class="self">self</span>.client_recover(<span class="kw-2">&amp;</span>cli, mnemonic, invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="comment">// TODO: until we implement recovery for other modules we can&#39;t really wait
+                <span class="comment">// TODO: until we implement recovery for other modules we can't really wait
                 // for more than this one
-                </span><span class="macro">debug!</span>(<span class="string">&quot;Waiting for mint module recovery to finish&quot;</span>);
+                </span><span class="macro">debug!</span>(<span class="string">"Waiting for mint module recovery to finish"</span>);
                 client
                     .wait_for_module_kind_recovery(MintClientModule::kind())
                     .<span class="kw">await
                     </span>.map_err_cli_general()<span class="question-mark">?</span>;
 
-                <span class="macro">debug!</span>(<span class="string">&quot;Recovery complete&quot;</span>);
+                <span class="macro">debug!</span>(<span class="string">"Recovery complete"</span>);
 
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(serde_json::to_value(()).unwrap()))
             }
@@ -1543,7 +1589,7 @@ Examples:
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
                     client::handle_command(command, client)
                         .<span class="kw">await
-                        </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>,
+                        </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">"failure"</span>)<span class="question-mark">?</span>,
                 ))
             }
             Command::Admin(AdminCmd::Audit) =&gt; {
@@ -1555,7 +1601,7 @@ Examples:
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
                     serde_json::to_value(audit)
-                        .map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;invalid response&quot;</span>)<span class="question-mark">?</span>,
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">"invalid response"</span>)<span class="question-mark">?</span>,
                 ))
             }
             Command::Admin(AdminCmd::Status) =&gt; {
@@ -1564,7 +1610,19 @@ Examples:
                 <span class="kw">let </span>status = cli.admin_client(client.get_config())<span class="question-mark">?</span>.status().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
                     serde_json::to_value(status)
-                        .map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;invalid response&quot;</span>)<span class="question-mark">?</span>,
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">"invalid response"</span>)<span class="question-mark">?</span>,
+                ))
+            }
+            Command::Admin(AdminCmd::GuardianConfigBackup) =&gt; {
+                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="kw">let </span>guardian_config_backup = cli
+                    .admin_client(client.get_config())<span class="question-mark">?
+                    </span>.guardian_config_backup(cli.auth()<span class="question-mark">?</span>)
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(CliOutput::Raw(
+                    serde_json::to_value(guardian_config_backup)
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">"invalid response"</span>)<span class="question-mark">?</span>,
                 ))
             }
             Command::Dev(DevCmd::Api {
@@ -1577,7 +1635,7 @@ Examples:
                 //If fails, convert to JSON string.
                 </span><span class="kw">let </span>params = serde_json::from_str::&lt;Value&gt;(<span class="kw-2">&amp;</span>params).unwrap_or_else(|err| {
                     <span class="macro">debug!</span>(
-                        <span class="string">&quot;Failed to serialize params:{}. Converting it to JSON string&quot;</span>,
+                        <span class="string">"Failed to serialize params:{}. Converting it to JSON string"</span>,
                         err
                     );
 
@@ -1621,7 +1679,7 @@ Examples:
                     }
                 })
                 .<span class="kw">await
-                </span>.map_err_cli_msg(CliErrorKind::Timeout, <span class="string">&quot;reached timeout&quot;</span>)<span class="question-mark">?
+                </span>.map_err_cli_msg(CliErrorKind::Timeout, <span class="string">"reached timeout"</span>)<span class="question-mark">?
             </span>}
             Command::Dev(DevCmd::WaitComplete) =&gt; {
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1664,7 +1722,7 @@ Examples:
                     .create_new(<span class="bool-val">true</span>)
                     .write(<span class="bool-val">true</span>)
                     .open(out_file)
-                    .expect(<span class="string">&quot;Could not create output cfg file&quot;</span>);
+                    .expect(<span class="string">"Could not create output cfg file"</span>);
                 out_file_handle
                     .write_all(<span class="kw-2">&amp;</span>decrypted_bytes)
                     .map_err_cli_general()<span class="question-mark">?</span>;
@@ -1677,7 +1735,7 @@ Examples:
                 password,
             }) =&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>in_file_handle =
-                    fs::File::open(in_file).expect(<span class="string">&quot;Could not create output cfg file&quot;</span>);
+                    fs::File::open(in_file).expect(<span class="string">"Could not create output cfg file"</span>);
                 <span class="kw">let </span><span class="kw-2">mut </span>plaintext_bytes = <span class="macro">vec!</span>[];
                 in_file_handle.read_to_end(<span class="kw-2">&amp;mut </span>plaintext_bytes).unwrap();
 
@@ -1691,7 +1749,7 @@ Examples:
                 <span class="kw">let </span>bytes: Vec&lt;u8&gt; = bitcoin_hashes::hex::FromHex::from_hex(<span class="kw-2">&amp;</span>hex_string)
                     .map_err_cli_msg(
                         CliErrorKind::SerializationError,
-                        <span class="string">&quot;failed to decode transaction&quot;</span>,
+                        <span class="string">"failed to decode transaction"</span>,
                     )<span class="question-mark">?</span>;
 
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1699,18 +1757,18 @@ Examples:
                     fedimint_core::transaction::Transaction::from_bytes(<span class="kw-2">&amp;</span>bytes, client.decoders())
                         .map_err_cli_msg(
                             CliErrorKind::SerializationError,
-                            <span class="string">&quot;failed to decode transaction&quot;</span>,
+                            <span class="string">"failed to decode transaction"</span>,
                         )<span class="question-mark">?</span>;
 
                 <span class="prelude-val">Ok</span>(CliOutput::DecodeTransaction {
-                    transaction: (<span class="macro">format!</span>(<span class="string">&quot;{tx:?}&quot;</span>)),
+                    transaction: (<span class="macro">format!</span>(<span class="string">"{tx:?}"</span>)),
                 })
             }
             Command::Completion { shell } =&gt; {
                 clap_complete::generate(
                     shell,
                     <span class="kw-2">&amp;mut </span>Opts::command(),
-                    <span class="string">&quot;fedimint-cli&quot;</span>,
+                    <span class="string">"fedimint-cli"</span>,
                     <span class="kw-2">&amp;mut </span>std::io::stdout(),
                 );
                 <span class="comment">// HACK: prints true to stdout which is fine for shells
@@ -1723,12 +1781,12 @@ Examples:
 <span class="kw">fn </span>salt_from_file_path(file_path: <span class="kw-2">&amp;</span>Path) -&gt; PathBuf {
     file_path
         .parent()
-        .expect(<span class="string">&quot;File has no parent?!&quot;</span>)
+        .expect(<span class="string">"File has no parent?!"</span>)
         .join(SALT_FILE)
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub struct </span>LnInvoiceResponse {
     <span class="kw">pub </span>operation_id: OperationId,
     <span class="kw">pub </span>invoice: String,
@@ -1740,18 +1798,18 @@ Examples:
         .into_iter()
         .map(|item| {
             <span class="kw">match </span><span class="kw-2">&amp;</span>item
-                .splitn(<span class="number">2</span>, <span class="string">&#39;=&#39;</span>)
+                .splitn(<span class="number">2</span>, <span class="string">'='</span>)
                 .map(ToString::to_string)
                 .collect::&lt;Vec&lt;String&gt;&gt;()[..]
             {
-                [] =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(<span class="string">&quot;Empty metadata argument not allowed&quot;</span>)),
-                [key] =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(<span class="string">&quot;Metadata {key} is missing a value&quot;</span>)),
+                [] =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(<span class="string">"Empty metadata argument not allowed"</span>)),
+                [key] =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(<span class="string">"Metadata {key} is missing a value"</span>)),
                 [key, val] =&gt; <span class="prelude-val">Ok</span>((key.clone(), val.clone())),
                 [..] =&gt; <span class="macro">unreachable!</span>(),
             }
         })
         .collect::&lt;anyhow::Result&lt;<span class="kw">_</span>&gt;&gt;()
-        .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">&quot;invalid metadata&quot;</span>)<span class="question-mark">?</span>;
+        .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">"invalid metadata"</span>)<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(metadata)
 }
 
@@ -1759,12 +1817,12 @@ Examples:
 </span><span class="kw">fn </span>metadata_from_clap_cli_test() {
     <span class="kw">for </span>(args, expected) <span class="kw">in </span>[
         (
-            <span class="macro">vec!</span>[<span class="string">&quot;a=b&quot;</span>.to_string()],
-            BTreeMap::from([(<span class="string">&quot;a&quot;</span>.into(), <span class="string">&quot;b&quot;</span>.into())]),
+            <span class="macro">vec!</span>[<span class="string">"a=b"</span>.to_string()],
+            BTreeMap::from([(<span class="string">"a"</span>.into(), <span class="string">"b"</span>.into())]),
         ),
         (
-            <span class="macro">vec!</span>[<span class="string">&quot;a=b&quot;</span>.to_string(), <span class="string">&quot;c=d&quot;</span>.to_string()],
-            BTreeMap::from([(<span class="string">&quot;a&quot;</span>.into(), <span class="string">&quot;b&quot;</span>.into()), (<span class="string">&quot;c&quot;</span>.into(), <span class="string">&quot;d&quot;</span>.into())]),
+            <span class="macro">vec!</span>[<span class="string">"a=b"</span>.to_string(), <span class="string">"c=d"</span>.to_string()],
+            BTreeMap::from([(<span class="string">"a"</span>.into(), <span class="string">"b"</span>.into()), (<span class="string">"c"</span>.into(), <span class="string">"d"</span>.into())]),
         ),
     ] {
         <span class="macro">assert_eq!</span>(metadata_from_clap_cli(args).unwrap(), expected);

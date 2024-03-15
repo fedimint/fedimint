@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-load-test-tool/src/main.rs`."><title>main.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_load_test_tool" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_load_test_tool/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-load-test-tool/src/main.rs`."><title>main.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_load_test_tool" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_load_test_tool/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1294,6 +1296,59 @@
 <a href="#1294" id="1294">1294</a>
 <a href="#1295" id="1295">1295</a>
 <a href="#1296" id="1296">1296</a>
+<a href="#1297" id="1297">1297</a>
+<a href="#1298" id="1298">1298</a>
+<a href="#1299" id="1299">1299</a>
+<a href="#1300" id="1300">1300</a>
+<a href="#1301" id="1301">1301</a>
+<a href="#1302" id="1302">1302</a>
+<a href="#1303" id="1303">1303</a>
+<a href="#1304" id="1304">1304</a>
+<a href="#1305" id="1305">1305</a>
+<a href="#1306" id="1306">1306</a>
+<a href="#1307" id="1307">1307</a>
+<a href="#1308" id="1308">1308</a>
+<a href="#1309" id="1309">1309</a>
+<a href="#1310" id="1310">1310</a>
+<a href="#1311" id="1311">1311</a>
+<a href="#1312" id="1312">1312</a>
+<a href="#1313" id="1313">1313</a>
+<a href="#1314" id="1314">1314</a>
+<a href="#1315" id="1315">1315</a>
+<a href="#1316" id="1316">1316</a>
+<a href="#1317" id="1317">1317</a>
+<a href="#1318" id="1318">1318</a>
+<a href="#1319" id="1319">1319</a>
+<a href="#1320" id="1320">1320</a>
+<a href="#1321" id="1321">1321</a>
+<a href="#1322" id="1322">1322</a>
+<a href="#1323" id="1323">1323</a>
+<a href="#1324" id="1324">1324</a>
+<a href="#1325" id="1325">1325</a>
+<a href="#1326" id="1326">1326</a>
+<a href="#1327" id="1327">1327</a>
+<a href="#1328" id="1328">1328</a>
+<a href="#1329" id="1329">1329</a>
+<a href="#1330" id="1330">1330</a>
+<a href="#1331" id="1331">1331</a>
+<a href="#1332" id="1332">1332</a>
+<a href="#1333" id="1333">1333</a>
+<a href="#1334" id="1334">1334</a>
+<a href="#1335" id="1335">1335</a>
+<a href="#1336" id="1336">1336</a>
+<a href="#1337" id="1337">1337</a>
+<a href="#1338" id="1338">1338</a>
+<a href="#1339" id="1339">1339</a>
+<a href="#1340" id="1340">1340</a>
+<a href="#1341" id="1341">1341</a>
+<a href="#1342" id="1342">1342</a>
+<a href="#1343" id="1343">1343</a>
+<a href="#1344" id="1344">1344</a>
+<a href="#1345" id="1345">1345</a>
+<a href="#1346" id="1346">1346</a>
+<a href="#1347" id="1347">1347</a>
+<a href="#1348" id="1348">1348</a>
+<a href="#1349" id="1349">1349</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -1304,11 +1359,12 @@
 <span class="kw">use </span>clap::{Args, Parser, Subcommand, ValueEnum};
 <span class="kw">use </span>common::{
     cln_create_invoice, cln_pay_invoice, cln_wait_invoice_payment, gateway_pay_invoice,
-    get_note_summary, lnd_create_invoice, lnd_pay_invoice, lnd_wait_invoice_payment, reissue_notes,
+    get_note_summary, lnd_create_invoice, lnd_pay_invoice, lnd_wait_invoice_payment,
+    parse_gateway_id, reissue_notes,
 };
 <span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>devimint::util::{GatewayClnCli, GatewayLndCli};
-<span class="kw">use </span>fedimint_client::ClientArc;
+<span class="kw">use </span>fedimint_client::ClientHandle;
 <span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
@@ -1317,6 +1373,7 @@
 <span class="kw">use </span>fedimint_core::util::{BoxFuture, SafeUrl};
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_ln_client::{LightningClientModule, LnReceiveState};
+<span class="kw">use </span>fedimint_ln_common::LightningGateway;
 <span class="kw">use </span>fedimint_mint_client::OOBNotes;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
@@ -1327,8 +1384,7 @@
 <span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::common::{
-    build_client, do_spend_notes, get_invite_code_cli, remint_denomination, switch_default_gateway,
-    try_get_notes_cli,
+    build_client, do_spend_notes, get_invite_code_cli, remint_denomination, try_get_notes_cli,
 };
 <span class="kw">pub mod </span>common;
 
@@ -1337,17 +1393,17 @@
 </span><span class="kw">struct </span>Opts {
     <span class="attr">#[arg(
         long,
-        default_value = <span class="string">&quot;10&quot;</span>,
-        help = <span class="string">&quot;Number of users. Each user will work in parallel&quot;
+        default_value = <span class="string">"10"</span>,
+        help = <span class="string">"Number of users. Each user will work in parallel"
     </span>)]
     </span>users: u16,
 
-    <span class="attr">#[arg(long, help = <span class="string">&quot;Output with the metrics results in JSON format&quot;</span>)]
+    <span class="attr">#[arg(long, help = <span class="string">"Output with the metrics results in JSON format"</span>)]
     </span>metrics_json_output: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;If given, will be used to store and retrieve past metrics for comparison purposes&quot;
+        help = <span class="string">"If given, will be used to store and retrieve past metrics for comparison purposes"
     </span>)]
     </span>archive_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
 
@@ -1363,40 +1419,40 @@
 
 <span class="attr">#[derive(Subcommand, Clone)]
 </span><span class="kw">enum </span>Command {
-    <span class="attr">#[command(about = <span class="string">&quot;Keep many websocket connections to a federation for a duration of time&quot;</span>)]
+    <span class="attr">#[command(about = <span class="string">"Keep many websocket connections to a federation for a duration of time"</span>)]
     </span>TestConnect {
-        <span class="attr">#[arg(long, help = <span class="string">&quot;Federation invite code&quot;</span>)]
+        <span class="attr">#[arg(long, help = <span class="string">"Federation invite code"</span>)]
         </span>invite_code: String,
         <span class="attr">#[arg(
             long,
-            default_value = <span class="string">&quot;60&quot;</span>,
-            help = <span class="string">&quot;How much time to keep the connections open, in seconds&quot;
+            default_value = <span class="string">"60"</span>,
+            help = <span class="string">"How much time to keep the connections open, in seconds"
         </span>)]
         </span>duration_secs: u64,
         <span class="attr">#[arg(
             long,
-            default_value = <span class="string">&quot;120&quot;</span>,
-            help = <span class="string">&quot;Timeout for connection attempt and for each request, in secnods&quot;
+            default_value = <span class="string">"120"</span>,
+            help = <span class="string">"Timeout for connection attempt and for each request, in secnods"
         </span>)]
         </span>timeout_secs: u64,
         <span class="attr">#[arg(
             long,
-            help = <span class="string">&quot;If given, will limit the number of endpoints (guardians) to connect to&quot;
+            help = <span class="string">"If given, will limit the number of endpoints (guardians) to connect to"
         </span>)]
         </span>limit_endpoints: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     },
-    <span class="attr">#[command(about = <span class="string">&quot;Try to download the client config many times.&quot;</span>)]
+    <span class="attr">#[command(about = <span class="string">"Try to download the client config many times."</span>)]
     </span>TestDownload {
-        <span class="attr">#[arg(long, help = <span class="string">&quot;Federation invite code&quot;</span>)]
+        <span class="attr">#[arg(long, help = <span class="string">"Federation invite code"</span>)]
         </span>invite_code: String,
     },
     <span class="attr">#[command(
-        about = <span class="string">&quot;Run a load test where many users in parallel will try to reissue notes and pay invoices through the gateway&quot;
+        about = <span class="string">"Run a load test where many users in parallel will try to reissue notes and pay invoices through the gateway"
     </span>)]
     </span>LoadTest(LoadTestArgs),
     <span class="doccomment">/// Run a load test where many users in parallel will receive then send a
     /// payment through lightning.
-    /// It&#39;s &#39;circular&#39; because the funds always come back to the same user then
+    /// It's 'circular' because the funds always come back to the same user then
     /// we can keep making the payments in a loop
     </span><span class="attr">#[command()]
     </span>LnCircularLoadTest(LnCircularLoadTestArgs),
@@ -1406,66 +1462,66 @@
 </span><span class="kw">struct </span>LoadTestArgs {
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;Federation invite code. If none given, we assume the client already has a config downloaded in DB&quot;
+        help = <span class="string">"Federation invite code. If none given, we assume the client already has a config downloaded in DB"
     </span>)]
     </span>invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;Notes for the test. If none and no funds on archive, will call fedimint-cli spend&quot;
+        help = <span class="string">"Notes for the test. If none and no funds on archive, will call fedimint-cli spend"
     </span>)]
     </span>initial_notes: <span class="prelude-ty">Option</span>&lt;OOBNotes&gt;,
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;Gateway Id. If none, retrieve one according to --generate-invoice-with&quot;
+        help = <span class="string">"Gateway Id. If none, retrieve one according to --generate-invoice-with"
     </span>)]
     </span>gateway_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;The method used to generate invoices to be paid through the gateway. If none and no --invoices-file provided, no gateway/LN tests will be run. Note that you can&#39;t generate an invoice using the same lightning node used by the gateway (i.e self payment is forbidden)&quot;
+        help = <span class="string">"The method used to generate invoices to be paid through the gateway. If none and no --invoices-file provided, no gateway/LN tests will be run. Note that you can't generate an invoice using the same lightning node used by the gateway (i.e self payment is forbidden)"
     </span>)]
     </span>generate_invoice_with: <span class="prelude-ty">Option</span>&lt;LnInvoiceGeneration&gt;,
 
     <span class="attr">#[arg(
         long,
-        default_value = <span class="string">&quot;1&quot;</span>,
-        help = <span class="string">&quot;How many invoices will be created for each user. Only applicable if --generate-invoice-with is provided&quot;
+        default_value = <span class="string">"1"</span>,
+        help = <span class="string">"How many invoices will be created for each user. Only applicable if --generate-invoice-with is provided"
     </span>)]
     </span>invoices_per_user: u16,
 
     <span class="attr">#[arg(
         long,
-        default_value = <span class="string">&quot;0&quot;</span>,
-        help = <span class="string">&quot;How many seconds to sleep between LN payments&quot;
+        default_value = <span class="string">"0"</span>,
+        help = <span class="string">"How many seconds to sleep between LN payments"
     </span>)]
     </span>ln_payment_sleep_secs: u64,
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;A text file with one invoice per line. If --generate-invoice-with is provided, these will be additional invoices to be paid&quot;
+        help = <span class="string">"A text file with one invoice per line. If --generate-invoice-with is provided, these will be additional invoices to be paid"
     </span>)]
     </span>invoices_file: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;How many notes to distribute to each user&quot;</span>,
-        default_value = <span class="string">&quot;2&quot;
+        help = <span class="string">"How many notes to distribute to each user"</span>,
+        default_value = <span class="string">"2"
     </span>)]
     </span>notes_per_user: u16,
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;Note denomination to use for the test&quot;</span>,
-        default_value = <span class="string">&quot;1024&quot;
+        help = <span class="string">"Note denomination to use for the test"</span>,
+        default_value = <span class="string">"1024"
     </span>)]
     </span>note_denomination: Amount,
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;Invoice amount when generating one&quot;</span>,
-        default_value = <span class="string">&quot;1000&quot;
+        help = <span class="string">"Invoice amount when generating one"</span>,
+        default_value = <span class="string">"1000"
     </span>)]
     </span>invoice_amount: Amount,
 }
@@ -1474,48 +1530,48 @@
 </span><span class="kw">struct </span>LnCircularLoadTestArgs {
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;Federation invite code. If none given, we assume the client already has a config downloaded in DB&quot;
+        help = <span class="string">"Federation invite code. If none given, we assume the client already has a config downloaded in DB"
     </span>)]
     </span>invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;Notes for the test. If none and no funds on archive, will call fedimint-cli spend&quot;
+        help = <span class="string">"Notes for the test. If none and no funds on archive, will call fedimint-cli spend"
     </span>)]
     </span>initial_notes: <span class="prelude-ty">Option</span>&lt;OOBNotes&gt;,
 
     <span class="attr">#[arg(
         long,
-        default_value = <span class="string">&quot;60&quot;</span>,
-        help = <span class="string">&quot;For how many seconds to run the test&quot;
+        default_value = <span class="string">"60"</span>,
+        help = <span class="string">"For how many seconds to run the test"
     </span>)]
     </span>test_duration_secs: u64,
 
     <span class="attr">#[arg(
         long,
-        default_value = <span class="string">&quot;0&quot;</span>,
-        help = <span class="string">&quot;How many seconds to sleep between LN payments&quot;
+        default_value = <span class="string">"0"</span>,
+        help = <span class="string">"How many seconds to sleep between LN payments"
     </span>)]
     </span>ln_payment_sleep_secs: u64,
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;How many notes to distribute to each user&quot;</span>,
-        default_value = <span class="string">&quot;1&quot;
+        help = <span class="string">"How many notes to distribute to each user"</span>,
+        default_value = <span class="string">"1"
     </span>)]
     </span>notes_per_user: u16,
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;Note denomination to use for the test&quot;</span>,
-        default_value = <span class="string">&quot;1024&quot;
+        help = <span class="string">"Note denomination to use for the test"</span>,
+        default_value = <span class="string">"1024"
     </span>)]
     </span>note_denomination: Amount,
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;Invoice amount when generating one&quot;</span>,
-        default_value = <span class="string">&quot;1000&quot;
+        help = <span class="string">"Invoice amount when generating one"</span>,
+        default_value = <span class="string">"1000"
     </span>)]
     </span>invoice_amount: Amount,
 
@@ -1563,16 +1619,16 @@
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>EventMetricComparison {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
         <span class="kw">fn </span>to_percent(gain: f64) -&gt; String {
             <span class="kw">if </span>gain &gt;= <span class="number">1.0 </span>{
-                <span class="macro">format!</span>(<span class="string">&quot;+{:.2}%&quot;</span>, (gain - <span class="number">1.0</span>) * <span class="number">100.0</span>)
+                <span class="macro">format!</span>(<span class="string">"+{:.2}%"</span>, (gain - <span class="number">1.0</span>) * <span class="number">100.0</span>)
             } <span class="kw">else </span>{
-                <span class="macro">format!</span>(<span class="string">&quot;-{:.2}%&quot;</span>, (<span class="number">1.0 </span>- gain) * <span class="number">100.0</span>)
+                <span class="macro">format!</span>(<span class="string">"-{:.2}%"</span>, (<span class="number">1.0 </span>- gain) * <span class="number">100.0</span>)
             }
         }
         f.write_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-            <span class="string">&quot;avg: {}, median: {}, max: {}, min: {}&quot;</span>,
+            <span class="string">"avg: {}, median: {}, max: {}, min: {}"</span>,
             to_percent(<span class="self">self</span>.avg_ms_gain),
             to_percent(<span class="self">self</span>.median_ms_gain),
             to_percent(<span class="self">self</span>.max_ms_gain),
@@ -1586,11 +1642,11 @@
     fedimint_logging::TracingSetup::default().init()<span class="question-mark">?</span>;
     <span class="kw">let </span>opts = Opts::parse();
     <span class="kw">let </span>(event_sender, event_receiver) = tokio::sync::mpsc::unbounded_channel();
-    <span class="kw">let </span>summary_handle = spawn(<span class="string">&quot;handle metrics summary&quot;</span>, {
+    <span class="kw">let </span>summary_handle = spawn(<span class="string">"handle metrics summary"</span>, {
         <span class="kw">let </span>opts = opts.clone();
         <span class="kw">async move </span>{ handle_metrics_summary(opts, event_receiver).<span class="kw">await </span>}
     })
-    .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
+    .expect(<span class="string">"some handle on non-wasm"</span>);
     <span class="kw">let </span>futures = <span class="kw">match </span>opts.command.clone() {
         Command::TestConnect {
             invite_code,
@@ -1598,7 +1654,7 @@
             timeout_secs,
             limit_endpoints,
         } =&gt; {
-            <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code).context(<span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>;
+            <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code).context(<span class="string">"invalid invite code"</span>)<span class="question-mark">?</span>;
             test_connect_raw_client(
                 invite_code,
                 opts.users,
@@ -1610,7 +1666,7 @@
             .<span class="kw">await</span><span class="question-mark">?
         </span>}
         Command::TestDownload { invite_code } =&gt; {
-            <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code).context(<span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>;
+            <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code).context(<span class="string">"invalid invite code"</span>)<span class="question-mark">?</span>;
             test_download_config(invite_code, opts.users, event_sender.clone()).<span class="kw">await</span><span class="question-mark">?
         </span>}
         Command::LoadTest(args) =&gt; {
@@ -1626,7 +1682,7 @@
             <span class="kw">let </span>invoices = <span class="kw">if let </span><span class="prelude-val">Some</span>(invoices_file) = args.invoices_file {
                 <span class="kw">let </span>invoices_file = tokio::fs::File::open(<span class="kw-2">&amp;</span>invoices_file)
                     .<span class="kw">await
-                    </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Failed to open {invoices_file:?}&quot;</span>))<span class="question-mark">?</span>;
+                    </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"Failed to open {invoices_file:?}"</span>))<span class="question-mark">?</span>;
                 <span class="kw">let </span><span class="kw-2">mut </span>lines = tokio::io::BufReader::new(invoices_file).lines();
                 <span class="kw">let </span><span class="kw-2">mut </span>invoices = <span class="macro">vec!</span>[];
                 <span class="kw">while let </span><span class="prelude-val">Some</span>(line) = lines.next_line().<span class="kw">await</span><span class="question-mark">? </span>{
@@ -1638,7 +1694,7 @@
                 <span class="macro">vec!</span>[]
             };
             <span class="kw">if </span>args.generate_invoice_with.is_none() &amp;&amp; invoices.is_empty() {
-                <span class="macro">info!</span>(<span class="string">&quot;No --generate-invoice-with given no invoices on --invoices-file, not LN/gateway tests will be run&quot;</span>)
+                <span class="macro">info!</span>(<span class="string">"No --generate-invoice-with given no invoices on --invoices-file, not LN/gateway tests will be run"</span>)
             }
             run_load_test(
                 opts.archive_dir,
@@ -1680,17 +1736,16 @@
     drop(event_sender);
     summary_handle.<span class="kw">await</span><span class="question-mark">??</span>;
     <span class="kw">let </span>len_failures = result.iter().filter(|r| r.is_err()).count();
-    <span class="macro">eprintln!</span>(<span class="string">&quot;{} results, {len_failures} failures&quot;</span>, result.len());
+    <span class="macro">eprintln!</span>(<span class="string">"{} results, {len_failures} failures"</span>, result.len());
     <span class="kw">for </span>r <span class="kw">in </span>result {
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = r {
-            <span class="macro">warn!</span>(<span class="string">&quot;Task failed: {:?}&quot;</span>, e);
+            <span class="macro">warn!</span>(<span class="string">"Task failed: {:?}"</span>, e);
         }
     }
     <span class="kw">if </span>len_failures &gt; <span class="number">0 </span>{
-        <span class="macro">bail!</span>(<span class="string">&quot;Finished with failures&quot;</span>);
-    } <span class="kw">else </span>{
-        <span class="macro">info!</span>(<span class="string">&quot;Finished successfully&quot;</span>)
+        <span class="macro">bail!</span>(<span class="string">"Finished with failures"</span>);
     }
+    <span class="macro">info!</span>(<span class="string">"Finished successfully"</span>);
     <span class="prelude-val">Ok</span>(())
 }
 
@@ -1702,7 +1757,7 @@
         </span><span class="kw">match </span>get_invite_code_cli().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(invite_code) =&gt; <span class="prelude-val">Some</span>(invite_code),
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">info!</span>(<span class="string">&quot;No invite code provided and failed to get one with &#39;{e}&#39; error, will try to proceed without one...&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"No invite code provided and failed to get one with '{e}' error, will try to proceed without one..."</span>);
                 <span class="prelude-val">None
             </span>}
         }
@@ -1724,7 +1779,7 @@
     note_denomination: Amount,
     invoice_amount: Amount,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
-) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">&#39;static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
+) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">'static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
     <span class="kw">let </span>db_path = get_db_path(archive_dir);
     <span class="kw">let </span>(coordinator, invite_code) = get_coordinator_client(<span class="kw-2">&amp;</span>db_path, <span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>minimum_notes = notes_per_user * users;
@@ -1733,12 +1788,12 @@
     reissue_initial_notes(initial_notes, <span class="kw-2">&amp;</span>coordinator, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
     get_required_notes(<span class="kw-2">&amp;</span>coordinator, minimum_amount_required, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="macro">info!</span>(<span class="string">&quot;Reminting {minimum_notes} notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Reminting {minimum_notes} notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)"</span>);
     remint_denomination(<span class="kw-2">&amp;</span>coordinator, note_denomination, minimum_notes).<span class="kw">await</span><span class="question-mark">?</span>;
 
     print_coordinator_notes(<span class="kw-2">&amp;</span>coordinator).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>users_clients = get_users_clients(users, db_path, invite_code, gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>users_clients = get_users_clients(users, db_path, invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span><span class="kw-2">mut </span>users_notes =
         get_notes_for_users(users, notes_per_user, coordinator, note_denomination).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1753,7 +1808,7 @@
         user = (user + <span class="number">1</span>) % users;
     }
 
-    <span class="macro">info!</span>(<span class="string">&quot;Starting user tasks&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Starting user tasks"</span>);
     <span class="kw">let </span>futures = users_clients
         .into_iter()
         .enumerate()
@@ -1763,7 +1818,7 @@
             <span class="kw">let </span>invoices = users_invoices.remove(<span class="kw-2">&amp;</span>u).unwrap_or_default();
             <span class="kw">let </span>event_sender = event_sender.clone();
             <span class="kw">let </span>f: BoxFuture&lt;<span class="kw">_</span>&gt; = Box::pin(do_load_test_user_task(
-                <span class="macro">format!</span>(<span class="string">&quot;User {u}:&quot;</span>),
+                <span class="macro">format!</span>(<span class="string">"User {u}:"</span>),
                 client,
                 oob_notes,
                 generated_invoices_per_user,
@@ -1772,6 +1827,7 @@
                 invoices,
                 generate_invoice_with,
                 event_sender,
+                gateway_id.clone(),
             ));
             f
         })
@@ -1783,7 +1839,7 @@
 <span class="kw">async fn </span>get_notes_for_users(
     users: u16,
     notes_per_user: u16,
-    coordinator: ClientArc,
+    coordinator: ClientHandle,
     note_denomination: Amount,
 ) -&gt; anyhow::Result&lt;HashMap&lt;u16, Vec&lt;OOBNotes&gt;&gt;&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>users_notes = HashMap::new();
@@ -1792,7 +1848,7 @@
         <span class="kw">for _ in </span><span class="number">0</span>..notes_per_user {
             <span class="kw">let </span>(<span class="kw">_</span>, oob_notes) = do_spend_notes(<span class="kw-2">&amp;</span>coordinator, note_denomination).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>user_amount = oob_notes.total_amount();
-            <span class="macro">info!</span>(<span class="string">&quot;Giving {user_amount} to user {u}&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">"Giving {user_amount} to user {u}"</span>);
             users_notes.get_mut(<span class="kw-2">&amp;</span>u).unwrap().push(oob_notes);
         }
     }
@@ -1803,11 +1859,10 @@
     n: u16,
     db_path: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
     invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
-    gateway_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
-) -&gt; anyhow::Result&lt;Vec&lt;ClientArc&gt;&gt; {
+) -&gt; anyhow::Result&lt;Vec&lt;ClientHandle&gt;&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>users_clients = Vec::with_capacity(n.into());
     <span class="kw">for </span>u <span class="kw">in </span><span class="number">0</span>..n {
-        <span class="kw">let </span>(client, <span class="kw">_</span>) = get_user_client(u, <span class="kw-2">&amp;</span>db_path, <span class="kw-2">&amp;</span>invite_code, <span class="kw-2">&amp;</span>gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(client, <span class="kw">_</span>) = get_user_client(u, <span class="kw-2">&amp;</span>db_path, <span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
         users_clients.push(client);
     }
     <span class="prelude-val">Ok</span>(users_clients)
@@ -1817,63 +1872,59 @@
     user_index: u16,
     db_path: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
     invite_code: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
-    gateway_id: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
-) -&gt; anyhow::Result&lt;(ClientArc, <span class="prelude-ty">Option</span>&lt;InviteCode&gt;)&gt; {
+) -&gt; anyhow::Result&lt;(ClientHandle, <span class="prelude-ty">Option</span>&lt;InviteCode&gt;)&gt; {
     <span class="kw">let </span>user_db = db_path
         .as_ref()
-        .map(|db_path| db_path.join(<span class="macro">format!</span>(<span class="string">&quot;user_{user_index}.db&quot;</span>)));
+        .map(|db_path| db_path.join(<span class="macro">format!</span>(<span class="string">"user_{user_index}.db"</span>)));
     <span class="kw">let </span>user_invite_code = <span class="kw">if </span>user_db.as_ref().map_or(<span class="bool-val">false</span>, |db| db.exists()) {
         <span class="prelude-val">None
     </span>} <span class="kw">else </span>{
         invite_code.clone()
     };
     <span class="kw">let </span>(client, invite_code) = build_client(user_invite_code, user_db.as_ref()).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_id) = gateway_id {
-        switch_default_gateway(<span class="kw-2">&amp;</span>client, gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
-    }
     <span class="prelude-val">Ok</span>((client, invite_code))
 }
 
-<span class="kw">async fn </span>print_coordinator_notes(coordinator: <span class="kw-2">&amp;</span>ClientArc) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="macro">info!</span>(<span class="string">&quot;Note summary:&quot;</span>);
+<span class="kw">async fn </span>print_coordinator_notes(coordinator: <span class="kw-2">&amp;</span>ClientHandle) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="macro">info!</span>(<span class="string">"Note summary:"</span>);
     <span class="kw">let </span>summary = get_note_summary(coordinator).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">for </span>(k, v) <span class="kw">in </span>summary.iter() {
-        <span class="macro">info!</span>(<span class="string">&quot;{k}: {v}&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"{k}: {v}"</span>);
     }
     <span class="prelude-val">Ok</span>(())
 }
 
 <span class="kw">async fn </span>get_required_notes(
-    coordinator: <span class="kw-2">&amp;</span>ClientArc,
+    coordinator: <span class="kw-2">&amp;</span>ClientHandle,
     minimum_amount_required: Amount,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>current_balance = coordinator.get_balance().<span class="kw">await</span>;
     <span class="kw">if </span>current_balance &lt; minimum_amount_required {
         <span class="kw">let </span>diff = minimum_amount_required - current_balance;
-        <span class="macro">info!</span>(<span class="string">&quot;Current balance {current_balance} on coordinator not enough, trying to get {diff} more through fedimint-cli&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"Current balance {current_balance} on coordinator not enough, trying to get {diff} more through fedimint-cli"</span>);
         <span class="kw">match </span>try_get_notes_cli(<span class="kw-2">&amp;</span>diff, <span class="number">5</span>).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(notes) =&gt; {
                 reissue_notes(coordinator, notes, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
             }
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">info!</span>(<span class="string">&quot;Unable to get more notes: &#39;{e}&#39;, will try to proceed without them&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"Unable to get more notes: '{e}', will try to proceed without them"</span>);
             }
         };
     } <span class="kw">else </span>{
-        <span class="macro">info!</span>(<span class="string">&quot;Current balance of {current_balance} already covers the minimum required of {minimum_amount_required}&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"Current balance of {current_balance} already covers the minimum required of {minimum_amount_required}"</span>);
     }
     <span class="prelude-val">Ok</span>(())
 }
 
 <span class="kw">async fn </span>reissue_initial_notes(
     initial_notes: <span class="prelude-ty">Option</span>&lt;OOBNotes&gt;,
-    coordinator: <span class="kw-2">&amp;</span>ClientArc,
+    coordinator: <span class="kw-2">&amp;</span>ClientHandle,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">if let </span><span class="prelude-val">Some</span>(notes) = initial_notes {
         <span class="kw">let </span>amount = notes.total_amount();
-        <span class="macro">info!</span>(<span class="string">&quot;Reissuing initial notes, got {amount}&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"Reissuing initial notes, got {amount}"</span>);
         reissue_notes(coordinator, notes, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
     }
     <span class="prelude-val">Ok</span>(())
@@ -1882,16 +1933,16 @@
 <span class="kw">async fn </span>get_coordinator_client(
     db_path: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
     invite_code: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
-) -&gt; anyhow::Result&lt;(ClientArc, <span class="prelude-ty">Option</span>&lt;InviteCode&gt;)&gt; {
+) -&gt; anyhow::Result&lt;(ClientHandle, <span class="prelude-ty">Option</span>&lt;InviteCode&gt;)&gt; {
     <span class="kw">let </span>(client, invite_code) = <span class="kw">if let </span><span class="prelude-val">Some</span>(db_path) = db_path {
-        <span class="kw">let </span>coordinator_db = db_path.join(<span class="string">&quot;coordinator.db&quot;</span>);
+        <span class="kw">let </span>coordinator_db = db_path.join(<span class="string">"coordinator.db"</span>);
         <span class="kw">if </span>coordinator_db.exists() {
             build_client(invite_code.clone(), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>coordinator_db)).<span class="kw">await</span><span class="question-mark">?
         </span>} <span class="kw">else </span>{
             tokio::fs::create_dir_all(db_path).<span class="kw">await</span><span class="question-mark">?</span>;
             build_client(
                 <span class="prelude-val">Some</span>(invite_code.clone().context(
-                    <span class="string">&quot;Running on this archive dir for the first time, an invite code is required&quot;</span>,
+                    <span class="string">"Running on this archive dir for the first time, an invite code is required"</span>,
                 )<span class="question-mark">?</span>),
                 <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>coordinator_db),
             )
@@ -1902,7 +1953,7 @@
             <span class="prelude-val">Some</span>(
                 invite_code
                     .clone()
-                    .context(<span class="string">&quot;No archive dir given, an invite code is strictly required&quot;</span>)<span class="question-mark">?</span>,
+                    .context(<span class="string">"No archive dir given, an invite code is strictly required"</span>)<span class="question-mark">?</span>,
             ),
             <span class="prelude-val">None</span>,
         )
@@ -1912,13 +1963,22 @@
 }
 
 <span class="kw">fn </span>get_db_path(archive_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;PathBuf&gt; {
-    archive_dir.as_ref().map(|p| p.join(<span class="string">&quot;db&quot;</span>))
+    archive_dir.as_ref().map(|p| p.join(<span class="string">"db"</span>))
 }
+
+<span class="kw">async fn </span>get_lightning_gateway(
+    client: <span class="kw-2">&amp;</span>ClientHandle,
+    gateway_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
+) -&gt; <span class="prelude-ty">Option</span>&lt;LightningGateway&gt; {
+    <span class="kw">let </span>gateway_id = parse_gateway_id(gateway_id.or(<span class="prelude-val">None</span>)<span class="question-mark">?</span>.as_str()).expect(<span class="string">"Invalid gateway id"</span>);
+    <span class="kw">let </span>ln_module = client.get_first_module::&lt;LightningClientModule&gt;();
+    ln_module.select_gateway(<span class="kw-2">&amp;</span>gateway_id).<span class="kw">await
+</span>}
 
 <span class="attr">#[allow(clippy::too_many_arguments)]
 </span><span class="kw">async fn </span>do_load_test_user_task(
     prefix: String,
-    client: ClientArc,
+    client: ClientHandle,
     oob_notes: Vec&lt;OOBNotes&gt;,
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
@@ -1926,32 +1986,50 @@
     additional_invoices: Vec&lt;Bolt11Invoice&gt;,
     generate_invoice_with: <span class="prelude-ty">Option</span>&lt;LnInvoiceGeneration&gt;,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
+    gateway_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">let </span>ln_gateway = get_lightning_gateway(<span class="kw-2">&amp;</span>client, gateway_id).<span class="kw">await</span>;
     <span class="kw">for </span>oob_note <span class="kw">in </span>oob_notes {
         <span class="kw">let </span>amount = oob_note.total_amount();
         reissue_notes(<span class="kw-2">&amp;</span>client, oob_note, <span class="kw-2">&amp;</span>event_sender)
             .<span class="kw">await
-            </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;while reissuing initial {amount}: {e}&quot;</span>))<span class="question-mark">?</span>;
+            </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">"while reissuing initial {amount}: {e}"</span>))<span class="question-mark">?</span>;
     }
     <span class="kw">let </span><span class="kw-2">mut </span>generated_invoices_per_user_iterator = (<span class="number">0</span>..generated_invoices_per_user).peekable();
     <span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="kw">_</span>) = generated_invoices_per_user_iterator.next() {
         <span class="kw">let </span>total_amount = get_note_summary(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>.total_amount();
         <span class="kw">if </span>invoice_amount &gt; total_amount {
-            <span class="macro">warn!</span>(<span class="string">&quot;Can&#39;t pay invoice, not enough funds: {invoice_amount} &gt; {total_amount}&quot;</span>);
+            <span class="macro">warn!</span>(<span class="string">"Can't pay invoice, not enough funds: {invoice_amount} &gt; {total_amount}"</span>);
         } <span class="kw">else </span>{
             <span class="kw">match </span>generate_invoice_with {
                 <span class="prelude-val">Some</span>(LnInvoiceGeneration::ClnLightningCli) =&gt; {
                     <span class="kw">let </span>(invoice, label) = cln_create_invoice(invoice_amount).<span class="kw">await</span><span class="question-mark">?</span>;
-                    gateway_pay_invoice(<span class="kw-2">&amp;</span>prefix, <span class="string">&quot;LND&quot;</span>, <span class="kw-2">&amp;</span>client, invoice, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
+                    gateway_pay_invoice(
+                        <span class="kw-2">&amp;</span>prefix,
+                        <span class="string">"LND"</span>,
+                        <span class="kw-2">&amp;</span>client,
+                        invoice,
+                        <span class="kw-2">&amp;</span>event_sender,
+                        ln_gateway.clone(),
+                    )
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
                     cln_wait_invoice_payment(<span class="kw-2">&amp;</span>label).<span class="kw">await</span><span class="question-mark">?</span>;
                 }
                 <span class="prelude-val">Some</span>(LnInvoiceGeneration::LnCli) =&gt; {
                     <span class="kw">let </span>(invoice, r_hash) = lnd_create_invoice(invoice_amount).<span class="kw">await</span><span class="question-mark">?</span>;
-                    gateway_pay_invoice(<span class="kw-2">&amp;</span>prefix, <span class="string">&quot;CLN&quot;</span>, <span class="kw-2">&amp;</span>client, invoice, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
+                    gateway_pay_invoice(
+                        <span class="kw-2">&amp;</span>prefix,
+                        <span class="string">"CLN"</span>,
+                        <span class="kw-2">&amp;</span>client,
+                        invoice,
+                        <span class="kw-2">&amp;</span>event_sender,
+                        ln_gateway.clone(),
+                    )
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
                     lnd_wait_invoice_payment(r_hash).<span class="kw">await</span><span class="question-mark">?</span>;
                 }
                 <span class="prelude-val">None </span><span class="kw">if </span>additional_invoices.is_empty() =&gt; {
-                    <span class="macro">debug!</span>(<span class="string">&quot;No method given to generate an invoice and no invoices on file, will not test the gateway&quot;</span>);
+                    <span class="macro">debug!</span>(<span class="string">"No method given to generate an invoice and no invoices on file, will not test the gateway"</span>);
                     <span class="kw">break</span>;
                 }
                 <span class="prelude-val">None </span>=&gt; {
@@ -1970,11 +2048,19 @@
         <span class="kw">let </span>invoice_amount =
             Amount::from_msats(invoice.amount_milli_satoshis().unwrap_or_default());
         <span class="kw">if </span>invoice_amount &gt; total_amount {
-            <span class="macro">warn!</span>(<span class="string">&quot;Can&#39;t pay invoice, not enough funds: {invoice_amount} &gt; {total_amount}&quot;</span>);
+            <span class="macro">warn!</span>(<span class="string">"Can't pay invoice, not enough funds: {invoice_amount} &gt; {total_amount}"</span>);
         } <span class="kw">else if </span>invoice_amount == Amount::ZERO {
-            <span class="macro">warn!</span>(<span class="string">&quot;Can&#39;t pay invoice {invoice}, amount is zero&quot;</span>);
+            <span class="macro">warn!</span>(<span class="string">"Can't pay invoice {invoice}, amount is zero"</span>);
         } <span class="kw">else </span>{
-            gateway_pay_invoice(<span class="kw-2">&amp;</span>prefix, <span class="string">&quot;unknown&quot;</span>, <span class="kw-2">&amp;</span>client, invoice, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
+            gateway_pay_invoice(
+                <span class="kw-2">&amp;</span>prefix,
+                <span class="string">"unknown"</span>,
+                <span class="kw-2">&amp;</span>client,
+                invoice,
+                <span class="kw-2">&amp;</span>event_sender,
+                ln_gateway.clone(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">if </span>additional_invoices.peek().is_some() {
                 <span class="comment">// Only sleep while there are more invoices to pay
                 </span>fedimint_core::task::sleep(ln_payment_sleep).<span class="kw">await</span>;
@@ -1997,7 +2083,7 @@
     invoice_amount: Amount,
     strategy: LnCircularStrategy,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
-) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">&#39;static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
+) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">'static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
     <span class="kw">let </span>db_path = get_db_path(archive_dir);
     <span class="kw">let </span>(coordinator, invite_code) = get_coordinator_client(<span class="kw-2">&amp;</span>db_path, <span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>minimum_notes = notes_per_user * users;
@@ -2006,17 +2092,17 @@
     reissue_initial_notes(initial_notes, <span class="kw-2">&amp;</span>coordinator, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
     get_required_notes(<span class="kw-2">&amp;</span>coordinator, minimum_amount_required, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="macro">info!</span>(<span class="string">&quot;Reminting {minimum_notes} notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Reminting {minimum_notes} notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)"</span>);
     remint_denomination(<span class="kw-2">&amp;</span>coordinator, note_denomination, minimum_notes).<span class="kw">await</span><span class="question-mark">?</span>;
 
     print_coordinator_notes(<span class="kw-2">&amp;</span>coordinator).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>users_clients = get_users_clients(users, db_path, invite_code.clone(), <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>users_clients = get_users_clients(users, db_path, invite_code.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span><span class="kw-2">mut </span>users_notes =
         get_notes_for_users(users, notes_per_user, coordinator, note_denomination).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="macro">info!</span>(<span class="string">&quot;Starting user tasks&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Starting user tasks"</span>);
     <span class="kw">let </span>futures = users_clients
         .into_iter()
         .enumerate()
@@ -2025,7 +2111,7 @@
             <span class="kw">let </span>oob_notes = users_notes.remove(<span class="kw-2">&amp;</span>u).unwrap();
             <span class="kw">let </span>event_sender = event_sender.clone();
             <span class="kw">let </span>f: BoxFuture&lt;<span class="kw">_</span>&gt; = Box::pin(do_ln_circular_test_user_task(
-                <span class="macro">format!</span>(<span class="string">&quot;User {u}:&quot;</span>),
+                <span class="macro">format!</span>(<span class="string">"User {u}:"</span>),
                 client,
                 invite_code.clone(),
                 oob_notes,
@@ -2045,7 +2131,7 @@
 <span class="attr">#[allow(clippy::too_many_arguments)]
 </span><span class="kw">async fn </span>do_ln_circular_test_user_task(
     prefix: String,
-    client: ClientArc,
+    client: ClientHandle,
     invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
     oob_notes: Vec&lt;OOBNotes&gt;,
     test_duration: Duration,
@@ -2058,13 +2144,13 @@
         <span class="kw">let </span>amount = oob_note.total_amount();
         reissue_notes(<span class="kw-2">&amp;</span>client, oob_note, <span class="kw-2">&amp;</span>event_sender)
             .<span class="kw">await
-            </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;while reissuing initial {amount}: {e}&quot;</span>))<span class="question-mark">?</span>;
+            </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">"while reissuing initial {amount}: {e}"</span>))<span class="question-mark">?</span>;
     }
     <span class="kw">let </span>initial_time = fedimint_core::time::now();
     <span class="kw">let </span>still_ontime = || <span class="kw">async </span>{
         fedimint_core::time::now()
             .duration_since(initial_time)
-            .expect(<span class="string">&quot;time to work&quot;</span>)
+            .expect(<span class="string">"time to work"</span>)
             &lt;= test_duration
     };
     <span class="kw">let </span>sleep_a_bit = || <span class="kw">async </span>{
@@ -2083,13 +2169,14 @@
             };
             <span class="kw">while </span>still_ontime().<span class="kw">await </span>{
                 <span class="kw">let </span>gateway_id = get_gateway_id(invoice_generation).<span class="kw">await</span><span class="question-mark">?</span>;
-                switch_default_gateway(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>ln_gateway = get_lightning_gateway(<span class="kw-2">&amp;</span>client, <span class="prelude-val">Some</span>(gateway_id)).<span class="kw">await</span>;
                 run_two_gateways_strategy(
                     <span class="kw-2">&amp;</span>prefix,
                     <span class="kw-2">&amp;mut </span>invoice_generation,
                     <span class="kw-2">&amp;</span>invoice_amount,
                     <span class="kw-2">&amp;</span>event_sender,
                     <span class="kw-2">&amp;</span>client,
+                    ln_gateway,
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
                 sleep_a_bit().<span class="kw">await</span>;
@@ -2113,34 +2200,43 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">const </span>GATEWAY_CREATE_INVOICE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;gateway_create_invoice&quot;</span>;
+<span class="kw">const </span>GATEWAY_CREATE_INVOICE: <span class="kw-2">&amp;</span>str = <span class="string">"gateway_create_invoice"</span>;
 
 <span class="kw">async fn </span>run_two_gateways_strategy(
     prefix: <span class="kw-2">&amp;</span>str,
     invoice_generation: <span class="kw-2">&amp;mut </span>LnInvoiceGeneration,
     invoice_amount: <span class="kw-2">&amp;</span>Amount,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
-    client: <span class="kw-2">&amp;</span>ClientArc,
+    client: <span class="kw-2">&amp;</span>ClientHandle,
+    ln_gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     <span class="kw">let </span>create_invoice_time = fedimint_core::time::now();
     <span class="kw">match </span><span class="kw-2">*</span>invoice_generation {
         LnInvoiceGeneration::ClnLightningCli =&gt; {
             <span class="kw">let </span>(invoice, label) = cln_create_invoice(<span class="kw-2">*</span>invoice_amount).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>elapsed = create_invoice_time.elapsed()<span class="question-mark">?</span>;
-            <span class="macro">info!</span>(<span class="string">&quot;Created invoice using CLN in {elapsed:?}&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">"Created invoice using CLN in {elapsed:?}"</span>);
             event_sender.send(MetricEvent {
                 name: GATEWAY_CREATE_INVOICE.into(),
                 duration: elapsed,
             })<span class="question-mark">?</span>;
-            gateway_pay_invoice(prefix, <span class="string">&quot;LND&quot;</span>, client, invoice, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
+            gateway_pay_invoice(
+                prefix,
+                <span class="string">"LND"</span>,
+                client,
+                invoice,
+                event_sender,
+                ln_gateway.clone(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
             cln_wait_invoice_payment(<span class="kw-2">&amp;</span>label).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>(operation_id, invoice) =
-                client_create_invoice(client, <span class="kw-2">*</span>invoice_amount, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
+                client_create_invoice(client, <span class="kw-2">*</span>invoice_amount, event_sender, ln_gateway).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
             cln_pay_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
             wait_invoice_payment(
                 prefix,
-                <span class="string">&quot;LND&quot;</span>,
+                <span class="string">"LND"</span>,
                 client,
                 operation_id,
                 event_sender,
@@ -2152,20 +2248,28 @@
         LnInvoiceGeneration::LnCli =&gt; {
             <span class="kw">let </span>(invoice, r_hash) = lnd_create_invoice(<span class="kw-2">*</span>invoice_amount).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>elapsed = create_invoice_time.elapsed()<span class="question-mark">?</span>;
-            <span class="macro">info!</span>(<span class="string">&quot;Created invoice using LND in {elapsed:?}&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">"Created invoice using LND in {elapsed:?}"</span>);
             event_sender.send(MetricEvent {
                 name: GATEWAY_CREATE_INVOICE.into(),
                 duration: elapsed,
             })<span class="question-mark">?</span>;
-            gateway_pay_invoice(prefix, <span class="string">&quot;CLN&quot;</span>, client, invoice, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
+            gateway_pay_invoice(
+                prefix,
+                <span class="string">"CLN"</span>,
+                client,
+                invoice,
+                event_sender,
+                ln_gateway.clone(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
             lnd_wait_invoice_payment(r_hash).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>(operation_id, invoice) =
-                client_create_invoice(client, <span class="kw-2">*</span>invoice_amount, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
+                client_create_invoice(client, <span class="kw-2">*</span>invoice_amount, event_sender, ln_gateway).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
             lnd_pay_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
             wait_invoice_payment(
                 prefix,
-                <span class="string">&quot;CLN&quot;</span>,
+                <span class="string">"CLN"</span>,
                 client,
                 operation_id,
                 event_sender,
@@ -2180,21 +2284,21 @@
 
 <span class="kw">async fn </span>do_self_payment(
     prefix: <span class="kw-2">&amp;</span>str,
-    client: <span class="kw-2">&amp;</span>ClientArc,
+    client: <span class="kw-2">&amp;</span>ClientHandle,
     invoice_amount: Amount,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>(operation_id, invoice) =
-        client_create_invoice(client, invoice_amount, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
+        client_create_invoice(client, invoice_amount, event_sender, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
     <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-    <span class="kw">let </span>gateway = lightning_module.select_active_gateway_opt().<span class="kw">await</span>;
-    lightning_module
-        .pay_bolt11_invoice(gateway, invoice, ())
+    <span class="comment">//let gateway = lightning_module.select_active_gateway_opt().await;
+    </span>lightning_module
+        .pay_bolt11_invoice(<span class="prelude-val">None</span>, invoice, ())
         .<span class="kw">await</span><span class="question-mark">?</span>;
     wait_invoice_payment(
         prefix,
-        <span class="string">&quot;gateway&quot;</span>,
+        <span class="string">"gateway"</span>,
         client,
         operation_id,
         event_sender,
@@ -2206,23 +2310,24 @@
 
 <span class="kw">async fn </span>do_partner_ping_pong(
     prefix: <span class="kw-2">&amp;</span>str,
-    client: <span class="kw-2">&amp;</span>ClientArc,
-    partner: <span class="kw-2">&amp;</span>ClientArc,
+    client: <span class="kw-2">&amp;</span>ClientHandle,
+    partner: <span class="kw-2">&amp;</span>ClientHandle,
     invoice_amount: Amount,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="comment">// Ping (partner creates invoice, client pays)
     </span><span class="kw">let </span>(operation_id, invoice) =
-        client_create_invoice(partner, invoice_amount, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
+        client_create_invoice(partner, invoice_amount, event_sender, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
     <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-    <span class="kw">let </span>gateway = lightning_module.select_active_gateway_opt().<span class="kw">await</span>;
-    lightning_module
-        .pay_bolt11_invoice(gateway, invoice, ())
+    <span class="comment">// TODO: Select random gateway?
+    //let gateway = lightning_module.select_active_gateway_opt().await;
+    </span>lightning_module
+        .pay_bolt11_invoice(<span class="prelude-val">None</span>, invoice, ())
         .<span class="kw">await</span><span class="question-mark">?</span>;
     wait_invoice_payment(
         prefix,
-        <span class="string">&quot;gateway&quot;</span>,
+        <span class="string">"gateway"</span>,
         partner,
         operation_id,
         event_sender,
@@ -2231,16 +2336,17 @@
     .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="comment">// Pong (client creates invoice, partner pays)
     </span><span class="kw">let </span>(operation_id, invoice) =
-        client_create_invoice(client, invoice_amount, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
+        client_create_invoice(client, invoice_amount, event_sender, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
     <span class="kw">let </span>partner_lightning_module = partner.get_first_module::&lt;LightningClientModule&gt;();
-    <span class="kw">let </span>gateway = partner_lightning_module.select_active_gateway_opt().<span class="kw">await</span>;
-    partner_lightning_module
-        .pay_bolt11_invoice(gateway, invoice, ())
+    <span class="comment">//let gateway = partner_lightning_module.select_active_gateway_opt().await;
+    // TODO: Select random gateway?
+    </span>partner_lightning_module
+        .pay_bolt11_invoice(<span class="prelude-val">None</span>, invoice, ())
         .<span class="kw">await</span><span class="question-mark">?</span>;
     wait_invoice_payment(
         prefix,
-        <span class="string">&quot;gateway&quot;</span>,
+        <span class="string">"gateway"</span>,
         client,
         operation_id,
         event_sender,
@@ -2253,15 +2359,15 @@
 <span class="kw">async fn </span>wait_invoice_payment(
     prefix: <span class="kw-2">&amp;</span>str,
     gateway_name: <span class="kw-2">&amp;</span>str,
-    client: <span class="kw-2">&amp;</span>ClientArc,
+    client: <span class="kw-2">&amp;</span>ClientHandle,
     operation_id: fedimint_core::core::OperationId,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
     pay_invoice_time: std::time::SystemTime,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>elapsed = pay_invoice_time.elapsed()<span class="question-mark">?</span>;
-    <span class="macro">info!</span>(<span class="string">&quot;{prefix} Invoice payment receive started using {gateway_name} in {elapsed:?}&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"{prefix} Invoice payment receive started using {gateway_name} in {elapsed:?}"</span>);
     event_sender.send(MetricEvent {
-        name: <span class="macro">format!</span>(<span class="string">&quot;gateway_{gateway_name}_payment_received_started&quot;</span>),
+        name: <span class="macro">format!</span>(<span class="string">"gateway_{gateway_name}_payment_received_started"</span>),
         duration: elapsed,
     })<span class="question-mark">?</span>;
     <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
@@ -2270,26 +2376,26 @@
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_stream();
     <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
-        <span class="macro">info!</span>(<span class="string">&quot;{prefix} Update: {update:?}&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"{prefix} Update: {update:?}"</span>);
         <span class="kw">match </span>update {
             LnReceiveState::Claimed =&gt; {
                 <span class="kw">let </span>elapsed: Duration = pay_invoice_time.elapsed()<span class="question-mark">?</span>;
-                <span class="macro">info!</span>(<span class="string">&quot;{prefix} Invoice payment received on {gateway_name} in {elapsed:?}&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"{prefix} Invoice payment received on {gateway_name} in {elapsed:?}"</span>);
                 event_sender.send(MetricEvent {
-                    name: <span class="string">&quot;gateway_payment_received_success&quot;</span>.into(),
+                    name: <span class="string">"gateway_payment_received_success"</span>.into(),
                     duration: elapsed,
                 })<span class="question-mark">?</span>;
                 event_sender.send(MetricEvent {
-                    name: <span class="macro">format!</span>(<span class="string">&quot;gateway_{gateway_name}_payment_received_success&quot;</span>),
+                    name: <span class="macro">format!</span>(<span class="string">"gateway_{gateway_name}_payment_received_success"</span>),
                     duration: elapsed,
                 })<span class="question-mark">?</span>;
                 <span class="kw">break</span>;
             }
             LnReceiveState::Canceled { reason } =&gt; {
                 <span class="kw">let </span>elapsed: Duration = pay_invoice_time.elapsed()<span class="question-mark">?</span>;
-                <span class="macro">info!</span>(<span class="string">&quot;{prefix} Invoice payment receive was canceled on {gateway_name}: {reason} in {elapsed:?}&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"{prefix} Invoice payment receive was canceled on {gateway_name}: {reason} in {elapsed:?}"</span>);
                 event_sender.send(MetricEvent {
-                    name: <span class="string">&quot;gateway_payment_received_canceled&quot;</span>.into(),
+                    name: <span class="string">"gateway_payment_received_canceled"</span>.into(),
                     duration: elapsed,
                 })<span class="question-mark">?</span>;
                 <span class="kw">break</span>;
@@ -2301,17 +2407,18 @@
 }
 
 <span class="kw">async fn </span>client_create_invoice(
-    client: <span class="kw-2">&amp;</span>ClientArc,
+    client: <span class="kw-2">&amp;</span>ClientHandle,
     invoice_amount: Amount,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
+    ln_gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
 ) -&gt; anyhow::Result&lt;(fedimint_core::core::OperationId, Bolt11Invoice)&gt; {
     <span class="kw">let </span>create_invoice_time = fedimint_core::time::now();
     <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
     <span class="kw">let </span>(operation_id, invoice, <span class="kw">_</span>) = lightning_module
-        .create_bolt11_invoice(invoice_amount, <span class="string">&quot;&quot;</span>.into(), <span class="prelude-val">None</span>, ())
+        .create_bolt11_invoice(invoice_amount, <span class="string">""</span>.into(), <span class="prelude-val">None</span>, (), ln_gateway)
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>elapsed = create_invoice_time.elapsed()<span class="question-mark">?</span>;
-    <span class="macro">info!</span>(<span class="string">&quot;Created invoice using gateway in {elapsed:?}&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Created invoice using gateway in {elapsed:?}"</span>);
     event_sender.send(MetricEvent {
         name: GATEWAY_CREATE_INVOICE.into(),
         duration: elapsed,
@@ -2323,7 +2430,7 @@
     invite_code: InviteCode,
     users: u16,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
-) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">&#39;static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
+) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">'static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
     <span class="prelude-val">Ok</span>((<span class="number">0</span>..users)
         .map(|<span class="kw">_</span>| {
             <span class="kw">let </span>invite_code = invite_code.clone();
@@ -2332,7 +2439,7 @@
                 <span class="kw">let </span>m = fedimint_core::time::now();
                 <span class="kw">let _ </span>= ClientConfig::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
                 event_sender.send(MetricEvent {
-                    name: <span class="string">&quot;download_client_config&quot;</span>.into(),
+                    name: <span class="string">"download_client_config"</span>.into(),
                     duration: m.elapsed()<span class="question-mark">?</span>,
                 })<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(())
@@ -2349,7 +2456,7 @@
     timeout: Duration,
     limit_endpoints: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
-) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">&#39;static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
+) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">'static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>cfg = ClientConfig::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">if let </span><span class="prelude-val">Some</span>(limit_endpoints) = limit_endpoints {
@@ -2359,12 +2466,12 @@
             .into_iter()
             .take(limit_endpoints)
             .collect();
-        <span class="macro">info!</span>(<span class="string">&quot;Limiting endpoints to {:?}&quot;</span>, cfg.global.api_endpoints);
+        <span class="macro">info!</span>(<span class="string">"Limiting endpoints to {:?}"</span>, cfg.global.api_endpoints);
     }
     <span class="kw">use </span>jsonrpsee_core::client::ClientT;
     <span class="kw">use </span>jsonrpsee_ws_client::WsClientBuilder;
 
-    <span class="macro">info!</span>(<span class="string">&quot;Connecting to {users} clients&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Connecting to {users} clients"</span>);
     <span class="kw">let </span>clients = (<span class="number">0</span>..users)
         .flat_map(|<span class="kw">_</span>| {
             <span class="kw">let </span>clients = cfg.global.api_endpoints.values().map(|url| <span class="kw">async </span>{
@@ -2380,7 +2487,7 @@
         })
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
     <span class="kw">let </span>clients = futures::future::try_join_all(clients).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(<span class="string">&quot;Keeping {users} clients connected for {duration:?}&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Keeping {users} clients connected for {duration:?}"</span>);
     <span class="prelude-val">Ok</span>(clients
         .into_iter()
         .map(|client| {
@@ -2407,11 +2514,11 @@
 
 <span class="kw">fn </span>url_to_string_with_default_port(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; String {
     <span class="macro">format!</span>(
-        <span class="string">&quot;{}://{}:{}{}&quot;</span>,
+        <span class="string">"{}://{}:{}{}"</span>,
         url.scheme(),
-        url.host().expect(<span class="string">&quot;Asserted on construction&quot;</span>),
+        url.host().expect(<span class="string">"Asserted on construction"</span>),
         url.port_or_known_default()
-            .expect(<span class="string">&quot;Asserted on construction&quot;</span>),
+            .expect(<span class="string">"Asserted on construction"</span>),
         url.path()
     )
 }
@@ -2425,10 +2532,10 @@
     <span class="kw">let </span><span class="kw-2">mut </span>previous_metrics = <span class="macro">vec!</span>[];
     <span class="kw">let </span><span class="kw-2">mut </span>comparison_output = <span class="prelude-val">None</span>;
     <span class="kw">if let </span><span class="prelude-val">Some</span>(archive_dir) = opts.archive_dir {
-        <span class="kw">let </span><span class="kw-2">mut </span>archive_metrics = archive_dir.join(<span class="string">&quot;metrics&quot;</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>archive_metrics = archive_dir.join(<span class="string">"metrics"</span>);
         archive_metrics.push(opts.users.to_string());
         tokio::fs::create_dir_all(<span class="kw-2">&amp;</span>archive_metrics).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>archive_comparisons = archive_dir.join(<span class="string">&quot;comparisons&quot;</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>archive_comparisons = archive_dir.join(<span class="string">"comparisons"</span>);
         archive_comparisons.push(opts.users.to_string());
         tokio::fs::create_dir_all(<span class="kw-2">&amp;</span>archive_comparisons).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -2446,7 +2553,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(latest_metrics_file) = latest_metrics_file {
             <span class="kw">let </span>latest_metrics_file = tokio::fs::File::open(<span class="kw-2">&amp;</span>latest_metrics_file)
                 .<span class="kw">await
-                </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Failed to open {latest_metrics_file:?}&quot;</span>))<span class="question-mark">?</span>;
+                </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"Failed to open {latest_metrics_file:?}"</span>))<span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>lines = tokio::io::BufReader::new(latest_metrics_file).lines();
             <span class="kw">while let </span><span class="prelude-val">Some</span>(line) = lines.next_line().<span class="kw">await</span><span class="question-mark">? </span>{
                 <span class="kw">match </span>serde_json::from_str::&lt;EventMetricSummary&gt;(<span class="kw-2">&amp;</span>line) {
@@ -2454,12 +2561,12 @@
                         previous_metrics.push(metric);
                     }
                     <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">warn!</span>(<span class="string">&quot;Failed to parse previous metric: {e:?}&quot;</span>);
+                        <span class="macro">warn!</span>(<span class="string">"Failed to parse previous metric: {e:?}"</span>);
                     }
                 }
             }
         }
-        <span class="kw">let </span>new_metric_output = archive_metrics.join(<span class="macro">format!</span>(<span class="string">&quot;{timestamp_seconds}.json&quot;</span>,));
+        <span class="kw">let </span>new_metric_output = archive_metrics.join(<span class="macro">format!</span>(<span class="string">"{timestamp_seconds}.json"</span>,));
         <span class="kw">let </span>new_metric_output = BufWriter::new(
             OpenOptions::new()
                 .write(<span class="bool-val">true</span>)
@@ -2471,7 +2578,7 @@
         metrics_json_output_files.push(new_metric_output);
         <span class="kw">if </span>!previous_metrics.is_empty() {
             <span class="kw">let </span>new_comparison_output =
-                archive_comparisons.join(<span class="macro">format!</span>(<span class="string">&quot;{timestamp_seconds}.json&quot;</span>,));
+                archive_comparisons.join(<span class="macro">format!</span>(<span class="string">"{timestamp_seconds}.json"</span>,));
             comparison_output = <span class="prelude-val">Some</span>(BufWriter::new(
                 OpenOptions::new()
                     .write(<span class="bool-val">true</span>)
@@ -2487,6 +2594,7 @@
             tokio::fs::OpenOptions::new()
                 .write(<span class="bool-val">true</span>)
                 .create(<span class="bool-val">true</span>)
+                .truncate(<span class="bool-val">true</span>)
                 .open(metrics_json_output)
                 .<span class="kw">await</span><span class="question-mark">?</span>,
         ))
@@ -2536,32 +2644,32 @@
                 };
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(comparison_output) = <span class="kw-2">&amp;mut </span>comparison_output {
                     <span class="kw">let </span>comparison_json =
-                        serde_json::to_string(<span class="kw-2">&amp;</span>comparison).expect(<span class="string">&quot;to be serializable&quot;</span>);
+                        serde_json::to_string(<span class="kw-2">&amp;</span>comparison).expect(<span class="string">"to be serializable"</span>);
                     comparison_output
-                        .write_all(<span class="macro">format!</span>(<span class="string">&quot;{comparison_json}\n&quot;</span>).as_bytes())
+                        .write_all(<span class="macro">format!</span>(<span class="string">"{comparison_json}\n"</span>).as_bytes())
                         .<span class="kw">await
-                        </span>.expect(<span class="string">&quot;to write on file&quot;</span>);
+                        </span>.expect(<span class="string">"to write on file"</span>);
                 }
                 <span class="prelude-val">Some</span>(comparison)
             } <span class="kw">else </span>{
-                <span class="macro">info!</span>(<span class="string">&quot;Skipping comparison for {k} because previous metric has different n ({} vs {})&quot;</span>, previous_metric.n, metric_summary.n);
+                <span class="macro">info!</span>(<span class="string">"Skipping comparison for {k} because previous metric has different n ({} vs {})"</span>, previous_metric.n, metric_summary.n);
                 <span class="prelude-val">None
             </span>}
         } <span class="kw">else </span>{
             <span class="prelude-val">None
         </span>};
         <span class="kw">if let </span><span class="prelude-val">Some</span>(comparison) = comparison {
-            <span class="macro">println!</span>(<span class="string">&quot;{n} {k}: avg {avg:?}, median {median:?}, max {max:?}, min {min:?} (compared to previous: {comparison})&quot;</span>);
+            <span class="macro">println!</span>(<span class="string">"{n} {k}: avg {avg:?}, median {median:?}, max {max:?}, min {min:?} (compared to previous: {comparison})"</span>);
         } <span class="kw">else </span>{
-            <span class="macro">println!</span>(<span class="string">&quot;{n} {k}: avg {avg:?}, median {median:?}, max {max:?}, min {min:?}&quot;</span>);
+            <span class="macro">println!</span>(<span class="string">"{n} {k}: avg {avg:?}, median {median:?}, max {max:?}, min {min:?}"</span>);
         }
         <span class="kw">let </span>metric_summary_json =
-            serde_json::to_string(<span class="kw-2">&amp;</span>metric_summary).expect(<span class="string">&quot;to be serializable&quot;</span>);
+            serde_json::to_string(<span class="kw-2">&amp;</span>metric_summary).expect(<span class="string">"to be serializable"</span>);
         <span class="kw">for </span>metrics_json_output_file <span class="kw">in </span><span class="kw-2">&amp;mut </span>metrics_json_output_files {
             metrics_json_output_file
-                .write_all(<span class="macro">format!</span>(<span class="string">&quot;{metric_summary_json}\n&quot;</span>).as_bytes())
+                .write_all(<span class="macro">format!</span>(<span class="string">"{metric_summary_json}\n"</span>).as_bytes())
                 .<span class="kw">await
-                </span>.expect(<span class="string">&quot;to write on file&quot;</span>);
+                </span>.expect(<span class="string">"to write on file"</span>);
         }
     }
     <span class="kw">for </span><span class="kw-2">mut </span>output <span class="kw">in </span>metrics_json_output_files {
@@ -2577,16 +2685,16 @@
     <span class="kw">let </span>gateway_json = <span class="kw">match </span>generate_invoice_with {
         LnInvoiceGeneration::ClnLightningCli =&gt; {
             <span class="comment">// If we are paying a lnd invoice, we use the cln gateway
-            </span><span class="macro">cmd!</span>(GatewayLndCli, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await
+            </span><span class="macro">cmd!</span>(GatewayLndCli, <span class="string">"info"</span>).out_json().<span class="kw">await
         </span>}
         LnInvoiceGeneration::LnCli =&gt; {
             <span class="comment">// and vice-versa
-            </span><span class="macro">cmd!</span>(GatewayClnCli, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await
+            </span><span class="macro">cmd!</span>(GatewayClnCli, <span class="string">"info"</span>).out_json().<span class="kw">await
         </span>}
     }<span class="question-mark">?</span>;
-    <span class="kw">let </span>gateway_id = gateway_json[<span class="string">&quot;gateway_id&quot;</span>]
+    <span class="kw">let </span>gateway_id = gateway_json[<span class="string">"gateway_id"</span>]
         .as_str()
-        .context(<span class="string">&quot;Missing gateway_id field&quot;</span>)<span class="question-mark">?</span>;
+        .context(<span class="string">"Missing gateway_id field"</span>)<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(gateway_id.into())
 }

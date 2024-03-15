@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/core/server.rs`."><title>server.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_core/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/core/server.rs`."><title>server.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_core/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -293,19 +295,19 @@
     <span class="doccomment">/// Returns the decoder belonging to the server module
     </span><span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder;
 
-    <span class="doccomment">/// This module&#39;s contribution to the next consensus proposal
+    <span class="doccomment">/// This module's contribution to the next consensus proposal
     </span><span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         module_instance_id: ModuleInstanceId,
     ) -&gt; Vec&lt;DynModuleConsensusItem&gt;;
 
     <span class="doccomment">/// This function is called once for every consensus item. The function
     /// returns an error if any only if the consensus item does not change
     /// our state and therefore may be safely discarded by the atomic broadcast.
-    </span><span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">'a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'a</span>&gt;,
         consensus_item: DynModuleConsensusItem,
         peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt;;
@@ -314,10 +316,10 @@
     /// be part of the database transaction. On failure (e.g. double spend)
     /// the database transaction is rolled back and the operation will take
     /// no effect.
-    </span><span class="kw">async fn </span>process_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>DynInput,
+    </span><span class="kw">async fn </span>process_input&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, <span class="lifetime">'c</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'c</span>&gt;,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">'b </span>DynInput,
         module_instance_id: ModuleInstanceId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, DynInputError&gt;;
 
@@ -329,9 +331,9 @@
     /// The supplied `out_point` identifies the operation (e.g. a peg-out or
     /// note issuance) and can be used to retrieve its outcome later using
     /// `output_status`.
-    </span><span class="kw">async fn </span>process_output&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">async fn </span>process_output&lt;<span class="lifetime">'a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'a</span>&gt;,
         output: <span class="kw-2">&amp;</span>DynOutput,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
@@ -343,7 +345,7 @@
     /// output is unknown, **NOT** if it is just not ready yet.
     </span><span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;DynOutputOutcome&gt;;
@@ -355,7 +357,7 @@
     /// occurred in the database and consensus should halt.
     </span><span class="kw">async fn </span>audit(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         audit: <span class="kw-2">&amp;mut </span>Audit,
         module_instance_id: ModuleInstanceId,
     );
@@ -375,7 +377,7 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl</span>&lt;T&gt; IServerModule <span class="kw">for </span>T
 <span class="kw">where
-    </span>T: ServerModule + <span class="lifetime">&#39;static </span>+ Sync,
+    </span>T: ServerModule + <span class="lifetime">'static </span>+ Sync,
 {
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
         &lt;T::Common <span class="kw">as </span>ModuleCommon&gt;::decoder_builder().build()
@@ -385,10 +387,10 @@
         <span class="self">self
     </span>}
 
-    <span class="doccomment">/// This module&#39;s contribution to the next consensus proposal
+    <span class="doccomment">/// This module's contribution to the next consensus proposal
     </span><span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         module_instance_id: ModuleInstanceId,
     ) -&gt; Vec&lt;DynModuleConsensusItem&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::consensus_proposal(<span class="self">self</span>, dbtx)
@@ -401,9 +403,9 @@
     <span class="doccomment">/// This function is called once for every consensus item. The function
     /// returns an error if any only if the consensus item does not change
     /// our state and therefore may be safely discarded by the atomic broadcast.
-    </span><span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">'a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'a</span>&gt;,
         consensus_item: DynModuleConsensusItem,
         peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt; {
@@ -413,7 +415,7 @@
             Clone::clone(
                 consensus_item.as_any()
                     .downcast_ref::&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Common <span class="kw">as </span>ModuleCommon&gt;::ConsensusItem&gt;()
-                    .expect(<span class="string">&quot;incorrect consensus item type passed to module plugin&quot;</span>),
+                    .expect(<span class="string">"incorrect consensus item type passed to module plugin"</span>),
             ),
             peer_id
         )
@@ -424,10 +426,10 @@
     /// be part of the database transaction. On failure (e.g. double spend)
     /// the database transaction is rolled back and the operation will take
     /// no effect.
-    </span><span class="kw">async fn </span>process_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>DynInput,
+    </span><span class="kw">async fn </span>process_input&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, <span class="lifetime">'c</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'c</span>&gt;,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">'b </span>DynInput,
         module_instance_id: ModuleInstanceId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, DynInputError&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::process_input(
@@ -436,7 +438,7 @@
             input
                 .as_any()
                 .downcast_ref::&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Common <span class="kw">as </span>ModuleCommon&gt;::Input&gt;()
-                .expect(<span class="string">&quot;incorrect input type passed to module plugin&quot;</span>),
+                .expect(<span class="string">"incorrect input type passed to module plugin"</span>),
         )
         .<span class="kw">await
         </span>.map(Into::into)
@@ -451,9 +453,9 @@
     /// The supplied `out_point` identifies the operation (e.g. a peg-out or
     /// note issuance) and can be used to retrieve its outcome later using
     /// `output_status`.
-    </span><span class="kw">async fn </span>process_output&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">async fn </span>process_output&lt;<span class="lifetime">'a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'a</span>&gt;,
         output: <span class="kw-2">&amp;</span>DynOutput,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
@@ -464,7 +466,7 @@
             output
                 .as_any()
                 .downcast_ref::&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::Common <span class="kw">as </span>ModuleCommon&gt;::Output&gt;()
-                .expect(<span class="string">&quot;incorrect output type passed to module plugin&quot;</span>),
+                .expect(<span class="string">"incorrect output type passed to module plugin"</span>),
             out_point,
         )
         .<span class="kw">await
@@ -477,7 +479,7 @@
     /// output is unknown, **NOT** if it is just not ready yet.
     </span><span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;DynOutputOutcome&gt; {
@@ -493,7 +495,7 @@
     /// occurred in the database and consensus should halt.
     </span><span class="kw">async fn </span>audit(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         audit: <span class="kw-2">&amp;mut </span>Audit,
         module_instance_id: ModuleInstanceId,
     ) {
@@ -507,12 +509,12 @@
                 path,
                 handler: Box::new(
                     <span class="kw">move </span>|module: <span class="kw-2">&amp;</span>DynServerModule,
-                          context: ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;,
+                          context: ApiEndpointContext&lt;<span class="lifetime">'_</span>&gt;,
                           value: ApiRequestErased| {
                         <span class="kw">let </span>typed_module = module
                             .as_any()
                             .downcast_ref::&lt;T&gt;()
-                            .expect(<span class="string">&quot;the dispatcher should always call with the right module&quot;</span>);
+                            .expect(<span class="string">"the dispatcher should always call with the right module"</span>);
                         Box::pin(handler(typed_module, context, value))
                     },
                 ),

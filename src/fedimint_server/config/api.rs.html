@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config/api.rs`."><title>api.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_server/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config/api.rs`."><title>api.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_server/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1394,9 +1396,9 @@
 <span class="kw">use </span>fedimint_aead::random_salt;
 <span class="kw">use </span>fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
-    ConfigGenParamsResponse, PeerServerParams, WsAdminClient,
+    ConfigGenParamsResponse, PeerServerParams,
 };
-<span class="kw">use </span>fedimint_core::api::{ServerStatus, StatusResponse};
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, ServerStatus, StatusResponse};
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
@@ -1463,7 +1465,7 @@
             task_group: task_group.clone(),
             version_hash,
         };
-        <span class="macro">info!</span>(target: fedimint_logging::LOG_NET_PEER_DKG, <span class="string">&quot;Created new config gen Api&quot;</span>);
+        <span class="macro">info!</span>(target: fedimint_logging::LOG_NET_PEER_DKG, <span class="string">"Created new config gen Api"</span>);
         config_gen_api
     }
 
@@ -1474,15 +1476,15 @@
         state.status = ServerStatus::SharingConfigGenParams;
         <span class="macro">info!</span>(
             target: fedimint_logging::LOG_NET_PEER_DKG,
-            <span class="string">&quot;Set password for config gen&quot;
+            <span class="string">"Set password for config gen"
         </span>);
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">fn </span>require_status(<span class="kw-2">&amp;</span><span class="self">self</span>, status: ServerStatus) -&gt; ApiResult&lt;MutexGuard&lt;ConfigGenState&gt;&gt; {
-        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
+        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">"lock poisoned"</span>);
         <span class="kw">if </span>state.status != status {
-            <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;Expected to be in {status:?} state&quot;</span>));
+            <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Expected to be in {status:?} state"</span>));
         }
         <span class="prelude-val">Ok</span>(state)
     }
@@ -1491,9 +1493,9 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         statuses: <span class="kw-2">&amp;</span>[ServerStatus],
     ) -&gt; ApiResult&lt;MutexGuard&lt;ConfigGenState&gt;&gt; {
-        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
+        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">"lock poisoned"</span>);
         <span class="kw">if </span>!statuses.contains(<span class="kw-2">&amp;</span>state.status) {
-            <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;Expected to be in one of {:?} states&quot;</span>, statuses));
+            <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Expected to be in one of {:?} states"</span>, statuses));
         }
         <span class="prelude-val">Ok</span>(state)
     }
@@ -1513,36 +1515,36 @@
 
     <span class="doccomment">/// Sends our updated peer info to the leader (if we have one)
     </span><span class="kw">async fn </span>update_leader(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;()&gt; {
-        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>).clone();
+        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">"lock poisoned"</span>).clone();
         <span class="kw">let </span>local = state.local.clone();
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(url) = local.and_then(|local| local.leader_api_url) {
-            WsAdminClient::new(url)
+            DynGlobalApi::from_pre_peer_id_endpoint(url)
                 .add_config_gen_peer(state.our_peer_info()<span class="question-mark">?</span>)
                 .<span class="kw">await
-                </span>.map_err(|<span class="kw">_</span>| ApiError::not_found(<span class="string">&quot;Unable to connect to the leader&quot;</span>.to_string()))<span class="question-mark">?</span>;
+                </span>.map_err(|<span class="kw">_</span>| ApiError::not_found(<span class="string">"Unable to connect to the leader"</span>.to_string()))<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Called from `set_config_gen_connections` to add a peer&#39;s connection info
+    <span class="doccomment">/// Called from `set_config_gen_connections` to add a peer's connection info
     /// to the leader
     </span><span class="kw">pub fn </span>add_config_gen_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerServerParams) -&gt; ApiResult&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">"lock poisoned"</span>);
         state.peers.insert(peer.api_url.clone(), peer);
-        <span class="macro">info!</span>(target: fedimint_logging::LOG_NET_PEER_DKG, <span class="string">&quot;New peer added to config gen&quot;</span>);
+        <span class="macro">info!</span>(target: fedimint_logging::LOG_NET_PEER_DKG, <span class="string">"New peer added to config gen"</span>);
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Returns the peers that have called `add_config_gen_peer` on the leader
     </span><span class="kw">pub async fn </span>config_gen_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;Vec&lt;PeerServerParams&gt;&gt; {
-        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
+        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">"lock poisoned"</span>);
         <span class="prelude-val">Ok</span>(state.get_peer_info().into_values().collect())
     }
 
     <span class="doccomment">/// Returns default config gen params that can be modified by the leader
     </span><span class="kw">pub fn </span>default_config_gen_params(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;ConfigGenParamsRequest&gt; {
-        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
+        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">"lock poisoned"</span>);
         <span class="prelude-val">Ok</span>(state.settings.default_params.clone())
     }
 
@@ -1555,15 +1557,15 @@
         state.requested_params = <span class="prelude-val">Some</span>(request);
         <span class="macro">info!</span>(
             target: fedimint_logging::LOG_NET_PEER_DKG,
-            <span class="string">&quot;Set params for config gen&quot;
+            <span class="string">"Set params for config gen"
         </span>);
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">fn </span>get_requested_params(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;ConfigGenParamsRequest&gt; {
-        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>).clone();
+        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">"lock poisoned"</span>).clone();
         state.requested_params.ok_or(ApiError::bad_request(
-            <span class="string">&quot;Config params were not set on this guardian&quot;</span>.to_string(),
+            <span class="string">"Config params were not set on this guardian"</span>.to_string(),
         ))
     }
 
@@ -1572,15 +1574,15 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         request: <span class="kw-2">&amp;</span>ConfigGenParamsRequest,
     ) -&gt; ApiResult&lt;ConfigGenParamsResponse&gt; {
-        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>).clone();
+        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">"lock poisoned"</span>).clone();
         <span class="kw">let </span>local = state.local.clone();
 
         <span class="kw">let </span>consensus = <span class="kw">match </span>local.and_then(|local| local.leader_api_url) {
             <span class="prelude-val">Some</span>(leader_url) =&gt; {
-                <span class="kw">let </span>client = WsAdminClient::new(leader_url.clone());
+                <span class="kw">let </span>client = DynGlobalApi::from_pre_peer_id_endpoint(leader_url.clone());
                 <span class="kw">let </span>response = client.consensus_config_gen_params().<span class="kw">await</span>;
                 response
-                    .map_err(|<span class="kw">_</span>| ApiError::not_found(<span class="string">&quot;Cannot get leader params&quot;</span>.to_string()))<span class="question-mark">?
+                    .map_err(|<span class="kw">_</span>| ApiError::not_found(<span class="string">"Cannot get leader params"</span>.to_string()))<span class="question-mark">?
                     </span>.consensus
             }
             <span class="prelude-val">None </span>=&gt; ConfigGenParamsConsensus {
@@ -1611,13 +1613,14 @@
             </span>state.status = ServerStatus::ReadyForConfigGen;
             <span class="macro">info!</span>(
                 target: fedimint_logging::LOG_NET_PEER_DKG,
-                <span class="string">&quot;Update config gen status to &#39;Ready for config gen&#39;&quot;
+                <span class="string">"Update config gen status to 'Ready for config gen'"
             </span>);
             <span class="comment">// Create a WSClient for the leader
-            </span>state
-                .local
-                .clone()
-                .and_then(|local| local.leader_api_url.map(WsAdminClient::new))
+            </span>state.local.clone().and_then(|local| {
+                local
+                    .leader_api_url
+                    .map(DynGlobalApi::from_pre_peer_id_endpoint)
+            })
         };
 
         <span class="self">self</span>.update_leader().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1625,12 +1628,12 @@
         <span class="kw">let </span>self_clone = <span class="self">self</span>.clone();
         <span class="kw">let </span>sub_group = <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>;
         sub_group
-            .spawn(<span class="string">&quot;run dkg&quot;</span>, <span class="kw">move </span>|_handle| <span class="kw">async move </span>{
+            .spawn(<span class="string">"run dkg"</span>, <span class="kw">move </span>|_handle| <span class="kw">async move </span>{
                 <span class="comment">// Followers wait for leader to signal readiness for DKG
                 </span><span class="kw">if let </span><span class="prelude-val">Some</span>(client) = leader {
                     <span class="kw">loop </span>{
                         <span class="kw">let </span>status = client.status().<span class="kw">await</span>.map_err(|<span class="kw">_</span>| {
-                            ApiError::not_found(<span class="string">&quot;Unable to connect to the leader&quot;</span>.to_string())
+                            ApiError::not_found(<span class="string">"Unable to connect to the leader"</span>.to_string())
                         })<span class="question-mark">?</span>;
                         <span class="kw">if </span>status.server == ServerStatus::ReadyForConfigGen {
                             <span class="kw">break</span>;
@@ -1643,7 +1646,7 @@
                 </span><span class="kw">let </span>request = self_clone.get_requested_params()<span class="question-mark">?</span>;
                 <span class="kw">let </span>response = self_clone.consensus_config_gen_params(<span class="kw-2">&amp;</span>request).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>(params, registry) = {
-                    <span class="kw">let </span>state: MutexGuard&lt;<span class="lifetime">&#39;_</span>, ConfigGenState&gt; =
+                    <span class="kw">let </span>state: MutexGuard&lt;<span class="lifetime">'_</span>, ConfigGenState&gt; =
                         self_clone.require_status(ServerStatus::ReadyForConfigGen)<span class="question-mark">?</span>;
                     <span class="kw">let </span>params = state.get_config_gen_params(<span class="kw-2">&amp;</span>request, response.consensus)<span class="question-mark">?</span>;
                     <span class="kw">let </span>registry = state.settings.registry.clone();
@@ -1663,10 +1666,10 @@
                 task_group
                     .shutdown_join_all(<span class="prelude-val">None</span>)
                     .<span class="kw">await
-                    </span>.expect(<span class="string">&quot;shuts down&quot;</span>);
+                    </span>.expect(<span class="string">"shuts down"</span>);
 
                 {
-                    <span class="kw">let </span><span class="kw-2">mut </span>state = self_clone.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
+                    <span class="kw">let </span><span class="kw-2">mut </span>state = self_clone.state.lock().expect(<span class="string">"lock poisoned"</span>);
                     <span class="kw">match </span>config {
                         <span class="prelude-val">Ok</span>(config) =&gt; {
                             self_clone.stage_configs(<span class="kw-2">&amp;</span>config, <span class="kw-2">&amp;</span>state)<span class="question-mark">?</span>;
@@ -1674,18 +1677,18 @@
                             state.config = <span class="prelude-val">Some</span>(config);
                             <span class="macro">info!</span>(
                                 target: fedimint_logging::LOG_NET_PEER_DKG,
-                                <span class="string">&quot;Set config for config gen&quot;
+                                <span class="string">"Set config for config gen"
                             </span>);
                         }
                         <span class="prelude-val">Err</span>(e) =&gt; {
                             <span class="macro">error!</span>(
                                 target: fedimint_logging::LOG_NET_PEER_DKG,
-                                <span class="string">&quot;DKG failed with {:?}&quot;</span>, e
+                                <span class="string">"DKG failed with {:?}"</span>, e
                             );
                             state.status = ServerStatus::ConfigGenFailed;
                             <span class="macro">info!</span>(
                                 target: fedimint_logging::LOG_NET_PEER_DKG,
-                                <span class="string">&quot;Update config gen status to &#39;Config gen failed&#39;&quot;
+                                <span class="string">"Update config gen status to 'Config gen failed'"
                             </span>);
                         }
                     }
@@ -1708,7 +1711,7 @@
         <span class="kw">let </span>config = state
             .config
             .clone()
-            .ok_or(ApiError::bad_request(<span class="string">&quot;Missing config&quot;</span>.to_string()))<span class="question-mark">?</span>;
+            .ok_or(ApiError::bad_request(<span class="string">"Missing config"</span>.to_string()))<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(get_verification_hashes(<span class="kw-2">&amp;</span>config))
     }
@@ -1717,45 +1720,45 @@
     </span><span class="kw">fn </span>stage_configs(<span class="kw-2">&amp;</span><span class="self">self</span>, config: <span class="kw-2">&amp;</span>ServerConfig, state: <span class="kw-2">&amp;</span>ConfigGenState) -&gt; ApiResult&lt;()&gt; {
         <span class="kw">let </span>cfg_staging_dir = <span class="self">self</span>.data_dir.join(CONFIG_STAGING_DIR);
         fs::create_dir_all(<span class="kw-2">&amp;</span>cfg_staging_dir)
-            .map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">&quot;Unable to modify data dir {e:?}&quot;</span>)))<span class="question-mark">?</span>;
+            .map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">"Unable to modify data dir {e:?}"</span>)))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>auth = config.private.api_auth.<span class="number">0</span>.clone();
-        <span class="kw">let </span>io_error = |e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">&quot;Unable to write to data dir {e:?}&quot;</span>));
+        <span class="kw">let </span>io_error = |e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">"Unable to write to data dir {e:?}"</span>));
 
         <span class="comment">// TODO: Make writing password optional
         </span>write_new(cfg_staging_dir.join(PLAINTEXT_PASSWORD), <span class="kw-2">&amp;</span>auth).map_err(io_error)<span class="question-mark">?</span>;
         write_new(cfg_staging_dir.join(SALT_FILE), random_salt()).map_err(io_error)<span class="question-mark">?</span>;
         write_server_config(config, cfg_staging_dir, <span class="kw-2">&amp;</span>auth, <span class="kw-2">&amp;</span>state.settings.registry)
-            .map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">&quot;Unable to encrypt configs {e:?}&quot;</span>)))
+            .map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">"Unable to encrypt configs {e:?}"</span>)))
     }
 
     <span class="doccomment">/// Moves configuration artifacts from a staging directory to a permanent
     /// data directory.
     </span><span class="kw">fn </span>persist_staged_configs(<span class="kw-2">&amp;</span><span class="self">self</span>, cfg_staging_dir: <span class="kw-2">&amp;</span>PathBuf) -&gt; ApiResult&lt;()&gt; {
         <span class="kw">let </span>files = fs::read_dir(cfg_staging_dir).map_err(|e| {
-            ApiError::server_error(<span class="macro">format!</span>(<span class="string">&quot;Unable to read config staging dir {e:?}&quot;</span>))
+            ApiError::server_error(<span class="macro">format!</span>(<span class="string">"Unable to read config staging dir {e:?}"</span>))
         })<span class="question-mark">?</span>;
 
         <span class="kw">for </span>file_result <span class="kw">in </span>files {
             <span class="kw">let </span>file = file_result.map_err(|e| {
-                ApiError::server_error(<span class="macro">format!</span>(<span class="string">&quot;Unable to read file in config staging dir {e:?}&quot;</span>))
+                ApiError::server_error(<span class="macro">format!</span>(<span class="string">"Unable to read file in config staging dir {e:?}"</span>))
             })<span class="question-mark">?</span>;
             <span class="kw">let </span>path = file.path();
             <span class="kw">let </span>filename = path
                 .file_name()
                 .ok_or(ApiError::server_error(
-                    <span class="string">&quot;Failed to get file name&quot;</span>.to_string(),
+                    <span class="string">"Failed to get file name"</span>.to_string(),
                 ))<span class="question-mark">?
                 </span>.to_str()
                 .ok_or(ApiError::server_error(
-                    <span class="string">&quot;Failed to convert file name to string&quot;</span>.to_string(),
+                    <span class="string">"Failed to convert file name to string"</span>.to_string(),
                 ))<span class="question-mark">?</span>;
 
             <span class="comment">// TODO: https://github.com/fedimint/fedimint/issues/3692
 
             </span><span class="kw">let </span>dest = <span class="self">self</span>.data_dir.join(filename);
             fs::rename(<span class="kw-2">&amp;</span>path, <span class="kw-2">&amp;</span>dest)
-                .map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">&quot;Unable to modify data dir {e:?}&quot;</span>)))<span class="question-mark">?</span>;
+                .map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">"Unable to modify data dir {e:?}"</span>)))<span class="question-mark">?</span>;
         }
 
         <span class="prelude-val">Ok</span>(())
@@ -1764,7 +1767,7 @@
     <span class="kw">fn </span>remove_staged_configs(<span class="kw-2">&amp;</span><span class="self">self</span>, cfg_staging_dir: <span class="kw-2">&amp;</span>PathBuf) -&gt; ApiResult&lt;()&gt; {
         <span class="kw">if </span>cfg_staging_dir.exists() {
             fs::remove_dir_all(cfg_staging_dir)
-                .map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">&quot;Unable to modify data dir {e:?}&quot;</span>)))
+                .map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">"Unable to modify data dir {e:?}"</span>)))
         } <span class="kw">else </span>{
             <span class="prelude-val">Ok</span>(())
         }
@@ -1784,7 +1787,7 @@
             state.status = ServerStatus::VerifiedConfigs;
             <span class="macro">info!</span>(
                 target: fedimint_logging::LOG_NET_PEER_DKG,
-                <span class="string">&quot;Update config gen status to &#39;Verfied configs&#39;&quot;
+                <span class="string">"Update config gen status to 'Verfied configs'"
             </span>);
         }
 
@@ -1804,16 +1807,16 @@
         }
 
         <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>auth.<span class="number">0</span>, <span class="self">self</span>.data_dir.clone())
-            .map_err(|e| ApiError::bad_request(<span class="macro">format!</span>(<span class="string">&quot;Unable to decrypt configs {e:?}&quot;</span>)))<span class="question-mark">?</span>;
+            .map_err(|e| ApiError::bad_request(<span class="macro">format!</span>(<span class="string">"Unable to decrypt configs {e:?}"</span>)))<span class="question-mark">?</span>;
 
-        <span class="self">self</span>.config_generated_tx.send(cfg).<span class="kw">await</span>.expect(<span class="string">&quot;Can send&quot;</span>);
+        <span class="self">self</span>.config_generated_tx.send(cfg).<span class="kw">await</span>.expect(<span class="string">"Can send"</span>);
 
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Returns the server status
     </span><span class="kw">pub async fn </span>server_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ServerStatus {
-        <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>).status.clone()
+        <span class="self">self</span>.state.lock().expect(<span class="string">"lock poisoned"</span>).status.clone()
     }
 
     <span class="kw">fn </span>bad_request&lt;T&gt;(msg: <span class="kw-2">&amp;</span>str) -&gt; ApiResult&lt;T&gt; {
@@ -1837,31 +1840,32 @@
             state.status = ServerStatus::SetupRestarted;
             <span class="macro">info!</span>(
                 target: fedimint_logging::LOG_NET_PEER_DKG,
-                <span class="string">&quot;Update config gen status to &#39;Setup restarted&#39;&quot;
+                <span class="string">"Update config gen status to 'Setup restarted'"
             </span>);
             <span class="comment">// Create a WSClient for the leader
-            </span>state
-                .local
-                .clone()
-                .and_then(|local| local.leader_api_url.map(WsAdminClient::new))
+            </span>state.local.clone().and_then(|local| {
+                local
+                    .leader_api_url
+                    .map(DynGlobalApi::from_pre_peer_id_endpoint)
+            })
         };
 
         <span class="self">self</span>.update_leader().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// Followers wait for leader to signal that all peers have restarted setup
-        // The leader will signal this by setting it&#39;s status to AwaitingPassword
+        // The leader will signal this by setting it's status to AwaitingPassword
         </span><span class="kw">let </span>self_clone = <span class="self">self</span>.clone();
         <span class="kw">let </span>sub_group = <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>;
         sub_group
-            .spawn(<span class="string">&quot;restart&quot;</span>, <span class="kw">move </span>|_handle| <span class="kw">async move </span>{
+            .spawn(<span class="string">"restart"</span>, <span class="kw">move </span>|_handle| <span class="kw">async move </span>{
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = leader {
-                    self_clone.await_leader_restart(client).<span class="kw">await</span><span class="question-mark">?</span>;
+                    self_clone.await_leader_restart(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
                 } <span class="kw">else </span>{
                     self_clone.await_peer_restart().<span class="kw">await</span>;
                 }
                 <span class="comment">// Progress status to AwaitingPassword
                 </span>{
-                    <span class="kw">let </span><span class="kw-2">mut </span>state = self_clone.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
+                    <span class="kw">let </span><span class="kw-2">mut </span>state = self_clone.state.lock().expect(<span class="string">"lock poisoned"</span>);
                     state.reset();
                 }
                 self_clone.update_leader().<span class="kw">await
@@ -1872,7 +1876,7 @@
     }
 
     <span class="comment">// Followers wait for leader to signal that all peers have restarted setup
-    </span><span class="kw">async fn </span>await_leader_restart(<span class="kw-2">&amp;</span><span class="self">self</span>, client: WsAdminClient) -&gt; ApiResult&lt;()&gt; {
+    </span><span class="kw">async fn </span>await_leader_restart(<span class="kw-2">&amp;</span><span class="self">self</span>, client: <span class="kw-2">&amp;</span>DynGlobalApi) -&gt; ApiResult&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>retries = <span class="number">0</span>;
         <span class="kw">loop </span>{
             <span class="kw">match </span>client.status().<span class="kw">await </span>{
@@ -1886,7 +1890,7 @@
                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
                     <span class="kw">if </span>retries &gt; <span class="number">3 </span>{
                         <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::not_found(
-                            <span class="string">&quot;Unable to connect to the leader&quot;</span>.to_string(),
+                            <span class="string">"Unable to connect to the leader"</span>.to_string(),
                         ));
                     }
                     retries += <span class="number">1</span>;
@@ -1900,7 +1904,7 @@
     </span><span class="kw">async fn </span>await_peer_restart(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">loop </span>{
             {
-                <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
+                <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">"lock poisoned"</span>);
                 <span class="kw">let </span>peers = state.peers.clone();
                 <span class="kw">if </span>peers
                     .values()
@@ -1914,7 +1918,7 @@
     }
 }
 
-<span class="doccomment">/// Config gen params that are only used locally, shouldn&#39;t be shared
+<span class="doccomment">/// Config gen params that are only used locally, shouldn't be shared
 </span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>ConfigGenParamsLocal {
     <span class="doccomment">/// Our peer id
@@ -1962,7 +1966,7 @@
     <span class="doccomment">/// Our local connection
     </span>local: <span class="prelude-ty">Option</span>&lt;ConfigGenLocalConnection&gt;,
     <span class="doccomment">/// Connection info received from other guardians, unique by api_url
-    /// (because it&#39;s non-user configurable)
+    /// (because it's non-user configurable)
     </span>peers: BTreeMap&lt;SafeUrl, PeerServerParams&gt;,
     <span class="doccomment">/// The config gen params requested by the leader
     </span>requested_params: <span class="prelude-ty">Option</span>&lt;ConfigGenParamsRequest&gt;,
@@ -1981,7 +1985,7 @@
     </span>tls_cert: rustls::Certificate,
     <span class="doccomment">/// Our guardian name
     </span>our_name: String,
-    <span class="doccomment">/// URL of &quot;leader&quot; guardian to send our connection info to
+    <span class="doccomment">/// URL of "leader" guardian to send our connection info to
     /// Will be `None` if we are the leader
     </span>leader_api_url: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
 }
@@ -2001,7 +2005,7 @@
 
     <span class="kw">fn </span>set_request(<span class="kw-2">&amp;mut </span><span class="self">self</span>, request: ConfigGenConnectionsRequest) -&gt; ApiResult&lt;()&gt; {
         <span class="kw">let </span>(tls_cert, tls_private) = gen_cert_and_key(<span class="kw-2">&amp;</span>request.our_name)
-            .map_err(|<span class="kw">_</span>| ApiError::server_error(<span class="string">&quot;Unable to generate TLS keys&quot;</span>.to_string()))<span class="question-mark">?</span>;
+            .map_err(|<span class="kw">_</span>| ApiError::server_error(<span class="string">"Unable to generate TLS keys"</span>.to_string()))<span class="question-mark">?</span>;
         <span class="self">self</span>.local = <span class="prelude-val">Some</span>(ConfigGenLocalConnection {
             tls_private,
             tls_cert,
@@ -2010,21 +2014,21 @@
         });
         <span class="macro">info!</span>(
             target: fedimint_logging::LOG_NET_PEER_DKG,
-            <span class="string">&quot;Set local connection for config gen&quot;
+            <span class="string">"Set local connection for config gen"
         </span>);
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">fn </span>local_connection(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;ConfigGenLocalConnection&gt; {
         <span class="self">self</span>.local.clone().ok_or(ApiError::bad_request(
-            <span class="string">&quot;Our connection info not set yet&quot;</span>.to_string(),
+            <span class="string">"Our connection info not set yet"</span>.to_string(),
         ))
     }
 
     <span class="kw">fn </span>auth(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;ApiAuth&gt; {
         <span class="self">self</span>.auth
             .clone()
-            .ok_or(ApiError::bad_request(<span class="string">&quot;Missing auth&quot;</span>.to_string()))
+            .ok_or(ApiError::bad_request(<span class="string">"Missing auth"</span>.to_string()))
     }
 
     <span class="kw">fn </span>our_peer_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;PeerServerParams&gt; {
@@ -2044,7 +2048,7 @@
             .cloned()
             .chain(<span class="self">self</span>.our_peer_info().ok())
             <span class="comment">// Since sort order here is arbitrary, try to sort by nick-names first for more natural
-            // &#39;name -&gt; id&#39; mapping, which is helpful when operating on &#39;peer-ids&#39; (debugging etc.);
+            // 'name -&gt; id' mapping, which is helpful when operating on 'peer-ids' (debugging etc.);
             // Ties are OK (to_lowercase), not important in practice.
             </span>.sorted_by_cached_key(|peer| {
                 <span class="comment">// in certain (very obscure) cases, it might be worthwhile to sort by urls, so
@@ -2074,7 +2078,7 @@
             .iter()
             .find(|(<span class="kw">_</span>, param)| local_connection.tls_cert == param.cert)
             .ok_or(ApiError::bad_request(
-                <span class="string">&quot;Our TLS cert not found among peers&quot;</span>.to_string(),
+                <span class="string">"Our TLS cert not found among peers"</span>.to_string(),
             ))<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>combined_params = <span class="macro">vec!</span>[];
@@ -2087,12 +2091,12 @@
             <span class="kw">let </span>local = <span class="kw-2">&amp;</span>local_params.get(id).unwrap_or(default).local;
             <span class="kw">let </span>combined = ConfigGenModuleParams::new(local.clone(), consensus.clone());
             <span class="comment">// Check that the params are parseable
-            </span><span class="kw">let </span>module = <span class="self">self</span>.settings.registry.get(kind).expect(<span class="string">&quot;Module exists&quot;</span>);
+            </span><span class="kw">let </span>module = <span class="self">self</span>.settings.registry.get(kind).expect(<span class="string">"Module exists"</span>);
             module.validate_params(<span class="kw-2">&amp;</span>combined).map_err(|e| {
                 ApiError::bad_request(<span class="macro">format!</span>(
-                    <span class="string">&quot;Module {} params invalid: {}&quot;</span>,
+                    <span class="string">"Module {} params invalid: {}"</span>,
                     id,
-                    itertools::join(e.chain(), <span class="string">&quot;: &quot;</span>)
+                    itertools::join(e.chain(), <span class="string">": "</span>)
                 ))
             })<span class="question-mark">?</span>;
             combined_params.push((id, kind.clone(), combined));
@@ -2121,7 +2125,7 @@
 
         <span class="macro">info!</span>(
             target: fedimint_logging::LOG_NET_PEER_DKG,
-            <span class="string">&quot;Reset config gen state&quot;
+            <span class="string">"Reset config gen state"
         </span>);
     }
 }
@@ -2132,14 +2136,14 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         request: <span class="kw-2">&amp;</span>ApiRequestErased,
         id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
-    ) -&gt; (<span class="kw-2">&amp;</span>ConfigGenApi, ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;) {
+    ) -&gt; (<span class="kw-2">&amp;</span>ConfigGenApi, ApiEndpointContext&lt;<span class="lifetime">'_</span>&gt;) {
         <span class="kw">let </span><span class="kw-2">mut </span>db = <span class="self">self</span>.db.clone();
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = id {
             db = <span class="self">self</span>.db.with_prefix_module_id(id);
             dbtx = dbtx.with_prefix_module_id(id)
         }
-        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;locks&quot;</span>);
+        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">"locks"</span>);
         <span class="kw">let </span>auth = request.auth.as_ref();
         <span class="kw">let </span>has_auth = <span class="kw">match </span>state.auth.clone() {
             <span class="comment">// The first client to connect gets the set the password
@@ -2161,7 +2165,7 @@
             ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; () {
                 <span class="kw">match </span>context.request_auth() {
-                    <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">&quot;Missing password&quot;</span>.to_string())),
+                    <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">"Missing password"</span>.to_string())),
                     <span class="prelude-val">Some</span>(auth) =&gt; config.set_password(auth)
                 }
             }
@@ -2244,7 +2248,7 @@
                 check_auth(context)<span class="question-mark">?</span>;
                 <span class="kw">let </span>request_auth = context.request_auth();
                 <span class="kw">match </span>request_auth {
-                    <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">&quot;Missing password&quot;</span>.to_string())),
+                    <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">"Missing password"</span>.to_string())),
                     <span class="prelude-val">Some</span>(auth) =&gt; config.start_consensus(auth).<span class="kw">await
                 </span>}
             }
@@ -2288,8 +2292,8 @@
     <span class="kw">use </span>std::sync::Arc;
     <span class="kw">use </span>std::time::Duration;
 
-    <span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsRequest, WsAdminClient};
-    <span class="kw">use </span>fedimint_core::api::{FederationResult, ServerStatus, StatusResponse};
+    <span class="kw">use </span>fedimint_core::admin_client::ConfigGenParamsRequest;
+    <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, FederationResult, ServerStatus, StatusResponse};
     <span class="kw">use </span>fedimint_core::config::{ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry};
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::IRawDatabaseExt;
@@ -2314,9 +2318,9 @@
     <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::module::ServerModuleInit;
     <span class="kw">use </span><span class="kw">crate</span>::FedimintServer;
 
-    <span class="doccomment">/// Helper in config API tests for simulating a guardian&#39;s client and server
+    <span class="doccomment">/// Helper in config API tests for simulating a guardian's client and server
     </span><span class="kw">struct </span>TestConfigApi {
-        client: WsAdminClient,
+        client: DynGlobalApi,
         auth: ApiAuth,
         name: String,
         settings: ConfigGenSettings,
@@ -2334,13 +2338,13 @@
         ) -&gt; (TestConfigApi, FedimintServer) {
             <span class="kw">let </span>db = MemDatabase::new().into_database();
 
-            <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">&quot;peer{name_suffix}&quot;</span>);
-            <span class="kw">let </span>api_bind = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{port}&quot;</span>).parse().expect(<span class="string">&quot;parses&quot;</span>);
-            <span class="kw">let </span>api_url: SafeUrl = <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{port}&quot;</span>).parse().expect(<span class="string">&quot;parses&quot;</span>);
-            <span class="kw">let </span>p2p_bind = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, port + <span class="number">1</span>).parse().expect(<span class="string">&quot;parses&quot;</span>);
-            <span class="kw">let </span>p2p_url = <span class="macro">format!</span>(<span class="string">&quot;fedimint://127.0.0.1:{}&quot;</span>, port + <span class="number">1</span>)
+            <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"peer{name_suffix}"</span>);
+            <span class="kw">let </span>api_bind = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{port}"</span>).parse().expect(<span class="string">"parses"</span>);
+            <span class="kw">let </span>api_url: SafeUrl = <span class="macro">format!</span>(<span class="string">"ws://127.0.0.1:{port}"</span>).parse().expect(<span class="string">"parses"</span>);
+            <span class="kw">let </span>p2p_bind = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, port + <span class="number">1</span>).parse().expect(<span class="string">"parses"</span>);
+            <span class="kw">let </span>p2p_url = <span class="macro">format!</span>(<span class="string">"fedimint://127.0.0.1:{}"</span>, port + <span class="number">1</span>)
                 .parse()
-                .expect(<span class="string">&quot;parses&quot;</span>);
+                .expect(<span class="string">"parses"</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>modules = ServerModuleConfigGenParamsRegistry::default();
             modules.attach_config_gen_params(<span class="number">0</span>, DummyInit::kind(), DummyGenParams::default());
 
@@ -2361,18 +2365,18 @@
                 )]),
             };
             <span class="kw">let </span>dir = data_dir.join(name_suffix.to_string());
-            fs::create_dir_all(dir.clone()).expect(<span class="string">&quot;Unable to create test dir&quot;</span>);
+            fs::create_dir_all(dir.clone()).expect(<span class="string">"Unable to create test dir"</span>);
 
             <span class="kw">let </span>api = FedimintServer {
                 data_dir: dir.clone(),
                 settings: settings.clone(),
                 db,
-                version_hash: <span class="string">&quot;dummyversionhash&quot;</span>.to_owned(),
+                version_hash: <span class="string">"dummyversionhash"</span>.to_owned(),
             };
 
-            <span class="comment">// our id doesn&#39;t really exist at this point
-            </span><span class="kw">let </span>auth = ApiAuth(<span class="macro">format!</span>(<span class="string">&quot;password-{port}&quot;</span>));
-            <span class="kw">let </span>client = WsAdminClient::new(api_url);
+            <span class="comment">// our id doesn't really exist at this point
+            </span><span class="kw">let </span>auth = ApiAuth(<span class="macro">format!</span>(<span class="string">"password-{port}"</span>));
+            <span class="kw">let </span>client = DynGlobalApi::from_pre_peer_id_endpoint(api_url);
 
             (
                 TestConfigApi {
@@ -2409,7 +2413,7 @@
                 }
                 <span class="macro">info!</span>(
                     target: fedimint_logging::LOG_TEST,
-                    <span class="string">&quot;Test retrying server status&quot;
+                    <span class="string">"Test retrying server status"
                 </span>)
             }
         }
@@ -2425,7 +2429,7 @@
                         <span class="kw">if </span>peer_status != server_status {
                             <span class="macro">info!</span>(
                                 target: fedimint_logging::LOG_TEST,
-                                <span class="string">&quot;Test retrying peer server status preconfig&quot;
+                                <span class="string">"Test retrying peer server status preconfig"
                             </span>);
                             sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
                             <span class="kw">continue</span>;
@@ -2435,7 +2439,7 @@
                 }
                 <span class="macro">info!</span>(
                     target: fedimint_logging::LOG_TEST,
-                    <span class="string">&quot;Test retrying server status preconfig&quot;
+                    <span class="string">"Test retrying server status preconfig"
                 </span>);
             }
         }
@@ -2456,7 +2460,7 @@
                 }
                 <span class="macro">info!</span>(
                     target: fedimint_logging::LOG_TEST,
-                    <span class="string">&quot;Test retrying server status&quot;
+                    <span class="string">"Test retrying server status"
                 </span>);
                 sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
             }
@@ -2469,14 +2473,14 @@
                 <span class="number">0</span>,
                 DummyInit::kind(),
                 DummyGenParams {
-                    local: DummyGenParamsLocal(<span class="self">self</span>.name.clone()),
+                    local: DummyGenParamsLocal,
                     consensus: DummyGenParamsConsensus {
                         tx_fee: <span class="self">self</span>.amount,
                     },
                 },
             );
             <span class="kw">let </span>request = ConfigGenParamsRequest {
-                meta: BTreeMap::from([(<span class="string">&quot;\&quot;test\&quot;&quot;</span>.to_string(), <span class="self">self</span>.name.clone())]),
+                meta: BTreeMap::from([(<span class="string">"\"test\""</span>.to_string(), <span class="self">self</span>.name.clone())]),
                 modules,
             };
 
@@ -2499,12 +2503,12 @@
         }
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     </span><span class="kw">async fn </span>test_config_api() {
         <span class="kw">const </span>PEER_NUM: u16 = <span class="number">4</span>;
         <span class="kw">const </span>PORTS_PER_PEER: u16 = <span class="number">2</span>;
         <span class="kw">let _ </span>= TracingSetup::default().init();
-        <span class="kw">let </span>(data_dir, _maybe_tmp_dir_guard) = test_dir(<span class="string">&quot;test-config-api&quot;</span>);
+        <span class="kw">let </span>(data_dir, _maybe_tmp_dir_guard) = test_dir(<span class="string">"test-config-api"</span>);
         <span class="kw">let </span>base_port = port_alloc(PEER_NUM * PORTS_PER_PEER).unwrap();
 
         <span class="comment">// let mut join_handles = vec![];
@@ -2522,7 +2526,7 @@
         }
 
         <span class="comment">// Run the Fedimint servers and test concurrently
-        </span>spawn(<span class="string">&quot;Fedimint server apis&quot;</span>, <span class="kw">async move </span>{
+        </span>spawn(<span class="string">"Fedimint server apis"</span>, <span class="kw">async move </span>{
             join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))).<span class="kw">await</span>;
         });
 
@@ -2541,7 +2545,7 @@
                 </span>.unwrap();
             <span class="kw">let </span>leader_url = <span class="prelude-val">Some</span>(leader.settings.api_url.clone());
             follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
-            follower.name = <span class="macro">format!</span>(<span class="string">&quot;{}_&quot;</span>, follower.name);
+            follower.name = <span class="macro">format!</span>(<span class="string">"{}_"</span>, follower.name);
             follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
             follower.set_config_gen_params().<span class="kw">await</span>;
         }
@@ -2550,13 +2554,13 @@
         </span>validate_full_setup(leader, followers).<span class="kw">await</span>;
     }
 
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
     #[ignore] </span><span class="comment">// TODO: flaky https://github.com/fedimint/fedimint/issues/4308
     </span><span class="kw">async fn </span>test_restart_setup() {
         <span class="kw">const </span>PEER_NUM: u16 = <span class="number">4</span>;
         <span class="kw">const </span>PORTS_PER_PEER: u16 = <span class="number">2</span>;
         <span class="kw">let _ </span>= TracingSetup::default().init();
-        <span class="kw">let </span>(data_dir, _maybe_tmp_dir_guard) = test_dir(<span class="string">&quot;test-restart-setup&quot;</span>);
+        <span class="kw">let </span>(data_dir, _maybe_tmp_dir_guard) = test_dir(<span class="string">"test-restart-setup"</span>);
         <span class="kw">let </span>base_port = port_alloc(PEER_NUM * PORTS_PER_PEER).unwrap();
 
         <span class="comment">// let mut join_handles = vec![];
@@ -2574,7 +2578,7 @@
         }
 
         <span class="comment">// Run the Fedimint servers and test concurrently
-        </span>spawn(<span class="string">&quot;Fedimint server apis&quot;</span>, <span class="kw">async move </span>{
+        </span>spawn(<span class="string">"Fedimint server apis"</span>, <span class="kw">async move </span>{
             join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))).<span class="kw">await</span>;
         });
 
@@ -2593,7 +2597,7 @@
                 </span>.unwrap();
             <span class="kw">let </span>leader_url = <span class="prelude-val">Some</span>(leader.settings.api_url.clone());
             follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
-            follower.name = <span class="macro">format!</span>(<span class="string">&quot;{}_&quot;</span>, follower.name);
+            follower.name = <span class="macro">format!</span>(<span class="string">"{}_"</span>, follower.name);
             follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
             follower.set_config_gen_params().<span class="kw">await</span>;
         }
@@ -2665,7 +2669,7 @@
 
         <span class="comment">// We can call this twice to change the leader name
         </span>leader.set_connections(<span class="kw-2">&amp;</span><span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
-        leader.name = <span class="string">&quot;leader&quot;</span>.to_string();
+        leader.name = <span class="string">"leader"</span>.to_string();
         leader.set_connections(<span class="kw-2">&amp;</span><span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
 
         <span class="comment">// Leader sets the config
@@ -2684,7 +2688,7 @@
         <span class="comment">// Confirm we can get peer servers if we are the leader
         </span><span class="kw">let </span>peers = leader.client.get_config_gen_peers().<span class="kw">await</span>.unwrap();
         <span class="kw">let </span>names: Vec&lt;<span class="kw">_</span>&gt; = peers.into_iter().map(|peer| peer.name).sorted().collect();
-        <span class="macro">assert_eq!</span>(names, <span class="macro">vec!</span>[<span class="string">&quot;leader&quot;</span>, <span class="string">&quot;peer1_&quot;</span>, <span class="string">&quot;peer2_&quot;</span>, <span class="string">&quot;peer3_&quot;</span>]);
+        <span class="macro">assert_eq!</span>(names, <span class="macro">vec!</span>[<span class="string">"leader"</span>, <span class="string">"peer1_"</span>, <span class="string">"peer2_"</span>, <span class="string">"peer3_"</span>]);
 
         leader
             .wait_status(ServerStatus::SharingConfigGenParams)
@@ -2717,7 +2721,7 @@
             all_peers[<span class="number">0</span>].wait_status(ServerStatus::VerifyingConfigs)
         );
         <span class="kw">for </span>result <span class="kw">in </span>results {
-            result.expect(<span class="string">&quot;DKG failed&quot;</span>);
+            result.expect(<span class="string">"DKG failed"</span>);
         }
 
         <span class="comment">// verify config hashes equal for all peers
@@ -2738,8 +2742,7 @@
             <span class="kw">let </span>cfg = peer.read_config(<span class="bool-val">true</span>); <span class="comment">// read temporary configs from staging dir
             </span><span class="kw">let </span>dummy: DummyConfig = cfg.get_module_config_typed(<span class="number">0</span>).unwrap();
             <span class="macro">assert_eq!</span>(dummy.consensus.tx_fee, leader_amount);
-            <span class="macro">assert_eq!</span>(dummy.local.example, peer.name);
-            <span class="macro">assert_eq!</span>(cfg.consensus.meta[<span class="string">&quot;\&quot;test\&quot;&quot;</span>], leader_name);
+            <span class="macro">assert_eq!</span>(cfg.consensus.meta[<span class="string">"\"test\""</span>], leader_name);
         }
 
         <span class="comment">// set verified configs
@@ -2761,8 +2764,7 @@
             </span><span class="kw">let </span>cfg = peer.read_config(<span class="bool-val">false</span>); <span class="comment">// read persisted configs
             </span><span class="kw">let </span>dummy: DummyConfig = cfg.get_module_config_typed(<span class="number">0</span>).unwrap();
             <span class="macro">assert_eq!</span>(dummy.consensus.tx_fee, leader_amount);
-            <span class="macro">assert_eq!</span>(dummy.local.example, peer.name);
-            <span class="macro">assert_eq!</span>(cfg.consensus.meta[<span class="string">&quot;\&quot;test\&quot;&quot;</span>], leader_name);
+            <span class="macro">assert_eq!</span>(cfg.consensus.meta[<span class="string">"\"test\""</span>], leader_name);
         }
     }
 }

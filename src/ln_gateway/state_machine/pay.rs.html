@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/state_machine/pay.rs`."><title>pay.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../ln_gateway/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/state_machine/pay.rs`."><title>pay.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../ln_gateway/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -902,21 +904,42 @@
 <a href="#902" id="902">902</a>
 <a href="#903" id="903">903</a>
 <a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput};
-<span class="kw">use </span>fedimint_client::{ClientArc, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_client::{ClientHandle, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::util::Spanned;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_ln_client::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
-<span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
+<span class="kw">use </span>fedimint_ln_common::config::FeeToAmount;
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract, Preimage};
 <span class="kw">use </span>fedimint_ln_common::{LightningInput, LightningOutput};
@@ -927,11 +950,11 @@
 <span class="kw">use </span>tracing::{debug, error, info, warn, Instrument};
 
 <span class="kw">use super</span>::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
-<span class="kw">use </span><span class="kw">crate</span>::db::PreimageAuthentication;
+<span class="kw">use </span><span class="kw">crate</span>::db::{FederationIdKey, PreimageAuthentication};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{PayInvoiceRequest, PayInvoiceResponse};
 <span class="kw">use </span><span class="kw">crate</span>::lightning::LightningRpcError;
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientModule;
-<span class="kw">use </span><span class="kw">crate</span>::GatewayState;
+<span class="kw">use crate</span>::{GatewayState, RoutingFees};
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
 </span><span class="doccomment">/// State machine that executes the Lightning payment on behalf of
@@ -1026,21 +1049,21 @@
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
 )]
 </span><span class="kw">pub enum </span>OutgoingContractError {
-    <span class="attr">#[error(<span class="string">&quot;Invalid OutgoingContract {contract_id}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Invalid OutgoingContract {contract_id}"</span>)]
     </span>InvalidOutgoingContract { contract_id: ContractId },
-    <span class="attr">#[error(<span class="string">&quot;The contract is already cancelled and can&#39;t be processed by the gateway&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"The contract is already cancelled and can't be processed by the gateway"</span>)]
     </span>CancelledContract,
-    <span class="attr">#[error(<span class="string">&quot;The Account or offer is keyed to another gateway&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"The Account or offer is keyed to another gateway"</span>)]
     </span>NotOurKey,
-    <span class="attr">#[error(<span class="string">&quot;Invoice is missing amount&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Invoice is missing amount"</span>)]
     </span>InvoiceMissingAmount,
-    <span class="attr">#[error(<span class="string">&quot;Outgoing contract is underfunded, wants us to pay {0}, but only contains {1}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Outgoing contract is underfunded, wants us to pay {0}, but only contains {1}"</span>)]
     </span>Underfunded(Amount, Amount),
-    <span class="attr">#[error(<span class="string">&quot;The contract&#39;s timeout is in the past or does not allow for a safety margin&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"The contract's timeout is in the past or does not allow for a safety margin"</span>)]
     </span>TimeoutTooClose,
-    <span class="attr">#[error(<span class="string">&quot;Gateway could not retrieve metadata about the contract.&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Gateway could not retrieve metadata about the contract."</span>)]
     </span>MissingContractData,
-    <span class="attr">#[error(<span class="string">&quot;The invoice is expired. Expiry happened at timestamp: {0}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"The invoice is expired. Expiry happened at timestamp: {0}"</span>)]
     </span>InvoiceExpired(u64),
 }
 
@@ -1048,30 +1071,32 @@
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
 )]
 </span><span class="kw">pub enum </span>OutgoingPaymentErrorType {
-    <span class="attr">#[error(<span class="string">&quot;OutgoingContract does not exist {contract_id}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"OutgoingContract does not exist {contract_id}"</span>)]
     </span>OutgoingContractDoesNotExist { contract_id: ContractId },
-    <span class="attr">#[error(<span class="string">&quot;An error occurred while paying the lightning invoice.&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"An error occurred while paying the lightning invoice."</span>)]
     </span>LightningPayError { lightning_error: LightningRpcError },
-    <span class="attr">#[error(<span class="string">&quot;An invalid contract was specified.&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"An invalid contract was specified."</span>)]
     </span>InvalidOutgoingContract { error: OutgoingContractError },
-    <span class="attr">#[error(<span class="string">&quot;An error occurred while attempting direct swap between federations.&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"An error occurred while attempting direct swap between federations."</span>)]
     </span>SwapFailed { swap_error: String },
-    <span class="attr">#[error(<span class="string">&quot;Invoice has already been paid&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Invoice has already been paid"</span>)]
     </span>InvoiceAlreadyPaid,
+    <span class="attr">#[error(<span class="string">"No federation configuration"</span>)]
+    </span>InvalidFederationConfiguration,
 }
 
 <span class="attr">#[derive(
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
 )]
 </span><span class="kw">pub struct </span>OutgoingPaymentError {
-    error_type: OutgoingPaymentErrorType,
+    <span class="kw">pub </span>error_type: OutgoingPaymentErrorType,
     contract_id: ContractId,
     contract: <span class="prelude-ty">Option</span>&lt;OutgoingContractAccount&gt;,
 }
 
 <span class="kw">impl </span>Display <span class="kw">for </span>OutgoingPaymentError {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;OutgoingContractError: {}&quot;</span>, <span class="self">self</span>.error_type)
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"OutgoingContractError: {}"</span>, <span class="self">self</span>.error_type)
     }
 }
 
@@ -1110,6 +1135,7 @@
             context.clone(),
             pay_invoice_payload.contract_id,
             pay_invoice_payload.payment_data.clone(),
+            pay_invoice_payload.federation_id,
         )
         .<span class="kw">await
         </span>{
@@ -1124,7 +1150,7 @@
                 .<span class="kw">await
             </span>}
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;Failed to get payment parameters: {e:?}&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">"Failed to get payment parameters: {e:?}"</span>);
                 <span class="kw">match </span>e.contract.clone() {
                     <span class="prelude-val">Some</span>(contract) =&gt; GatewayPayStateMachine {
                         common,
@@ -1148,7 +1174,7 @@
         common: GatewayPayCommon,
         payload: PayInvoicePayload,
     ) -&gt; GatewayPayStateMachine {
-        <span class="macro">debug!</span>(<span class="string">&quot;Buying preimage contract {contract:?}&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"Buying preimage contract {contract:?}"</span>);
         <span class="comment">// Verify that this client is authorized to receive the preimage.
         </span><span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">Self</span>::verify_preimage_authentication(
             <span class="kw-2">&amp;</span>context,
@@ -1158,7 +1184,7 @@
         )
         .<span class="kw">await
         </span>{
-            <span class="macro">warn!</span>(<span class="string">&quot;Preimage authentication failed: {err} for contract {contract:?}&quot;</span>);
+            <span class="macro">warn!</span>(<span class="string">"Preimage authentication failed: {err} for contract {contract:?}"</span>);
             <span class="kw">return </span>GatewayPayStateMachine {
                 common,
                 state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
@@ -1198,8 +1224,9 @@
         context: GatewayClientContext,
         contract_id: ContractId,
         payment_data: PaymentData,
+        federation_id: FederationId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError&gt; {
-        <span class="macro">debug!</span>(<span class="string">&quot;Await payment parameters for outgoing contract {contract_id:?}&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"Await payment parameters for outgoing contract {contract_id:?}"</span>);
         <span class="kw">let </span>account = global_context
             .module_api()
             .wait_contract(contract_id)
@@ -1228,7 +1255,7 @@
                     },
                 })<span class="question-mark">?</span>;
 
-            <span class="macro">debug!</span>(<span class="string">&quot;Consensus block count: {consensus_block_count:?} for outgoing contract {contract_id:?}&quot;</span>);
+            <span class="macro">debug!</span>(<span class="string">"Consensus block count: {consensus_block_count:?} for outgoing contract {contract_id:?}"</span>);
             <span class="kw">if </span>consensus_block_count.is_none() {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingPaymentError {
                     contract_id,
@@ -1239,27 +1266,39 @@
                 });
             }
 
+            <span class="kw">let </span><span class="kw-2">mut </span>gateway_dbtx = context.gateway.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
+            <span class="kw">let </span>config = gateway_dbtx
+                .get_value(<span class="kw-2">&amp;</span>FederationIdKey { id: federation_id })
+                .<span class="kw">await
+                </span>.ok_or(OutgoingPaymentError {
+                    error_type: OutgoingPaymentErrorType::InvalidFederationConfiguration,
+                    contract_id,
+                    contract: <span class="prelude-val">Some</span>(outgoing_contract_account.clone()),
+                })<span class="question-mark">?</span>;
+            <span class="kw">let </span>routing_fees = config.fees;
+
             <span class="kw">let </span>payment_parameters = <span class="self">Self</span>::validate_outgoing_account(
                 <span class="kw-2">&amp;</span>outgoing_contract_account,
                 context.redeem_key,
                 context.timelock_delta,
                 consensus_block_count.unwrap(),
                 <span class="kw-2">&amp;</span>payment_data,
+                routing_fees,
             )
             .<span class="kw">await
             </span>.map_err(|e| {
-                <span class="macro">warn!</span>(<span class="string">&quot;Invalid outgoing contract: {e:?}&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">"Invalid outgoing contract: {e:?}"</span>);
                 OutgoingPaymentError {
                     contract_id,
                     contract: <span class="prelude-val">Some</span>(outgoing_contract_account.clone()),
                     error_type: OutgoingPaymentErrorType::InvalidOutgoingContract { error: e },
                 }
             })<span class="question-mark">?</span>;
-            <span class="macro">debug!</span>(<span class="string">&quot;Got payment parameters: {payment_parameters:?} for contract {contract_id:?}&quot;</span>);
+            <span class="macro">debug!</span>(<span class="string">"Got payment parameters: {payment_parameters:?} for contract {contract_id:?}"</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>((outgoing_contract_account, payment_parameters));
         }
 
-        <span class="macro">error!</span>(<span class="string">&quot;Contract {contract_id:?} is not an outgoing contract&quot;</span>);
+        <span class="macro">error!</span>(<span class="string">"Contract {contract_id:?} is not an outgoing contract"</span>);
         <span class="prelude-val">Err</span>(OutgoingPaymentError {
             contract_id,
             contract: <span class="prelude-val">None</span>,
@@ -1273,7 +1312,7 @@
         contract: OutgoingContractAccount,
         common: GatewayPayCommon,
     ) -&gt; GatewayPayStateMachine {
-        <span class="macro">debug!</span>(<span class="string">&quot;Buying preimage over lightning for contract {contract:?}&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"Buying preimage over lightning for contract {contract:?}"</span>);
         <span class="kw">let </span>payment_data = buy_preimage.payment_data.clone();
 
         <span class="kw">let </span>max_delay = buy_preimage.max_delay;
@@ -1281,7 +1320,7 @@
             - buy_preimage
                 .payment_data
                 .amount()
-                .expect(<span class="string">&quot;We already checked that an amount was supplied&quot;</span>);
+                .expect(<span class="string">"We already checked that an amount was supplied"</span>);
 
         <span class="kw">let </span>lightning_context = <span class="kw">match </span>context.gateway.get_lightning_context().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(lightning_context) =&gt; lightning_context,
@@ -1312,8 +1351,8 @@
 
         <span class="kw">match </span>payment_result {
             <span class="prelude-val">Ok</span>(PayInvoiceResponse { preimage, .. }) =&gt; {
-                <span class="macro">debug!</span>(<span class="string">&quot;Preimage received for contract {contract:?}&quot;</span>);
-                <span class="kw">let </span>slice: [u8; <span class="number">32</span>] = preimage.try_into().expect(<span class="string">&quot;Failed to parse preimage&quot;</span>);
+                <span class="macro">debug!</span>(<span class="string">"Preimage received for contract {contract:?}"</span>);
+                <span class="kw">let </span>slice: [u8; <span class="number">32</span>] = preimage.try_into().expect(<span class="string">"Failed to parse preimage"</span>);
                 GatewayPayStateMachine {
                     common,
                     state: GatewayPayStates::ClaimOutgoingContract(Box::new(
@@ -1333,7 +1372,7 @@
         contract: OutgoingContractAccount,
         common: GatewayPayCommon,
     ) -&gt; GatewayPayStateMachine {
-        <span class="macro">warn!</span>(<span class="string">&quot;Failed to buy preimage with {error} for contract {contract:?}&quot;</span>);
+        <span class="macro">warn!</span>(<span class="string">"Failed to buy preimage with {error} for contract {contract:?}"</span>);
         <span class="kw">let </span>outgoing_error = OutgoingPaymentError {
             contract_id: contract.contract.contract_id(),
             contract: <span class="prelude-val">Some</span>(contract.clone()),
@@ -1351,12 +1390,12 @@
     }
 
     <span class="kw">async fn </span>buy_preimage_via_direct_swap(
-        client: ClientArc,
+        client: ClientHandle,
         payment_data: PaymentData,
         contract: OutgoingContractAccount,
         common: GatewayPayCommon,
     ) -&gt; GatewayPayStateMachine {
-        <span class="macro">debug!</span>(<span class="string">&quot;Buying preimage via direct swap for contract {contract:?}&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"Buying preimage via direct swap for contract {contract:?}"</span>);
         <span class="kw">match </span>payment_data.try_into() {
             <span class="prelude-val">Ok</span>(swap_params) =&gt; <span class="kw">match </span>client
                 .get_first_module::&lt;GatewayClientModule&gt;()
@@ -1364,7 +1403,7 @@
                 .<span class="kw">await
             </span>{
                 <span class="prelude-val">Ok</span>(operation_id) =&gt; {
-                    <span class="macro">debug!</span>(<span class="string">&quot;Direct swap initiated for contract {contract:?}&quot;</span>);
+                    <span class="macro">debug!</span>(<span class="string">"Direct swap initiated for contract {contract:?}"</span>);
                     GatewayPayStateMachine {
                         common,
                         state: GatewayPayStates::WaitForSwapPreimage(Box::new(
@@ -1377,12 +1416,12 @@
                     }
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">info!</span>(<span class="string">&quot;Failed to initiate direct swap: {e:?} for contract {contract:?}&quot;</span>);
+                    <span class="macro">info!</span>(<span class="string">"Failed to initiate direct swap: {e:?} for contract {contract:?}"</span>);
                     <span class="kw">let </span>outgoing_payment_error = OutgoingPaymentError {
                         contract_id: contract.contract.contract_id(),
                         contract: <span class="prelude-val">Some</span>(contract.clone()),
                         error_type: OutgoingPaymentErrorType::SwapFailed {
-                            swap_error: <span class="macro">format!</span>(<span class="string">&quot;Failed to initiate direct swap: {e}&quot;</span>),
+                            swap_error: <span class="macro">format!</span>(<span class="string">"Failed to initiate direct swap: {e}"</span>),
                         },
                     };
                     GatewayPayStateMachine {
@@ -1397,12 +1436,12 @@
                 }
             },
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">info!</span>(<span class="string">&quot;Failed to initiate direct swap: {e:?} for contract {contract:?}&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"Failed to initiate direct swap: {e:?} for contract {contract:?}"</span>);
                 <span class="kw">let </span>outgoing_payment_error = OutgoingPaymentError {
                     contract_id: contract.contract.contract_id(),
                     contract: <span class="prelude-val">Some</span>(contract.clone()),
                     error_type: OutgoingPaymentErrorType::SwapFailed {
-                        swap_error: <span class="macro">format!</span>(<span class="string">&quot;Failed to initiate direct swap: {e}&quot;</span>),
+                        swap_error: <span class="macro">format!</span>(<span class="string">"Failed to initiate direct swap: {e}"</span>),
                     },
                 };
                 GatewayPayStateMachine {
@@ -1462,6 +1501,7 @@
         timelock_delta: u64,
         consensus_block_count: u64,
         payment_data: <span class="kw-2">&amp;</span>PaymentData,
+        routing_fees: RoutingFees,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentParameters, OutgoingContractError&gt; {
         <span class="kw">let </span>our_pub_key = secp256k1::PublicKey::from_keypair(<span class="kw-2">&amp;</span>redeem_key);
 
@@ -1477,9 +1517,11 @@
             .amount()
             .ok_or(OutgoingContractError::InvoiceMissingAmount)<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>account.amount &lt; payment_amount {
+        <span class="kw">let </span>gateway_fee = routing_fees.to_amount(<span class="kw-2">&amp;</span>payment_amount);
+        <span class="kw">let </span>necessary_contract_amount = payment_amount + gateway_fee;
+        <span class="kw">if </span>account.amount &lt; necessary_contract_amount {
             <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingContractError::Underfunded(
-                payment_amount,
+                necessary_contract_amount,
                 account.amount,
             ));
         }
@@ -1512,7 +1554,7 @@
     </span><span class="kw">async fn </span>check_swap_to_federation(
         context: GatewayClientContext,
         payment_data: PaymentData,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientArc&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandle&gt;&gt; {
         <span class="kw">let </span>rhints = payment_data.route_hints();
         <span class="kw">match </span>rhints.first().and_then(|rh| rh.<span class="number">0</span>.last()) {
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
@@ -1538,7 +1580,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>PaymentParameters {
+</span><span class="kw">struct </span>PaymentParameters {
     max_delay: u64,
     max_send_amount: Amount,
     payment_data: PaymentData,
@@ -1575,14 +1617,14 @@
     }
 
     <span class="kw">async fn </span>transition_claim_outgoing_contract(
-        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         global_context: DynGlobalClientContext,
         context: GatewayClientContext,
         common: GatewayPayCommon,
         contract: OutgoingContractAccount,
         preimage: Preimage,
     ) -&gt; GatewayPayStateMachine {
-        <span class="macro">debug!</span>(<span class="string">&quot;Claiming outgoing contract {contract:?}&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"Claiming outgoing contract {contract:?}"</span>);
         <span class="kw">let </span>claim_input = contract.claim(preimage.clone());
         <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, GatewayClientStateMachines&gt; {
             input: claim_input,
@@ -1591,7 +1633,7 @@
         };
 
         <span class="kw">let </span>out_points = global_context.claim_input(dbtx, client_input).<span class="kw">await</span>.<span class="number">1</span>;
-        <span class="macro">debug!</span>(<span class="string">&quot;Claimed outgoing contract {contract:?} with out points {out_points:?}&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"Claimed outgoing contract {contract:?} with out points {out_points:?}"</span>);
         GatewayPayStateMachine {
             common,
             state: GatewayPayStates::Preimage(out_points, preimage),
@@ -1634,7 +1676,7 @@
         operation_id: OperationId,
         contract: OutgoingContractAccount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, OutgoingPaymentError&gt; {
-        <span class="macro">debug!</span>(<span class="string">&quot;Waiting preimage for contract {contract:?}&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"Waiting preimage for contract {contract:?}"</span>);
         <span class="kw">let </span>client = context
             .gateway
             .clients
@@ -1646,7 +1688,7 @@
                 contract_id: contract.contract.contract_id(),
                 contract: <span class="prelude-val">Some</span>(contract.clone()),
                 error_type: OutgoingPaymentErrorType::SwapFailed {
-                    swap_error: <span class="string">&quot;Federation client not found&quot;</span>.to_string(),
+                    swap_error: <span class="string">"Federation client not found"</span>.to_string(),
                 },
             })<span class="question-mark">?</span>;
 
@@ -1660,14 +1702,14 @@
                     <span class="kw">let </span>contract_id = contract.contract.contract_id();
                     <span class="macro">warn!</span>(
                         <span class="question-mark">?</span>contract_id,
-                        <span class="string">&quot;Failed to subscribe to ln receive of direct swap: {e:?}&quot;
+                        <span class="string">"Failed to subscribe to ln receive of direct swap: {e:?}"
                     </span>);
                     OutgoingPaymentError {
                         contract_id,
                         contract: <span class="prelude-val">Some</span>(contract.clone()),
                         error_type: OutgoingPaymentErrorType::SwapFailed {
                             swap_error: <span class="macro">format!</span>(
-                                <span class="string">&quot;Failed to subscribe to ln receive of direct swap: {e}&quot;
+                                <span class="string">"Failed to subscribe to ln receive of direct swap: {e}"
                             </span>),
                         },
                     }
@@ -1675,24 +1717,24 @@
                 </span>.into_stream();
 
             <span class="kw">loop </span>{
-                <span class="macro">debug!</span>(<span class="string">&quot;Waiting next state of preimage buy for contract {contract:?}&quot;</span>);
+                <span class="macro">debug!</span>(<span class="string">"Waiting next state of preimage buy for contract {contract:?}"</span>);
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(state) = stream.next().<span class="kw">await </span>{
                     <span class="kw">match </span>state {
                         GatewayExtReceiveStates::Funding =&gt; {
-                            <span class="macro">debug!</span>(<span class="question-mark">?</span>contract, <span class="string">&quot;Funding&quot;</span>);
+                            <span class="macro">debug!</span>(<span class="question-mark">?</span>contract, <span class="string">"Funding"</span>);
                             <span class="kw">continue</span>;
                         }
                         GatewayExtReceiveStates::Preimage(preimage) =&gt; {
-                            <span class="macro">debug!</span>(<span class="question-mark">?</span>contract, <span class="string">&quot;Received preimage&quot;</span>);
+                            <span class="macro">debug!</span>(<span class="question-mark">?</span>contract, <span class="string">"Received preimage"</span>);
                             <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage);
                         }
                         other =&gt; {
-                            <span class="macro">warn!</span>(<span class="question-mark">?</span>contract, <span class="string">&quot;Got state {other:?}&quot;</span>);
+                            <span class="macro">warn!</span>(<span class="question-mark">?</span>contract, <span class="string">"Got state {other:?}"</span>);
                             <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingPaymentError {
                                 contract_id: contract.contract.contract_id(),
                                 contract: <span class="prelude-val">Some</span>(contract),
                                 error_type: OutgoingPaymentErrorType::SwapFailed {
-                                    swap_error: <span class="string">&quot;Failed to receive preimage&quot;</span>.to_string(),
+                                    swap_error: <span class="string">"Failed to receive preimage"</span>.to_string(),
                                 },
                             });
                         }
@@ -1758,14 +1800,14 @@
     }
 
     <span class="kw">async fn </span>transition_canceled(
-        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         contract: OutgoingContractAccount,
         global_context: DynGlobalClientContext,
         context: GatewayClientContext,
         common: GatewayPayCommon,
         error: OutgoingPaymentError,
     ) -&gt; GatewayPayStateMachine {
-        <span class="macro">info!</span>(<span class="string">&quot;Canceling outgoing contract {contract:?}&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"Canceling outgoing contract {contract:?}"</span>);
         <span class="kw">let </span>cancel_signature = context.secp.sign_schnorr(
             <span class="kw-2">&amp;</span>contract.contract.cancellation_message().into(),
             <span class="kw-2">&amp;</span>context.redeem_key,
@@ -1781,7 +1823,7 @@
 
         <span class="kw">match </span>global_context.fund_output(dbtx, client_output).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>((txid, <span class="kw">_</span>)) =&gt; {
-                <span class="macro">info!</span>(<span class="string">&quot;Canceled outgoing contract {contract:?} with txid {txid:?}&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"Canceled outgoing contract {contract:?} with txid {txid:?}"</span>);
                 GatewayPayStateMachine {
                     common,
                     state: GatewayPayStates::Canceled {
@@ -1792,13 +1834,13 @@
                 }
             }
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;Failed to cancel outgoing contract {contract:?}: {e:?}&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">"Failed to cancel outgoing contract {contract:?}: {e:?}"</span>);
                 GatewayPayStateMachine {
                     common,
                     state: GatewayPayStates::Failed {
                         error,
                         error_message: <span class="macro">format!</span>(
-                            <span class="string">&quot;Failed to submit refund transaction to federation {e:?}&quot;
+                            <span class="string">"Failed to submit refund transaction to federation {e:?}"
                         </span>),
                     },
                 }

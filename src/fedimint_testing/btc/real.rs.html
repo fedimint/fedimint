@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-testing/src/btc/real.rs`."><title>real.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_testing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_testing/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-testing/src/btc/real.rs`."><title>real.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_testing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_testing/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -318,14 +320,14 @@
 }
 
 <span class="kw">impl </span>RealBitcoinTestNoLock {
-    <span class="kw">const </span>ERROR: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="string">&quot;Bitcoin RPC returned an error&quot;</span>;
+    <span class="kw">const </span>ERROR: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str = <span class="string">"Bitcoin RPC returned an error"</span>;
 }
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>BitcoinTest <span class="kw">for </span>RealBitcoinTestNoLock {
     <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send + Sync&gt; {
         <span class="macro">unimplemented!</span>(
-            <span class="string">&quot;You should never try to lock `RealBitcoinTestNoLock`. Lock `RealBitcoinTest` instead&quot;
+            <span class="string">"You should never try to lock `RealBitcoinTestNoLock`. Lock `RealBitcoinTest` instead"
         </span>)
     }
 
@@ -339,20 +341,20 @@
             <span class="kw">let </span>last_mined_block = <span class="self">self
                 </span>.client
                 .get_block_header_info(block_hash)
-                .expect(<span class="string">&quot;rpc failed&quot;</span>);
+                .expect(<span class="string">"rpc failed"</span>);
             <span class="kw">let </span>expected_block_count = last_mined_block.height <span class="kw">as </span>u64 + <span class="number">1</span>;
             <span class="comment">// waits for the rpc client to catch up to bitcoind
             </span><span class="kw">loop </span>{
-                <span class="kw">let </span>current_block_count = <span class="self">self</span>.rpc.get_block_count().<span class="kw">await</span>.expect(<span class="string">&quot;rpc failed&quot;</span>);
+                <span class="kw">let </span>current_block_count = <span class="self">self</span>.rpc.get_block_count().<span class="kw">await</span>.expect(<span class="string">"rpc failed"</span>);
                 <span class="kw">if </span>current_block_count &lt; expected_block_count {
                     <span class="macro">debug!</span>(
                         target: LOG_TEST,
                         <span class="question-mark">?</span>block_num,
                         <span class="question-mark">?</span>expected_block_count,
                         <span class="question-mark">?</span>current_block_count,
-                        <span class="string">&quot;Waiting for blocks to be mined&quot;
+                        <span class="string">"Waiting for blocks to be mined"
                     </span>);
-                    sleep_in_test(<span class="string">&quot;waiting for blocks to be mined&quot;</span>, Duration::from_millis(<span class="number">200</span>))
+                    sleep_in_test(<span class="string">"waiting for blocks to be mined"</span>, Duration::from_millis(<span class="number">200</span>))
                         .<span class="kw">await</span>;
                 } <span class="kw">else </span>{
                     <span class="macro">debug!</span>(
@@ -360,7 +362,7 @@
                         <span class="question-mark">?</span>block_num,
                         <span class="question-mark">?</span>expected_block_count,
                         <span class="question-mark">?</span>current_block_count,
-                        <span class="string">&quot;Mined blocks&quot;
+                        <span class="string">"Mined blocks"
                     </span>);
                     <span class="kw">break</span>;
                 }
@@ -369,7 +371,7 @@
     }
 
     <span class="kw">async fn </span>prepare_funding_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">let </span>block_count = <span class="self">self</span>.client.get_block_count().expect(<span class="string">&quot;should not fail&quot;</span>);
+        <span class="kw">let </span>block_count = <span class="self">self</span>.client.get_block_count().expect(<span class="string">"should not fail"</span>);
         <span class="kw">if </span>block_count &lt; <span class="number">100 </span>{
             <span class="self">self</span>.mine_blocks(<span class="number">100 </span>- block_count).<span class="kw">await</span>;
         }
@@ -395,12 +397,12 @@
                 <span class="kw">match </span><span class="self">self</span>.client.get_tx_out_proof(<span class="kw-2">&amp;</span>[id], <span class="prelude-val">None</span>) {
                     <span class="prelude-val">Ok</span>(o) =&gt; <span class="kw">break </span>o,
                     <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="kw">if </span>e.to_string().contains(<span class="string">&quot;not yet in block&quot;</span>) {
+                        <span class="kw">if </span>e.to_string().contains(<span class="string">"not yet in block"</span>) {
                             <span class="comment">// mostly to yield, as we no other yield points
-                            </span>task::sleep_in_test(<span class="string">&quot;not yet in block&quot;</span>, Duration::from_millis(<span class="number">1</span>)).<span class="kw">await</span>;
+                            </span>task::sleep_in_test(<span class="string">"not yet in block"</span>, Duration::from_millis(<span class="number">1</span>)).<span class="kw">await</span>;
                             <span class="kw">continue</span>;
                         }
-                        <span class="macro">panic!</span>(<span class="string">&quot;Could not get txoutproof: {e}&quot;</span>);
+                        <span class="macro">panic!</span>(<span class="string">"Could not get txoutproof: {e}"</span>);
                     }
                 }
             }),
@@ -427,7 +429,7 @@
             <span class="kw">match </span><span class="self">self</span>.client.get_mempool_entry(txid) {
                 <span class="prelude-val">Ok</span>(tx) =&gt; <span class="kw">return </span>tx.fees.base.into(),
                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                    sleep_in_test(<span class="string">&quot;could not get mempool tx fee&quot;</span>, Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+                    sleep_in_test(<span class="string">"could not get mempool tx fee"</span>, Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
                     <span class="kw">continue</span>;
                 }
             }
@@ -444,11 +446,11 @@
 }
 
 <span class="kw">impl </span>RealBitcoinTest {
-    <span class="kw">const </span>ERROR: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="string">&quot;Bitcoin RPC returned an error&quot;</span>;
+    <span class="kw">const </span>ERROR: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str = <span class="string">"Bitcoin RPC returned an error"</span>;
 
     <span class="kw">pub fn </span>new(url: <span class="kw-2">&amp;</span>SafeUrl, rpc: DynBitcoindRpc) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>(host, auth) =
-            fedimint_bitcoind::bitcoincore::from_url_to_url_auth(url).expect(<span class="string">&quot;correct url&quot;</span>);
+            fedimint_bitcoind::bitcoincore::from_url_to_url_auth(url).expect(<span class="string">"correct url"</span>);
         <span class="kw">let </span>client = Arc::new(Client::new(<span class="kw-2">&amp;</span>host, auth).expect(<span class="self">Self</span>::ERROR));
 
         <span class="self">Self </span>{
@@ -467,21 +469,21 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>BitcoinTest <span class="kw">for </span>RealBitcoinTest {
     <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send + Sync&gt; {
-        <span class="macro">trace!</span>(<span class="string">&quot;Trying to acquire global bitcoin lock&quot;</span>);
+        <span class="macro">trace!</span>(<span class="string">"Trying to acquire global bitcoin lock"</span>);
         <span class="kw">let </span>_guard = tokio::task::block_in_place(|| {
-            <span class="kw">let </span>lock_file_path = std::env::temp_dir().join(<span class="string">&quot;fm-test-bitcoind-lock&quot;</span>);
+            <span class="kw">let </span>lock_file_path = std::env::temp_dir().join(<span class="string">"fm-test-bitcoind-lock"</span>);
             fs_lock::FileLock::new_exclusive(
                 std::fs::OpenOptions::new()
                     .write(<span class="bool-val">true</span>)
                     .create(<span class="bool-val">true</span>)
                     .truncate(<span class="bool-val">true</span>)
                     .open(<span class="kw-2">&amp;</span>lock_file_path)
-                    .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Failed to open {}&quot;</span>, lock_file_path.display()))<span class="question-mark">?</span>,
+                    .with_context(|| <span class="macro">format!</span>(<span class="string">"Failed to open {}"</span>, lock_file_path.display()))<span class="question-mark">?</span>,
             )
-            .context(<span class="string">&quot;Failed to acquire exclusive lock file&quot;</span>)
+            .context(<span class="string">"Failed to acquire exclusive lock file"</span>)
         })
-        .expect(<span class="string">&quot;Failed to lock&quot;</span>);
-        <span class="macro">trace!</span>(<span class="string">&quot;Acquired global bitcoin lock&quot;</span>);
+        .expect(<span class="string">"Failed to lock"</span>);
+        <span class="macro">trace!</span>(<span class="string">"Acquired global bitcoin lock"</span>);
         Box::new(RealBitcoinTestLocked {
             inner: <span class="self">self</span>.inner.clone(),
             _guard,
@@ -526,7 +528,7 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>BitcoinTest <span class="kw">for </span>RealBitcoinTestLocked {
     <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send + Sync&gt; {
-        <span class="macro">panic!</span>(<span class="string">&quot;Double-locking would lead to a hang&quot;</span>);
+        <span class="macro">panic!</span>(<span class="string">"Double-locking would lead to a hang"</span>);
     }
 
     <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) {

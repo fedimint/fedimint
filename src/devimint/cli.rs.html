@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `devimint/src/cli.rs`."><title>cli.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../devimint/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `devimint/src/cli.rs`."><title>cli.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../devimint/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -337,7 +339,6 @@
 <a href="#337" id="337">337</a>
 <a href="#338" id="338">338</a>
 <a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -357,17 +358,17 @@
 
 <span class="attr">#[derive(Parser, Clone)]
 </span><span class="kw">pub struct </span>CommonArgs {
-    <span class="attr">#[clap(short = <span class="string">&#39;d&#39;</span>, long, env = <span class="string">&quot;FM_TEST_DIR&quot;</span>)]
+    <span class="attr">#[clap(short = <span class="string">'d'</span>, long, env = <span class="string">"FM_TEST_DIR"</span>)]
     </span><span class="kw">pub </span>test_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
-    <span class="attr">#[clap(short = <span class="string">&#39;n&#39;</span>, long, env = <span class="string">&quot;FM_FED_SIZE&quot;</span>, default_value = <span class="string">&quot;4&quot;</span>)]
+    <span class="attr">#[clap(short = <span class="string">'n'</span>, long, env = <span class="string">"FM_FED_SIZE"</span>, default_value = <span class="string">"4"</span>)]
     </span><span class="kw">pub </span>fed_size: usize,
 
-    <span class="attr">#[clap(long, env = <span class="string">&quot;FM_LINK_TEST_DIR&quot;</span>)]
+    <span class="attr">#[clap(long, env = <span class="string">"FM_LINK_TEST_DIR"</span>)]
     </span><span class="doccomment">/// Create a link to the test dir under this path
     </span><span class="kw">pub </span>link_test_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
 
     <span class="doccomment">/// Run degraded federation with FM_OFFLINE_NODES shutdown
-    </span><span class="attr">#[clap(long, env = <span class="string">&quot;FM_OFFLINE_NODES&quot;</span>, default_value = <span class="string">&quot;0&quot;</span>)]
+    </span><span class="attr">#[clap(long, env = <span class="string">"FM_OFFLINE_NODES"</span>, default_value = <span class="string">"0"</span>)]
     </span><span class="kw">pub </span>offline_nodes: usize,
 }
 
@@ -376,14 +377,14 @@
         <span class="kw">let </span>path = <span class="self">self</span>.test_dir();
 
         std::fs::create_dir_all(<span class="kw-2">&amp;</span>path)
-            .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Creating tmp directory {}&quot;</span>, path.display()))<span class="question-mark">?</span>;
+            .with_context(|| <span class="macro">format!</span>(<span class="string">"Creating tmp directory {}"</span>, path.display()))<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(path)
     }
 
     <span class="kw">pub fn </span>test_dir(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PathBuf {
         <span class="self">self</span>.test_dir.clone().unwrap_or_else(|| {
-            std::env::temp_dir().join(<span class="macro">format!</span>(<span class="string">&quot;devimint-{}&quot;</span>, std::process::id()))
+            std::env::temp_dir().join(<span class="macro">format!</span>(<span class="string">"devimint-{}"</span>, std::process::id()))
         })
     }
 }
@@ -425,7 +426,7 @@
         .write(<span class="bool-val">true</span>)
         .create(<span class="bool-val">true</span>)
         .append(<span class="bool-val">true</span>)
-        .open(globals.FM_LOGS_DIR.join(<span class="string">&quot;devimint.log&quot;</span>))
+        .open(globals.FM_LOGS_DIR.join(<span class="string">"devimint.log"</span>))
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_std()
         .<span class="kw">await</span>;
@@ -440,12 +441,12 @@
 
     <span class="kw">let </span><span class="kw-2">mut </span>env_string = String::new();
     <span class="kw">for </span>(var, value) <span class="kw">in </span>globals.vars() {
-        <span class="macro">debug!</span>(var, value, <span class="string">&quot;Env variable set&quot;</span>);
-        <span class="macro">writeln!</span>(env_string, <span class="string">r#&quot;export {var}=&quot;{value}&quot;&quot;#</span>)<span class="question-mark">?</span>; <span class="comment">// hope that value doesn&#39;t contain a &quot;
+        <span class="macro">debug!</span>(var, value, <span class="string">"Env variable set"</span>);
+        <span class="macro">writeln!</span>(env_string, <span class="string">r#"export {var}="{value}""#</span>)<span class="question-mark">?</span>; <span class="comment">// hope that value doesn't contain a "
         </span>std::env::set_var(var, value);
     }
-    write_overwrite_async(globals.FM_TEST_DIR.join(<span class="string">&quot;env&quot;</span>), env_string).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(<span class="string">&quot;Test setup in {:?}&quot;</span>, globals.FM_DATA_DIR);
+    write_overwrite_async(globals.FM_TEST_DIR.join(<span class="string">"env"</span>), env_string).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">info!</span>(<span class="string">"Test setup in {:?}"</span>, globals.FM_DATA_DIR);
     <span class="kw">let </span>process_mgr = ProcessManager::new(globals);
     <span class="kw">let </span>task_group = TaskGroup::new();
     task_group.install_kill_handler();
@@ -462,13 +463,13 @@
                 old = %existing.display(),
                 new = %test_dir.display(),
                 link = %link_test_dir.display(),
-                <span class="string">&quot;Updating exinst test dir link&quot;
+                <span class="string">"Updating exinst test dir link"
             </span>);
 
             fs::remove_file(link_test_dir).<span class="kw">await</span><span class="question-mark">?</span>;
         }
     }
-    <span class="macro">info!</span>(src = %test_dir.display(), dst = %link_test_dir.display(), <span class="string">&quot;Linking test dir&quot;</span>);
+    <span class="macro">info!</span>(src = %test_dir.display(), dst = %link_test_dir.display(), <span class="string">"Linking test dir"</span>);
     fs::symlink(<span class="kw-2">&amp;</span>test_dir, link_test_dir).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
@@ -477,27 +478,25 @@
     main_process: <span class="kw">impl </span>futures::Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T&gt;&gt;,
     task_group: TaskGroup,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="comment">// This select makes it possible to exit earlier if a signal is received before
-    // the main process is finished
-    </span><span class="macro">tokio::select! </span>{
-        <span class="kw">_ </span>= task_group.make_handle().make_shutdown_rx().<span class="kw">await </span>=&gt; {
-            <span class="macro">info!</span>(<span class="string">&quot;Received shutdown signal before finishing main process, exiting early&quot;</span>);
+    <span class="kw">match </span>task_group
+        .make_handle()
+        .cancel_on_shutdown(main_process)
+        .<span class="kw">await
+    </span>{
+        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+            <span class="macro">info!</span>(<span class="string">"Received shutdown signal before finishing main process, exiting early"</span>);
             <span class="prelude-val">Ok</span>(())
         }
-        result = main_process =&gt; {
-            <span class="kw">match </span>result {
-                <span class="prelude-val">Ok</span>(v) =&gt; {
-                    <span class="macro">info!</span>(<span class="string">&quot;Main process finished successfully, will wait for shutdown signal&quot;</span>);
-                    task_group.make_handle().make_shutdown_rx().<span class="kw">await</span>.<span class="kw">await</span>;
-                    <span class="macro">info!</span>(<span class="string">&quot;Received shutdown signal, shutting down&quot;</span>);
-                    drop(v); <span class="comment">// execute destructors
-                    </span><span class="prelude-val">Ok</span>(())
-                },
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(<span class="string">&quot;Main process failed with {e:?}, will shutdown&quot;</span>);
-                    <span class="prelude-val">Err</span>(e)
-                }
-            }
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(v)) =&gt; {
+            <span class="macro">info!</span>(<span class="string">"Main process finished successfully, will wait for shutdown signal"</span>);
+            task_group.make_handle().make_shutdown_rx().<span class="kw">await</span>.<span class="kw">await</span>;
+            <span class="macro">info!</span>(<span class="string">"Received shutdown signal, shutting down"</span>);
+            drop(v); <span class="comment">// execute destructors
+            </span><span class="prelude-val">Ok</span>(())
+        }
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
+            <span class="macro">warn!</span>(<span class="string">"Main process failed with {e:?}, will shutdown"</span>);
+            <span class="prelude-val">Err</span>(e)
         }
     }
 }
@@ -505,8 +504,8 @@
 <span class="kw">pub async fn </span>write_ready_file&lt;T&gt;(global: <span class="kw-2">&amp;</span>vars::Global, result: <span class="prelude-ty">Result</span>&lt;T&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;T&gt; {
     <span class="kw">let </span>ready_file = <span class="kw-2">&amp;</span>global.FM_READY_FILE;
     <span class="kw">match </span>result {
-        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; write_overwrite_async(ready_file, <span class="string">&quot;READY&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>,
-        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; write_overwrite_async(ready_file, <span class="string">&quot;ERROR&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>,
+        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; write_overwrite_async(ready_file, <span class="string">"READY"</span>).<span class="kw">await</span><span class="question-mark">?</span>,
+        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; write_overwrite_async(ready_file, <span class="string">"ERROR"</span>).<span class="kw">await</span><span class="question-mark">?</span>,
     }
     result
 }
@@ -537,6 +536,7 @@
                         dev_fed.fed.pegin_gateway(<span class="number">20_000</span>, <span class="kw-2">&amp;</span>dev_fed.gw_cln),
                         dev_fed.fed.pegin_gateway(<span class="number">20_000</span>, <span class="kw-2">&amp;</span>dev_fed.gw_lnd),
                     )<span class="question-mark">?</span>;
+                    std::env::set_var(<span class="string">"FM_INVITE_CODE"</span>, dev_fed.fed.invite_code()<span class="question-mark">?</span>);
                     <span class="kw">let </span>daemons = write_ready_file(<span class="kw-2">&amp;</span>process_mgr.globals, <span class="prelude-val">Ok</span>(dev_fed)).<span class="kw">await</span><span class="question-mark">?</span>;
 
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(exec) = exec {
@@ -564,20 +564,20 @@
 
 <span class="kw">pub async fn </span>exec_user_command(exec: Vec&lt;ffi::OsString&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     <span class="kw">let </span>cmd_str = exec
-        .join(ffi::OsStr::new(<span class="string">&quot; &quot;</span>))
+        .join(ffi::OsStr::new(<span class="string">" "</span>))
         .to_string_lossy()
         .to_string();
-    <span class="macro">info!</span>(cmd = %cmd_str, <span class="string">&quot;Executing user command&quot;</span>);
+    <span class="macro">info!</span>(cmd = %cmd_str, <span class="string">"Executing user command"</span>);
     <span class="kw">if </span>!tokio::process::Command::new(<span class="kw-2">&amp;</span>exec[<span class="number">0</span>])
         .args(<span class="kw-2">&amp;</span>exec[<span class="number">1</span>..])
         .kill_on_drop(<span class="bool-val">true</span>)
         .status()
         .<span class="kw">await
-        </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Executing user command failed: {cmd_str}&quot;</span>))<span class="question-mark">?
+        </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"Executing user command failed: {cmd_str}"</span>))<span class="question-mark">?
         </span>.success()
     {
-        <span class="macro">error!</span>(cmd = %cmd_str, <span class="string">&quot;User command failed&quot;</span>);
-        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;User command failed: {cmd_str}&quot;</span>));
+        <span class="macro">error!</span>(cmd = %cmd_str, <span class="string">"User command failed"</span>);
+        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"User command failed: {cmd_str}"</span>));
     }
     <span class="prelude-val">Ok</span>(())
 }
@@ -586,51 +586,51 @@
     fedimint_logging::TracingSetup::default().init()<span class="question-mark">?</span>;
     <span class="kw">match </span>rpc {
         RpcCmd::Env =&gt; {
-            <span class="kw">let </span>env_file = common.test_dir().join(<span class="string">&quot;env&quot;</span>);
-            poll(<span class="string">&quot;env file&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+            <span class="kw">let </span>env_file = common.test_dir().join(<span class="string">"env"</span>);
+            poll(<span class="string">"env file"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
                 <span class="kw">if </span>fs::try_exists(<span class="kw-2">&amp;</span>env_file)
                     .<span class="kw">await
-                    </span>.context(<span class="string">&quot;env file&quot;</span>)
+                    </span>.context(<span class="string">"env file"</span>)
                     .map_err(ControlFlow::Continue)<span class="question-mark">?
                 </span>{
                     <span class="prelude-val">Ok</span>(())
                 } <span class="kw">else </span>{
-                    <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">&quot;env file not found&quot;</span>)))
+                    <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"env file not found"</span>)))
                 }
             })
             .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>env = fs::read_to_string(<span class="kw-2">&amp;</span>env_file).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="macro">print!</span>(<span class="string">&quot;{env}&quot;</span>);
+            <span class="macro">print!</span>(<span class="string">"{env}"</span>);
             <span class="prelude-val">Ok</span>(())
         }
         RpcCmd::Wait =&gt; {
-            <span class="kw">let </span>ready_file = common.test_dir().join(<span class="string">&quot;ready&quot;</span>);
-            poll(<span class="string">&quot;ready file&quot;</span>, <span class="number">60</span>, || <span class="kw">async </span>{
+            <span class="kw">let </span>ready_file = common.test_dir().join(<span class="string">"ready"</span>);
+            poll(<span class="string">"ready file"</span>, <span class="number">60</span>, || <span class="kw">async </span>{
                 <span class="kw">if </span>fs::try_exists(<span class="kw-2">&amp;</span>ready_file)
                     .<span class="kw">await
-                    </span>.context(<span class="string">&quot;ready file&quot;</span>)
+                    </span>.context(<span class="string">"ready file"</span>)
                     .map_err(ControlFlow::Continue)<span class="question-mark">?
                 </span>{
                     <span class="prelude-val">Ok</span>(())
                 } <span class="kw">else </span>{
-                    <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">&quot;ready file not found&quot;</span>)))
+                    <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"ready file not found"</span>)))
                 }
             })
             .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>env = fs::read_to_string(<span class="kw-2">&amp;</span>ready_file).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="macro">print!</span>(<span class="string">&quot;{env}&quot;</span>);
+            <span class="macro">print!</span>(<span class="string">"{env}"</span>);
 
             <span class="comment">// Append invite code to devimint env
             </span><span class="kw">let </span>test_dir = <span class="kw-2">&amp;</span>common.test_dir();
-            <span class="kw">let </span>env_file = test_dir.join(<span class="string">&quot;env&quot;</span>);
-            <span class="kw">let </span>invite_file = test_dir.join(<span class="string">&quot;cfg/invite-code&quot;</span>);
+            <span class="kw">let </span>env_file = test_dir.join(<span class="string">"env"</span>);
+            <span class="kw">let </span>invite_file = test_dir.join(<span class="string">"cfg/invite-code"</span>);
             <span class="kw">if </span>fs::try_exists(<span class="kw-2">&amp;</span>env_file).<span class="kw">await</span>.ok().unwrap_or(<span class="bool-val">false</span>)
                 &amp;&amp; fs::try_exists(<span class="kw-2">&amp;</span>invite_file).<span class="kw">await</span>.ok().unwrap_or(<span class="bool-val">false</span>)
             {
                 <span class="kw">let </span>invite = fs::read_to_string(<span class="kw-2">&amp;</span>invite_file).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span><span class="kw-2">mut </span>env_string = fs::read_to_string(<span class="kw-2">&amp;</span>env_file).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="macro">writeln!</span>(env_string, <span class="string">r#&quot;export FM_INVITE_CODE=&quot;{invite}&quot;&quot;#</span>)<span class="question-mark">?</span>;
-                std::env::set_var(<span class="string">&quot;FM_INVITE_CODE&quot;</span>, invite);
+                <span class="macro">writeln!</span>(env_string, <span class="string">r#"export FM_INVITE_CODE="{invite}""#</span>)<span class="question-mark">?</span>;
+                std::env::set_var(<span class="string">"FM_INVITE_CODE"</span>, invite);
                 write_overwrite_async(env_file, env_string).<span class="kw">await</span><span class="question-mark">?</span>;
             }
 
@@ -650,23 +650,23 @@
             <span class="kw">let </span>metrics_port = <span class="number">3510 </span>+ peer;
 
             <span class="kw">let </span>vars = vars::Fedimintd {
-                FM_BIND_P2P: <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{peer_port}&quot;</span>),
-                FM_P2P_URL: <span class="macro">format!</span>(<span class="string">&quot;fedimint://127.0.0.1:{peer_port}&quot;</span>),
-                FM_BIND_API: <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{api_port}&quot;</span>),
-                FM_API_URL: <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{api_port}&quot;</span>),
+                FM_BIND_P2P: <span class="macro">format!</span>(<span class="string">"127.0.0.1:{peer_port}"</span>),
+                FM_P2P_URL: <span class="macro">format!</span>(<span class="string">"fedimint://127.0.0.1:{peer_port}"</span>),
+                FM_BIND_API: <span class="macro">format!</span>(<span class="string">"127.0.0.1:{api_port}"</span>),
+                FM_API_URL: <span class="macro">format!</span>(<span class="string">"ws://127.0.0.1:{api_port}"</span>),
                 FM_DATA_DIR: process_mgr
                     .globals
                     .FM_DATA_DIR
-                    .join(<span class="macro">format!</span>(<span class="string">&quot;fedimintd-{peer}&quot;</span>)),
-                FM_BIND_METRICS_API: <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{metrics_port}&quot;</span>),
+                    .join(<span class="macro">format!</span>(<span class="string">"fedimintd-{peer}"</span>)),
+                FM_BIND_METRICS_API: <span class="macro">format!</span>(<span class="string">"127.0.0.1:{metrics_port}"</span>),
             };
             <span class="kw">let </span>fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer, <span class="kw-2">&amp;</span>vars).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>server_addr = <span class="kw-2">&amp;</span>vars.FM_BIND_API;
 
-            poll(<span class="string">&quot;waiting for api startup&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+            poll(<span class="string">"waiting for api startup"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
                 TcpStream::connect(server_addr)
                     .<span class="kw">await
-                    </span>.context(<span class="string">&quot;connect to api&quot;</span>)
+                    </span>.context(<span class="string">"connect to api"</span>)
                     .map_err(ControlFlow::Continue)
             })
             .<span class="kw">await</span><span class="question-mark">?</span>;

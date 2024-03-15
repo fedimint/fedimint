@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/module/init/recovery.rs`."><title>recovery.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../../fedimint_client/index.html"><img class="rust-logo" src="../../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/module/init/recovery.rs`."><title>recovery.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../../fedimint_client/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -522,7 +524,7 @@
     /// Storing and restoring progress is used to save progress and
     /// continue recovery if it was previously terminated before completion.
     </span><span class="kw">async fn </span>load_dbtx(
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         args: <span class="kw-2">&amp;</span>ClientModuleRecoverArgs&lt;<span class="self">Self</span>::Init&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>, RecoveryFromHistoryCommon)&gt;;
 
@@ -531,28 +533,28 @@
     /// See [`Self::load_dbtx`].
     </span><span class="kw">async fn </span>store_dbtx(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         common: <span class="kw-2">&amp;</span>RecoveryFromHistoryCommon,
     );
 
     <span class="doccomment">/// Delete the the recovery state from the database
     ///
     /// See [`Self::load_dbtx`].
-    </span><span class="kw">async fn </span>delete_dbtx(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;);
+    </span><span class="kw">async fn </span>delete_dbtx(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;);
 
     <span class="doccomment">/// Read the finalization status
     ///
     /// See [`Self::load_dbtx`].
-    </span><span class="kw">async fn </span>load_finalized(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;bool&gt;;
+    </span><span class="kw">async fn </span>load_finalized(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;bool&gt;;
 
     <span class="doccomment">/// Store finalization status
     ///
     /// See [`Self::load_finalized`].
-    </span><span class="kw">async fn </span>store_finalized(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, state: bool);
+    </span><span class="kw">async fn </span>store_finalized(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;, state: bool);
 
     <span class="doccomment">/// Handle session outcome, adjusting the current state
     ///
-    /// It is expected that most implementations don&#39;t need to override this
+    /// It is expected that most implementations don't need to override this
     /// function, and override more granular ones instead (e.g.
     /// [`Self::handle_input`] and/or [`Self::handle_output`]).
     ///
@@ -575,7 +577,7 @@
 
     <span class="doccomment">/// Handle session outcome, adjusting the current state
     ///
-    /// It is expected that most implementations don&#39;t need to override this
+    /// It is expected that most implementations don't need to override this
     /// function, and override more granular ones instead (e.g.
     /// [`Self::handle_input`] and/or [`Self::handle_output`]).
     ///
@@ -591,13 +593,13 @@
         <span class="macro">trace!</span>(
             target: LOG_CLIENT_RECOVERY,
             <span class="question-mark">?</span>transaction,
-            <span class="string">&quot;found consensus item&quot;
+            <span class="string">"found consensus item"
         </span>);
 
         <span class="macro">trace!</span>(
             target: LOG_CLIENT_RECOVERY,
             tx_hash = %transaction.tx_hash(),
-            <span class="string">&quot;found transaction&quot;
+            <span class="string">"found transaction"
         </span>);
 
         <span class="macro">debug!</span>(
@@ -605,7 +607,7 @@
             tx_hash = %transaction.tx_hash(),
             input_num = transaction.inputs.len(),
             output_num = transaction.outputs.len(),
-            <span class="string">&quot;processing transaction&quot;
+            <span class="string">"processing transaction"
         </span>);
 
         <span class="kw">for </span>(idx, input) <span class="kw">in </span>transaction.inputs.iter().enumerate() {
@@ -614,7 +616,7 @@
                 tx_hash = %transaction.tx_hash(),
                 idx,
                 module_id = input.module_instance_id(),
-                <span class="string">&quot;found transaction input&quot;
+                <span class="string">"found transaction input"
             </span>);
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(own_input) = client_ctx.input_from_dyn(input) {
@@ -628,7 +630,7 @@
                 tx_hash = %transaction.tx_hash(),
                 idx = out_idx,
                 module_id = output.module_instance_id(),
-                <span class="string">&quot;found transaction output&quot;
+                <span class="string">"found transaction output"
             </span>);
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(own_output) = client_ctx.output_from_dyn(output) {
@@ -673,14 +675,14 @@
     /// changes in the database.
     ///
     /// This is the only place during recovery where module gets a chance to
-    /// create state machines, etc. and that&#39;s why `dbtx` is of
+    /// create state machines, etc. and that's why `dbtx` is of
     /// [`ClientDbTxContext`] type.
     ///
     /// Notably this function is running in a database-autocommit wrapper, so
     /// might be called again on database commit failure.
     </span><span class="kw">async fn </span>finalize_dbtx(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientDbTxContext&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>, &lt;<span class="self">Self</span>::Init <span class="kw">as </span>ClientModuleInit&gt;::Module&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientDbTxContext&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>, &lt;<span class="self">Self</span>::Init <span class="kw">as </span>ClientModuleInit&gt;::Module&gt;,
     ) -&gt; anyhow::Result&lt;()&gt;;
 }
 
@@ -704,14 +706,14 @@
     {
         <span class="doccomment">/// Fetch epochs in a given range and send them over `sender`
         ///
-        /// Since WASM&#39;s `spawn` does not support join handles, we indicate
+        /// Since WASM's `spawn` does not support join handles, we indicate
         /// errors via `sender` itself.
-        </span><span class="kw">fn </span>fetch_block_stream&lt;<span class="lifetime">&#39;a</span>&gt;(
+        </span><span class="kw">fn </span>fetch_block_stream&lt;<span class="lifetime">'a</span>&gt;(
             api: DynGlobalApi,
             core_api_version: ApiVersion,
             decoders: ModuleDecoderRegistry,
             epoch_range: ops::Range&lt;u64&gt;,
-        ) -&gt; <span class="kw">impl </span>futures::Stream&lt;Item = (u64, Vec&lt;AcceptedItem&gt;)&gt; + <span class="lifetime">&#39;a </span>{
+        ) -&gt; <span class="kw">impl </span>futures::Stream&lt;Item = (u64, Vec&lt;AcceptedItem&gt;)&gt; + <span class="lifetime">'a </span>{
             <span class="comment">// How many request for blocks to run in parallel (streaming).
             </span><span class="kw">const </span>PARALLISM_LEVEL: usize = <span class="number">8</span>;
             <span class="kw">const </span>VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
@@ -722,17 +724,17 @@
                     <span class="kw">let </span>api = api.clone();
                     <span class="kw">let </span>decoders = decoders.clone();
                     Box::pin(<span class="kw">async move </span>{
-                        <span class="macro">info!</span>(session_idx, <span class="string">&quot;Fetching epoch&quot;</span>);
+                        <span class="macro">info!</span>(session_idx, <span class="string">"Fetching epoch"</span>);
 
                         <span class="kw">let </span><span class="kw-2">mut </span>retry_sleep = Duration::from_millis(<span class="number">10</span>);
                         <span class="kw">let </span>block = <span class="kw">loop </span>{
-                            <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY, session_idx, <span class="string">&quot;Awaiting signed block&quot;</span>);
+                            <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY, session_idx, <span class="string">"Awaiting signed block"</span>);
 
                             <span class="kw">let </span>items_res = <span class="kw">if </span>core_api_version &lt; VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
                                 api.await_block(session_idx, <span class="kw-2">&amp;</span>decoders).<span class="kw">await</span>.map(|s| s.items)
                             } <span class="kw">else </span>{
                                 api.get_session_status(session_idx, <span class="kw-2">&amp;</span>decoders).<span class="kw">await</span>.map(|s| <span class="kw">match </span>s {
-                                    SessionStatus::Initial =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Federation missing session that existed when we started recovery&quot;</span>),
+                                    SessionStatus::Initial =&gt; <span class="macro">panic!</span>(<span class="string">"Federation missing session that existed when we started recovery"</span>),
                                     SessionStatus::Pending(items) =&gt; items,
                                     SessionStatus::Complete(s) =&gt; s.items,
                                 })
@@ -741,8 +743,8 @@
                             <span class="kw">match </span>items_res {
                                 <span class="prelude-val">Ok</span>(block) =&gt; <span class="kw">break </span>block,
                                 <span class="prelude-val">Err</span>(e) =&gt; {
-                                    <span class="macro">info!</span>(e = %e, session_idx, <span class="string">&quot;Error trying to fetch signed block&quot;</span>);
-                                    <span class="comment">// We don&#39;t want PARALLISM_LEVEL tasks hammering Federation
+                                    <span class="macro">info!</span>(e = %e, session_idx, <span class="string">"Error trying to fetch signed block"</span>);
+                                    <span class="comment">// We don't want PARALLISM_LEVEL tasks hammering Federation
                                     // with requests, so max sleep is significant
                                     </span><span class="kw">const </span>MAX_SLEEP: Duration = Duration::from_secs(<span class="number">120</span>);
                                     <span class="kw">if </span>retry_sleep &lt;= MAX_SLEEP {
@@ -763,7 +765,7 @@
 
         <span class="doccomment">/// Make enough progress to justify saving a state snapshot
 
-        </span><span class="kw">async fn </span>make_progress&lt;<span class="lifetime">&#39;a</span>, Init, Recovery: RecoveryFromHistory&lt;Init = Init&gt;&gt;(
+        </span><span class="kw">async fn </span>make_progress&lt;<span class="lifetime">'a</span>, Init, Recovery: RecoveryFromHistory&lt;Init = Init&gt;&gt;(
             client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;&lt;Init <span class="kw">as </span>ClientModuleInit&gt;::Module&gt;,
             common_state: <span class="kw-2">&amp;mut </span>RecoveryFromHistoryCommon,
             state: <span class="kw-2">&amp;mut </span>Recovery,
@@ -792,7 +794,7 @@
             <span class="macro">debug!</span>(
                 target: LOG_CLIENT_RECOVERY,
                 <span class="question-mark">?</span>block_range,
-                <span class="string">&quot;Processing blocks&quot;
+                <span class="string">"Processing blocks"
             </span>);
 
             <span class="kw">for _ in </span>block_range {
@@ -820,12 +822,12 @@
         {
             <span class="comment">// In rare circumstances, the finalization could complete, yet the completion
             // of `recover` function not yet persisted in the database. So
-            // it&#39;s possible that `recovery` would be called again on an
+            // it's possible that `recovery` would be called again on an
             // already finalized state. Because of this we store a
             // finalization marker in the same dbtx as the finalization itself, detect this
             // here and exit early.
             //
-            // Example sequence how this happens (if `finalize_dbtx` didn&#39;t exist):
+            // Example sequence how this happens (if `finalize_dbtx` didn't exist):
             //
             // 0. module recovery is complete and progress saved to the db
             // 1. `dbtx` with finalization commits, progress deleted, completing recovery on
@@ -834,25 +836,25 @@
             // 3. client starts again
             // 4. client never observed/persisted that the module finished recovery, so
             //    calls module recovery again
-            // 5. module doesn&#39;t see progress, starts recovery again, eventually completes
+            // 5. module doesn't see progress, starts recovery again, eventually completes
             //    again and moves to finalization
-            // 6. module runs finalization again and probably fails because it&#39;s actually
-            //    not idempotent and doesn&#39;t expect the already existing state.
-            </span><span class="macro">warn!</span>(<span class="string">&quot;Previously finalized, exiting&quot;</span>);
+            // 6. module runs finalization again and probably fails because it's actually
+            //    not idempotent and doesn't expect the already existing state.
+            </span><span class="macro">warn!</span>(<span class="string">"Previously finalized, exiting"</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
         <span class="kw">let </span>current_session_count = client_ctx.global_api().session_count().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, session_count = current_session_count, <span class="string">&quot;Current session count&quot;</span>);
+        <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, session_count = current_session_count, <span class="string">"Current session count"</span>);
 
         <span class="kw">let </span>(<span class="kw-2">mut </span>state, <span class="kw-2">mut </span>common_state) =
-            <span class="comment">// TODO: if load fails (e.g. module didn&#39;t migrate an existing recovery state and failed to decode it),
+            <span class="comment">// TODO: if load fails (e.g. module didn't migrate an existing recovery state and failed to decode it),
             // we could just ... start from scratch? at least being able to force this behavior might be useful
             </span><span class="kw">if let </span><span class="prelude-val">Some</span>((state, common_state)) = Recovery::load_dbtx(<span class="kw-2">&amp;mut </span>db.begin_transaction_nc().<span class="kw">await</span>, <span class="self">self</span>).<span class="kw">await </span>{
                 (state, common_state)
             } <span class="kw">else </span>{
                 <span class="kw">let </span>(state, start_session) = Recovery::new(<span class="self">self</span>, snapshot).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, start_session, <span class="string">&quot;Recovery start session&quot;</span>);
+                <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, start_session, <span class="string">"Recovery start session"</span>);
                 (state,
                 RecoveryFromHistoryCommon {
                     start_session,
@@ -862,7 +864,7 @@
             };
 
         <span class="kw">let </span>block_stream_session_range = common_state.next_session..common_state.end_session;
-        <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, range = <span class="question-mark">?</span>block_stream_session_range, <span class="string">&quot;Starting block streaming&quot;</span>);
+        <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, range = <span class="question-mark">?</span>block_stream_session_range, <span class="string">"Starting block streaming"</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>block_stream = fetch_block_stream(
             <span class="self">self</span>.api().clone(),
@@ -899,7 +901,7 @@
         <span class="macro">debug!</span>(
             target: LOG_CLIENT_RECOVERY,
             <span class="question-mark">?</span>state,
-            <span class="string">&quot;Finalizing restore&quot;
+            <span class="string">"Finalizing restore"
         </span>);
 
         client_ctx

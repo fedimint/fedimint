@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/sm/executor.rs`."><title>executor.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/sm/executor.rs`."><title>executor.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_client/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1351,6 +1353,17 @@
 <a href="#1351" id="1351">1351</a>
 <a href="#1352" id="1352">1352</a>
 <a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
+<a href="#1357" id="1357">1357</a>
+<a href="#1358" id="1358">1358</a>
+<a href="#1359" id="1359">1359</a>
+<a href="#1360" id="1360">1360</a>
+<a href="#1361" id="1361">1361</a>
+<a href="#1362" id="1362">1362</a>
+<a href="#1363" id="1363">1363</a>
+<a href="#1364" id="1364">1364</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -1368,7 +1381,7 @@
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateJson;
 <span class="kw">use </span>fedimint_core::maybe_add_send_sync;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::task::spawn;
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::BoxFuture;
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_REACTOR;
 <span class="kw">use </span>futures::future::{<span class="self">self</span>, select_all};
@@ -1417,9 +1430,10 @@
     notifier: Notifier,
     shutdown_executor: Mutex&lt;<span class="prelude-ty">Option</span>&lt;oneshot::Sender&lt;()&gt;&gt;&gt;,
     <span class="doccomment">/// Any time executor should notice state machine update (e.g. because it
-    /// was created), it&#39;s must be sent through this channel for it to notice.
+    /// was created), it's must be sent through this channel for it to notice.
     </span>sm_update_tx: mpsc::UnboundedSender&lt;DynState&gt;,
     sm_update_rx: Mutex&lt;<span class="prelude-ty">Option</span>&lt;mpsc::UnboundedReceiver&lt;DynState&gt;&gt;&gt;,
+    client_task_group: TaskGroup,
 }
 
 <span class="doccomment">/// Builder to which module clients can be attached and used to build an
@@ -1457,8 +1471,8 @@
                 AutocommitError::CommitFailed {
                     last_error,
                     attempts,
-                } =&gt; last_error.context(<span class="macro">format!</span>(<span class="string">&quot;Failed to commit after {attempts} attempts&quot;</span>)),
-                AutocommitError::ClosureError { error, .. } =&gt; <span class="macro">anyhow!</span>(<span class="string">&quot;{error:?}&quot;</span>),
+                } =&gt; last_error.context(<span class="macro">format!</span>(<span class="string">"Failed to commit after {attempts} attempts"</span>)),
+                AutocommitError::ClosureError { error, .. } =&gt; <span class="macro">anyhow!</span>(<span class="string">"{error:?}"</span>),
             })<span class="question-mark">?</span>;
 
         <span class="comment">// TODO: notify subscribers to state changes?
@@ -1476,7 +1490,7 @@
     </span><span class="comment">// TODO: remove warning once finality is an inherent state attribute
     </span><span class="kw">pub async fn </span>add_state_machines_dbtx(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         states: Vec&lt;DynState&gt;,
     ) -&gt; AddStateMachinesResult {
         <span class="kw">for </span>state <span class="kw">in </span>states {
@@ -1485,7 +1499,7 @@
                 .valid_module_ids
                 .contains(<span class="kw-2">&amp;</span>state.module_instance_id())
             {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(AddStateMachinesError::Other(<span class="macro">anyhow!</span>(<span class="string">&quot;Unknown module&quot;</span>)));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(AddStateMachinesError::Other(<span class="macro">anyhow!</span>(<span class="string">"Unknown module"</span>)));
             }
 
             <span class="kw">let </span>is_active_state = dbtx
@@ -1502,7 +1516,7 @@
             }
 
             <span class="comment">// In case of recovery functions, the module itself is not yet initialized,
-            // so we can&#39;t check if the state is terminal. However the
+            // so we can't check if the state is terminal. However the
             // [`Self::get_transitions_for`] function will double check and
             // deactivate any terminal states that would slip past this check.
             </span><span class="kw">if let </span><span class="prelude-val">Some</span>(module_context) =
@@ -1512,13 +1526,13 @@
                     <span class="kw">let </span>context_gen_guard = <span class="self">self</span>.inner.context.lock().<span class="kw">await</span>;
                     <span class="kw">let </span>context_gen = context_gen_guard
                         .as_ref()
-                        .expect(<span class="string">&quot;should be initialized at this point&quot;</span>);
+                        .expect(<span class="string">"should be initialized at this point"</span>);
                     context_gen(state.module_instance_id(), state.operation_id())
                 };
 
                 <span class="kw">if </span>state.is_terminal(module_context, <span class="kw-2">&amp;</span>context) {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(AddStateMachinesError::Other(<span class="macro">anyhow!</span>(
-                        <span class="string">&quot;State is already terminal, adding it to the executor doesn&#39;t make sense.&quot;
+                        <span class="string">"State is already terminal, adding it to the executor doesn't make sense."
                     </span>)));
                 }
             }
@@ -1606,7 +1620,7 @@
             .is_some();
         <span class="macro">assert!</span>(
             !replaced_old_context_gen,
-            <span class="string">&quot;start_executor was called previously&quot;
+            <span class="string">"start_executor was called previously"
         </span>);
         <span class="kw">let </span>sm_update_rx = <span class="self">self
             </span>.inner
@@ -1614,7 +1628,7 @@
             .lock()
             .<span class="kw">await
             </span>.take()
-            .expect(<span class="string">&quot;start_executor was called previously: no sm_update_rx available&quot;</span>);
+            .expect(<span class="string">"start_executor was called previously: no sm_update_rx available"</span>);
 
         <span class="kw">let </span>(shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel::&lt;()&gt;();
 
@@ -1627,28 +1641,32 @@
             .is_some();
         <span class="macro">assert!</span>(
             !replaced_old_shutdown_sender,
-            <span class="string">&quot;start_executor was called previously&quot;
+            <span class="string">"start_executor was called previously"
         </span>);
 
         <span class="kw">let </span>task_runner_inner = <span class="self">self</span>.inner.clone();
-        <span class="kw">let </span>_handle = spawn(<span class="string">&quot;state machine executor&quot;</span>, <span class="kw">async move </span>{
+        <span class="kw">let </span>_handle = <span class="self">self</span>.inner.client_task_group.spawn(<span class="string">"state machine executor"</span>, |task_handle| <span class="kw">async move </span>{
             <span class="kw">let </span>executor_runner = task_runner_inner.run(context_gen, sm_update_rx);
+            <span class="kw">let </span>task_group_shutdown_rx = task_handle.make_shutdown_rx().<span class="kw">await</span>;
             <span class="macro">select! </span>{
+                <span class="kw">_ </span>= task_group_shutdown_rx =&gt; {
+                    <span class="macro">info!</span>(<span class="string">"Shutting down state machine executor runner due to task group shutdown signal"</span>);
+                },
                 shutdown_happened_sender = shutdown_receiver =&gt; {
                     <span class="kw">match </span>shutdown_happened_sender {
                         <span class="prelude-val">Ok</span>(()) =&gt; {
-                            <span class="macro">info!</span>(<span class="string">&quot;Shutting down state machine executor runner due to shutdown signal&quot;</span>);
+                            <span class="macro">info!</span>(<span class="string">"Shutting down state machine executor runner due to explicit shutdown signal"</span>);
                         },
                         <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                            <span class="macro">error!</span>(<span class="string">&quot;Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)&quot;</span>);
+                            <span class="macro">error!</span>(<span class="string">"Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)"</span>);
                         }
                     }
                 },
                 <span class="kw">_ </span>= executor_runner =&gt; {
-                    <span class="macro">error!</span>(<span class="string">&quot;State machine executor runner exited unexpectedly!&quot;</span>);
+                    <span class="macro">error!</span>(<span class="string">"State machine executor runner exited unexpectedly!"</span>);
                 },
             };
-        });
+        }).<span class="kw">await</span>;
     }
 
     <span class="doccomment">/// Stops the background task that runs the state machines.
@@ -1694,14 +1712,14 @@
         global_context_gen: ContextGen,
         sm_update_rx: tokio::sync::mpsc::UnboundedReceiver&lt;DynState&gt;,
     ) {
-        <span class="macro">info!</span>(<span class="string">&quot;Starting state machine executor task&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"Starting state machine executor task"</span>);
         <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self
             </span>.run_state_machines_executor_inner(global_context_gen, sm_update_rx)
             .<span class="kw">await
         </span>{
             <span class="macro">warn!</span>(
                 %err,
-                <span class="string">&quot;An unexpected error occurred during a state transition&quot;
+                <span class="string">"An unexpected error occurred during a state transition"
             </span>);
         }
     }
@@ -1711,12 +1729,12 @@
         state: <span class="kw-2">&amp;</span>DynState,
         meta: ActiveStateMeta,
         global_context_gen: <span class="kw-2">&amp;</span>ContextGen,
-    ) -&gt; Vec&lt;BoxFuture&lt;<span class="lifetime">&#39;static</span>, TransitionForActiveState&gt;&gt; {
+    ) -&gt; Vec&lt;BoxFuture&lt;<span class="lifetime">'static</span>, TransitionForActiveState&gt;&gt; {
         <span class="kw">let </span>module_instance = state.module_instance_id();
         <span class="kw">let </span>context = <span class="kw-2">&amp;</span><span class="self">self
             </span>.module_contexts
             .get(<span class="kw-2">&amp;</span>module_instance)
-            .expect(<span class="string">&quot;Unknown module&quot;</span>);
+            .expect(<span class="string">"Unknown module"</span>);
         <span class="kw">let </span>transitions = state
             .transitions(
                 context,
@@ -1744,7 +1762,7 @@
             <span class="comment">// In certain cases a terminal (no transitions) state could get here due to
             // module bug. Inactivate it to prevent accumulation of such states.
             // See [`Self::add_state_machines_dbtx`].
-            </span><span class="macro">warn!</span>(module_id = module_instance, <span class="string">&quot;A terminal state where only active states are expected. Please report this bug upstream.&quot;</span>);
+            </span><span class="macro">warn!</span>(module_id = module_instance, <span class="string">"A terminal state where only active states are expected. Please report this bug upstream."</span>);
             <span class="self">self</span>.db
                 .autocommit::&lt;<span class="kw">_</span>, <span class="kw">_</span>, anyhow::Error&gt;(
                     |dbtx, <span class="kw">_</span>| {
@@ -1760,7 +1778,7 @@
                     <span class="prelude-val">None</span>,
                 )
                 .<span class="kw">await
-                </span>.expect(<span class="string">&quot;Autocommit here can&#39;t fail&quot;</span>);
+                </span>.expect(<span class="string">"Autocommit here can't fail"</span>);
         }
 
         transitions
@@ -1772,11 +1790,11 @@
         <span class="kw-2">mut </span>sm_update_rx: tokio::sync::mpsc::UnboundedReceiver&lt;DynState&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>active_states = <span class="self">self</span>.get_active_states().<span class="kw">await</span>;
-        <span class="macro">trace!</span>(target: LOG_CLIENT_REACTOR, <span class="string">&quot;Starting active states: {:?}&quot;</span>, active_states);
+        <span class="macro">trace!</span>(target: LOG_CLIENT_REACTOR, <span class="string">"Starting active states: {:?}"</span>, active_states);
         <span class="kw">for </span>(state, _meta) <span class="kw">in </span>active_states {
             <span class="self">self</span>.sm_update_tx
                 .send(state)
-                .expect(<span class="string">&quot;Must be able to send state machine to own opened channel&quot;</span>);
+                .expect(<span class="string">"Must be able to send state machine to own opened channel"</span>);
         }
 
         <span class="doccomment">/// All futures in the executor resolve to this type, so the handling
@@ -1801,7 +1819,7 @@
         // in case.
         </span><span class="kw">let </span><span class="kw-2">mut </span>currently_running_sms = HashSet::&lt;DynState&gt;::new();
         <span class="comment">// All things happening in parallel go into here
-        </span><span class="kw">let </span><span class="kw-2">mut </span>futures: FuturesUnordered&lt;BoxFuture&lt;<span class="lifetime">&#39;_</span>, ExecutorLoopEvent&gt;&gt; =
+        </span><span class="kw">let </span><span class="kw-2">mut </span>futures: FuturesUnordered&lt;BoxFuture&lt;<span class="lifetime">'_</span>, ExecutorLoopEvent&gt;&gt; =
             FuturesUnordered::new();
 
         <span class="kw">loop </span>{
@@ -1816,7 +1834,7 @@
                     }
                 },
 
-                event = futures.next(), <span class="kw">if </span>!futures.is_empty() =&gt; event.expect(<span class="string">&quot;we only .next() if there are pending futures&quot;</span>),
+                event = futures.next(), <span class="kw">if </span>!futures.is_empty() =&gt; event.expect(<span class="string">"we only .next() if there are pending futures"</span>),
             };
 
             <span class="comment">// main reactor loop: wait for next thing that completed, react (possibly adding
@@ -1824,11 +1842,11 @@
             </span><span class="kw">match </span>event {
                 ExecutorLoopEvent::New { state } =&gt; {
                     <span class="kw">if </span>currently_running_sms.contains(<span class="kw-2">&amp;</span>state) {
-                        <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), <span class="string">&quot;Received a state machine that is already running. Ignoring&quot;</span>);
+                        <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), <span class="string">"Received a state machine that is already running. Ignoring"</span>);
                         <span class="kw">continue</span>;
                     }
                     <span class="kw">let </span><span class="prelude-val">Some</span>(meta) = <span class="self">self</span>.get_active_state(<span class="kw-2">&amp;</span>state).<span class="kw">await else </span>{
-                        <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), <span class="string">&quot;Couldn&#39;t look up received state machine. Ignoring.&quot;</span>);
+                        <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), <span class="string">"Couldn't look up received state machine. Ignoring."</span>);
                         <span class="kw">continue</span>;
                     };
 
@@ -1836,7 +1854,7 @@
                         </span>.get_transition_for(<span class="kw-2">&amp;</span>state, meta, <span class="kw-2">&amp;</span>global_context_gen)
                         .<span class="kw">await</span>;
                     <span class="kw">if </span>transitions.is_empty() {
-                        <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), <span class="string">&quot;Received an active state that doesn&#39;t produce any transitions. Ignoring.&quot;</span>);
+                        <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), <span class="string">"Received an active state that doesn't produce any transitions. Ignoring."</span>);
                         <span class="kw">continue</span>;
                     }
 
@@ -1848,7 +1866,7 @@
                         ExecutorLoopEvent::Triggered(first_completed_result)
                     }));
 
-                    <span class="macro">info!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), transitions_num, <span class="string">&quot;Started new active state machine.&quot;</span>);
+                    <span class="macro">info!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), transitions_num, <span class="string">"Started new active state machine."</span>);
                 }
                 ExecutorLoopEvent::Triggered(TransitionForActiveState {
                     outcome,
@@ -1859,10 +1877,10 @@
                     <span class="macro">debug!</span>(
                         target: LOG_CLIENT_REACTOR,
                         operation_id = %state.operation_id(),
-                        <span class="string">&quot;State machine trigger function complete. Starting transition function.&quot;</span>,
+                        <span class="string">"State machine trigger function complete. Starting transition function."</span>,
                     );
                     <span class="kw">let </span>span = <span class="macro">tracing::info_span!</span>(
-                        <span class="string">&quot;state_machine_transition&quot;</span>,
+                        <span class="string">"state_machine_transition"</span>,
                         operation_id = %state.operation_id()
                     );
                     <span class="comment">// Perform the transition as another future, so transitions can happen in
@@ -1881,21 +1899,21 @@
                                 <span class="macro">info!</span>(
                                     target: LOG_CLIENT_REACTOR,
                                     operation_id = %state.operation_id(),
-                                    <span class="string">&quot;Executing state transition&quot;</span>,
+                                    <span class="string">"Executing state transition"</span>,
                                 );
                                 <span class="macro">debug!</span>(
                                     target: LOG_CLIENT_REACTOR,
                                     operation_id = %state.operation_id(),
                                     <span class="question-mark">?</span>state,
                                     outcome = <span class="question-mark">?</span>AbbreviateJson(<span class="kw-2">&amp;</span>outcome),
-                                    <span class="string">&quot;Executing state transition (details)&quot;</span>,
+                                    <span class="string">"Executing state transition (details)"</span>,
                                 );
 
                                 <span class="kw">let </span>module_contexts = <span class="kw-2">&amp;</span>module_contexts;
                                 <span class="kw">let </span>global_context_gen = <span class="kw-2">&amp;</span>global_context_gen;
 
                                 <span class="kw">let </span>outcome = db
-                                    .autocommit::&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>, <span class="kw">_</span>, <span class="kw">_</span>, Infallible&gt;(
+                                    .autocommit::&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>, <span class="kw">_</span>, <span class="kw">_</span>, Infallible&gt;(
                                         |dbtx, <span class="kw">_</span>| {
                                             <span class="kw">let </span>state = state.clone();
                                             <span class="kw">let </span>transition_fn = transition_fn.clone();
@@ -1922,7 +1940,7 @@
 
                                                 <span class="kw">let </span>context = <span class="kw-2">&amp;</span>module_contexts
                                                     .get(<span class="kw-2">&amp;</span>state.module_instance_id())
-                                                    .expect(<span class="string">&quot;Unknown module&quot;</span>);
+                                                    .expect(<span class="string">"Unknown module"</span>);
 
                                                 <span class="kw">let </span>global_context = global_context_gen(
                                                     state.module_instance_id(),
@@ -1953,21 +1971,21 @@
                                         <span class="prelude-val">None</span>,
                                     )
                                     .<span class="kw">await
-                                    </span>.expect(<span class="string">&quot;autocommit should keep trying to commit (max_attempt: None) and body doesn&#39;t return errors&quot;</span>);
+                                    </span>.expect(<span class="string">"autocommit should keep trying to commit (max_attempt: None) and body doesn't return errors"</span>);
 
                                 <span class="macro">debug!</span>(
                                     target: LOG_CLIENT_REACTOR,
                                     operation_id = %state.operation_id(),
                                     terminal = !outcome.is_active(),
                                     <span class="question-mark">?</span>outcome,
-                                    <span class="string">&quot;Finished executing state transition&quot;</span>,
+                                    <span class="string">"Finished executing state transition"</span>,
                                 );
 
                                 <span class="kw">match </span><span class="kw-2">&amp;</span>outcome {
                                     ActiveOrInactiveState::Active { dyn_state, meta: <span class="kw">_ </span>} =&gt; {
                                         sm_update_tx
                                             .send(dyn_state.clone())
-                                            .expect(<span class="string">&quot;can&#39;t fail: we are the receiving end&quot;</span>);
+                                            .expect(<span class="string">"can't fail: we are the receiving end"</span>);
                                         notifier.notify(dyn_state.clone());
                                     }
                                     ActiveOrInactiveState::Inactive { dyn_state } =&gt; {
@@ -1983,20 +2001,20 @@
                 ExecutorLoopEvent::Completed { state, outcome } =&gt; {
                     <span class="macro">assert!</span>(
                         currently_running_sms.remove(<span class="kw-2">&amp;</span>state),
-                        <span class="string">&quot;State must have been recorded&quot;
+                        <span class="string">"State must have been recorded"
                     </span>);
                     <span class="macro">info!</span>(
                         target: LOG_CLIENT_REACTOR,
                         operation_id = %state.operation_id(),
                         outcome_active = outcome.is_active(),
                         total = futures.len(),
-                        <span class="string">&quot;State transition complete&quot;
+                        <span class="string">"State transition complete"
                     </span>);
                     <span class="macro">trace!</span>(
                         target: LOG_CLIENT_REACTOR,
                         <span class="question-mark">?</span>outcome,
                         operation_id = %state.operation_id(), total = futures.len(),
-                        <span class="string">&quot;State transition complete&quot;
+                        <span class="string">"State transition complete"
                     </span>);
                 }
                 ExecutorLoopEvent::Disconnected =&gt; {
@@ -2005,7 +2023,7 @@
             }
         }
 
-        <span class="macro">info!</span>(target: LOG_CLIENT_REACTOR, <span class="string">&quot;Terminated.&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_CLIENT_REACTOR, <span class="string">"Terminated."</span>);
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -2067,15 +2085,15 @@
         <span class="kw">let </span><span class="prelude-val">Some</span>(shutdown_sender) = <span class="self">self
             </span>.shutdown_executor
             .try_lock()
-            .expect(<span class="string">&quot;Only locked during startup, no collisions should be possible&quot;</span>)
+            .expect(<span class="string">"Only locked during startup, no collisions should be possible"</span>)
             .take()
         <span class="kw">else </span>{
-            <span class="macro">debug!</span>(<span class="string">&quot;Executor already stopped, ignoring stop request&quot;</span>);
+            <span class="macro">debug!</span>(<span class="string">"Executor already stopped, ignoring stop request"</span>);
             <span class="kw">return </span><span class="prelude-val">None</span>;
         };
 
         <span class="kw">if </span>shutdown_sender.send(()).is_err() {
-            <span class="macro">warn!</span>(<span class="string">&quot;Failed to send shutdown signal to executor, already dead?&quot;</span>);
+            <span class="macro">warn!</span>(<span class="string">"Failed to send shutdown signal to executor, already dead?"</span>);
         }
 
         <span class="prelude-val">Some</span>(())
@@ -2083,16 +2101,16 @@
 }
 
 <span class="kw">impl </span>Debug <span class="kw">for </span>ExecutorInner {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
         <span class="kw">let </span>(active, inactive) = futures::executor::block_on(<span class="kw">async </span>{
             <span class="kw">let </span>active_states = <span class="self">self</span>.get_active_states().<span class="kw">await</span>;
             <span class="kw">let </span>inactive_states = <span class="self">self</span>.get_inactive_states().<span class="kw">await</span>;
             (active_states, inactive_states)
         });
-        <span class="macro">writeln!</span>(f, <span class="string">&quot;ExecutorInner {{&quot;</span>)<span class="question-mark">?</span>;
-        <span class="macro">writeln!</span>(f, <span class="string">&quot;    active_states: {active:?}&quot;</span>)<span class="question-mark">?</span>;
-        <span class="macro">writeln!</span>(f, <span class="string">&quot;    inactive_states: {inactive:?}&quot;</span>)<span class="question-mark">?</span>;
-        <span class="macro">writeln!</span>(f, <span class="string">&quot;}}&quot;</span>)<span class="question-mark">?</span>;
+        <span class="macro">writeln!</span>(f, <span class="string">"ExecutorInner {{"</span>)<span class="question-mark">?</span>;
+        <span class="macro">writeln!</span>(f, <span class="string">"    active_states: {active:?}"</span>)<span class="question-mark">?</span>;
+        <span class="macro">writeln!</span>(f, <span class="string">"    inactive_states: {inactive:?}"</span>)<span class="question-mark">?</span>;
+        <span class="macro">writeln!</span>(f, <span class="string">"}}"</span>)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -2118,7 +2136,7 @@
             .insert(context.module_instance_id(), context)
             .is_some()
         {
-            <span class="macro">panic!</span>(<span class="string">&quot;Tried to add two modules with the same instance id!&quot;</span>);
+            <span class="macro">panic!</span>(<span class="string">"Tried to add two modules with the same instance id!"</span>);
         }
     }
 
@@ -2132,7 +2150,12 @@
     <span class="doccomment">/// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    </span><span class="kw">pub async fn </span>build(<span class="self">self</span>, db: Database, notifier: Notifier) -&gt; Executor {
+    </span><span class="kw">pub async fn </span>build(
+        <span class="self">self</span>,
+        db: Database,
+        notifier: Notifier,
+        client_task_group: TaskGroup,
+    ) -&gt; Executor {
         <span class="kw">let </span>(sm_update_tx, sm_update_rx) = tokio::sync::mpsc::unbounded_channel();
 
         <span class="kw">let </span>inner = Arc::new(ExecutorInner {
@@ -2144,11 +2167,12 @@
             shutdown_executor: Default::default(),
             sm_update_tx,
             sm_update_rx: Mutex::new(<span class="prelude-val">Some</span>(sm_update_rx)),
+            client_task_group,
         });
 
         <span class="macro">debug!</span>(
             instances = <span class="question-mark">?</span>inner.module_contexts.keys().copied().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
-            <span class="string">&quot;Initialized state machine executor with module instances&quot;
+            <span class="string">"Initialized state machine executor with module instances"
         </span>);
         Executor { inner }
     }
@@ -2517,7 +2541,7 @@
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-    <span class="kw">use </span>fedimint_core::task;
+    <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, TaskGroup};
     <span class="kw">use </span>tokio::sync::broadcast::Sender;
     <span class="kw">use </span>tracing::{info, trace};
 
@@ -2550,7 +2574,7 @@
                                 <span class="kw">loop </span>{
                                     <span class="kw">let </span>val = receiver1.recv().<span class="kw">await</span>.unwrap();
                                     <span class="kw">if </span>val == <span class="number">0 </span>{
-                                        <span class="macro">trace!</span>(<span class="string">&quot;State transition Start-&gt;Final&quot;</span>);
+                                        <span class="macro">trace!</span>(<span class="string">"State transition Start-&gt;Final"</span>);
                                         <span class="kw">break</span>;
                                     }
                                 }
@@ -2562,7 +2586,7 @@
                                 <span class="kw">loop </span>{
                                     <span class="kw">let </span>val = receiver2.recv().<span class="kw">await</span>.unwrap();
                                     <span class="kw">if </span>val != <span class="number">0 </span>{
-                                        <span class="macro">trace!</span>(<span class="string">&quot;State transition Start-&gt;ReceivedNonNull&quot;</span>);
+                                        <span class="macro">trace!</span>(<span class="string">"State transition Start-&gt;ReceivedNonNull"</span>);
                                         <span class="kw">break </span>val;
                                     }
                                 }
@@ -2581,7 +2605,7 @@
                             <span class="kw">loop </span>{
                                 <span class="kw">let </span>val = receiver.recv().<span class="kw">await</span>.unwrap();
                                 <span class="kw">if </span>val == prev_val {
-                                    <span class="macro">trace!</span>(<span class="string">&quot;State transition ReceivedNonNull-&gt;Final&quot;</span>);
+                                    <span class="macro">trace!</span>(<span class="string">"State transition ReceivedNonNull-&gt;Final"</span>);
                                     <span class="kw">break</span>;
                                 }
                             }
@@ -2631,7 +2655,7 @@
         <span class="kw">let </span>decoder = decoder_builder.build();
 
         <span class="kw">let </span>decoders =
-            ModuleDecoderRegistry::new(<span class="macro">vec!</span>[(<span class="number">42</span>, ModuleKind::from_static_str(<span class="string">&quot;test&quot;</span>), decoder)]);
+            ModuleDecoderRegistry::new(<span class="macro">vec!</span>[(<span class="number">42</span>, ModuleKind::from_static_str(<span class="string">"test"</span>), decoder)]);
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), decoders);
 
         <span class="kw">let </span><span class="kw-2">mut </span>executor_builder = Executor::builder();
@@ -2642,13 +2666,13 @@
             },
         );
         <span class="kw">let </span>executor = executor_builder
-            .build(db.clone(), Notifier::new(db.clone()))
+            .build(db.clone(), Notifier::new(db.clone()), TaskGroup::new())
             .<span class="kw">await</span>;
         executor
             .start_executor(Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| DynGlobalClientContext::new_fake()))
             .<span class="kw">await</span>;
 
-        <span class="macro">info!</span>(<span class="string">&quot;Initialized test executor&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"Initialized test executor"</span>);
         (executor, broadcast, db)
     }
 
@@ -2675,20 +2699,20 @@
                 )])
                 .<span class="kw">await
                 </span>.is_err(),
-            <span class="string">&quot;Running the same state machine a second time should fail&quot;
+            <span class="string">"Running the same state machine a second time should fail"
         </span>);
 
         <span class="macro">assert!</span>(
             executor
                 .contains_active_state(MOCK_INSTANCE_1, MockStateMachine::Start)
                 .<span class="kw">await</span>,
-            <span class="string">&quot;State was written to DB and waits for broadcast&quot;
+            <span class="string">"State was written to DB and waits for broadcast"
         </span>);
         <span class="macro">assert!</span>(
             !executor
                 .contains_active_state(MOCK_INSTANCE_2, MockStateMachine::Start)
                 .<span class="kw">await</span>,
-            <span class="string">&quot;Instance separation works&quot;
+            <span class="string">"Instance separation works"
         </span>);
 
         <span class="comment">// TODO build await fn+timeout or allow manual driving of executor
@@ -2700,7 +2724,7 @@
             executor
                 .contains_inactive_state(MOCK_INSTANCE_1, MockStateMachine::Final)
                 .<span class="kw">await</span>,
-            <span class="string">&quot;State was written to DB and waits for broadcast&quot;
+            <span class="string">"State was written to DB and waits for broadcast"
         </span>);
     }
 }

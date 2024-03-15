@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-logging/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_logging" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_logging/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-logging/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_logging" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_logging/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -162,57 +164,57 @@
 <span class="kw">use </span>tracing_subscriber::{EnvFilter, Layer};
 
 <span class="doccomment">/// Constants for categorizing the logging type
-</span><span class="kw">pub const </span>LOG_BLOCKCHAIN: <span class="kw-2">&amp;</span>str = <span class="string">&quot;net::blockchain&quot;</span>;
-<span class="kw">pub const </span>LOG_CONSENSUS: <span class="kw-2">&amp;</span>str = <span class="string">&quot;consensus&quot;</span>;
-<span class="kw">pub const </span>LOG_CORE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;core&quot;</span>;
-<span class="kw">pub const </span>LOG_DB: <span class="kw-2">&amp;</span>str = <span class="string">&quot;db&quot;</span>;
-<span class="kw">pub const </span>LOG_DEVIMINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;devimint&quot;</span>;
-<span class="kw">pub const </span>LOG_ECASH_RECOVERY: <span class="kw-2">&amp;</span>str = <span class="string">&quot;ecash-recovery&quot;</span>;
-<span class="kw">pub const </span>LOG_NET_API: <span class="kw-2">&amp;</span>str = <span class="string">&quot;net::api&quot;</span>;
-<span class="kw">pub const </span>LOG_NET_PEER_DKG: <span class="kw-2">&amp;</span>str = <span class="string">&quot;net::peer::dkg&quot;</span>;
-<span class="kw">pub const </span>LOG_NET_PEER: <span class="kw-2">&amp;</span>str = <span class="string">&quot;net::peer&quot;</span>;
-<span class="kw">pub const </span>LOG_NET: <span class="kw-2">&amp;</span>str = <span class="string">&quot;net&quot;</span>;
-<span class="kw">pub const </span>LOG_TASK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;task&quot;</span>;
-<span class="kw">pub const </span>LOG_TEST: <span class="kw-2">&amp;</span>str = <span class="string">&quot;test&quot;</span>;
-<span class="kw">pub const </span>LOG_TIMING: <span class="kw-2">&amp;</span>str = <span class="string">&quot;timing&quot;</span>;
-<span class="kw">pub const </span>LOG_WALLET: <span class="kw-2">&amp;</span>str = <span class="string">&quot;wallet&quot;</span>;
-<span class="kw">pub const </span>LOG_CLIENT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;client&quot;</span>;
-<span class="kw">pub const </span>LOG_CLIENT_REACTOR: <span class="kw-2">&amp;</span>str = <span class="string">&quot;client::reactor&quot;</span>;
-<span class="kw">pub const </span>LOG_CLIENT_NET_API: <span class="kw-2">&amp;</span>str = <span class="string">&quot;client::net::api&quot;</span>;
-<span class="kw">pub const </span>LOG_CLIENT_BACKUP: <span class="kw-2">&amp;</span>str = <span class="string">&quot;client::backup&quot;</span>;
-<span class="kw">pub const </span>LOG_CLIENT_RECOVERY: <span class="kw-2">&amp;</span>str = <span class="string">&quot;client::recovery&quot;</span>;
-<span class="kw">pub const </span>LOG_CLIENT_RECOVERY_MINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;client::recovery::mint&quot;</span>;
+</span><span class="kw">pub const </span>LOG_BLOCKCHAIN: <span class="kw-2">&amp;</span>str = <span class="string">"net::blockchain"</span>;
+<span class="kw">pub const </span>LOG_CONSENSUS: <span class="kw-2">&amp;</span>str = <span class="string">"consensus"</span>;
+<span class="kw">pub const </span>LOG_CORE: <span class="kw-2">&amp;</span>str = <span class="string">"core"</span>;
+<span class="kw">pub const </span>LOG_DB: <span class="kw-2">&amp;</span>str = <span class="string">"db"</span>;
+<span class="kw">pub const </span>LOG_DEVIMINT: <span class="kw-2">&amp;</span>str = <span class="string">"devimint"</span>;
+<span class="kw">pub const </span>LOG_ECASH_RECOVERY: <span class="kw-2">&amp;</span>str = <span class="string">"ecash-recovery"</span>;
+<span class="kw">pub const </span>LOG_NET_API: <span class="kw-2">&amp;</span>str = <span class="string">"net::api"</span>;
+<span class="kw">pub const </span>LOG_NET_PEER_DKG: <span class="kw-2">&amp;</span>str = <span class="string">"net::peer::dkg"</span>;
+<span class="kw">pub const </span>LOG_NET_PEER: <span class="kw-2">&amp;</span>str = <span class="string">"net::peer"</span>;
+<span class="kw">pub const </span>LOG_NET: <span class="kw-2">&amp;</span>str = <span class="string">"net"</span>;
+<span class="kw">pub const </span>LOG_TASK: <span class="kw-2">&amp;</span>str = <span class="string">"task"</span>;
+<span class="kw">pub const </span>LOG_TEST: <span class="kw-2">&amp;</span>str = <span class="string">"test"</span>;
+<span class="kw">pub const </span>LOG_TIMING: <span class="kw-2">&amp;</span>str = <span class="string">"timing"</span>;
+<span class="kw">pub const </span>LOG_WALLET: <span class="kw-2">&amp;</span>str = <span class="string">"wallet"</span>;
+<span class="kw">pub const </span>LOG_CLIENT: <span class="kw-2">&amp;</span>str = <span class="string">"client"</span>;
+<span class="kw">pub const </span>LOG_CLIENT_REACTOR: <span class="kw-2">&amp;</span>str = <span class="string">"client::reactor"</span>;
+<span class="kw">pub const </span>LOG_CLIENT_NET_API: <span class="kw-2">&amp;</span>str = <span class="string">"client::net::api"</span>;
+<span class="kw">pub const </span>LOG_CLIENT_BACKUP: <span class="kw-2">&amp;</span>str = <span class="string">"client::backup"</span>;
+<span class="kw">pub const </span>LOG_CLIENT_RECOVERY: <span class="kw-2">&amp;</span>str = <span class="string">"client::recovery"</span>;
+<span class="kw">pub const </span>LOG_CLIENT_RECOVERY_MINT: <span class="kw-2">&amp;</span>str = <span class="string">"client::recovery::mint"</span>;
 
 <span class="doccomment">/// Consolidates the setup of server tracing into a helper
 </span><span class="attr">#[derive(Default)]
 </span><span class="kw">pub struct </span>TracingSetup {
     base_level: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+    <span class="attr">#[cfg(feature = <span class="string">"telemetry"</span>)]
     </span>tokio_console_bind: <span class="prelude-ty">Option</span>&lt;std::net::SocketAddr&gt;,
-    <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+    <span class="attr">#[cfg(feature = <span class="string">"telemetry"</span>)]
     </span>with_jaeger: bool,
-    <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+    <span class="attr">#[cfg(feature = <span class="string">"telemetry"</span>)]
     </span>with_chrome: bool,
     with_file: <span class="prelude-ty">Option</span>&lt;File&gt;,
 }
 
 <span class="kw">impl </span>TracingSetup {
     <span class="doccomment">/// Setup a console server for tokio logging &lt;https://docs.rs/console-subscriber&gt;
-    </span><span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+    </span><span class="attr">#[cfg(feature = <span class="string">"telemetry"</span>)]
     </span><span class="kw">pub fn </span>tokio_console_bind(<span class="kw-2">&amp;mut </span><span class="self">self</span>, address: <span class="prelude-ty">Option</span>&lt;std::net::SocketAddr&gt;) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
         <span class="self">self</span>.tokio_console_bind = address;
         <span class="self">self
     </span>}
 
     <span class="doccomment">/// Setup telemetry through Jaeger &lt;https://docs.rs/tracing-jaeger&gt;
-    </span><span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+    </span><span class="attr">#[cfg(feature = <span class="string">"telemetry"</span>)]
     </span><span class="kw">pub fn </span>with_jaeger(<span class="kw-2">&amp;mut </span><span class="self">self</span>, enabled: bool) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
         <span class="self">self</span>.with_jaeger = enabled;
         <span class="self">self
     </span>}
 
     <span class="doccomment">/// Setup telemetry through Chrome &lt;https://docs.rs/tracing-chrome&gt;
-    </span><span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+    </span><span class="attr">#[cfg(feature = <span class="string">"telemetry"</span>)]
     </span><span class="kw">pub fn </span>with_chrome(<span class="kw-2">&amp;mut </span><span class="self">self</span>, enabled: bool) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
         <span class="self">self</span>.with_chrome = enabled;
         <span class="self">self
@@ -240,11 +242,11 @@
             <span class="comment">// We prefix everything with a default general log level and
             // good per-module specific default. User provided RUST_LOG
             // can override one or both
-            </span><span class="string">&quot;{},{},{},{},{}&quot;</span>,
-            <span class="self">self</span>.base_level.as_deref().unwrap_or(<span class="string">&quot;info&quot;</span>),
-            <span class="string">&quot;jsonrpsee_core::client::async_client=off&quot;</span>,
-            <span class="string">&quot;jsonrpsee_server=warn,jsonrpsee_server::transport=off&quot;</span>,
-            <span class="string">&quot;AlephBFT-=error&quot;</span>,
+            </span><span class="string">"{},{},{},{},{}"</span>,
+            <span class="self">self</span>.base_level.as_deref().unwrap_or(<span class="string">"info"</span>),
+            <span class="string">"jsonrpsee_core::client::async_client=off"</span>,
+            <span class="string">"jsonrpsee_server=warn,jsonrpsee_server::transport=off"</span>,
+            <span class="string">"AlephBFT-=error"</span>,
             var
         ))<span class="question-mark">?</span>;
 
@@ -259,25 +261,25 @@
             </span>.with_writer(fmt_writer)
             .with_filter(filter_layer);
 
-        <span class="kw">let </span>console_opt = || -&gt; <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>Layer&lt;<span class="kw">_</span>&gt; + Send + Sync + <span class="lifetime">&#39;static</span>&gt;&gt; {
-            <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+        <span class="kw">let </span>console_opt = || -&gt; <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>Layer&lt;<span class="kw">_</span>&gt; + Send + Sync + <span class="lifetime">'static</span>&gt;&gt; {
+            <span class="attr">#[cfg(feature = <span class="string">"telemetry"</span>)]
             </span><span class="kw">if let </span><span class="prelude-val">Some</span>(l) = <span class="self">self</span>.tokio_console_bind {
                 <span class="kw">let </span>tracer = console_subscriber::ConsoleLayer::builder()
                     .retention(std::time::Duration::from_secs(<span class="number">60</span>))
                     .server_addr(l)
                     .spawn()
                     <span class="comment">// tokio-console cares only about these layers, so we filter separately for it
-                    </span>.with_filter(EnvFilter::new(<span class="string">&quot;tokio=trace,runtime=trace&quot;</span>));
+                    </span>.with_filter(EnvFilter::new(<span class="string">"tokio=trace,runtime=trace"</span>));
                 <span class="kw">return </span><span class="prelude-val">Some</span>(tracer.boxed());
             }
             <span class="prelude-val">None
         </span>};
 
-        <span class="kw">let </span>telemetry_layer_opt = || -&gt; <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>Layer&lt;<span class="kw">_</span>&gt; + Send + Sync + <span class="lifetime">&#39;static</span>&gt;&gt; {
-            <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+        <span class="kw">let </span>telemetry_layer_opt = || -&gt; <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>Layer&lt;<span class="kw">_</span>&gt; + Send + Sync + <span class="lifetime">'static</span>&gt;&gt; {
+            <span class="attr">#[cfg(feature = <span class="string">"telemetry"</span>)]
             </span><span class="kw">if </span><span class="self">self</span>.with_jaeger {
                 <span class="kw">let </span>tracer = opentelemetry_jaeger::new_agent_pipeline()
-                    .with_service_name(<span class="string">&quot;fedimint&quot;</span>)
+                    .with_service_name(<span class="string">"fedimint"</span>)
                     .install_simple()
                     .unwrap();
 
@@ -286,8 +288,8 @@
             <span class="prelude-val">None
         </span>};
 
-        <span class="kw">let </span>chrome_layer_opt = || -&gt; <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>Layer&lt;<span class="kw">_</span>&gt; + Send + Sync + <span class="lifetime">&#39;static</span>&gt;&gt; {
-            <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+        <span class="kw">let </span>chrome_layer_opt = || -&gt; <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>Layer&lt;<span class="kw">_</span>&gt; + Send + Sync + <span class="lifetime">'static</span>&gt;&gt; {
+            <span class="attr">#[cfg(feature = <span class="string">"telemetry"</span>)]
             </span><span class="kw">if </span><span class="self">self</span>.with_chrome {
                 <span class="kw">let </span>(cr_layer, guard) = tracing_chrome::ChromeLayerBuilder::new()
                     .include_args(<span class="bool-val">true</span>)

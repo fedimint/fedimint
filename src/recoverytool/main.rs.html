@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `recoverytool/src/main.rs`."><title>main.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="recoverytool" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../recoverytool/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `recoverytool/src/main.rs`."><title>main.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="recoverytool" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../recoverytool/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -544,26 +546,26 @@
 <span class="doccomment">/// Tool to recover the on-chain wallet of a Fedimint federation
 </span><span class="attr">#[derive(Debug, Parser)]
 #[command(group(
-    ArgGroup::new(<span class="string">&quot;keysource&quot;</span>)
+    ArgGroup::new(<span class="string">"keysource"</span>)
         .required(<span class="bool-val">true</span>)
-        .args([<span class="string">&quot;config&quot;</span>, <span class="string">&quot;descriptor&quot;</span>]</span>),
+        .args([<span class="string">"config"</span>, <span class="string">"descriptor"</span>]</span>),
 ))]
 <span class="kw">struct </span>RecoveryTool {
     <span class="doccomment">/// Directory containing server config files
-    </span><span class="attr">#[arg(long = <span class="string">&quot;cfg&quot;</span>)]
+    </span><span class="attr">#[arg(long = <span class="string">"cfg"</span>)]
     </span>config: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
     <span class="doccomment">/// The password that encrypts the configs
-    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_PASSWORD&quot;</span>, requires = <span class="string">&quot;config&quot;</span>)]
+    </span><span class="attr">#[arg(long, env = <span class="string">"FM_PASSWORD"</span>, requires = <span class="string">"config"</span>)]
     </span>password: String,
     <span class="doccomment">/// Wallet descriptor, can be used instead of --cfg
     </span><span class="attr">#[arg(long)]
     </span>descriptor: <span class="prelude-ty">Option</span>&lt;PegInDescriptor&gt;,
     <span class="doccomment">/// Wallet secret key, can be used instead of config together with
     /// --descriptor
-    </span><span class="attr">#[arg(long, requires = <span class="string">&quot;descriptor&quot;</span>)]
+    </span><span class="attr">#[arg(long, requires = <span class="string">"descriptor"</span>)]
     </span>key: <span class="prelude-ty">Option</span>&lt;SecretKey&gt;,
-    <span class="doccomment">/// Network to operate on, has to be specified if --cfg isn&#39;t present
-    </span><span class="attr">#[arg(long, default_value = <span class="string">&quot;bitcoin&quot;</span>, requires = <span class="string">&quot;descriptor&quot;</span>)]
+    <span class="doccomment">/// Network to operate on, has to be specified if --cfg isn't present
+    </span><span class="attr">#[arg(long, default_value = <span class="string">"bitcoin"</span>, requires = <span class="string">"descriptor"</span>)]
     </span>network: Network,
     <span class="doccomment">/// Open the database in read-only mode, useful for debugging, should not be
     /// used in production
@@ -603,18 +605,18 @@
 <span class="kw">fn </span>tweak_parser(hex: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;[u8; <span class="number">33</span>]&gt; {
     &lt;Vec&lt;u8&gt; <span class="kw">as </span>FromHex&gt;::from_hex(hex)<span class="question-mark">?
         </span>.try_into()
-        .map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">&quot;tweaks have to be 33 bytes long&quot;</span>))
+        .map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">"tweaks have to be 33 bytes long"</span>))
 }
 
 <span class="kw">fn </span>get_db(readonly: bool, path: <span class="kw-2">&amp;</span>Path, module_decoders: ModuleDecoderRegistry) -&gt; Database {
     <span class="kw">if </span>readonly {
         Database::new(
-            RocksDbReadOnly::open_read_only(path).expect(<span class="string">&quot;Error opening readonly DB&quot;</span>),
+            RocksDbReadOnly::open_read_only(path).expect(<span class="string">"Error opening readonly DB"</span>),
             module_decoders,
         )
     } <span class="kw">else </span>{
         Database::new(
-            RocksDb::open(path).expect(<span class="string">&quot;Error opening DB&quot;</span>),
+            RocksDb::open(path).expect(<span class="string">"Error opening DB"</span>),
             module_decoders,
         )
     }
@@ -627,10 +629,10 @@
     <span class="kw">let </span>opts: RecoveryTool = RecoveryTool::parse();
 
     <span class="kw">let </span>(base_descriptor, base_key, network) = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = opts.config {
-        <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>opts.password, config).expect(<span class="string">&quot;Could not read config file&quot;</span>);
+        <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>opts.password, config).expect(<span class="string">"Could not read config file"</span>);
         <span class="kw">let </span>wallet_cfg: WalletConfig = cfg
             .get_module_config_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
-            .expect(<span class="string">&quot;Malformed wallet config&quot;</span>);
+            .expect(<span class="string">"Malformed wallet config"</span>);
         <span class="kw">let </span>base_descriptor = wallet_cfg.consensus.peg_in_descriptor;
         <span class="kw">let </span>base_key = wallet_cfg.private.peg_in_key;
         <span class="kw">let </span>network = wallet_cfg.consensus.network;
@@ -639,7 +641,7 @@
     } <span class="kw">else if let </span>(<span class="prelude-val">Some</span>(descriptor), <span class="prelude-val">Some</span>(key)) = (opts.descriptor, opts.key) {
         (descriptor, key, opts.network)
     } <span class="kw">else </span>{
-        <span class="macro">panic!</span>(<span class="string">&quot;Either config or descriptor need to be provided by clap&quot;</span>);
+        <span class="macro">panic!</span>(<span class="string">"Either config or descriptor need to be provided by clap"</span>);
     };
 
     <span class="kw">match </span>opts.strategy {
@@ -648,7 +650,7 @@
             <span class="kw">let </span>wallets = <span class="macro">vec!</span>[ImportableWalletMin { descriptor }];
 
             serde_json::to_writer(std::io::stdout().lock(), <span class="kw-2">&amp;</span>wallets)
-                .expect(<span class="string">&quot;Could not encode to stdout&quot;</span>)
+                .expect(<span class="string">"Could not encode to stdout"</span>)
         }
         TweakSource::Utxos { legacy, db } =&gt; {
             <span class="kw">let </span>db = get_db(opts.readonly, <span class="kw-2">&amp;</span>db, Default::default());
@@ -677,7 +679,7 @@
                 .<span class="kw">await</span>;
 
             serde_json::to_writer(std::io::stdout().lock(), <span class="kw-2">&amp;</span>utxos)
-                .expect(<span class="string">&quot;Could not encode to stdout&quot;</span>)
+                .expect(<span class="string">"Could not encode to stdout"</span>)
         }
         TweakSource::Epochs { db } =&gt; {
             <span class="kw">let </span>decoders = ModuleDecoderRegistry::from_iter([
@@ -725,12 +727,12 @@
                             .collect();
 
                         <span class="comment">// Get all user-submitted tweaks and if we did a peg-out tx also return the
-                        // consensus round&#39;s tweak used for change
+                        // consensus round's tweak used for change
                         </span><span class="kw">let </span>(<span class="kw-2">mut </span>peg_in_tweaks, peg_out_present) =
                             input_tweaks_output_present(transaction_cis.into_iter());
 
                         <span class="kw">if </span>peg_out_present {
-                            <span class="macro">info!</span>(<span class="string">&quot;Found change output, adding tweak {change_tweak_idx} to list&quot;</span>);
+                            <span class="macro">info!</span>(<span class="string">"Found change output, adding tweak {change_tweak_idx} to list"</span>);
                             peg_in_tweaks.insert(nonce_from_idx(change_tweak_idx));
                             change_tweak_idx += <span class="number">1</span>;
                         }
@@ -748,7 +750,7 @@
                 .<span class="kw">await</span>;
 
             serde_json::to_writer(std::io::stdout().lock(), <span class="kw-2">&amp;</span>wallets)
-                .expect(<span class="string">&quot;Could not encode to stdout&quot;</span>)
+                .expect(<span class="string">"Could not encode to stdout"</span>)
         }
     }
 
@@ -777,9 +779,9 @@
                         input
                             .as_any()
                             .downcast_ref::&lt;WalletInput&gt;()
-                            .expect(<span class="string">&quot;Instance id mapping incorrect&quot;</span>)
+                            .expect(<span class="string">"Instance id mapping incorrect"</span>)
                             .ensure_v0_ref()
-                            .expect(<span class="string">&quot;recoverytool only supports v0 wallet inputs&quot;</span>)
+                            .expect(<span class="string">"recoverytool only supports v0 wallet inputs"</span>)
                             .<span class="number">0
                             </span>.tweak_contract_key()
                             .serialize(),
@@ -810,7 +812,7 @@
             },
             public: pub_key,
         })
-        .expect(<span class="string">&quot;can&#39;t fail&quot;</span>)
+        .expect(<span class="string">"can't fail"</span>)
 }
 
 <span class="doccomment">/// A UTXO with its Bitcoin Core importable descriptor
@@ -818,7 +820,7 @@
 </span><span class="kw">struct </span>ImportableWallet {
     outpoint: OutPoint,
     descriptor: Descriptor&lt;Key&gt;,
-    <span class="attr">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]
+    <span class="attr">#[serde(with = <span class="string">"bitcoin::util::amount::serde::as_sat"</span>)]
     </span>amount_sat: bitcoin::Amount,
 }
 
@@ -877,7 +879,7 @@
 }
 
 <span class="kw">impl </span>Display <span class="kw">for </span>Key {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
         <span class="kw">match </span><span class="self">self </span>{
             Key::Public(pk) =&gt; Display::fmt(pk, f),
             Key::Private(sk) =&gt; Display::fmt(sk, f),
@@ -983,7 +985,7 @@
     </span><span class="kw">let </span>good_length_tweak: [u8; <span class="number">33</span>] = core::array::from_fn(|<span class="kw">_</span>| rand::random::&lt;u8&gt;());
     <span class="kw">let </span>good_length_tweak_hex = good_length_tweak.to_hex();
     <span class="macro">assert_eq!</span>(
-        tweak_parser(good_length_tweak_hex.as_str()).expect(<span class="string">&quot;should parse valid length hex&quot;</span>),
+        tweak_parser(good_length_tweak_hex.as_str()).expect(<span class="string">"should parse valid length hex"</span>),
         good_length_tweak
     );
     <span class="macro">assert!</span>(tweak_parser(bad_length_tweak_hex.as_str()).is_err());

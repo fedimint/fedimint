@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/state_machine/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../ln_gateway/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/state_machine/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../ln_gateway/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -714,9 +716,61 @@
 <a href="#714" id="714">714</a>
 <a href="#715" id="715">715</a>
 <a href="#716" id="716">716</a>
-</pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+</pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
+<span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -738,24 +792,24 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_ln_client::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
 <span class="kw">use </span>fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 <span class="kw">use </span>fedimint_ln_client::{create_incoming_contract_output, LightningClientInit};
-<span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, Preimage};
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::{
-    LightningClientContext, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
-    LightningModuleTypes, LightningOutput, LightningOutputV0, KIND,
+    create_gateway_remove_message, LightningClientContext, LightningCommonInit, LightningGateway,
+    LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    RemoveGatewayRequest, KIND,
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>secp256k1::{KeyPair, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="kw">use </span><span class="self">self</span>::complete::GatewayCompleteStateMachine;
@@ -832,9 +886,9 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         _prefix_names: Vec&lt;String&gt;,
-    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">'_</span>&gt; {
         Box::new(<span class="macro">vec!</span>[].into_iter())
     }
 }
@@ -845,7 +899,7 @@
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}])
-            .expect(<span class="string">&quot;no version conflicts&quot;</span>)
+            .expect(<span class="string">"no version conflicts"</span>)
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
@@ -955,7 +1009,7 @@
 }
 
 <span class="kw">impl </span>GatewayClientModule {
-    <span class="kw">pub fn </span>to_gateway_registration_info(
+    <span class="kw">fn </span>to_gateway_registration_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         route_hints: Vec&lt;RouteHint&gt;,
         ttl: Duration,
@@ -1072,15 +1126,70 @@
             <span class="self">self</span>.to_gateway_registration_info(route_hints, time_to_live, fees, lightning_context);
         <span class="kw">let </span>gateway_id = registration_info.info.gateway_id;
 
-        <span class="kw">let </span>federation_id = <span class="self">self</span>.client_ctx.get_config().global.federation_id();
+        <span class="kw">let </span>federation_id = <span class="self">self
+            </span>.client_ctx
+            .get_config()
+            .global
+            .calculate_federation_id();
         <span class="self">self</span>.module_api.register_gateway(<span class="kw-2">&amp;</span>registration_info).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(<span class="string">&quot;Successfully registered gateway {gateway_id} with federation {federation_id}&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"Successfully registered gateway {gateway_id} with federation {federation_id}"</span>);
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Attempts to remove a gateway's registration from the federation. Since
+    /// removing gateway registrations is best effort, this does not return
+    /// an error and simply emits a warning when the registration cannot be
+    /// removed.
+    </span><span class="kw">pub async fn </span>remove_from_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway_keypair: KeyPair) {
+        <span class="comment">// Removing gateway registrations is best effort, so just emit a warning if it
+        // fails
+        </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.remove_from_federation_inner(gateway_keypair).<span class="kw">await </span>{
+            <span class="kw">let </span>gateway_id = gateway_keypair.public_key();
+            <span class="kw">let </span>federation_id = <span class="self">self
+                </span>.client_ctx
+                .get_config()
+                .global
+                .calculate_federation_id();
+            <span class="macro">warn!</span>(<span class="string">"Failed to remove gateway {gateway_id} from federation {federation_id}: {e:?}"</span>);
+        }
+    }
+
+    <span class="doccomment">/// Retrieves the signing challenge from each federation peer. Since each
+    /// peer maintains their own list of registered gateways, the gateway
+    /// needs to provide a signature that is signed by the private key of the
+    /// gateway id to remove the registration.
+    </span><span class="kw">async fn </span>remove_from_federation_inner(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway_keypair: KeyPair) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>gateway_id = gateway_keypair.public_key();
+        <span class="kw">let </span>challenges = <span class="self">self
+            </span>.module_api
+            .get_remove_gateway_challenge(gateway_id)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>fed_public_key = <span class="self">self</span>.cfg.threshold_pub_key;
+        <span class="kw">let </span>signatures = challenges
+            .into_iter()
+            .filter_map(|(peer_id, challenge)| {
+                <span class="kw">let </span>msg = create_gateway_remove_message(fed_public_key, peer_id, challenge<span class="question-mark">?</span>);
+                <span class="kw">let </span>signature = gateway_keypair.sign_schnorr(msg);
+                <span class="prelude-val">Some</span>((peer_id, signature))
+            })
+            .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+
+        <span class="kw">let </span>remove_gateway_request = RemoveGatewayRequest {
+            gateway_id,
+            signatures,
+        };
+
+        <span class="self">self</span>.module_api
+            .remove_gateway(remove_gateway_request)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Attempt fulfill HTLC by buying preimage from the federation
     </span><span class="kw">pub async fn </span>gateway_handle_intercepted_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: Htlc) -&gt; anyhow::Result&lt;OperationId&gt; {
-        <span class="macro">debug!</span>(<span class="string">&quot;Handling intercepted HTLC {htlc:?}&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"Handling intercepted HTLC {htlc:?}"</span>);
         <span class="kw">let </span>(operation_id, client_output) = <span class="self">self
             </span>.create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1095,7 +1204,7 @@
         <span class="self">self</span>.client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Submitted transaction for HTLC {htlc:?}&quot;</span>);
+        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Submitted transaction for HTLC {htlc:?}"</span>);
         <span class="prelude-val">Ok</span>(operation_id)
     }
 
@@ -1106,7 +1215,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         swap_params: SwapParameters,
     ) -&gt; anyhow::Result&lt;OperationId&gt; {
-        <span class="macro">debug!</span>(<span class="string">&quot;Handling direct swap {swap_params:?}&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"Handling direct swap {swap_params:?}"</span>);
         <span class="kw">let </span>(operation_id, client_output) = <span class="self">self
             </span>.create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1123,7 +1232,7 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">debug!</span>(
             <span class="question-mark">?</span>operation_id,
-            <span class="string">&quot;Submitted transaction for direct swap {swap_params:?}&quot;
+            <span class="string">"Submitted transaction for direct swap {swap_params:?}"
         </span>);
         <span class="prelude-val">Ok</span>(operation_id)
     }
@@ -1144,32 +1253,32 @@
                 <span class="kw">yield </span>GatewayExtReceiveStates::Funding;
 
                 <span class="kw">let </span>state = <span class="kw">loop </span>{
-                    <span class="macro">debug!</span>(<span class="string">&quot;Getting next ln receive state for {operation_id}&quot;</span>);
+                    <span class="macro">debug!</span>(<span class="string">"Getting next ln receive state for {operation_id}"</span>);
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Receive(state)) = stream.next().<span class="kw">await </span>{
                         <span class="kw">match </span>state.state {
                             IncomingSmStates::Preimage(preimage) =&gt;{
-                                <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Received preimage&quot;</span>);
+                                <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Received preimage"</span>);
                                 <span class="kw">break </span>GatewayExtReceiveStates::Preimage(preimage)
                             },
                             IncomingSmStates::RefundSubmitted { out_points, error } =&gt; {
-                                <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Refund submitted for {out_points:?} {error}&quot;</span>);
+                                <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Refund submitted for {out_points:?} {error}"</span>);
                                 <span class="kw">match </span>client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).<span class="kw">await </span>{
                                     <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Refund success&quot;</span>);
+                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Refund success"</span>);
                                         <span class="kw">break </span>GatewayExtReceiveStates::RefundSuccess { out_points, error }
                                     },
                                     <span class="prelude-val">Err</span>(e) =&gt; {
-                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Got failure {e:?} while awaiting for refund outputs {out_points:?}&quot;</span>);
+                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Got failure {e:?} while awaiting for refund outputs {out_points:?}"</span>);
                                         <span class="kw">break </span>GatewayExtReceiveStates::RefundError{ error_message: e.to_string(), error }
                                     },
                                 }
                             },
                             IncomingSmStates::FundingFailed { error } =&gt; {
-                                <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Funding failed: {error:?}&quot;</span>);
+                                <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Funding failed: {error:?}"</span>);
                                 <span class="kw">break </span>GatewayExtReceiveStates::FundingFailed{ error }
                             },
                             other =&gt; {
-                                <span class="macro">debug!</span>(<span class="string">&quot;Got state {other:?} while awaiting for output of {operation_id}&quot;</span>);
+                                <span class="macro">debug!</span>(<span class="string">"Got state {other:?} while awaiting for output of {operation_id}"</span>);
                             }
                         }
                     }
@@ -1193,7 +1302,7 @@
         ) {
             <span class="macro">ensure!</span>(
                 lightning_context.lnrpc.supports_private_payments(),
-                <span class="string">&quot;Private payments are not supported by the lightning node&quot;
+                <span class="string">"Private payments are not supported by the lightning node"
             </span>);
         }
 
@@ -1227,10 +1336,10 @@
                                         .<span class="kw">await</span>;
                                 }
                                 <span class="prelude-val">Err</span>(AddStateMachinesError::StateAlreadyExists) =&gt; {
-                                    <span class="macro">info!</span>(<span class="string">&quot;State machine for operation {operation_id} already exists, will not add a new one&quot;</span>)
+                                    <span class="macro">info!</span>(<span class="string">"State machine for operation {operation_id} already exists, will not add a new one"</span>)
                                 }
                                 <span class="prelude-val">Err</span>(other) =&gt; {
-                                    <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Failed to add state machines: {other:?}&quot;</span>)
+                                    <span class="macro">anyhow::bail!</span>(<span class="string">"Failed to add state machines: {other:?}"</span>)
                                 }
                             }
                             <span class="prelude-val">Ok</span>(operation_id)
@@ -1242,7 +1351,7 @@
             </span>.map_err(|e| <span class="kw">match </span>e {
                 AutocommitError::ClosureError { error, .. } =&gt; error,
                 AutocommitError::CommitFailed { last_error, .. } =&gt; {
-                    <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Commit to DB failed: {last_error}&quot;</span>)
+                    <span class="macro">anyhow::anyhow!</span>(<span class="string">"Commit to DB failed: {last_error}"</span>)
                 }
             })
     }
@@ -1260,7 +1369,7 @@
                 <span class="kw">yield </span>GatewayExtPayStates::Created;
 
                 <span class="kw">loop </span>{
-                    <span class="macro">debug!</span>(<span class="string">&quot;Getting next ln pay state for {operation_id}&quot;</span>);
+                    <span class="macro">debug!</span>(<span class="string">"Getting next ln pay state for {operation_id}"</span>);
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Pay(state)) = stream.next().<span class="kw">await </span>{
                         <span class="kw">match </span>state.state {
                             GatewayPayStates::Preimage(out_points, preimage) =&gt; {
@@ -1268,48 +1377,48 @@
 
                                 <span class="kw">match </span>client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).<span class="kw">await </span>{
                                     <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Success&quot;</span>);
+                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Success"</span>);
                                         <span class="kw">yield </span>GatewayExtPayStates::Success{ preimage: preimage.clone(), out_points };
                                         <span class="kw">return</span>;
 
                                     }
                                     <span class="prelude-val">Err</span>(e) =&gt; {
-                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Got failure {e:?} while awaiting for outputs {out_points:?}&quot;</span>);
+                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Got failure {e:?} while awaiting for outputs {out_points:?}"</span>);
                                         <span class="comment">// TODO: yield something here?
                                     </span>}
                                 }
                             }
                             GatewayPayStates::Canceled { txid, contract_id, error } =&gt; {
-                                <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Trying to cancel contract {contract_id:?} due to {error:?}&quot;</span>);
+                                <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Trying to cancel contract {contract_id:?} due to {error:?}"</span>);
                                 <span class="kw">match </span>client_ctx.transaction_updates(operation_id).<span class="kw">await</span>.await_tx_accepted(txid).<span class="kw">await </span>{
                                     <span class="prelude-val">Ok</span>(()) =&gt; {
-                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Canceled contract {contract_id:?} due to {error:?}&quot;</span>);
+                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Canceled contract {contract_id:?} due to {error:?}"</span>);
                                         <span class="kw">yield </span>GatewayExtPayStates::Canceled{ error };
                                         <span class="kw">return</span>;
                                     }
                                     <span class="prelude-val">Err</span>(e) =&gt; {
-                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Got failure {e:?} while awaiting for transaction {txid} to be accepted for&quot;</span>);
-                                        <span class="kw">yield </span>GatewayExtPayStates::Fail { error, error_message: <span class="macro">format!</span>(<span class="string">&quot;Refund transaction {txid} was not accepted by the federation. OperationId: {operation_id} Error: {e:?}&quot;</span>) };
+                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Got failure {e:?} while awaiting for transaction {txid} to be accepted for"</span>);
+                                        <span class="kw">yield </span>GatewayExtPayStates::Fail { error, error_message: <span class="macro">format!</span>(<span class="string">"Refund transaction {txid} was not accepted by the federation. OperationId: {operation_id} Error: {e:?}"</span>) };
                                     }
                                 }
                             }
                             GatewayPayStates::OfferDoesNotExist(contract_id) =&gt; {
-                                <span class="macro">warn!</span>(<span class="string">&quot;Yielding OfferDoesNotExist state for {operation_id} and contract {contract_id}&quot;</span>);
+                                <span class="macro">warn!</span>(<span class="string">"Yielding OfferDoesNotExist state for {operation_id} and contract {contract_id}"</span>);
                                 <span class="kw">yield </span>GatewayExtPayStates::OfferDoesNotExist { contract_id };
                             }
                             GatewayPayStates::Failed{ error, error_message } =&gt; {
-                                <span class="macro">warn!</span>(<span class="string">&quot;Yielding Fail state for {operation_id} due to {error:?} {error_message:?}&quot;</span>);
+                                <span class="macro">warn!</span>(<span class="string">"Yielding Fail state for {operation_id} due to {error:?} {error_message:?}"</span>);
                                 <span class="kw">yield </span>GatewayExtPayStates::Fail{ error, error_message };
                             },
                             GatewayPayStates::PayInvoice(<span class="kw">_</span>) =&gt; {
-                                <span class="macro">debug!</span>(<span class="string">&quot;Got initial state PayInvoice while awaiting for output of {operation_id}&quot;</span>);
+                                <span class="macro">debug!</span>(<span class="string">"Got initial state PayInvoice while awaiting for output of {operation_id}"</span>);
                             }
                             other =&gt; {
-                                <span class="macro">info!</span>(<span class="string">&quot;Got state {other:?} while awaiting for output of {operation_id}&quot;</span>);
+                                <span class="macro">info!</span>(<span class="string">"Got state {other:?} while awaiting for output of {operation_id}"</span>);
                             }
                         }
                     } <span class="kw">else </span>{
-                        <span class="macro">warn!</span>(<span class="string">&quot;Got None while getting next ln pay state for {operation_id}&quot;</span>);
+                        <span class="macro">warn!</span>(<span class="string">"Got None while getting next ln pay state for {operation_id}"</span>);
                     }
                 }
             }
@@ -1371,11 +1480,6 @@
     }
 }
 
-<span class="attr">#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
-</span><span class="kw">pub enum </span>ReceiveError {
-    <span class="attr">#[error(<span class="string">&quot;Route htlc error&quot;</span>)]
-    </span>RouteHtlcError,
-}
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>Htlc {
     <span class="doccomment">/// The HTLC payment hash.
@@ -1411,7 +1515,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>SwapParameters {
+</span><span class="kw">struct </span>SwapParameters {
     payment_hash: sha256::Hash,
     amount_msat: Amount,
 }
@@ -1423,7 +1527,7 @@
         <span class="kw">let </span>payment_hash = s.payment_hash();
         <span class="kw">let </span>amount_msat = s
             .amount()
-            .ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Amountless invoice cannot be used in direct swap&quot;</span>))<span class="question-mark">?</span>;
+            .ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Amountless invoice cannot be used in direct swap"</span>))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             payment_hash,
             amount_msat,

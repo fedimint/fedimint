@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/macros.rs`."><title>macros.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_core/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/macros.rs`."><title>macros.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_core/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -760,12 +762,12 @@
 <a href="#760" id="760">760</a>
 <a href="#761" id="761">761</a>
 <a href="#762" id="762">762</a>
-</pre></div><pre class="rust"><code><span class="doccomment">/// Define &quot;dyn newtype&quot; (a newtype over `dyn Trait`)
+</pre></div><pre class="rust"><code><span class="doccomment">/// Define "dyn newtype" (a newtype over `dyn Trait`)
 ///
 /// This is a simple pattern that make working with `dyn Trait`s
 /// easier, by hiding their details.
 ///
-/// A &quot;dyn newtype&quot; `Deref`s to the underlying `&amp;dyn Trait`, making
+/// A "dyn newtype" `Deref`s to the underlying `&amp;dyn Trait`, making
 /// it easy to access the encapsulated operations, while hiding
 /// the boxing details.
 </span><span class="attr">#[macro_export]
@@ -812,10 +814,10 @@
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident(<span class="macro-nonterminal">$container</span>:ident&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
         $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
-        <span class="macro-nonterminal">$vis </span><span class="kw">struct </span><span class="macro-nonterminal">$name </span>{ inner: <span class="macro-nonterminal">$container</span>&lt;<span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>)&gt; }
+        <span class="macro-nonterminal">$vis </span><span class="kw">struct </span><span class="macro-nonterminal">$name </span>{ inner: <span class="macro-nonterminal">$container</span>&lt;<span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">'static</span>)&gt; }
 
         <span class="kw">impl </span><span class="macro-nonterminal">std::ops::Deref </span><span class="kw">for </span><span class="macro-nonterminal">$name </span>{
-            <span class="kw">type </span>Target = <span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>);
+            <span class="kw">type </span>Target = <span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">'static</span>);
 
             <span class="kw">fn </span><span class="macro-nonterminal">deref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
                 <span class="kw-2">&amp;*</span><span class="self">self</span>.inner
@@ -831,7 +833,7 @@
 
         <span class="kw">impl</span>&lt;I&gt; From&lt;I&gt; <span class="kw">for </span><span class="macro-nonterminal">$name
         </span><span class="kw">where
-            </span>I: <span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="macro-nonterminal">$crate::task::MaybeSend </span>+ <span class="macro-nonterminal">$crate::task::MaybeSync </span>+ <span class="lifetime">&#39;static</span>,
+            </span>I: <span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="macro-nonterminal">$crate::task::MaybeSend </span>+ <span class="macro-nonterminal">$crate::task::MaybeSync </span>+ <span class="lifetime">'static</span>,
         {
             <span class="kw">fn </span>from(i: I) -&gt; <span class="self">Self </span>{
                 <span class="self">Self </span>{ inner: <span class="macro-nonterminal">$container::new</span>(i) }
@@ -839,7 +841,7 @@
         }
 
         <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
-            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
                 std::fmt::Debug::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.inner, f)
             }
         }
@@ -875,15 +877,15 @@
 </span><span class="macro">macro_rules! </span>dyn_newtype_display_passthrough {
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
         <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span><span class="macro-nonterminal">$newtype </span>{
-            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
                 std::fmt::Display::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.inner, f)
             }
         }
     };
 }
 
-<span class="doccomment">/// Define a &quot;module plugin dyn-newtype&quot; which is like a standard &quot;dyn newtype&quot;,
-/// but with associated &quot;module_instance_id&quot;.
+<span class="doccomment">/// Define a "module plugin dyn-newtype" which is like a standard "dyn newtype",
+/// but with associated "module_instance_id".
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>module_plugin_dyn_newtype_define{
     (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
@@ -930,11 +932,11 @@
         $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
         <span class="macro-nonterminal">$vis </span><span class="kw">struct </span><span class="macro-nonterminal">$name </span>{
             module_instance_id: <span class="macro-nonterminal">$crate::core::ModuleInstanceId</span>,
-            inner: <span class="macro-nonterminal">$container</span>&lt;<span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>)&gt;,
+            inner: <span class="macro-nonterminal">$container</span>&lt;<span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">'static</span>)&gt;,
         }
 
         <span class="kw">impl </span><span class="macro-nonterminal">std::ops::Deref </span><span class="kw">for </span><span class="macro-nonterminal">$name </span>{
-            <span class="kw">type </span>Target = <span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>);
+            <span class="kw">type </span>Target = <span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">'static</span>);
 
             <span class="kw">fn </span><span class="macro-nonterminal">deref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
                 <span class="kw-2">&amp;*</span><span class="self">self</span>.inner
@@ -949,18 +951,18 @@
 
             <span class="kw">pub fn </span>from_typed&lt;I&gt;(module_instance_id: ::fedimint_core::core::ModuleInstanceId, typed: I) -&gt; <span class="self">Self
             </span><span class="kw">where
-                </span>I: <span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="macro-nonterminal">$crate::task::MaybeSend </span>+ <span class="macro-nonterminal">$crate::task::MaybeSync </span>+ <span class="lifetime">&#39;static </span>{
+                </span>I: <span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="macro-nonterminal">$crate::task::MaybeSend </span>+ <span class="macro-nonterminal">$crate::task::MaybeSync </span>+ <span class="lifetime">'static </span>{
 
                 <span class="self">Self </span>{ inner: <span class="macro-nonterminal">$container::new</span>(typed), module_instance_id }
             }
 
-            <span class="kw">pub fn </span>from_parts(module_instance_id: <span class="macro-nonterminal">$crate::core::ModuleInstanceId</span>, dynbox: <span class="macro-nonterminal">$container</span>&lt;<span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>)&gt;) -&gt; <span class="macro-nonterminal">Self </span>{
+            <span class="kw">pub fn </span>from_parts(module_instance_id: <span class="macro-nonterminal">$crate::core::ModuleInstanceId</span>, dynbox: <span class="macro-nonterminal">$container</span>&lt;<span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">'static</span>)&gt;) -&gt; <span class="macro-nonterminal">Self </span>{
                 <span class="self">Self </span>{ inner: dynbox, module_instance_id }
             }
         }
 
         <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
-            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
                 std::fmt::Debug::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.inner, f)
             }
         }
@@ -978,14 +980,14 @@
 
             <span class="kw">pub fn </span>from_typed&lt;I&gt;(module_instance_id: ::fedimint_core::core::ModuleInstanceId, typed: I) -&gt; <span class="self">Self
             </span><span class="kw">where
-                </span>I: <span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="macro-nonterminal">$crate::task::MaybeSend </span>+ <span class="macro-nonterminal">$crate::task::MaybeSync </span>+ <span class="lifetime">&#39;static </span>{
+                </span>I: <span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="macro-nonterminal">$crate::task::MaybeSend </span>+ <span class="macro-nonterminal">$crate::task::MaybeSync </span>+ <span class="lifetime">'static </span>{
 
                 <span class="self">Self </span>{ inner: <span class="macro-nonterminal">$container::new</span>(typed), module_instance_id }
             }
         }
 
         <span class="kw">impl</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; std::ops::Deref <span class="kw">for </span><span class="macro-nonterminal">$name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; {
-            <span class="kw">type </span>Target = <span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>);
+            <span class="kw">type </span>Target = <span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">'static</span>);
 
             <span class="kw">fn </span><span class="macro-nonterminal">deref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
                 <span class="kw-2">&amp;*</span><span class="self">self</span>.inner
@@ -1012,7 +1014,7 @@
     };
 }
 
-<span class="doccomment">/// Implement `Clone` on a &quot;dyn newtype&quot;
+<span class="doccomment">/// Implement `Clone` on a "dyn newtype"
 ///
 /// ... by calling `clone` method on the underlying
 /// `dyn Trait`.
@@ -1048,9 +1050,9 @@
     };
 }
 
-<span class="doccomment">/// Implement `Encodable` and `Decodable` for a &quot;module dyn newtype&quot;
+<span class="doccomment">/// Implement `Encodable` and `Decodable` for a "module dyn newtype"
 ///
-/// &quot;Module dyn newtype&quot; is just a &quot;dyn newtype&quot; used by general purpose
+/// "Module dyn newtype" is just a "dyn newtype" used by general purpose
 /// Fedimint code to abstract away details of mint modules.
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>module_plugin_dyn_newtype_encode_decode {
@@ -1088,7 +1090,7 @@
                         <span class="kw">if </span>reader.limit() != <span class="number">0 </span>{
                             <span class="kw">return </span><span class="prelude-val">Err</span>(fedimint_core::encoding::DecodeError::new_custom(
                                 <span class="macro">anyhow::anyhow!</span>(
-                                    <span class="string">&quot;Dyn type did not consume all bytes during decoding&quot;
+                                    <span class="string">"Dyn type did not consume all bytes during decoding"
                                 </span>),
                             ));
                         }
@@ -1099,7 +1101,7 @@
                         <span class="macro-nonterminal">$crate::module::registry::DecodingMode::Reject </span>=&gt; {
                             <span class="kw">return </span><span class="prelude-val">Err</span>(fedimint_core::encoding::DecodeError::new_custom(
                                 <span class="macro">anyhow::anyhow!</span>(
-                                    <span class="string">&quot;Module decoder not available: {module_instance_id}&quot;
+                                    <span class="string">"Module decoder not available: {module_instance_id}"
                                 </span>),
                             ));
                         }
@@ -1119,15 +1121,15 @@
     };
 }
 
-<span class="doccomment">/// Define a &quot;plugin&quot; trait
+<span class="doccomment">/// Define a "plugin" trait
 ///
-/// &quot;Plugin trait&quot; is a trait that a developer of a mint module
+/// "Plugin trait" is a trait that a developer of a mint module
 /// needs to implement when implementing mint module. It uses associated
 /// types with trait bounds to guide the developer.
 ///
-/// Blanket implementations are used to convert the &quot;plugin trait&quot;,
-/// incompatible with `dyn Trait` into &quot;module types&quot; and corresponding
-/// &quot;module dyn newtypes&quot;, erasing the exact type and used in a common
+/// Blanket implementations are used to convert the "plugin trait",
+/// incompatible with `dyn Trait` into "module types" and corresponding
+/// "module dyn newtypes", erasing the exact type and used in a common
 /// Fedimint code.
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>module_plugin_static_trait_define{
@@ -1135,7 +1137,7 @@
         <span class="macro-nonterminal">$dyn_newtype</span>:ident, <span class="macro-nonterminal">$static_trait</span>:ident, <span class="macro-nonterminal">$dyn_trait</span>:ident, { $(<span class="macro-nonterminal">$extra_methods</span>:tt)* }, { $(<span class="macro-nonterminal">$extra_impls</span>:tt)* }
     ) =&gt; {
         <span class="kw">pub trait </span><span class="macro-nonterminal">$static_trait</span>:
-            std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + IntoDynInstance&lt;DynType = <span class="macro-nonterminal">$dyn_newtype</span>&gt; + Send + Sync + <span class="lifetime">&#39;static
+            std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + IntoDynInstance&lt;DynType = <span class="macro-nonterminal">$dyn_newtype</span>&gt; + Send + Sync + <span class="lifetime">'static
         </span>{
             $(<span class="macro-nonterminal">$extra_methods</span>)*
         }
@@ -1161,7 +1163,7 @@
 
         <span class="kw">impl</span>&lt;T&gt; <span class="macro-nonterminal">$dyn_trait </span><span class="kw">for </span>T
         <span class="kw">where
-            </span>T: <span class="macro-nonterminal">$static_trait </span>+ DynEncodable + <span class="lifetime">&#39;static </span>+ Send + Sync,
+            </span>T: <span class="macro-nonterminal">$static_trait </span>+ DynEncodable + <span class="lifetime">'static </span>+ Send + Sync,
         {
             <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync) {
                 <span class="self">self
@@ -1202,7 +1204,7 @@
         <span class="macro-nonterminal">$dyn_newtype</span>:ident, <span class="macro-nonterminal">$static_trait</span>:ident, <span class="macro-nonterminal">$dyn_trait</span>:ident, { $(<span class="macro-nonterminal">$extra_methods</span>:tt)* }, { $(<span class="macro-nonterminal">$extra_impls</span>:tt)* }, { $(<span class="macro-nonterminal">$extra_impls_unknown</span>:tt)* }
     ) =&gt; {
         <span class="kw">pub trait </span><span class="macro-nonterminal">$static_trait</span>:
-            std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + IntoDynInstance&lt;DynType = <span class="macro-nonterminal">$dyn_newtype</span>&gt; + Send + Sync + serde::Serialize + serde::de::DeserializeOwned + <span class="lifetime">&#39;static
+            std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + IntoDynInstance&lt;DynType = <span class="macro-nonterminal">$dyn_newtype</span>&gt; + Send + Sync + serde::Serialize + serde::de::DeserializeOwned + <span class="lifetime">'static
         </span>{
             $(<span class="macro-nonterminal">$extra_methods</span>)*
         }
@@ -1228,7 +1230,7 @@
 
         <span class="kw">impl</span>&lt;T&gt; <span class="macro-nonterminal">$dyn_trait </span><span class="kw">for </span>T
         <span class="kw">where
-            </span>T: <span class="macro-nonterminal">$static_trait </span>+ DynEncodable + <span class="lifetime">&#39;static </span>+ Send + Sync,
+            </span>T: <span class="macro-nonterminal">$static_trait </span>+ DynEncodable + <span class="lifetime">'static </span>+ Send + Sync,
         {
             <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync) {
                 <span class="self">self
@@ -1410,7 +1412,7 @@
             <span class="kw">let </span>other: <span class="kw-2">&amp;</span><span class="self">Self </span>= other
                 .as_any()
                 .downcast_ref()
-                .expect(<span class="string">&quot;Type is ensured in previous step&quot;</span>);
+                .expect(<span class="string">"Type is ensured in previous step"</span>);
 
             <span class="self">self </span>== other
         }
@@ -1437,8 +1439,8 @@
 </span><span class="macro">macro_rules! </span>module_plugin_dyn_newtype_display_passthrough {
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
         <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span><span class="macro-nonterminal">$newtype </span>{
-            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-                f.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;{}-{}&quot;</span>, <span class="self">self</span>.module_instance_id, <span class="self">self</span>.inner))
+            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+                f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"{}-{}"</span>, <span class="self">self</span>.module_instance_id, <span class="self">self</span>.inner))
             }
         }
     };
@@ -1505,17 +1507,17 @@
             fedimint_core::encoding::Encodable,
             fedimint_core::encoding::Decodable,
         )]
-        #[error(<span class="string">&quot;Unknown {} variant {variant}&quot;</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>))]
+        #[error(<span class="string">"Unknown {} variant {variant}"</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>))]
         </span><span class="kw">pub struct </span><span class="macro-nonterminal">$error </span>{
             <span class="kw">pub </span>variant: u64,
         }
 
         <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
-            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
                 <span class="kw">match </span><span class="self">self </span>{
                     <span class="macro-nonterminal">$name::V0</span>(inner) =&gt; std::fmt::Display::fmt(inner, f),
                     <span class="macro-nonterminal">$name::Default </span>{ variant, .. } =&gt; {
-                        <span class="macro">write!</span>(f, <span class="string">&quot;Unknown {} (variant={variant})&quot;</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>))
+                        <span class="macro">write!</span>(f, <span class="string">"Unknown {} (variant={variant})"</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>))
                     }
                 }
             }

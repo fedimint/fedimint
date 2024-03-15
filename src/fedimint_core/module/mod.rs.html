@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/module/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_core/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/module/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_core/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -961,7 +963,6 @@
 <a href="#961" id="961">961</a>
 <a href="#962" id="962">962</a>
 <a href="#963" id="963">963</a>
-<a href="#964" id="964">964</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>registry;
 
@@ -1000,8 +1001,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::server::DynServerModule;
 <span class="kw">use </span><span class="kw">crate</span>::task::{MaybeSend, TaskGroup};
 <span class="kw">use crate</span>::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
-    OutPoint, PeerId,
+    apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync, Amount, OutPoint, PeerId,
 };
 
 <span class="attr">#[derive(Debug, PartialEq)]
@@ -1053,12 +1053,12 @@
         <span class="self">Self </span>{
             auth: <span class="prelude-val">None</span>,
             params: serde_json::to_value(params)
-                .expect(<span class="string">&quot;parameter serialization error - this should not happen&quot;</span>),
+                .expect(<span class="string">"parameter serialization error - this should not happen"</span>),
         }
     }
 
     <span class="kw">pub fn </span>to_json(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; JsonValue {
-        serde_json::to_value(<span class="self">self</span>).expect(<span class="string">&quot;parameter serialization error - this should not happen&quot;</span>)
+        serde_json::to_value(<span class="self">self</span>).expect(<span class="string">"parameter serialization error - this should not happen"</span>)
     }
 
     <span class="kw">pub fn </span>with_auth(<span class="self">self</span>, auth: ApiAuth) -&gt; <span class="self">Self </span>{
@@ -1083,8 +1083,8 @@
 </span><span class="kw">pub struct </span>ApiAuth(<span class="kw">pub </span>String);
 
 <span class="kw">impl </span>Debug <span class="kw">for </span>ApiAuth {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;ApiAuth(****)&quot;</span>)
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"ApiAuth(****)"</span>)
     }
 }
 
@@ -1108,7 +1108,7 @@
     }
 
     <span class="kw">pub fn </span>unauthorized() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new(<span class="number">401</span>, <span class="string">&quot;Invalid authorization&quot;</span>.to_string())
+        <span class="self">Self</span>::new(<span class="number">401</span>, <span class="string">"Invalid authorization"</span>.to_string())
     }
 
     <span class="kw">pub fn </span>server_error(message: String) -&gt; <span class="self">Self </span>{
@@ -1117,18 +1117,18 @@
 }
 
 <span class="doccomment">/// State made available to all API endpoints for handling a request
-</span><span class="kw">pub struct </span>ApiEndpointContext&lt;<span class="lifetime">&#39;dbtx</span>&gt; {
+</span><span class="kw">pub struct </span>ApiEndpointContext&lt;<span class="lifetime">'dbtx</span>&gt; {
     db: Database,
-    dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;dbtx</span>, Committable&gt;,
+    dbtx: DatabaseTransaction&lt;<span class="lifetime">'dbtx</span>, Committable&gt;,
     has_auth: bool,
     request_auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ApiEndpointContext&lt;<span class="lifetime">&#39;a</span>&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; ApiEndpointContext&lt;<span class="lifetime">'a</span>&gt; {
     <span class="doccomment">/// `db` and `dbtx` should be isolated.
     </span><span class="kw">pub fn </span>new(
         db: Database,
-        dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Committable&gt;,
+        dbtx: DatabaseTransaction&lt;<span class="lifetime">'a</span>, Committable&gt;,
         has_auth: bool,
         request_auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
     ) -&gt; <span class="self">Self </span>{
@@ -1141,10 +1141,10 @@
     }
 
     <span class="doccomment">/// Database tx handle, will be committed
-    </span><span class="kw">pub fn </span>dbtx&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;mtx</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="kw-2">mut </span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;mtx</span>, Committable&gt;
+    </span><span class="kw">pub fn </span>dbtx&lt;<span class="lifetime">'s</span>, <span class="lifetime">'mtx</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'s </span><span class="kw-2">mut </span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">'mtx</span>, Committable&gt;
     <span class="kw">where
-        </span><span class="lifetime">&#39;a</span>: <span class="lifetime">&#39;mtx</span>,
-        <span class="lifetime">&#39;s</span>: <span class="lifetime">&#39;mtx</span>,
+        </span><span class="lifetime">'a</span>: <span class="lifetime">'mtx</span>,
+        <span class="lifetime">'s</span>: <span class="lifetime">'mtx</span>,
     {
         <span class="comment">// dbtx is already isolated.
         </span><span class="self">self</span>.dbtx.to_ref()
@@ -1187,17 +1187,17 @@
     }
 
     <span class="doccomment">/// Attempts to commit the dbtx or returns an ApiError
-    </span><span class="kw">pub async fn </span>commit_tx_result(<span class="self">self</span>, path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {
+    </span><span class="kw">pub async fn </span>commit_tx_result(<span class="self">self</span>, path: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {
         <span class="self">self</span>.dbtx.commit_tx_result().<span class="kw">await</span>.map_err(|_err| {
             <span class="macro">tracing::warn!</span>(
                 target: fedimint_logging::LOG_NET_API,
                 path,
-                <span class="string">&quot;API server error when writing to database: {:?}&quot;</span>,
+                <span class="string">"API server error when writing to database: {:?}"</span>,
                 _err
             );
             ApiError {
                 code: <span class="number">500</span>,
-                message: <span class="string">&quot;API server error when writing to database&quot;</span>.to_string(),
+                message: <span class="string">"API server error when writing to database"</span>.to_string(),
             }
         })
     }
@@ -1208,18 +1208,18 @@
     <span class="kw">type </span>State: Sync;
 
     <span class="doccomment">/// example: /transaction
-    </span><span class="kw">const </span>PATH: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str;
+    </span><span class="kw">const </span>PATH: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str;
 
     <span class="kw">type </span>Param: serde::de::DeserializeOwned + Send;
     <span class="kw">type </span>Response: serde::Serialize;
 
-    <span class="kw">async fn </span>handle&lt;<span class="lifetime">&#39;state</span>, <span class="lifetime">&#39;context</span>, <span class="lifetime">&#39;dbtx</span>&gt;(
-        state: <span class="kw-2">&amp;</span><span class="lifetime">&#39;state </span><span class="self">Self</span>::State,
-        context: <span class="kw-2">&amp;</span><span class="lifetime">&#39;context </span><span class="kw-2">mut </span>ApiEndpointContext&lt;<span class="lifetime">&#39;dbtx</span>&gt;,
+    <span class="kw">async fn </span>handle&lt;<span class="lifetime">'state</span>, <span class="lifetime">'context</span>, <span class="lifetime">'dbtx</span>&gt;(
+        state: <span class="kw-2">&amp;</span><span class="lifetime">'state </span><span class="self">Self</span>::State,
+        context: <span class="kw-2">&amp;</span><span class="lifetime">'context </span><span class="kw-2">mut </span>ApiEndpointContext&lt;<span class="lifetime">'dbtx</span>&gt;,
         request: <span class="self">Self</span>::Param,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Response, ApiError&gt;
     <span class="kw">where
-        </span><span class="lifetime">&#39;dbtx</span>: <span class="lifetime">&#39;context</span>;
+        </span><span class="lifetime">'dbtx</span>: <span class="lifetime">'context</span>;
 }
 
 <span class="attr">#[doc(hidden)]
@@ -1235,7 +1235,7 @@
 /// struct State;
 ///
 /// let _: ApiEndpoint&lt;State&gt; = api_endpoint! {
-///     &quot;/foobar&quot;,
+///     "/foobar",
 ///     ApiVersion::new(0, 3),
 ///     async |state: &amp;State, _dbtx, params: ()| -&gt; i32 {
 ///         Ok(0)
@@ -1255,14 +1255,14 @@
 
         <span class="attr">#[<span class="macro-nonterminal">$crate::apply</span>(<span class="macro-nonterminal">$</span><span class="macro">crate::async_trait_maybe_send!</span>)]
         </span><span class="kw">impl </span><span class="macro-nonterminal">$crate::module::TypedApiEndpoint </span><span class="kw">for </span>Endpoint {
-            <span class="kw">const </span>PATH: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="macro-nonterminal">$path</span>;
+            <span class="kw">const </span>PATH: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str = <span class="macro-nonterminal">$path</span>;
             <span class="kw">type </span>State = <span class="macro-nonterminal">$state_ty</span>;
             <span class="kw">type </span>Param = <span class="macro-nonterminal">$param_ty</span>;
             <span class="kw">type </span>Response = <span class="macro-nonterminal">$resp_ty</span>;
 
-            <span class="kw">async fn </span>handle&lt;<span class="lifetime">&#39;state</span>, <span class="lifetime">&#39;context</span>, <span class="lifetime">&#39;dbtx</span>&gt;(
-                <span class="macro-nonterminal">$state</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;state </span><span class="self">Self</span>::State,
-                <span class="macro-nonterminal">$context</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;context </span><span class="kw-2">mut </span><span class="macro-nonterminal">$crate::module::ApiEndpointContext</span>&lt;<span class="lifetime">&#39;dbtx</span>&gt;,
+            <span class="kw">async fn </span>handle&lt;<span class="lifetime">'state</span>, <span class="lifetime">'context</span>, <span class="lifetime">'dbtx</span>&gt;(
+                <span class="macro-nonterminal">$state</span>: <span class="kw-2">&amp;</span><span class="lifetime">'state </span><span class="self">Self</span>::State,
+                <span class="macro-nonterminal">$context</span>: <span class="kw-2">&amp;</span><span class="lifetime">'context </span><span class="kw-2">mut </span><span class="macro-nonterminal">$crate::module::ApiEndpointContext</span>&lt;<span class="lifetime">'dbtx</span>&gt;,
                 <span class="macro-nonterminal">$param</span>: <span class="self">Self</span>::Param,
             ) -&gt; ::std::result::Result&lt;<span class="self">Self</span>::Response, <span class="macro-nonterminal">$crate::module::ApiError</span>&gt; {
                 {
@@ -1282,11 +1282,11 @@
 
 <span class="kw">use </span><span class="self">self</span>::registry::ModuleDecoderRegistry;
 
-<span class="kw">type </span>HandlerFnReturn&lt;<span class="lifetime">&#39;a</span>&gt; =
-    Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;&gt; + <span class="lifetime">&#39;a</span>)&gt;&gt;;
+<span class="kw">type </span>HandlerFnReturn&lt;<span class="lifetime">'a</span>&gt; =
+    Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;&gt; + <span class="lifetime">'a</span>)&gt;&gt;;
 <span class="kw">type </span>HandlerFn&lt;M&gt; = Box&lt;
     <span class="macro">maybe_add_send_sync!</span>(
-        <span class="kw">dyn for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>M, ApiEndpointContext&lt;<span class="lifetime">&#39;a</span>&gt;, ApiRequestErased) -&gt; HandlerFnReturn&lt;<span class="lifetime">&#39;a</span>&gt;
+        <span class="kw">dyn for</span>&lt;<span class="lifetime">'a</span>&gt; Fn(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>M, ApiEndpointContext&lt;<span class="lifetime">'a</span>&gt;, ApiRequestErased) -&gt; HandlerFnReturn&lt;<span class="lifetime">'a</span>&gt;
     ),
 &gt;;
 
@@ -1296,7 +1296,7 @@
     /// `/` e.g. `/transaction`. E.g. this API endpoint would be reachable
     /// under `module_module_instance_id_transaction` depending on the
     /// module name returned by `[FedertionModule::api_base_name]`.
-    </span><span class="kw">pub </span>path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
+    </span><span class="kw">pub </span>path: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
     <span class="doccomment">/// Handler for the API call that takes the following arguments:
     ///   * Reference to the module which defined it
     ///   * Request parameters parsed into JSON `[Value](serde_json::Value)`
@@ -1312,29 +1312,29 @@
         E::Response: Debug,
     {
         <span class="attr">#[instrument(
-            target = <span class="string">&quot;fedimint_server::request&quot;</span>,
-            level = <span class="string">&quot;trace&quot;</span>,
+            target = <span class="string">"fedimint_server::request"</span>,
+            level = <span class="string">"trace"</span>,
             skip_all,
             fields(method = E::PATH),
             ret,
         )]
-        </span><span class="kw">async fn </span>handle_request&lt;<span class="lifetime">&#39;state</span>, <span class="lifetime">&#39;context</span>, <span class="lifetime">&#39;dbtx</span>, E&gt;(
-            state: <span class="kw-2">&amp;</span><span class="lifetime">&#39;state </span>E::State,
-            context: <span class="kw-2">&amp;</span><span class="lifetime">&#39;context </span><span class="kw-2">mut </span>ApiEndpointContext&lt;<span class="lifetime">&#39;dbtx</span>&gt;,
+        </span><span class="kw">async fn </span>handle_request&lt;<span class="lifetime">'state</span>, <span class="lifetime">'context</span>, <span class="lifetime">'dbtx</span>, E&gt;(
+            state: <span class="kw-2">&amp;</span><span class="lifetime">'state </span>E::State,
+            context: <span class="kw-2">&amp;</span><span class="lifetime">'context </span><span class="kw-2">mut </span>ApiEndpointContext&lt;<span class="lifetime">'dbtx</span>&gt;,
             request: ApiRequest&lt;E::Param&gt;,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;E::Response, ApiError&gt;
         <span class="kw">where
-            </span><span class="lifetime">&#39;dbtx</span>: <span class="lifetime">&#39;context</span>,
+            </span><span class="lifetime">'dbtx</span>: <span class="lifetime">'context</span>,
             E: TypedApiEndpoint,
             E::Param: Debug,
             E::Response: Debug,
         {
-            <span class="macro">tracing::debug!</span>(target: LOG_NET_API, path = E::PATH, <span class="question-mark">?</span>request, <span class="string">&quot;received request&quot;</span>);
+            <span class="macro">tracing::debug!</span>(target: LOG_NET_API, path = E::PATH, <span class="question-mark">?</span>request, <span class="string">"received request"</span>);
             <span class="kw">let </span>result = E::handle(state, context, request.params).<span class="kw">await</span>;
             <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = <span class="kw-2">&amp;</span>result {
-                <span class="macro">tracing::warn!</span>(target: LOG_NET_API, path = E::PATH, <span class="question-mark">?</span>error, <span class="string">&quot;api request error&quot;</span>);
+                <span class="macro">tracing::warn!</span>(target: LOG_NET_API, path = E::PATH, <span class="question-mark">?</span>error, <span class="string">"api request error"</span>);
             } <span class="kw">else </span>{
-                <span class="macro">tracing::debug!</span>(target: LOG_NET_API, path = E::PATH, <span class="string">&quot;api request complete&quot;</span>);
+                <span class="macro">tracing::debug!</span>(target: LOG_NET_API, path = E::PATH, <span class="string">"api request complete"</span>);
             }
             result
         }
@@ -1351,7 +1351,7 @@
 
                     context.commit_tx_result(E::PATH).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                    <span class="prelude-val">Ok</span>(serde_json::to_value(ret).expect(<span class="string">&quot;encoding error&quot;</span>))
+                    <span class="prelude-val">Ok</span>(serde_json::to_value(ret).expect(<span class="string">"encoding error"</span>))
                 })
             }),
         }
@@ -1361,7 +1361,7 @@
 <span class="doccomment">/// Operations common to Server and Client side module gen dyn newtypes
 ///
 /// Due to conflict of `impl Trait for T` for both `ServerModuleInit` and
-/// `ClientModuleInit`, we can&#39;t really have a `ICommonModuleInit`, so to unify
+/// `ClientModuleInit`, we can't really have a `ICommonModuleInit`, so to unify
 /// them in `ModuleInitRegistry` we move the common functionality to be an
 /// interface over their dyn newtype wrappers. A bit weird, but works.
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -1376,17 +1376,17 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
-    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt;;
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">'_</span>&gt;;
 }
 
 <span class="doccomment">/// Trait implemented by every `*ModuleInit` (server or client side)
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>ModuleInit: Debug + Clone + Send + Sync + <span class="lifetime">&#39;static </span>{
+</span><span class="kw">pub trait </span>ModuleInit: Debug + Clone + Send + Sync + <span class="lifetime">'static </span>{
     <span class="kw">type </span>Common: CommonModuleInit;
 
-    <span class="doccomment">/// This represents the module&#39;s database version that the current code is
+    <span class="doccomment">/// This represents the module's database version that the current code is
     /// compatible with. It is important to increment this value whenever a
     /// key or a value that is persisted to the database within the module
     /// changes. It is also important to add the corresponding
@@ -1396,9 +1396,9 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
-    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt;;
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">'_</span>&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -1424,16 +1424,16 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
-    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">'_</span>&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ModuleInit&gt;::dump_database(<span class="self">self</span>, dbtx, prefix_names).<span class="kw">await
     </span>}
 }
 
 <span class="doccomment">/// Interface for Module Generation
 ///
-/// This trait contains the methods responsible for the module&#39;s
+/// This trait contains the methods responsible for the module's
 /// - initialization
 /// - config generation
 /// - config validation
@@ -1442,7 +1442,7 @@
 /// `[Self::init]`.
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>IServerModuleInit: IDynCommonModuleInit {
-    <span class="kw">fn </span>as_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">&#39;static</span>);
+    <span class="kw">fn </span>as_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">'static</span>);
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions;
 
@@ -1488,15 +1488,15 @@
     </span><span class="kw">pub </span>DynCommonModuleInit(Arc&lt;IDynCommonModuleInit&gt;)
 );
 
-<span class="kw">impl </span>AsRef&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleInit + <span class="lifetime">&#39;static</span>)&gt; <span class="kw">for </span>DynCommonModuleInit {
-    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleInit + <span class="lifetime">&#39;static</span>)) {
+<span class="kw">impl </span>AsRef&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleInit + <span class="lifetime">'static</span>)&gt; <span class="kw">for </span>DynCommonModuleInit {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleInit + <span class="lifetime">'static</span>)) {
         <span class="self">self</span>.inner.as_ref()
     }
 }
 
 <span class="kw">impl </span>DynCommonModuleInit {
     <span class="kw">pub fn </span>from_inner(
-        inner: Arc&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleInit + <span class="lifetime">&#39;static</span>)&gt;,
+        inner: Arc&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleInit + <span class="lifetime">'static</span>)&gt;,
     ) -&gt; <span class="self">Self </span>{
         DynCommonModuleInit { inner }
     }
@@ -1507,8 +1507,8 @@
     </span><span class="kw">pub </span>DynServerModuleInit(Arc&lt;IServerModuleInit&gt;)
 );
 
-<span class="kw">impl </span>AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">&#39;static</span>&gt; <span class="kw">for </span>DynServerModuleInit {
-    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">&#39;static</span>) {
+<span class="kw">impl </span>AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">'static</span>&gt; <span class="kw">for </span>DynServerModuleInit {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">'static</span>) {
         <span class="self">self</span>.inner.as_common()
     }
 }
@@ -1533,7 +1533,7 @@
     task_group: TaskGroup,
     our_peer_id: PeerId,
     <span class="comment">// ClientModuleInitArgs needs a bound because sometimes we need
-    // to pass associated-types data, so let&#39;s just put it here right away
+    // to pass associated-types data, so let's just put it here right away
     </span>_marker: marker::PhantomData&lt;S&gt;,
 }
 
@@ -1624,9 +1624,9 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl</span>&lt;T&gt; IServerModuleInit <span class="kw">for </span>T
 <span class="kw">where
-    </span>T: ServerModuleInit + <span class="lifetime">&#39;static </span>+ Sync,
+    </span>T: ServerModuleInit + <span class="lifetime">'static </span>+ Sync,
 {
-    <span class="kw">fn </span>as_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">&#39;static</span>) {
+    <span class="kw">fn </span>as_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">'static</span>) {
         <span class="self">self
     </span>}
 
@@ -1732,7 +1732,7 @@
     <span class="kw">type </span>Init: ServerModuleInit;
 
     <span class="kw">fn </span>module_kind() -&gt; ModuleKind {
-        <span class="comment">// Note: All modules should define kinds as &amp;&#39;static str, so this doesn&#39;t
+        <span class="comment">// Note: All modules should define kinds as &amp;'static str, so this doesn't
         // allocate
         </span>&lt;<span class="self">Self</span>::Init <span class="kw">as </span>ModuleInit&gt;::Common::KIND
     }
@@ -1746,18 +1746,18 @@
         <span class="self">Self</span>::Common::decoder_builder().build()
     }
 
-    <span class="doccomment">/// This module&#39;s contribution to the next consensus proposal
-    </span><span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    <span class="doccomment">/// This module's contribution to the next consensus proposal
+    </span><span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">'a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     ) -&gt; Vec&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::ConsensusItem&gt;;
 
     <span class="doccomment">/// This function is called once for every consensus item. The function
     /// returns an error if and only if the consensus item does not change
     /// our state and therefore may be safely discarded by the atomic broadcast.
-    </span><span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+    </span><span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'b</span>&gt;,
         consensus_item: &lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::ConsensusItem,
         peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt;;
@@ -1766,10 +1766,10 @@
     /// be part of the database transaction. On failure (e.g. double spend)
     /// the database transaction is rolled back and the operation will take
     /// no effect.
-    </span><span class="kw">async fn </span>process_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
+    </span><span class="kw">async fn </span>process_input&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, <span class="lifetime">'c</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'c</span>&gt;,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">'b </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, &lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::InputError&gt;;
 
     <span class="doccomment">/// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
@@ -1780,10 +1780,10 @@
     /// The supplied `out_point` identifies the operation (e.g. a peg-out or
     /// note issuance) and can be used to retrieve its outcome later using
     /// `output_status`.
-    </span><span class="kw">async fn </span>process_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
+    </span><span class="kw">async fn </span>process_output&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'b</span>&gt;,
+        output: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, &lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::OutputError&gt;;
 
@@ -1793,7 +1793,7 @@
     /// output is unknown, **NOT** if it is just not ready yet.
     </span><span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::OutputOutcome&gt;;
 
@@ -1804,7 +1804,7 @@
     /// occurred in the database and consensus should halt.
     </span><span class="kw">async fn </span>audit(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         audit: <span class="kw-2">&amp;mut </span>Audit,
         module_instance_id: ModuleInstanceId,
     );
@@ -1822,7 +1822,7 @@
 </span><span class="comment">// bytes internally.
 </span><span class="attr">#[derive(Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>SerdeModuleEncoding&lt;T: Encodable + Decodable&gt;(
-    <span class="attr">#[serde(with = <span class="string">&quot;::fedimint_core::encoding::as_hex&quot;</span>)] </span>Vec&lt;u8&gt;,
+    <span class="attr">#[serde(with = <span class="string">"::fedimint_core::encoding::as_hex"</span>)] </span>Vec&lt;u8&gt;,
     <span class="attr">#[serde(skip)] </span>PhantomData&lt;T&gt;,
 );
 
@@ -1830,10 +1830,10 @@
 <span class="kw">where
     </span>T: Encodable + Decodable,
 {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
-        f.write_str(<span class="string">&quot;SerdeModuleEncoding(&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        f.write_str(<span class="string">"SerdeModuleEncoding("</span>)<span class="question-mark">?</span>;
         fmt::Debug::fmt(<span class="kw-2">&amp;</span>AbbreviateHexBytes(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>), f)<span class="question-mark">?</span>;
-        f.write_str(<span class="string">&quot;)&quot;</span>)<span class="question-mark">?</span>;
+        f.write_str(<span class="string">")"</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 }
@@ -1842,18 +1842,18 @@
     <span class="kw">fn </span>from(value: <span class="kw-2">&amp;</span>T) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
         fedimint_core::encoding::Encodable::consensus_encode(value, <span class="kw-2">&amp;mut </span>bytes)
-            .expect(<span class="string">&quot;Writing to buffer can never fail&quot;</span>);
+            .expect(<span class="string">"Writing to buffer can never fail"</span>);
         <span class="self">Self</span>(bytes, PhantomData)
     }
 }
 
-<span class="kw">impl</span>&lt;T: Encodable + Decodable + <span class="lifetime">&#39;static</span>&gt; SerdeModuleEncoding&lt;T&gt; {
+<span class="kw">impl</span>&lt;T: Encodable + Decodable + <span class="lifetime">'static</span>&gt; SerdeModuleEncoding&lt;T&gt; {
     <span class="kw">pub fn </span>try_into_inner(<span class="kw-2">&amp;</span><span class="self">self</span>, modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>reader = std::io::Cursor::new(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>);
         Decodable::consensus_decode(<span class="kw-2">&amp;mut </span>reader, modules)
     }
 
-    <span class="doccomment">/// In cases where we know exactly which module kind we expect but don&#39;t
+    <span class="doccomment">/// In cases where we know exactly which module kind we expect but don't
     /// have access to all decoders this function can be used instead.
     ///
     /// Note that it just assumes the decoded module instance id to be valid
@@ -1880,7 +1880,7 @@
 
         <span class="kw">if </span>reader.limit() != <span class="number">0 </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(fedimint_core::encoding::DecodeError::new_custom(
-                <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Dyn type did not consume all bytes during decoding&quot;</span>),
+                <span class="macro">anyhow::anyhow!</span>(<span class="string">"Dyn type did not consume all bytes during decoding"</span>),
             ));
         }
 
@@ -1894,11 +1894,11 @@
 /// access to, and implements higher level dkg operations available to the
 /// module to complete its distributed initialization inside the federation.
 </span><span class="attr">#[non_exhaustive]
-</span><span class="kw">pub struct </span>PeerHandle&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">pub struct </span>PeerHandle&lt;<span class="lifetime">'a</span>&gt; {
     <span class="comment">// TODO: this whole type should be a part of a `fedimint-server` and fields here inaccessible
     // to outside crates, but until `ServerModule` is not in `fedimint-server` this is impossible
     </span><span class="attr">#[doc(hidden)]
-    </span><span class="kw">pub </span>connections: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MuxPeerConnections&lt;(ModuleInstanceId, String), DkgPeerMsg&gt;,
+    </span><span class="kw">pub </span>connections: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>MuxPeerConnections&lt;(ModuleInstanceId, String), DkgPeerMsg&gt;,
     <span class="attr">#[doc(hidden)]
     </span><span class="kw">pub </span>module_instance_id: ModuleInstanceId,
     <span class="attr">#[doc(hidden)]
@@ -1907,9 +1907,9 @@
     </span><span class="kw">pub </span>peers: Vec&lt;PeerId&gt;,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; PeerHandle&lt;<span class="lifetime">&#39;a</span>&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; PeerHandle&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">pub fn </span>new(
-        connections: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MuxPeerConnections&lt;(ModuleInstanceId, String), DkgPeerMsg&gt;,
+        connections: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>MuxPeerConnections&lt;(ModuleInstanceId, String), DkgPeerMsg&gt;,
         module_instance_id: ModuleInstanceId,
         our_id: PeerId,
         peers: Vec&lt;PeerId&gt;,

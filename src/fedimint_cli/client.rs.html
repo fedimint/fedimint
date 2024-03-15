@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-cli/src/client.rs`."><title>client.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_cli" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_cli/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-cli/src/client.rs`."><title>client.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_cli" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_cli/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -782,12 +784,6 @@
 <a href="#782" id="782">782</a>
 <a href="#783" id="783">783</a>
 <a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -799,7 +795,7 @@
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_client::backup::Metadata;
-<span class="kw">use </span>fedimint_client::ClientArc;
+<span class="kw">use </span>fedimint_client::ClientHandle;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
@@ -810,6 +806,7 @@
     PayType,
 };
 <span class="kw">use </span>fedimint_ln_common::contracts::ContractId;
+<span class="kw">use </span>fedimint_ln_common::LightningGateway;
 <span class="kw">use </span>fedimint_mint_client::{
     MintClientModule, OOBNotes, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
 };
@@ -858,7 +855,7 @@
         </span><span class="attr">#[clap(long)]
         </span>allow_overpay: bool,
         <span class="doccomment">/// After how many seconds we will try to reclaim the e-cash if it
-        /// hasn&#39;t been redeemed by the recipient. Defaults to one week.
+        /// hasn't been redeemed by the recipient. Defaults to one week.
         </span><span class="attr">#[clap(long, default_value_t = <span class="number">60 </span>* <span class="number">60 </span>* <span class="number">24 </span>* <span class="number">7</span>)]
         </span>timeout: u64,
         <span class="doccomment">/// If the necessary information to join the federation the e-cash
@@ -881,10 +878,12 @@
     </span>LnInvoice {
         <span class="attr">#[clap(long)]
         </span>amount: Amount,
-        <span class="attr">#[clap(long, default_value = <span class="string">&quot;&quot;</span>)]
+        <span class="attr">#[clap(long, default_value = <span class="string">""</span>)]
         </span>description: String,
         <span class="attr">#[clap(long)]
         </span>expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+        <span class="attr">#[clap(long)]
+        </span>gateway_id: <span class="prelude-ty">Option</span>&lt;secp256k1::PublicKey&gt;,
     },
     <span class="doccomment">/// Wait for incoming invoice to be paid
     </span>AwaitInvoice { operation_id: OperationId },
@@ -901,16 +900,15 @@
         <span class="doccomment">/// Will return immediately after funding the payment
         </span><span class="attr">#[clap(long, action)]
         </span>finish_in_background: bool,
+        <span class="attr">#[clap(long)]
+        </span>gateway_id: <span class="prelude-ty">Option</span>&lt;secp256k1::PublicKey&gt;,
     },
     <span class="doccomment">/// Wait for a lightning payment to complete
     </span>AwaitLnPay { operation_id: OperationId },
     <span class="doccomment">/// List registered gateways
     </span>ListGateways,
-    <span class="doccomment">/// Switch active gateway
-    </span>SwitchGateway {
-        <span class="attr">#[clap(value_parser = parse_gateway_id)]
-        </span>gateway_id: secp256k1::PublicKey,
-    },
+    <span class="doccomment">/// Re-downloads the registered gateways from the federation
+    </span>UpdateGatewayCache,
     <span class="doccomment">/// Generate a new deposit address, funds sent to it can later be claimed
     </span>DepositAddress {
         <span class="doccomment">/// How long the client should watch the address for incoming
@@ -929,7 +927,7 @@
     },
     <span class="doccomment">/// Upload the (encrypted) snapshot of mint notes to federation
     </span>Backup {
-        <span class="attr">#[clap(long = <span class="string">&quot;metadata&quot;</span>)]
+        <span class="attr">#[clap(long = <span class="string">"metadata"</span>)]
         </span><span class="doccomment">/// Backup metadata, encoded as `key=value` (use `--metadata=key=value`,
         /// possibly multiple times)
         </span><span class="comment">// TODO: Can we make it `*Map&lt;String, String&gt;` and avoid custom parsing?
@@ -950,13 +948,12 @@
     <span class="doccomment">/// Print the secret key of the client
     </span>PrintSecret,
     ListOperations {
-        <span class="attr">#[clap(long, default_value = <span class="string">&quot;10&quot;</span>)]
+        <span class="attr">#[clap(long, default_value = <span class="string">"10"</span>)]
         </span>limit: usize,
     },
     <span class="doccomment">/// Call a module subcommand
     </span>Module {
         <span class="doccomment">/// Module selector (either module id or module kind)
-        </span><span class="attr">#[clap(long)]
         </span>module: ModuleSelector,
         args: Vec&lt;ffi::OsString&gt;,
     },
@@ -964,13 +961,9 @@
     </span>Config,
 }
 
-<span class="kw">pub fn </span>parse_gateway_id(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::PublicKey, secp256k1::Error&gt; {
-    secp256k1::PublicKey::from_str(s)
-}
-
 <span class="kw">pub async fn </span>handle_command(
     command: ClientCmd,
-    client: ClientArc,
+    client: ClientHandle,
 ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
     <span class="kw">match </span>command {
         ClientCmd::Info =&gt; get_note_summary(<span class="kw-2">&amp;</span>client).<span class="kw">await</span>,
@@ -988,10 +981,10 @@
 
             <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
                 <span class="kw">if let </span>fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
-                    <span class="macro">bail!</span>(<span class="string">&quot;Reissue failed: {e}&quot;</span>);
+                    <span class="macro">bail!</span>(<span class="string">"Reissue failed: {e}"</span>);
                 }
 
-                <span class="macro">info!</span>(<span class="string">&quot;Update: {update:?}&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"Update: {update:?}"</span>);
             }
 
             <span class="prelude-val">Ok</span>(serde_json::to_value(amount).unwrap())
@@ -1002,7 +995,7 @@
             timeout,
             include_invite,
         } =&gt; {
-            <span class="macro">warn!</span>(<span class="string">&quot;The client will try to double-spend these notes after the duration specified by the --timeout option to recover any unclaimed e-cash.&quot;</span>);
+            <span class="macro">warn!</span>(<span class="string">"The client will try to double-spend these notes after the duration specified by the --timeout option to recover any unclaimed e-cash."</span>);
 
             <span class="kw">let </span>mint_module = client.get_first_module::&lt;MintClientModule&gt;();
             <span class="kw">let </span>timeout = Duration::from_secs(timeout);
@@ -1020,7 +1013,7 @@
                 <span class="kw">let </span>overspend_amount = notes.total_amount() - amount;
                 <span class="kw">if </span>overspend_amount != Amount::ZERO {
                     <span class="macro">warn!</span>(
-                        <span class="string">&quot;Selected notes {} worth more than requested&quot;</span>,
+                        <span class="string">"Selected notes {} worth more than requested"</span>,
                         overspend_amount
                     );
                 }
@@ -1037,10 +1030,10 @@
                     )
                     .<span class="kw">await</span><span class="question-mark">?
             </span>};
-            <span class="macro">info!</span>(<span class="string">&quot;Spend e-cash operation: {operation}&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">"Spend e-cash operation: {operation}"</span>);
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
-                <span class="string">&quot;notes&quot;</span>: notes,
+                <span class="string">"notes"</span>: notes,
             }))
         }
         ClientCmd::Validate { oob_notes } =&gt; {
@@ -1050,7 +1043,7 @@
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
-                <span class="string">&quot;amount_msat&quot;</span>: amount,
+                <span class="string">"amount_msat"</span>: amount,
             }))
         }
         ClientCmd::Split { oob_notes } =&gt; {
@@ -1075,7 +1068,7 @@
                 .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
-                <span class="string">&quot;notes&quot;</span>: notes,
+                <span class="string">"notes"</span>: notes,
             }))
         }
         ClientCmd::Combine { oob_notes } =&gt; {
@@ -1085,9 +1078,9 @@
                 .all_equal_value()
             {
                 <span class="prelude-val">Ok</span>(id) =&gt; id,
-                <span class="prelude-val">Err</span>(<span class="prelude-val">None</span>) =&gt; <span class="macro">panic!</span>(<span class="string">&quot;At least one e-cash notes string expected&quot;</span>),
+                <span class="prelude-val">Err</span>(<span class="prelude-val">None</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"At least one e-cash notes string expected"</span>),
                 <span class="prelude-val">Err</span>(<span class="prelude-val">Some</span>((a, b))) =&gt; {
-                    <span class="macro">bail!</span>(<span class="string">&quot;Trying to combine e-cash from different federations: {a} and {b}&quot;</span>);
+                    <span class="macro">bail!</span>(<span class="string">"Trying to combine e-cash from different federations: {a} and {b}"</span>);
                 }
             };
 
@@ -1099,19 +1092,20 @@
             <span class="kw">let </span>combined_oob_notes = OOBNotes::new(federation_id_prefix, combined_notes);
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
-                <span class="string">&quot;notes&quot;</span>: combined_oob_notes,
+                <span class="string">"notes"</span>: combined_oob_notes,
             }))
         }
         ClientCmd::LnInvoice {
             amount,
             description,
             expiry_time,
+            gateway_id,
         } =&gt; {
-            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-            lightning_module.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>ln_gateway = get_gateway(<span class="kw-2">&amp;</span>client, gateway_id).<span class="kw">await</span>;
 
+            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
             <span class="kw">let </span>(operation_id, invoice, <span class="kw">_</span>) = lightning_module
-                .create_bolt11_invoice(amount, description, expiry_time, ())
+                .create_bolt11_invoice(amount, description, expiry_time, (), ln_gateway)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(serde_json::to_value(LnInvoiceResponse {
                 operation_id,
@@ -1136,11 +1130,11 @@
                     <span class="kw">_ </span>=&gt; {}
                 }
 
-                <span class="macro">info!</span>(<span class="string">&quot;Update: {update:?}&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"Update: {update:?}"</span>);
             }
 
             <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">&quot;Unexpected end of update stream. Lightning receive failed&quot;
+                <span class="string">"Unexpected end of update stream. Lightning receive failed"
             </span>))
         }
         ClientCmd::LnPay {
@@ -1148,38 +1142,38 @@
             amount,
             finish_in_background,
             lnurl_comment,
+            gateway_id,
         } =&gt; {
             <span class="kw">let </span>bolt11 = get_invoice(<span class="kw-2">&amp;</span>payment_info, amount, lnurl_comment).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="macro">info!</span>(<span class="string">&quot;Paying invoice: {bolt11}&quot;</span>);
-            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-            lightning_module.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="macro">info!</span>(<span class="string">"Paying invoice: {bolt11}"</span>);
+            <span class="kw">let </span>ln_gateway = get_gateway(<span class="kw-2">&amp;</span>client, gateway_id).<span class="kw">await</span>;
 
-            <span class="kw">let </span>gateway = lightning_module.select_active_gateway_opt().<span class="kw">await</span>;
+            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
             <span class="kw">let </span>OutgoingLightningPayment {
                 payment_type,
                 contract_id,
                 fee,
             } = lightning_module
-                .pay_bolt11_invoice(gateway, bolt11, ())
+                .pay_bolt11_invoice(ln_gateway, bolt11, ())
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>operation_id = payment_type.operation_id();
-            <span class="macro">info!</span>(<span class="string">&quot;Gateway fee: {fee}, payment operation id: {operation_id}&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">"Gateway fee: {fee}, payment operation id: {operation_id}"</span>);
             <span class="kw">if </span>finish_in_background {
                 wait_for_ln_payment(<span class="kw-2">&amp;</span>client, payment_type, contract_id, <span class="bool-val">true</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="macro">info!</span>(<span class="string">&quot;Payment will finish in background, use await-ln-pay to get the result&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"Payment will finish in background, use await-ln-pay to get the result"</span>);
                 <span class="prelude-val">Ok</span>(<span class="macro">serde_json::json! </span>{
                     {
-                        <span class="string">&quot;operation_id&quot;</span>: operation_id,
-                        <span class="string">&quot;payment_type&quot;</span>: payment_type.payment_type(),
-                        <span class="string">&quot;contract_id&quot;</span>: contract_id,
-                        <span class="string">&quot;fee&quot;</span>: fee,
+                        <span class="string">"operation_id"</span>: operation_id,
+                        <span class="string">"payment_type"</span>: payment_type.payment_type(),
+                        <span class="string">"contract_id"</span>: contract_id,
+                        <span class="string">"fee"</span>: fee,
                     }
                 })
             } <span class="kw">else </span>{
                 <span class="prelude-val">Ok</span>(
                     wait_for_ln_payment(<span class="kw-2">&amp;</span>client, payment_type, contract_id, <span class="bool-val">false</span>)
                         .<span class="kw">await</span><span class="question-mark">?
-                        </span>.context(<span class="string">&quot;expected a response&quot;</span>)<span class="question-mark">?</span>,
+                        </span>.context(<span class="string">"expected a response"</span>)<span class="question-mark">?</span>,
                 )
             }
         }
@@ -1196,39 +1190,27 @@
             <span class="prelude-val">Ok</span>(
                 wait_for_ln_payment(<span class="kw-2">&amp;</span>client, payment_type, ln_pay_details.contract_id, <span class="bool-val">false</span>)
                     .<span class="kw">await</span><span class="question-mark">?
-                    </span>.context(<span class="string">&quot;expected a response&quot;</span>)<span class="question-mark">?</span>,
+                    </span>.context(<span class="string">"expected a response"</span>)<span class="question-mark">?</span>,
             )
         }
         ClientCmd::ListGateways =&gt; {
             <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-            <span class="kw">let </span>gateways = lightning_module.fetch_registered_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>gateways = lightning_module.list_gateways().<span class="kw">await</span>;
             <span class="kw">if </span>gateways.is_empty() {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(serde_json::to_value(Vec::&lt;String&gt;::new()).unwrap());
             }
 
-            <span class="kw">let </span><span class="kw-2">mut </span>gateways_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateways);
-            <span class="kw">let </span>active_gateway = lightning_module.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
-
-            gateways_json
-                .as_array_mut()
-                .expect(<span class="string">&quot;gateways_json is not an array&quot;</span>)
-                .iter_mut()
-                .for_each(|gateway| {
-                    <span class="kw">if </span>gateway[<span class="string">&quot;node_pub_key&quot;</span>] == <span class="macro">json!</span>(active_gateway.node_pub_key) {
-                        gateway[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">true</span>);
-                    } <span class="kw">else </span>{
-                        gateway[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">false</span>);
-                    }
-                });
-            <span class="prelude-val">Ok</span>(serde_json::to_value(gateways_json).unwrap())
+            <span class="prelude-val">Ok</span>(<span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateways))
         }
-        ClientCmd::SwitchGateway { gateway_id } =&gt; {
+        ClientCmd::UpdateGatewayCache =&gt; {
             <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-            lightning_module.set_active_gateway(<span class="kw-2">&amp;</span>gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>gateway = lightning_module.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span><span class="kw-2">mut </span>gateway_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateway);
-            gateway_json[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">true</span>);
-            <span class="prelude-val">Ok</span>(serde_json::to_value(gateway_json).unwrap())
+            lightning_module.update_gateway_cache(<span class="bool-val">true</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>gateways = lightning_module.list_gateways().<span class="kw">await</span>;
+            <span class="kw">if </span>gateways.is_empty() {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(serde_json::to_value(Vec::&lt;String&gt;::new()).unwrap());
+            }
+
+            <span class="prelude-val">Ok</span>(<span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateways))
         }
         ClientCmd::DepositAddress { timeout } =&gt; {
             <span class="kw">let </span>(operation_id, address) = client
@@ -1237,8 +1219,8 @@
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(<span class="macro">serde_json::json! </span>{
                 {
-                    <span class="string">&quot;address&quot;</span>: address,
-                    <span class="string">&quot;operation_id&quot;</span>: operation_id,
+                    <span class="string">"address"</span>: address,
+                    <span class="string">"operation_id"</span>: operation_id,
                 }
             })
         }
@@ -1250,7 +1232,7 @@
                 </span>.into_stream();
 
             <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
-                <span class="macro">info!</span>(<span class="string">&quot;Update: {update:?}&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"Update: {update:?}"</span>);
             }
 
             <span class="prelude-val">Ok</span>(serde_json::to_value(()).unwrap())
@@ -1265,25 +1247,25 @@
             <span class="prelude-val">Ok</span>(serde_json::to_value(()).unwrap())
         }
         ClientCmd::Restore { .. } =&gt; {
-            <span class="macro">panic!</span>(<span class="string">&quot;Has to be handled before initializing client&quot;</span>)
+            <span class="macro">panic!</span>(<span class="string">"Has to be handled before initializing client"</span>)
         }
         ClientCmd::PrintSecret =&gt; {
             <span class="kw">let </span>entropy = client.get_decoded_client_secret::&lt;Vec&lt;u8&gt;&gt;().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>mnemonic = Mnemonic::from_entropy(<span class="kw-2">&amp;</span>entropy)<span class="question-mark">?</span>;
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
-                <span class="string">&quot;secret&quot;</span>: mnemonic,
+                <span class="string">"secret"</span>: mnemonic,
             }))
         }
         ClientCmd::ListOperations { limit } =&gt; {
             <span class="attr">#[derive(Serialize)]
-            #[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+            #[serde(rename_all = <span class="string">"snake_case"</span>)]
             </span><span class="kw">struct </span>OperationOutput {
                 id: OperationId,
                 creation_time: String,
                 operation_kind: String,
                 operation_meta: serde_json::Value,
-                <span class="attr">#[serde(skip_serializing_if = <span class="string">&quot;Option::is_none&quot;</span>)]
+                <span class="attr">#[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>)]
                 </span>outcome: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;,
             }
 
@@ -1299,12 +1281,12 @@
                     <span class="kw">let </span>creation_time = OffsetDateTime::from_unix_timestamp(
                         k.creation_time
                             .duration_since(UNIX_EPOCH)
-                            .expect(<span class="string">&quot;Couldn&#39;t convert time from SystemTime to timestamp&quot;</span>)
+                            .expect(<span class="string">"Couldn't convert time from SystemTime to timestamp"</span>)
                             .as_secs() <span class="kw">as </span>i64,
                     )
-                    .expect(<span class="string">&quot;Couldn&#39;t convert time from SystemTime to OffsetDateTime&quot;</span>)
+                    .expect(<span class="string">"Couldn't convert time from SystemTime to OffsetDateTime"</span>)
                     .format(<span class="kw-2">&amp;</span>iso8601::Iso8601::&lt;ISO8601_CONFIG&gt;)
-                    .expect(<span class="string">&quot;Couldn&#39;t format OffsetDateTime as ISO8601&quot;</span>);
+                    .expect(<span class="string">"Couldn't format OffsetDateTime as ISO8601"</span>);
 
                     OperationOutput {
                         id: k.operation_id,
@@ -1317,13 +1299,13 @@
                 .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
-                <span class="string">&quot;operations&quot;</span>: operations,
+                <span class="string">"operations"</span>: operations,
             }))
         }
         ClientCmd::Withdraw { amount, address } =&gt; {
             <span class="kw">let </span>wallet_module = client.get_first_module::&lt;WalletClientModule&gt;();
             <span class="kw">let </span>(amount, fees) = <span class="kw">match </span>amount {
-                <span class="comment">// If the amount is &quot;all&quot;, then we need to subtract the fees from
+                <span class="comment">// If the amount is "all", then we need to subtract the fees from
                 // the amount we are withdrawing
                 </span>BitcoinAmountOrAll::All =&gt; {
                     <span class="kw">let </span>balance =
@@ -1333,7 +1315,7 @@
                         .<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">let </span>amount = balance.checked_sub(fees.amount());
                     <span class="kw">if </span>amount.is_none() {
-                        <span class="macro">bail!</span>(<span class="string">&quot;Not enough funds to pay fees&quot;</span>);
+                        <span class="macro">bail!</span>(<span class="string">"Not enough funds to pay fees"</span>);
                     }
                     (amount.unwrap(), fees)
                 }
@@ -1346,7 +1328,7 @@
             };
             <span class="kw">let </span>absolute_fees = fees.amount();
 
-            <span class="macro">info!</span>(<span class="string">&quot;Attempting withdraw with fees: {fees:?}&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">"Attempting withdraw with fees: {fees:?}"</span>);
 
             <span class="kw">let </span>operation_id = wallet_module.withdraw(address, amount, fees, ()).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1356,44 +1338,44 @@
                 </span>.into_stream();
 
             <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
-                <span class="macro">info!</span>(<span class="string">&quot;Update: {update:?}&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"Update: {update:?}"</span>);
 
                 <span class="kw">match </span>update {
                     WithdrawState::Succeeded(txid) =&gt; {
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
-                            <span class="string">&quot;txid&quot;</span>: txid.to_hex(),
-                            <span class="string">&quot;fees_sat&quot;</span>: absolute_fees.to_sat(),
+                            <span class="string">"txid"</span>: txid.to_hex(),
+                            <span class="string">"fees_sat"</span>: absolute_fees.to_sat(),
                         }));
                     }
                     WithdrawState::Failed(e) =&gt; {
-                        <span class="macro">bail!</span>(<span class="string">&quot;Withdraw failed: {e}&quot;</span>);
+                        <span class="macro">bail!</span>(<span class="string">"Withdraw failed: {e}"</span>);
                     }
                     <span class="kw">_ </span>=&gt; {}
                 }
             }
 
-            <span class="macro">unreachable!</span>(<span class="string">&quot;Update stream ended without outcome&quot;</span>);
+            <span class="macro">unreachable!</span>(<span class="string">"Update stream ended without outcome"</span>);
         }
         ClientCmd::DiscoverVersion =&gt; {
-            <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({ <span class="string">&quot;versions&quot;</span>: client.discover_common_api_version().<span class="kw">await</span><span class="question-mark">? </span>}))
+            <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({ <span class="string">"versions"</span>: client.discover_common_api_version(<span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">? </span>}))
         }
         ClientCmd::Module { module, args } =&gt; {
             <span class="kw">let </span>module_instance_id = <span class="kw">match </span>module {
                 ModuleSelector::Id(id) =&gt; id,
                 ModuleSelector::Kind(kind) =&gt; client
                     .get_first_instance(<span class="kw-2">&amp;</span>kind)
-                    .context(<span class="string">&quot;No module with this kind found&quot;</span>)<span class="question-mark">?</span>,
+                    .context(<span class="string">"No module with this kind found"</span>)<span class="question-mark">?</span>,
             };
 
             client
                 .get_module_client_dyn(module_instance_id)
-                .context(<span class="string">&quot;Module not found&quot;</span>)<span class="question-mark">?
+                .context(<span class="string">"Module not found"</span>)<span class="question-mark">?
                 </span>.handle_cli_command(<span class="kw-2">&amp;</span>args)
                 .<span class="kw">await
         </span>}
         ClientCmd::Config =&gt; {
             <span class="kw">let </span>config = client.get_config_json();
-            <span class="prelude-val">Ok</span>(serde_json::to_value(config).expect(<span class="string">&quot;Client config is serializable&quot;</span>))
+            <span class="prelude-val">Ok</span>(serde_json::to_value(config).expect(<span class="string">"Client config is serializable"</span>))
         }
     }
 }
@@ -1406,28 +1388,28 @@
     <span class="kw">let </span>info = info.trim();
     <span class="kw">match </span>lightning_invoice::Bolt11Invoice::from_str(info) {
         <span class="prelude-val">Ok</span>(invoice) =&gt; {
-            <span class="macro">debug!</span>(<span class="string">&quot;Parsed parameter as bolt11 invoice: {invoice}&quot;</span>);
+            <span class="macro">debug!</span>(<span class="string">"Parsed parameter as bolt11 invoice: {invoice}"</span>);
             <span class="kw">match </span>(invoice.amount_milli_satoshis(), amount) {
                 (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; {
-                    <span class="macro">bail!</span>(<span class="string">&quot;Amount specified in both invoice and command line&quot;</span>)
+                    <span class="macro">bail!</span>(<span class="string">"Amount specified in both invoice and command line"</span>)
                 }
                 (<span class="prelude-val">None</span>, <span class="kw">_</span>) =&gt; {
-                    <span class="macro">bail!</span>(<span class="string">&quot;We don&#39;t support invoices without an amount&quot;</span>)
+                    <span class="macro">bail!</span>(<span class="string">"We don't support invoices without an amount"</span>)
                 }
                 <span class="kw">_ </span>=&gt; {}
             };
             <span class="prelude-val">Ok</span>(invoice)
         }
         <span class="prelude-val">Err</span>(e) =&gt; {
-            <span class="kw">let </span>lnurl = <span class="kw">if </span>info.to_lowercase().starts_with(<span class="string">&quot;lnurl&quot;</span>) {
+            <span class="kw">let </span>lnurl = <span class="kw">if </span>info.to_lowercase().starts_with(<span class="string">"lnurl"</span>) {
                 lnurl::lnurl::LnUrl::from_str(info)<span class="question-mark">?
-            </span>} <span class="kw">else if </span>info.contains(<span class="string">&#39;@&#39;</span>) {
+            </span>} <span class="kw">else if </span>info.contains(<span class="string">'@'</span>) {
                 lnurl::lightning_address::LightningAddress::from_str(info)<span class="question-mark">?</span>.lnurl()
             } <span class="kw">else </span>{
-                <span class="macro">bail!</span>(<span class="string">&quot;Invalid invoice or lnurl: {e:?}&quot;</span>);
+                <span class="macro">bail!</span>(<span class="string">"Invalid invoice or lnurl: {e:?}"</span>);
             };
-            <span class="macro">debug!</span>(<span class="string">&quot;Parsed parameter as lnurl: {lnurl:?}&quot;</span>);
-            <span class="kw">let </span>amount = amount.context(<span class="string">&quot;When using a lnurl, an amount must be specified&quot;</span>)<span class="question-mark">?</span>;
+            <span class="macro">debug!</span>(<span class="string">"Parsed parameter as lnurl: {lnurl:?}"</span>);
+            <span class="kw">let </span>amount = amount.context(<span class="string">"When using a lnurl, an amount must be specified"</span>)<span class="question-mark">?</span>;
             <span class="kw">let </span>async_client = lnurl::AsyncClient::from_client(reqwest::Client::new());
             <span class="kw">let </span>response = async_client.make_request(<span class="kw-2">&amp;</span>lnurl.url).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">match </span>response {
@@ -1440,7 +1422,7 @@
                     <span class="prelude-val">Ok</span>(invoice)
                 }
                 other =&gt; {
-                    <span class="macro">bail!</span>(<span class="string">&quot;Unexpected response from lnurl: {other:?}&quot;</span>);
+                    <span class="macro">bail!</span>(<span class="string">"Unexpected response from lnurl: {other:?}"</span>);
                 }
             }
         }
@@ -1448,13 +1430,12 @@
 }
 
 <span class="kw">async fn </span>wait_for_ln_payment(
-    client: <span class="kw-2">&amp;</span>ClientArc,
+    client: <span class="kw-2">&amp;</span>ClientHandle,
     payment_type: PayType,
     contract_id: ContractId,
     return_on_funding: bool,
 ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;&gt; {
     <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-    lightning_module.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">match </span>payment_type {
         PayType::Internal(operation_id) =&gt; {
@@ -1477,25 +1458,25 @@
                     }
                     InternalPayState::RefundSuccess { out_points, error } =&gt; {
                         <span class="kw">let </span>e = <span class="macro">format!</span>(
-                            <span class="string">&quot;Internal payment failed. A refund was issued to {:?} Error: {error}&quot;</span>,
+                            <span class="string">"Internal payment failed. A refund was issued to {:?} Error: {error}"</span>,
                             out_points
                         );
-                        <span class="macro">bail!</span>(<span class="string">&quot;{e}&quot;</span>);
+                        <span class="macro">bail!</span>(<span class="string">"{e}"</span>);
                     }
                     InternalPayState::UnexpectedError(e) =&gt; {
-                        <span class="macro">bail!</span>(<span class="string">&quot;{e}&quot;</span>);
+                        <span class="macro">bail!</span>(<span class="string">"{e}"</span>);
                     }
                     InternalPayState::Funding <span class="kw">if </span>return_on_funding =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
                     InternalPayState::Funding =&gt; {}
                     InternalPayState::RefundError {
                         error_message,
                         error,
-                    } =&gt; <span class="macro">bail!</span>(<span class="string">&quot;RefundError: {error_message} {error}&quot;</span>),
+                    } =&gt; <span class="macro">bail!</span>(<span class="string">"RefundError: {error_message} {error}"</span>),
                     InternalPayState::FundingFailed { error } =&gt; {
-                        <span class="macro">bail!</span>(<span class="string">&quot;FundingFailed: {error}&quot;</span>)
+                        <span class="macro">bail!</span>(<span class="string">"FundingFailed: {error}"</span>)
                     }
                 }
-                <span class="macro">info!</span>(<span class="string">&quot;Update: {update:?}&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"Update: {update:?}"</span>);
             }
         }
         PayType::Lightning(operation_id) =&gt; {
@@ -1517,7 +1498,7 @@
                         ));
                     }
                     LnPayState::Refunded { gateway_error } =&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;{gateway_error}&quot;</span>);
+                        <span class="macro">info!</span>(<span class="string">"{gateway_error}"</span>);
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(get_note_summary(client).<span class="kw">await</span><span class="question-mark">?</span>));
                     }
                     LnPayState::Created
@@ -1527,17 +1508,17 @@
                     LnPayState::Funded <span class="kw">if </span>return_on_funding =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
                     LnPayState::Funded =&gt; {}
                     LnPayState::UnexpectedError { error_message } =&gt; {
-                        <span class="macro">bail!</span>(<span class="string">&quot;UnexpectedError: {error_message}&quot;</span>)
+                        <span class="macro">bail!</span>(<span class="string">"UnexpectedError: {error_message}"</span>)
                     }
                 }
-                <span class="macro">info!</span>(<span class="string">&quot;Update: {update:?}&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"Update: {update:?}"</span>);
             }
         }
     };
-    <span class="macro">bail!</span>(<span class="string">&quot;Lightning Payment failed&quot;</span>)
+    <span class="macro">bail!</span>(<span class="string">"Lightning Payment failed"</span>)
 }
 
-<span class="kw">async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientArc) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
+<span class="kw">async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientHandle) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
     <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;();
     <span class="kw">let </span>wallet_client = client.get_first_module::&lt;WalletClientModule&gt;();
     <span class="kw">let </span>summary = mint_client
@@ -1560,8 +1541,17 @@
     .unwrap())
 }
 
+<span class="kw">async fn </span>get_gateway(
+    client: <span class="kw-2">&amp;</span>ClientHandle,
+    gateway_id: <span class="prelude-ty">Option</span>&lt;secp256k1::PublicKey&gt;,
+) -&gt; <span class="prelude-ty">Option</span>&lt;LightningGateway&gt; {
+    <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+    <span class="kw">let </span>gateway_id = gateway_id.or(<span class="prelude-val">None</span>)<span class="question-mark">?</span>;
+    lightning_module.select_gateway(<span class="kw-2">&amp;</span>gateway_id).<span class="kw">await
+</span>}
+
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">struct </span>InfoResponse {
     federation_id: FederationId,
     network: Network,
@@ -1572,7 +1562,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">struct </span>PayInvoiceResponse {
     operation_id: OperationId,
     contract_id: ContractId,

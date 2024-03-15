@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimintd/src/fedimintd.rs`."><title>fedimintd.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimintd" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimintd/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimintd/src/fedimintd.rs`."><title>fedimintd.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimintd" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimintd/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -380,51 +382,51 @@
 <span class="doccomment">/// Time we will wait before forcefully shutting down tasks
 </span><span class="kw">const </span>SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(<span class="number">10</span>);
 
-<span class="kw">pub const </span>FM_EXTRA_DKG_META_VAR: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_EXTRA_DKG_META&quot;</span>;
+<span class="kw">pub const </span>FM_EXTRA_DKG_META_VAR: <span class="kw-2">&amp;</span>str = <span class="string">"FM_EXTRA_DKG_META"</span>;
 
 <span class="attr">#[derive(Parser)]
 #[command(version)]
 </span><span class="kw">pub struct </span>ServerOpts {
     <span class="doccomment">/// Path to folder containing federation config files
-    </span><span class="attr">#[arg(long = <span class="string">&quot;data-dir&quot;</span>, env = <span class="string">&quot;FM_DATA_DIR&quot;</span>)]
+    </span><span class="attr">#[arg(long = <span class="string">"data-dir"</span>, env = <span class="string">"FM_DATA_DIR"</span>)]
     </span><span class="kw">pub </span>data_dir: PathBuf,
     <span class="doccomment">/// Password to encrypt sensitive config files
     </span><span class="comment">// TODO: should probably never send password to the server directly, rather send the hash via
     // the API
-    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
+    </span><span class="attr">#[arg(long, env = <span class="string">"FM_PASSWORD"</span>)]
     </span><span class="kw">pub </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="doccomment">/// Enable tokio console logging
-    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_TOKIO_CONSOLE_BIND&quot;</span>)]
+    </span><span class="attr">#[arg(long, env = <span class="string">"FM_TOKIO_CONSOLE_BIND"</span>)]
     </span><span class="kw">pub </span>tokio_console_bind: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
     <span class="doccomment">/// Enable telemetry logging
-    </span><span class="attr">#[arg(long, default_value = <span class="string">&quot;false&quot;</span>)]
+    </span><span class="attr">#[arg(long, default_value = <span class="string">"false"</span>)]
     </span><span class="kw">pub </span>with_telemetry: bool,
 
     <span class="doccomment">/// Address we bind to for federation communication
-    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_BIND_P2P&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:8173&quot;</span>)]
+    </span><span class="attr">#[arg(long, env = <span class="string">"FM_BIND_P2P"</span>, default_value = <span class="string">"127.0.0.1:8173"</span>)]
     </span>bind_p2p: SocketAddr,
     <span class="doccomment">/// Our external address for communicating with our peers
-    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_P2P_URL&quot;</span>, default_value = <span class="string">&quot;fedimint://127.0.0.1:8173&quot;</span>)]
+    </span><span class="attr">#[arg(long, env = <span class="string">"FM_P2P_URL"</span>, default_value = <span class="string">"fedimint://127.0.0.1:8173"</span>)]
     </span>p2p_url: SafeUrl,
     <span class="doccomment">/// Address we bind to for exposing the API
-    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_BIND_API&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:8174&quot;</span>)]
+    </span><span class="attr">#[arg(long, env = <span class="string">"FM_BIND_API"</span>, default_value = <span class="string">"127.0.0.1:8174"</span>)]
     </span>bind_api: SocketAddr,
     <span class="doccomment">/// Our API address for clients to connect to us
-    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_API_URL&quot;</span>, default_value = <span class="string">&quot;ws://127.0.0.1:8174&quot;</span>)]
+    </span><span class="attr">#[arg(long, env = <span class="string">"FM_API_URL"</span>, default_value = <span class="string">"ws://127.0.0.1:8174"</span>)]
     </span>api_url: SafeUrl,
     <span class="doccomment">/// The bitcoin network that fedimint will be running on
-    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_BITCOIN_NETWORK&quot;</span>, default_value = <span class="string">&quot;regtest&quot;</span>)]
+    </span><span class="attr">#[arg(long, env = <span class="string">"FM_BITCOIN_NETWORK"</span>, default_value = <span class="string">"regtest"</span>)]
     </span>network: bitcoin::network::constants::Network,
     <span class="doccomment">/// The bitcoin network that fedimint will be running on
-    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_FINALITY_DELAY&quot;</span>, default_value = <span class="string">&quot;10&quot;</span>)]
+    </span><span class="attr">#[arg(long, env = <span class="string">"FM_FINALITY_DELAY"</span>, default_value = <span class="string">"10"</span>)]
     </span>finality_delay: u32,
 
-    <span class="attr">#[arg(long, env = <span class="string">&quot;FM_BIND_METRICS_API&quot;</span>)]
+    <span class="attr">#[arg(long, env = <span class="string">"FM_BIND_METRICS_API"</span>)]
     </span>bind_metrics_api: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
 
     <span class="doccomment">/// List of default meta values to use during config generation (format:
     /// `key1=value1,key2=value,...`)
-    </span><span class="attr">#[arg(long, env = FM_EXTRA_DKG_META_VAR, value_parser = parse_map, default_value=<span class="string">&quot;&quot;</span>)]
+    </span><span class="attr">#[arg(long, env = FM_EXTRA_DKG_META_VAR, value_parser = parse_map, default_value=<span class="string">""</span>)]
     </span>extra_dkg_meta: BTreeMap&lt;String, String&gt;,
 }
 
@@ -435,12 +437,12 @@
         <span class="kw">return </span><span class="prelude-val">Ok</span>(map);
     }
 
-    <span class="kw">for </span>pair <span class="kw">in </span>s.split(<span class="string">&#39;,&#39;</span>) {
-        <span class="kw">let </span>parts: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = pair.split(<span class="string">&#39;=&#39;</span>).collect();
+    <span class="kw">for </span>pair <span class="kw">in </span>s.split(<span class="string">','</span>) {
+        <span class="kw">let </span>parts: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = pair.split(<span class="string">'='</span>).collect();
         <span class="kw">if </span>parts.len() == <span class="number">2 </span>{
             map.insert(parts[<span class="number">0</span>].to_string(), parts[<span class="number">1</span>].to_string());
         } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">&quot;Invalid pair in map: {}&quot;</span>, pair));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Invalid pair in map: {}"</span>, pair));
         }
     }
     <span class="prelude-val">Ok</span>(map)
@@ -466,7 +468,7 @@
 /// // Note: not called `main` to avoid rustdoc executing it
 /// // #[tokio::main]
 /// async fn main_() -&gt; anyhow::Result&lt;()&gt; {
-///     Fedimintd::new(env!(&quot;FEDIMINT_BUILD_CODE_VERSION&quot;))?
+///     Fedimintd::new(env!("FEDIMINT_BUILD_CODE_VERSION"))?
 ///         // use `.with_default_modules()` to avoid having
 ///         // to import these manually
 ///         .with_module(WalletInit)
@@ -488,14 +490,14 @@
     /// Like [`Self::new`] but with an ability to customize version strings.
     </span><span class="kw">pub fn </span>new(version_hash: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;Fedimintd&gt; {
         <span class="macro">assert_eq!</span>(
-            <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>).len(),
+            <span class="macro">env!</span>(<span class="string">"FEDIMINT_BUILD_CODE_VERSION"</span>).len(),
             version_hash.len(),
-            <span class="string">&quot;version_hash must have an expected length&quot;
+            <span class="string">"version_hash must have an expected length"
         </span>);
 
         handle_version_hash_command(version_hash);
 
-        <span class="macro">info!</span>(<span class="string">&quot;Starting fedimintd (version_hash: {})&quot;</span>, version_hash);
+        <span class="macro">info!</span>(<span class="string">"Starting fedimintd (version_hash: {})"</span>, version_hash);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             server_gens: ServerModuleInitRegistry::new(),
@@ -507,7 +509,7 @@
     <span class="doccomment">/// Attach a server module to the Fedimintd instance
     </span><span class="kw">pub fn </span>with_module&lt;T&gt;(<span class="kw-2">mut </span><span class="self">self</span>, gen: T) -&gt; <span class="self">Self
     </span><span class="kw">where
-        </span>T: ServerModuleInit + <span class="lifetime">&#39;static </span>+ Send + Sync,
+        </span>T: ServerModuleInit + <span class="lifetime">'static </span>+ Send + Sync,
     {
         <span class="self">self</span>.server_gens.attach(gen);
         <span class="self">self
@@ -554,15 +556,15 @@
         <span class="kw">let </span>root_task_group = TaskGroup::new();
         root_task_group.install_kill_handler();
 
-        <span class="kw">let </span>timing_total_runtime = timing::TimeReporter::new(<span class="string">&quot;total-runtime&quot;</span>).info();
+        <span class="kw">let </span>timing_total_runtime = timing::TimeReporter::new(<span class="string">"total-runtime"</span>).info();
 
-        <span class="comment">// DO NOT REMOVE, or spawn_local tasks won&#39;t run anymore
+        <span class="comment">// DO NOT REMOVE, or spawn_local tasks won't run anymore
         </span><span class="kw">let </span>local_task_set = tokio::task::LocalSet::new();
         <span class="kw">let </span>_guard = local_task_set.enter();
 
         <span class="kw">let </span>task_group = root_task_group.clone();
         root_task_group
-            .spawn_local(<span class="string">&quot;main&quot;</span>, <span class="kw">move </span>|_task_handle| <span class="kw">async move </span>{
+            .spawn_local(<span class="string">"main"</span>, <span class="kw">move </span>|_task_handle| <span class="kw">async move </span>{
                 <span class="kw">match </span>run(
                     opts,
                     task_group.clone(),
@@ -574,7 +576,7 @@
                 </span>{
                     <span class="prelude-val">Ok</span>(()) =&gt; {}
                     <span class="prelude-val">Err</span>(error) =&gt; {
-                        <span class="macro">error!</span>(<span class="question-mark">?</span>error, <span class="string">&quot;Main task returned error, shutting down&quot;</span>);
+                        <span class="macro">error!</span>(<span class="question-mark">?</span>error, <span class="string">"Main task returned error, shutting down"</span>);
                         task_group.shutdown();
                     }
                 }
@@ -588,26 +590,26 @@
                 .<span class="kw">await
                 </span>.then(|<span class="kw">_</span>| <span class="kw">async </span>{
                     <span class="kw">let </span>shutdown_seconds = SHUTDOWN_TIMEOUT.as_secs();
-                    <span class="macro">info!</span>(<span class="string">&quot;Shutdown called, waiting {shutdown_seconds}s for main task to finish&quot;</span>);
+                    <span class="macro">info!</span>(<span class="string">"Shutdown called, waiting {shutdown_seconds}s for main task to finish"</span>);
                     sleep(SHUTDOWN_TIMEOUT).<span class="kw">await</span>;
                 });
 
         <span class="macro">select! </span>{
             <span class="kw">_ </span>= shutdown_future =&gt; {
-                <span class="macro">debug!</span>(<span class="string">&quot;Terminating main task&quot;</span>);
+                <span class="macro">debug!</span>(<span class="string">"Terminating main task"</span>);
             }
             <span class="kw">_ </span>= local_task_set =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;local_task_set finished before shutdown was called&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">"local_task_set finished before shutdown was called"</span>);
             }
         }
 
         <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = root_task_group.join_all(<span class="prelude-val">Some</span>(SHUTDOWN_TIMEOUT)).<span class="kw">await </span>{
-            <span class="macro">error!</span>(<span class="question-mark">?</span>err, <span class="string">&quot;Error while shutting down task group&quot;</span>);
+            <span class="macro">error!</span>(<span class="question-mark">?</span>err, <span class="string">"Error while shutting down task group"</span>);
         }
 
-        <span class="macro">info!</span>(<span class="string">&quot;Shutdown complete&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"Shutdown complete"</span>);
 
-        <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+        <span class="attr">#[cfg(feature = <span class="string">"telemetry"</span>)]
         </span>opentelemetry::global::shutdown_tracer_provider();
 
         drop(timing_total_runtime);
@@ -686,7 +688,7 @@
     <span class="kw-2">mut </span>task_group: TaskGroup,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>rx = fedimint_metrics::run_api_server(bind_address, <span class="kw-2">&amp;mut </span>task_group).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(<span class="string">&quot;Metrics API listening on {bind_address}&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Metrics API listening on {bind_address}"</span>);
     rx.<span class="kw">await</span>;
     <span class="prelude-val">Ok</span>(())
 }

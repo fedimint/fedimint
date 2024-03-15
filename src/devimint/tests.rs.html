@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `devimint/src/tests.rs`."><title>tests.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../devimint/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `devimint/src/tests.rs`."><title>tests.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../devimint/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1929,7 +1931,320 @@
 <a href="#1929" id="1929">1929</a>
 <a href="#1930" id="1930">1930</a>
 <a href="#1931" id="1931">1931</a>
+<a href="#1932" id="1932">1932</a>
+<a href="#1933" id="1933">1933</a>
+<a href="#1934" id="1934">1934</a>
+<a href="#1935" id="1935">1935</a>
+<a href="#1936" id="1936">1936</a>
+<a href="#1937" id="1937">1937</a>
+<a href="#1938" id="1938">1938</a>
+<a href="#1939" id="1939">1939</a>
+<a href="#1940" id="1940">1940</a>
+<a href="#1941" id="1941">1941</a>
+<a href="#1942" id="1942">1942</a>
+<a href="#1943" id="1943">1943</a>
+<a href="#1944" id="1944">1944</a>
+<a href="#1945" id="1945">1945</a>
+<a href="#1946" id="1946">1946</a>
+<a href="#1947" id="1947">1947</a>
+<a href="#1948" id="1948">1948</a>
+<a href="#1949" id="1949">1949</a>
+<a href="#1950" id="1950">1950</a>
+<a href="#1951" id="1951">1951</a>
+<a href="#1952" id="1952">1952</a>
+<a href="#1953" id="1953">1953</a>
+<a href="#1954" id="1954">1954</a>
+<a href="#1955" id="1955">1955</a>
+<a href="#1956" id="1956">1956</a>
+<a href="#1957" id="1957">1957</a>
+<a href="#1958" id="1958">1958</a>
+<a href="#1959" id="1959">1959</a>
+<a href="#1960" id="1960">1960</a>
+<a href="#1961" id="1961">1961</a>
+<a href="#1962" id="1962">1962</a>
+<a href="#1963" id="1963">1963</a>
+<a href="#1964" id="1964">1964</a>
+<a href="#1965" id="1965">1965</a>
+<a href="#1966" id="1966">1966</a>
+<a href="#1967" id="1967">1967</a>
+<a href="#1968" id="1968">1968</a>
+<a href="#1969" id="1969">1969</a>
+<a href="#1970" id="1970">1970</a>
+<a href="#1971" id="1971">1971</a>
+<a href="#1972" id="1972">1972</a>
+<a href="#1973" id="1973">1973</a>
+<a href="#1974" id="1974">1974</a>
+<a href="#1975" id="1975">1975</a>
+<a href="#1976" id="1976">1976</a>
+<a href="#1977" id="1977">1977</a>
+<a href="#1978" id="1978">1978</a>
+<a href="#1979" id="1979">1979</a>
+<a href="#1980" id="1980">1980</a>
+<a href="#1981" id="1981">1981</a>
+<a href="#1982" id="1982">1982</a>
+<a href="#1983" id="1983">1983</a>
+<a href="#1984" id="1984">1984</a>
+<a href="#1985" id="1985">1985</a>
+<a href="#1986" id="1986">1986</a>
+<a href="#1987" id="1987">1987</a>
+<a href="#1988" id="1988">1988</a>
+<a href="#1989" id="1989">1989</a>
+<a href="#1990" id="1990">1990</a>
+<a href="#1991" id="1991">1991</a>
+<a href="#1992" id="1992">1992</a>
+<a href="#1993" id="1993">1993</a>
+<a href="#1994" id="1994">1994</a>
+<a href="#1995" id="1995">1995</a>
+<a href="#1996" id="1996">1996</a>
+<a href="#1997" id="1997">1997</a>
+<a href="#1998" id="1998">1998</a>
+<a href="#1999" id="1999">1999</a>
+<a href="#2000" id="2000">2000</a>
+<a href="#2001" id="2001">2001</a>
+<a href="#2002" id="2002">2002</a>
+<a href="#2003" id="2003">2003</a>
+<a href="#2004" id="2004">2004</a>
+<a href="#2005" id="2005">2005</a>
+<a href="#2006" id="2006">2006</a>
+<a href="#2007" id="2007">2007</a>
+<a href="#2008" id="2008">2008</a>
+<a href="#2009" id="2009">2009</a>
+<a href="#2010" id="2010">2010</a>
+<a href="#2011" id="2011">2011</a>
+<a href="#2012" id="2012">2012</a>
+<a href="#2013" id="2013">2013</a>
+<a href="#2014" id="2014">2014</a>
+<a href="#2015" id="2015">2015</a>
+<a href="#2016" id="2016">2016</a>
+<a href="#2017" id="2017">2017</a>
+<a href="#2018" id="2018">2018</a>
+<a href="#2019" id="2019">2019</a>
+<a href="#2020" id="2020">2020</a>
+<a href="#2021" id="2021">2021</a>
+<a href="#2022" id="2022">2022</a>
+<a href="#2023" id="2023">2023</a>
+<a href="#2024" id="2024">2024</a>
+<a href="#2025" id="2025">2025</a>
+<a href="#2026" id="2026">2026</a>
+<a href="#2027" id="2027">2027</a>
+<a href="#2028" id="2028">2028</a>
+<a href="#2029" id="2029">2029</a>
+<a href="#2030" id="2030">2030</a>
+<a href="#2031" id="2031">2031</a>
+<a href="#2032" id="2032">2032</a>
+<a href="#2033" id="2033">2033</a>
+<a href="#2034" id="2034">2034</a>
+<a href="#2035" id="2035">2035</a>
+<a href="#2036" id="2036">2036</a>
+<a href="#2037" id="2037">2037</a>
+<a href="#2038" id="2038">2038</a>
+<a href="#2039" id="2039">2039</a>
+<a href="#2040" id="2040">2040</a>
+<a href="#2041" id="2041">2041</a>
+<a href="#2042" id="2042">2042</a>
+<a href="#2043" id="2043">2043</a>
+<a href="#2044" id="2044">2044</a>
+<a href="#2045" id="2045">2045</a>
+<a href="#2046" id="2046">2046</a>
+<a href="#2047" id="2047">2047</a>
+<a href="#2048" id="2048">2048</a>
+<a href="#2049" id="2049">2049</a>
+<a href="#2050" id="2050">2050</a>
+<a href="#2051" id="2051">2051</a>
+<a href="#2052" id="2052">2052</a>
+<a href="#2053" id="2053">2053</a>
+<a href="#2054" id="2054">2054</a>
+<a href="#2055" id="2055">2055</a>
+<a href="#2056" id="2056">2056</a>
+<a href="#2057" id="2057">2057</a>
+<a href="#2058" id="2058">2058</a>
+<a href="#2059" id="2059">2059</a>
+<a href="#2060" id="2060">2060</a>
+<a href="#2061" id="2061">2061</a>
+<a href="#2062" id="2062">2062</a>
+<a href="#2063" id="2063">2063</a>
+<a href="#2064" id="2064">2064</a>
+<a href="#2065" id="2065">2065</a>
+<a href="#2066" id="2066">2066</a>
+<a href="#2067" id="2067">2067</a>
+<a href="#2068" id="2068">2068</a>
+<a href="#2069" id="2069">2069</a>
+<a href="#2070" id="2070">2070</a>
+<a href="#2071" id="2071">2071</a>
+<a href="#2072" id="2072">2072</a>
+<a href="#2073" id="2073">2073</a>
+<a href="#2074" id="2074">2074</a>
+<a href="#2075" id="2075">2075</a>
+<a href="#2076" id="2076">2076</a>
+<a href="#2077" id="2077">2077</a>
+<a href="#2078" id="2078">2078</a>
+<a href="#2079" id="2079">2079</a>
+<a href="#2080" id="2080">2080</a>
+<a href="#2081" id="2081">2081</a>
+<a href="#2082" id="2082">2082</a>
+<a href="#2083" id="2083">2083</a>
+<a href="#2084" id="2084">2084</a>
+<a href="#2085" id="2085">2085</a>
+<a href="#2086" id="2086">2086</a>
+<a href="#2087" id="2087">2087</a>
+<a href="#2088" id="2088">2088</a>
+<a href="#2089" id="2089">2089</a>
+<a href="#2090" id="2090">2090</a>
+<a href="#2091" id="2091">2091</a>
+<a href="#2092" id="2092">2092</a>
+<a href="#2093" id="2093">2093</a>
+<a href="#2094" id="2094">2094</a>
+<a href="#2095" id="2095">2095</a>
+<a href="#2096" id="2096">2096</a>
+<a href="#2097" id="2097">2097</a>
+<a href="#2098" id="2098">2098</a>
+<a href="#2099" id="2099">2099</a>
+<a href="#2100" id="2100">2100</a>
+<a href="#2101" id="2101">2101</a>
+<a href="#2102" id="2102">2102</a>
+<a href="#2103" id="2103">2103</a>
+<a href="#2104" id="2104">2104</a>
+<a href="#2105" id="2105">2105</a>
+<a href="#2106" id="2106">2106</a>
+<a href="#2107" id="2107">2107</a>
+<a href="#2108" id="2108">2108</a>
+<a href="#2109" id="2109">2109</a>
+<a href="#2110" id="2110">2110</a>
+<a href="#2111" id="2111">2111</a>
+<a href="#2112" id="2112">2112</a>
+<a href="#2113" id="2113">2113</a>
+<a href="#2114" id="2114">2114</a>
+<a href="#2115" id="2115">2115</a>
+<a href="#2116" id="2116">2116</a>
+<a href="#2117" id="2117">2117</a>
+<a href="#2118" id="2118">2118</a>
+<a href="#2119" id="2119">2119</a>
+<a href="#2120" id="2120">2120</a>
+<a href="#2121" id="2121">2121</a>
+<a href="#2122" id="2122">2122</a>
+<a href="#2123" id="2123">2123</a>
+<a href="#2124" id="2124">2124</a>
+<a href="#2125" id="2125">2125</a>
+<a href="#2126" id="2126">2126</a>
+<a href="#2127" id="2127">2127</a>
+<a href="#2128" id="2128">2128</a>
+<a href="#2129" id="2129">2129</a>
+<a href="#2130" id="2130">2130</a>
+<a href="#2131" id="2131">2131</a>
+<a href="#2132" id="2132">2132</a>
+<a href="#2133" id="2133">2133</a>
+<a href="#2134" id="2134">2134</a>
+<a href="#2135" id="2135">2135</a>
+<a href="#2136" id="2136">2136</a>
+<a href="#2137" id="2137">2137</a>
+<a href="#2138" id="2138">2138</a>
+<a href="#2139" id="2139">2139</a>
+<a href="#2140" id="2140">2140</a>
+<a href="#2141" id="2141">2141</a>
+<a href="#2142" id="2142">2142</a>
+<a href="#2143" id="2143">2143</a>
+<a href="#2144" id="2144">2144</a>
+<a href="#2145" id="2145">2145</a>
+<a href="#2146" id="2146">2146</a>
+<a href="#2147" id="2147">2147</a>
+<a href="#2148" id="2148">2148</a>
+<a href="#2149" id="2149">2149</a>
+<a href="#2150" id="2150">2150</a>
+<a href="#2151" id="2151">2151</a>
+<a href="#2152" id="2152">2152</a>
+<a href="#2153" id="2153">2153</a>
+<a href="#2154" id="2154">2154</a>
+<a href="#2155" id="2155">2155</a>
+<a href="#2156" id="2156">2156</a>
+<a href="#2157" id="2157">2157</a>
+<a href="#2158" id="2158">2158</a>
+<a href="#2159" id="2159">2159</a>
+<a href="#2160" id="2160">2160</a>
+<a href="#2161" id="2161">2161</a>
+<a href="#2162" id="2162">2162</a>
+<a href="#2163" id="2163">2163</a>
+<a href="#2164" id="2164">2164</a>
+<a href="#2165" id="2165">2165</a>
+<a href="#2166" id="2166">2166</a>
+<a href="#2167" id="2167">2167</a>
+<a href="#2168" id="2168">2168</a>
+<a href="#2169" id="2169">2169</a>
+<a href="#2170" id="2170">2170</a>
+<a href="#2171" id="2171">2171</a>
+<a href="#2172" id="2172">2172</a>
+<a href="#2173" id="2173">2173</a>
+<a href="#2174" id="2174">2174</a>
+<a href="#2175" id="2175">2175</a>
+<a href="#2176" id="2176">2176</a>
+<a href="#2177" id="2177">2177</a>
+<a href="#2178" id="2178">2178</a>
+<a href="#2179" id="2179">2179</a>
+<a href="#2180" id="2180">2180</a>
+<a href="#2181" id="2181">2181</a>
+<a href="#2182" id="2182">2182</a>
+<a href="#2183" id="2183">2183</a>
+<a href="#2184" id="2184">2184</a>
+<a href="#2185" id="2185">2185</a>
+<a href="#2186" id="2186">2186</a>
+<a href="#2187" id="2187">2187</a>
+<a href="#2188" id="2188">2188</a>
+<a href="#2189" id="2189">2189</a>
+<a href="#2190" id="2190">2190</a>
+<a href="#2191" id="2191">2191</a>
+<a href="#2192" id="2192">2192</a>
+<a href="#2193" id="2193">2193</a>
+<a href="#2194" id="2194">2194</a>
+<a href="#2195" id="2195">2195</a>
+<a href="#2196" id="2196">2196</a>
+<a href="#2197" id="2197">2197</a>
+<a href="#2198" id="2198">2198</a>
+<a href="#2199" id="2199">2199</a>
+<a href="#2200" id="2200">2200</a>
+<a href="#2201" id="2201">2201</a>
+<a href="#2202" id="2202">2202</a>
+<a href="#2203" id="2203">2203</a>
+<a href="#2204" id="2204">2204</a>
+<a href="#2205" id="2205">2205</a>
+<a href="#2206" id="2206">2206</a>
+<a href="#2207" id="2207">2207</a>
+<a href="#2208" id="2208">2208</a>
+<a href="#2209" id="2209">2209</a>
+<a href="#2210" id="2210">2210</a>
+<a href="#2211" id="2211">2211</a>
+<a href="#2212" id="2212">2212</a>
+<a href="#2213" id="2213">2213</a>
+<a href="#2214" id="2214">2214</a>
+<a href="#2215" id="2215">2215</a>
+<a href="#2216" id="2216">2216</a>
+<a href="#2217" id="2217">2217</a>
+<a href="#2218" id="2218">2218</a>
+<a href="#2219" id="2219">2219</a>
+<a href="#2220" id="2220">2220</a>
+<a href="#2221" id="2221">2221</a>
+<a href="#2222" id="2222">2222</a>
+<a href="#2223" id="2223">2223</a>
+<a href="#2224" id="2224">2224</a>
+<a href="#2225" id="2225">2225</a>
+<a href="#2226" id="2226">2226</a>
+<a href="#2227" id="2227">2227</a>
+<a href="#2228" id="2228">2228</a>
+<a href="#2229" id="2229">2229</a>
+<a href="#2230" id="2230">2230</a>
+<a href="#2231" id="2231">2231</a>
+<a href="#2232" id="2232">2232</a>
+<a href="#2233" id="2233">2233</a>
+<a href="#2234" id="2234">2234</a>
+<a href="#2235" id="2235">2235</a>
+<a href="#2236" id="2236">2236</a>
+<a href="#2237" id="2237">2237</a>
+<a href="#2238" id="2238">2238</a>
+<a href="#2239" id="2239">2239</a>
+<a href="#2240" id="2240">2240</a>
+<a href="#2241" id="2241">2241</a>
+<a href="#2242" id="2242">2242</a>
+<a href="#2243" id="2243">2243</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
+<span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::str::FromStr;
@@ -1944,6 +2259,7 @@
 <span class="kw">use </span>cln_rpc::primitives::{Amount <span class="kw">as </span>ClnRpcAmount, AmountOrAny};
 <span class="kw">use </span>fedimint_cli::LnInvoiceResponse;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
+<span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>ln_gateway::rpc::GatewayInfo;
 <span class="kw">use </span>semver::VersionReq;
@@ -1968,13 +2284,13 @@
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>Stats {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;min: {:.1}s&quot;</span>, <span class="self">self</span>.min.as_secs_f32())<span class="question-mark">?</span>;
-        <span class="macro">write!</span>(f, <span class="string">&quot;, avg: {:.1}s&quot;</span>, <span class="self">self</span>.avg.as_secs_f32())<span class="question-mark">?</span>;
-        <span class="macro">write!</span>(f, <span class="string">&quot;, median: {:.1}s&quot;</span>, <span class="self">self</span>.median.as_secs_f32())<span class="question-mark">?</span>;
-        <span class="macro">write!</span>(f, <span class="string">&quot;, p90: {:.1}s&quot;</span>, <span class="self">self</span>.p90.as_secs_f32())<span class="question-mark">?</span>;
-        <span class="macro">write!</span>(f, <span class="string">&quot;, max: {:.1}s&quot;</span>, <span class="self">self</span>.max.as_secs_f32())<span class="question-mark">?</span>;
-        <span class="macro">write!</span>(f, <span class="string">&quot;, sum: {:.1}s&quot;</span>, <span class="self">self</span>.sum.as_secs_f32())<span class="question-mark">?</span>;
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"min: {:.1}s"</span>, <span class="self">self</span>.min.as_secs_f32())<span class="question-mark">?</span>;
+        <span class="macro">write!</span>(f, <span class="string">", avg: {:.1}s"</span>, <span class="self">self</span>.avg.as_secs_f32())<span class="question-mark">?</span>;
+        <span class="macro">write!</span>(f, <span class="string">", median: {:.1}s"</span>, <span class="self">self</span>.median.as_secs_f32())<span class="question-mark">?</span>;
+        <span class="macro">write!</span>(f, <span class="string">", p90: {:.1}s"</span>, <span class="self">self</span>.p90.as_secs_f32())<span class="question-mark">?</span>;
+        <span class="macro">write!</span>(f, <span class="string">", max: {:.1}s"</span>, <span class="self">self</span>.max.as_secs_f32())<span class="question-mark">?</span>;
+        <span class="macro">write!</span>(f, <span class="string">", sum: {:.1}s"</span>, <span class="self">self</span>.sum.as_secs_f32())<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 }
@@ -2000,27 +2316,27 @@
 }
 
 <span class="kw">pub async fn </span>log_binary_versions() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="kw">let </span>fedimint_cli_version = <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::get_fedimint_cli_path(), <span class="string">&quot;--version&quot;</span>)
+    <span class="kw">let </span>fedimint_cli_version = <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::get_fedimint_cli_path(), <span class="string">"--version"</span>)
         .out_string()
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="question-mark">?</span>fedimint_cli_version);
-    <span class="kw">let </span>fedimint_cli_version_hash = <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::get_fedimint_cli_path(), <span class="string">&quot;version-hash&quot;</span>)
+    <span class="kw">let </span>fedimint_cli_version_hash = <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::get_fedimint_cli_path(), <span class="string">"version-hash"</span>)
         .out_string()
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="question-mark">?</span>fedimint_cli_version_hash);
-    <span class="kw">let </span>gateway_cli_version = <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::get_gateway_cli_path(), <span class="string">&quot;--version&quot;</span>)
+    <span class="kw">let </span>gateway_cli_version = <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::get_gateway_cli_path(), <span class="string">"--version"</span>)
         .out_string()
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="question-mark">?</span>gateway_cli_version);
-    <span class="kw">let </span>gateway_cli_version_hash = <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::get_gateway_cli_path(), <span class="string">&quot;version-hash&quot;</span>)
+    <span class="kw">let </span>gateway_cli_version_hash = <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::get_gateway_cli_path(), <span class="string">"version-hash"</span>)
         .out_string()
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="question-mark">?</span>gateway_cli_version_hash);
-    <span class="kw">let </span>fedimintd_version_hash = <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::FedimintdCmd, <span class="string">&quot;version-hash&quot;</span>)
+    <span class="kw">let </span>fedimintd_version_hash = <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::FedimintdCmd, <span class="string">"version-hash"</span>)
         .out_string()
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="question-mark">?</span>fedimintd_version_hash);
-    <span class="kw">let </span>gatewayd_version_hash = <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::Gatewayd, <span class="string">&quot;version-hash&quot;</span>)
+    <span class="kw">let </span>gatewayd_version_hash = <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::Gatewayd, <span class="string">"version-hash"</span>)
         .out_string()
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="question-mark">?</span>gatewayd_version_hash);
@@ -2045,33 +2361,35 @@
     <span class="kw">let </span>max_p90_factor = <span class="number">5.0</span>;
     <span class="kw">let </span>p90_median_factor = <span class="number">7</span>;
 
-    <span class="kw">let </span>client = fed.new_joined_client(<span class="string">&quot;latency-tests-client&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"latency-tests-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     client.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
     fed.pegin_client(<span class="number">10_000_000</span>, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// LN operations take longer, we need less iterations
     </span><span class="kw">let </span>iterations = <span class="number">20</span>;
 
+    <span class="kw">let </span>cln_gw_id = gw_cln.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="kw">match </span>r#type {
         LatencyTest::Reissue =&gt; {
-            <span class="macro">info!</span>(<span class="string">&quot;Testing latency of reissue&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">"Testing latency of reissue"</span>);
             <span class="comment">// On AlephBFT session times may lead to high latencies, so we need to run it
             // for enough time to catch up a session end
             </span><span class="kw">let </span>iterations = <span class="number">30</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>reissues = Vec::with_capacity(iterations);
             <span class="kw">for _ in </span><span class="number">0</span>..iterations {
-                <span class="kw">let </span>notes = <span class="macro">cmd!</span>(client, <span class="string">&quot;spend&quot;</span>, <span class="string">&quot;1000000&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;notes&quot;</span>]
+                <span class="kw">let </span>notes = <span class="macro">cmd!</span>(client, <span class="string">"spend"</span>, <span class="string">"1000000"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"notes"</span>]
                     .as_str()
-                    .context(<span class="string">&quot;note must be a string&quot;</span>)<span class="question-mark">?
+                    .context(<span class="string">"note must be a string"</span>)<span class="question-mark">?
                     </span>.to_owned();
 
                 <span class="kw">let </span>start_time = Instant::now();
-                <span class="macro">cmd!</span>(client, <span class="string">&quot;reissue&quot;</span>, notes).run().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="macro">cmd!</span>(client, <span class="string">"reissue"</span>, notes).run().<span class="kw">await</span><span class="question-mark">?</span>;
                 reissues.push(start_time.elapsed());
             }
             <span class="kw">let </span>reissue_stats = stats_for(reissues);
-            <span class="macro">println!</span>(<span class="string">&quot;### LATENCY REISSUE: {reissue_stats}&quot;</span>);
-            <span class="macro">assert!</span>(reissue_stats.median &lt; Duration::from_secs(<span class="number">6</span>));
+            <span class="macro">println!</span>(<span class="string">"### LATENCY REISSUE: {reissue_stats}"</span>);
+            <span class="macro">assert!</span>(reissue_stats.median &lt; Duration::from_secs(<span class="number">10</span>));
 
             <span class="macro">assert!</span>(reissue_stats.p90 &lt; reissue_stats.median * p90_median_factor);
             <span class="macro">assert!</span>(
@@ -2079,7 +2397,7 @@
             );
         }
         LatencyTest::LnSend =&gt; {
-            <span class="macro">info!</span>(<span class="string">&quot;Testing latency of ln send&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">"Testing latency of ln send"</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>ln_sends = Vec::with_capacity(iterations);
             <span class="kw">for _ in </span><span class="number">0</span>..iterations {
                 <span class="kw">let </span>add_invoice = lnd
@@ -2095,7 +2413,7 @@
                 <span class="kw">let </span>invoice = add_invoice.payment_request;
                 <span class="kw">let </span>payment_hash = add_invoice.r_hash;
                 <span class="kw">let </span>start_time = Instant::now();
-                <span class="macro">cmd!</span>(client, <span class="string">&quot;ln-pay&quot;</span>, invoice).run().<span class="kw">await</span><span class="question-mark">?</span>;
+                ln_pay(<span class="kw-2">&amp;</span>client, invoice, cln_gw_id.clone(), <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>invoice_status = lnd
                     .lightning_client_lock()
                     .<span class="kw">await</span><span class="question-mark">?
@@ -2110,8 +2428,8 @@
                 ln_sends.push(start_time.elapsed());
             }
             <span class="kw">let </span>ln_sends_stats = stats_for(ln_sends);
-            <span class="macro">println!</span>(<span class="string">&quot;### LATENCY LN SEND: {ln_sends_stats}&quot;</span>);
-            <span class="macro">assert!</span>(ln_sends_stats.median &lt; Duration::from_secs(<span class="number">6</span>));
+            <span class="macro">println!</span>(<span class="string">"### LATENCY LN SEND: {ln_sends_stats}"</span>);
+            <span class="macro">assert!</span>(ln_sends_stats.median &lt; Duration::from_secs(<span class="number">10</span>));
             <span class="macro">assert!</span>(ln_sends_stats.p90 &lt; ln_sends_stats.median * p90_median_factor);
             <span class="macro">assert!</span>(
                 ln_sends_stats.max.as_secs_f64()
@@ -2119,7 +2437,7 @@
             );
         }
         LatencyTest::LnReceive =&gt; {
-            <span class="macro">info!</span>(<span class="string">&quot;Testing latency of ln receive&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">"Testing latency of ln receive"</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>ln_receives = Vec::with_capacity(iterations);
 
             <span class="comment">// give lnd some funds
@@ -2134,20 +2452,17 @@
                 </span>.into_inner();
 
             <span class="kw">let </span>invoice = add_invoice.payment_request;
-            <span class="macro">cmd!</span>(client, <span class="string">&quot;ln-pay&quot;</span>, invoice).run().<span class="kw">await</span><span class="question-mark">?</span>;
+            ln_pay(<span class="kw-2">&amp;</span>client, invoice, cln_gw_id.clone(), <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">for _ in </span><span class="number">0</span>..iterations {
-                <span class="kw">let </span>invoice = <span class="macro">cmd!</span>(
-                    client,
-                    <span class="string">&quot;ln-invoice&quot;</span>,
-                    <span class="string">&quot;--amount=100000msat&quot;</span>,
-                    <span class="string">&quot;--description=incoming-over-lnd-gw&quot;
-                </span>)
-                .out_json()
-                .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;invoice&quot;</span>]
-                    .as_str()
-                    .context(<span class="string">&quot;invoice must be string&quot;</span>)<span class="question-mark">?
-                    </span>.to_owned();
+                <span class="kw">let </span>invoice = ln_invoice(
+                    <span class="kw-2">&amp;</span>client,
+                    Amount::from_msats(<span class="number">100000</span>),
+                    <span class="string">"latency-over-cln-gw"</span>.to_string(),
+                    cln_gw_id.clone(),
+                )
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.invoice;
 
                 <span class="kw">let </span>start_time = Instant::now();
                 <span class="kw">let </span>payment = lnd
@@ -2171,7 +2486,7 @@
                     .payments
                     .into_iter()
                     .find(|p| p.payment_hash == payment.payment_hash.to_hex())
-                    .context(<span class="string">&quot;payment not in list&quot;</span>)<span class="question-mark">?
+                    .context(<span class="string">"payment not in list"</span>)<span class="question-mark">?
                     </span>.status();
                 <span class="macro">anyhow::ensure!</span>(
                     payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded
@@ -2179,8 +2494,8 @@
                 ln_receives.push(start_time.elapsed());
             }
             <span class="kw">let </span>ln_receives_stats = stats_for(ln_receives);
-            <span class="macro">println!</span>(<span class="string">&quot;### LATENCY LN RECV: {ln_receives_stats}&quot;</span>);
-            <span class="macro">assert!</span>(ln_receives_stats.median &lt; Duration::from_secs(<span class="number">6</span>));
+            <span class="macro">println!</span>(<span class="string">"### LATENCY LN RECV: {ln_receives_stats}"</span>);
+            <span class="macro">assert!</span>(ln_receives_stats.median &lt; Duration::from_secs(<span class="number">10</span>));
             <span class="macro">assert!</span>(ln_receives_stats.p90 &lt; ln_receives_stats.median * p90_median_factor);
             <span class="macro">assert!</span>(
                 ln_receives_stats.max.as_secs_f64()
@@ -2188,74 +2503,74 @@
             );
         }
         LatencyTest::FmPay =&gt; {
-            <span class="macro">info!</span>(<span class="string">&quot;Testing latency of internal payments within a federation&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">"Testing latency of internal payments within a federation"</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>fm_internal_pay = Vec::with_capacity(iterations);
-            <span class="kw">let </span>sender = fed.new_joined_client(<span class="string">&quot;internal-swap-sender&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>sender = fed.new_joined_client(<span class="string">"internal-swap-sender"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
             fed.pegin_client(<span class="number">10_000_000</span>, <span class="kw-2">&amp;</span>sender).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">for _ in </span><span class="number">0</span>..iterations {
                 <span class="kw">let </span>recv = <span class="macro">cmd!</span>(
                     client,
-                    <span class="string">&quot;ln-invoice&quot;</span>,
-                    <span class="string">&quot;--amount=1000000msat&quot;</span>,
-                    <span class="string">&quot;--description=internal-swap-invoice&quot;
+                    <span class="string">"ln-invoice"</span>,
+                    <span class="string">"--amount=1000000msat"</span>,
+                    <span class="string">"--description=internal-swap-invoice"
                 </span>)
                 .out_json()
                 .<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>invoice = recv[<span class="string">&quot;invoice&quot;</span>]
+                <span class="kw">let </span>invoice = recv[<span class="string">"invoice"</span>]
                     .as_str()
-                    .context(<span class="string">&quot;invoice must be string&quot;</span>)<span class="question-mark">?
+                    .context(<span class="string">"invoice must be string"</span>)<span class="question-mark">?
                     </span>.to_owned();
-                <span class="kw">let </span>recv_op = recv[<span class="string">&quot;operation_id&quot;</span>]
+                <span class="kw">let </span>recv_op = recv[<span class="string">"operation_id"</span>]
                     .as_str()
-                    .context(<span class="string">&quot;operation id must be string&quot;</span>)<span class="question-mark">?
+                    .context(<span class="string">"operation id must be string"</span>)<span class="question-mark">?
                     </span>.to_owned();
 
                 <span class="kw">let </span>start_time = Instant::now();
-                <span class="macro">cmd!</span>(sender, <span class="string">&quot;ln-pay&quot;</span>, invoice).run().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="macro">cmd!</span>(client, <span class="string">&quot;await-invoice&quot;</span>, recv_op).run().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="macro">cmd!</span>(sender, <span class="string">"ln-pay"</span>, invoice).run().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="macro">cmd!</span>(client, <span class="string">"await-invoice"</span>, recv_op).run().<span class="kw">await</span><span class="question-mark">?</span>;
                 fm_internal_pay.push(start_time.elapsed());
             }
             <span class="kw">let </span>fm_pay_stats = stats_for(fm_internal_pay);
 
-            <span class="macro">println!</span>(<span class="string">&quot;### LATENCY FM PAY: {fm_pay_stats}&quot;</span>);
-            <span class="macro">assert!</span>(fm_pay_stats.median &lt; Duration::from_secs(<span class="number">12</span>));
+            <span class="macro">println!</span>(<span class="string">"### LATENCY FM PAY: {fm_pay_stats}"</span>);
+            <span class="macro">assert!</span>(fm_pay_stats.median &lt; Duration::from_secs(<span class="number">15</span>));
             <span class="macro">assert!</span>(fm_pay_stats.p90 &lt; fm_pay_stats.median * p90_median_factor);
             <span class="macro">assert!</span>(
                 fm_pay_stats.max.as_secs_f64() &lt; fm_pay_stats.p90.as_secs_f64() * max_p90_factor
             );
         }
         LatencyTest::Restore =&gt; {
-            <span class="macro">info!</span>(<span class="string">&quot;Testing latency of restore&quot;</span>);
-            <span class="kw">let </span>backup_secret = <span class="macro">cmd!</span>(client, <span class="string">&quot;print-secret&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;secret&quot;</span>]
+            <span class="macro">info!</span>(<span class="string">"Testing latency of restore"</span>);
+            <span class="kw">let </span>backup_secret = <span class="macro">cmd!</span>(client, <span class="string">"print-secret"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"secret"</span>]
                 .as_str()
                 .map(ToOwned::to_owned)
                 .unwrap();
             <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
             <span class="kw">let </span>start_time = Instant::now();
-            <span class="kw">if </span>VersionReq::parse(<span class="string">&quot;&gt;=0.3.0-alpha&quot;</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
-                <span class="kw">let </span>restore_client = Client::create(<span class="string">&quot;restore&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>VersionReq::parse(<span class="string">"&gt;=0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
+                <span class="kw">let </span>restore_client = Client::create(<span class="string">"restore"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="macro">cmd!</span>(
                     restore_client,
-                    <span class="string">&quot;restore&quot;</span>,
-                    <span class="string">&quot;--mnemonic&quot;</span>,
+                    <span class="string">"restore"</span>,
+                    <span class="string">"--mnemonic"</span>,
                     <span class="kw-2">&amp;</span>backup_secret,
-                    <span class="string">&quot;--invite-code&quot;</span>,
+                    <span class="string">"--invite-code"</span>,
                     fed.invite_code()<span class="question-mark">?
                 </span>)
                 .run()
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             } <span class="kw">else </span>{
-                <span class="kw">let </span>client = client.new_forked(<span class="string">&quot;restore-without-backup&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">&quot;wipe&quot;</span>, <span class="string">&quot;--force&quot;</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>client = client.new_forked(<span class="string">"restore-without-backup"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">"wipe"</span>, <span class="string">"--force"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="macro">assert_eq!</span>(
                     <span class="number">0</span>,
-                    <span class="macro">cmd!</span>(client, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;total_amount_msat&quot;</span>]
+                    <span class="macro">cmd!</span>(client, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"total_amount_msat"</span>]
                         .as_u64()
                         .unwrap()
                 );
 
-                <span class="kw">let </span>_post_balance = <span class="macro">cmd!</span>(client, <span class="string">&quot;restore&quot;</span>, <span class="kw-2">&amp;</span>backup_secret)
+                <span class="kw">let </span>_post_balance = <span class="macro">cmd!</span>(client, <span class="string">"restore"</span>, <span class="kw-2">&amp;</span>backup_secret)
                     .out_json()
                     .<span class="kw">await</span><span class="question-mark">?
                     </span>.as_u64()
@@ -2263,11 +2578,11 @@
             }
             <span class="kw">let </span>restore_time = start_time.elapsed();
 
-            <span class="macro">println!</span>(<span class="string">&quot;### LATENCY RESTORE: {restore_time:?}&quot;</span>);
+            <span class="macro">println!</span>(<span class="string">"### LATENCY RESTORE: {restore_time:?}"</span>);
             <span class="kw">if </span><span class="kw">crate</span>::util::is_backwards_compatibility_test() {
                 <span class="macro">assert!</span>(restore_time &lt; Duration::from_secs(<span class="number">160</span>));
             } <span class="kw">else </span>{
-                <span class="macro">assert!</span>(restore_time &lt; Duration::from_secs(<span class="number">10</span>));
+                <span class="macro">assert!</span>(restore_time &lt; Duration::from_secs(<span class="number">15</span>));
             }
         }
     }
@@ -2276,8 +2591,9 @@
 }
 
 <span class="kw">pub async fn </span>cli_tests(dev_fed: DevFed) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>data_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>data_dir = env::var(<span class="string">"FM_DATA_DIR"</span>)<span class="question-mark">?</span>;
 
     <span class="attr">#[allow(unused_variables)]
     </span><span class="kw">let </span>DevFed {
@@ -2291,84 +2607,86 @@
         esplora,
     } = dev_fed;
 
-    <span class="kw">let </span>client = fed.new_joined_client(<span class="string">&quot;cli-tests-client&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"cli-tests-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     client.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>cln_gw_id = gw_cln.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>lnd_gw_id = gw_lnd.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="macro">cmd!</span>(
         client,
-        <span class="string">&quot;dev&quot;</span>,
-        <span class="string">&quot;config-decrypt&quot;</span>,
-        <span class="string">&quot;--in-file={data_dir}/fedimintd-0/private.encrypt&quot;</span>,
-        <span class="string">&quot;--out-file={data_dir}/fedimintd-0/config-plaintext.json&quot;
+        <span class="string">"dev"</span>,
+        <span class="string">"config-decrypt"</span>,
+        <span class="string">"--in-file={data_dir}/fedimintd-0/private.encrypt"</span>,
+        <span class="string">"--out-file={data_dir}/fedimintd-0/config-plaintext.json"
     </span>)
-    .env(<span class="string">&quot;FM_PASSWORD&quot;</span>, <span class="string">&quot;pass&quot;</span>)
+    .env(<span class="string">"FM_PASSWORD"</span>, <span class="string">"pass"</span>)
     .run()
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="macro">cmd!</span>(
         client,
-        <span class="string">&quot;dev&quot;</span>,
-        <span class="string">&quot;config-encrypt&quot;</span>,
-        <span class="string">&quot;--in-file={data_dir}/fedimintd-0/config-plaintext.json&quot;</span>,
-        <span class="string">&quot;--out-file={data_dir}/fedimintd-0/config-2&quot;
+        <span class="string">"dev"</span>,
+        <span class="string">"config-encrypt"</span>,
+        <span class="string">"--in-file={data_dir}/fedimintd-0/config-plaintext.json"</span>,
+        <span class="string">"--out-file={data_dir}/fedimintd-0/config-2"
     </span>)
-    .env(<span class="string">&quot;FM_PASSWORD&quot;</span>, <span class="string">&quot;pass-foo&quot;</span>)
+    .env(<span class="string">"FM_PASSWORD"</span>, <span class="string">"pass-foo"</span>)
     .run()
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="macro">cmd!</span>(
         client,
-        <span class="string">&quot;dev&quot;</span>,
-        <span class="string">&quot;config-decrypt&quot;</span>,
-        <span class="string">&quot;--in-file={data_dir}/fedimintd-0/config-2&quot;</span>,
-        <span class="string">&quot;--out-file={data_dir}/fedimintd-0/config-plaintext-2.json&quot;
+        <span class="string">"dev"</span>,
+        <span class="string">"config-decrypt"</span>,
+        <span class="string">"--in-file={data_dir}/fedimintd-0/config-2"</span>,
+        <span class="string">"--out-file={data_dir}/fedimintd-0/config-plaintext-2.json"
     </span>)
-    .env(<span class="string">&quot;FM_PASSWORD&quot;</span>, <span class="string">&quot;pass-foo&quot;</span>)
+    .env(<span class="string">"FM_PASSWORD"</span>, <span class="string">"pass-foo"</span>)
     .run()
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>plaintext_one =
-        fs::read_to_string(<span class="macro">format!</span>(<span class="string">&quot;{data_dir}/fedimintd-0/config-plaintext.json&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+        fs::read_to_string(<span class="macro">format!</span>(<span class="string">"{data_dir}/fedimintd-0/config-plaintext.json"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>plaintext_two =
-        fs::read_to_string(<span class="macro">format!</span>(<span class="string">&quot;{data_dir}/fedimintd-0/config-plaintext-2.json&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+        fs::read_to_string(<span class="macro">format!</span>(<span class="string">"{data_dir}/fedimintd-0/config-plaintext-2.json"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">anyhow::ensure!</span>(
         plaintext_one == plaintext_two,
-        <span class="string">&quot;config-decrypt/encrypt failed&quot;
+        <span class="string">"config-decrypt/encrypt failed"
     </span>);
 
     fed.pegin_gateway(<span class="number">10_000_000</span>, <span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>fed_id = fed.federation_id().<span class="kw">await</span>;
+    <span class="kw">let </span>fed_id = fed.calculate_federation_id().<span class="kw">await</span>;
     <span class="kw">let </span>invite = fed.invite_code()<span class="question-mark">?</span>;
-    <span class="kw">let </span>invite_code = <span class="macro">cmd!</span>(client, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;decode-invite-code&quot;</span>, invite.clone())
+    <span class="kw">let </span>invite_code = <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"decode-invite-code"</span>, invite.clone())
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">anyhow::ensure!</span>(
         <span class="macro">cmd!</span>(
             client,
-            <span class="string">&quot;dev&quot;</span>,
-            <span class="string">&quot;encode-invite-code&quot;</span>,
-            <span class="macro">format!</span>(<span class="string">&quot;--url={}&quot;</span>, invite_code[<span class="string">&quot;url&quot;</span>].as_str().unwrap()),
-            <span class="string">&quot;--federation_id={fed_id}&quot;</span>,
-            <span class="string">&quot;--peer=0&quot;
+            <span class="string">"dev"</span>,
+            <span class="string">"encode-invite-code"</span>,
+            <span class="macro">format!</span>(<span class="string">"--url={}"</span>, invite_code[<span class="string">"url"</span>].as_str().unwrap()),
+            <span class="string">"--federation_id={fed_id}"</span>,
+            <span class="string">"--peer=0"
         </span>)
         .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;invite_code&quot;</span>]
+        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"invite_code"</span>]
             .as_str()
             .unwrap()
             == invite,
-        <span class="string">&quot;failed to decode and encode the client invite code&quot;</span>,
+        <span class="string">"failed to decode and encode the client invite code"</span>,
     );
 
     <span class="comment">// Test that LND and CLN can still send directly to each other
 
     // LND can pay CLN directly
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing LND can pay CLN directly&quot;</span>);
+    </span><span class="macro">info!</span>(<span class="string">"Testing LND can pay CLN directly"</span>);
     <span class="kw">let </span>invoice = cln
         .request(cln_rpc::model::requests::InvoiceRequest {
             amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(<span class="number">1_200_000</span>)),
-            description: <span class="string">&quot;test&quot;</span>.to_string(),
-            label: <span class="string">&quot;test2&quot;</span>.to_string(),
+            description: <span class="string">"test"</span>.to_string(),
+            label: <span class="string">"test2"</span>.to_string(),
             expiry: <span class="prelude-val">Some</span>(<span class="number">60</span>),
             fallbacks: <span class="prelude-val">None</span>,
             preimage: <span class="prelude-val">None</span>,
@@ -2398,7 +2716,7 @@
     ));
 
     <span class="comment">// CLN can pay LND directly
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing CLN can pay LND directly&quot;</span>);
+    </span><span class="macro">info!</span>(<span class="string">"Testing CLN can pay LND directly"</span>);
     <span class="kw">let </span>add_invoice = lnd
         .lightning_client_lock()
         .<span class="kw">await</span><span class="question-mark">?
@@ -2441,27 +2759,27 @@
     // The code path is backwards-compatible, however this test will fail if we
     // check against earlier fedimintd versions.
     </span><span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
-    <span class="kw">if </span>VersionReq::parse(<span class="string">&quot;&gt;=0.3.0-alpha&quot;</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimintd_version) {
+    <span class="kw">if </span>VersionReq::parse(<span class="string">"&gt;=0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimintd_version) {
         <span class="comment">// # Test the correct descriptor is used
-        </span><span class="kw">let </span>config = <span class="macro">cmd!</span>(client, <span class="string">&quot;config&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>guardian_count = config[<span class="string">&quot;global&quot;</span>][<span class="string">&quot;api_endpoints&quot;</span>].as_object().unwrap().len();
-        <span class="kw">let </span>descriptor = config[<span class="string">&quot;modules&quot;</span>][<span class="string">&quot;2&quot;</span>][<span class="string">&quot;peg_in_descriptor&quot;</span>]
+        </span><span class="kw">let </span>config = <span class="macro">cmd!</span>(client, <span class="string">"config"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>guardian_count = config[<span class="string">"global"</span>][<span class="string">"api_endpoints"</span>].as_object().unwrap().len();
+        <span class="kw">let </span>descriptor = config[<span class="string">"modules"</span>][<span class="string">"2"</span>][<span class="string">"peg_in_descriptor"</span>]
             .as_str()
             .unwrap()
             .to_owned();
 
-        <span class="macro">info!</span>(<span class="string">&quot;Testing generated descriptor for {guardian_count} guardian federation&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"Testing generated descriptor for {guardian_count} guardian federation"</span>);
         <span class="kw">if </span>guardian_count == <span class="number">1 </span>{
-            <span class="macro">assert!</span>(descriptor.contains(<span class="string">&quot;wpkh(&quot;</span>));
+            <span class="macro">assert!</span>(descriptor.contains(<span class="string">"wpkh("</span>));
         } <span class="kw">else </span>{
-            <span class="macro">assert!</span>(descriptor.contains(<span class="string">&quot;wsh(sortedmulti(&quot;</span>));
+            <span class="macro">assert!</span>(descriptor.contains(<span class="string">"wsh(sortedmulti("</span>));
         }
     }
 
     <span class="comment">// # Client tests
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing Client&quot;</span>);
+    </span><span class="macro">info!</span>(<span class="string">"Testing Client"</span>);
     <span class="comment">// ## reissue e-cash
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing reissuing e-cash&quot;</span>);
+    </span><span class="macro">info!</span>(<span class="string">"Testing reissuing e-cash"</span>);
     <span class="kw">const </span>CLIENT_START_AMOUNT: u64 = <span class="number">5_000_000_000</span>;
     <span class="kw">const </span>CLIENT_SPEND_AMOUNT: u64 = <span class="number">1_100_000</span>;
 
@@ -2472,33 +2790,33 @@
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// Check log contains deposit
-    </span><span class="kw">let </span>operation = <span class="macro">cmd!</span>(client, <span class="string">&quot;list-operations&quot;</span>)
+    </span><span class="kw">let </span>operation = <span class="macro">cmd!</span>(client, <span class="string">"list-operations"</span>)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?
-        </span>.get(<span class="string">&quot;operations&quot;</span>)
-        .expect(<span class="string">&quot;Output didn&#39;t contain operation log&quot;</span>)
+        </span>.get(<span class="string">"operations"</span>)
+        .expect(<span class="string">"Output didn't contain operation log"</span>)
         .as_array()
         .unwrap()
         .first()
         .unwrap()
         .to_owned();
-    <span class="macro">assert_eq!</span>(operation[<span class="string">&quot;operation_kind&quot;</span>].as_str().unwrap(), <span class="string">&quot;wallet&quot;</span>);
-    <span class="macro">assert!</span>(operation[<span class="string">&quot;outcome&quot;</span>][<span class="string">&quot;Claimed&quot;</span>].as_object().is_some());
+    <span class="macro">assert_eq!</span>(operation[<span class="string">"operation_kind"</span>].as_str().unwrap(), <span class="string">"wallet"</span>);
+    <span class="macro">assert!</span>(operation[<span class="string">"outcome"</span>][<span class="string">"Claimed"</span>].as_object().is_some());
 
-    <span class="macro">info!</span>(<span class="string">&quot;Testing backup&amp;restore&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Testing backup&amp;restore"</span>);
     <span class="comment">// TODO: make sure there are no in-progress operations involved
-    // This test can&#39;t tolerate &quot;spend&quot;, but not &quot;reissue&quot;d coins currently,
-    // and there&#39;s a no clean way to do `reissue` on `spend` output ATM
+    // This test can't tolerate "spend", but not "reissue"d coins currently,
+    // and there's a no clean way to do `reissue` on `spend` output ATM
     // so just putting it here for time being.
     </span>cli_tests_backup_and_restore(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// # Spend from client
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing spending from client&quot;</span>);
-    <span class="kw">let </span>notes = <span class="macro">cmd!</span>(client, <span class="string">&quot;spend&quot;</span>, CLIENT_SPEND_AMOUNT)
+    </span><span class="macro">info!</span>(<span class="string">"Testing spending from client"</span>);
+    <span class="kw">let </span>notes = <span class="macro">cmd!</span>(client, <span class="string">"spend"</span>, CLIENT_SPEND_AMOUNT)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?
-        </span>.get(<span class="string">&quot;notes&quot;</span>)
-        .expect(<span class="string">&quot;Output didn&#39;t contain e-cash notes&quot;</span>)
+        </span>.get(<span class="string">"notes"</span>)
+        .expect(<span class="string">"Output didn't contain e-cash notes"</span>)
         .as_str()
         .unwrap()
         .to_owned();
@@ -2510,7 +2828,7 @@
     );
 
     <span class="comment">// Test we can reissue our own notes
-    </span><span class="macro">cmd!</span>(client, <span class="string">&quot;reissue&quot;</span>, notes).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+    </span><span class="macro">cmd!</span>(client, <span class="string">"reissue"</span>, notes).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>client_post_spend_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">assert_eq!</span>(client_post_spend_balance, CLIENT_START_AMOUNT);
@@ -2518,22 +2836,22 @@
     <span class="kw">let </span>reissue_amount: u64 = <span class="number">409600</span>;
 
     <span class="comment">// Ensure that client can reissue after spending
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing reissuing e-cash after spending&quot;</span>);
-    <span class="kw">let </span>_notes = <span class="macro">cmd!</span>(client, <span class="string">&quot;spend&quot;</span>, CLIENT_SPEND_AMOUNT)
+    </span><span class="macro">info!</span>(<span class="string">"Testing reissuing e-cash after spending"</span>);
+    <span class="kw">let </span>_notes = <span class="macro">cmd!</span>(client, <span class="string">"spend"</span>, CLIENT_SPEND_AMOUNT)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_object()
         .unwrap()
-        .get(<span class="string">&quot;notes&quot;</span>)
-        .expect(<span class="string">&quot;Output didn&#39;t contain e-cash notes&quot;</span>)
+        .get(<span class="string">"notes"</span>)
+        .expect(<span class="string">"Output didn't contain e-cash notes"</span>)
         .as_str()
         .unwrap();
 
-    <span class="kw">let </span>reissue_notes = <span class="macro">cmd!</span>(client, <span class="string">&quot;spend&quot;</span>, reissue_amount).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;notes&quot;</span>]
+    <span class="kw">let </span>reissue_notes = <span class="macro">cmd!</span>(client, <span class="string">"spend"</span>, reissue_amount).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"notes"</span>]
         .as_str()
         .map(|s| s.to_owned())
         .unwrap();
-    <span class="kw">let </span>client_reissue_amt = <span class="macro">cmd!</span>(client, <span class="string">&quot;reissue&quot;</span>, reissue_notes)
+    <span class="kw">let </span>client_reissue_amt = <span class="macro">cmd!</span>(client, <span class="string">"reissue"</span>, reissue_notes)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_u64()
@@ -2541,37 +2859,42 @@
     <span class="macro">assert_eq!</span>(client_reissue_amt, reissue_amount);
 
     <span class="comment">// Ensure that client can reissue via module commands
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing reissuing e-cash via module commands&quot;</span>);
-    <span class="kw">let </span>reissue_notes = <span class="macro">cmd!</span>(client, <span class="string">&quot;spend&quot;</span>, reissue_amount).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;notes&quot;</span>]
+    </span><span class="macro">info!</span>(<span class="string">"Testing reissuing e-cash via module commands"</span>);
+    <span class="kw">let </span>reissue_notes = <span class="macro">cmd!</span>(client, <span class="string">"spend"</span>, reissue_amount).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"notes"</span>]
         .as_str()
         .map(|s| s.to_owned())
         .unwrap();
-    <span class="kw">let </span>client_reissue_amt = <span class="macro">cmd!</span>(
-        client,
-        <span class="string">&quot;module&quot;</span>,
-        <span class="string">&quot;--module&quot;</span>,
-        <span class="string">&quot;mint&quot;</span>,
-        <span class="string">&quot;reissue&quot;</span>,
-        reissue_notes
-    )
-    .out_json()
-    .<span class="kw">await</span><span class="question-mark">?
-    </span>.as_u64()
-    .unwrap();
+    <span class="kw">let </span>client_reissue_amt =
+        <span class="kw">if </span>VersionReq::parse(<span class="string">"&gt;=0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
+            <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"mint"</span>, <span class="string">"reissue"</span>, reissue_notes)
+        } <span class="kw">else </span>{
+            <span class="macro">cmd!</span>(
+                client,
+                <span class="string">"module"</span>,
+                <span class="string">"--module"</span>,
+                <span class="string">"mint"</span>,
+                <span class="string">"reissue"</span>,
+                reissue_notes
+            )
+        }
+        .out_json()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.as_u64()
+        .unwrap();
     <span class="macro">assert_eq!</span>(client_reissue_amt, reissue_amount);
 
-    <span class="comment">// Before doing a normal payment, let&#39;s start with a HOLD invoice and only
+    <span class="comment">// Before doing a normal payment, let's start with a HOLD invoice and only
     // finish this payment at the end
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing fedimint-cli pays LND HOLD invoice via CLN gateway&quot;</span>);
+    </span><span class="macro">info!</span>(<span class="string">"Testing fedimint-cli pays LND HOLD invoice via CLN gateway"</span>);
     <span class="kw">let </span>(hold_invoice_preimage, hold_invoice_hash, hold_invoice_operation_id) =
-        start_hold_invoice_payment(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_cln, <span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
+        start_hold_invoice_payment(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_cln, cln_gw_id.clone(), <span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// OUTGOING: fedimint-cli pays LND via CLN gateway
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing fedimint-cli pays LND via CLN gateway&quot;</span>);
+    </span><span class="macro">info!</span>(<span class="string">"Testing fedimint-cli pays LND via CLN gateway"</span>);
     client.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>initial_client_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>initial_cln_gateway_balance = <span class="macro">cmd!</span>(gw_cln, <span class="string">&quot;balance&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
+    <span class="kw">let </span>initial_cln_gateway_balance = <span class="macro">cmd!</span>(gw_cln, <span class="string">"balance"</span>, <span class="string">"--federation-id={fed_id}"</span>)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_u64()
@@ -2587,7 +2910,7 @@
         </span>.into_inner();
     <span class="kw">let </span>invoice = add_invoice.payment_request;
     <span class="kw">let </span>payment_hash = add_invoice.r_hash;
-    <span class="macro">cmd!</span>(client, <span class="string">&quot;ln-pay&quot;</span>, invoice).run().<span class="kw">await</span><span class="question-mark">?</span>;
+    ln_pay(<span class="kw-2">&amp;</span>client, invoice, cln_gw_id.clone(), <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>invoice_status = lnd
         .lightning_client_lock()
@@ -2603,7 +2926,7 @@
 
     <span class="comment">// Assert balances changed by 1_200_000 msat (amount sent) + 0 msat (fee)
     </span><span class="kw">let </span>final_cln_outgoing_client_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>final_cln_outgoing_gateway_balance = <span class="macro">cmd!</span>(gw_cln, <span class="string">&quot;balance&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
+    <span class="kw">let </span>final_cln_outgoing_gateway_balance = <span class="macro">cmd!</span>(gw_cln, <span class="string">"balance"</span>, <span class="string">"--federation-id={fed_id}"</span>)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_u64()
@@ -2612,24 +2935,22 @@
     <span class="kw">let </span>expected_diff = <span class="number">1_200_000</span>;
     <span class="macro">anyhow::ensure!</span>(
         initial_client_balance - final_cln_outgoing_client_balance == expected_diff,
-        <span class="string">&quot;Client balance changed by {} on CLN outgoing payment, expected {expected_diff}&quot;</span>,
+        <span class="string">"Client balance changed by {} on CLN outgoing payment, expected {expected_diff}"</span>,
         initial_client_balance - final_cln_outgoing_client_balance
     );
     <span class="macro">anyhow::ensure!</span>(
         final_cln_outgoing_gateway_balance - initial_cln_gateway_balance == expected_diff,
-        <span class="string">&quot;CLN Gateway balance changed by {} on CLN outgoing payment, expected {expected_diff}&quot;</span>,
+        <span class="string">"CLN Gateway balance changed by {} on CLN outgoing payment, expected {expected_diff}"</span>,
         final_cln_outgoing_gateway_balance - initial_cln_gateway_balance
     );
 
-    <span class="kw">let </span>ln_response_val = <span class="macro">cmd!</span>(
-        client,
-        <span class="string">&quot;ln-invoice&quot;</span>,
-        <span class="string">&quot;--amount=1100000msat&quot;</span>,
-        <span class="string">&quot;--description=&#39;incoming-over-cln-gw&#39;&quot;
-    </span>)
-    .out_json()
+    <span class="kw">let </span>ln_invoice_response = ln_invoice(
+        <span class="kw-2">&amp;</span>client,
+        Amount::from_msats(<span class="number">1100000</span>),
+        <span class="string">"incoming-over-cln-gw"</span>.to_string(),
+        cln_gw_id.clone(),
+    )
     .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)<span class="question-mark">?</span>;
     <span class="kw">let </span>invoice = ln_invoice_response.invoice;
     <span class="kw">let </span>payment = lnd
         .lightning_client_lock()
@@ -2652,40 +2973,40 @@
         .payments
         .into_iter()
         .find(|p| p.payment_hash == payment.payment_hash.to_hex())
-        .context(<span class="string">&quot;payment not in list&quot;</span>)<span class="question-mark">?
+        .context(<span class="string">"payment not in list"</span>)<span class="question-mark">?
         </span>.status();
     <span class="macro">anyhow::ensure!</span>(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
 
     <span class="comment">// Receive the ecash notes
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing receiving e-cash notes&quot;</span>);
+    </span><span class="macro">info!</span>(<span class="string">"Testing receiving e-cash notes"</span>);
     <span class="kw">let </span>operation_id = ln_invoice_response.operation_id;
-    <span class="macro">cmd!</span>(client, <span class="string">&quot;await-invoice&quot;</span>, operation_id).run().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">cmd!</span>(client, <span class="string">"await-invoice"</span>, operation_id).run().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// Assert balances changed by 1100000 msat
     </span><span class="kw">let </span>final_cln_incoming_client_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>final_cln_incoming_gateway_balance = <span class="macro">cmd!</span>(gw_cln, <span class="string">&quot;balance&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
+    <span class="kw">let </span>final_cln_incoming_gateway_balance = <span class="macro">cmd!</span>(gw_cln, <span class="string">"balance"</span>, <span class="string">"--federation-id={fed_id}"</span>)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_u64()
         .unwrap();
     <span class="macro">anyhow::ensure!</span>(
         final_cln_incoming_client_balance - final_cln_outgoing_client_balance == <span class="number">1100000</span>,
-        <span class="string">&quot;Client balance changed by {} on CLN incoming payment, expected 1100000&quot;</span>,
+        <span class="string">"Client balance changed by {} on CLN incoming payment, expected 1100000"</span>,
         final_cln_incoming_client_balance - final_cln_outgoing_client_balance
     );
     <span class="macro">anyhow::ensure!</span>(
         final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == <span class="number">1100000</span>,
-        <span class="string">&quot;CLN Gateway balance changed by {} on CLN incoming payment, expected 1100000&quot;</span>,
+        <span class="string">"CLN Gateway balance changed by {} on CLN incoming payment, expected 1100000"</span>,
         final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance
     );
 
     <span class="comment">// LND gateway tests
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing LND gateway&quot;</span>);
+    </span><span class="macro">info!</span>(<span class="string">"Testing LND gateway"</span>);
     client.use_gateway(<span class="kw-2">&amp;</span>gw_lnd).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// OUTGOING: fedimint-cli pays CLN via LND gateaway
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing outgoing payment from client to CLN via LND gateway&quot;</span>);
-    <span class="kw">let </span>initial_lnd_gateway_balance = <span class="macro">cmd!</span>(gw_lnd, <span class="string">&quot;balance&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
+    </span><span class="macro">info!</span>(<span class="string">"Testing outgoing payment from client to CLN via LND gateway"</span>);
+    <span class="kw">let </span>initial_lnd_gateway_balance = <span class="macro">cmd!</span>(gw_lnd, <span class="string">"balance"</span>, <span class="string">"--federation-id={fed_id}"</span>)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_u64()
@@ -2693,8 +3014,8 @@
     <span class="kw">let </span>invoice = cln
         .request(cln_rpc::model::requests::InvoiceRequest {
             amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(<span class="number">2_000_000</span>)),
-            description: <span class="string">&quot;lnd-gw-to-cln&quot;</span>.to_string(),
-            label: <span class="string">&quot;test-client&quot;</span>.to_string(),
+            description: <span class="string">"lnd-gw-to-cln"</span>.to_string(),
+            label: <span class="string">"test-client"</span>.to_string(),
             expiry: <span class="prelude-val">Some</span>(<span class="number">60</span>),
             fallbacks: <span class="prelude-val">None</span>,
             preimage: <span class="prelude-val">None</span>,
@@ -2704,8 +3025,8 @@
         .<span class="kw">await</span><span class="question-mark">?
         </span>.bolt11;
     <span class="macro">tokio::try_join!</span>(cln.await_block_processing(), lnd.await_block_processing())<span class="question-mark">?</span>;
-    <span class="macro">cmd!</span>(client, <span class="string">&quot;ln-pay&quot;</span>, invoice.clone()).run().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>fed_id = fed.federation_id().<span class="kw">await</span>;
+    ln_pay(<span class="kw-2">&amp;</span>client, invoice.clone(), lnd_gw_id.clone(), <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>fed_id = fed.calculate_federation_id().<span class="kw">await</span>;
 
     <span class="kw">let </span>invoice_status = cln
         .request(cln_rpc::model::requests::WaitanyinvoiceRequest {
@@ -2721,34 +3042,32 @@
 
     <span class="comment">// Assert balances changed by 2_000_000 msat (amount sent) + 0 msat (fee)
     </span><span class="kw">let </span>final_lnd_outgoing_client_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>final_lnd_outgoing_gateway_balance = <span class="macro">cmd!</span>(gw_lnd, <span class="string">&quot;balance&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
+    <span class="kw">let </span>final_lnd_outgoing_gateway_balance = <span class="macro">cmd!</span>(gw_lnd, <span class="string">"balance"</span>, <span class="string">"--federation-id={fed_id}"</span>)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_u64()
         .unwrap();
     <span class="macro">anyhow::ensure!</span>(
         final_cln_incoming_client_balance - final_lnd_outgoing_client_balance == <span class="number">2_000_000</span>,
-        <span class="string">&quot;Client balance changed by {} on LND outgoing payment, expected 2_000_000&quot;</span>,
+        <span class="string">"Client balance changed by {} on LND outgoing payment, expected 2_000_000"</span>,
         final_cln_incoming_client_balance - final_lnd_outgoing_client_balance
     );
     <span class="macro">anyhow::ensure!</span>(
         final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == <span class="number">2_000_000</span>,
-        <span class="string">&quot;LND Gateway balance changed by {} on LND outgoing payment, expected 2_000_000&quot;</span>,
+        <span class="string">"LND Gateway balance changed by {} on LND outgoing payment, expected 2_000_000"</span>,
         final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance
     );
 
     <span class="comment">// INCOMING: fedimint-cli receives from CLN via LND gateway
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing incoming payment from CLN to client via LND gateway&quot;</span>);
-    <span class="kw">let </span>ln_response_val = <span class="macro">cmd!</span>(
-        client,
-        <span class="string">&quot;ln-invoice&quot;</span>,
-        <span class="string">&quot;--amount=1300000msat&quot;</span>,
-        <span class="string">&quot;--description=&#39;incoming-over-lnd-gw&#39;&quot;
-    </span>)
-    .out_json()
+    </span><span class="macro">info!</span>(<span class="string">"Testing incoming payment from CLN to client via LND gateway"</span>);
+    <span class="kw">let </span>recv = ln_invoice(
+        <span class="kw-2">&amp;</span>client,
+        Amount::from_msats(<span class="number">1300000</span>),
+        <span class="string">"incoming-over-lnd-gw"</span>.to_string(),
+        lnd_gw_id,
+    )
     .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)<span class="question-mark">?</span>;
-    <span class="kw">let </span>invoice = ln_invoice_response.invoice;
+    <span class="kw">let </span>invoice = recv.invoice;
     <span class="kw">let </span>invoice_status = cln
         .request(cln_rpc::model::requests::PayRequest {
             bolt11: invoice,
@@ -2772,29 +3091,29 @@
     ));
 
     <span class="comment">// Receive the ecash notes
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing receiving ecash notes&quot;</span>);
-    <span class="kw">let </span>operation_id = ln_invoice_response.operation_id;
-    <span class="macro">cmd!</span>(client, <span class="string">&quot;await-invoice&quot;</span>, operation_id).run().<span class="kw">await</span><span class="question-mark">?</span>;
+    </span><span class="macro">info!</span>(<span class="string">"Testing receiving ecash notes"</span>);
+    <span class="kw">let </span>operation_id = recv.operation_id;
+    <span class="macro">cmd!</span>(client, <span class="string">"await-invoice"</span>, operation_id).run().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// Assert balances changed by 1_300_000 msat
     </span><span class="kw">let </span>final_lnd_incoming_client_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>final_lnd_incoming_gateway_balance = <span class="macro">cmd!</span>(gw_lnd, <span class="string">&quot;balance&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
+    <span class="kw">let </span>final_lnd_incoming_gateway_balance = <span class="macro">cmd!</span>(gw_lnd, <span class="string">"balance"</span>, <span class="string">"--federation-id={fed_id}"</span>)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.as_u64()
         .unwrap();
     <span class="macro">anyhow::ensure!</span>(
         final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance == <span class="number">1_300_000</span>,
-        <span class="string">&quot;Client balance changed by {} on LND incoming payment, expected 1_300_000&quot;</span>,
+        <span class="string">"Client balance changed by {} on LND incoming payment, expected 1_300_000"</span>,
         final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance
     );
     <span class="macro">anyhow::ensure!</span>(
         final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance == <span class="number">1_300_000</span>,
-        <span class="string">&quot;LND Gateway balance changed by {} on LND incoming payment, expected 1_300_000&quot;</span>,
+        <span class="string">"LND Gateway balance changed by {} on LND incoming payment, expected 1_300_000"</span>,
         final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance
     );
 
-    <span class="macro">info!</span>(<span class="string">&quot;Will finish the payment of the LND HOLD invoice via CLN gateway&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Will finish the payment of the LND HOLD invoice via CLN gateway"</span>);
     finish_hold_invoice_payment(
         <span class="kw-2">&amp;</span>client,
         hold_invoice_operation_id,
@@ -2808,7 +3127,7 @@
 
     // # Wallet tests
     // ## Deposit
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing client deposit&quot;</span>);
+    </span><span class="macro">info!</span>(<span class="string">"Testing client deposit"</span>);
     <span class="kw">let </span>initial_walletng_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
 
     fed.pegin_client(<span class="number">100_000</span>, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>; <span class="comment">// deposit in sats
@@ -2821,35 +3140,35 @@
     </span>);
 
     <span class="comment">// ## Withdraw
-    </span><span class="macro">info!</span>(<span class="string">&quot;Testing client withdraw&quot;</span>);
+    </span><span class="macro">info!</span>(<span class="string">"Testing client withdraw"</span>);
 
     <span class="kw">let </span>initial_walletng_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>address = bitcoind.get_new_address().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>withdraw_res = <span class="macro">cmd!</span>(
         client,
-        <span class="string">&quot;withdraw&quot;</span>,
-        <span class="string">&quot;--address&quot;</span>,
+        <span class="string">"withdraw"</span>,
+        <span class="string">"--address"</span>,
         <span class="kw-2">&amp;</span>address,
-        <span class="string">&quot;--amount&quot;</span>,
-        <span class="string">&quot;50000 sat&quot;
+        <span class="string">"--amount"</span>,
+        <span class="string">"50000 sat"
     </span>)
     .out_json()
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>txid: Txid = withdraw_res[<span class="string">&quot;txid&quot;</span>].as_str().unwrap().parse().unwrap();
-    <span class="kw">let </span>fees_sat = withdraw_res[<span class="string">&quot;fees_sat&quot;</span>].as_u64().unwrap();
+    <span class="kw">let </span>txid: Txid = withdraw_res[<span class="string">"txid"</span>].as_str().unwrap().parse().unwrap();
+    <span class="kw">let </span>fees_sat = withdraw_res[<span class="string">"fees_sat"</span>].as_u64().unwrap();
 
-    <span class="kw">let </span>tx_hex = poll(<span class="string">&quot;Waiting for transaction in mempool&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+    <span class="kw">let </span>tx_hex = poll(<span class="string">"Waiting for transaction in mempool"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
         <span class="comment">// TODO: distinguish errors from not found
         </span>bitcoind
             .get_raw_transaction(<span class="kw-2">&amp;</span>txid)
             .<span class="kw">await
-            </span>.context(<span class="string">&quot;getrawtransaction&quot;</span>)
+            </span>.context(<span class="string">"getrawtransaction"</span>)
             .map_err(ControlFlow::Continue)
     })
     .<span class="kw">await
-    </span>.expect(<span class="string">&quot;cannot fail, gets stuck&quot;</span>);
+    </span>.expect(<span class="string">"cannot fail, gets stuck"</span>);
 
     <span class="kw">let </span>tx = bitcoin::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>Default::default()).unwrap();
     <span class="kw">let </span>address = bitcoin::Address::from_str(<span class="kw-2">&amp;</span>address).unwrap();
@@ -2869,6 +3188,7 @@
 <span class="kw">pub async fn </span>start_hold_invoice_payment(
     client: <span class="kw-2">&amp;</span>Client,
     gw_cln: <span class="kw-2">&amp;</span>Gatewayd,
+    gw_cln_id: String,
     lnd: <span class="kw-2">&amp;</span>Lnd,
 ) -&gt; anyhow::Result&lt;([u8; <span class="number">32</span>], cln_rpc::primitives::Sha256, String)&gt; {
     client.use_gateway(gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2890,12 +3210,7 @@
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_inner()
         .payment_request;
-    <span class="kw">let </span>operation_id = <span class="macro">cmd!</span>(client, <span class="string">&quot;ln-pay&quot;</span>, payment_request, <span class="string">&quot;--finish-in-background&quot;</span>)
-        .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;operation_id&quot;</span>]
-        .as_str()
-        .context(<span class="string">&quot;missing operation id&quot;</span>)<span class="question-mark">?
-        </span>.to_owned();
+    <span class="kw">let </span>operation_id = ln_pay(client, payment_request, gw_cln_id, <span class="bool-val">true</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>((preimage, hash, operation_id))
 }
 
@@ -2925,18 +3240,17 @@
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(invoice))) =&gt; {
                 <span class="kw">if </span>invoice.state() == tonic_lnd::lnrpc::invoice::InvoiceState::Accepted {
                     <span class="kw">break</span>;
-                } <span class="kw">else </span>{
-                    <span class="macro">debug!</span>(<span class="string">&quot;hold invoice payment state: {:?}&quot;</span>, invoice.state());
                 }
+                <span class="macro">debug!</span>(<span class="string">"hold invoice payment state: {:?}"</span>, invoice.state());
             }
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(e))) =&gt; {
-                <span class="macro">bail!</span>(<span class="string">&quot;error in invoice subscription: {e:?}&quot;</span>);
+                <span class="macro">bail!</span>(<span class="string">"error in invoice subscription: {e:?}"</span>);
             }
             <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {
-                <span class="macro">bail!</span>(<span class="string">&quot;invoice subscription ended before invoice was accepted&quot;</span>);
+                <span class="macro">bail!</span>(<span class="string">"invoice subscription ended before invoice was accepted"</span>);
             }
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                <span class="macro">bail!</span>(<span class="string">&quot;timed out waiting for invoice to be accepted&quot;</span>)
+                <span class="macro">bail!</span>(<span class="string">"timed out waiting for invoice to be accepted"</span>)
             }
         }
     }
@@ -2946,11 +3260,11 @@
             preimage: hold_invoice_preimage.to_vec(),
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>received_preimage = <span class="macro">cmd!</span>(client, <span class="string">&quot;await-ln-pay&quot;</span>, hold_invoice_operation_id)
+    <span class="kw">let </span>received_preimage = <span class="macro">cmd!</span>(client, <span class="string">"await-ln-pay"</span>, hold_invoice_operation_id)
         .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;preimage&quot;</span>]
+        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"preimage"</span>]
         .as_str()
-        .context(<span class="string">&quot;missing preimage&quot;</span>)<span class="question-mark">?
+        .context(<span class="string">"missing preimage"</span>)<span class="question-mark">?
         </span>.to_owned();
     <span class="macro">assert_eq!</span>(received_preimage, hold_invoice_preimage.to_hex());
     <span class="prelude-val">Ok</span>(())
@@ -2958,8 +3272,8 @@
 
 <span class="kw">pub async fn </span>cli_load_test_tool_test(dev_fed: DevFed) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>data_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
-    <span class="kw">let </span>load_test_temp = PathBuf::from(data_dir).join(<span class="string">&quot;load-test-temp&quot;</span>);
+    <span class="kw">let </span>data_dir = env::var(<span class="string">"FM_DATA_DIR"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>load_test_temp = PathBuf::from(data_dir).join(<span class="string">"load-test-temp"</span>);
     dev_fed
         .fed
         .pegin_client(<span class="number">10_000</span>, dev_fed.fed.internal_client())
@@ -2976,55 +3290,55 @@
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>output = <span class="macro">cmd!</span>(
         LoadTestTool,
-        <span class="string">&quot;--archive-dir&quot;</span>,
+        <span class="string">"--archive-dir"</span>,
         load_test_temp.display(),
-        <span class="string">&quot;--users&quot;</span>,
-        <span class="string">&quot;1&quot;</span>,
-        <span class="string">&quot;load-test&quot;</span>,
-        <span class="string">&quot;--notes-per-user&quot;</span>,
-        <span class="string">&quot;1&quot;</span>,
-        <span class="string">&quot;--generate-invoice-with&quot;</span>,
-        <span class="string">&quot;cln-lightning-cli&quot;</span>,
-        <span class="string">&quot;--invite-code&quot;</span>,
+        <span class="string">"--users"</span>,
+        <span class="string">"1"</span>,
+        <span class="string">"load-test"</span>,
+        <span class="string">"--notes-per-user"</span>,
+        <span class="string">"1"</span>,
+        <span class="string">"--generate-invoice-with"</span>,
+        <span class="string">"cln-lightning-cli"</span>,
+        <span class="string">"--invite-code"</span>,
         invite_code
     )
     .out_string()
     .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">println!</span>(<span class="string">&quot;{output}&quot;</span>);
+    <span class="macro">println!</span>(<span class="string">"{output}"</span>);
     <span class="macro">anyhow::ensure!</span>(
-        output.contains(<span class="string">&quot;2 reissue_notes&quot;</span>),
-        <span class="string">&quot;reissued different number notes than expected&quot;
+        output.contains(<span class="string">"2 reissue_notes"</span>),
+        <span class="string">"reissued different number notes than expected"
     </span>);
     <span class="macro">anyhow::ensure!</span>(
-        output.contains(<span class="string">&quot;1 gateway_pay_invoice&quot;</span>),
-        <span class="string">&quot;paid different number of invoices than expected&quot;
+        output.contains(<span class="string">"1 gateway_pay_invoice"</span>),
+        <span class="string">"paid different number of invoices than expected"
     </span>);
     <span class="kw">let </span>output = <span class="macro">cmd!</span>(
         LoadTestTool,
-        <span class="string">&quot;--archive-dir&quot;</span>,
+        <span class="string">"--archive-dir"</span>,
         load_test_temp.display(),
-        <span class="string">&quot;--users&quot;</span>,
-        <span class="string">&quot;1&quot;</span>,
-        <span class="string">&quot;load-test&quot;</span>,
-        <span class="string">&quot;--notes-per-user&quot;</span>,
-        <span class="string">&quot;1&quot;</span>,
-        <span class="string">&quot;--generate-invoice-with&quot;</span>,
-        <span class="string">&quot;ln-cli&quot;
+        <span class="string">"--users"</span>,
+        <span class="string">"1"</span>,
+        <span class="string">"load-test"</span>,
+        <span class="string">"--notes-per-user"</span>,
+        <span class="string">"1"</span>,
+        <span class="string">"--generate-invoice-with"</span>,
+        <span class="string">"ln-cli"
     </span>)
     .out_string()
     .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">println!</span>(<span class="string">&quot;{output}&quot;</span>);
+    <span class="macro">println!</span>(<span class="string">"{output}"</span>);
     <span class="macro">anyhow::ensure!</span>(
-        output.contains(<span class="string">&quot;compared to previous&quot;</span>),
-        <span class="string">&quot;did not compare to previous run&quot;
+        output.contains(<span class="string">"compared to previous"</span>),
+        <span class="string">"did not compare to previous run"
     </span>);
     <span class="macro">anyhow::ensure!</span>(
-        output.contains(<span class="string">&quot;2 reissue_notes&quot;</span>),
-        <span class="string">&quot;reissued different number notes than expected&quot;
+        output.contains(<span class="string">"2 reissue_notes"</span>),
+        <span class="string">"reissued different number notes than expected"
     </span>);
     <span class="macro">anyhow::ensure!</span>(
-        output.contains(<span class="string">&quot;1 gateway_pay_invoice&quot;</span>),
-        <span class="string">&quot;paid different number of invoices than expected&quot;
+        output.contains(<span class="string">"1 gateway_pay_invoice"</span>),
+        <span class="string">"paid different number of invoices than expected"
     </span>);
     <span class="prelude-val">Ok</span>(())
 }
@@ -3033,93 +3347,93 @@
     load_test_temp: <span class="kw-2">&amp;</span>Path,
     invite_code: <span class="kw-2">&amp;</span>str,
 ) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="macro">info!</span>(<span class="string">&quot;Testing ln-circular-load-test with &#39;two-gateways&#39; strategy&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Testing ln-circular-load-test with 'two-gateways' strategy"</span>);
     <span class="kw">let </span>output = <span class="macro">cmd!</span>(
         LoadTestTool,
-        <span class="string">&quot;--archive-dir&quot;</span>,
+        <span class="string">"--archive-dir"</span>,
         load_test_temp.display(),
-        <span class="string">&quot;--users&quot;</span>,
-        <span class="string">&quot;1&quot;</span>,
-        <span class="string">&quot;ln-circular-load-test&quot;</span>,
-        <span class="string">&quot;--strategy&quot;</span>,
-        <span class="string">&quot;two-gateways&quot;</span>,
-        <span class="string">&quot;--test-duration-secs&quot;</span>,
-        <span class="string">&quot;2&quot;</span>,
-        <span class="string">&quot;--invite-code&quot;</span>,
+        <span class="string">"--users"</span>,
+        <span class="string">"1"</span>,
+        <span class="string">"ln-circular-load-test"</span>,
+        <span class="string">"--strategy"</span>,
+        <span class="string">"two-gateways"</span>,
+        <span class="string">"--test-duration-secs"</span>,
+        <span class="string">"2"</span>,
+        <span class="string">"--invite-code"</span>,
         invite_code
     )
     .out_string()
     .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">println!</span>(<span class="string">&quot;{output}&quot;</span>);
+    <span class="macro">println!</span>(<span class="string">"{output}"</span>);
     <span class="macro">anyhow::ensure!</span>(
-        output.contains(<span class="string">&quot;gateway_create_invoice&quot;</span>),
-        <span class="string">&quot;missing invoice creation&quot;
+        output.contains(<span class="string">"gateway_create_invoice"</span>),
+        <span class="string">"missing invoice creation"
     </span>);
     <span class="macro">anyhow::ensure!</span>(
-        output.contains(<span class="string">&quot;gateway_pay_invoice_success&quot;</span>),
-        <span class="string">&quot;missing invoice payment&quot;
+        output.contains(<span class="string">"gateway_pay_invoice_success"</span>),
+        <span class="string">"missing invoice payment"
     </span>);
     <span class="macro">anyhow::ensure!</span>(
-        output.contains(<span class="string">&quot;gateway_payment_received_success&quot;</span>),
-        <span class="string">&quot;missing received payment&quot;
+        output.contains(<span class="string">"gateway_payment_received_success"</span>),
+        <span class="string">"missing received payment"
     </span>);
 
-    <span class="macro">info!</span>(<span class="string">&quot;Testing ln-circular-load-test with &#39;partner-ping-pong&#39; strategy&quot;</span>);
-    <span class="comment">// Note: invite code isn&#39;t required because we already have an archive dir
+    <span class="macro">info!</span>(<span class="string">"Testing ln-circular-load-test with 'partner-ping-pong' strategy"</span>);
+    <span class="comment">// Note: invite code isn't required because we already have an archive dir
     // Note: test-duration-secs needs to be greater than the timeout for
     // discover_api_version_set to work with degraded federations
     </span><span class="kw">let </span>output = <span class="macro">cmd!</span>(
         LoadTestTool,
-        <span class="string">&quot;--archive-dir&quot;</span>,
+        <span class="string">"--archive-dir"</span>,
         load_test_temp.display(),
-        <span class="string">&quot;--users&quot;</span>,
-        <span class="string">&quot;1&quot;</span>,
-        <span class="string">&quot;ln-circular-load-test&quot;</span>,
-        <span class="string">&quot;--strategy&quot;</span>,
-        <span class="string">&quot;partner-ping-pong&quot;</span>,
-        <span class="string">&quot;--test-duration-secs&quot;</span>,
-        <span class="string">&quot;6&quot;</span>,
-        <span class="string">&quot;--invite-code&quot;</span>,
+        <span class="string">"--users"</span>,
+        <span class="string">"1"</span>,
+        <span class="string">"ln-circular-load-test"</span>,
+        <span class="string">"--strategy"</span>,
+        <span class="string">"partner-ping-pong"</span>,
+        <span class="string">"--test-duration-secs"</span>,
+        <span class="string">"6"</span>,
+        <span class="string">"--invite-code"</span>,
         invite_code
     )
     .out_string()
     .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">println!</span>(<span class="string">&quot;{output}&quot;</span>);
+    <span class="macro">println!</span>(<span class="string">"{output}"</span>);
     <span class="macro">anyhow::ensure!</span>(
-        output.contains(<span class="string">&quot;gateway_create_invoice&quot;</span>),
-        <span class="string">&quot;missing invoice creation&quot;
+        output.contains(<span class="string">"gateway_create_invoice"</span>),
+        <span class="string">"missing invoice creation"
     </span>);
     <span class="macro">anyhow::ensure!</span>(
-        output.contains(<span class="string">&quot;gateway_payment_received_success&quot;</span>),
-        <span class="string">&quot;missing received payment&quot;
+        output.contains(<span class="string">"gateway_payment_received_success"</span>),
+        <span class="string">"missing received payment"
     </span>);
 
-    <span class="macro">info!</span>(<span class="string">&quot;Testing ln-circular-load-test with &#39;self-payment&#39; strategy&quot;</span>);
-    <span class="comment">// Note invite code isn&#39;t required because we already have an archive dir
+    <span class="macro">info!</span>(<span class="string">"Testing ln-circular-load-test with 'self-payment' strategy"</span>);
+    <span class="comment">// Note invite code isn't required because we already have an archive dir
     </span><span class="kw">let </span>output = <span class="macro">cmd!</span>(
         LoadTestTool,
-        <span class="string">&quot;--archive-dir&quot;</span>,
+        <span class="string">"--archive-dir"</span>,
         load_test_temp.display(),
-        <span class="string">&quot;--users&quot;</span>,
-        <span class="string">&quot;1&quot;</span>,
-        <span class="string">&quot;ln-circular-load-test&quot;</span>,
-        <span class="string">&quot;--strategy&quot;</span>,
-        <span class="string">&quot;self-payment&quot;</span>,
-        <span class="string">&quot;--test-duration-secs&quot;</span>,
-        <span class="string">&quot;2&quot;</span>,
-        <span class="string">&quot;--invite-code&quot;</span>,
+        <span class="string">"--users"</span>,
+        <span class="string">"1"</span>,
+        <span class="string">"ln-circular-load-test"</span>,
+        <span class="string">"--strategy"</span>,
+        <span class="string">"self-payment"</span>,
+        <span class="string">"--test-duration-secs"</span>,
+        <span class="string">"2"</span>,
+        <span class="string">"--invite-code"</span>,
         invite_code
     )
     .out_string()
     .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">println!</span>(<span class="string">&quot;{output}&quot;</span>);
+    <span class="macro">println!</span>(<span class="string">"{output}"</span>);
     <span class="macro">anyhow::ensure!</span>(
-        output.contains(<span class="string">&quot;gateway_create_invoice&quot;</span>),
-        <span class="string">&quot;missing invoice creation&quot;
+        output.contains(<span class="string">"gateway_create_invoice"</span>),
+        <span class="string">"missing invoice creation"
     </span>);
     <span class="macro">anyhow::ensure!</span>(
-        output.contains(<span class="string">&quot;gateway_payment_received_success&quot;</span>),
-        <span class="string">&quot;missing received payment&quot;
+        output.contains(<span class="string">"gateway_payment_received_success"</span>),
+        <span class="string">"missing received payment"
     </span>);
     <span class="prelude-val">Ok</span>(())
 }
@@ -3132,16 +3446,16 @@
     // The code path is backwards-compatible, however we need to handle the two
     // separate interfaces to test backwards-compatibility with old clients.
     </span><span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
-    <span class="kw">let </span>secret = <span class="macro">cmd!</span>(reference_client, <span class="string">&quot;print-secret&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;secret&quot;</span>]
+    <span class="kw">let </span>secret = <span class="macro">cmd!</span>(reference_client, <span class="string">"print-secret"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"secret"</span>]
         .as_str()
         .map(ToOwned::to_owned)
         .unwrap();
 
-    <span class="kw">let </span>pre_notes = <span class="macro">cmd!</span>(reference_client, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>pre_notes = <span class="macro">cmd!</span>(reference_client, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>pre_balance = pre_notes[<span class="string">&quot;total_amount_msat&quot;</span>].as_u64().unwrap();
+    <span class="kw">let </span>pre_balance = pre_notes[<span class="string">"total_amount_msat"</span>].as_u64().unwrap();
 
-    <span class="macro">debug!</span>(%pre_notes, pre_balance, <span class="string">&quot;State before backup&quot;</span>);
+    <span class="macro">debug!</span>(%pre_notes, pre_balance, <span class="string">"State before backup"</span>);
 
     <span class="comment">// we need to have some funds
     // TODO: right now we rely on previous tests to leave some balance
@@ -3155,46 +3469,46 @@
     // Testing restore in different setups would require multiple clients,
     // which is a larger refactor.
     </span>{
-        <span class="kw">let </span>post_balance = <span class="kw">if </span>VersionReq::parse(<span class="string">&quot;&gt;=0.3.0-alpha&quot;</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
-            <span class="kw">let </span>client = Client::create(<span class="string">&quot;restore-without-backup&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>post_balance = <span class="kw">if </span>VersionReq::parse(<span class="string">"&gt;=0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
+            <span class="kw">let </span>client = Client::create(<span class="string">"restore-without-backup"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let _ </span>= <span class="macro">cmd!</span>(
                 client,
-                <span class="string">&quot;restore&quot;</span>,
-                <span class="string">&quot;--mnemonic&quot;</span>,
+                <span class="string">"restore"</span>,
+                <span class="string">"--mnemonic"</span>,
                 <span class="kw-2">&amp;</span>secret,
-                <span class="string">&quot;--invite-code&quot;</span>,
+                <span class="string">"--invite-code"</span>,
                 fed.invite_code()<span class="question-mark">?
             </span>)
             .out_json()
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="comment">// `wait-complete` was introduced in v0.3.0 (90f3082)
-            </span><span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;wait-complete&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>post_notes = <span class="macro">cmd!</span>(client, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>post_balance = post_notes[<span class="string">&quot;total_amount_msat&quot;</span>].as_u64().unwrap();
-            <span class="macro">debug!</span>(%post_notes, post_balance, <span class="string">&quot;State after backup&quot;</span>);
+            </span><span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"wait-complete"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>post_notes = <span class="macro">cmd!</span>(client, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>post_balance = post_notes[<span class="string">"total_amount_msat"</span>].as_u64().unwrap();
+            <span class="macro">debug!</span>(%post_notes, post_balance, <span class="string">"State after backup"</span>);
 
             post_balance
         } <span class="kw">else </span>{
             <span class="kw">let </span>client = reference_client
-                .new_forked(<span class="string">&quot;restore-without-backup&quot;</span>)
+                .new_forked(<span class="string">"restore-without-backup"</span>)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">&quot;wipe&quot;</span>, <span class="string">&quot;--force&quot;</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">"wipe"</span>, <span class="string">"--force"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="macro">assert_eq!</span>(
                 <span class="number">0</span>,
-                <span class="macro">cmd!</span>(client, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;total_amount_msat&quot;</span>]
+                <span class="macro">cmd!</span>(client, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"total_amount_msat"</span>]
                     .as_u64()
                     .unwrap()
             );
 
-            <span class="kw">let </span>post_balance = <span class="macro">cmd!</span>(client, <span class="string">&quot;restore&quot;</span>, <span class="kw-2">&amp;</span>secret,)
+            <span class="kw">let </span>post_balance = <span class="macro">cmd!</span>(client, <span class="string">"restore"</span>, <span class="kw-2">&amp;</span>secret,)
                 .out_json()
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.as_u64()
                 .unwrap();
-            <span class="kw">let </span>post_notes = <span class="macro">cmd!</span>(client, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="macro">debug!</span>(%post_notes, post_balance, <span class="string">&quot;State after backup&quot;</span>);
+            <span class="kw">let </span>post_notes = <span class="macro">cmd!</span>(client, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="macro">debug!</span>(%post_notes, post_balance, <span class="string">"State after backup"</span>);
 
             post_balance
         };
@@ -3203,41 +3517,41 @@
 
     <span class="comment">// with a backup
     </span>{
-        <span class="kw">let </span>post_balance = <span class="kw">if </span>VersionReq::parse(<span class="string">&quot;&gt;=0.3.0-alpha&quot;</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
-            <span class="kw">let _ </span>= <span class="macro">cmd!</span>(reference_client, <span class="string">&quot;backup&quot;</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>client = Client::create(<span class="string">&quot;restore-with-backup&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>post_balance = <span class="kw">if </span>VersionReq::parse(<span class="string">"&gt;=0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
+            <span class="kw">let _ </span>= <span class="macro">cmd!</span>(reference_client, <span class="string">"backup"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>client = Client::create(<span class="string">"restore-with-backup"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">let _ </span>= <span class="macro">cmd!</span>(
                 client,
-                <span class="string">&quot;restore&quot;</span>,
-                <span class="string">&quot;--mnemonic&quot;</span>,
+                <span class="string">"restore"</span>,
+                <span class="string">"--mnemonic"</span>,
                 <span class="kw-2">&amp;</span>secret,
-                <span class="string">&quot;--invite-code&quot;</span>,
+                <span class="string">"--invite-code"</span>,
                 fed.invite_code()<span class="question-mark">?
             </span>)
             .out_json()
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;wait-complete&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>post_notes = <span class="macro">cmd!</span>(client, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>post_balance = post_notes[<span class="string">&quot;total_amount_msat&quot;</span>].as_u64().unwrap();
-            <span class="macro">debug!</span>(%post_notes, post_balance, <span class="string">&quot;State after backup&quot;</span>);
+            <span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"wait-complete"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>post_notes = <span class="macro">cmd!</span>(client, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>post_balance = post_notes[<span class="string">"total_amount_msat"</span>].as_u64().unwrap();
+            <span class="macro">debug!</span>(%post_notes, post_balance, <span class="string">"State after backup"</span>);
 
             post_balance
         } <span class="kw">else </span>{
-            <span class="kw">let </span>client = reference_client.new_forked(<span class="string">&quot;restore-with-backup&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">&quot;backup&quot;</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">&quot;wipe&quot;</span>, <span class="string">&quot;--force&quot;</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>client = reference_client.new_forked(<span class="string">"restore-with-backup"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">"backup"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">"wipe"</span>, <span class="string">"--force"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">assert_eq!</span>(
                 <span class="number">0</span>,
-                <span class="macro">cmd!</span>(client, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;total_amount_msat&quot;</span>]
+                <span class="macro">cmd!</span>(client, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"total_amount_msat"</span>]
                     .as_u64()
                     .unwrap()
             );
-            <span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">&quot;restore&quot;</span>, <span class="kw-2">&amp;</span>secret,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>post_notes = <span class="macro">cmd!</span>(client, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>post_balance = post_notes[<span class="string">&quot;total_amount_msat&quot;</span>].as_u64().unwrap();
-            <span class="macro">debug!</span>(%post_notes, post_balance, <span class="string">&quot;State after backup&quot;</span>);
+            <span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">"restore"</span>, <span class="kw-2">&amp;</span>secret,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>post_notes = <span class="macro">cmd!</span>(client, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>post_balance = post_notes[<span class="string">"total_amount_msat"</span>].as_u64().unwrap();
+            <span class="macro">debug!</span>(%post_notes, post_balance, <span class="string">"State after backup"</span>);
 
             post_balance
         };
@@ -3265,11 +3579,11 @@
     } = dev_fed;
 
     <span class="kw">let </span>client = fed
-        .new_joined_client(<span class="string">&quot;lightning-gw-reconnect-test-client&quot;</span>)
+        .new_joined_client(<span class="string">"lightning-gw-reconnect-test-client"</span>)
         .<span class="kw">await</span><span class="question-mark">?</span>;
     client.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="macro">info!</span>(<span class="string">&quot;Pegging-in both gateways&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Pegging-in both gateways"</span>);
     fed.pegin_gateway(<span class="number">99_999</span>, <span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
     fed.pegin_gateway(<span class="number">99_999</span>, <span class="kw-2">&amp;</span>gw_lnd).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -3279,10 +3593,10 @@
 
     <span class="kw">let </span><span class="kw-2">mut </span>gateways = <span class="macro">vec!</span>[gw_cln, gw_lnd];
 
-    <span class="macro">tracing::info!</span>(<span class="string">&quot;Stopping all lightning nodes&quot;</span>);
+    <span class="macro">tracing::info!</span>(<span class="string">"Stopping all lightning nodes"</span>);
     <span class="kw">for </span>gw <span class="kw">in </span><span class="kw-2">&amp;mut </span>gateways {
         <span class="comment">// Verify that the gateway can query the lightning node for the pubkey and alias
-        </span><span class="kw">let </span><span class="kw-2">mut </span>info_cmd = <span class="macro">cmd!</span>(gw, <span class="string">&quot;info&quot;</span>);
+        </span><span class="kw">let </span><span class="kw-2">mut </span>info_cmd = <span class="macro">cmd!</span>(gw, <span class="string">"info"</span>);
         <span class="macro">assert!</span>(info_cmd.run().<span class="kw">await</span>.is_ok());
 
         <span class="comment">// Verify that after stopping the lightning node, info no longer returns the
@@ -3294,13 +3608,13 @@
     }
 
     <span class="comment">// Restart both lightning nodes
-    </span><span class="macro">tracing::info!</span>(<span class="string">&quot;Restarting both lightning nodes...&quot;</span>);
+    </span><span class="macro">tracing::info!</span>(<span class="string">"Restarting both lightning nodes..."</span>);
     <span class="kw">let </span>new_cln = Lightningd::new(process_mgr, bitcoind.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>new_lnd = Lnd::new(process_mgr, bitcoind.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
     gateways[<span class="number">0</span>].set_lightning_node(LightningNode::Cln(new_cln.clone()));
     gateways[<span class="number">1</span>].set_lightning_node(LightningNode::Lnd(new_lnd.clone()));
 
-    <span class="macro">tracing::info!</span>(<span class="string">&quot;Retrying info...&quot;</span>);
+    <span class="macro">tracing::info!</span>(<span class="string">"Retrying info..."</span>);
     <span class="kw">const </span>MAX_RETRIES: usize = <span class="number">10</span>;
     <span class="kw">const </span>RETRY_INTERVAL: Duration = Duration::from_secs(<span class="number">1</span>);
     <span class="kw">for </span>gw <span class="kw">in </span>gateways {
@@ -3310,9 +3624,9 @@
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="kw">if </span>i == MAX_RETRIES - <span class="number">1 </span>{
                         <span class="kw">return </span><span class="prelude-val">Err</span>(e);
-                    } <span class="kw">else </span>{
-                        <span class="macro">tracing::debug!</span>(
-                            <span class="string">&quot;Pay invoice for gateway {} failed with {e:?}, retrying in {} seconds (try {}/{MAX_RETRIES})&quot;</span>,
+                    }
+                    <span class="macro">tracing::debug!</span>(
+                            <span class="string">"Pay invoice for gateway {} failed with {e:?}, retrying in {} seconds (try {}/{MAX_RETRIES})"</span>,
                             gw.ln
                                 .as_ref()
                                 .map(|ln| ln.name().to_string())
@@ -3320,18 +3634,17 @@
                             RETRY_INTERVAL.as_secs(),
                             i + <span class="number">1</span>,
                         );
-                        fedimint_core::task::sleep_in_test(
-                            <span class="string">&quot;paying invoice for gateway failed&quot;</span>,
-                            RETRY_INTERVAL,
-                        )
-                        .<span class="kw">await</span>;
-                    }
+                    fedimint_core::task::sleep_in_test(
+                        <span class="string">"paying invoice for gateway failed"</span>,
+                        RETRY_INTERVAL,
+                    )
+                    .<span class="kw">await</span>;
                 }
             }
         }
     }
 
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;lightning_reconnect_test: success&quot;</span>);
+    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"lightning_reconnect_test: success"</span>);
     <span class="prelude-val">Ok</span>(())
 }
 
@@ -3349,22 +3662,23 @@
         esplora,
     } = dev_fed;
 
-    <span class="kw">let </span>client = fed.new_joined_client(<span class="string">&quot;gw-reboot-test-client&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"gw-reboot-test-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     client.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
     fed.pegin_client(<span class="number">10_000</span>, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// Query current gateway infos
-    </span><span class="kw">let </span><span class="kw-2">mut </span>cln_cmd = <span class="macro">cmd!</span>(gw_cln, <span class="string">&quot;info&quot;</span>);
-    <span class="kw">let </span><span class="kw-2">mut </span>lnd_cmd = <span class="macro">cmd!</span>(gw_lnd, <span class="string">&quot;info&quot;</span>);
+    </span><span class="kw">let </span><span class="kw-2">mut </span>cln_cmd = <span class="macro">cmd!</span>(gw_cln, <span class="string">"info"</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>lnd_cmd = <span class="macro">cmd!</span>(gw_lnd, <span class="string">"info"</span>);
     <span class="kw">let </span>(cln_value, lnd_value) = <span class="macro">tokio::try_join!</span>(cln_cmd.out_json(), lnd_cmd.out_json())<span class="question-mark">?</span>;
 
     <span class="comment">// Drop references to cln and lnd gateways so the test can kill them
-    </span>drop(gw_cln);
+    </span><span class="kw">let </span>cln_gateway_id = gw_cln.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
+    drop(gw_cln);
     drop(gw_lnd);
 
     <span class="comment">// Verify that making a payment while the gateways are down does not result in
     // funds being stuck
-    </span><span class="macro">info!</span>(<span class="string">&quot;Making payment while gateway is down&quot;</span>);
+    </span><span class="macro">info!</span>(<span class="string">"Making payment while gateway is down"</span>);
     <span class="kw">let </span>initial_client_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>add_invoice = lnd
         .lightning_client_lock()
@@ -3376,15 +3690,14 @@
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_inner();
     <span class="kw">let </span>invoice = add_invoice.payment_request;
-    <span class="macro">cmd!</span>(client, <span class="string">&quot;ln-pay&quot;</span>, invoice)
-        .run()
+    ln_pay(<span class="kw-2">&amp;</span>client, invoice, cln_gateway_id, <span class="bool-val">false</span>)
         .<span class="kw">await
-        </span>.expect_err(<span class="string">&quot;Expected ln-pay to return error because the gateway is not online&quot;</span>);
+        </span>.expect_err(<span class="string">"Expected ln-pay to return error because the gateway is not online"</span>);
     <span class="kw">let </span>new_client_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">anyhow::ensure!</span>(initial_client_balance == new_client_balance);
 
     <span class="comment">// Reboot gateways with the same Lightning node instances
-    </span><span class="macro">info!</span>(<span class="string">&quot;Rebooting gateways...&quot;</span>);
+    </span><span class="macro">info!</span>(<span class="string">"Rebooting gateways..."</span>);
     <span class="kw">let </span>(new_gw_cln, new_gw_lnd) = <span class="macro">tokio::try_join!</span>(
         Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
         Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone()))
@@ -3392,45 +3705,45 @@
 
     <span class="kw">let </span>cln_info: GatewayInfo = serde_json::from_value(cln_value)<span class="question-mark">?</span>;
     poll(
-        <span class="string">&quot;Waiting for CLN Gateway Running state after reboot&quot;</span>,
+        <span class="string">"Waiting for CLN Gateway Running state after reboot"</span>,
         <span class="number">10</span>,
         || <span class="kw">async </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>new_cln_cmd = <span class="macro">cmd!</span>(new_gw_cln, <span class="string">&quot;info&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>new_cln_cmd = <span class="macro">cmd!</span>(new_gw_cln, <span class="string">"info"</span>);
             <span class="kw">let </span>cln_value = new_cln_cmd.out_json().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-            <span class="kw">let </span>reboot_info: GatewayInfo = serde_json::from_value(cln_value).context(<span class="string">&quot;json invalid&quot;</span>).map_err(ControlFlow::Break)<span class="question-mark">?</span>;
+            <span class="kw">let </span>reboot_info: GatewayInfo = serde_json::from_value(cln_value).context(<span class="string">"json invalid"</span>).map_err(ControlFlow::Break)<span class="question-mark">?</span>;
 
-            <span class="kw">if </span>reboot_info.gateway_state == <span class="string">&quot;Running&quot; </span>{
-                <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;CLN Gateway restarted, with auto-rejoin to federation&quot;</span>);
+            <span class="kw">if </span>reboot_info.gateway_state == <span class="string">"Running" </span>{
+                <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"CLN Gateway restarted, with auto-rejoin to federation"</span>);
                 <span class="comment">// Assert that the gateway info is the same as before the reboot
                 </span><span class="macro">assert_eq!</span>(cln_info, reboot_info);
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
-            <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">&quot;gateway not running&quot;</span>)))
+            <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"gateway not running"</span>)))
         },
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>lnd_info: GatewayInfo = serde_json::from_value(lnd_value)<span class="question-mark">?</span>;
     poll(
-        <span class="string">&quot;Waiting for LND Gateway Running state after reboot&quot;</span>,
+        <span class="string">"Waiting for LND Gateway Running state after reboot"</span>,
         <span class="number">10</span>,
         || <span class="kw">async </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>new_lnd_cmd = <span class="macro">cmd!</span>(new_gw_lnd, <span class="string">&quot;info&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>new_lnd_cmd = <span class="macro">cmd!</span>(new_gw_lnd, <span class="string">"info"</span>);
             <span class="kw">let </span>lnd_value = new_lnd_cmd.out_json().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-            <span class="kw">let </span>reboot_info: GatewayInfo = serde_json::from_value(lnd_value).context(<span class="string">&quot;json invalid&quot;</span>).map_err(ControlFlow::Break)<span class="question-mark">?</span>;
+            <span class="kw">let </span>reboot_info: GatewayInfo = serde_json::from_value(lnd_value).context(<span class="string">"json invalid"</span>).map_err(ControlFlow::Break)<span class="question-mark">?</span>;
 
-            <span class="kw">if </span>reboot_info.gateway_state == <span class="string">&quot;Running&quot; </span>{
-                <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;LND Gateway restarted, with auto-rejoin to federation&quot;</span>);
+            <span class="kw">if </span>reboot_info.gateway_state == <span class="string">"Running" </span>{
+                <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"LND Gateway restarted, with auto-rejoin to federation"</span>);
                 <span class="comment">// Assert that the gateway info is the same as before the reboot
                 </span><span class="macro">assert_eq!</span>(lnd_info, reboot_info);
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
-            <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">&quot;gateway not running&quot;</span>)))
+            <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"gateway not running"</span>)))
         },
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;gateway_reboot_test: success&quot;</span>);
+    <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">"gateway_reboot_test: success"</span>);
     <span class="prelude-val">Ok</span>(())
 }
 
@@ -3444,31 +3757,29 @@
     // automatically reconnects and can query the lightning node
     // info again.
     </span>poll(
-        <span class="string">&quot;Waiting for info to succeed after restart&quot;</span>,
+        <span class="string">"Waiting for info to succeed after restart"</span>,
         <span class="prelude-val">None</span>,
         || <span class="kw">async </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>info_cmd = <span class="macro">cmd!</span>(gw, <span class="string">&quot;info&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>info_cmd = <span class="macro">cmd!</span>(gw, <span class="string">"info"</span>);
             <span class="kw">let </span>lightning_info = info_cmd.out_json().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
             <span class="kw">let </span>gateway_info: GatewayInfo = serde_json::from_value(lightning_info)
-                .context(<span class="string">&quot;invalid json&quot;</span>)
+                .context(<span class="string">"invalid json"</span>)
                 .map_err(ControlFlow::Break)<span class="question-mark">?</span>;
             <span class="macro">poll_eq!</span>(gateway_info.lightning_pub_key.is_some(), <span class="bool-val">true</span>)
         },
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
+    <span class="macro">tracing::info!</span>(<span class="string">"Creating invoice...."</span>);
     client.use_gateway(gw).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">tracing::info!</span>(<span class="string">&quot;Creating invoice....&quot;</span>);
-    <span class="kw">let </span>ln_response_val = <span class="macro">cmd!</span>(
+    <span class="kw">let </span>invoice = ln_invoice(
         client,
-        <span class="string">&quot;ln-invoice&quot;</span>,
-        <span class="string">&quot;--amount=1000msat&quot;</span>,
-        <span class="string">&quot;--description=&#39;incoming-over-cln-gw&#39;&quot;
-    </span>)
-    .out_json()
-    .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)<span class="question-mark">?</span>;
-    <span class="kw">let </span>invoice = ln_invoice_response.invoice;
+        Amount::from_msats(<span class="number">1000</span>),
+        <span class="string">"incoming-over-cln-gw"</span>.to_string(),
+        gw.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>,
+    )
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.invoice;
 
     <span class="kw">match </span>gw.ln.as_ref() {
         <span class="prelude-val">Some</span>(LightningNode::Cln(_cln)) =&gt; {
@@ -3495,7 +3806,7 @@
                 .payments
                 .into_iter()
                 .find(|p| p.payment_hash == payment.payment_hash.to_hex())
-                .context(<span class="string">&quot;payment not in list&quot;</span>)<span class="question-mark">?
+                .context(<span class="string">"payment not in list"</span>)<span class="question-mark">?
                 </span>.status();
             <span class="macro">anyhow::ensure!</span>(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
         }
@@ -3524,10 +3835,90 @@
             ));
         }
         <span class="prelude-val">None </span>=&gt; {
-            <span class="macro">panic!</span>(<span class="string">&quot;Lightning node did not come back up correctly&quot;</span>);
+            <span class="macro">panic!</span>(<span class="string">"Lightning node did not come back up correctly"</span>);
         }
     }
     <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>ln_pay(
+    client: <span class="kw-2">&amp;</span>Client,
+    invoice: String,
+    gw_id: String,
+    finish_in_background: bool,
+) -&gt; anyhow::Result&lt;String&gt; {
+    <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+
+    <span class="comment">// TODO(support:v0.2): 0.3 removed the active gateway concept and requires a
+    // `gateway-id` parameter for lightning sends
+    </span><span class="kw">let </span>value = <span class="kw">if </span>VersionReq::parse(<span class="string">"&lt;0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
+        <span class="kw">if </span>finish_in_background {
+            <span class="macro">cmd!</span>(client, <span class="string">"ln-pay"</span>, invoice, <span class="string">"--finish-in-background"</span>,)
+                .out_json()
+                .<span class="kw">await</span><span class="question-mark">?
+        </span>} <span class="kw">else </span>{
+            <span class="macro">cmd!</span>(client, <span class="string">"ln-pay"</span>, invoice,).out_json().<span class="kw">await</span><span class="question-mark">?
+        </span>}
+    } <span class="kw">else if </span>finish_in_background {
+        <span class="macro">cmd!</span>(
+            client,
+            <span class="string">"ln-pay"</span>,
+            invoice,
+            <span class="string">"--finish-in-background"</span>,
+            <span class="string">"--gateway-id"</span>,
+            gw_id,
+        )
+        .out_json()
+        .<span class="kw">await</span><span class="question-mark">?
+    </span>} <span class="kw">else </span>{
+        <span class="macro">cmd!</span>(client, <span class="string">"ln-pay"</span>, invoice, <span class="string">"--gateway-id"</span>, gw_id,)
+            .out_json()
+            .<span class="kw">await</span><span class="question-mark">?
+    </span>};
+
+    <span class="kw">let </span>operation_id = value[<span class="string">"operation_id"</span>]
+        .as_str()
+        .expect(<span class="string">"missing operation id"</span>)
+        .to_string();
+    <span class="prelude-val">Ok</span>(operation_id)
+}
+
+<span class="kw">async fn </span>ln_invoice(
+    client: <span class="kw-2">&amp;</span>Client,
+    amount: Amount,
+    description: String,
+    gw_id: String,
+) -&gt; anyhow::Result&lt;LnInvoiceResponse&gt; {
+    <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+    <span class="comment">// TODO(support:v0.2): 0.3 removed the active gateway concept and requires a
+    // `gateway-id` parameter for lightning receives
+    </span><span class="kw">let </span>ln_response_val = <span class="kw">if </span>VersionReq::parse(<span class="string">"&lt;0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
+        <span class="macro">cmd!</span>(
+            client,
+            <span class="string">"ln-invoice"</span>,
+            <span class="string">"--amount"</span>,
+            amount.msats,
+            <span class="macro">format!</span>(<span class="string">"--description='{description}'"</span>),
+        )
+        .out_json()
+        .<span class="kw">await</span><span class="question-mark">?
+    </span>} <span class="kw">else </span>{
+        <span class="macro">cmd!</span>(
+            client,
+            <span class="string">"ln-invoice"</span>,
+            <span class="string">"--amount"</span>,
+            amount.msats,
+            <span class="macro">format!</span>(<span class="string">"--description='{description}'"</span>),
+            <span class="string">"--gateway-id"</span>,
+            gw_id,
+        )
+        .out_json()
+        .<span class="kw">await</span><span class="question-mark">?
+    </span>};
+
+    <span class="kw">let </span>ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(ln_invoice_response)
 }
 
 <span class="kw">pub async fn </span>reconnect_test(dev_fed: DevFed, process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -3555,7 +3946,7 @@
     fed.start_server(process_mgr, <span class="number">0</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     fed.mine_then_wait_blocks_sync(<span class="number">100</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     fed.await_all_peers().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;Server 0 successfully rejoined!&quot;</span>);
+    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Server 0 successfully rejoined!"</span>);
     fed.mine_then_wait_blocks_sync(<span class="number">100</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// now test what happens if consensus needs to be restarted
@@ -3570,7 +3961,7 @@
 
     fed.await_all_peers().<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;fm success: reconnect-test&quot;</span>);
+    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"fm success: reconnect-test"</span>);
     <span class="prelude-val">Ok</span>(())
 }
 
@@ -3588,8 +3979,8 @@
         esplora,
     } = dev_fed;
 
-    <span class="kw">let </span>data_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
-    <span class="kw">let </span>client = fed.new_joined_client(<span class="string">&quot;recoverytool-test-client&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>data_dir = env::var(<span class="string">"FM_DATA_DIR"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"recoverytool-test-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span><span class="kw-2">mut </span>fed_utxos_sats = HashSet::from([<span class="number">12_345_000</span>, <span class="number">23_456_000</span>, <span class="number">34_567_000</span>]);
     <span class="kw">for </span>sats <span class="kw">in </span><span class="kw-2">&amp;</span>fed_utxos_sats {
@@ -3600,32 +3991,32 @@
     </span><span class="kw">let </span>withdrawal_address = bitcoind.get_new_address().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>withdraw_res = <span class="macro">cmd!</span>(
         client,
-        <span class="string">&quot;withdraw&quot;</span>,
-        <span class="string">&quot;--address&quot;</span>,
+        <span class="string">"withdraw"</span>,
+        <span class="string">"--address"</span>,
         <span class="kw-2">&amp;</span>withdrawal_address,
-        <span class="string">&quot;--amount&quot;</span>,
-        <span class="string">&quot;5000 sat&quot;
+        <span class="string">"--amount"</span>,
+        <span class="string">"5000 sat"
     </span>)
     .out_json()
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>fees_sat = withdraw_res[<span class="string">&quot;fees_sat&quot;</span>]
+    <span class="kw">let </span>fees_sat = withdraw_res[<span class="string">"fees_sat"</span>]
         .as_u64()
-        .expect(<span class="string">&quot;withdrawal should contain fees&quot;</span>);
-    <span class="kw">let </span>txid: Txid = withdraw_res[<span class="string">&quot;txid&quot;</span>]
+        .expect(<span class="string">"withdrawal should contain fees"</span>);
+    <span class="kw">let </span>txid: Txid = withdraw_res[<span class="string">"txid"</span>]
         .as_str()
-        .expect(<span class="string">&quot;withdrawal should contain txid string&quot;</span>)
+        .expect(<span class="string">"withdrawal should contain txid string"</span>)
         .parse()
-        .expect(<span class="string">&quot;txid should be parsable&quot;</span>);
-    <span class="kw">let </span>tx_hex = poll(<span class="string">&quot;Waiting for transaction in mempool&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+        .expect(<span class="string">"txid should be parsable"</span>);
+    <span class="kw">let </span>tx_hex = poll(<span class="string">"Waiting for transaction in mempool"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
         bitcoind
             .get_raw_transaction(<span class="kw-2">&amp;</span>txid)
             .<span class="kw">await
-            </span>.context(<span class="string">&quot;getrawtransaction&quot;</span>)
+            </span>.context(<span class="string">"getrawtransaction"</span>)
             .map_err(ControlFlow::Continue)
     })
     .<span class="kw">await
-    </span>.expect(<span class="string">&quot;withdrawal tx failed to reach mempool&quot;</span>);
+    </span>.expect(<span class="string">"withdrawal tx failed to reach mempool"</span>);
 
     <span class="kw">let </span>tx = bitcoin::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>;
     <span class="macro">assert_eq!</span>(tx.input.len(), <span class="number">1</span>);
@@ -3636,7 +4027,7 @@
         .output
         .iter()
         .find(|o| o.to_owned().script_pubkey != withdrawal_address.script_pubkey())
-        .expect(<span class="string">&quot;withdrawal must have change output&quot;</span>);
+        .expect(<span class="string">"withdrawal must have change output"</span>);
     <span class="macro">assert!</span>(fed_utxos_sats.insert(change_output.value));
 
     <span class="comment">// Remove the utxo consumed from the withdrawal tx
@@ -3648,32 +4039,32 @@
     fed.finalize_mempool_tx().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>now = fedimint_core::time::now();
-    <span class="macro">info!</span>(<span class="string">&quot;Recovering using utxos method&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Recovering using utxos method"</span>);
     <span class="kw">let </span>output = <span class="macro">cmd!</span>(
         <span class="kw">crate</span>::util::Recoverytool,
-        <span class="string">&quot;--readonly&quot;</span>,
-        <span class="string">&quot;--cfg&quot;</span>,
-        <span class="string">&quot;{data_dir}/fedimintd-0&quot;</span>,
-        <span class="string">&quot;utxos&quot;</span>,
-        <span class="string">&quot;--db&quot;</span>,
-        <span class="string">&quot;{data_dir}/fedimintd-0/database&quot;
+        <span class="string">"--readonly"</span>,
+        <span class="string">"--cfg"</span>,
+        <span class="string">"{data_dir}/fedimintd-0"</span>,
+        <span class="string">"utxos"</span>,
+        <span class="string">"--db"</span>,
+        <span class="string">"{data_dir}/fedimintd-0/database"
     </span>)
-    .env(<span class="string">&quot;FM_PASSWORD&quot;</span>, <span class="string">&quot;pass&quot;</span>)
+    .env(<span class="string">"FM_PASSWORD"</span>, <span class="string">"pass"</span>)
     .out_json()
     .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>outputs = output.as_array().context(<span class="string">&quot;expected an array&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>outputs = output.as_array().context(<span class="string">"expected an array"</span>)<span class="question-mark">?</span>;
     <span class="macro">assert_eq!</span>(outputs.len(), fed_utxos_sats.len());
 
     <span class="macro">assert_eq!</span>(
         outputs
             .iter()
-            .map(|o| o[<span class="string">&quot;amount_sat&quot;</span>].as_u64().unwrap())
+            .map(|o| o[<span class="string">"amount_sat"</span>].as_u64().unwrap())
             .collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;(),
         fed_utxos_sats
     );
     <span class="kw">let </span>utxos_descriptors = outputs
         .iter()
-        .map(|o| o[<span class="string">&quot;descriptor&quot;</span>].as_str().unwrap())
+        .map(|o| o[<span class="string">"descriptor"</span>].as_str().unwrap())
         .collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;();
 
     <span class="kw">let </span>descriptors_json = [serde_json::value::to_raw_value(<span class="kw-2">&amp;</span>serde_json::Value::Array(
@@ -3681,65 +4072,286 @@
             .iter()
             .map(|d| {
                 <span class="kw">let </span>object = <span class="macro">json!</span>({
-                    <span class="string">&quot;desc&quot;</span>: d,
-                    <span class="string">&quot;timestamp&quot;</span>: <span class="number">0</span>,
+                    <span class="string">"desc"</span>: d,
+                    <span class="string">"timestamp"</span>: <span class="number">0</span>,
                 });
                 object
             })
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
     ))<span class="question-mark">?</span>];
-    <span class="macro">info!</span>(<span class="string">&quot;Getting wallet balances before import&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Getting wallet balances before import"</span>);
     <span class="kw">let </span>balances_before = bitcoind.client().get_balances()<span class="question-mark">?</span>;
-    <span class="macro">info!</span>(<span class="string">&quot;Importing descriptors into bitcoin wallet&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Importing descriptors into bitcoin wallet"</span>);
     <span class="kw">let </span>request = bitcoind
         .client()
         .get_jsonrpc_client()
-        .build_request(<span class="string">&quot;importdescriptors&quot;</span>, <span class="kw-2">&amp;</span>descriptors_json);
+        .build_request(<span class="string">"importdescriptors"</span>, <span class="kw-2">&amp;</span>descriptors_json);
     <span class="kw">let </span>response = bitcoind
         .client()
         .get_jsonrpc_client()
         .send_request(request)<span class="question-mark">?</span>;
     response.check_error()<span class="question-mark">?</span>;
-    <span class="macro">info!</span>(<span class="string">&quot;Getting wallet balances after import&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Getting wallet balances after import"</span>);
     <span class="kw">let </span>balances_after = bitcoind.client().get_balances()<span class="question-mark">?</span>;
     <span class="kw">let </span>diff = balances_after.mine.immature + balances_after.mine.trusted
         - balances_before.mine.immature
         - balances_before.mine.trusted;
-    <span class="comment">// Funds from descriptors should match the the fed&#39;s utxos
+    <span class="comment">// Funds from descriptors should match the the fed's utxos
     </span><span class="macro">assert_eq!</span>(diff.to_sat(), total_fed_sats);
-    <span class="macro">info!</span>(<span class="string">&quot;Recovering using epochs method&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Recovering using epochs method"</span>);
     <span class="kw">let </span>outputs = <span class="kw">loop </span>{
         <span class="kw">let </span>output = <span class="macro">cmd!</span>(
             <span class="kw">crate</span>::util::Recoverytool,
-            <span class="string">&quot;--readonly&quot;</span>,
-            <span class="string">&quot;--cfg&quot;</span>,
-            <span class="string">&quot;{data_dir}/fedimintd-0&quot;</span>,
-            <span class="string">&quot;epochs&quot;</span>,
-            <span class="string">&quot;--db&quot;</span>,
-            <span class="string">&quot;{data_dir}/fedimintd-0/database&quot;
+            <span class="string">"--readonly"</span>,
+            <span class="string">"--cfg"</span>,
+            <span class="string">"{data_dir}/fedimintd-0"</span>,
+            <span class="string">"epochs"</span>,
+            <span class="string">"--db"</span>,
+            <span class="string">"{data_dir}/fedimintd-0/database"
         </span>)
-        .env(<span class="string">&quot;FM_PASSWORD&quot;</span>, <span class="string">&quot;pass&quot;</span>)
+        .env(<span class="string">"FM_PASSWORD"</span>, <span class="string">"pass"</span>)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>outputs = output.as_array().context(<span class="string">&quot;expected an array&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>outputs = output.as_array().context(<span class="string">"expected an array"</span>)<span class="question-mark">?</span>;
         <span class="kw">if </span>outputs.len() &gt;= fed_utxos_sats.len() {
             <span class="kw">break </span>outputs.clone();
-        } <span class="kw">else if </span>now.elapsed()<span class="question-mark">? </span>&gt; Duration::from_secs(<span class="number">180</span>) {
-            <span class="comment">// 3 minutes should be enough to finish one or two sessions
-            </span><span class="macro">bail!</span>(<span class="string">&quot;recoverytool epochs method timed out&quot;</span>);
-        } <span class="kw">else </span>{
-            fedimint_core::task::sleep_in_test(<span class="string">&quot;recovery failed&quot;</span>, Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
-        </span>}
-    };
+        }
+        <span class="kw">if </span>now.elapsed()<span class="question-mark">? </span>&gt; Duration::from_secs(<span class="number">180</span>) {
+            <span class="macro">bail!</span>(<span class="string">"recoverytool epochs method timed out"</span>);
+        }
+        fedimint_core::task::sleep_in_test(<span class="string">"recovery failed"</span>, Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
+    </span>};
     <span class="kw">let </span>epochs_descriptors = outputs
         .iter()
-        .map(|o| o[<span class="string">&quot;descriptor&quot;</span>].as_str().unwrap())
+        .map(|o| o[<span class="string">"descriptor"</span>].as_str().unwrap())
         .collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;();
     <span class="comment">// Epochs method includes descriptors from spent outputs, so we only need to
     // verify the epochs method includes all available utxos
     </span><span class="kw">for </span>utxo_descriptor <span class="kw">in </span>utxos_descriptors.iter() {
         <span class="macro">assert!</span>(epochs_descriptors.contains(<span class="kw-2">*</span>utxo_descriptor))
     }
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">pub async fn </span>guardian_backup_test(dev_fed: DevFed, process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
+
+    log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+    <span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
+
+    <span class="comment">// TODO(support:v0.2): remove
+    </span><span class="kw">if </span>VersionReq::parse(<span class="string">"&lt;0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version)
+        || VersionReq::parse(<span class="string">"&lt;0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimintd_version)
+    {
+        <span class="macro">info!</span>(<span class="string">"Guardian backups didn't exist pre-0.3.0, so can't be tested, exiting"</span>);
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+    }
+
+    <span class="attr">#[allow(unused_variables)]
+    </span><span class="kw">let </span>DevFed {
+        bitcoind,
+        cln,
+        lnd,
+        <span class="kw-2">mut </span>fed,
+        gw_cln,
+        gw_lnd,
+        electrs,
+        esplora,
+    } = dev_fed;
+
+    <span class="kw">const </span>PEER_TO_TEST: usize = <span class="number">0</span>;
+
+    fed.await_all_peers()
+        .<span class="kw">await
+        </span>.expect(<span class="string">"Awaiting federation coming online failed"</span>);
+
+    <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"guardian-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>old_block_count = <span class="macro">cmd!</span>(
+        client,
+        <span class="string">"dev"</span>,
+        <span class="string">"api"</span>,
+        <span class="string">"--peer-id"</span>,
+        PEER_TO_TEST.to_string(),
+        <span class="string">"module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count"</span>,
+    )
+    .out_json()
+    .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"value"</span>]
+        .as_u64()
+        .expect(<span class="string">"No block height returned"</span>);
+
+    <span class="kw">let </span>backup_res = <span class="macro">cmd!</span>(
+        client,
+        <span class="string">"--our-id"</span>,
+        PEER_TO_TEST.to_string(),
+        <span class="string">"--password"</span>,
+        <span class="string">"pass"</span>,
+        <span class="string">"admin"</span>,
+        <span class="string">"guardian-config-backup"
+    </span>)
+    .out_json()
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>backup_hex = backup_res[<span class="string">"tar_archive_bytes"</span>]
+        .as_str()
+        .expect(<span class="string">"expected hex string"</span>);
+    <span class="kw">let </span>backup_tar = hex::decode(backup_hex).expect(<span class="string">"invalid hex"</span>);
+
+    <span class="kw">let </span>data_dir = fed
+        .vars
+        .get(<span class="kw-2">&amp;</span>PEER_TO_TEST)
+        .expect(<span class="string">"peer not found"</span>)
+        .FM_DATA_DIR
+        .clone();
+
+    fed.terminate_server(PEER_TO_TEST)
+        .<span class="kw">await
+        </span>.expect(<span class="string">"could not terminate fedimintd"</span>);
+
+    std::fs::remove_dir_all(<span class="kw-2">&amp;</span>data_dir).expect(<span class="string">"error deleting old datadir"</span>);
+    std::fs::create_dir(<span class="kw-2">&amp;</span>data_dir).expect(<span class="string">"error creating new datadir"</span>);
+
+    <span class="kw">let </span>write_file = |name: <span class="kw-2">&amp;</span>str, data: <span class="kw-2">&amp;</span>[u8]| {
+        <span class="kw">let </span><span class="kw-2">mut </span>file = std::fs::File::options()
+            .write(<span class="bool-val">true</span>)
+            .create(<span class="bool-val">true</span>)
+            .truncate(<span class="bool-val">true</span>)
+            .open(data_dir.join(name))
+            .expect(<span class="string">"could not open file"</span>);
+        file.write_all(data).expect(<span class="string">"could not write file"</span>);
+        file.flush().expect(<span class="string">"could not flush file"</span>);
+    };
+
+    write_file(<span class="string">"backup.tar"</span>, <span class="kw-2">&amp;</span>backup_tar);
+    write_file(
+        fedimint_server::config::io::PLAINTEXT_PASSWORD,
+        <span class="string">"pass"</span>.as_bytes(),
+    );
+
+    <span class="macro">assert_eq!</span>(
+        std::process::Command::new(<span class="string">"tar"</span>)
+            .arg(<span class="string">"-xf"</span>)
+            .arg(<span class="string">"backup.tar"</span>)
+            .current_dir(data_dir)
+            .spawn()
+            .expect(<span class="string">"error spawning tar"</span>)
+            .wait()
+            .expect(<span class="string">"error extracting archive"</span>)
+            .code(),
+        <span class="prelude-val">Some</span>(<span class="number">0</span>),
+        <span class="string">"tar failed"
+    </span>);
+
+    fed.start_server(process_mgr, PEER_TO_TEST)
+        .<span class="kw">await
+        </span>.expect(<span class="string">"could not restart fedimintd"</span>);
+
+    poll(<span class="string">"Peer catches up again"</span>, <span class="prelude-val">Some</span>(<span class="number">30</span>), || <span class="kw">async </span>{
+        <span class="kw">let </span>block_count = <span class="macro">cmd!</span>(
+            client,
+            <span class="string">"dev"</span>,
+            <span class="string">"api"</span>,
+            <span class="string">"--peer-id"</span>,
+            PEER_TO_TEST.to_string(),
+            <span class="string">"module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count"</span>,
+        )
+        .out_json()
+        .<span class="kw">await
+        </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>[<span class="string">"value"</span>]
+            .as_u64()
+            .expect(<span class="string">"No block height returned"</span>);
+
+        <span class="macro">info!</span>(<span class="string">"Caught up to block {block_count} of at least {old_block_count}"</span>);
+
+        <span class="kw">if </span>block_count &lt; old_block_count {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"Block count still behind"</span>)));
+        }
+
+        <span class="prelude-val">Ok</span>(())
+    })
+    .<span class="kw">await
+    </span>.expect(<span class="string">"Peer didn't rejoin federation"</span>);
+
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">pub async fn </span>cannot_replay_tx_test(dev_fed: DevFed) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="attr">#[allow(unused_variables)]
+    </span><span class="kw">let </span>DevFed {
+        bitcoind,
+        cln,
+        lnd,
+        fed,
+        gw_cln,
+        gw_lnd,
+        electrs,
+        esplora,
+    } = dev_fed;
+
+    <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"cannot-replay-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="comment">// Make the start and spend amount the same so we spend all ecash
+    </span><span class="kw">const </span>CLIENT_START_AMOUNT: u64 = <span class="number">5_000_000_000</span>;
+    <span class="kw">const </span>CLIENT_SPEND_AMOUNT: u64 = <span class="number">5_000_000_000</span>;
+
+    <span class="kw">let </span>initial_client_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">assert_eq!</span>(initial_client_balance, <span class="number">0</span>);
+
+    fed.pegin_client(CLIENT_START_AMOUNT / <span class="number">1000</span>, <span class="kw-2">&amp;</span>client)
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="comment">// Fork client before spending ecash so we can later attempt a double spend
+    </span><span class="kw">let </span>double_spend_client = client.new_forked(<span class="string">"double-spender"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="comment">// Spend and reissue all ecash from the client
+    </span><span class="kw">let </span>notes = <span class="macro">cmd!</span>(client, <span class="string">"spend"</span>, CLIENT_SPEND_AMOUNT)
+        .out_json()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.get(<span class="string">"notes"</span>)
+        .expect(<span class="string">"Output didn't contain e-cash notes"</span>)
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    <span class="kw">let </span>client_post_spend_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">assert_eq!</span>(
+        client_post_spend_balance,
+        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
+    );
+
+    <span class="macro">cmd!</span>(client, <span class="string">"reissue"</span>, notes).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>client_post_reissue_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">assert_eq!</span>(client_post_reissue_balance, CLIENT_START_AMOUNT);
+
+    <span class="comment">// Attempt to spend the same ecash from the forked client
+    </span><span class="kw">let </span>double_spend_notes = <span class="macro">cmd!</span>(double_spend_client, <span class="string">"spend"</span>, CLIENT_SPEND_AMOUNT)
+        .out_json()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.get(<span class="string">"notes"</span>)
+        .expect(<span class="string">"Output didn't contain e-cash notes"</span>)
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    <span class="kw">let </span>double_spend_client_post_spend_balance = double_spend_client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">assert_eq!</span>(
+        double_spend_client_post_spend_balance,
+        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
+    );
+
+    <span class="macro">cmd!</span>(double_spend_client, <span class="string">"reissue"</span>, double_spend_notes)
+        .run()
+        .<span class="kw">await
+        </span>.expect_err(<span class="string">"double spend must fail"</span>);
+
+    <span class="kw">let </span>double_spend_client_post_spend_balance = double_spend_client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">assert_eq!</span>(
+        double_spend_client_post_spend_balance,
+        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
+    );
+
     <span class="prelude-val">Ok</span>(())
 }
 
@@ -3781,6 +4393,10 @@
         <span class="attr">#[arg(long, trailing_var_arg = <span class="bool-val">true</span>, allow_hyphen_values = <span class="bool-val">true</span>, num_args=<span class="number">1</span>..)]
         </span>exec: <span class="prelude-ty">Option</span>&lt;Vec&lt;ffi::OsString&gt;&gt;,
     },
+    <span class="doccomment">/// Restore guardian from downloaded backup
+    </span>GuardianBackup,
+    <span class="doccomment">/// `devfed` then tests that spent ecash cannot be double spent
+    </span>CannotReplayTransaction,
 }
 
 <span class="kw">pub async fn </span>handle_command(cmd: TestCmd, common_args: CommonArgs) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -3796,16 +4412,16 @@
                         dev_fed.fed.pegin_gateway(<span class="number">20_000</span>, <span class="kw-2">&amp;</span>dev_fed.gw_lnd),
                         <span class="kw">async </span>{
                             <span class="kw">let </span>faucet = process_mgr
-                                .spawn_daemon(<span class="string">&quot;faucet&quot;</span>, <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::Faucet))
+                                .spawn_daemon(<span class="string">"faucet"</span>, <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::Faucet))
                                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-                            poll(<span class="string">&quot;waiting for faucet startup&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+                            poll(<span class="string">"waiting for faucet startup"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
                                 TcpStream::connect(<span class="macro">format!</span>(
-                                    <span class="string">&quot;127.0.0.1:{}&quot;</span>,
+                                    <span class="string">"127.0.0.1:{}"</span>,
                                     process_mgr.globals.FM_PORT_FAUCET
                                 ))
                                 .<span class="kw">await
-                                </span>.context(<span class="string">&quot;connect to faucet&quot;</span>)
+                                </span>.context(<span class="string">"connect to faucet"</span>)
                                 .map_err(ControlFlow::Continue)
                             })
                             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -3856,6 +4472,16 @@
             <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
             recoverytool_test(dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+        TestCmd::GuardianBackup =&gt; {
+            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+            guardian_backup_test(dev_fed, <span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+        TestCmd::CannotReplayTransaction =&gt; {
+            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+            cannot_replay_tx_test(dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
         }
     }
     <span class="prelude-val">Ok</span>(())

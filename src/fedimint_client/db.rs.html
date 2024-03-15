@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/db.rs`."><title>db.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/db.rs`."><title>db.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_client/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -526,10 +528,21 @@
 <a href="#526" id="526">526</a>
 <a href="#527" id="527">527</a>
 <a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::pin::Pin;
 
-<span class="kw">use </span>fedimint_core::api::{ApiVersionSet, InviteCode};
+<span class="kw">use </span>fedimint_core::api::ApiVersionSet;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
@@ -538,6 +551,7 @@
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::util::BoxFuture;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
 <span class="kw">use </span>fedimint_logging::LOG_DB;
 <span class="kw">use </span>futures::StreamExt;
@@ -563,14 +577,35 @@
     ChronologicalOperationLog = <span class="number">0x2d</span>,
     CommonApiVersionCache = <span class="number">0x2e</span>,
     ClientConfig = <span class="number">0x2f</span>,
-    ClientInviteCode = <span class="number">0x30</span>,
-    ClientInitState = <span class="number">0x31</span>,
+    ClientInviteCode = <span class="number">0x30</span>, <span class="comment">// Unused; clean out remnant data before re-using!
+    </span>ClientInitState = <span class="number">0x31</span>,
     ClientMetadata = <span class="number">0x32</span>,
+    ClientLastBackup = <span class="number">0x33</span>,
+    <span class="doccomment">/// Arbitrary data of the applications integrating Fedimint client and
+    /// wanting to store some Federation-specific data in Fedimint client
+    /// database.
+    ///
+    /// New users are encouraged to use this single prefix only.
+    </span><span class="comment">//
+    // TODO: https://github.com/fedimint/fedimint/issues/4444
+    //       in the future, we should make all global access to the db private
+    //       and only expose a getter returning isolated database.
+    </span>UserData = <span class="number">0xb0</span>,
+    <span class="doccomment">/// Prefixes between 0xb1..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    </span>ExternalReservedStart = <span class="number">0xb1</span>,
+    <span class="doccomment">/// Prefixes between 0xb1..=0xcf shall all be considered allocated for
+    /// historical and future external use
+    </span>ExternalReservedEnd = <span class="number">0xcf</span>,
+    <span class="doccomment">/// 0xd0.. reserved for Fedimint internal use
+    </span>InternalReservedStart = <span class="number">0xd0</span>,
+    <span class="doccomment">/// Per-module instance data
+    </span>ModuleGlobalPrefix = <span class="number">0xff</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;{self:?}&quot;</span>)
+        <span class="macro">write!</span>(f, <span class="string">"{self:?}"</span>)
     }
 }
 
@@ -650,23 +685,6 @@
 
 <span class="macro">impl_db_lookup!</span>(key = ClientConfigKey, query_prefix = ClientConfigKeyPrefix);
 
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>ClientInviteCodeKey;
-
-<span class="attr">#[derive(Debug, Encodable)]
-</span><span class="kw">pub struct </span>ClientInviteCodeKeyPrefix;
-
-<span class="macro">impl_db_record!</span>(
-    key = ClientInviteCodeKey,
-    value = InviteCode,
-    db_prefix = DbKeyPrefix::ClientInviteCode
-);
-
-<span class="macro">impl_db_lookup!</span>(
-    key = ClientInviteCodeKey,
-    query_prefix = ClientInviteCodeKeyPrefix
-);
-
 <span class="doccomment">/// Client metadata that will be stored/restored on backup&amp;recovery
 </span><span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>ClientMetadataKey;
@@ -702,7 +720,7 @@
 <span class="doccomment">/// Like `InitMode`, but without no longer required data.
 ///
 /// This is distinct from `InitMode` to prevent holding on to `snapshot`
-/// forever both for user&#39;s privacy and space use. In case user get hacked
+/// forever both for user's privacy and space use. In case user get hacked
 /// or phone gets stolen.
 </span><span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>InitModeComplete {
@@ -807,21 +825,29 @@
     query_prefix = ClientModuleRecoveryPrefix
 );
 
-<span class="doccomment">/// `ClientMigrationFn` is a function that modules can implement to &quot;migrate&quot;
+<span class="doccomment">/// Last valid backup the client attempted to make
+///
+/// Can be used to find previous valid versions of
+/// module backup.
+</span><span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>LastBackupKey;
+
+<span class="macro">impl_db_record!</span>(
+    key = LastBackupKey,
+    value = ClientBackup,
+    db_prefix = DbKeyPrefix::ClientLastBackup
+);
+
+<span class="doccomment">/// `ClientMigrationFn` is a function that modules can implement to "migrate"
 /// the database to the next database version.
-</span><span class="kw">pub type </span>ClientMigrationFn = <span class="kw">for</span>&lt;<span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;tx</span>&gt; <span class="kw">fn</span>(
-    <span class="kw-2">&amp;</span><span class="lifetime">&#39;r </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;tx</span>&gt;,
-    ModuleInstanceId,
-    Vec&lt;(Vec&lt;u8&gt;, OperationId)&gt;, <span class="comment">// active states
-    </span>Vec&lt;(Vec&lt;u8&gt;, OperationId)&gt;, <span class="comment">// inactive states
-    </span>ModuleDecoderRegistry,
-) -&gt; Pin&lt;
-    Box&lt;
-        <span class="kw">dyn </span>futures::Future&lt;Output = anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;(Vec&lt;DynState&gt;, Vec&lt;DynState&gt;)&gt;&gt;&gt;
-            + Send
-            + <span class="lifetime">&#39;r</span>,
-    &gt;,
-&gt;;
+</span><span class="kw">pub type </span>ClientMigrationFn =
+    <span class="kw">for</span>&lt;<span class="lifetime">'r</span>, <span class="lifetime">'tx</span>&gt; <span class="kw">fn</span>(
+        <span class="kw-2">&amp;</span><span class="lifetime">'r </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">'tx</span>&gt;,
+        ModuleInstanceId,
+        Vec&lt;(Vec&lt;u8&gt;, OperationId)&gt;, <span class="comment">// active states
+        </span>Vec&lt;(Vec&lt;u8&gt;, OperationId)&gt;, <span class="comment">// inactive states
+        </span>ModuleDecoderRegistry,
+    ) -&gt; BoxFuture&lt;<span class="lifetime">'r</span>, anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;(Vec&lt;DynState&gt;, Vec&lt;DynState&gt;)&gt;&gt;&gt;;
 
 <span class="doccomment">/// `apply_migrations_client` iterates from the on disk database version for the
 /// client module up to `target_db_version` and executes all of the migrations
@@ -860,7 +886,7 @@
 
         <span class="kw">if </span>current_db_version &gt; target_db_version {
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="macro">format!</span>(
-                <span class="string">&quot;On disk database version for module {kind} was higher than the code database version.&quot;
+                <span class="string">"On disk database version for module {kind} was higher than the code database version."
             </span>)));
         }
 
@@ -876,7 +902,7 @@
 
         <span class="kw">while </span>current_db_version &lt; target_db_version {
             <span class="kw">let </span>new_states = <span class="kw">if let </span><span class="prelude-val">Some</span>(migration) = migrations.get(<span class="kw-2">&amp;</span>current_db_version) {
-                <span class="macro">info!</span>(target: LOG_DB, <span class="string">&quot;Migrating module {kind} current: {current_db_version} target: {target_db_version}&quot;</span>);
+                <span class="macro">info!</span>(target: LOG_DB, <span class="string">"Migrating module {kind} current: {current_db_version} target: {target_db_version}"</span>);
 
                 migration(
                     <span class="kw-2">&amp;mut </span>global_dbtx
@@ -889,7 +915,7 @@
                 )
                 .<span class="kw">await</span><span class="question-mark">?
             </span>} <span class="kw">else </span>{
-                <span class="macro">warn!</span>(<span class="string">&quot;Missing client db migration for version {current_db_version}&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">"Missing client db migration for version {current_db_version}"</span>);
                 <span class="prelude-val">None
             </span>};
 
@@ -934,17 +960,17 @@
     };
 
     global_dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(target: LOG_DB, <span class="string">&quot;{} module db version: {} migration complete&quot;</span>, kind, db_version);
+    <span class="macro">info!</span>(target: LOG_DB, <span class="string">"{} module db version: {} migration complete"</span>, kind, db_version);
     <span class="prelude-val">Ok</span>(())
 }
 
 <span class="doccomment">/// Reads all active states from the database and returns `Vec&lt;DynState&gt;`.
-/// TODO: It is unfortunate that we can&#39;t read states by the module&#39;s instance
+/// TODO: It is unfortunate that we can't read states by the module's instance
 /// id so we are forced to return all active states. Once we do a db migration
 /// to add `module_instance_id` to `ActiveStateKey`, this can be improved to
-/// only read the module&#39;s relevant states.
+/// only read the module's relevant states.
 </span><span class="kw">pub async fn </span>get_active_states(
-    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     module_instance_id: ModuleInstanceId,
 ) -&gt; Vec&lt;(Vec&lt;u8&gt;, OperationId)&gt; {
     dbtx.find_by_prefix(<span class="kw-2">&amp;</span>ActiveStateKeyPrefixBytes)
@@ -961,12 +987,12 @@
 </span>}
 
 <span class="doccomment">/// Reads all inactive states from the database and returns `Vec&lt;DynState&gt;`.
-/// TODO: It is unfortunate that we can&#39;t read states by the module&#39;s instance
+/// TODO: It is unfortunate that we can't read states by the module's instance
 /// id so we are forced to return all inactive states. Once we do a db migration
 /// to add `module_instance_id` to `InactiveStateKey`, this can be improved to
-/// only read the module&#39;s relevant states.
+/// only read the module's relevant states.
 </span><span class="kw">pub async fn </span>get_inactive_states(
-    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     module_instance_id: ModuleInstanceId,
 ) -&gt; Vec&lt;(Vec&lt;u8&gt;, OperationId)&gt; {
     dbtx.find_by_prefix(<span class="kw-2">&amp;</span>InactiveStateKeyPrefixBytes)
@@ -986,7 +1012,7 @@
 /// re-writing with the new set of active states. `new_active_states` is
 /// expected to contain all active states, not just the newly created states.
 </span><span class="kw">pub async fn </span>remove_old_and_persist_new_active_states(
-    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     new_active_states: Vec&lt;DynState&gt;,
     states_to_remove: Vec&lt;(Vec&lt;u8&gt;, OperationId)&gt;,
     module_instance_id: ModuleInstanceId,
@@ -1011,7 +1037,7 @@
         })
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-    <span class="comment">// Insert new &quot;migrated&quot; active states
+    <span class="comment">// Insert new "migrated" active states
     </span><span class="kw">for </span>(state, active_state) <span class="kw">in </span>new_active_states {
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>state, <span class="kw-2">&amp;</span>active_state).<span class="kw">await</span>;
     }
@@ -1021,7 +1047,7 @@
 /// and re-writing with the new set of inactive states. `new_inactive_states` is
 /// expected to contain all inactive states, not just the newly created states.
 </span><span class="kw">pub async fn </span>remove_old_and_persist_new_inactive_states(
-    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     new_inactive_states: Vec&lt;DynState&gt;,
     states_to_remove: Vec&lt;(Vec&lt;u8&gt;, OperationId)&gt;,
     module_instance_id: ModuleInstanceId,
@@ -1049,7 +1075,7 @@
         })
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-    <span class="comment">// Insert new &quot;migrated&quot; inactive states
+    <span class="comment">// Insert new "migrated" inactive states
     </span><span class="kw">for </span>(state, inactive_state) <span class="kw">in </span>new_inactive_states {
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>state, <span class="kw-2">&amp;</span>inactive_state).<span class="kw">await</span>;
     }

@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_server/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_server/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -320,13 +322,6 @@
 <a href="#320" id="320">320</a>
 <a href="#321" id="321">321</a>
 <a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a>
-<a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -352,8 +347,7 @@
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 <span class="kw">use </span>futures::FutureExt;
-<span class="kw">use </span>jsonrpsee::server::{ServerBuilder, ServerHandle};
-<span class="kw">use </span>jsonrpsee::types::error::CallError;
+<span class="kw">use </span>jsonrpsee::server::{PingConfig, ServerBuilder, ServerHandle};
 <span class="kw">use </span>jsonrpsee::types::ErrorObject;
 <span class="kw">use </span>jsonrpsee::RpcModule;
 <span class="kw">use </span>tokio::runtime::Runtime;
@@ -396,7 +390,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         request: <span class="kw-2">&amp;</span>ApiRequestErased,
         id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
-    ) -&gt; (<span class="kw-2">&amp;</span>State, ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;);
+    ) -&gt; (<span class="kw-2">&amp;</span>State, ApiEndpointContext&lt;<span class="lifetime">'_</span>&gt;);
 }
 
 <span class="doccomment">/// Main server for running Fedimint consensus and APIs
@@ -416,7 +410,7 @@
     <span class="doccomment">/// Starts the `ConfigGenApi` unless configs already exist
     /// After configs are generated, start `ConsensusApi` and `ConsensusServer`
     </span><span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw-2">mut </span>task_group: TaskGroup) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Starting config gen&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting config gen"</span>);
         <span class="kw">let </span>cfg = <span class="self">self
             </span>.run_config_gen(task_group.make_subgroup().<span class="kw">await</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -430,7 +424,7 @@
         .<span class="kw">await
         </span>.unwrap();
 
-        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Starting consensus API&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting consensus API"</span>);
 
         <span class="kw">let </span>handler = <span class="self">Self</span>::spawn_consensus_api(consensus_api, <span class="bool-val">true</span>).<span class="kw">await</span>;
 
@@ -438,7 +432,7 @@
 
         handler.stop().<span class="kw">await</span>;
 
-        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Shutting down tasks&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Shutting down tasks"</span>);
         task_group.shutdown();
 
         <span class="prelude-val">Ok</span>(())
@@ -463,21 +457,21 @@
         </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(password) = fs::read_to_string(<span class="self">self</span>.data_dir.join(PLAINTEXT_PASSWORD)) {
             config_gen
                 .set_password(ApiAuth(password.clone()))
-                .map_err(|<span class="kw">_</span>| <span class="macro">format_err!</span>(<span class="string">&quot;Unable to use local password&quot;</span>))<span class="question-mark">?</span>;
-            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Setting password from local file&quot;</span>);
+                .map_err(|<span class="kw">_</span>| <span class="macro">format_err!</span>(<span class="string">"Unable to use local password"</span>))<span class="question-mark">?</span>;
+            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Setting password from local file"</span>);
 
             <span class="kw">if </span>config_gen.start_consensus(ApiAuth(password)).<span class="kw">await</span>.is_ok() {
-                <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Configs found locally&quot;</span>);
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(config_generated_rx.recv().<span class="kw">await</span>.expect(<span class="string">&quot;should not close&quot;</span>));
+                <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Configs found locally"</span>);
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(config_generated_rx.recv().<span class="kw">await</span>.expect(<span class="string">"should not close"</span>));
             }
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(config_gen);
         <span class="self">Self</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, config::api::server_endpoints(), <span class="prelude-val">None</span>);
         <span class="kw">let </span>handler =
-            <span class="self">Self</span>::spawn_api(<span class="string">&quot;config-gen&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.settings.api_bind, rpc_module, <span class="number">10</span>, <span class="bool-val">true</span>).<span class="kw">await</span>;
+            <span class="self">Self</span>::spawn_api(<span class="string">"config-gen"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.settings.api_bind, rpc_module, <span class="number">10</span>, <span class="bool-val">true</span>).<span class="kw">await</span>;
 
-        <span class="kw">let </span>cfg = config_generated_rx.recv().<span class="kw">await</span>.expect(<span class="string">&quot;should not close&quot;</span>);
+        <span class="kw">let </span>cfg = config_generated_rx.recv().<span class="kw">await</span>.expect(<span class="string">"should not close"</span>);
         handler.stop().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(cfg)
     }
@@ -496,7 +490,7 @@
         }
 
         <span class="self">Self</span>::spawn_api(
-            <span class="string">&quot;consensus&quot;</span>,
+            <span class="string">"consensus"</span>,
             <span class="kw-2">&amp;</span>cfg.api_bind,
             rpc_module,
             cfg.max_connections,
@@ -511,7 +505,7 @@
     /// `FedimintApiHandler` can force to shutdown, otherwise the task cannot
     /// easily be killed.
     </span><span class="kw">async fn </span>spawn_api&lt;T&gt;(
-        name: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
+        name: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
         api_bind: <span class="kw-2">&amp;</span>SocketAddr,
         module: RpcModule&lt;RpcHandlerCtx&lt;T&gt;&gt;,
         max_connections: u32,
@@ -519,10 +513,10 @@
     ) -&gt; FedimintApiHandler {
         <span class="kw">let </span><span class="kw-2">mut </span>builder = ServerBuilder::new()
             .max_connections(max_connections)
-            .ping_interval(Duration::from_secs(<span class="number">10</span>));
+            .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(<span class="number">10</span>)));
 
         <span class="kw">let </span>runtime = <span class="kw">if </span>force_shutdown {
-            <span class="kw">let </span>runtime = Runtime::new().expect(<span class="string">&quot;Creates runtime&quot;</span>);
+            <span class="kw">let </span>runtime = Runtime::new().expect(<span class="string">"Creates runtime"</span>);
             builder = builder.custom_tokio_runtime(runtime.handle().clone());
             <span class="prelude-val">Some</span>(runtime)
         } <span class="kw">else </span>{
@@ -532,12 +526,11 @@
         <span class="kw">let </span>handle = builder
             .build(<span class="kw-2">&amp;</span>api_bind.to_string())
             .<span class="kw">await
-            </span>.context(<span class="macro">format!</span>(<span class="string">&quot;Bind address: {api_bind}&quot;</span>))
-            .context(<span class="macro">format!</span>(<span class="string">&quot;API name: {name}&quot;</span>))
-            .expect(<span class="string">&quot;Could not build API server&quot;</span>)
-            .start(module)
-            .expect(<span class="string">&quot;Could not start API server&quot;</span>);
-        <span class="macro">info!</span>(target: LOG_NET_API, <span class="string">&quot;Starting api on ws://{api_bind}&quot;</span>);
+            </span>.context(<span class="macro">format!</span>(<span class="string">"Bind address: {api_bind}"</span>))
+            .context(<span class="macro">format!</span>(<span class="string">"API name: {name}"</span>))
+            .expect(<span class="string">"Could not build API server"</span>)
+            .start(module);
+        <span class="macro">info!</span>(target: LOG_NET_API, <span class="string">"Starting api on ws://{api_bind}"</span>);
 
         FedimintApiHandler { handle, runtime }
     }
@@ -548,27 +541,27 @@
         endpoints: Vec&lt;ApiEndpoint&lt;State&gt;&gt;,
         module_instance_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
     ) <span class="kw">where
-        </span>T: HasApiContext&lt;State&gt; + Sync + Send + <span class="lifetime">&#39;static</span>,
-        State: Sync + Send + <span class="lifetime">&#39;static</span>,
+        </span>T: HasApiContext&lt;State&gt; + Sync + Send + <span class="lifetime">'static</span>,
+        State: Sync + Send + <span class="lifetime">'static</span>,
     {
         <span class="kw">for </span>endpoint <span class="kw">in </span>endpoints {
             <span class="kw">let </span>path = <span class="kw">if let </span><span class="prelude-val">Some</span>(module_instance_id) = module_instance_id {
                 <span class="comment">// This memory leak is fine because it only happens on server startup
                 // and path has to live till the end of program anyways.
                 </span>Box::leak(
-                    <span class="macro">format!</span>(<span class="string">&quot;module_{}_{}&quot;</span>, module_instance_id, endpoint.path).into_boxed_str(),
+                    <span class="macro">format!</span>(<span class="string">"module_{}_{}"</span>, module_instance_id, endpoint.path).into_boxed_str(),
                 )
             } <span class="kw">else </span>{
                 endpoint.path
             };
             <span class="comment">// Check if paths contain any abnormal characters
-            </span><span class="kw">if </span>path.contains(|c: char| !<span class="macro">matches!</span>(c, <span class="string">&#39;0&#39;</span>..=<span class="string">&#39;9&#39; </span>| <span class="string">&#39;a&#39;</span>..=<span class="string">&#39;z&#39; </span>| <span class="string">&#39;_&#39;</span>)) {
-                <span class="macro">panic!</span>(<span class="string">&quot;Constructing bad path name {path}&quot;</span>);
+            </span><span class="kw">if </span>path.contains(|c: char| !<span class="macro">matches!</span>(c, <span class="string">'0'</span>..=<span class="string">'9' </span>| <span class="string">'a'</span>..=<span class="string">'z' </span>| <span class="string">'_'</span>)) {
+                <span class="macro">panic!</span>(<span class="string">"Constructing bad path name {path}"</span>);
             }
 
             <span class="comment">// Another memory leak that is fine because the function is only called once at
             // startup
-            </span><span class="kw">let </span>handler: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span><span class="kw">_ </span>= Box::leak(endpoint.handler);
+            </span><span class="kw">let </span>handler: <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">_ </span>= Box::leak(endpoint.handler);
 
             rpc_module
                 .register_async_method(path, <span class="kw">move </span>|params, rpc_state| <span class="kw">async move </span>{
@@ -592,24 +585,19 @@
                     </span>.map_err(|<span class="kw">_</span>| {
                         <span class="macro">error!</span>(
                             target: LOG_NET_API,
-                            path, <span class="string">&quot;API handler panicked, DO NOT IGNORE, FIX IT!!!&quot;
+                            path, <span class="string">"API handler panicked, DO NOT IGNORE, FIX IT!!!"
                         </span>);
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            <span class="number">500</span>,
-                            <span class="string">&quot;API handler panicked&quot;</span>,
-                            <span class="prelude-val">None</span>::&lt;()&gt;,
-                        )))
+                        ErrorObject::owned(<span class="number">500</span>, <span class="string">"API handler panicked"</span>, <span class="prelude-val">None</span>::&lt;()&gt;)
                     })<span class="question-mark">?
                     </span>.map_err(|tokio::time::error::Elapsed { .. }| {
-                        jsonrpsee::core::Error::RequestTimeout
+                        <span class="comment">// TODO: find a better error for this, the error we used before:
+                        // jsonrpsee::core::Error::RequestTimeout
+                        // was moved to be client-side only
+                        </span>ErrorObject::owned(-<span class="number">32000</span>, <span class="string">"Request timeout"</span>, <span class="prelude-val">None</span>::&lt;()&gt;)
                     })<span class="question-mark">?
-                    </span>.map_err(|e| {
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            e.code, e.message, <span class="prelude-val">None</span>::&lt;()&gt;,
-                        )))
-                    })
+                    </span>.map_err(|e| ErrorObject::owned(e.code, e.message, <span class="prelude-val">None</span>::&lt;()&gt;))
                 })
-                .expect(<span class="string">&quot;Failed to register async method&quot;</span>);
+                .expect(<span class="string">"Failed to register async method"</span>);
         }
     }
 }
@@ -648,8 +636,8 @@
         config
             .consensus
             .consensus_encode(<span class="kw-2">&amp;mut </span>engine)
-            .expect(<span class="string">&quot;hashes&quot;</span>);
-        cert.consensus_encode(<span class="kw-2">&amp;mut </span>engine).expect(<span class="string">&quot;hashes&quot;</span>);
+            .expect(<span class="string">"hashes"</span>);
+        cert.consensus_encode(<span class="kw-2">&amp;mut </span>engine).expect(<span class="string">"hashes"</span>);
 
         <span class="kw">let </span>hash = sha256::Hash::from_engine(engine);
         hashes.insert(<span class="kw-2">*</span>peer, hash);

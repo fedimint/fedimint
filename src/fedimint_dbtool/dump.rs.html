@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-dbtool/src/dump.rs`."><title>dump.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_dbtool" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_dbtool/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-dbtool/src/dump.rs`."><title>dump.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_dbtool" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_dbtool/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -302,7 +304,6 @@
 <a href="#302" id="302">302</a>
 <a href="#303" id="303">303</a>
 <a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::path::PathBuf;
 
@@ -316,7 +317,6 @@
     Database, DatabaseVersionKey, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
-<span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::push_db_pair_items_no_serde;
 <span class="kw">use </span>fedimint_rocksdb::RocksDbReadOnly;
@@ -328,13 +328,13 @@
 <span class="kw">use </span>strum::IntoEnumIterator;
 
 <span class="attr">#[derive(Debug, serde::Serialize)]
-</span><span class="kw">struct </span>SerdeWrapper(<span class="attr">#[serde(with = <span class="string">&quot;hex::serde&quot;</span>)] </span>Vec&lt;u8&gt;);
+</span><span class="kw">struct </span>SerdeWrapper(<span class="attr">#[serde(with = <span class="string">"hex::serde"</span>)] </span>Vec&lt;u8&gt;);
 
 <span class="kw">impl </span>SerdeWrapper {
     <span class="kw">fn </span>from_encodable&lt;T: Encodable&gt;(e: T) -&gt; SerdeWrapper {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
         e.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
-            .expect(<span class="string">&quot;Write to vec can&#39;t fail&quot;</span>);
+            .expect(<span class="string">"Write to vec can't fail"</span>);
         SerdeWrapper(bytes)
     }
 }
@@ -365,14 +365,14 @@
         <span class="kw">let </span>read_only = <span class="kw">match </span>RocksDbReadOnly::open_read_only(data_dir.clone()) {
             <span class="prelude-val">Ok</span>(db) =&gt; Database::new(db, Default::default()),
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                <span class="macro">panic!</span>(<span class="string">&quot;Error reading RocksDB database. Quitting...&quot;</span>);
+                <span class="macro">panic!</span>(<span class="string">"Error reading RocksDB database. Quitting..."</span>);
             }
         };
 
         <span class="kw">let </span>(server_cfg, client_cfg, decoders) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(cfg) =
-            read_server_config(<span class="kw-2">&amp;</span>password, cfg_dir).context(<span class="string">&quot;Failed to read server config&quot;</span>)
+            read_server_config(<span class="kw-2">&amp;</span>password, cfg_dir).context(<span class="string">"Failed to read server config"</span>)
         {
-            <span class="comment">// Successfully read the server&#39;s config, that means this database is a server
+            <span class="comment">// Successfully read the server's config, that means this database is a server
             // db
             </span><span class="kw">let </span>decoders = module_inits
                 .available_decoders(cfg.iter_module_instances())
@@ -385,7 +385,7 @@
             </span><span class="kw">let </span>db = <span class="kw">match </span>RocksDbReadOnly::open_read_only(data_dir) {
                 <span class="prelude-val">Ok</span>(db) =&gt; Database::new(db, Default::default()),
                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                    <span class="macro">panic!</span>(<span class="string">&quot;Error reading RocksDB database. Quitting...&quot;</span>);
+                    <span class="macro">panic!</span>(<span class="string">"Error reading RocksDB database. Quitting..."</span>);
                 }
             };
 
@@ -427,7 +427,7 @@
     <span class="doccomment">/// Prints the contents of the BTreeMap to a pretty JSON string
     </span><span class="kw">fn </span>print_database(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span>json = serde_json::to_string_pretty(<span class="kw-2">&amp;</span><span class="self">self</span>.serialized).unwrap();
-        <span class="macro">println!</span>(<span class="string">&quot;{json}&quot;</span>);
+        <span class="macro">println!</span>(<span class="string">"{json}"</span>);
     }
 
     <span class="kw">async fn </span>serialize_module(
@@ -445,7 +445,7 @@
 
         <span class="kw">match </span>inits.get(kind) {
             <span class="prelude-val">None </span>=&gt; {
-                <span class="macro">tracing::warn!</span>(module_id, %kind, <span class="string">&quot;Detected configuration for unsupported module&quot;</span>);
+                <span class="macro">tracing::warn!</span>(module_id, %kind, <span class="string">"Detected configuration for unsupported module"</span>);
 
                 <span class="kw">let </span><span class="kw-2">mut </span>module_serialized = BTreeMap::new();
                 <span class="kw">let </span>filtered_prefixes = (<span class="number">0u8</span>..=<span class="number">255</span>).filter(|f| {
@@ -471,7 +471,7 @@
                     module_serialized.extend(db_items);
                 }
                 <span class="self">self</span>.serialized
-                    .insert(<span class="macro">format!</span>(<span class="string">&quot;{kind}-{module_id}&quot;</span>), Box::new(module_serialized));
+                    .insert(<span class="macro">format!</span>(<span class="string">"{kind}-{module_id}"</span>), Box::new(module_serialized));
             }
             <span class="prelude-val">Some</span>(init) =&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>module_serialized = init
@@ -480,14 +480,14 @@
                     </span>.collect::&lt;BTreeMap&lt;String, <span class="kw">_</span>&gt;&gt;();
 
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(db_version) = db_version {
-                    module_serialized.insert(<span class="string">&quot;Version&quot;</span>.to_string(), Box::new(db_version));
+                    module_serialized.insert(<span class="string">"Version"</span>.to_string(), Box::new(db_version));
                 } <span class="kw">else </span>{
                     module_serialized
-                        .insert(<span class="string">&quot;Version&quot;</span>.to_string(), Box::new(<span class="string">&quot;Not Specified&quot;</span>.to_string()));
+                        .insert(<span class="string">"Version"</span>.to_string(), Box::new(<span class="string">"Not Specified"</span>.to_string()));
                 }
 
                 <span class="self">self</span>.serialized
-                    .insert(<span class="macro">format!</span>(<span class="string">&quot;{kind}-{module_id}&quot;</span>), Box::new(module_serialized));
+                    .insert(<span class="macro">format!</span>(<span class="string">"{kind}-{module_id}"</span>), Box::new(module_serialized));
             }
         }
 
@@ -501,7 +501,7 @@
             .<span class="kw">await
             </span>.collect::&lt;BTreeMap&lt;String, <span class="kw">_</span>&gt;&gt;();
         <span class="self">self</span>.serialized
-            .insert(<span class="string">&quot;gateway&quot;</span>.to_string(), Box::new(gateway_serialized));
+            .insert(<span class="string">"gateway"</span>.to_string(), Box::new(gateway_serialized));
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -510,7 +510,7 @@
     </span><span class="kw">pub async fn </span>dump_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>cfg = <span class="self">self</span>.cfg.clone();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(cfg) = cfg {
-            <span class="kw">if </span><span class="self">self</span>.modules.is_empty() || <span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span><span class="string">&quot;consensus&quot;</span>.to_string()) {
+            <span class="kw">if </span><span class="self">self</span>.modules.is_empty() || <span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span><span class="string">"consensus"</span>.to_string()) {
                 <span class="self">self</span>.retrieve_consensus_data().<span class="kw">await</span>;
             }
 
@@ -566,7 +566,7 @@
                         ConsensusRange::AcceptedItemKey,
                         fedimint_server::consensus::AcceptedItem,
                         consensus,
-                        <span class="string">&quot;Accepted Items&quot;
+                        <span class="string">"Accepted Items"
                     </span>);
                 }
                 ConsensusRange::DbKeyPrefix::AcceptedTransaction =&gt; {
@@ -576,7 +576,7 @@
                         ConsensusRange::AcceptedTransactionKey,
                         fedimint_server::consensus::AcceptedTransaction,
                         consensus,
-                        <span class="string">&quot;Accepted Transactions&quot;
+                        <span class="string">"Accepted Transactions"
                     </span>);
                 }
                 ConsensusRange::DbKeyPrefix::SignedSessionOutcome =&gt; {
@@ -586,7 +586,7 @@
                         ConsensusRange::SignedBlockKey,
                         fedimint_server::consensus::SignedBlock,
                         consensus,
-                        <span class="string">&quot;Signed Blocks&quot;
+                        <span class="string">"Signed Blocks"
                     </span>);
                 }
                 ConsensusRange::DbKeyPrefix::AlephUnits =&gt; {
@@ -596,7 +596,7 @@
                         ConsensusRange::AlephUnitsKey,
                         Vec&lt;u8&gt;,
                         consensus,
-                        <span class="string">&quot;Aleph Units&quot;
+                        <span class="string">"Aleph Units"
                     </span>);
                 }
                 <span class="comment">// Module is a global prefix for all module data
@@ -605,7 +605,7 @@
         }
 
         <span class="self">self</span>.serialized
-            .insert(<span class="string">&quot;Consensus&quot;</span>.to_string(), Box::new(consensus));
+            .insert(<span class="string">"Consensus"</span>.to_string(), Box::new(consensus));
     }
 }
 </code></pre></div></section></main></body></html>

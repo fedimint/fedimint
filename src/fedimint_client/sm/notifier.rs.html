@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/sm/notifier.rs`."><title>notifier.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/sm/notifier.rs`."><title>notifier.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_client/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -254,20 +256,20 @@
     <span class="doccomment">/// Notify all subscribers of a state transition
     </span><span class="kw">pub fn </span>notify(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState) {
         <span class="kw">let </span>queue_len = <span class="self">self</span>.broadcast.len();
-        <span class="macro">trace!</span>(<span class="question-mark">?</span>state, %queue_len, <span class="string">&quot;Sending notification about state transition&quot;</span>);
+        <span class="macro">trace!</span>(<span class="question-mark">?</span>state, %queue_len, <span class="string">"Sending notification about state transition"</span>);
         <span class="comment">// FIXME: use more robust notification mechanism
         </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.broadcast.send(state) {
             <span class="macro">debug!</span>(
                 <span class="question-mark">?</span>e,
                 %queue_len,
                 receivers=<span class="self">self</span>.broadcast.receiver_count(),
-                <span class="string">&quot;Could not send state transition notification, no active receivers&quot;
+                <span class="string">"Could not send state transition notification, no active receivers"
             </span>);
         }
     }
 
     <span class="doccomment">/// Create a new notifier for a specific module instance that can only
-    /// subscribe to the instance&#39;s state transitions
+    /// subscribe to the instance's state transitions
     </span><span class="kw">pub fn </span>module_notifier&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance: ModuleInstanceId) -&gt; ModuleNotifier&lt;S&gt; {
         ModuleNotifier {
             broadcast: <span class="self">self</span>.broadcast.clone(),
@@ -286,7 +288,7 @@
     }
 }
 
-<span class="doccomment">/// Notifier send handle that can be shared to places where we don&#39;t need an
+<span class="doccomment">/// Notifier send handle that can be shared to places where we don't need an
 /// entire [`Notifier`] but still need to trigger notifications. The main use
 /// case is triggering notifications when a DB transaction was committed
 /// successfully.
@@ -328,23 +330,23 @@
     /// these the stream will contain all future state transitions. The states
     /// loaded from the database are not returned in a specific order. There may
     /// also be duplications.
-    </span><span class="kw">pub async fn </span>subscribe(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, S&gt; {
+    </span><span class="kw">pub async fn </span>subscribe(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; BoxStream&lt;<span class="lifetime">'static</span>, S&gt; {
         <span class="kw">let </span>to_typed_state = |state: DynState| {
             state
                 .as_any()
                 .downcast_ref::&lt;S&gt;()
-                .expect(<span class="string">&quot;Tried to subscribe to wrong state type&quot;</span>)
+                .expect(<span class="string">"Tried to subscribe to wrong state type"</span>)
                 .clone()
         };
 
-        <span class="comment">// It&#39;s important to start the subscription first and then query the database to
+        <span class="comment">// It's important to start the subscription first and then query the database to
         // not lose any transitions in the meantime.
         </span><span class="kw">let </span>new_transitions =
             <span class="self">self</span>.subscribe_all_operations()
                 .<span class="kw">await
                 </span>.filter_map(<span class="kw">move </span>|state: S| <span class="kw">async move </span>{
                     <span class="kw">if </span>state.operation_id() == operation_id {
-                        <span class="macro">trace!</span>(%operation_id, <span class="question-mark">?</span>state, <span class="string">&quot;Received state transition notification&quot;</span>);
+                        <span class="macro">trace!</span>(%operation_id, <span class="question-mark">?</span>state, <span class="string">"Received state transition notification"</span>);
                         <span class="prelude-val">Some</span>(state)
                     } <span class="kw">else </span>{
                         <span class="prelude-val">None
@@ -377,7 +379,7 @@
                 .collect::&lt;Vec&lt;(S, <span class="kw">_</span>)&gt;&gt;()
                 .<span class="kw">await</span>;
 
-            <span class="comment">// FIXME: don&#39;t rely on SystemTime for ordering and introduce a state transition
+            <span class="comment">// FIXME: don't rely on SystemTime for ordering and introduce a state transition
             // index instead (dpc was right again xD)
             </span><span class="kw">let </span><span class="kw-2">mut </span>all_states_timed = active_states
                 .into_iter()
@@ -386,7 +388,7 @@
             all_states_timed.sort_by(|(<span class="kw">_</span>, t1), (<span class="kw">_</span>, t2)| t1.cmp(t2));
             <span class="macro">debug!</span>(
                 %operation_id,
-                <span class="string">&quot;Returning {} state transitions from DB for notifier subscription&quot;</span>,
+                <span class="string">"Returning {} state transitions from DB for notifier subscription"</span>,
                 all_states_timed.len()
             );
             all_states_timed
@@ -399,13 +401,13 @@
     }
 
     <span class="doccomment">/// Subscribe to all state transitions belonging to the module instance.
-    </span><span class="kw">pub async fn </span>subscribe_all_operations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, S&gt; {
+    </span><span class="kw">pub async fn </span>subscribe_all_operations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">'static</span>, S&gt; {
         <span class="kw">let </span>module_instance_id = <span class="self">self</span>.module_instance;
         Box::pin(
             BroadcastStream::new(<span class="self">self</span>.broadcast.subscribe())
                 .take_while(|res| {
                     <span class="kw">let </span>cont = <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = res {
-                        <span class="macro">error!</span>(<span class="question-mark">?</span>err, <span class="string">&quot;ModuleNotifier stream stopped on error&quot;</span>);
+                        <span class="macro">error!</span>(<span class="question-mark">?</span>err, <span class="string">"ModuleNotifier stream stopped on error"</span>);
                         <span class="bool-val">false
                     </span>} <span class="kw">else </span>{
                         <span class="bool-val">true
@@ -413,12 +415,12 @@
                     std::future::ready(cont)
                 })
                 .filter_map(<span class="kw">move </span>|res| <span class="kw">async move </span>{
-                    <span class="kw">let </span>s = res.expect(<span class="string">&quot;We filtered out errors above&quot;</span>);
+                    <span class="kw">let </span>s = res.expect(<span class="string">"We filtered out errors above"</span>);
                     <span class="kw">if </span>s.module_instance_id() == module_instance_id {
                         <span class="prelude-val">Some</span>(
                             s.as_any()
                                 .downcast_ref::&lt;S&gt;()
-                                .expect(<span class="string">&quot;Tried to subscribe to wrong state type&quot;</span>)
+                                .expect(<span class="string">"Tried to subscribe to wrong state type"</span>)
                                 .clone(),
                         )
                     } <span class="kw">else </span>{

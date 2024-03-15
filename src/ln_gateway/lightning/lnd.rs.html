@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/lightning/lnd.rs`."><title>lnd.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../ln_gateway/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/lightning/lnd.rs`."><title>lnd.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../ln_gateway/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -872,7 +874,7 @@
         lnd_sender: <span class="prelude-ty">Option</span>&lt;mpsc::Sender&lt;ForwardHtlcInterceptResponse&gt;&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="macro">info!</span>(
-            <span class="string">&quot;Gateway configured to connect to LND LnRpcClient at \n address: {},\n tls cert path: {},\n macaroon path: {} &quot;</span>,
+            <span class="string">"Gateway configured to connect to LND LnRpcClient at \n address: {},\n tls cert path: {},\n macaroon path: {} "</span>,
             address, tls_cert, macaroon
         );
         GatewayLndClient {
@@ -899,7 +901,7 @@
             <span class="kw">match </span>connect(address.clone(), tls_cert.clone(), macaroon.clone()).<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(client) =&gt; <span class="kw">break </span>client,
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">tracing::debug!</span>(<span class="string">&quot;Couldn&#39;t connect to LND, retrying in 1 second... {e:?}&quot;</span>);
+                    <span class="macro">tracing::debug!</span>(<span class="string">"Couldn't connect to LND, retrying in 1 second... {e:?}"</span>);
                     sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
                 }
             }
@@ -929,11 +931,11 @@
             .get_info(GetInfoRequest {})
             .<span class="kw">await
             </span>.map_err(|status| LightningRpcError::FailedToGetNodeInfo {
-                failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to get node info {status:?}&quot;</span>),
+                failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to get node info {status:?}"</span>),
             })<span class="question-mark">?</span>;
 
         task_group
-            .spawn(<span class="string">&quot;LND HTLC Subscription&quot;</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+            .spawn(<span class="string">"LND HTLC Subscription"</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
                 <span class="kw">let </span>future_stream = client
                     .router()
                     .htlc_interceptor(ReceiverStream::new(lnd_rx));
@@ -942,48 +944,48 @@
                         <span class="kw">match </span>stream {
                             <span class="prelude-val">Ok</span>(stream) =&gt; stream.into_inner(),
                             <span class="prelude-val">Err</span>(e) =&gt; {
-                                <span class="macro">error!</span>(<span class="string">&quot;Failed to establish htlc stream&quot;</span>);
+                                <span class="macro">error!</span>(<span class="string">"Failed to establish htlc stream"</span>);
                                 <span class="kw">let </span>e = LightningRpcError::FailedToGetRouteHints {
-                                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to subscribe to LND htlc stream {e:?}&quot;</span>),
+                                    failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to subscribe to LND htlc stream {e:?}"</span>),
                                 };
-                                <span class="macro">debug!</span>(<span class="string">&quot;Error: {e}&quot;</span>);
+                                <span class="macro">debug!</span>(<span class="string">"Error: {e}"</span>);
                                 <span class="kw">return</span>;
                             }
                         }
                     },
                     <span class="kw">_ </span>= handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;LND HTLC Subscription received shutdown signal while trying to intercept HTLC stream, exiting...&quot;</span>);
+                        <span class="macro">info!</span>(<span class="string">"LND HTLC Subscription received shutdown signal while trying to intercept HTLC stream, exiting..."</span>);
                         <span class="kw">return</span>;
                     }
                 };
 
-                <span class="macro">debug!</span>(<span class="string">&quot;LND HTLC Subscription: starting to process stream&quot;</span>);
+                <span class="macro">debug!</span>(<span class="string">"LND HTLC Subscription: starting to process stream"</span>);
                 <span class="comment">// To gracefully handle shutdown signals, we need to be able to receive signals
                 // while waiting for the next message from the HTLC stream.
                 //
-                // If we&#39;re in the middle of processing a message from the stream, we need to
+                // If we're in the middle of processing a message from the stream, we need to
                 // finish before stopping the spawned task. Checking if the task group is
                 // shutting down at the start of each iteration will cause shutdown signals to
                 // not process until another message arrives from the HTLC stream, which may
                 // take a long time, or never.
                 </span><span class="kw">while let </span><span class="prelude-val">Some</span>(htlc) = <span class="macro">tokio::select! </span>{
                     <span class="kw">_ </span>= handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;LND HTLC Subscription task received shutdown signal&quot;</span>);
+                        <span class="macro">info!</span>(<span class="string">"LND HTLC Subscription task received shutdown signal"</span>);
                         <span class="prelude-val">None
                     </span>}
                     htlc_message = htlc_stream.message() =&gt; {
                         <span class="kw">match </span>htlc_message {
                             <span class="prelude-val">Ok</span>(htlc) =&gt; htlc,
                             <span class="prelude-val">Err</span>(e) =&gt; {
-                                <span class="macro">error!</span>(<span class="string">&quot;Error received over HTLC stream: {:?}&quot;</span>, e);
+                                <span class="macro">error!</span>(<span class="string">"Error received over HTLC stream: {:?}"</span>, e);
                                 <span class="prelude-val">None
                             </span>}
                     }}
                 } {
-                    <span class="macro">trace!</span>(<span class="string">&quot;LND HTLC Subscription: handling htlc {htlc:?}&quot;</span>);
+                    <span class="macro">trace!</span>(<span class="string">"LND HTLC Subscription: handling htlc {htlc:?}"</span>);
 
                     <span class="kw">if </span>htlc.incoming_circuit_key.is_none() {
-                        <span class="macro">error!</span>(<span class="string">&quot;Cannot route htlc with None incoming_circuit_key&quot;</span>);
+                        <span class="macro">error!</span>(<span class="string">"Cannot route htlc with None incoming_circuit_key"</span>);
                         <span class="kw">continue</span>;
                     }
 
@@ -1003,11 +1005,11 @@
                     <span class="kw">match </span>gateway_sender.send(<span class="prelude-val">Ok</span>(intercept)).<span class="kw">await </span>{
                         <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
                         <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="macro">error!</span>(<span class="string">&quot;Failed to send HTLC to gatewayd for processing: {:?}&quot;</span>, e);
+                            <span class="macro">error!</span>(<span class="string">"Failed to send HTLC to gatewayd for processing: {:?}"</span>, e);
                             <span class="kw">let _ </span>= <span class="self">Self</span>::cancel_htlc(incoming_circuit_key, lnd_sender.clone())
                                 .<span class="kw">await
                                 </span>.map_err(|e| {
-                                    <span class="macro">error!</span>(<span class="string">&quot;Failed to cancel HTLC: {:?}&quot;</span>, e);
+                                    <span class="macro">error!</span>(<span class="string">"Failed to cancel HTLC: {:?}"</span>, e);
                                 });
                         }
                     }
@@ -1041,7 +1043,7 @@
         </span>lnd_sender.send(response).<span class="kw">await</span>.map_err(|send_error| {
             LightningRpcError::FailedToCompleteHtlc {
                 failure_reason: <span class="macro">format!</span>(
-                    <span class="string">&quot;Failed to send ForwardHtlcInterceptResponse to LND {send_error:?}&quot;
+                    <span class="string">"Failed to send ForwardHtlcInterceptResponse to LND {send_error:?}"
                 </span>),
             }
         })
@@ -1079,7 +1081,7 @@
 
                         <span class="kw">let </span>failure_reason = payment.failure_reason();
                         <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
-                            failure_reason: <span class="macro">format!</span>(<span class="string">&quot;{failure_reason:?}&quot;</span>),
+                            failure_reason: <span class="macro">format!</span>(<span class="string">"{failure_reason:?}"</span>),
                         });
                     }
                 }
@@ -1090,7 +1092,7 @@
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
                     }
 
-                    <span class="macro">warn!</span>(<span class="string">&quot;Could not get the status of payment {payment_hash:?} Error: {e:?}. Trying again in 5 seconds&quot;</span>);
+                    <span class="macro">warn!</span>(<span class="string">"Could not get the status of payment {payment_hash:?} Error: {e:?}. Trying again in 5 seconds"</span>);
                     sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
                 }
             }
@@ -1100,7 +1102,7 @@
 
 <span class="kw">impl </span>fmt::Debug <span class="kw">for </span>GatewayLndClient {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;LndClient&quot;</span>)
+        <span class="macro">write!</span>(f, <span class="string">"LndClient"</span>)
     }
 }
 
@@ -1118,7 +1120,7 @@
             .get_info(GetInfoRequest {})
             .<span class="kw">await
             </span>.map_err(|status| LightningRpcError::FailedToGetNodeInfo {
-                failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to get node info {status:?}&quot;</span>),
+                failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to get node info {status:?}"</span>),
             })<span class="question-mark">?
             </span>.into_inner();
 
@@ -1126,13 +1128,13 @@
             info.identity_pubkey
                 .parse()
                 .map_err(|e| LightningRpcError::FailedToGetNodeInfo {
-                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to parse public key {e:?}&quot;</span>),
+                    failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to parse public key {e:?}"</span>),
                 })<span class="question-mark">?</span>;
         <span class="kw">let </span>network = info
             .chains
             .first()
             .ok_or_else(|| LightningRpcError::FailedToGetNodeInfo {
-                failure_reason: <span class="string">&quot;Failed to parse node network&quot;</span>.to_string(),
+                failure_reason: <span class="string">"Failed to parse node network"</span>.to_string(),
             })<span class="question-mark">?
             </span>.clone()
             .network;
@@ -1165,7 +1167,7 @@
             })
             .<span class="kw">await
             </span>.map_err(|status| LightningRpcError::FailedToGetRouteHints {
-                failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to list channels {status:?}&quot;</span>),
+                failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to list channels {status:?}"</span>),
             })<span class="question-mark">?
             </span>.into_inner()
             .channels;
@@ -1183,7 +1185,7 @@
                 })
                 .<span class="kw">await
                 </span>.map_err(|status| LightningRpcError::FailedToGetRouteHints {
-                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to get channel info {status:?}&quot;</span>),
+                    failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to get channel info {status:?}"</span>),
                 })<span class="question-mark">?
                 </span>.into_inner();
 
@@ -1229,7 +1231,7 @@
             payment_hash,
             ..
         } = request;
-        <span class="macro">info!</span>(<span class="string">&quot;LND Paying invoice {invoice:?}&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"LND Paying invoice {invoice:?}"</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(
             <span class="self">self</span>.address.clone(),
             <span class="self">self</span>.tls_cert.clone(),
@@ -1237,17 +1239,17 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="macro">debug!</span>(<span class="string">&quot;LND got client to pay invoice {invoice:?}, will check if payment already exists&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"LND got client to pay invoice {invoice:?}, will check if payment already exists"</span>);
 
-        <span class="comment">// If the payment exists, that means we&#39;ve already tried to pay the invoice
+        <span class="comment">// If the payment exists, that means we've already tried to pay the invoice
         </span><span class="kw">let </span>preimage: Vec&lt;u8&gt; = <span class="kw">if let </span><span class="prelude-val">Some</span>(preimage) = <span class="self">self
             </span>.lookup_payment(payment_hash.clone(), <span class="kw-2">&amp;mut </span>client)
             .<span class="kw">await</span><span class="question-mark">?
         </span>{
-            <span class="macro">info!</span>(<span class="string">&quot;LND payment already exists for invoice {invoice:?}&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">"LND payment already exists for invoice {invoice:?}"</span>);
             bitcoin_hashes::hex::FromHex::from_hex(preimage.as_str()).map_err(|error| {
                 LightningRpcError::FailedPayment {
-                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to convert preimage {error:?}&quot;</span>),
+                    failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to convert preimage {error:?}"</span>),
                 }
             })<span class="question-mark">?
         </span>} <span class="kw">else </span>{
@@ -1259,10 +1261,10 @@
                     .try_into()
                     .map_err(|error| LightningRpcError::FailedPayment {
                         failure_reason: <span class="macro">format!</span>(
-                            <span class="string">&quot;max_fee_msat exceeds valid LND fee limit ranges {error:?}&quot;
+                            <span class="string">"max_fee_msat exceeds valid LND fee limit ranges {error:?}"
                         </span>),
                     })<span class="question-mark">?</span>;
-            <span class="macro">debug!</span>(<span class="string">&quot;LND payment does not exist for invoice {invoice:?}, will attempt to pay&quot;</span>);
+            <span class="macro">debug!</span>(<span class="string">"LND payment does not exist for invoice {invoice:?}, will attempt to pay"</span>);
             <span class="kw">let </span>payments = client
                 .router()
                 .send_payment_v2(SendPaymentRequest {
@@ -1274,14 +1276,14 @@
                 })
                 .<span class="kw">await
                 </span>.map_err(|status| {
-                    <span class="macro">info!</span>(<span class="string">&quot;LND payment request failed for invoice {invoice:?} with {status:?}&quot;</span>);
+                    <span class="macro">info!</span>(<span class="string">"LND payment request failed for invoice {invoice:?} with {status:?}"</span>);
                     LightningRpcError::FailedPayment {
-                        failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to make outgoing payment {status:?}&quot;</span>),
+                        failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to make outgoing payment {status:?}"</span>),
                     }
                 })<span class="question-mark">?</span>;
 
             <span class="macro">debug!</span>(
-                <span class="string">&quot;LND payment request sent for invoice {invoice:?}, waiting for payment status...&quot;
+                <span class="string">"LND payment request sent for invoice {invoice:?}, waiting for payment status..."
             </span>);
             <span class="kw">let </span><span class="kw-2">mut </span>messages = payments.into_inner();
             <span class="kw">loop </span>{
@@ -1289,40 +1291,40 @@
                     .message()
                     .<span class="kw">await
                     </span>.map_err(|error| LightningRpcError::FailedPayment {
-                        failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to get payment status {error:?}&quot;</span>),
+                        failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to get payment status {error:?}"</span>),
                     }) {
                     <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(payment)) <span class="kw">if </span>payment.status() == PaymentStatus::Succeeded =&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;LND payment succeeded for invoice {invoice:?}&quot;</span>);
+                        <span class="macro">info!</span>(<span class="string">"LND payment succeeded for invoice {invoice:?}"</span>);
                         <span class="kw">break </span>bitcoin_hashes::hex::FromHex::from_hex(
                             payment.payment_preimage.as_str(),
                         )
                         .map_err(|error| {
                             LightningRpcError::FailedPayment {
-                                failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to convert preimage {error:?}&quot;</span>),
+                                failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to convert preimage {error:?}"</span>),
                             }
                         })<span class="question-mark">?</span>;
                     }
                     <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(payment)) <span class="kw">if </span>payment.status() == PaymentStatus::InFlight =&gt; {
-                        <span class="macro">debug!</span>(<span class="string">&quot;LND payment is inflight&quot;</span>);
+                        <span class="macro">debug!</span>(<span class="string">"LND payment is inflight"</span>);
                         <span class="kw">continue</span>;
                     }
                     <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(payment)) =&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;LND payment failed for invoice {invoice:?} with {payment:?}&quot;</span>);
+                        <span class="macro">info!</span>(<span class="string">"LND payment failed for invoice {invoice:?} with {payment:?}"</span>);
                         <span class="kw">let </span>failure_reason = payment.failure_reason();
                         <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
-                            failure_reason: <span class="macro">format!</span>(<span class="string">&quot;{failure_reason:?}&quot;</span>),
+                            failure_reason: <span class="macro">format!</span>(<span class="string">"{failure_reason:?}"</span>),
                         });
                     }
                     <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;LND payment failed for invoice {invoice:?} with no payment status&quot;</span>);
+                        <span class="macro">info!</span>(<span class="string">"LND payment failed for invoice {invoice:?} with no payment status"</span>);
                         <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
                             failure_reason: <span class="macro">format!</span>(
-                                <span class="string">&quot;Failed to get payment status for payment hash {payment_hash:?}&quot;
+                                <span class="string">"Failed to get payment status for payment hash {payment_hash:?}"
                             </span>),
                         });
                     }
                     <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;LND payment failed for invoice {invoice:?} with {e:?}&quot;</span>);
+                        <span class="macro">info!</span>(<span class="string">"LND payment failed for invoice {invoice:?} with {e:?}"</span>);
                         <span class="kw">return </span><span class="prelude-val">Err</span>(e);
                     }
                 }
@@ -1338,7 +1340,7 @@
         max_delay: u64,
         max_fee: Amount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
-        <span class="macro">info!</span>(<span class="string">&quot;LND Paying invoice {invoice:?}&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"LND Paying invoice {invoice:?}"</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(
             <span class="self">self</span>.address.clone(),
             <span class="self">self</span>.tls_cert.clone(),
@@ -1346,17 +1348,17 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="macro">debug!</span>(<span class="string">&quot;LND got client to pay invoice {invoice:?}, will check if payment already exists&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"LND got client to pay invoice {invoice:?}, will check if payment already exists"</span>);
 
-        <span class="comment">// If the payment exists, that means we&#39;ve already tried to pay the invoice
+        <span class="comment">// If the payment exists, that means we've already tried to pay the invoice
         </span><span class="kw">let </span>preimage: Vec&lt;u8&gt; = <span class="kw">if let </span><span class="prelude-val">Some</span>(preimage) = <span class="self">self
             </span>.lookup_payment(invoice.payment_hash.to_vec(), <span class="kw-2">&amp;mut </span>client)
             .<span class="kw">await</span><span class="question-mark">?
         </span>{
-            <span class="macro">info!</span>(<span class="string">&quot;LND payment already exists for invoice {invoice:?}&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">"LND payment already exists for invoice {invoice:?}"</span>);
             bitcoin_hashes::hex::FromHex::from_hex(preimage.as_str()).map_err(|error| {
                 LightningRpcError::FailedPayment {
-                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to convert preimage {error:?}&quot;</span>),
+                    failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to convert preimage {error:?}"</span>),
                 }
             })<span class="question-mark">?
         </span>} <span class="kw">else </span>{
@@ -1369,25 +1371,25 @@
                     .try_into()
                     .map_err(|error| LightningRpcError::FailedPayment {
                         failure_reason: <span class="macro">format!</span>(
-                            <span class="string">&quot;max_fee_msat exceeds valid LND fee limit ranges {error:?}&quot;
+                            <span class="string">"max_fee_msat exceeds valid LND fee limit ranges {error:?}"
                         </span>),
                     })<span class="question-mark">?</span>;
 
             <span class="kw">let </span>amt_msat = invoice.amount.msats.try_into().map_err(|error| {
                 LightningRpcError::FailedPayment {
-                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;amount exceeds valid LND amount ranges {error:?}&quot;</span>),
+                    failure_reason: <span class="macro">format!</span>(<span class="string">"amount exceeds valid LND amount ranges {error:?}"</span>),
                 }
             })<span class="question-mark">?</span>;
             <span class="kw">let </span>final_cltv_delta = invoice.min_final_cltv_delta.try_into().map_err(|error| {
                 LightningRpcError::FailedPayment {
-                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;final cltv delta exceeds valid LND range {error:?}&quot;</span>),
+                    failure_reason: <span class="macro">format!</span>(<span class="string">"final cltv delta exceeds valid LND range {error:?}"</span>),
                 }
             })<span class="question-mark">?</span>;
             <span class="kw">let </span>cltv_limit =
                 max_delay
                     .try_into()
                     .map_err(|error| LightningRpcError::FailedPayment {
-                        failure_reason: <span class="macro">format!</span>(<span class="string">&quot;max delay exceeds valid LND range {error:?}&quot;</span>),
+                        failure_reason: <span class="macro">format!</span>(<span class="string">"max delay exceeds valid LND range {error:?}"</span>),
                     })<span class="question-mark">?</span>;
 
             <span class="kw">let </span>dest_features = wire_features_to_lnd_feature_vec(<span class="kw-2">&amp;</span>invoice.destination_features)
@@ -1395,7 +1397,7 @@
                     failure_reason: e.to_string(),
                 })<span class="question-mark">?</span>;
 
-            <span class="macro">debug!</span>(<span class="string">&quot;LND payment does not exist for invoice {invoice:?}, will attempt to pay&quot;</span>);
+            <span class="macro">debug!</span>(<span class="string">"LND payment does not exist for invoice {invoice:?}, will attempt to pay"</span>);
             <span class="kw">let </span>payments = client
                 .router()
                 .send_payment_v2(SendPaymentRequest {
@@ -1414,14 +1416,14 @@
                 })
                 .<span class="kw">await
                 </span>.map_err(|status| {
-                    <span class="macro">info!</span>(<span class="string">&quot;LND payment request failed for invoice {invoice:?} with {status:?}&quot;</span>);
+                    <span class="macro">info!</span>(<span class="string">"LND payment request failed for invoice {invoice:?} with {status:?}"</span>);
                     LightningRpcError::FailedPayment {
-                        failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to make outgoing payment {status:?}&quot;</span>),
+                        failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to make outgoing payment {status:?}"</span>),
                     }
                 })<span class="question-mark">?</span>;
 
             <span class="macro">debug!</span>(
-                <span class="string">&quot;LND payment request sent for invoice {invoice:?}, waiting for payment status...&quot;
+                <span class="string">"LND payment request sent for invoice {invoice:?}, waiting for payment status..."
             </span>);
             <span class="kw">let </span><span class="kw-2">mut </span>messages = payments.into_inner();
             <span class="kw">loop </span>{
@@ -1429,41 +1431,41 @@
                     .message()
                     .<span class="kw">await
                     </span>.map_err(|error| LightningRpcError::FailedPayment {
-                        failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to get payment status {error:?}&quot;</span>),
+                        failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to get payment status {error:?}"</span>),
                     }) {
                     <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(payment)) <span class="kw">if </span>payment.status() == PaymentStatus::Succeeded =&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;LND payment succeeded for invoice {invoice:?}&quot;</span>);
+                        <span class="macro">info!</span>(<span class="string">"LND payment succeeded for invoice {invoice:?}"</span>);
                         <span class="kw">break </span>bitcoin_hashes::hex::FromHex::from_hex(
                             payment.payment_preimage.as_str(),
                         )
                         .map_err(|error| {
                             LightningRpcError::FailedPayment {
-                                failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to convert preimage {error:?}&quot;</span>),
+                                failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to convert preimage {error:?}"</span>),
                             }
                         })<span class="question-mark">?</span>;
                     }
                     <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(payment)) <span class="kw">if </span>payment.status() == PaymentStatus::InFlight =&gt; {
-                        <span class="macro">debug!</span>(<span class="string">&quot;LND payment is inflight&quot;</span>);
+                        <span class="macro">debug!</span>(<span class="string">"LND payment is inflight"</span>);
                         <span class="kw">continue</span>;
                     }
                     <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(payment)) =&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;LND payment failed for invoice {invoice:?} with {payment:?}&quot;</span>);
+                        <span class="macro">info!</span>(<span class="string">"LND payment failed for invoice {invoice:?} with {payment:?}"</span>);
                         <span class="kw">let </span>failure_reason = payment.failure_reason();
                         <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
-                            failure_reason: <span class="macro">format!</span>(<span class="string">&quot;{failure_reason:?}&quot;</span>),
+                            failure_reason: <span class="macro">format!</span>(<span class="string">"{failure_reason:?}"</span>),
                         });
                     }
                     <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;LND payment failed for invoice {invoice:?} with no payment status&quot;</span>);
+                        <span class="macro">info!</span>(<span class="string">"LND payment failed for invoice {invoice:?} with no payment status"</span>);
                         <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
                             failure_reason: <span class="macro">format!</span>(
-                                <span class="string">&quot;Failed to get payment status for payment hash {:?}&quot;</span>,
+                                <span class="string">"Failed to get payment status for payment hash {:?}"</span>,
                                 invoice.payment_hash
                             ),
                         });
                     }
                     <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;LND payment failed for invoice {invoice:?} with {e:?}&quot;</span>);
+                        <span class="macro">info!</span>(<span class="string">"LND payment failed for invoice {invoice:?} with {e:?}"</span>);
                         <span class="kw">return </span><span class="prelude-val">Err</span>(e);
                     }
                 }
@@ -1478,10 +1480,10 @@
         <span class="bool-val">true
     </span>}
 
-    <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">'a</span>&gt;(
         <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">'a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt; {
         <span class="kw">const </span>CHANNEL_SIZE: usize = <span class="number">100</span>;
 
         <span class="comment">// Channel to send intercepted htlc to the gateway for processing
@@ -1549,7 +1551,7 @@
         }
 
         <span class="prelude-val">Err</span>(LightningRpcError::FailedToCompleteHtlc {
-            failure_reason: <span class="string">&quot;Gatewayd has not started to route HTLCs&quot;</span>.to_string(),
+            failure_reason: <span class="string">"Gatewayd has not started to route HTLCs"</span>.to_string(),
         })
     }
 }
@@ -1578,7 +1580,7 @@
 <span class="kw">fn </span>wire_features_to_lnd_feature_vec(features_wire_encoded: <span class="kw-2">&amp;</span>[u8]) -&gt; anyhow::Result&lt;Vec&lt;i32&gt;&gt; {
     <span class="macro">ensure!</span>(
         features_wire_encoded.len() &lt;= <span class="number">1_000</span>,
-        <span class="string">&quot;Will not process feature bit vectors larger than 1000 byte&quot;
+        <span class="string">"Will not process feature bit vectors larger than 1000 byte"
     </span>);
 
     <span class="kw">let </span>lnd_features = features_wire_encoded
@@ -1590,7 +1592,7 @@
                 <span class="kw">if </span>(feature_byte &amp; (<span class="number">1u8 </span>&lt;&lt; bit_idx)) != <span class="number">0 </span>{
                     <span class="prelude-val">Some</span>(
                         i32::try_from(byte_idx * <span class="number">8 </span>+ bit_idx)
-                            .expect(<span class="string">&quot;Index will never exceed i32::MAX for feature vectors &lt;8MB&quot;</span>),
+                            .expect(<span class="string">"Index will never exceed i32::MAX for feature vectors &lt;8MB"</span>),
                     )
                 } <span class="kw">else </span>{
                     <span class="prelude-val">None
@@ -1629,7 +1631,7 @@
 
         <span class="comment">// Phoenix feature flags
         </span><span class="kw">let </span>features_payment_secret =
-            Vec::from_hex(<span class="string">&quot;20000000000000000000000002000000024100&quot;</span>).unwrap();
+            Vec::from_hex(<span class="string">"20000000000000000000000002000000024100"</span>).unwrap();
         <span class="macro">assert_eq!</span>(
             wire_features_to_lnd_feature_vec(<span class="kw-2">&amp;</span>features_payment_secret).unwrap(),
             <span class="macro">vec!</span>[<span class="number">8</span>, <span class="number">14</span>, <span class="number">17</span>, <span class="number">49</span>, <span class="number">149</span>]

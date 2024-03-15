@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/rpc/rpc_client.rs`."><title>rpc_client.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../ln_gateway/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/rpc/rpc_client.rs`."><title>rpc_client.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../ln_gateway/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -154,15 +156,9 @@
 <a href="#154" id="154">154</a>
 <a href="#155" id="155">155</a>
 <a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::result::Result;
-
-<span class="kw">use </span>bitcoin::Address;
+</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
-<span class="kw">pub use </span>reqwest::{Error, Response};
 <span class="kw">use </span>reqwest::{Method, StatusCode};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
@@ -198,23 +194,23 @@
     }
 
     <span class="kw">pub async fn </span>get_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayRpcResult&lt;GatewayInfo&gt; {
-        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/info&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
+        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">"/info"</span>).expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_get(url).<span class="kw">await
     </span>}
 
     <span class="comment">// FIXME: deprecated &gt;= 0.3.0
     </span><span class="kw">pub async fn </span>get_info_legacy(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayRpcResult&lt;GatewayInfo&gt; {
-        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/info&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
+        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">"/info"</span>).expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, ()).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>get_config(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: ConfigPayload) -&gt; GatewayRpcResult&lt;GatewayFedConfig&gt; {
-        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/config&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
+        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">"/config"</span>).expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: BalancePayload) -&gt; GatewayRpcResult&lt;Amount&gt; {
-        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/balance&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
+        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">"/balance"</span>).expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
@@ -222,12 +218,12 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: DepositAddressPayload,
     ) -&gt; GatewayRpcResult&lt;Address&gt; {
-        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/address&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
+        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">"/address"</span>).expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>withdraw(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: WithdrawPayload) -&gt; GatewayRpcResult&lt;TransactionId&gt; {
-        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/withdraw&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
+        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">"/withdraw"</span>).expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
@@ -237,8 +233,8 @@
     ) -&gt; GatewayRpcResult&lt;FederationInfo&gt; {
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
-            .join(<span class="string">&quot;/connect-fed&quot;</span>)
-            .expect(<span class="string">&quot;invalid base url&quot;</span>);
+            .join(<span class="string">"/connect-fed"</span>)
+            .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
@@ -246,17 +242,17 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: LeaveFedPayload,
     ) -&gt; GatewayRpcResult&lt;FederationInfo&gt; {
-        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/leave-fed&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
+        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">"/leave-fed"</span>).expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>backup(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: BackupPayload) -&gt; GatewayRpcResult&lt;()&gt; {
-        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/backup&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
+        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">"/backup"</span>).expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>restore(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: RestorePayload) -&gt; GatewayRpcResult&lt;()&gt; {
-        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/restore&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
+        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">"/restore"</span>).expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
@@ -266,8 +262,8 @@
     ) -&gt; GatewayRpcResult&lt;()&gt; {
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
-            .join(<span class="string">&quot;/set_configuration&quot;</span>)
-            .expect(<span class="string">&quot;invalid base url&quot;</span>);
+            .join(<span class="string">"/set_configuration"</span>)
+            .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 
@@ -284,7 +280,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(payload) = payload {
             builder = builder
                 .json(<span class="kw-2">&amp;</span>payload)
-                .header(reqwest::header::CONTENT_TYPE, <span class="string">&quot;application/json&quot;</span>)
+                .header(reqwest::header::CONTENT_TYPE, <span class="string">"application/json"</span>)
         }
         <span class="kw">let </span>response = builder.send().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -311,7 +307,7 @@
 
 <span class="attr">#[derive(Error, Debug)]
 </span><span class="kw">pub enum </span>GatewayRpcError {
-    <span class="attr">#[error(<span class="string">&quot;Bad status returned {0}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Bad status returned {0}"</span>)]
     </span>BadStatus(StatusCode),
     <span class="attr">#[error(transparent)]
     </span>RequestError(<span class="attr">#[from] </span>reqwest::Error),

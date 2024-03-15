@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/encoding/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_core/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/encoding/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_core/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1329,6 +1331,12 @@
 <a href="#1329" id="1329">1329</a>
 <a href="#1330" id="1330">1330</a>
 <a href="#1331" id="1331">1331</a>
+<a href="#1332" id="1332">1332</a>
+<a href="#1333" id="1333">1333</a>
+<a href="#1334" id="1334">1334</a>
+<a href="#1335" id="1335">1335</a>
+<a href="#1336" id="1336">1336</a>
+<a href="#1337" id="1337">1337</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -1338,7 +1346,7 @@
 <span class="kw">mod </span>secp256k1;
 <span class="kw">mod </span>tbs;
 
-<span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+<span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">mod </span>tls;
 
 <span class="kw">use </span>std::any::TypeId;
@@ -1362,7 +1370,7 @@
 
 <span class="doccomment">/// Object-safe trait for things that can encode themselves
 ///
-/// Like `rust-bitcoin`&#39;s `consensus_encode`, but without generics,
+/// Like `rust-bitcoin`'s `consensus_encode`, but without generics,
 /// so can be used in `dyn` objects.
 </span><span class="kw">pub trait </span>DynEncodable {
     <span class="kw">fn </span>consensus_encode_dyn(
@@ -1407,17 +1415,26 @@
     </span><span class="kw">fn </span>consensus_encode_to_vec(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
-            .expect(<span class="string">&quot;encoding to bytes can&#39;t fail for io reasons&quot;</span>);
+            .expect(<span class="string">"encoding to bytes can't fail for io reasons"</span>);
         bytes
     }
 
-    <span class="kw">fn </span>consensus_encode_to_hex(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+    <span class="doccomment">/// Encode and convert to hex string representation
+    </span><span class="kw">fn </span>consensus_encode_to_hex(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
-            .expect(<span class="string">&quot;encoding to bytes can&#39;t fail for io reasons&quot;</span>);
-        bytes.to_hex()
+            .expect(<span class="string">"encoding to bytes can't fail for io reasons"</span>);
+        <span class="comment">// TODO: This double allocation offends real Rustaceans. We should
+        // be able to go straight to String, but this use case seems under-served
+        // by hex encoding crates.
+        </span>bytes.to_hex()
     }
 
+    <span class="doccomment">/// Encode without storing the encoding, return the size
+    </span><span class="kw">fn </span>consensus_encode_to_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>io::sink())
+            .expect(<span class="string">"encoding to bytes can't fail for io reasons"</span>)
+    }
     <span class="doccomment">/// Generate a SHA256 hash of the consensus encoding using the default hash
     /// engine for `H`.
     ///
@@ -1430,7 +1447,7 @@
     {
         <span class="kw">let </span><span class="kw-2">mut </span>engine = H::engine();
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>engine)
-            .expect(<span class="string">&quot;writing to HashEngine cannot fail&quot;</span>);
+            .expect(<span class="string">"writing to HashEngine cannot fail"</span>);
         H::from_engine(engine)
     }
 }
@@ -1496,7 +1513,7 @@
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>writer = CountWrite::from(writer);
         <span class="self">self</span>.write(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(usize::try_from(writer.count()).expect(<span class="string">&quot;can&#39;t overflow&quot;</span>))
+        <span class="prelude-val">Ok</span>(usize::try_from(writer.count()).expect(<span class="string">"can't overflow"</span>))
     }
 }
 
@@ -1506,7 +1523,7 @@
         _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         BigSize::read(r)
-            .map_err(|e| DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;BigSize decoding error: {e:?}&quot;</span>)))
+            .map_err(|e| DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(<span class="string">"BigSize decoding error: {e:?}"</span>)))
     }
 }
 
@@ -1636,7 +1653,7 @@
     <span class="kw">let </span>len = u64::consensus_decode(r, <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>;
 
     <span class="kw">let </span>len: usize =
-        usize::try_from(len).map_err(|<span class="kw">_</span>| DecodeError::from_str(<span class="string">&quot;size exceeds memory&quot;</span>))<span class="question-mark">?</span>;
+        usize::try_from(len).map_err(|<span class="kw">_</span>| DecodeError::from_str(<span class="string">"size exceeds memory"</span>))<span class="question-mark">?</span>;
 
     <span class="kw">let </span>opts = ReadBytesFromFiniteReaderOpts {
         len,
@@ -1662,11 +1679,11 @@
 
 <span class="kw">impl</span>&lt;T&gt; Encodable <span class="kw">for </span><span class="kw-2">&amp;</span>[T]
 <span class="kw">where
-    </span>T: Encodable + <span class="lifetime">&#39;static</span>,
+    </span>T: Encodable + <span class="lifetime">'static</span>,
 {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="kw">if </span>TypeId::of::&lt;T&gt;() == TypeId::of::&lt;u8&gt;() {
-            <span class="comment">// unsafe: we&#39;ve just checked that T is `u8` so the transmute here is a no-op
+            <span class="comment">// unsafe: we've just checked that T is `u8` so the transmute here is a no-op
             </span><span class="kw">return </span>consensus_encode_bytes(<span class="kw">unsafe </span>{ mem::transmute::&lt;<span class="kw-2">&amp;</span>[T], <span class="kw-2">&amp;</span>[u8]&gt;(<span class="self">self</span>) }, writer);
         }
 
@@ -1682,7 +1699,7 @@
 
 <span class="kw">impl</span>&lt;T&gt; Encodable <span class="kw">for </span>Vec&lt;T&gt;
 <span class="kw">where
-    </span>T: Encodable + <span class="lifetime">&#39;static</span>,
+    </span>T: Encodable + <span class="lifetime">'static</span>,
 {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         (<span class="self">self </span><span class="kw">as </span><span class="kw-2">&amp;</span>[T]).consensus_encode(writer)
@@ -1691,14 +1708,14 @@
 
 <span class="kw">impl</span>&lt;T&gt; Decodable <span class="kw">for </span>Vec&lt;T&gt;
 <span class="kw">where
-    </span>T: Decodable + <span class="lifetime">&#39;static</span>,
+    </span>T: Decodable + <span class="lifetime">'static</span>,
 {
     <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">if </span>TypeId::of::&lt;T&gt;() == TypeId::of::&lt;u8&gt;() {
-            <span class="comment">// unsafe: we&#39;ve just checked that T is `u8` so the transmute here is a no-op
+            <span class="comment">// unsafe: we've just checked that T is `u8` so the transmute here is a no-op
             </span><span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="kw">unsafe </span>{ mem::transmute::&lt;Vec&lt;u8&gt;, Vec&lt;T&gt;&gt;(consensus_decode_bytes(d)<span class="question-mark">?</span>) });
         }
         <span class="kw">let </span>len = u64::consensus_decode(d, modules)<span class="question-mark">?</span>;
@@ -1743,11 +1760,11 @@
 
 <span class="kw">impl</span>&lt;T, <span class="kw">const </span>SIZE: usize&gt; Encodable <span class="kw">for </span>[T; SIZE]
 <span class="kw">where
-    </span>T: Encodable + <span class="lifetime">&#39;static</span>,
+    </span>T: Encodable + <span class="lifetime">'static</span>,
 {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">if </span>TypeId::of::&lt;T&gt;() == TypeId::of::&lt;u8&gt;() {
-            <span class="comment">// unsafe: we&#39;ve just checked that T is `u8` so the transmute here is a no-op
+            <span class="comment">// unsafe: we've just checked that T is `u8` so the transmute here is a no-op
             </span><span class="kw">return </span>consensus_encode_bytes_static(
                 <span class="kw">unsafe </span>{ mem::transmute::&lt;<span class="kw-2">&amp;</span>[T; SIZE], <span class="kw-2">&amp;</span>[u8; SIZE]&gt;(<span class="self">self</span>) },
                 writer,
@@ -1772,14 +1789,14 @@
 
 <span class="kw">impl</span>&lt;T, <span class="kw">const </span>SIZE: usize&gt; Decodable <span class="kw">for </span>[T; SIZE]
 <span class="kw">where
-    </span>T: Decodable + Debug + Default + Copy + <span class="lifetime">&#39;static</span>,
+    </span>T: Decodable + Debug + Default + Copy + <span class="lifetime">'static</span>,
 {
     <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">if </span>TypeId::of::&lt;T&gt;() == TypeId::of::&lt;u8&gt;() {
-            <span class="comment">// unsafe: we&#39;ve just checked that T is `u8` so the transmute here is a no-op
+            <span class="comment">// unsafe: we've just checked that T is `u8` so the transmute here is a no-op
             </span><span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="kw">unsafe </span>{
                 <span class="kw">let </span>arr = consensus_decode_bytes_static(d)<span class="question-mark">?</span>;
                 horribe_array_transmute_workaround::&lt;SIZE, u8, T&gt;(arr)
@@ -1823,7 +1840,7 @@
             <span class="number">0 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
             <span class="number">1 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(T::consensus_decode(d, modules)<span class="question-mark">?</span>)),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(DecodeError::from_str(
-                <span class="string">&quot;Invalid flag for option enum, expected 0 or 1&quot;</span>,
+                <span class="string">"Invalid flag for option enum, expected 0 or 1"</span>,
             )),
         }
     }
@@ -1866,7 +1883,7 @@
             <span class="number">0 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(E::consensus_decode(d, modules)<span class="question-mark">?</span>)),
             <span class="number">1 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(T::consensus_decode(d, modules)<span class="question-mark">?</span>)),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(DecodeError::from_str(
-                <span class="string">&quot;Invalid flag for option enum, expected 0 or 1&quot;</span>,
+                <span class="string">"Invalid flag for option enum, expected 0 or 1"</span>,
             )),
         }
     }
@@ -1934,7 +1951,7 @@
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>SystemTime {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        <span class="kw">let </span>duration = <span class="self">self</span>.duration_since(UNIX_EPOCH).expect(<span class="string">&quot;valid duration&quot;</span>);
+        <span class="kw">let </span>duration = <span class="self">self</span>.duration_since(UNIX_EPOCH).expect(<span class="string">"valid duration"</span>);
         duration.consensus_encode_dyn(writer)
     }
 }
@@ -2029,7 +2046,7 @@
         <span class="kw">match </span>bool_as_u8[<span class="number">0</span>] {
             <span class="number">0 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>),
             <span class="number">1 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>),
-            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(DecodeError::from_str(<span class="string">&quot;Out of range, expected 0 or 1&quot;</span>)),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(DecodeError::from_str(<span class="string">"Out of range, expected 0 or 1"</span>)),
         }
     }
 }
@@ -2037,12 +2054,12 @@
 <span class="kw">impl </span>DecodeError {
     <span class="comment">// TODO: think about better name
     </span><span class="attr">#[allow(clippy::should_implement_trait)]
-    </span><span class="kw">pub fn </span>from_str(s: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>from_str(s: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str) -&gt; <span class="self">Self </span>{
         <span class="attr">#[derive(Debug)]
-        </span><span class="kw">struct </span>StrError(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str);
+        </span><span class="kw">struct </span>StrError(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str);
 
         <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>StrError {
-            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
                 std::fmt::Display::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, f)
             }
         }
@@ -2052,13 +2069,13 @@
         DecodeError(anyhow::Error::from(StrError(s)))
     }
 
-    <span class="kw">pub fn </span>from_err&lt;E: std::error::Error + Send + Sync + <span class="lifetime">&#39;static</span>&gt;(e: E) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>from_err&lt;E: std::error::Error + Send + Sync + <span class="lifetime">'static</span>&gt;(e: E) -&gt; <span class="self">Self </span>{
         DecodeError(anyhow::Error::from(e))
     }
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DecodeError {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
         std::fmt::Display::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, f)
     }
 }
@@ -2094,7 +2111,7 @@
             <span class="kw">let </span>amt = K::consensus_decode(d, modules)<span class="question-mark">?</span>;
             <span class="kw">let </span>v = V::consensus_decode(d, modules)<span class="question-mark">?</span>;
             <span class="kw">if </span>res.insert(amt, v).is_some() {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError(<span class="macro">format_err!</span>(<span class="string">&quot;Duplicate key&quot;</span>)));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError(<span class="macro">format_err!</span>(<span class="string">"Duplicate key"</span>)));
             }
         }
         <span class="prelude-val">Ok</span>(res)
@@ -2128,20 +2145,20 @@
         <span class="kw">for _ in </span><span class="number">0</span>..len {
             <span class="kw">let </span>k = K::consensus_decode(d, modules)<span class="question-mark">?</span>;
             <span class="kw">if </span>!res.insert(k) {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError(<span class="macro">format_err!</span>(<span class="string">&quot;Duplicate key&quot;</span>)));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError(<span class="macro">format_err!</span>(<span class="string">"Duplicate key"</span>)));
             }
         }
         <span class="prelude-val">Ok</span>(res)
     }
 }
 
-<span class="kw">impl </span>Encodable <span class="kw">for </span>Cow&lt;<span class="lifetime">&#39;static</span>, str&gt; {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>Cow&lt;<span class="lifetime">'static</span>, str&gt; {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="self">self</span>.as_ref().consensus_encode(writer)
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>Cow&lt;<span class="lifetime">&#39;static</span>, str&gt; {
+<span class="kw">impl </span>Decodable <span class="kw">for </span>Cow&lt;<span class="lifetime">'static</span>, str&gt; {
     <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
@@ -2153,7 +2170,7 @@
 <span class="doccomment">/// A writer counting number of writes written to it
 ///
 /// Copy&amp;pasted from &lt;https://github.com/SOF3/count-write&gt; which
-/// uses Apache license (and it&#39;s a trivial amount of code, repeating
+/// uses Apache license (and it's a trivial amount of code, repeating
 /// on stack overflow).
 </span><span class="kw">pub struct </span>CountWrite&lt;W&gt; {
     inner: W,
@@ -2199,10 +2216,10 @@
 /// module_instance_id | len_u64 | data
 /// ```
 ///
-/// So clients that don&#39;t have a corresponding module, can read
+/// So clients that don't have a corresponding module, can read
 /// the `len_u64` and skip the amount of data specified in it.
 ///
-/// This type makes it more convenient. It&#39;s possible to attempt
+/// This type makes it more convenient. It's possible to attempt
 /// to retry decoding after more modules become available by using
 /// [`DynRawFallback::redecode_raw`].
 ///
@@ -2212,7 +2229,7 @@
 </span><span class="kw">pub enum </span>DynRawFallback&lt;T&gt; {
     Raw {
         module_instance_id: ModuleInstanceId,
-        <span class="attr">#[serde(with = <span class="string">&quot;::fedimint_core::encoding::as_hex&quot;</span>)]
+        <span class="attr">#[serde(with = <span class="string">"::fedimint_core::encoding::as_hex"</span>)]
         </span>raw: Vec&lt;u8&gt;,
     },
     Decoded(T),
@@ -2220,7 +2237,7 @@
 
 <span class="kw">impl</span>&lt;T&gt; DynRawFallback&lt;T&gt;
 <span class="kw">where
-    </span>T: Decodable + <span class="lifetime">&#39;static</span>,
+    </span>T: Decodable + <span class="lifetime">'static</span>,
 {
     <span class="doccomment">/// Get the decoded `T` or `None` if not decoded yet
     </span><span class="kw">pub fn </span>decoded(<span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt; {
@@ -2234,7 +2251,7 @@
     </span><span class="kw">pub fn </span>expect_decoded(<span class="self">self</span>) -&gt; T {
         <span class="kw">match </span><span class="self">self </span>{
             DynRawFallback::Raw { .. } =&gt; {
-                <span class="macro">panic!</span>(<span class="string">&quot;Expected decoded value. Possibly `redecode_raw` call is missing.&quot;</span>)
+                <span class="macro">panic!</span>(<span class="string">"Expected decoded value. Possibly `redecode_raw` call is missing."</span>)
             }
             DynRawFallback::Decoded(v) =&gt; v,
         }
@@ -2244,7 +2261,7 @@
     </span><span class="kw">pub fn </span>expect_decoded_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>T {
         <span class="kw">match </span><span class="self">self </span>{
             DynRawFallback::Raw { .. } =&gt; {
-                <span class="macro">panic!</span>(<span class="string">&quot;Expected decoded value. Possibly `redecode_raw` call is missing.&quot;</span>)
+                <span class="macro">panic!</span>(<span class="string">"Expected decoded value. Possibly `redecode_raw` call is missing."</span>)
             }
             DynRawFallback::Decoded(v) =&gt; v,
         }
@@ -2286,7 +2303,7 @@
 
 <span class="kw">impl</span>&lt;T&gt; Decodable <span class="kw">for </span>DynRawFallback&lt;T&gt;
 <span class="kw">where
-    </span>T: Decodable + <span class="lifetime">&#39;static</span>,
+    </span>T: Decodable + <span class="lifetime">'static</span>,
 {
     <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
         reader: <span class="kw-2">&amp;mut </span>R,
@@ -2302,7 +2319,7 @@
 
                 <span class="kw">if </span>reader.limit() != <span class="number">0 </span>{
                     <span class="kw">return </span><span class="prelude-val">Err</span>(fedimint_core::encoding::DecodeError::new_custom(
-                        <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Dyn type did not consume all bytes during decoding&quot;</span>),
+                        <span class="macro">anyhow::anyhow!</span>(<span class="string">"Dyn type did not consume all bytes during decoding"</span>),
                     ));
                 }
 
@@ -2343,12 +2360,9 @@
     <span class="kw">use </span>std::fmt::Debug;
     <span class="kw">use </span>std::io::Cursor;
 
-    <span class="kw">use </span>bitcoin_hashes::hex::FromHex;
-
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
     <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseValue;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
-    <span class="kw">use </span><span class="kw">crate</span>::ModuleDecoderRegistry;
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>test_roundtrip&lt;T&gt;(value: T)
     <span class="kw">where
@@ -2403,7 +2417,7 @@
             NoDefaultEnum::Foo,
             NoDefaultEnum::Bar(
                 <span class="number">42</span>,
-                <span class="string">&quot;The answer to life, the universe, and everything&quot;</span>.to_string(),
+                <span class="string">"The answer to life, the universe, and everything"</span>.to_string(),
             ),
             NoDefaultEnum::Baz { baz: <span class="number">0 </span>},
         ];
@@ -2428,8 +2442,8 @@
         <span class="kw">let </span>decode_res = NoDefaultEnum::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>Default::default());
 
         <span class="kw">match </span>decode_res {
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Should return error&quot;</span>),
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">assert!</span>(e.to_string().contains(<span class="string">&quot;Invalid enum variant&quot;</span>)),
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"Should return error"</span>),
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">assert!</span>(e.to_string().contains(<span class="string">"Invalid enum variant"</span>)),
         }
     }
 
@@ -2507,7 +2521,7 @@
 
     <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_invoice() {
-        <span class="kw">let </span>invoice_str = <span class="string">&quot;lnbc100p1psj9jhxdqud3jxktt5w46x7unfv9kz6mn0v3jsnp4q0d3p2sfluzdx45tqcs\
+        <span class="kw">let </span>invoice_str = <span class="string">"lnbc100p1psj9jhxdqud3jxktt5w46x7unfv9kz6mn0v3jsnp4q0d3p2sfluzdx45tqcs\
 			h2pu5qc7lgq0xs578ngs6s0s68ua4h7cvspp5q6rmq35js88zp5dvwrv9m459tnk2zunwj5jalqtyxqulh0l\
 			5gflssp5nf55ny5gcrfl30xuhzj3nphgj27rstekmr9fw3ny5989s300gyus9qyysgqcqpcrzjqw2sxwe993\
 			h5pcm4dxzpvttgza8zhkqxpgffcrf5v25nwpr3cmfg7z54kuqq8rgqqqqqqqq2qqqqq9qq9qrzjqd0ylaqcl\
@@ -2517,7 +2531,7 @@
 			ywntrrhqjcraumvc4y6r8v4z5v593trte429v4hredj7ms5z52usqq9ngqqqqqqqlgqqqqqqgq9qrzjq2v0v\
 			p62g49p7569ev48cmulecsxe59lvaw3wlxm7r982zxa9zzj7z5l0cqqxusqqyqqqqlgqqqqqzsqygarl9fh3\
 			8s0gyuxjjgux34w75dnc6xp2l35j7es3jd4ugt3lu0xzre26yg5m7ke54n2d5sym4xcmxtl8238xxvw5h5h5\
-			j5r6drg6k6zcqj0fcwg&quot;</span>;
+			j5r6drg6k6zcqj0fcwg"</span>;
         <span class="kw">let </span>invoice = invoice_str
             .parse::&lt;lightning_invoice::Bolt11Invoice&gt;()
             .unwrap();
@@ -2527,14 +2541,14 @@
     <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_btreemap() {
         test_roundtrip(BTreeMap::from([
-            (<span class="string">&quot;a&quot;</span>.to_string(), <span class="number">1u32</span>),
-            (<span class="string">&quot;b&quot;</span>.to_string(), <span class="number">2</span>),
+            (<span class="string">"a"</span>.to_string(), <span class="number">1u32</span>),
+            (<span class="string">"b"</span>.to_string(), <span class="number">2</span>),
         ]));
     }
 
     <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_btreeset() {
-        test_roundtrip(BTreeSet::from([<span class="string">&quot;a&quot;</span>.to_string(), <span class="string">&quot;b&quot;</span>.to_string()]));
+        test_roundtrip(BTreeSet::from([<span class="string">"a"</span>.to_string(), <span class="string">"b"</span>.to_string()]));
     }
 
     <span class="attr">#[test_log::test]
@@ -2572,7 +2586,7 @@
         encoded.sort();
         <span class="kw">let </span>decoded = encoded.iter().map(decode_value).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">for </span>(i, (a, b)) <span class="kw">in </span>vec.iter().zip(decoded.iter()).enumerate() {
-            <span class="macro">assert_eq!</span>(a, b, <span class="string">&quot;difference at index {i}&quot;</span>);
+            <span class="macro">assert_eq!</span>(a, b, <span class="string">"difference at index {i}"</span>);
         }
     }
 
@@ -2596,10 +2610,10 @@
 
         <span class="attr">#[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
         </span><span class="kw">struct </span>Text(String);
-        <span class="kw">let </span>texts = (<span class="string">&#39; &#39;</span>..<span class="string">&#39;~&#39;</span>)
+        <span class="kw">let </span>texts = (<span class="string">' '</span>..<span class="string">'~'</span>)
             .flat_map(|i| {
-                (<span class="string">&#39; &#39;</span>..<span class="string">&#39;~&#39;</span>)
-                    .map(|j| Text(<span class="macro">format!</span>(<span class="string">&quot;{i}{j}&quot;</span>)))
+                (<span class="string">' '</span>..<span class="string">'~'</span>)
+                    .map(|j| Text(<span class="macro">format!</span>(<span class="string">"{i}{j}"</span>)))
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
             })
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
@@ -2614,7 +2628,7 @@
     </span><span class="kw">fn </span>test_bitcoin_consensus_encoding() {
         <span class="comment">// encodings should follow the bitcoin consensus encoding
         </span><span class="kw">let </span>txid = bitcoin::Txid::from_hex(
-            <span class="string">&quot;51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a&quot;</span>,
+            <span class="string">"51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a"</span>,
         )
         .unwrap();
         test_roundtrip_expected(
@@ -2625,7 +2639,7 @@
             ],
         );
         <span class="kw">let </span>transaction: Vec&lt;u8&gt; = FromHex::from_hex(
-            <span class="string">&quot;02000000000101d35b66c54cf6c09b81a8d94cd5d179719cd7595c258449452a9305ab9b12df250200000000fdffffff020cd50a0000000000160014ae5d450b71c04218e6e81c86fcc225882d7b7caae695b22100000000160014f60834ef165253c571b11ce9fa74e46692fc5ec10248304502210092062c609f4c8dc74cd7d4596ecedc1093140d90b3fd94b4bdd9ad3e102ce3bc02206bb5a6afc68d583d77d5d9bcfb6252a364d11a307f3418be1af9f47f7b1b3d780121026e5628506ecd33242e5ceb5fdafe4d3066b5c0f159b3c05a621ef65f177ea28600000000&quot;
+            <span class="string">"02000000000101d35b66c54cf6c09b81a8d94cd5d179719cd7595c258449452a9305ab9b12df250200000000fdffffff020cd50a0000000000160014ae5d450b71c04218e6e81c86fcc225882d7b7caae695b22100000000160014f60834ef165253c571b11ce9fa74e46692fc5ec10248304502210092062c609f4c8dc74cd7d4596ecedc1093140d90b3fd94b4bdd9ad3e102ce3bc02206bb5a6afc68d583d77d5d9bcfb6252a364d11a307f3418be1af9f47f7b1b3d780121026e5628506ecd33242e5ceb5fdafe4d3066b5c0f159b3c05a621ef65f177ea28600000000"
         </span>).unwrap();
         <span class="kw">let </span>transaction =
             bitcoin::Transaction::from_bytes(<span class="kw-2">&amp;</span>transaction, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
@@ -2648,7 +2662,7 @@
             ],
         );
         <span class="kw">let </span>blockhash = bitcoin::BlockHash::from_hex(
-            <span class="string">&quot;0000000000000000000065bda8f8a88f2e1e00d9a6887a43d640e52a4c7660f2&quot;</span>,
+            <span class="string">"0000000000000000000065bda8f8a88f2e1e00d9a6887a43d640e52a4c7660f2"</span>,
         )
         .unwrap();
         test_roundtrip_expected(

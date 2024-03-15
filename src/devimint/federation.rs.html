@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `devimint/src/federation.rs`."><title>federation.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../devimint/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `devimint/src/federation.rs`."><title>federation.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../devimint/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -649,6 +651,47 @@
 <a href="#649" id="649">649</a>
 <a href="#650" id="650">650</a>
 <a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
@@ -656,10 +699,8 @@
 
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
-<span class="kw">use </span>fedimint_core::admin_client::{
-    ConfigGenConnectionsRequest, ConfigGenParamsRequest, WsAdminClient,
-};
-<span class="kw">use </span>fedimint_core::api::ServerStatus;
+<span class="kw">use </span>fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, ServerStatus};
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig, ServerModuleConfigGenParamsRegistry};
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
@@ -673,8 +714,10 @@
 <span class="kw">use </span>fedimint_wallet_client::config::WalletClientConfig;
 <span class="kw">use </span>fedimintd::attach_default_module_init_params;
 <span class="kw">use </span>fedimintd::fedimintd::FM_EXTRA_DKG_META_VAR;
+<span class="kw">use </span>fs_lock::FileLock;
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>rand::Rng;
+<span class="kw">use </span>semver::VersionReq;
 <span class="kw">use </span>tracing::{debug, info};
 
 <span class="kw">use </span><span class="kw">super</span>::external::Bitcoind;
@@ -701,49 +744,67 @@
 }
 
 <span class="kw">impl </span>Client {
-    <span class="kw">fn </span>client_dir(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PathBuf {
-        <span class="kw">let </span>data_dir: PathBuf = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)
-            .expect(<span class="string">&quot;FM_DATA_DIR not set&quot;</span>)
+    <span class="kw">fn </span>clients_dir() -&gt; PathBuf {
+        <span class="kw">let </span>data_dir: PathBuf = env::var(<span class="string">"FM_DATA_DIR"</span>)
+            .expect(<span class="string">"FM_DATA_DIR not set"</span>)
             .parse()
-            .expect(<span class="string">&quot;FM_DATA_DIR invalid&quot;</span>);
-        data_dir.join(<span class="string">&quot;clients&quot;</span>).join(<span class="kw-2">&amp;</span><span class="self">self</span>.name)
+            .expect(<span class="string">"FM_DATA_DIR invalid"</span>);
+        data_dir.join(<span class="string">"clients"</span>)
+    }
+
+    <span class="kw">fn </span>client_dir(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PathBuf {
+        <span class="self">Self</span>::clients_dir().join(<span class="kw-2">&amp;</span><span class="self">self</span>.name)
+    }
+
+    <span class="kw">pub fn </span>client_name_lock(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;FileLock&gt; {
+        <span class="kw">let </span>lock_path = <span class="self">Self</span>::clients_dir().join(<span class="macro">format!</span>(<span class="string">".{name}.lock"</span>));
+        <span class="kw">let </span>file_lock = std::fs::OpenOptions::new()
+            .write(<span class="bool-val">true</span>)
+            .create(<span class="bool-val">true</span>)
+            .truncate(<span class="bool-val">true</span>)
+            .open(<span class="kw-2">&amp;</span>lock_path)
+            .with_context(|| <span class="macro">format!</span>(<span class="string">"Failed to open {}"</span>, lock_path.display()))<span class="question-mark">?</span>;
+
+        fs_lock::FileLock::new_exclusive(file_lock)
+            .with_context(|| <span class="macro">format!</span>(<span class="string">"Failed to lock {}"</span>, lock_path.display()))
     }
 
     <span class="doccomment">/// Create a [`Client`] that starts with a fresh state.
-    ///
-    /// Fails if directory exists. See [`Self::open_or_create`]
-    /// if that&#39;s not desired.
     </span><span class="kw">pub async fn </span>create(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
-        <span class="kw">let </span>client = <span class="self">Self </span>{
-            name: name.to_owned(),
-        };
+        tokio::task::block_in_place(|| {
+            <span class="kw">let </span>_lock = <span class="self">Self</span>::client_name_lock(name);
+            <span class="kw">for </span>i <span class="kw">in </span><span class="number">0u64</span>.. {
+                <span class="kw">let </span>client = <span class="self">Self </span>{
+                    name: <span class="macro">format!</span>(<span class="string">"{name}-{i}"</span>),
+                };
 
-        <span class="kw">if </span>!client.client_dir().exists() {
-            std::fs::create_dir_all(client.client_dir())<span class="question-mark">?</span>;
-        } <span class="kw">else </span>{
-            <span class="macro">bail!</span>(<span class="string">&quot;Client already exists: {name}&quot;</span>);
-        }
-
-        <span class="prelude-val">Ok</span>(client)
+                <span class="kw">if </span>!client.client_dir().exists() {
+                    std::fs::create_dir_all(client.client_dir())<span class="question-mark">?</span>;
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(client);
+                }
+            }
+            <span class="macro">unreachable!</span>()
+        })
     }
 
     <span class="doccomment">/// Open or create a [`Client`] that starts with a fresh state.
     </span><span class="kw">pub async fn </span>open_or_create(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
-        <span class="kw">let </span>client = <span class="self">Self </span>{
-            name: name.to_owned(),
-        };
-
-        <span class="kw">if </span>!client.client_dir().exists() {
-            std::fs::create_dir_all(client.client_dir())<span class="question-mark">?</span>;
-        }
-
-        <span class="prelude-val">Ok</span>(client)
+        tokio::task::block_in_place(|| {
+            <span class="kw">let </span>_lock = <span class="self">Self</span>::client_name_lock(name);
+            <span class="kw">let </span>client = <span class="self">Self </span>{
+                name: <span class="macro">format!</span>(<span class="string">"{name}-0"</span>),
+            };
+            <span class="kw">if </span>!client.client_dir().exists() {
+                std::fs::create_dir_all(client.client_dir())<span class="question-mark">?</span>;
+            }
+            <span class="prelude-val">Ok</span>(client)
+        })
     }
 
     <span class="doccomment">/// Client to join a federation
     </span><span class="kw">pub async fn </span>join_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, invite_code: String) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">&quot;Joining federation with the main client&quot;</span>);
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;join-federation&quot;</span>, invite_code).run().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Joining federation with the main client"</span>);
+        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"join-federation"</span>, invite_code).run().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -754,9 +815,9 @@
         <span class="kw">let </span>new = Client::create(name).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">cmd!</span>(
-            <span class="string">&quot;cp&quot;</span>,
-            <span class="string">&quot;-R&quot;</span>,
-            <span class="self">self</span>.client_dir().join(<span class="string">&quot;client.db&quot;</span>).display(),
+            <span class="string">"cp"</span>,
+            <span class="string">"-R"</span>,
+            <span class="self">self</span>.client_dir().join(<span class="string">"client.db"</span>).display(),
             new.client_dir().display()
         )
         .run()
@@ -766,27 +827,32 @@
     }
 
     <span class="kw">pub async fn </span>balance(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
-        <span class="prelude-val">Ok</span>(<span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;total_amount_msat&quot;</span>]
+        <span class="prelude-val">Ok</span>(<span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"total_amount_msat"</span>]
             .as_u64()
             .unwrap())
     }
 
-    <span class="kw">pub async fn </span>use_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::gatewayd::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>gateway_id = gw.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;switch-gateway&quot;</span>, gateway_id.clone())
-            .run()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(
-            <span class="string">&quot;Using {name} gateway&quot;</span>,
-            name = gw.ln.as_ref().unwrap().name()
-        );
+    <span class="comment">// TODO(support:v0.2): remove
+    </span><span class="kw">pub async fn </span>use_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::gatewayd::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+        <span class="kw">if </span>VersionReq::parse(<span class="string">"&lt;0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
+            <span class="kw">let </span>gateway_id = gw.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"switch-gateway"</span>, gateway_id.clone())
+                .run()
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="macro">info!</span>(
+                <span class="string">"Using {name} gateway"</span>,
+                name = gw.ln.as_ref().unwrap().name()
+            );
+        }
+
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub async fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
         <span class="macro">cmd!</span>(
             <span class="kw">crate</span>::util::get_fedimint_cli_path(),
-            <span class="macro">format!</span>(<span class="string">&quot;--data-dir={}&quot;</span>, <span class="self">self</span>.client_dir().display())
+            <span class="macro">format!</span>(<span class="string">"--data-dir={}"</span>, <span class="self">self</span>.client_dir().display())
         )
     }
 }
@@ -807,7 +873,7 @@
             ServerModuleConfigGenParamsRegistry::default(),
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>admin_clients: BTreeMap&lt;PeerId, WsAdminClient&gt; = BTreeMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>admin_clients: BTreeMap&lt;PeerId, DynGlobalApi&gt; = BTreeMap::new();
         <span class="kw">for </span>(peer, peer_params) <span class="kw">in </span><span class="kw-2">&amp;</span>params {
             <span class="kw">let </span>peer_env_vars =
                 vars::Fedimintd::init(<span class="kw-2">&amp;</span>process_mgr.globals, peer_params.to_owned()).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -821,7 +887,8 @@
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>,
             );
-            <span class="kw">let </span>admin_client = WsAdminClient::new(SafeUrl::parse(<span class="kw-2">&amp;</span>peer_env_vars.FM_API_URL)<span class="question-mark">?</span>);
+            <span class="kw">let </span>admin_client =
+                DynGlobalApi::from_pre_peer_id_endpoint(SafeUrl::parse(<span class="kw-2">&amp;</span>peer_env_vars.FM_API_URL)<span class="question-mark">?</span>);
             admin_clients.insert(<span class="kw-2">*</span>peer, admin_client);
             peer_to_env_vars_map.insert(peer.to_usize(), peer_env_vars);
         }
@@ -830,55 +897,55 @@
 
         <span class="comment">// move configs to config directory
         </span><span class="kw">let </span>client_dir = utf8(<span class="kw-2">&amp;</span>process_mgr.globals.FM_CLIENT_DIR);
-        <span class="kw">let </span>invite_code_filename_original = <span class="string">&quot;invite-code&quot;</span>;
+        <span class="kw">let </span>invite_code_filename_original = <span class="string">"invite-code"</span>;
 
         <span class="comment">// copy over invite-code file to client directory
         </span><span class="kw">let </span>peer_data_dir = utf8(<span class="kw-2">&amp;</span>peer_to_env_vars_map[<span class="kw-2">&amp;</span><span class="number">0</span>].FM_DATA_DIR);
         tokio::fs::copy(
-            <span class="macro">format!</span>(<span class="string">&quot;{peer_data_dir}/{invite_code_filename_original}&quot;</span>),
-            <span class="macro">format!</span>(<span class="string">&quot;{client_dir}/{invite_code_filename_original}&quot;</span>),
+            <span class="macro">format!</span>(<span class="string">"{peer_data_dir}/{invite_code_filename_original}"</span>),
+            <span class="macro">format!</span>(<span class="string">"{client_dir}/{invite_code_filename_original}"</span>),
         )
         .<span class="kw">await
-        </span>.context(<span class="string">&quot;copying invite-code file&quot;</span>)<span class="question-mark">?</span>;
+        </span>.context(<span class="string">"copying invite-code file"</span>)<span class="question-mark">?</span>;
 
-        <span class="comment">// move each guardian&#39;s invite-code file to the client&#39;s directory
+        <span class="comment">// move each guardian's invite-code file to the client's directory
         // appending the peer id to the end
         </span><span class="kw">for </span>(index, peer_env_vars) <span class="kw">in </span><span class="kw-2">&amp;</span>peer_to_env_vars_map {
             <span class="kw">let </span>peer_data_dir = utf8(<span class="kw-2">&amp;</span>peer_env_vars.FM_DATA_DIR);
 
-            <span class="kw">let </span>invite_code_filename_indexed = <span class="macro">format!</span>(<span class="string">&quot;{invite_code_filename_original}-{}&quot;</span>, index);
+            <span class="kw">let </span>invite_code_filename_indexed = <span class="macro">format!</span>(<span class="string">"{invite_code_filename_original}-{}"</span>, index);
             tokio::fs::rename(
-                <span class="macro">format!</span>(<span class="string">&quot;{peer_data_dir}/{}&quot;</span>, invite_code_filename_original),
-                <span class="macro">format!</span>(<span class="string">&quot;{client_dir}/{}&quot;</span>, invite_code_filename_indexed),
+                <span class="macro">format!</span>(<span class="string">"{peer_data_dir}/{}"</span>, invite_code_filename_original),
+                <span class="macro">format!</span>(<span class="string">"{client_dir}/{}"</span>, invite_code_filename_indexed),
             )
             .<span class="kw">await
-            </span>.context(<span class="string">&quot;moving invite-code file&quot;</span>)<span class="question-mark">?</span>;
+            </span>.context(<span class="string">"moving invite-code file"</span>)<span class="question-mark">?</span>;
         }
-        <span class="macro">info!</span>(<span class="string">&quot;moved invite-code files to client data directory&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"moved invite-code files to client data directory"</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             members,
             vars: peer_to_env_vars_map,
             bitcoind,
-            client: Client::open_or_create(<span class="string">&quot;default&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>,
+            client: Client::open_or_create(<span class="string">"default"</span>).<span class="kw">await</span><span class="question-mark">?</span>,
         })
     }
 
     <span class="kw">pub async fn </span>client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ClientConfig&gt; {
-        <span class="kw">let </span>cfg_path = <span class="self">self</span>.vars[<span class="kw-2">&amp;</span><span class="number">0</span>].FM_DATA_DIR.join(<span class="string">&quot;client.json&quot;</span>);
+        <span class="kw">let </span>cfg_path = <span class="self">self</span>.vars[<span class="kw-2">&amp;</span><span class="number">0</span>].FM_DATA_DIR.join(<span class="string">"client.json"</span>);
         load_from_file(<span class="kw-2">&amp;</span>cfg_path)
     }
 
     <span class="doccomment">/// Read the invite code from the client data dir
     </span><span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>data_dir: PathBuf = env::var(<span class="string">&quot;FM_CLIENT_DIR&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
-        <span class="kw">let </span>invite_code = fs::read_to_string(data_dir.join(<span class="string">&quot;invite-code&quot;</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>data_dir: PathBuf = env::var(<span class="string">"FM_CLIENT_DIR"</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
+        <span class="kw">let </span>invite_code = fs::read_to_string(data_dir.join(<span class="string">"invite-code"</span>))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(invite_code)
     }
 
     <span class="kw">pub fn </span>invite_code_for(peer_id: PeerId) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>data_dir: PathBuf = env::var(<span class="string">&quot;FM_CLIENT_DIR&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
-        <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">&quot;invite-code-{}&quot;</span>, peer_id);
+        <span class="kw">let </span>data_dir: PathBuf = env::var(<span class="string">"FM_CLIENT_DIR"</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
+        <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"invite-code-{}"</span>, peer_id);
         <span class="kw">let </span>invite_code = fs::read_to_string(data_dir.join(name))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(invite_code)
     }
@@ -904,7 +971,7 @@
 
     <span class="kw">pub async fn </span>start_server(<span class="kw-2">&amp;mut </span><span class="self">self</span>, process_mgr: <span class="kw-2">&amp;</span>ProcessManager, peer: usize) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">if </span><span class="self">self</span>.members.contains_key(<span class="kw-2">&amp;</span>peer) {
-            <span class="macro">bail!</span>(<span class="string">&quot;fedimintd-{peer} already running&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"fedimintd-{peer} already running"</span>);
         }
         <span class="self">self</span>.members.insert(
             peer,
@@ -915,7 +982,7 @@
 
     <span class="kw">pub async fn </span>terminate_server(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: usize) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, fedimintd)) = <span class="self">self</span>.members.remove_entry(<span class="kw-2">&amp;</span>peer_id) <span class="kw">else </span>{
-            <span class="macro">bail!</span>(<span class="string">&quot;fedimintd-{peer_id} does not exist&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"fedimintd-{peer_id} does not exist"</span>);
         };
         fedimintd.terminate().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
@@ -926,7 +993,7 @@
         <span class="kw">let </span>offline_nodes = process_mgr.globals.FM_OFFLINE_NODES;
         <span class="macro">anyhow::ensure!</span>(
             fed_size &gt; <span class="number">3 </span>* offline_nodes,
-            <span class="string">&quot;too many offline nodes ({offline_nodes}) to reach consensus&quot;
+            <span class="string">"too many offline nodes ({offline_nodes}) to reach consensus"
         </span>);
 
         <span class="kw">while </span><span class="self">self</span>.num_members() &gt; fed_size - offline_nodes {
@@ -934,41 +1001,41 @@
         }
 
         <span class="kw">if </span>offline_nodes &gt; <span class="number">0 </span>{
-            <span class="macro">info!</span>(fed_size, offline_nodes, <span class="string">&quot;federation is degraded&quot;</span>);
+            <span class="macro">info!</span>(fed_size, offline_nodes, <span class="string">"federation is degraded"</span>);
         }
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub async fn </span>pegin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, client: <span class="kw-2">&amp;</span>Client) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">info!</span>(amount, <span class="string">&quot;Pegging-in client funds&quot;</span>);
-        <span class="kw">let </span>deposit = <span class="macro">cmd!</span>(client, <span class="string">&quot;deposit-address&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>deposit_address = deposit[<span class="string">&quot;address&quot;</span>].as_str().unwrap();
-        <span class="kw">let </span>deposit_operation_id = deposit[<span class="string">&quot;operation_id&quot;</span>].as_str().unwrap();
+        <span class="macro">info!</span>(amount, <span class="string">"Pegging-in client funds"</span>);
+        <span class="kw">let </span>deposit = <span class="macro">cmd!</span>(client, <span class="string">"deposit-address"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>deposit_address = deposit[<span class="string">"address"</span>].as_str().unwrap();
+        <span class="kw">let </span>deposit_operation_id = deposit[<span class="string">"operation_id"</span>].as_str().unwrap();
 
         <span class="self">self</span>.bitcoind
             .send_to(deposit_address.to_owned(), amount)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="macro">cmd!</span>(client, <span class="string">&quot;await-deposit&quot;</span>, deposit_operation_id)
+        <span class="macro">cmd!</span>(client, <span class="string">"await-deposit"</span>, deposit_operation_id)
             .run()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub async fn </span>pegin_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::gatewayd::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">info!</span>(amount, <span class="string">&quot;Pegging-in gateway funds&quot;</span>);
-        <span class="kw">let </span>fed_id = <span class="self">self</span>.federation_id().<span class="kw">await</span>;
-        <span class="kw">let </span>pegin_addr = <span class="macro">cmd!</span>(gw, <span class="string">&quot;address&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
+        <span class="macro">info!</span>(amount, <span class="string">"Pegging-in gateway funds"</span>);
+        <span class="kw">let </span>fed_id = <span class="self">self</span>.calculate_federation_id().<span class="kw">await</span>;
+        <span class="kw">let </span>pegin_addr = <span class="macro">cmd!</span>(gw, <span class="string">"address"</span>, <span class="string">"--federation-id={fed_id}"</span>)
             .out_json()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.as_str()
-            .context(<span class="string">&quot;address must be a string&quot;</span>)<span class="question-mark">?
+            .context(<span class="string">"address must be a string"</span>)<span class="question-mark">?
             </span>.to_owned();
         <span class="self">self</span>.bitcoind.send_to(pegin_addr, amount).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        poll(<span class="string">&quot;gateway pegin&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
-            <span class="kw">let </span>gateway_balance = <span class="macro">cmd!</span>(gw, <span class="string">&quot;balance&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
+        poll(<span class="string">"gateway pegin"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+            <span class="kw">let </span>gateway_balance = <span class="macro">cmd!</span>(gw, <span class="string">"balance"</span>, <span class="string">"--federation-id={fed_id}"</span>)
                 .out_json()
                 .<span class="kw">await
                 </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
@@ -980,12 +1047,12 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+    <span class="kw">pub async fn </span>calculate_federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
         <span class="self">self</span>.client_config()
             .<span class="kw">await
             </span>.unwrap()
             .global
-            .federation_id()
+            .calculate_federation_id()
             .to_string()
     }
 
@@ -993,7 +1060,7 @@
         <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>block_count = <span class="self">self</span>.bitcoind.get_block_count()<span class="question-mark">?</span>;
         <span class="kw">let </span>expected = block_count.saturating_sub(finality_delay.into());
-        <span class="macro">cmd!</span>(<span class="self">self</span>.client, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;wait-block-count&quot;</span>, expected)
+        <span class="macro">cmd!</span>(<span class="self">self</span>.client, <span class="string">"dev"</span>, <span class="string">"wait-block-count"</span>, expected)
             .run()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(expected)
@@ -1004,7 +1071,7 @@
         <span class="kw">let </span>wallet_cfg = client_config
             .modules
             .get(<span class="kw-2">&amp;</span>LEGACY_HARDCODED_INSTANCE_ID_WALLET)
-            .context(<span class="string">&quot;wallet module not found&quot;</span>)<span class="question-mark">?
+            .context(<span class="string">"wallet module not found"</span>)<span class="question-mark">?
             </span>.clone()
             .redecode_raw(<span class="kw-2">&amp;</span>ModuleDecoderRegistry::new([(
                 LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -1018,13 +1085,20 @@
     }
 
     <span class="kw">pub async fn </span>await_gateways_registered(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        poll(<span class="string">&quot;gateways registered&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
-            <span class="kw">let </span>num_gateways = <span class="macro">cmd!</span>(<span class="self">self</span>.client, <span class="string">&quot;list-gateways&quot;</span>)
+        <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+        <span class="kw">let </span>command = <span class="kw">if </span>VersionReq::parse(<span class="string">"&lt;0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
+            <span class="string">"list-gateways"
+        </span>} <span class="kw">else </span>{
+            <span class="string">"update-gateway-cache"
+        </span>};
+
+        poll(<span class="string">"gateways registered"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+            <span class="kw">let </span>num_gateways = <span class="macro">cmd!</span>(<span class="self">self</span>.client, command)
                 .out_json()
                 .<span class="kw">await
                 </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
                 </span>.as_array()
-                .context(<span class="string">&quot;invalid output&quot;</span>)
+                .context(<span class="string">"invalid output"</span>)
                 .map_err(ControlFlow::Break)<span class="question-mark">?
                 </span>.len();
             <span class="macro">poll_eq!</span>(num_gateways, <span class="number">2</span>)
@@ -1034,12 +1108,12 @@
     }
 
     <span class="kw">pub async fn </span>await_all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        poll(<span class="string">&quot;Waiting for all peers to be online&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+        poll(<span class="string">"Waiting for all peers to be online"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
             <span class="macro">cmd!</span>(
                 <span class="self">self</span>.client,
-                <span class="string">&quot;dev&quot;</span>,
-                <span class="string">&quot;api&quot;</span>,
-                <span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count&quot;
+                <span class="string">"dev"</span>,
+                <span class="string">"api"</span>,
+                <span class="string">"module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count"
             </span>)
             .run()
             .<span class="kw">await
@@ -1090,10 +1164,10 @@
         peer_id: usize,
         env: <span class="kw-2">&amp;</span>vars::Fedimintd,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="macro">info!</span>(<span class="string">&quot;fedimintd-{peer_id} started&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"fedimintd-{peer_id} started"</span>);
         <span class="kw">let </span>process = process_mgr
             .spawn_daemon(
-                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;fedimintd-{peer_id}&quot;</span>),
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"fedimintd-{peer_id}"</span>),
                 <span class="macro">cmd!</span>(FedimintdCmd).envs(env.vars()),
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1110,40 +1184,40 @@
 }
 
 <span class="kw">pub async fn </span>run_dkg(
-    admin_clients: BTreeMap&lt;PeerId, WsAdminClient&gt;,
+    admin_clients: BTreeMap&lt;PeerId, DynGlobalApi&gt;,
     params: HashMap&lt;PeerId, ConfigGenParams&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="kw">let </span>auth_for = |peer: <span class="kw-2">&amp;</span>PeerId| -&gt; ApiAuth { params[peer].local.api_auth.clone() };
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
         <span class="kw">const </span>MAX_RETRIES: usize = <span class="number">20</span>;
-        poll(<span class="string">&quot;trying-to-connect-to-peers&quot;</span>, MAX_RETRIES, || <span class="kw">async </span>{
+        poll(<span class="string">"trying-to-connect-to-peers"</span>, MAX_RETRIES, || <span class="kw">async </span>{
             client
                 .status()
                 .<span class="kw">await
-                </span>.context(<span class="string">&quot;dkg status&quot;</span>)
+                </span>.context(<span class="string">"dkg status"</span>)
                 .map_err(ControlFlow::Continue)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(<span class="string">&quot;Connected to {peer_id}&quot;</span>)
+        <span class="macro">info!</span>(<span class="string">"Connected to {peer_id}"</span>)
     }
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
         <span class="macro">assert_eq!</span>(
             client.status().<span class="kw">await</span><span class="question-mark">?</span>.server,
             fedimint_core::api::ServerStatus::AwaitingPassword,
-            <span class="string">&quot;peer_id isn&#39;t waiting for password: {peer_id}&quot;
+            <span class="string">"peer_id isn't waiting for password: {peer_id}"
         </span>);
     }
 
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
         client.set_password(auth_for(peer_id)).<span class="kw">await</span><span class="question-mark">?</span>;
     }
-    <span class="kw">let </span>(leader_id, leader) = admin_clients.iter().next().context(<span class="string">&quot;missing peer&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>(leader_id, leader) = admin_clients.iter().next().context(<span class="string">"missing peer"</span>)<span class="question-mark">?</span>;
     <span class="kw">let </span>followers = admin_clients
         .iter()
         .filter(|(id, <span class="kw">_</span>)| <span class="kw-2">*</span>id != leader_id)
         .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
-    <span class="kw">let </span>leader_name = <span class="string">&quot;leader&quot;</span>.to_string();
+    <span class="kw">let </span>leader_name = <span class="string">"leader"</span>.to_string();
     leader
         .set_config_gen_connections(
             ConfigGenConnectionsRequest {
@@ -1169,20 +1243,30 @@
                     .take(<span class="number">5</span>)
                     .map(char::from)
                     .collect::&lt;String&gt;();
-                <span class="macro">format!</span>(<span class="string">&quot;random-{random_string}{peer_id}&quot;</span>)
+                <span class="macro">format!</span>(<span class="string">"random-{random_string}{peer_id}"</span>)
             })
         })
         .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
         <span class="kw">let </span>name = followers_names
             .get(peer_id)
-            .context(<span class="string">&quot;missing follower name&quot;</span>)<span class="question-mark">?</span>;
-        <span class="macro">info!</span>(<span class="string">&quot;calling set_config_gen_connections for {peer_id} {name}&quot;</span>);
+            .context(<span class="string">"missing follower name"</span>)<span class="question-mark">?</span>;
+        <span class="macro">info!</span>(<span class="string">"calling set_config_gen_connections for {peer_id} {name}"</span>);
         client
             .set_config_gen_connections(
                 ConfigGenConnectionsRequest {
                     our_name: name.clone(),
-                    leader_api_url: <span class="prelude-val">Some</span>(leader.url.clone()),
+                    leader_api_url: <span class="prelude-val">Some</span>(
+                        params
+                            .get(leader_id)
+                            .expect(<span class="string">"Must have leader configs"</span>)
+                            .consensus
+                            .peers
+                            .get(leader_id)
+                            .expect(<span class="string">"Must have leader api_endpoint"</span>)
+                            .api_url
+                            .clone(),
+                    ),
                 },
                 auth_for(peer_id),
             )
@@ -1220,7 +1304,7 @@
     <span class="kw">let </span>dkg_results = admin_clients
         .iter()
         .map(|(peer_id, client)| client.run_dkg(auth_for(peer_id)));
-    <span class="macro">info!</span>(<span class="string">&quot;Running DKG...&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Running DKG..."</span>);
     <span class="kw">let </span>(dkg_results, leader_wait_result) = <span class="macro">tokio::join!</span>(
         join_all(dkg_results),
         wait_server_status(leader, ServerStatus::VerifyingConfigs)
@@ -1237,20 +1321,20 @@
         hashes.insert(client.get_verify_config_hash(auth_for(peer_id)).<span class="kw">await</span><span class="question-mark">?</span>);
     }
     <span class="macro">assert_eq!</span>(hashes.len(), <span class="number">1</span>);
-    <span class="macro">info!</span>(<span class="string">&quot;DKG successfully complete. Starting consensus...&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"DKG successfully complete. Starting consensus..."</span>);
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client.start_consensus(auth_for(peer_id)).<span class="kw">await </span>{
-            <span class="macro">tracing::info!</span>(<span class="string">&quot;Error calling start_consensus: {e:?}, trying to continue...&quot;</span>)
+            <span class="macro">tracing::info!</span>(<span class="string">"Error calling start_consensus: {e:?}, trying to continue..."</span>)
         }
 
         wait_server_status(client, ServerStatus::ConsensusRunning).<span class="kw">await</span><span class="question-mark">?</span>;
     }
-    <span class="macro">info!</span>(<span class="string">&quot;Consensus is running&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">"Consensus is running"</span>);
     <span class="prelude-val">Ok</span>(())
 }
 
 <span class="kw">async fn </span>set_config_gen_params(
-    client: <span class="kw-2">&amp;</span>WsAdminClient,
+    client: <span class="kw-2">&amp;</span>DynGlobalApi,
     auth: ApiAuth,
     <span class="kw-2">mut </span>server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -1267,9 +1351,9 @@
             .ok()
             .unwrap_or_default(),
     )
-    .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Failed to parse {FM_EXTRA_DKG_META_VAR}&quot;</span>))
-    .expect(<span class="string">&quot;Failed&quot;</span>);
-    <span class="kw">let </span><span class="kw-2">mut </span>meta = BTreeMap::from([(<span class="string">&quot;federation_name&quot;</span>.to_string(), <span class="string">&quot;testfed&quot;</span>.to_string())]);
+    .with_context(|| <span class="macro">format!</span>(<span class="string">"Failed to parse {FM_EXTRA_DKG_META_VAR}"</span>))
+    .expect(<span class="string">"Failed"</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>meta = BTreeMap::from([(<span class="string">"federation_name"</span>.to_string(), <span class="string">"testfed"</span>.to_string())]);
     meta.append(<span class="kw-2">&amp;mut </span>extra_meta_data);
 
     <span class="kw">let </span>request = ConfigGenParamsRequest {
@@ -1280,20 +1364,20 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">async fn </span>wait_server_status(client: <span class="kw-2">&amp;</span>WsAdminClient, expected_status: ServerStatus) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<span class="kw">async fn </span>wait_server_status(client: <span class="kw-2">&amp;</span>DynGlobalApi, expected_status: ServerStatus) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="kw">const </span>RETRIES: usize = <span class="number">60</span>;
-    poll(<span class="string">&quot;waiting-server-status&quot;</span>, RETRIES, || <span class="kw">async </span>{
+    poll(<span class="string">"waiting-server-status"</span>, RETRIES, || <span class="kw">async </span>{
         <span class="kw">let </span>server_status = client
             .status()
             .<span class="kw">await
-            </span>.context(<span class="string">&quot;server status&quot;</span>)
+            </span>.context(<span class="string">"server status"</span>)
             .map_err(ControlFlow::Continue)<span class="question-mark">?
             </span>.server;
         <span class="kw">if </span>server_status == expected_status {
             <span class="prelude-val">Ok</span>(())
         } <span class="kw">else </span>{
             <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(
-                <span class="string">&quot;expected status: {expected_status:?} current status: {server_status:?}&quot;
+                <span class="string">"expected status: {expected_status:?} current status: {server_status:?}"
             </span>)))
         }
     })

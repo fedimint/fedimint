@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `devimint/src/vars.rs`."><title>vars.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../devimint/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `devimint/src/vars.rs`."><title>vars.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../devimint/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -219,7 +221,7 @@
                 })
             }
 
-            <span class="kw">pub fn </span>vars(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, String)&gt; {
+            <span class="kw">pub fn </span>vars(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, String)&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>env = ::std::vec::Vec::new();
                 $(
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="macro-nonterminal">$crate::vars::ToEnvVar::to_env_value</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="macro-nonterminal">$env_name</span>) {
@@ -234,7 +236,7 @@
 
 <span class="kw">impl </span>ToEnvVar <span class="kw">for </span>PathBuf {
     <span class="kw">fn </span>to_env_value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
-        <span class="prelude-val">Some</span>(<span class="self">self</span>.as_os_str().to_str().expect(<span class="string">&quot;must be utf8&quot;</span>).to_owned())
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.as_os_str().to_str().expect(<span class="string">"must be utf8"</span>).to_owned())
     }
 }
 
@@ -274,20 +276,20 @@
 <span class="kw">use </span>format <span class="kw">as </span>f;
 
 <span class="kw">pub fn </span>utf8(path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="kw-2">&amp;</span>str {
-    path.as_os_str().to_str().expect(<span class="string">&quot;must be valid utf8&quot;</span>)
+    path.as_os_str().to_str().expect(<span class="string">"must be valid utf8"</span>)
 }
 
 <span class="macro">declare_vars! </span>{
     Global = (test_dir: <span class="kw-2">&amp;</span>Path, fed_size: usize, offline_nodes: usize) =&gt;
     {
-        FM_USE_UNKNOWN_MODULE : String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|<span class="kw">_</span>| <span class="string">&quot;1&quot;</span>.into());
+        FM_USE_UNKNOWN_MODULE : String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|<span class="kw">_</span>| <span class="string">"1"</span>.into());
 
         FM_FED_SIZE: usize = fed_size;
         FM_OFFLINE_NODES: usize = offline_nodes;
         FM_TMP_DIR: PathBuf = mkdir(test_dir.into()).<span class="kw">await</span><span class="question-mark">?</span>;
         FM_TEST_DIR: PathBuf = FM_TMP_DIR.clone();
-        FM_TEST_FAST_WEAK_CRYPTO: String = <span class="string">&quot;1&quot;</span>;
-        FM_LOGS_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;logs&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_TEST_FAST_WEAK_CRYPTO: String = <span class="string">"1"</span>;
+        FM_LOGS_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"logs"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
 
         FM_PORT_BTC_RPC: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
         FM_PORT_BTC_P2P: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
@@ -307,53 +309,53 @@
         FM_PORT_CLN_EXTENSION: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
         FM_PORT_FAUCET: u16 = <span class="number">15243u16</span>;
 
-        FM_CLN_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;cln&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;lnd&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_BTC_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;bitcoin&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_CLN_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"cln"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"lnd"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_BTC_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"bitcoin"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
         FM_DATA_DIR: PathBuf = FM_TEST_DIR.clone();
-        FM_CLIENT_BASE_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;clients&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_CLIENT_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;clients&quot;</span>).join(<span class="string">&quot;default&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_ELECTRS_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;electrs&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_ESPLORA_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">&quot;esplora&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_READY_FILE: PathBuf = FM_TEST_DIR.join(<span class="string">&quot;ready&quot;</span>);
+        FM_CLIENT_BASE_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"clients"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_CLIENT_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"clients"</span>).join(<span class="string">"default-0"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_ELECTRS_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"electrs"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_ESPLORA_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"esplora"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_READY_FILE: PathBuf = FM_TEST_DIR.join(<span class="string">"ready"</span>);
 
-        FM_CLN_SOCKET: PathBuf = FM_CLN_DIR.join(<span class="string">&quot;regtest/lightning-rpc&quot;</span>);
-        FM_LND_RPC_ADDR: String = <span class="macro">f!</span>(<span class="string">&quot;https://localhost:{FM_PORT_LND_RPC}&quot;</span>);
-        FM_LND_TLS_CERT: PathBuf = FM_LND_DIR.join(<span class="string">&quot;tls.cert&quot;</span>);
-        FM_LND_MACAROON: PathBuf = FM_LND_DIR.join(<span class="string">&quot;data/chain/bitcoin/regtest/admin.macaroon&quot;</span>);
+        FM_CLN_SOCKET: PathBuf = FM_CLN_DIR.join(<span class="string">"regtest/lightning-rpc"</span>);
+        FM_LND_RPC_ADDR: String = <span class="macro">f!</span>(<span class="string">"https://localhost:{FM_PORT_LND_RPC}"</span>);
+        FM_LND_TLS_CERT: PathBuf = FM_LND_DIR.join(<span class="string">"tls.cert"</span>);
+        FM_LND_MACAROON: PathBuf = FM_LND_DIR.join(<span class="string">"data/chain/bitcoin/regtest/admin.macaroon"</span>);
 
-        FM_GATEWAY_API_ADDR: String = <span class="macro">f!</span>(<span class="string">&quot;http://127.0.0.1:{FM_PORT_GW_CLN}&quot;</span>);
-        FM_GATEWAY_PASSWORD: String = <span class="string">&quot;theresnosecondbest&quot;</span>;
-        FM_GATEWAY_FEES: String = <span class="string">&quot;0,0&quot;</span>; <span class="comment">// Enable to us to make an unbounded number of payments
+        FM_GATEWAY_API_ADDR: String = <span class="macro">f!</span>(<span class="string">"http://127.0.0.1:{FM_PORT_GW_CLN}"</span>);
+        FM_GATEWAY_PASSWORD: String = <span class="string">"theresnosecondbest"</span>;
+        FM_GATEWAY_FEES: String = <span class="string">"0,0"</span>; <span class="comment">// Enable to us to make an unbounded number of payments
 
-        </span>FM_CLN_EXTENSION_LISTEN_ADDRESS: String = <span class="macro">f!</span>(<span class="string">&quot;0.0.0.0:{FM_PORT_CLN_EXTENSION}&quot;</span>);
-        FM_GATEWAY_LIGHTNING_ADDR: String = <span class="macro">f!</span>(<span class="string">&quot;http://localhost:{FM_PORT_CLN_EXTENSION}&quot;</span>);
-        FM_FAUCET_BIND_ADDR: String = <span class="macro">f!</span>(<span class="string">&quot;0.0.0.0:{FM_PORT_FAUCET}&quot;</span>);
+        </span>FM_CLN_EXTENSION_LISTEN_ADDRESS: String = <span class="macro">f!</span>(<span class="string">"0.0.0.0:{FM_PORT_CLN_EXTENSION}"</span>);
+        FM_GATEWAY_LIGHTNING_ADDR: String = <span class="macro">f!</span>(<span class="string">"http://localhost:{FM_PORT_CLN_EXTENSION}"</span>);
+        FM_FAUCET_BIND_ADDR: String = <span class="macro">f!</span>(<span class="string">"0.0.0.0:{FM_PORT_FAUCET}"</span>);
 
         <span class="comment">// clients
-        </span>FM_LIGHTNING_CLI: String = <span class="macro">f!</span>(<span class="string">&quot;{lightning_cli} --network regtest --lightning-dir={lightning_dir}&quot;</span>,
-            lightning_cli = <span class="kw">crate</span>::util::get_lightning_cli_path().join(<span class="string">&quot; &quot;</span>),
+        </span>FM_LIGHTNING_CLI: String = <span class="macro">f!</span>(<span class="string">"{lightning_cli} --network regtest --lightning-dir={lightning_dir}"</span>,
+            lightning_cli = <span class="kw">crate</span>::util::get_lightning_cli_path().join(<span class="string">" "</span>),
             lightning_dir = utf8(<span class="kw-2">&amp;</span>FM_CLN_DIR));
-        FM_LNCLI: String = <span class="macro">f!</span>(<span class="string">&quot;{lncli} -n regtest --lnddir={lnddir} --rpcserver=localhost:{FM_PORT_LND_RPC}&quot;</span>,
-            lncli = <span class="kw">crate</span>::util::get_lncli_path().join(<span class="string">&quot; &quot;</span>),
+        FM_LNCLI: String = <span class="macro">f!</span>(<span class="string">"{lncli} -n regtest --lnddir={lnddir} --rpcserver=localhost:{FM_PORT_LND_RPC}"</span>,
+            lncli = <span class="kw">crate</span>::util::get_lncli_path().join(<span class="string">" "</span>),
             lnddir = utf8(<span class="kw-2">&amp;</span>FM_LND_DIR));
-        FM_BTC_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;{bitcoin_cli} -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -datadir={datadir}&quot;</span>,
-            bitcoin_cli = <span class="kw">crate</span>::util::get_bitcoin_cli_path().join(<span class="string">&quot; &quot;</span>),
+        FM_BTC_CLIENT: String = <span class="macro">f!</span>(<span class="string">"{bitcoin_cli} -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -datadir={datadir}"</span>,
+            bitcoin_cli = <span class="kw">crate</span>::util::get_bitcoin_cli_path().join(<span class="string">" "</span>),
             datadir = utf8(<span class="kw-2">&amp;</span>FM_BTC_DIR));
-        FM_MINT_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;{fedimint_cli} --data-dir {datadir}&quot;</span>,
-            fedimint_cli = <span class="kw">crate</span>::util::get_fedimint_cli_path().join(<span class="string">&quot; &quot;</span>),
+        FM_MINT_CLIENT: String = <span class="macro">f!</span>(<span class="string">"{fedimint_cli} --data-dir {datadir}"</span>,
+            fedimint_cli = <span class="kw">crate</span>::util::get_fedimint_cli_path().join(<span class="string">" "</span>),
             datadir = utf8(<span class="kw-2">&amp;</span>FM_CLIENT_DIR));
-        FM_MINT_RPC_CLIENT: String = <span class="macro">f!</span>(<span class="string">&quot;mint-rpc-client&quot;</span>);
-        FM_GWCLI_CLN: String = <span class="macro">f!</span>(<span class="string">&quot;{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_CLN}/&quot;</span>,
-            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">&quot; &quot;</span>),);
-        FM_GWCLI_LND: String = <span class="macro">f!</span>(<span class="string">&quot;{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/&quot;</span>,
-            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">&quot; &quot;</span>),);
-        FM_DB_TOOL: String = <span class="macro">f!</span>(<span class="string">&quot;{fedimint_dbtool}&quot;</span>, fedimint_dbtool = <span class="kw">crate</span>::util::get_fedimint_dbtool_cli_path().join(<span class="string">&quot; &quot;</span>));
+        FM_MINT_RPC_CLIENT: String = <span class="macro">f!</span>(<span class="string">"mint-rpc-client"</span>);
+        FM_GWCLI_CLN: String = <span class="macro">f!</span>(<span class="string">"{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_CLN}/"</span>,
+            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),);
+        FM_GWCLI_LND: String = <span class="macro">f!</span>(<span class="string">"{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/"</span>,
+            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),);
+        FM_DB_TOOL: String = <span class="macro">f!</span>(<span class="string">"{fedimint_dbtool}"</span>, fedimint_dbtool = <span class="kw">crate</span>::util::get_fedimint_dbtool_cli_path().join(<span class="string">" "</span>));
 
         <span class="comment">// fedimint config variables
-        </span>FM_TEST_BITCOIND_RPC: String = <span class="macro">f!</span>(<span class="string">&quot;http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}&quot;</span>);
-        FM_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">&quot;http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}&quot;</span>);
-        FM_BITCOIN_RPC_KIND: String = <span class="string">&quot;bitcoind&quot;</span>;
+        </span>FM_TEST_BITCOIND_RPC: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>);
+        FM_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>);
+        FM_BITCOIN_RPC_KIND: String = <span class="string">"bitcoind"</span>;
 
         FM_ROCKSDB_WRITE_BUFFER_SIZE : String = (<span class="number">1 </span>&lt;&lt; <span class="number">20</span>).to_string();
     }
@@ -376,8 +378,8 @@
         FM_BIND_API: String = params.local.api_bind.to_string();
         FM_P2P_URL: String = params.consensus.peers[<span class="kw-2">&amp;</span>params.local.our_id].p2p_url.to_string();
         FM_API_URL: String = params.consensus.peers[<span class="kw-2">&amp;</span>params.local.our_id].api_url.to_string();
-        FM_BIND_METRICS_API: String = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, globals.FM_PORT_FEDIMINTD_BASE <span class="kw">as </span>usize + <span class="number">2 </span>* globals.FM_FED_SIZE + params.local.our_id.to_usize());
-        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(<span class="macro">format!</span>(<span class="string">&quot;fedimintd-{}&quot;</span>, params.local.our_id.to_usize()))).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_BIND_METRICS_API: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, globals.FM_PORT_FEDIMINTD_BASE <span class="kw">as </span>usize + <span class="number">2 </span>* globals.FM_FED_SIZE + params.local.our_id.to_usize());
+        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(<span class="macro">format!</span>(<span class="string">"fedimintd-{}"</span>, params.local.our_id.to_usize()))).<span class="kw">await</span><span class="question-mark">?</span>;
     }
 }
 </code></pre></div></section></main></body></html>

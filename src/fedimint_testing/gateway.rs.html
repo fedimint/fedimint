@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-testing/src/gateway.rs`."><title>gateway.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_testing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_testing/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-testing/src/gateway.rs`."><title>gateway.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_testing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_testing/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -271,11 +273,6 @@
 <a href="#271" id="271">271</a>
 <a href="#272" id="272">272</a>
 <a href="#273" id="273">273</a>
-<a href="#274" id="274">274</a>
-<a href="#275" id="275">275</a>
-<a href="#276" id="276">276</a>
-<a href="#277" id="277">277</a>
-<a href="#278" id="278">278</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
@@ -284,7 +281,7 @@
 <span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
-<span class="kw">use </span>fedimint_client::ClientArc;
+<span class="kw">use </span>fedimint_client::ClientHandle;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -309,7 +306,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::ln::real::{ClnLightningTest, LndLightningTest};
 <span class="kw">use </span><span class="kw">crate</span>::ln::LightningTest;
 
-<span class="kw">pub const </span>DEFAULT_GATEWAY_PASSWORD: <span class="kw-2">&amp;</span>str = <span class="string">&quot;thereisnosecondbest&quot;</span>;
+<span class="kw">pub const </span>DEFAULT_GATEWAY_PASSWORD: <span class="kw-2">&amp;</span>str = <span class="string">"thereisnosecondbest"</span>;
 
 <span class="doccomment">/// Fixture for creating a gateway
 </span><span class="kw">pub struct </span>GatewayTest {
@@ -338,7 +335,7 @@
     /// Note: this makes the database opened, which can lead to gateway
     /// wanting to rejoin it. Better get your own client instead of being
     /// lazy here.
-    </span><span class="kw">pub async fn </span>remove_client_hack(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; ClientArc {
+    </span><span class="kw">pub async fn </span>remove_client_hack(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; ClientHandle {
         <span class="self">self</span>.gateway
             .remove_client_hack(fed.id())
             .<span class="kw">await
@@ -346,7 +343,7 @@
             .into_value()
     }
 
-    <span class="kw">pub async fn </span>select_client(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; ClientArc {
+    <span class="kw">pub async fn </span>select_client(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; ClientHandle {
         <span class="self">self</span>.gateway
             .select_client(federation_id)
             .<span class="kw">await
@@ -356,7 +353,7 @@
 
     <span class="doccomment">/// Connects to a new federation and stores the info
     </span><span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;mut </span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; FederationInfo {
-        <span class="macro">info!</span>(target: LOG_TEST, <span class="string">&quot;Sending rpc to connect gateway to federation&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_TEST, <span class="string">"Sending rpc to connect gateway to federation"</span>);
         <span class="kw">let </span>invite_code = fed.invite_code().to_string();
         <span class="kw">let </span>rpc = <span class="self">self
             </span>.get_rpc()
@@ -379,11 +376,11 @@
         registry: ClientModuleInitRegistry,
         num_route_hints: u32,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>listen: SocketAddr = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{base_port}&quot;</span>).parse().unwrap();
-        <span class="kw">let </span>address: SafeUrl = <span class="macro">format!</span>(<span class="string">&quot;http://{listen}&quot;</span>).parse().unwrap();
+        <span class="kw">let </span>listen: SocketAddr = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{base_port}"</span>).parse().unwrap();
+        <span class="kw">let </span>address: SafeUrl = <span class="macro">format!</span>(<span class="string">"http://{listen}"</span>).parse().unwrap();
         <span class="kw">let </span>versioned_api = address.join(V1_API_ENDPOINT).unwrap();
 
-        <span class="kw">let </span>(path, _config_dir) = test_dir(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;gateway-{}&quot;</span>, rand::random::&lt;u64&gt;()));
+        <span class="kw">let </span>(path, _config_dir) = test_dir(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"gateway-{}"</span>, rand::random::&lt;u64&gt;()));
 
         <span class="comment">// Create federation client builder for the gateway
         </span><span class="kw">let </span>client_builder: GatewayClientBuilder =
@@ -406,7 +403,7 @@
             listen,
             address.clone(),
             cli_password.clone(),
-            <span class="prelude-val">None</span>, <span class="comment">// Use default Network which is &quot;regtest&quot;
+            <span class="prelude-val">None</span>, <span class="comment">// Use default Network which is "regtest"
             </span>RoutingFees {
                 base_msat: <span class="number">0</span>,
                 proportional_millionths: <span class="number">0</span>,
@@ -415,24 +412,24 @@
             gateway_db,
         )
         .<span class="kw">await
-        </span>.expect(<span class="string">&quot;Failed to create gateway&quot;</span>);
+        </span>.expect(<span class="string">"Failed to create gateway"</span>);
 
         <span class="kw">let </span>gateway_run = gateway.clone();
         <span class="kw">let </span>root_group = TaskGroup::new();
         <span class="kw">let </span><span class="kw-2">mut </span>tg = root_group.clone();
         root_group
-            .spawn(<span class="string">&quot;Gateway Run&quot;</span>, |_handle| <span class="kw">async move </span>{
+            .spawn(<span class="string">"Gateway Run"</span>, |_handle| <span class="kw">async move </span>{
                 gateway_run
                     .run(<span class="kw-2">&amp;mut </span>tg)
                     .<span class="kw">await
-                    </span>.expect(<span class="string">&quot;Failed to start gateway&quot;</span>);
+                    </span>.expect(<span class="string">"Failed to start gateway"</span>);
             })
             .<span class="kw">await</span>;
 
         <span class="comment">// Wait for the gateway web server to be available
         </span>GatewayTest::wait_for_webserver(versioned_api.clone(), cli_password)
             .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Gateway web server failed to start&quot;</span>);
+            </span>.expect(<span class="string">"Gateway web server failed to start"</span>);
 
         <span class="comment">// Wait for the gateway to be in the configuring or running state
         </span>GatewayTest::wait_for_gateway_state(gateway.clone(), |gw_state| {
@@ -440,7 +437,7 @@
                 || <span class="macro">matches!</span>(gw_state, GatewayState::Running { .. })
         })
         .<span class="kw">await
-        </span>.expect(<span class="string">&quot;Gateway failed to start&quot;</span>);
+        </span>.expect(<span class="string">"Gateway failed to start"</span>);
 
         <span class="kw">let </span>listening_addr = lightning.listening_address();
         <span class="kw">let </span>info = lightning.info().<span class="kw">await</span>.unwrap();
@@ -472,11 +469,11 @@
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
 
-            sleep_in_test(<span class="string">&quot;waiting for webserver to be ready&quot;</span>, Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+            sleep_in_test(<span class="string">"waiting for webserver to be ready"</span>, Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
         }
 
         <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
-            <span class="string">&quot;Gateway web server did not come up within 30 seconds&quot;
+            <span class="string">"Gateway web server did not come up within 30 seconds"
         </span>))
     }
 
@@ -490,11 +487,11 @@
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
 
-            sleep_in_test(<span class="string">&quot;waiting for gateway state&quot;</span>, Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+            sleep_in_test(<span class="string">"waiting for gateway state"</span>, Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
         }
 
         <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
-            <span class="string">&quot;Gateway did not reach desired state within 30 seconds&quot;
+            <span class="string">"Gateway did not reach desired state within 30 seconds"
         </span>))
     }
 }
@@ -504,7 +501,7 @@
         block_in_place(<span class="kw">move </span>|| {
             block_on(<span class="kw">async move </span>{
                 <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.task_group.clone().shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await </span>{
-                    <span class="macro">warn!</span>(<span class="string">&quot;Got error shutting down GatewayTest: {e:?}&quot;</span>)
+                    <span class="macro">warn!</span>(<span class="string">"Got error shutting down GatewayTest: {e:?}"</span>)
                 }
             })
         });
@@ -514,15 +511,13 @@
 </span><span class="kw">pub enum </span>LightningNodeType {
     Cln,
     Lnd,
-    Ldk,
 }
 
 <span class="kw">impl </span>Display <span class="kw">for </span>LightningNodeType {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::result::Result&lt;(), std::fmt::Error&gt; {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::result::Result&lt;(), std::fmt::Error&gt; {
         <span class="kw">match </span><span class="self">self </span>{
-            LightningNodeType::Cln =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;cln&quot;</span>),
-            LightningNodeType::Lnd =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;lnd&quot;</span>),
-            LightningNodeType::Ldk =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;ldk&quot;</span>),
+            LightningNodeType::Cln =&gt; <span class="macro">write!</span>(f, <span class="string">"cln"</span>),
+            LightningNodeType::Lnd =&gt; <span class="macro">write!</span>(f, <span class="string">"lnd"</span>),
         }
     }
 }
@@ -538,9 +533,6 @@
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.node_type {
             LightningNodeType::Cln =&gt; Box::new(ClnLightningTest::new().<span class="kw">await</span>),
             LightningNodeType::Lnd =&gt; Box::new(LndLightningTest::new().<span class="kw">await</span>),
-            <span class="kw">_ </span>=&gt; {
-                <span class="macro">unimplemented!</span>(<span class="string">&quot;Unsupported Lightning implementation&quot;</span>);
-            }
         }
     }
 }

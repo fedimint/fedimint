@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/net/peers_reliable.rs`."><title>peers_reliable.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_server/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/net/peers_reliable.rs`."><title>peers_reliable.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_server/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -940,12 +942,12 @@
             <span class="kw">let </span>sender_response = sender
                 .send(query)
                 .<span class="kw">await
-                </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;channel closed while querying peer status&quot;</span>));
+                </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow::anyhow!</span>(<span class="string">"channel closed while querying peer status"</span>));
             <span class="kw">match </span>sender_response {
                 <span class="prelude-val">Ok</span>(()) =&gt; {
                     <span class="kw">let </span>status = response_receiver
                         .<span class="kw">await
-                        </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;channel closed while receiving peer status&quot;</span>));
+                        </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow::anyhow!</span>(<span class="string">"channel closed while receiving peer status"</span>));
                     (<span class="kw-2">*</span>peer_id, status)
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; (<span class="kw-2">*</span>peer_id, <span class="prelude-val">Err</span>(e)),
@@ -987,7 +989,7 @@
     Connected(ConnectedPeerConnectionState&lt;M&gt;),
 }
 
-<span class="kw">impl</span>&lt;T: <span class="lifetime">&#39;static</span>&gt; ReconnectPeerConnectionsReliable&lt;T&gt;
+<span class="kw">impl</span>&lt;T: <span class="lifetime">'static</span>&gt; ReconnectPeerConnectionsReliable&lt;T&gt;
 <span class="kw">where
     </span>T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync,
 {
@@ -1030,7 +1032,7 @@
             connections.insert(<span class="kw-2">*</span>peer, connection);
         }
         task_group
-            .spawn(<span class="string">&quot;listen task&quot;</span>, <span class="kw">move </span>|handle| {
+            .spawn(<span class="string">"listen task"</span>, <span class="kw">move </span>|handle| {
                 <span class="self">Self</span>::run_listen_task(cfg, shared_connector, connection_senders, handle)
             })
             .<span class="kw">await</span>;
@@ -1049,8 +1051,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>listener = connect
             .listen(cfg.bind_addr)
             .<span class="kw">await
-            </span>.with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Failed to listen on {}&quot;</span>, cfg.bind_addr))
-            .expect(<span class="string">&quot;Could not bind port&quot;</span>);
+            </span>.with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to listen on {}"</span>, cfg.bind_addr))
+            .expect(<span class="string">"Could not bind port"</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>shutdown_rx = task_handle.make_shutdown_rx().<span class="kw">await</span>;
 
@@ -1060,17 +1062,17 @@
                 <span class="kw">_ </span>= <span class="kw-2">&amp;mut </span>shutdown_rx =&gt; { <span class="kw">break</span>; },
             };
 
-            <span class="kw">let </span>(peer, connection) = <span class="kw">match </span>new_connection.expect(<span class="string">&quot;Listener closed&quot;</span>) {
+            <span class="kw">let </span>(peer, connection) = <span class="kw">match </span>new_connection.expect(<span class="string">"Listener closed"</span>) {
                 <span class="prelude-val">Ok</span>(connection) =&gt; connection,
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(target: LOG_NET_PEER, mint = <span class="question-mark">?</span>cfg.identity, err = %e, <span class="string">&quot;Error while opening incoming connection&quot;</span>);
+                    <span class="macro">warn!</span>(target: LOG_NET_PEER, mint = <span class="question-mark">?</span>cfg.identity, err = %e, <span class="string">"Error while opening incoming connection"</span>);
                     <span class="kw">continue</span>;
                 }
             };
 
             <span class="kw">let </span>err = connection_senders
                 .get_mut(<span class="kw-2">&amp;</span>peer)
-                .expect(<span class="string">&quot;Authenticating connectors should not return unknown peers&quot;</span>)
+                .expect(<span class="string">"Authenticating connectors should not return unknown peers"</span>)
                 .send(connection)
                 .<span class="kw">await
                 </span>.is_err();
@@ -1079,7 +1081,7 @@
                 <span class="macro">warn!</span>(
                     target: LOG_NET_PEER,
                     <span class="question-mark">?</span>peer,
-                    <span class="string">&quot;Could not send incoming connection to peer io task (possibly banned)&quot;
+                    <span class="string">"Could not send incoming connection to peer io task (possibly banned)"
                 </span>);
             }
         }
@@ -1089,23 +1091,23 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl</span>&lt;T&gt; IPeerConnections&lt;T&gt; <span class="kw">for </span>ReconnectPeerConnectionsReliable&lt;T&gt;
 <span class="kw">where
-    </span>T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + <span class="lifetime">&#39;static</span>,
+    </span>T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + <span class="lifetime">'static</span>,
 {
     <span class="attr">#[must_use]
     </span><span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peers: <span class="kw-2">&amp;</span>[PeerId], msg: T) -&gt; Cancellable&lt;()&gt; {
         <span class="kw">for </span>peer_id <span class="kw">in </span>peers {
-            <span class="macro">trace!</span>(target: LOG_NET_PEER, <span class="question-mark">?</span>peer_id, <span class="string">&quot;Sending message to&quot;</span>);
+            <span class="macro">trace!</span>(target: LOG_NET_PEER, <span class="question-mark">?</span>peer_id, <span class="string">"Sending message to"</span>);
             <span class="kw">if let </span><span class="prelude-val">Some</span>(peer) = <span class="self">self</span>.connections.get_mut(peer_id) {
                 peer.send(msg.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
             } <span class="kw">else </span>{
-                <span class="macro">trace!</span>(target: LOG_NET_PEER,peer = <span class="question-mark">?</span>peer_id, <span class="string">&quot;Not sending message to unknown peer (maybe banned)&quot;</span>);
+                <span class="macro">trace!</span>(target: LOG_NET_PEER,peer = <span class="question-mark">?</span>peer_id, <span class="string">"Not sending message to unknown peer (maybe banned)"</span>);
             }
         }
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Cancellable&lt;(PeerId, T)&gt; {
-        <span class="comment">// TODO: optimize, don&#39;t throw away remaining futures
+        <span class="comment">// TODO: optimize, don't throw away remaining futures
 
         </span><span class="kw">let </span>futures_non_banned = <span class="self">self</span>.connections.iter_mut().map(|(<span class="kw-2">&amp;</span>peer, connection)| {
             <span class="kw">let </span>receive_future = <span class="kw">async move </span>{
@@ -1122,7 +1124,7 @@
 
     <span class="kw">async fn </span>ban_peer(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId) {
         <span class="self">self</span>.connections.remove(<span class="kw-2">&amp;</span>peer);
-        <span class="macro">warn!</span>(target: LOG_NET_PEER, <span class="string">&quot;Peer {} banned.&quot;</span>, peer);
+        <span class="macro">warn!</span>(target: LOG_NET_PEER, <span class="string">"Peer {} banned."</span>, peer);
     }
 }
 
@@ -1135,7 +1137,7 @@
 
         <span class="comment">// Note: `state_transition` internally uses channel operations (`send` and
         // `recv`) which will disconnect when other tasks are shutting down
-        // returning here, so we probably don&#39;t need any `timeout` here.
+        // returning here, so we probably don't need any `timeout` here.
         </span><span class="kw">while </span>!task_handle.is_shutting_down() {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(new_self) = <span class="self">self</span>.state_transition(task_handle).<span class="kw">await </span>{
                 <span class="self">self </span>= new_self;
@@ -1146,7 +1148,7 @@
         <span class="macro">info!</span>(
             target: LOG_NET_PEER,
             <span class="question-mark">?</span>peer,
-            <span class="string">&quot;Shutting down peer connection state machine&quot;
+            <span class="string">"Shutting down peer connection state machine"
         </span>);
     }
 
@@ -1188,7 +1190,7 @@
                         <span class="self">self</span>.send_message_connected(connected, msg).<span class="kw">await
                     </span>},
                     <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">&quot;Exiting peer connection IO task - parent disconnected&quot;</span>);
+                        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">"Exiting peer connection IO task - parent disconnected"</span>);
                         <span class="kw">return </span><span class="prelude-val">None</span>;
                     },
                 }
@@ -1196,13 +1198,13 @@
             new_connection_res = <span class="self">self</span>.incoming_connections.recv() =&gt; {
                 <span class="kw">match </span>new_connection_res {
                     <span class="prelude-val">Some</span>(new_connection) =&gt; {
-                        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">&quot;Replacing existing connection&quot;</span>);
+                        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">"Replacing existing connection"</span>);
                         <span class="self">self</span>.connect(new_connection, <span class="number">0</span>).<span class="kw">await
                     </span>},
                     <span class="prelude-val">None </span>=&gt; {
                         <span class="macro">debug!</span>(
                         target: LOG_NET_PEER,
-                            <span class="string">&quot;Exiting peer connection IO task - parent disconnected&quot;</span>);
+                            <span class="string">"Exiting peer connection IO task - parent disconnected"</span>);
                         <span class="kw">return </span><span class="prelude-val">None</span>;
                     },
                 }
@@ -1210,7 +1212,7 @@
             <span class="prelude-val">Some</span>(status_query) = <span class="self">self</span>.status_query_receiver.recv() =&gt; {
                 <span class="kw">if </span>status_query.response_sender.send(PeerConnectionStatus::Connected).is_err() {
                     <span class="kw">let </span>peer_id = <span class="self">self</span>.peer_id;
-                    <span class="macro">debug!</span>(target: LOG_NET_PEER, %peer_id, <span class="string">&quot;Could not send peer status response: receiver dropped&quot;</span>);
+                    <span class="macro">debug!</span>(target: LOG_NET_PEER, %peer_id, <span class="string">"Could not send peer status response: receiver dropped"</span>);
                 }
                 PeerConnectionState::Connected(connected)
             },
@@ -1235,7 +1237,7 @@
             our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id,
             peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, %disconnect_count,
             resend_queue_len = <span class="self">self</span>.resend_queue.queue.len(),
-            <span class="string">&quot;Initializing new connection&quot;</span>);
+            <span class="string">"Initializing new connection"</span>);
         <span class="kw">match </span><span class="self">self</span>.resend_buffer_contents(<span class="kw-2">&amp;mut </span>new_connection).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(()) =&gt; PeerConnectionState::Connected(ConnectedPeerConnectionState {
                 connection: new_connection,
@@ -1273,7 +1275,7 @@
                 our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id,
                 peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id,
                 delay_secs,
-                <span class="string">&quot;Scheduling reopening of connection&quot;
+                <span class="string">"Scheduling reopening of connection"
             </span>);
             Instant::now() + delay
         };
@@ -1287,7 +1289,7 @@
     <span class="kw">fn </span>disconnect_err(<span class="kw-2">&amp;</span><span class="self">self</span>, err: anyhow::Error, disconnect_count: u64) -&gt; PeerConnectionState&lt;M&gt; {
         <span class="macro">debug!</span>(target: LOG_NET_PEER,
             our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id,
-            peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, %err, %disconnect_count, <span class="string">&quot;Peer disconnected&quot;</span>);
+            peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, %err, %disconnect_count, <span class="string">"Peer disconnected"</span>);
         <span class="self">self</span>.disconnect(disconnect_count)
     }
 
@@ -1297,7 +1299,7 @@
         msg: M,
     ) -&gt; PeerConnectionState&lt;M&gt; {
         <span class="kw">let </span>umsg = <span class="self">self</span>.resend_queue.push(msg);
-        <span class="macro">trace!</span>(target: LOG_NET_PEER, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, id = <span class="question-mark">?</span>umsg.id, <span class="string">&quot;Sending outgoing message&quot;</span>);
+        <span class="macro">trace!</span>(target: LOG_NET_PEER, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, id = <span class="question-mark">?</span>umsg.id, <span class="string">"Sending outgoing message"</span>);
 
         <span class="self">self</span>.send_message_connected_inner(connected, <span class="prelude-val">Some</span>(umsg))
             .<span class="kw">await
@@ -1307,7 +1309,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         connected: ConnectedPeerConnectionState&lt;M&gt;,
     ) -&gt; PeerConnectionState&lt;M&gt; {
-        <span class="macro">trace!</span>(target: LOG_NET_PEER, our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, <span class="string">&quot;Sending ping&quot;</span>);
+        <span class="macro">trace!</span>(target: LOG_NET_PEER, our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, <span class="string">"Sending ping"</span>);
         <span class="self">self</span>.send_message_connected_inner(connected, <span class="prelude-val">None</span>).<span class="kw">await
     </span>}
 
@@ -1357,12 +1359,12 @@
 
         <span class="comment">// Process ACK no matter if we received a message or not
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(ack) = ack {
-            <span class="macro">trace!</span>(target: LOG_NET_PEER, our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, <span class="question-mark">?</span>ack, <span class="string">&quot;Received ACK for sent message&quot;</span>);
+            <span class="macro">trace!</span>(target: LOG_NET_PEER, our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, <span class="question-mark">?</span>ack, <span class="string">"Received ACK for sent message"</span>);
             <span class="self">self</span>.resend_queue.ack(ack);
         }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(msg) = msg {
-            <span class="macro">trace!</span>(target: LOG_NET_PEER, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, id = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received incoming message&quot;</span>);
+            <span class="macro">trace!</span>(target: LOG_NET_PEER, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, id = <span class="question-mark">?</span>msg.id, <span class="string">"Received incoming message"</span>);
 
             <span class="kw">let </span>expected = <span class="self">self
                 </span>.last_received
@@ -1371,24 +1373,24 @@
 
             <span class="kw">if </span>msg.id &lt; expected {
                 <span class="macro">info!</span>(target: LOG_NET_PEER,
-                    <span class="question-mark">?</span>expected, received = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received old message&quot;</span>);
+                    <span class="question-mark">?</span>expected, received = <span class="question-mark">?</span>msg.id, <span class="string">"Received old message"</span>);
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
 
             <span class="kw">if </span>msg.id &gt; expected {
-                <span class="macro">warn!</span>(target: LOG_NET_PEER, <span class="question-mark">?</span>expected, received = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received message from the future&quot;</span>);
-                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Received message from the future&quot;</span>));
+                <span class="macro">warn!</span>(target: LOG_NET_PEER, <span class="question-mark">?</span>expected, received = <span class="question-mark">?</span>msg.id, <span class="string">"Received message from the future"</span>);
+                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Received message from the future"</span>));
             }
 
             <span class="self">self</span>.last_received = <span class="prelude-val">Some</span>(expected);
 
-            <span class="macro">debug_assert_eq!</span>(expected, msg.id, <span class="string">&quot;someone removed the check above&quot;</span>);
+            <span class="macro">debug_assert_eq!</span>(expected, msg.id, <span class="string">"someone removed the check above"</span>);
             <span class="kw">if </span><span class="self">self</span>.incoming.send(msg.msg).<span class="kw">await</span>.is_err() {
                 <span class="comment">// ignore error - if the other side is not there,
-                // it means we&#39;re are probably shutting down
+                // it means we're are probably shutting down
                 </span><span class="macro">debug!</span>(
                     target: LOG_NET_PEER,
-                    <span class="string">&quot;Could not deliver message to recipient - probably shutting down&quot;
+                    <span class="string">"Could not deliver message to recipient - probably shutting down"
                 </span>);
             }
         }
@@ -1407,7 +1409,7 @@
                     <span class="prelude-val">Some</span>(msg) =&gt; {
                         <span class="self">self</span>.send_message(disconnected, msg).<span class="kw">await</span>}
                     <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">&quot;Exiting peer connection IO task - parent disconnected&quot;</span>);
+                        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">"Exiting peer connection IO task - parent disconnected"</span>);
                         <span class="kw">return </span><span class="prelude-val">None</span>;
                     }
                 }
@@ -1418,7 +1420,7 @@
                         <span class="self">self</span>.receive_connection(disconnected, new_connection).<span class="kw">await
                     </span>},
                     <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">&quot;Exiting peer connection IO task - parent disconnected&quot;</span>);
+                        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">"Exiting peer connection IO task - parent disconnected"</span>);
                         <span class="kw">return </span><span class="prelude-val">None</span>;
                     },
                 }
@@ -1426,12 +1428,12 @@
             <span class="prelude-val">Some</span>(status_query) = <span class="self">self</span>.status_query_receiver.recv() =&gt; {
                 <span class="kw">if </span>status_query.response_sender.send(PeerConnectionStatus::Disconnected).is_err() {
                     <span class="kw">let </span>peer_id = <span class="self">self</span>.peer_id;
-                    <span class="macro">debug!</span>(target: LOG_NET_PEER, %peer_id, <span class="string">&quot;Could not send peer status response: receiver dropped&quot;</span>);
+                    <span class="macro">debug!</span>(target: LOG_NET_PEER, %peer_id, <span class="string">"Could not send peer status response: receiver dropped"</span>);
                 }
                 PeerConnectionState::Disconnected(disconnected)
             },
             () = tokio::time::sleep_until(disconnected.reconnect_at), <span class="kw">if </span><span class="self">self</span>.our_id &lt; <span class="self">self</span>.peer_id =&gt; {
-                <span class="comment">// to prevent &quot;reconnection ping-pongs&quot;, only the side with lower PeerId is responsible for reconnecting
+                <span class="comment">// to prevent "reconnection ping-pongs", only the side with lower PeerId is responsible for reconnecting
                 </span><span class="self">self</span>.reconnect(disconnected).<span class="kw">await
             </span>},
             <span class="kw">_ </span>= task_handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
@@ -1446,7 +1448,7 @@
         msg: M,
     ) -&gt; PeerConnectionState&lt;M&gt; {
         <span class="kw">let </span>umsg = <span class="self">self</span>.resend_queue.push(msg);
-        <span class="macro">trace!</span>(target: LOG_NET_PEER, id = <span class="question-mark">?</span>umsg.id, <span class="string">&quot;Queueing outgoing message&quot;</span>);
+        <span class="macro">trace!</span>(target: LOG_NET_PEER, id = <span class="question-mark">?</span>umsg.id, <span class="string">"Queueing outgoing message"</span>);
         PeerConnectionState::Disconnected(disconnected)
     }
 
@@ -1473,7 +1475,7 @@
     }
 
     <span class="kw">async fn </span>try_reconnect(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;, anyhow::Error&gt; {
-        <span class="macro">debug!</span>(target: LOG_NET_PEER, our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, <span class="string">&quot;Trying to reconnect&quot;</span>);
+        <span class="macro">debug!</span>(target: LOG_NET_PEER, our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, <span class="string">"Trying to reconnect"</span>);
         <span class="kw">let </span>addr = <span class="self">self</span>.peer_address.clone();
         <span class="kw">let </span>(connected_peer, conn) = <span class="self">self</span>.connect.connect_framed(addr, <span class="self">self</span>.peer_id).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1481,7 +1483,7 @@
             <span class="prelude-val">Ok</span>(conn)
         } <span class="kw">else </span>{
             <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">&quot;Peer identified itself incorrectly: {:?}&quot;</span>,
+                <span class="string">"Peer identified itself incorrectly: {:?}"</span>,
                 connected_peer
             ))
         }
@@ -1490,7 +1492,7 @@
 
 <span class="kw">impl</span>&lt;M&gt; PeerConnection&lt;M&gt;
 <span class="kw">where
-    </span>M: Debug + Clone + Send + Sync + <span class="lifetime">&#39;static</span>,
+    </span>M: Debug + Clone + Send + Sync + <span class="lifetime">'static</span>,
 {
     <span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">async fn </span>new(
@@ -1508,7 +1510,7 @@
 
         task_group
             .spawn(
-                <span class="macro">format!</span>(<span class="string">&quot;io-thread-peer-{peer_id}&quot;</span>),
+                <span class="macro">format!</span>(<span class="string">"io-thread-peer-{peer_id}"</span>),
                 <span class="kw">move </span>|handle| <span class="kw">async move </span>{
                     <span class="self">Self</span>::run_io_thread(
                         incoming_sender,
@@ -1613,9 +1615,9 @@
             <span class="kw">let </span>net = MockNetwork::new();
 
             <span class="kw">let </span>peers = [
-                <span class="string">&quot;http://127.0.0.1:1000&quot;</span>,
-                <span class="string">&quot;http://127.0.0.1:2000&quot;</span>,
-                <span class="string">&quot;http://127.0.0.1:3000&quot;</span>,
+                <span class="string">"http://127.0.0.1:1000"</span>,
+                <span class="string">"http://127.0.0.1:2000"</span>,
+                <span class="string">"http://127.0.0.1:3000"</span>,
             ]
             .iter()
             .enumerate()
@@ -1627,7 +1629,7 @@
 
             <span class="kw">let </span>peers_ref = <span class="kw-2">&amp;</span>peers;
             <span class="kw">let </span>net_ref = <span class="kw-2">&amp;</span>net;
-            <span class="kw">let </span>build_peers = <span class="kw">move </span>|bind: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, id: u16, <span class="kw-2">mut </span>task_group: TaskGroup| <span class="kw">async move </span>{
+            <span class="kw">let </span>build_peers = <span class="kw">move </span>|bind: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, id: u16, <span class="kw-2">mut </span>task_group: TaskGroup| <span class="kw">async move </span>{
                 <span class="kw">let </span>cfg = NetworkConfig {
                     identity: PeerId::from(id),
                     bind_addr: bind.parse().unwrap(),
@@ -1646,9 +1648,9 @@
             </span>};
 
             <span class="kw">let </span>(<span class="kw-2">mut </span>peers_a, peer_status_client_a) =
-                build_peers(<span class="string">&quot;127.0.0.1:1000&quot;</span>, <span class="number">1</span>, task_group.clone()).<span class="kw">await</span>;
+                build_peers(<span class="string">"127.0.0.1:1000"</span>, <span class="number">1</span>, task_group.clone()).<span class="kw">await</span>;
             <span class="kw">let </span>(<span class="kw-2">mut </span>peers_b, peer_status_client_b) =
-                build_peers(<span class="string">&quot;127.0.0.1:2000&quot;</span>, <span class="number">2</span>, task_group.clone()).<span class="kw">await</span>;
+                build_peers(<span class="string">"127.0.0.1:2000"</span>, <span class="number">2</span>, task_group.clone()).<span class="kw">await</span>;
 
             peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">2</span>)], <span class="number">42</span>).<span class="kw">await</span>.unwrap();
             <span class="kw">let </span>recv = timeout(peers_b.receive()).<span class="kw">await</span>.unwrap().unwrap();
@@ -1664,11 +1666,11 @@
             <span class="macro">assert!</span>(status.values().all(|s| s.is_ok()));
 
             <span class="kw">let </span>(<span class="kw-2">mut </span>peers_c, peer_status_client_c) =
-                build_peers(<span class="string">&quot;127.0.0.1:3000&quot;</span>, <span class="number">3</span>, task_group.clone()).<span class="kw">await</span>;
+                build_peers(<span class="string">"127.0.0.1:3000"</span>, <span class="number">3</span>, task_group.clone()).<span class="kw">await</span>;
             <span class="kw">let </span>recv = timeout(peers_c.receive())
                 .<span class="kw">await
-                </span>.expect(<span class="string">&quot;time out&quot;</span>)
-                .expect(<span class="string">&quot;stream closed&quot;</span>);
+                </span>.expect(<span class="string">"time out"</span>)
+                .expect(<span class="string">"stream closed"</span>);
             <span class="macro">assert_eq!</span>(recv.<span class="number">0</span>, PeerId::from(<span class="number">1</span>));
             <span class="macro">assert_eq!</span>(recv.<span class="number">1</span>, <span class="number">21</span>);
             <span class="kw">let </span>status = peer_status_client_c.get_all_status().<span class="kw">await</span>;
@@ -1684,13 +1686,13 @@
     </span><span class="kw">fn </span>test_delay_calculator() {
         <span class="kw">let </span>c = DelayCalculator::TEST_DEFAULT;
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..=<span class="number">20 </span>{
-            <span class="macro">println!</span>(<span class="string">&quot;{}: {:?}&quot;</span>, i, c.reconnection_delay(i));
+            <span class="macro">println!</span>(<span class="string">"{}: {:?}"</span>, i, c.reconnection_delay(i));
         }
         <span class="macro">assert!</span>((<span class="number">2000</span>..<span class="number">3000</span>).contains(<span class="kw-2">&amp;</span>c.reconnection_delay(<span class="number">1</span>).as_millis()));
         <span class="macro">assert!</span>((<span class="number">10000</span>..<span class="number">11000</span>).contains(<span class="kw-2">&amp;</span>c.reconnection_delay(<span class="number">10</span>).as_millis()));
         <span class="kw">let </span>c = DelayCalculator::PROD_DEFAULT;
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..=<span class="number">20 </span>{
-            <span class="macro">println!</span>(<span class="string">&quot;{}: {:?}&quot;</span>, i, c.reconnection_delay(i));
+            <span class="macro">println!</span>(<span class="string">"{}: {:?}"</span>, i, c.reconnection_delay(i));
         }
         <span class="macro">assert!</span>((<span class="number">10</span>..<span class="number">20</span>).contains(<span class="kw-2">&amp;</span>c.reconnection_delay(<span class="number">1</span>).as_millis()));
         <span class="macro">assert!</span>((<span class="number">10000</span>..<span class="number">11000</span>).contains(<span class="kw-2">&amp;</span>c.reconnection_delay(<span class="number">10</span>).as_millis()));

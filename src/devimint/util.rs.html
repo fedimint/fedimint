@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `devimint/src/util.rs`."><title>util.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../devimint/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `devimint/src/util.rs`."><title>util.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../devimint/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -795,7 +797,7 @@
 <span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, info, warn};
 
-<span class="comment">// If a binary doesn&#39;t provide a clap version, default to the first stable
+<span class="comment">// If a binary doesn't provide a clap version, default to the first stable
 // release (v0.2.1)
 </span><span class="kw">const </span>DEFAULT_VERSION: Version = Version::new(<span class="number">0</span>, <span class="number">2</span>, <span class="number">1</span>);
 
@@ -806,12 +808,12 @@
         <span class="kw">return </span><span class="prelude-val">Ok</span>(map);
     }
 
-    <span class="kw">for </span>pair <span class="kw">in </span>s.split(<span class="string">&#39;,&#39;</span>) {
-        <span class="kw">let </span>parts: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = pair.split(<span class="string">&#39;=&#39;</span>).collect();
+    <span class="kw">for </span>pair <span class="kw">in </span>s.split(<span class="string">','</span>) {
+        <span class="kw">let </span>parts: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = pair.split(<span class="string">'='</span>).collect();
         <span class="kw">if </span>parts.len() == <span class="number">2 </span>{
             map.insert(parts[<span class="number">0</span>].to_string(), parts[<span class="number">1</span>].to_string());
         } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">&quot;Invalid pair in map: {}&quot;</span>, pair));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Invalid pair in map: {}"</span>, pair));
         }
     }
     <span class="prelude-val">Ok</span>(map)
@@ -827,7 +829,7 @@
 
 <span class="kw">fn </span>send_signal(child: <span class="kw-2">&amp;</span>Child, signal: nix::sys::signal::Signal) {
     <span class="kw">let _ </span>= nix::sys::signal::kill(
-        nix::unistd::Pid::from_raw(child.id().expect(<span class="string">&quot;pid should be present&quot;</span>) <span class="kw">as _</span>),
+        nix::unistd::Pid::from_raw(child.id().expect(<span class="string">"pid should be present"</span>) <span class="kw">as _</span>),
         signal,
     );
 }
@@ -845,7 +847,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>child) = inner.child.take() {
             <span class="macro">info!</span>(
                 target: LOG_DEVIMINT,
-                <span class="string">&quot;sending SIGTERM to {} and waiting for it to exit&quot;</span>, inner.name
+                <span class="string">"sending SIGTERM to {} and waiting for it to exit"</span>, inner.name
             );
             send_sigterm(<span class="kw-2">&amp;</span>child);
             child.wait().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -873,11 +875,11 @@
             block_on(<span class="kw">async move </span>{
                 <span class="macro">info!</span>(
                     target: LOG_DEVIMINT,
-                    <span class="string">&quot;sending SIGKILL to {name} and waiting for it to exit&quot;
+                    <span class="string">"sending SIGKILL to {name} and waiting for it to exit"
                 </span>);
                 send_sigkill(child);
                 <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = child.wait().<span class="kw">await </span>{
-                    <span class="macro">warn!</span>(target: LOG_DEVIMINT, <span class="string">&quot;failed to wait for {name}: {e:?}&quot;</span>);
+                    <span class="macro">warn!</span>(target: LOG_DEVIMINT, <span class="string">"failed to wait for {name}: {e:?}"</span>);
                 }
             })
         })
@@ -895,8 +897,8 @@
 
     <span class="doccomment">/// Logs to $FM_LOGS_DIR/{name}.{out,err}
     </span><span class="kw">pub async fn </span>spawn_daemon(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str, <span class="kw-2">mut </span>cmd: Command) -&gt; <span class="prelude-ty">Result</span>&lt;ProcessHandle&gt; {
-        <span class="kw">let </span>logs_dir = env::var(<span class="string">&quot;FM_LOGS_DIR&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>path = <span class="macro">format!</span>(<span class="string">&quot;{logs_dir}/{name}.log&quot;</span>);
+        <span class="kw">let </span>logs_dir = env::var(<span class="string">"FM_LOGS_DIR"</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>path = <span class="macro">format!</span>(<span class="string">"{logs_dir}/{name}.log"</span>);
         <span class="kw">let </span>log = OpenOptions::new()
             .append(<span class="bool-val">true</span>)
             .create(<span class="bool-val">true</span>)
@@ -910,7 +912,7 @@
         <span class="kw">let </span>child = cmd
             .cmd
             .spawn()
-            .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Could not spawn: {name}&quot;</span>))<span class="question-mark">?</span>;
+            .with_context(|| <span class="macro">format!</span>(<span class="string">"Could not spawn: {name}"</span>))<span class="question-mark">?</span>;
         <span class="kw">let </span>handle = ProcessHandle(Arc::new(Mutex::new(ProcessHandleInner {
             name: name.to_owned(),
             child: <span class="prelude-val">Some</span>(child),
@@ -964,9 +966,9 @@
     <span class="kw">fn </span>command_debug(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
         <span class="self">self</span>.args_debug
             .iter()
-            .map(|x| x.replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;␣&quot;</span>))
+            .map(|x| x.replace(<span class="string">' '</span>, <span class="string">"␣"</span>))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-            .join(<span class="string">&quot; &quot;</span>)
+            .join(<span class="string">" "</span>)
     }
 
     <span class="doccomment">/// Run the command and get its output as json.
@@ -974,13 +976,13 @@
         <span class="kw">let </span>output = <span class="self">self
             </span>.run_inner()
             .<span class="kw">await
-            </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;command: {}&quot;</span>, <span class="self">self</span>.command_debug()))<span class="question-mark">?</span>;
+            </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"command: {}"</span>, <span class="self">self</span>.command_debug()))<span class="question-mark">?</span>;
         <span class="kw">let </span>output = String::from_utf8(output.stdout)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(output.trim().to_owned())
     }
 
     <span class="kw">pub async fn </span>run_inner(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;std::process::Output&gt; {
-        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">&quot;&gt; {}&quot;</span>, <span class="self">self</span>.command_debug());
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"&gt; {}"</span>, <span class="self">self</span>.command_debug());
         <span class="kw">let </span>output = <span class="self">self
             </span>.cmd
             .stdout(Stdio::piped())
@@ -990,7 +992,7 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!output.status.success() {
             <span class="macro">bail!</span>(
-                <span class="string">&quot;{}\nstdout:\n{}&quot;</span>,
+                <span class="string">"{}\nstdout:\n{}"</span>,
                 output.status,
                 String::from_utf8_lossy(<span class="kw-2">&amp;</span>output.stdout),
             );
@@ -1003,20 +1005,20 @@
         <span class="kw">let _ </span>= <span class="self">self
             </span>.run_inner()
             .<span class="kw">await
-            </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;command: {}&quot;</span>, <span class="self">self</span>.command_debug()))<span class="question-mark">?</span>;
+            </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"command: {}"</span>, <span class="self">self</span>.command_debug()))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Run the command logging the output and error
     </span><span class="kw">pub async fn </span>run_with_logging(<span class="kw-2">&amp;mut </span><span class="self">self</span>, name: String) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>logs_dir = env::var(<span class="string">&quot;FM_LOGS_DIR&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>path = <span class="macro">format!</span>(<span class="string">&quot;{logs_dir}/{name}.log&quot;</span>);
+        <span class="kw">let </span>logs_dir = env::var(<span class="string">"FM_LOGS_DIR"</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>path = <span class="macro">format!</span>(<span class="string">"{logs_dir}/{name}.log"</span>);
         <span class="kw">let </span>log = OpenOptions::new()
             .append(<span class="bool-val">true</span>)
             .create(<span class="bool-val">true</span>)
             .open(<span class="kw-2">&amp;</span>path)
             .<span class="kw">await
-            </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;path: {} cmd: {}&quot;</span>, path, name))<span class="question-mark">?
+            </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"path: {} cmd: {}"</span>, path, name))<span class="question-mark">?
             </span>.into_std()
             .<span class="kw">await</span>;
         <span class="self">self</span>.cmd.stdout(log.try_clone()<span class="question-mark">?</span>);
@@ -1024,11 +1026,11 @@
         <span class="kw">let </span>status = <span class="self">self
             </span>.cmd
             .spawn()
-            .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;cmd: {name}&quot;</span>))<span class="question-mark">?
+            .with_context(|| <span class="macro">format!</span>(<span class="string">"cmd: {name}"</span>))<span class="question-mark">?
             </span>.wait()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!status.success() {
-            <span class="macro">bail!</span>(<span class="string">&quot;{}&quot;</span>, status);
+            <span class="macro">bail!</span>(<span class="string">"{}"</span>, status);
         }
         <span class="prelude-val">Ok</span>(())
     }
@@ -1073,7 +1075,7 @@
             <span class="macro-nonterminal">$this</span>.cmd().<span class="kw">await
                 </span>$(.arg(<span class="macro-nonterminal">$arg</span>))*
                 .kill_on_drop(<span class="bool-val">true</span>)
-                .env(<span class="string">&quot;RUST_BACKTRACE&quot;</span>, <span class="string">&quot;1&quot;</span>)
+                .env(<span class="string">"RUST_BACKTRACE"</span>, <span class="string">"1"</span>)
         }
     };
 }
@@ -1087,7 +1089,7 @@
                     <span class="prelude-val">Ok</span>(())
                 } <span class="kw">else </span>{
                     <span class="prelude-val">Err</span>(std::ops::ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
-                        <span class="string">&quot;assertion failed, left: {left:?} right: {right:?}&quot;
+                        <span class="string">"assertion failed, left: {left:?} right: {right:?}"
                     </span>)))
                 }
             }
@@ -1118,14 +1120,14 @@
         <span class="kw">match </span>f().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(value) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(value),
             <span class="prelude-val">Err</span>(ControlFlow::Break(err)) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(err).with_context(|| <span class="macro">format!</span>(<span class="string">&quot;polling {name}&quot;</span>));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(err).with_context(|| <span class="macro">format!</span>(<span class="string">"polling {name}"</span>));
             }
             <span class="prelude-val">Err</span>(ControlFlow::Continue(err)) <span class="kw">if </span>i &lt;= retries =&gt; {
-                <span class="macro">debug!</span>(<span class="string">&quot;polling {name} failed with: {err:?}, will retry... ({i}/{retries})&quot;</span>);
+                <span class="macro">debug!</span>(<span class="string">"polling {name} failed with: {err:?}, will retry... ({i}/{retries})"</span>);
                 task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
             }
             <span class="prelude-val">Err</span>(ControlFlow::Continue(err)) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(err).with_context(|| <span class="macro">format!</span>(<span class="string">&quot;polling {name} after {retries} retries&quot;</span>));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(err).with_context(|| <span class="macro">format!</span>(<span class="string">"polling {name} after {retries} retries"</span>));
             }
         }
     }
@@ -1140,7 +1142,7 @@
 }
 
 <span class="comment">// a command that uses self as program name
-</span><span class="kw">impl </span>ToCmdExt <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span>str {
+</span><span class="kw">impl </span>ToCmdExt <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">'_ </span>str {
     <span class="kw">type </span>Fut = std::future::Ready&lt;Command&gt;;
 
     <span class="kw">fn </span>cmd(<span class="self">self</span>) -&gt; <span class="self">Self</span>::Fut {
@@ -1169,21 +1171,21 @@
     }
 }
 
-<span class="kw">const </span>GATEWAYD_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;gatewayd&quot;</span>;
+<span class="kw">const </span>GATEWAYD_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"gatewayd"</span>;
 <span class="comment">// To override gatewayd binary set:
-</span><span class="kw">const </span>ENV_FM_GATEWAYD_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_GATEWAYD_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_GATEWAYD_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAYD_BASE_EXECUTABLE"</span>;
 
-<span class="kw">const </span>FEDIMINTD_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;fedimintd&quot;</span>;
+<span class="kw">const </span>FEDIMINTD_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"fedimintd"</span>;
 <span class="comment">// To override fedimintd binary set:
-</span><span class="kw">const </span>ENV_FM_FEDIMINTD_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_FEDIMINTD_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_FEDIMINTD_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FEDIMINTD_BASE_EXECUTABLE"</span>;
 
-<span class="kw">const </span>FEDIMINT_CLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;fedimint-cli&quot;</span>;
+<span class="kw">const </span>FEDIMINT_CLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"fedimint-cli"</span>;
 <span class="comment">// To override fedimint-cli binary set:
-</span><span class="kw">const </span>ENV_FM_FEDIMINT_CLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_FEDIMINT_CLI_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_FEDIMINT_CLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FEDIMINT_CLI_BASE_EXECUTABLE"</span>;
 <span class="comment">// To override fedimint-cli default command
-// (like &quot;$FM_FEDIMINT_CLI_BASE_EXECUTABLE --data-dir /tmp/xxx ....&quot;)
+// (like "$FM_FEDIMINT_CLI_BASE_EXECUTABLE --data-dir /tmp/xxx ....")
 // set:
-</span><span class="kw">const </span>ENV_FM_MINT_CLIENT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_MINT_CLIENT&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_MINT_CLIENT: <span class="kw-2">&amp;</span>str = <span class="string">"FM_MINT_CLIENT"</span>;
 
 <span class="kw">pub fn </span>get_fedimint_cli_path() -&gt; Vec&lt;String&gt; {
     get_command_str_for_alias(
@@ -1192,9 +1194,9 @@
     )
 }
 
-<span class="kw">const </span>GATEWAY_CLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;gateway-cli&quot;</span>;
+<span class="kw">const </span>GATEWAY_CLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"gateway-cli"</span>;
 <span class="comment">// To override gateway-cli binary set:
-</span><span class="kw">const </span>ENV_FM_GATEWAY_CLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_GATEWAY_CLI_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_GATEWAY_CLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_CLI_BASE_EXECUTABLE"</span>;
 
 <span class="kw">pub fn </span>get_gateway_cli_path() -&gt; Vec&lt;String&gt; {
     get_command_str_for_alias(
@@ -1203,15 +1205,15 @@
     )
 }
 
-<span class="kw">const </span>LOAD_TEST_TOOL_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;fedimint-load-test-tool&quot;</span>;
+<span class="kw">const </span>LOAD_TEST_TOOL_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"fedimint-load-test-tool"</span>;
 <span class="comment">// To override fedimint-load-test-tool binary set:
-</span><span class="kw">const </span>ENV_FM_LOAD_TEST_TOOL_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_LOAD_TEST_TOOL_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_LOAD_TEST_TOOL_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LOAD_TEST_TOOL_BASE_EXECUTABLE"</span>;
 
-<span class="kw">const </span>LIGHTNING_CLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;lightning-cli&quot;</span>;
+<span class="kw">const </span>LIGHTNING_CLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"lightning-cli"</span>;
 <span class="comment">// To override lightning-cli binary set:
-</span><span class="kw">const </span>ENV_FM_LIGHTNING_CLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_LIGHTNING_CLI_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_LIGHTNING_CLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LIGHTNING_CLI_BASE_EXECUTABLE"</span>;
 <span class="comment">// to override lightning-cli default command set:
-</span><span class="kw">const </span>ENV_FM_LIGHTNING_CLI: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_LIGHTNING_CLI&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_LIGHTNING_CLI: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LIGHTNING_CLI"</span>;
 
 <span class="kw">pub fn </span>get_lightning_cli_path() -&gt; Vec&lt;String&gt; {
     get_command_str_for_alias(
@@ -1220,21 +1222,21 @@
     )
 }
 
-<span class="kw">const </span>LNCLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;lncli&quot;</span>;
+<span class="kw">const </span>LNCLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"lncli"</span>;
 <span class="comment">// To override lncli binary set:
-</span><span class="kw">const </span>ENV_FM_LNCLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_LNCLI_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_LNCLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LNCLI_BASE_EXECUTABLE"</span>;
 <span class="comment">// to override lncli default command set:
-</span><span class="kw">const </span>ENV_FM_LNCLI: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_LNCLI&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_LNCLI: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LNCLI"</span>;
 
 <span class="kw">pub fn </span>get_lncli_path() -&gt; Vec&lt;String&gt; {
     get_command_str_for_alias(<span class="kw-2">&amp;</span>[ENV_FM_LNCLI_BASE_EXECUTABLE], <span class="kw-2">&amp;</span>[LNCLI_FALLBACK])
 }
 
-<span class="kw">const </span>BITCOIN_CLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;bitcoin-cli&quot;</span>;
+<span class="kw">const </span>BITCOIN_CLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"bitcoin-cli"</span>;
 <span class="comment">// To override bitcoin-cli binary set:
-</span><span class="kw">const </span>ENV_FM_BITCOIN_CLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_BITCOIN_CLI_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_BITCOIN_CLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_BITCOIN_CLI_BASE_EXECUTABLE"</span>;
 <span class="comment">// to override bitcoin-cli default command set:
-</span><span class="kw">const </span>ENV_FM_BTC_CLIENT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_BTC_CLIENT&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_BTC_CLIENT: <span class="kw-2">&amp;</span>str = <span class="string">"FM_BTC_CLIENT"</span>;
 
 <span class="kw">pub fn </span>get_bitcoin_cli_path() -&gt; Vec&lt;String&gt; {
     get_command_str_for_alias(
@@ -1243,37 +1245,37 @@
     )
 }
 
-<span class="kw">const </span>BITCOIND_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;bitcoind&quot;</span>;
+<span class="kw">const </span>BITCOIND_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"bitcoind"</span>;
 <span class="comment">// To override bitcoind binary set:
-</span><span class="kw">const </span>ENV_FM_BITCOIND_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_BITCOIND_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_BITCOIND_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_BITCOIND_BASE_EXECUTABLE"</span>;
 
-<span class="kw">const </span>LIGHTNINGD_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;lightningd&quot;</span>;
+<span class="kw">const </span>LIGHTNINGD_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"lightningd"</span>;
 <span class="comment">// To override lightningd binary set:
-</span><span class="kw">const </span>ENV_FM_LIGHTNINGD_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_LIGHTNINGD_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_LIGHTNINGD_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LIGHTNINGD_BASE_EXECUTABLE"</span>;
 
-<span class="kw">const </span>LND_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;lnd&quot;</span>;
+<span class="kw">const </span>LND_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"lnd"</span>;
 <span class="comment">// To override lnd binary set:
-</span><span class="kw">const </span>ENV_FM_LND_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_LND_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_LND_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LND_BASE_EXECUTABLE"</span>;
 
-<span class="kw">const </span>ELECTRS_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;electrs&quot;</span>;
+<span class="kw">const </span>ELECTRS_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"electrs"</span>;
 <span class="comment">// To override electrs binary set:
-</span><span class="kw">const </span>ENV_FM_ELECTRS_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_ELECTRS_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_ELECTRS_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_ELECTRS_BASE_EXECUTABLE"</span>;
 
-<span class="kw">const </span>ESPLORA_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;esplora&quot;</span>;
+<span class="kw">const </span>ESPLORA_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"esplora"</span>;
 <span class="comment">// To override esplora binary set:
-</span><span class="kw">const </span>ENV_FM_ESPLORA_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_ESPLORA_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_ESPLORA_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_ESPLORA_BASE_EXECUTABLE"</span>;
 
-<span class="kw">const </span>RECOVERYTOOL_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;recoverytool&quot;</span>;
+<span class="kw">const </span>RECOVERYTOOL_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"recoverytool"</span>;
 <span class="comment">// To override esplora binary set:
-</span><span class="kw">const </span>ENV_FM_RECOVERYTOOL_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_RECOVERYTOOL_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_RECOVERYTOOL_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_RECOVERYTOOL_BASE_EXECUTABLE"</span>;
 
-<span class="kw">const </span>FAUCET_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;faucet&quot;</span>;
+<span class="kw">const </span>FAUCET_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"faucet"</span>;
 <span class="comment">// To override esplora binary set:
-</span><span class="kw">const </span>ENV_FM_FAUCET_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_FAUCET_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_FAUCET_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FAUCET_BASE_EXECUTABLE"</span>;
 
-<span class="kw">const </span>FEDIMINT_DBTOOL_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;fedimint-dbtool&quot;</span>;
+<span class="kw">const </span>FEDIMINT_DBTOOL_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"fedimint-dbtool"</span>;
 <span class="comment">// To override esplora binary set:
-</span><span class="kw">const </span>ENV_FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE&quot;</span>;
+</span><span class="kw">const </span>ENV_FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE"</span>;
 
 <span class="kw">pub fn </span>get_fedimint_dbtool_cli_path() -&gt; Vec&lt;String&gt; {
     get_command_str_for_alias(
@@ -1285,9 +1287,9 @@
 <span class="doccomment">/// Maps a version hash to a release version
 </span><span class="kw">fn </span>version_hash_to_version(version_hash: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Version&gt; {
     <span class="kw">match </span>version_hash {
-        <span class="string">&quot;a8422b84102ab5fc768307215d5b20d807143f27&quot; </span>=&gt; <span class="prelude-val">Ok</span>(Version::new(<span class="number">0</span>, <span class="number">2</span>, <span class="number">1</span>)),
-        <span class="string">&quot;a849377f6466b26bf9b2747242ff01fd4d4a031b&quot; </span>=&gt; <span class="prelude-val">Ok</span>(Version::new(<span class="number">0</span>, <span class="number">2</span>, <span class="number">2</span>)),
-        <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;no version known for version hash: {version_hash}&quot;</span>)),
+        <span class="string">"a8422b84102ab5fc768307215d5b20d807143f27" </span>=&gt; <span class="prelude-val">Ok</span>(Version::new(<span class="number">0</span>, <span class="number">2</span>, <span class="number">1</span>)),
+        <span class="string">"a849377f6466b26bf9b2747242ff01fd4d4a031b" </span>=&gt; <span class="prelude-val">Ok</span>(Version::new(<span class="number">0</span>, <span class="number">2</span>, <span class="number">2</span>)),
+        <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"no version known for version hash: {version_hash}"</span>)),
     }
 }
 
@@ -1302,9 +1304,9 @@
 
     <span class="doccomment">/// Returns the fedimintd version from clap or default min version
     </span><span class="kw">pub async fn </span>version_or_default() -&gt; Version {
-        <span class="kw">match </span><span class="macro">cmd!</span>(FedimintdCmd, <span class="string">&quot;--version&quot;</span>).out_string().<span class="kw">await </span>{
+        <span class="kw">match </span><span class="macro">cmd!</span>(FedimintdCmd, <span class="string">"--version"</span>).out_string().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(version) =&gt; parse_clap_version(<span class="kw-2">&amp;</span>version),
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="macro">cmd!</span>(FedimintdCmd, <span class="string">&quot;version-hash&quot;</span>)
+            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="macro">cmd!</span>(FedimintdCmd, <span class="string">"version-hash"</span>)
                 .out_string()
                 .<span class="kw">await
                 </span>.map(|v| version_hash_to_version(<span class="kw-2">&amp;</span>v).unwrap_or(DEFAULT_VERSION))
@@ -1337,7 +1339,7 @@
 
     <span class="doccomment">/// Returns the fedimint-cli version from clap or default min version
     </span><span class="kw">pub async fn </span>version_or_default() -&gt; Version {
-        <span class="kw">match </span><span class="macro">cmd!</span>(FedimintCli, <span class="string">&quot;--version&quot;</span>).out_string().<span class="kw">await </span>{
+        <span class="kw">match </span><span class="macro">cmd!</span>(FedimintCli, <span class="string">"--version"</span>).out_string().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(version) =&gt; parse_clap_version(<span class="kw-2">&amp;</span>version),
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; DEFAULT_VERSION,
         }
@@ -1371,8 +1373,8 @@
 <span class="kw">impl </span>GatewayClnCli {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[<span class="string">&quot;FM_GWCLI_CLN&quot;</span>],
-            <span class="kw-2">&amp;</span>[<span class="string">&quot;gateway-cln&quot;</span>],
+            <span class="kw-2">&amp;</span>[<span class="string">"FM_GWCLI_CLN"</span>],
+            <span class="kw-2">&amp;</span>[<span class="string">"gateway-cln"</span>],
         ))
     }
 }
@@ -1381,8 +1383,8 @@
 <span class="kw">impl </span>GatewayLndCli {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[<span class="string">&quot;FM_GWCLI_LND&quot;</span>],
-            <span class="kw-2">&amp;</span>[<span class="string">&quot;gateway-lnd&quot;</span>],
+            <span class="kw-2">&amp;</span>[<span class="string">"FM_GWCLI_LND"</span>],
+            <span class="kw-2">&amp;</span>[<span class="string">"gateway-lnd"</span>],
         ))
     }
 }
@@ -1518,13 +1520,13 @@
 
 <span class="doccomment">/// Returns true if running backwards-compatibility tests
 </span><span class="kw">pub fn </span>is_backwards_compatibility_test() -&gt; bool {
-    is_env_var_set(<span class="string">&quot;FM_BACKWARDS_COMPATIBILITY_TEST&quot;</span>)
+    is_env_var_set(<span class="string">"FM_BACKWARDS_COMPATIBILITY_TEST"</span>)
 }
 
 <span class="doccomment">/// Parses a version string returned from clap
 /// ex: fedimintd 0.3.0-alpha -&gt; 0.3.0-alpha
 </span><span class="kw">fn </span>parse_clap_version(res: <span class="kw-2">&amp;</span>str) -&gt; Version {
-    <span class="kw">match </span>res.split(<span class="string">&#39; &#39;</span>).collect::&lt;Vec&lt;<span class="kw-2">&amp;</span>str&gt;&gt;().as_slice() {
+    <span class="kw">match </span>res.split(<span class="string">' '</span>).collect::&lt;Vec&lt;<span class="kw-2">&amp;</span>str&gt;&gt;().as_slice() {
         [_binary, version] =&gt; Version::parse(version).unwrap_or(DEFAULT_VERSION),
         <span class="kw">_ </span>=&gt; DEFAULT_VERSION,
     }
@@ -1532,19 +1534,19 @@
 
 <span class="attr">#[test]
 </span><span class="kw">fn </span>test_parse_clap_version() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="kw">let </span>version_str = <span class="string">&quot;fedimintd 0.3.0-alpha&quot;</span>;
-    <span class="kw">let </span>expected_version = Version::parse(<span class="string">&quot;0.3.0-alpha&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>version_str = <span class="string">"fedimintd 0.3.0-alpha"</span>;
+    <span class="kw">let </span>expected_version = Version::parse(<span class="string">"0.3.0-alpha"</span>)<span class="question-mark">?</span>;
     <span class="macro">assert_eq!</span>(expected_version, parse_clap_version(version_str));
 
-    <span class="kw">let </span>version_str = <span class="string">&quot;fedimintd 0.3.12&quot;</span>;
-    <span class="kw">let </span>expected_version = Version::parse(<span class="string">&quot;0.3.12&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>version_str = <span class="string">"fedimintd 0.3.12"</span>;
+    <span class="kw">let </span>expected_version = Version::parse(<span class="string">"0.3.12"</span>)<span class="question-mark">?</span>;
     <span class="macro">assert_eq!</span>(expected_version, parse_clap_version(version_str));
 
-    <span class="kw">let </span>version_str = <span class="string">&quot;fedimint-cli 2.12.2-rc22&quot;</span>;
-    <span class="kw">let </span>expected_version = Version::parse(<span class="string">&quot;2.12.2-rc22&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>version_str = <span class="string">"fedimint-cli 2.12.2-rc22"</span>;
+    <span class="kw">let </span>expected_version = Version::parse(<span class="string">"2.12.2-rc22"</span>)<span class="question-mark">?</span>;
     <span class="macro">assert_eq!</span>(expected_version, parse_clap_version(version_str));
 
-    <span class="kw">let </span>version_str = <span class="string">&quot;bad version&quot;</span>;
+    <span class="kw">let </span>version_str = <span class="string">"bad version"</span>;
     <span class="kw">let </span>expected_version = DEFAULT_VERSION;
     <span class="macro">assert_eq!</span>(expected_version, parse_clap_version(version_str));
 

@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-load-test-tool/src/common.rs`."><title>common.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_load_test_tool" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_load_test_tool/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-load-test-tool/src/common.rs`."><title>common.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_load_test_tool" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_load_test_tool/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -394,14 +396,6 @@
 <a href="#394" id="394">394</a>
 <a href="#395" id="395">395</a>
 <a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -412,7 +406,7 @@
 <span class="kw">use </span>devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::transaction::TransactionBuilder;
-<span class="kw">use </span>fedimint_client::{Client, ClientArc};
+<span class="kw">use </span>fedimint_client::{Client, ClientHandle};
 <span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, OperationId};
@@ -422,6 +416,7 @@
 <span class="kw">use </span>fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LnPayState, OutgoingLightningPayment,
 };
+<span class="kw">use </span>fedimint_ln_common::LightningGateway;
 <span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintClientModule, MintCommonInit, OOBNotes};
 <span class="kw">use </span>fedimint_wallet_client::WalletClientInit;
 <span class="kw">use </span>futures::StreamExt;
@@ -433,21 +428,21 @@
 <span class="kw">use </span><span class="kw">crate</span>::MetricEvent;
 
 <span class="kw">pub async fn </span>get_invite_code_cli() -&gt; anyhow::Result&lt;InviteCode&gt; {
-    <span class="macro">cmd!</span>(FedimintCli, <span class="string">&quot;invite-code&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;invite_code&quot;</span>]
+    <span class="macro">cmd!</span>(FedimintCli, <span class="string">"invite-code"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"invite_code"</span>]
         .as_str()
         .map(InviteCode::from_str)
         .transpose()<span class="question-mark">?
-        </span>.context(<span class="string">&quot;missing invite code&quot;</span>)
+        </span>.context(<span class="string">"missing invite code"</span>)
 }
 
 <span class="kw">pub async fn </span>get_notes_cli(amount: <span class="kw-2">&amp;</span>Amount) -&gt; anyhow::Result&lt;OOBNotes&gt; {
-    <span class="macro">cmd!</span>(FedimintCli, <span class="string">&quot;spend&quot;</span>, amount.msats.to_string())
+    <span class="macro">cmd!</span>(FedimintCli, <span class="string">"spend"</span>, amount.msats.to_string())
         .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;notes&quot;</span>]
+        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"notes"</span>]
         .as_str()
         .map(OOBNotes::from_str)
         .transpose()<span class="question-mark">?
-        </span>.context(<span class="string">&quot;missing notes output&quot;</span>)
+        </span>.context(<span class="string">"missing notes output"</span>)
 }
 
 <span class="kw">pub async fn </span>try_get_notes_cli(amount: <span class="kw-2">&amp;</span>Amount, tries: usize) -&gt; anyhow::Result&lt;OOBNotes&gt; {
@@ -455,7 +450,7 @@
         <span class="kw">match </span>get_notes_cli(amount).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(oob_notes) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(oob_notes),
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">info!</span>(<span class="string">&quot;Failed to get notes from cli: {e}, trying again after a second...&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"Failed to get notes from cli: {e}, trying again after a second..."</span>);
                 fedimint_core::task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
             }
         }
@@ -464,7 +459,7 @@
 </span>}
 
 <span class="kw">pub async fn </span>reissue_notes(
-    client: <span class="kw-2">&amp;</span>ClientArc,
+    client: <span class="kw-2">&amp;</span>ClientHandle,
     oob_notes: OOBNotes,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
@@ -477,18 +472,18 @@
         </span>.into_stream();
     <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
         <span class="kw">if let </span>fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
-            <span class="macro">bail!</span>(<span class="string">&quot;Reissue failed: {e}&quot;</span>)
+            <span class="macro">bail!</span>(<span class="string">"Reissue failed: {e}"</span>)
         }
     }
     event_sender.send(MetricEvent {
-        name: <span class="string">&quot;reissue_notes&quot;</span>.into(),
+        name: <span class="string">"reissue_notes"</span>.into(),
         duration: m.elapsed()<span class="question-mark">?</span>,
     })<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
 
 <span class="kw">pub async fn </span>do_spend_notes(
-    mint: <span class="kw-2">&amp;</span>ClientArc,
+    mint: <span class="kw-2">&amp;</span>ClientHandle,
     amount: Amount,
 ) -&gt; anyhow::Result&lt;(OperationId, OOBNotes)&gt; {
     <span class="kw">let </span>mint = <span class="kw-2">&amp;</span>mint.get_first_module::&lt;MintClientModule&gt;();
@@ -504,7 +499,7 @@
             fedimint_mint_client::SpendOOBState::Created
             | fedimint_mint_client::SpendOOBState::Success =&gt; {}
             other =&gt; {
-                <span class="macro">bail!</span>(<span class="string">&quot;Spend failed: {other:?}&quot;</span>);
+                <span class="macro">bail!</span>(<span class="string">"Spend failed: {other:?}"</span>);
             }
         }
     }
@@ -512,7 +507,7 @@
 }
 
 <span class="kw">pub async fn </span>await_spend_notes_finish(
-    client: <span class="kw-2">&amp;</span>ClientArc,
+    client: <span class="kw-2">&amp;</span>ClientHandle,
     operation_id: OperationId,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>updates = client
@@ -521,12 +516,12 @@
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_stream();
     <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
-        <span class="macro">info!</span>(<span class="string">&quot;SpendOOBState update: {:?}&quot;</span>, update);
+        <span class="macro">info!</span>(<span class="string">"SpendOOBState update: {:?}"</span>, update);
         <span class="kw">match </span>update {
             fedimint_mint_client::SpendOOBState::Created
             | fedimint_mint_client::SpendOOBState::Success =&gt; {}
             other =&gt; {
-                <span class="macro">bail!</span>(<span class="string">&quot;Spend failed: {other:?}&quot;</span>);
+                <span class="macro">bail!</span>(<span class="string">"Spend failed: {other:?}"</span>);
             }
         }
     }
@@ -536,7 +531,7 @@
 <span class="kw">pub async fn </span>build_client(
     invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
     rocksdb: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>PathBuf&gt;,
-) -&gt; anyhow::Result&lt;(ClientArc, <span class="prelude-ty">Option</span>&lt;InviteCode&gt;)&gt; {
+) -&gt; anyhow::Result&lt;(ClientHandle, <span class="prelude-ty">Option</span>&lt;InviteCode&gt;)&gt; {
     <span class="kw">let </span>db = <span class="kw">if let </span><span class="prelude-val">Some</span>(rocksdb) = rocksdb {
         Database::new(
             fedimint_rocksdb::RocksDb::open(rocksdb)<span class="question-mark">?</span>,
@@ -557,10 +552,10 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(invite_code) = <span class="kw-2">&amp;</span>invite_code {
             <span class="kw">let </span>client_config = ClientConfig::download_from_invite_code(invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
             client_builder
-                .join(root_secret, client_config.clone(), invite_code.clone())
+                .join(root_secret, client_config.clone())
                 .<span class="kw">await
         </span>} <span class="kw">else </span>{
-            <span class="macro">bail!</span>(<span class="string">&quot;Database not initialize and invite code not provided&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Database not initialize and invite code not provided"</span>);
         }
     } <span class="kw">else </span>{
         client_builder.open(root_secret).<span class="kw">await
@@ -569,17 +564,17 @@
 }
 
 <span class="kw">pub async fn </span>lnd_create_invoice(amount: Amount) -&gt; anyhow::Result&lt;(Bolt11Invoice, String)&gt; {
-    <span class="kw">let </span>result = <span class="macro">cmd!</span>(LnCli, <span class="string">&quot;addinvoice&quot;</span>, <span class="string">&quot;--amt_msat&quot;</span>, amount.msats)
+    <span class="kw">let </span>result = <span class="macro">cmd!</span>(LnCli, <span class="string">"addinvoice"</span>, <span class="string">"--amt_msat"</span>, amount.msats)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>invoice = result[<span class="string">&quot;payment_request&quot;</span>]
+    <span class="kw">let </span>invoice = result[<span class="string">"payment_request"</span>]
         .as_str()
         .map(Bolt11Invoice::from_str)
         .transpose()<span class="question-mark">?
-        </span>.context(<span class="string">&quot;Missing payment_request field&quot;</span>)<span class="question-mark">?</span>;
-    <span class="kw">let </span>r_hash = result[<span class="string">&quot;r_hash&quot;</span>]
+        </span>.context(<span class="string">"Missing payment_request field"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>r_hash = result[<span class="string">"r_hash"</span>]
         .as_str()
-        .context(<span class="string">&quot;Missing r_hash field&quot;</span>)<span class="question-mark">?
+        .context(<span class="string">"Missing r_hash field"</span>)<span class="question-mark">?
         </span>.to_owned();
     <span class="prelude-val">Ok</span>((invoice, r_hash))
 }
@@ -587,53 +582,53 @@
 <span class="kw">pub async fn </span>lnd_pay_invoice(invoice: Bolt11Invoice) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>status = <span class="macro">cmd!</span>(
         LnCli,
-        <span class="string">&quot;payinvoice&quot;</span>,
-        <span class="string">&quot;--force&quot;</span>,
-        <span class="string">&quot;--allow_self_payment&quot;</span>,
-        <span class="string">&quot;--json&quot;</span>,
+        <span class="string">"payinvoice"</span>,
+        <span class="string">"--force"</span>,
+        <span class="string">"--allow_self_payment"</span>,
+        <span class="string">"--json"</span>,
         invoice.to_string()
     )
     .out_json()
-    .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;status&quot;</span>]
+    .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"status"</span>]
         .as_str()
-        .context(<span class="string">&quot;Missing status field&quot;</span>)<span class="question-mark">?
+        .context(<span class="string">"Missing status field"</span>)<span class="question-mark">?
         </span>.to_owned();
-    <span class="macro">anyhow::ensure!</span>(status == <span class="string">&quot;SUCCEEDED&quot;</span>);
+    <span class="macro">anyhow::ensure!</span>(status == <span class="string">"SUCCEEDED"</span>);
     <span class="prelude-val">Ok</span>(())
 }
 
 <span class="kw">pub async fn </span>lnd_wait_invoice_payment(r_hash: String) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">60 </span>{
-        <span class="kw">let </span>result = <span class="macro">cmd!</span>(LnCli, <span class="string">&quot;lookupinvoice&quot;</span>, <span class="kw-2">&amp;</span>r_hash).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>state = result[<span class="string">&quot;state&quot;</span>].as_str().context(<span class="string">&quot;Missing state field&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">if </span>state == <span class="string">&quot;SETTLED&quot; </span>{
+        <span class="kw">let </span>result = <span class="macro">cmd!</span>(LnCli, <span class="string">"lookupinvoice"</span>, <span class="kw-2">&amp;</span>r_hash).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>state = result[<span class="string">"state"</span>].as_str().context(<span class="string">"Missing state field"</span>)<span class="question-mark">?</span>;
+        <span class="kw">if </span>state == <span class="string">"SETTLED" </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         } <span class="kw">else </span>{
             fedimint_core::task::sleep(Duration::from_millis(<span class="number">500</span>)).<span class="kw">await</span>;
         }
     }
-    <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Timeout waiting for invoice to settle: {r_hash}&quot;</span>)
+    <span class="macro">anyhow::bail!</span>(<span class="string">"Timeout waiting for invoice to settle: {r_hash}"</span>)
 }
 
 <span class="kw">pub async fn </span>gateway_pay_invoice(
     prefix: <span class="kw-2">&amp;</span>str,
     gateway_name: <span class="kw-2">&amp;</span>str,
-    client: <span class="kw-2">&amp;</span>ClientArc,
+    client: <span class="kw-2">&amp;</span>ClientHandle,
     invoice: Bolt11Invoice,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
+    ln_gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>m = fedimint_core::time::now();
     <span class="kw">let </span>lightning_module = <span class="kw-2">&amp;</span>client.get_first_module::&lt;LightningClientModule&gt;();
-    <span class="kw">let </span>gateway = lightning_module.select_active_gateway_opt().<span class="kw">await</span>;
     <span class="kw">let </span>OutgoingLightningPayment {
         payment_type,
         contract_id: <span class="kw">_</span>,
         fee: <span class="kw">_</span>,
     } = lightning_module
-        .pay_bolt11_invoice(gateway, invoice, ())
+        .pay_bolt11_invoice(ln_gateway, invoice, ())
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>operation_id = <span class="kw">match </span>payment_type {
-        fedimint_ln_client::PayType::Internal(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Internal payment not expected&quot;</span>),
+        fedimint_ln_client::PayType::Internal(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">"Internal payment not expected"</span>),
         fedimint_ln_client::PayType::Lightning(operation_id) =&gt; operation_id,
     };
     <span class="kw">let </span><span class="kw-2">mut </span>updates = lightning_module
@@ -641,17 +636,17 @@
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_stream();
     <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
-        <span class="macro">info!</span>(<span class="string">&quot;{prefix} LnPayState update: {update:?}&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"{prefix} LnPayState update: {update:?}"</span>);
         <span class="kw">match </span>update {
             LnPayState::Success { preimage: <span class="kw">_ </span>} =&gt; {
                 <span class="kw">let </span>elapsed: Duration = m.elapsed()<span class="question-mark">?</span>;
-                <span class="macro">info!</span>(<span class="string">&quot;{prefix} Invoice paid in {elapsed:?}&quot;</span>);
+                <span class="macro">info!</span>(<span class="string">"{prefix} Invoice paid in {elapsed:?}"</span>);
                 event_sender.send(MetricEvent {
-                    name: <span class="string">&quot;gateway_pay_invoice_success&quot;</span>.into(),
+                    name: <span class="string">"gateway_pay_invoice_success"</span>.into(),
                     duration: elapsed,
                 })<span class="question-mark">?</span>;
                 event_sender.send(MetricEvent {
-                    name: <span class="macro">format!</span>(<span class="string">&quot;gateway_{gateway_name}_pay_invoice_success&quot;</span>),
+                    name: <span class="macro">format!</span>(<span class="string">"gateway_{gateway_name}_pay_invoice_success"</span>),
                     duration: elapsed,
                 })<span class="question-mark">?</span>;
                 <span class="kw">break</span>;
@@ -659,18 +654,18 @@
             LnPayState::Created | LnPayState::Funded | LnPayState::AwaitingChange =&gt; {}
             LnPayState::Canceled =&gt; {
                 <span class="kw">let </span>elapsed: Duration = m.elapsed()<span class="question-mark">?</span>;
-                <span class="macro">warn!</span>(<span class="string">&quot;{prefix} Invoice canceled in {elapsed:?}&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">"{prefix} Invoice canceled in {elapsed:?}"</span>);
                 event_sender.send(MetricEvent {
-                    name: <span class="string">&quot;gateway_pay_invoice_canceled&quot;</span>.into(),
+                    name: <span class="string">"gateway_pay_invoice_canceled"</span>.into(),
                     duration: elapsed,
                 })<span class="question-mark">?</span>;
                 <span class="kw">break</span>;
             }
             LnPayState::Refunded { gateway_error } =&gt; {
                 <span class="kw">let </span>elapsed: Duration = m.elapsed()<span class="question-mark">?</span>;
-                <span class="macro">warn!</span>(<span class="string">&quot;{prefix} Invoice refunded due to {gateway_error} in {elapsed:?}&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">"{prefix} Invoice refunded due to {gateway_error} in {elapsed:?}"</span>);
                 event_sender.send(MetricEvent {
-                    name: <span class="string">&quot;gateway_pay_invoice_refunded&quot;</span>.into(),
+                    name: <span class="string">"gateway_pay_invoice_refunded"</span>.into(),
                     duration: elapsed,
                 })<span class="question-mark">?</span>;
                 <span class="kw">break</span>;
@@ -679,10 +674,10 @@
                 block_height: <span class="kw">_</span>,
                 gateway_error,
             } =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;{prefix} Waiting for refund: {gateway_error:?}&quot;</span>)
+                <span class="macro">warn!</span>(<span class="string">"{prefix} Waiting for refund: {gateway_error:?}"</span>)
             }
             LnPayState::UnexpectedError { error_message } =&gt; {
-                <span class="macro">bail!</span>(<span class="string">&quot;Failed to pay invoice: {error_message:?}&quot;</span>)
+                <span class="macro">bail!</span>(<span class="string">"Failed to pay invoice: {error_message:?}"</span>)
             }
         }
     }
@@ -692,55 +687,46 @@
 <span class="kw">pub async fn </span>cln_create_invoice(amount: Amount) -&gt; anyhow::Result&lt;(Bolt11Invoice, String)&gt; {
     <span class="kw">let </span>now = fedimint_core::time::now();
     <span class="kw">let </span>random_n: u128 = rand::random();
-    <span class="kw">let </span>label = <span class="macro">format!</span>(<span class="string">&quot;label-{now:?}-{random_n}&quot;</span>);
-    <span class="kw">let </span>invoice_string = <span class="macro">cmd!</span>(ClnLightningCli, <span class="string">&quot;invoice&quot;</span>, amount.msats, <span class="kw-2">&amp;</span>label, <span class="kw-2">&amp;</span>label)
+    <span class="kw">let </span>label = <span class="macro">format!</span>(<span class="string">"label-{now:?}-{random_n}"</span>);
+    <span class="kw">let </span>invoice_string = <span class="macro">cmd!</span>(ClnLightningCli, <span class="string">"invoice"</span>, amount.msats, <span class="kw-2">&amp;</span>label, <span class="kw-2">&amp;</span>label)
         .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;bolt11&quot;</span>]
+        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"bolt11"</span>]
         .as_str()
-        .context(<span class="string">&quot;Missing bolt11 field&quot;</span>)<span class="question-mark">?
+        .context(<span class="string">"Missing bolt11 field"</span>)<span class="question-mark">?
         </span>.to_owned();
     <span class="prelude-val">Ok</span>((Bolt11Invoice::from_str(<span class="kw-2">&amp;</span>invoice_string)<span class="question-mark">?</span>, label))
 }
 
 <span class="kw">pub async fn </span>cln_pay_invoice(invoice: Bolt11Invoice) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span>status = <span class="macro">cmd!</span>(ClnLightningCli, <span class="string">&quot;pay&quot;</span>, invoice.to_string())
+    <span class="kw">let </span>status = <span class="macro">cmd!</span>(ClnLightningCli, <span class="string">"pay"</span>, invoice.to_string())
         .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;status&quot;</span>]
+        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"status"</span>]
         .as_str()
-        .context(<span class="string">&quot;Missing status field&quot;</span>)<span class="question-mark">?
+        .context(<span class="string">"Missing status field"</span>)<span class="question-mark">?
         </span>.to_owned();
-    <span class="macro">anyhow::ensure!</span>(status == <span class="string">&quot;complete&quot;</span>);
+    <span class="macro">anyhow::ensure!</span>(status == <span class="string">"complete"</span>);
     <span class="prelude-val">Ok</span>(())
 }
 
 <span class="kw">pub async fn </span>cln_wait_invoice_payment(label: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span>status = <span class="macro">cmd!</span>(ClnLightningCli, <span class="string">&quot;waitinvoice&quot;</span>, label)
+    <span class="kw">let </span>status = <span class="macro">cmd!</span>(ClnLightningCli, <span class="string">"waitinvoice"</span>, label)
         .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;status&quot;</span>]
+        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"status"</span>]
         .as_str()
-        .context(<span class="string">&quot;Missing status field&quot;</span>)<span class="question-mark">?
+        .context(<span class="string">"Missing status field"</span>)<span class="question-mark">?
         </span>.to_owned();
-    <span class="kw">if </span>status == <span class="string">&quot;paid&quot; </span>{
+    <span class="kw">if </span>status == <span class="string">"paid" </span>{
         <span class="prelude-val">Ok</span>(())
     } <span class="kw">else </span>{
-        <span class="macro">bail!</span>(<span class="string">&quot;Got status {status} for invoice {label}&quot;</span>)
+        <span class="macro">bail!</span>(<span class="string">"Got status {status} for invoice {label}"</span>)
     }
-}
-
-<span class="kw">pub async fn </span>switch_default_gateway(client: <span class="kw-2">&amp;</span>ClientArc, gateway_id: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span>gateway_id = parse_gateway_id(gateway_id)<span class="question-mark">?</span>;
-    client
-        .get_first_module::&lt;LightningClientModule&gt;()
-        .set_active_gateway(<span class="kw-2">&amp;</span>gateway_id)
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(())
 }
 
 <span class="kw">pub fn </span>parse_gateway_id(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::PublicKey, secp256k1::Error&gt; {
     secp256k1::PublicKey::from_str(s)
 }
 
-<span class="kw">pub async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientArc) -&gt; anyhow::Result&lt;TieredSummary&gt; {
+<span class="kw">pub async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientHandle) -&gt; anyhow::Result&lt;TieredSummary&gt; {
     <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;();
     <span class="kw">let </span>summary = mint_client
         .get_wallet_summary(
@@ -755,7 +741,7 @@
 }
 
 <span class="kw">pub async fn </span>remint_denomination(
-    client: <span class="kw-2">&amp;</span>ClientArc,
+    client: <span class="kw-2">&amp;</span>ClientHandle,
     denomination: Amount,
     quantity: u16,
 ) -&gt; anyhow::Result&lt;()&gt; {
@@ -793,7 +779,7 @@
     tx_subscription
         .await_tx_accepted(txid)
         .<span class="kw">await
-        </span>.map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;{e}&quot;</span>))<span class="question-mark">?</span>;
+        </span>.map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"{e}"</span>))<span class="question-mark">?</span>;
     dbtx.commit_tx().<span class="kw">await</span>;
     <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..quantity {
         <span class="kw">let </span>out_point = OutPoint {

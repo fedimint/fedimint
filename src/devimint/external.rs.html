@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `devimint/src/external.rs`."><title>external.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../devimint/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `devimint/src/external.rs`."><title>external.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../devimint/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -747,26 +749,26 @@
     <span class="kw">pub async fn </span>new(processmgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>btc_dir = utf8(<span class="kw-2">&amp;</span>processmgr.globals.FM_BTC_DIR);
         <span class="kw">let </span>conf = <span class="macro">format!</span>(
-            <span class="macro">include_str!</span>(<span class="string">&quot;cfg/bitcoin.conf&quot;</span>),
+            <span class="macro">include_str!</span>(<span class="string">"cfg/bitcoin.conf"</span>),
             rpc_port = processmgr.globals.FM_PORT_BTC_RPC,
             p2p_port = processmgr.globals.FM_PORT_BTC_P2P,
             zmq_pub_raw_block = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK,
             zmq_pub_raw_tx = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_TX,
         );
-        write_overwrite_async(processmgr.globals.FM_BTC_DIR.join(<span class="string">&quot;bitcoin.conf&quot;</span>), conf).<span class="kw">await</span><span class="question-mark">?</span>;
+        write_overwrite_async(processmgr.globals.FM_BTC_DIR.join(<span class="string">"bitcoin.conf"</span>), conf).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>process = processmgr
             .spawn_daemon(
-                <span class="string">&quot;bitcoind&quot;</span>,
-                <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::Bitcoind, <span class="string">&quot;-datadir={btc_dir}&quot;</span>),
+                <span class="string">"bitcoind"</span>,
+                <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::Bitcoind, <span class="string">"-datadir={btc_dir}"</span>),
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>url = processmgr.globals.FM_BITCOIN_RPC_URL.parse()<span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(<span class="string">&quot;Parsed FM_BITCOIN_RPC_URL: {:?}&quot;</span>, <span class="kw-2">&amp;</span>url);
+        <span class="macro">debug!</span>(<span class="string">"Parsed FM_BITCOIN_RPC_URL: {:?}"</span>, <span class="kw-2">&amp;</span>url);
         <span class="kw">let </span>(host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(<span class="kw-2">&amp;</span>url)<span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(<span class="string">&quot;bitcoind host: {:?}, auth: {:?}&quot;</span>, <span class="kw-2">&amp;</span>host, auth);
+        <span class="macro">debug!</span>(<span class="string">"bitcoind host: {:?}, auth: {:?}"</span>, <span class="kw-2">&amp;</span>host, auth);
         <span class="kw">let </span>client =
-            Arc::new(<span class="self">Self</span>::new_bitcoin_rpc(<span class="kw-2">&amp;</span>host, auth).context(<span class="string">&quot;Failed to connect to bitcoind&quot;</span>)<span class="question-mark">?</span>);
+            Arc::new(<span class="self">Self</span>::new_bitcoin_rpc(<span class="kw-2">&amp;</span>host, auth).context(<span class="string">"Failed to connect to bitcoind"</span>)<span class="question-mark">?</span>);
 
         <span class="self">Self</span>::init(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
@@ -794,35 +796,35 @@
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>init(client: <span class="kw-2">&amp;</span>bitcoincore_rpc::Client) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="comment">// create RPC wallet
-        </span><span class="kw">while let </span><span class="prelude-val">Err</span>(e) = client.create_wallet(<span class="string">&quot;&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>) {
-            <span class="kw">if </span>e.to_string().contains(<span class="string">&quot;Database already exists&quot;</span>) {
+        </span><span class="kw">while let </span><span class="prelude-val">Err</span>(e) = client.create_wallet(<span class="string">""</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>) {
+            <span class="kw">if </span>e.to_string().contains(<span class="string">"Database already exists"</span>) {
                 <span class="kw">break</span>;
             }
-            <span class="macro">warn!</span>(target: LOG_DEVIMINT, <span class="string">&quot;Failed to create wallet ... retrying {}&quot;</span>, e);
+            <span class="macro">warn!</span>(target: LOG_DEVIMINT, <span class="string">"Failed to create wallet ... retrying {}"</span>, e);
             sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
         </span>}
 
         <span class="comment">// mine blocks
         </span><span class="kw">let </span>blocks = <span class="number">101</span>;
         <span class="kw">let </span>address = client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
-        <span class="macro">info!</span>(<span class="string">&quot;Beginning to mine {blocks:?} blocks to address {address:?}&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">"Beginning to mine {blocks:?} blocks to address {address:?}"</span>);
         client
             .generate_to_address(blocks, <span class="kw-2">&amp;</span>address)
-            .context(<span class="string">&quot;Failed to generate blocks&quot;</span>)<span class="question-mark">?</span>;
-        <span class="macro">info!</span>(<span class="string">&quot;Mined {blocks:?} blocks to address {address:?}&quot;</span>);
+            .context(<span class="string">"Failed to generate blocks"</span>)<span class="question-mark">?</span>;
+        <span class="macro">info!</span>(<span class="string">"Mined {blocks:?} blocks to address {address:?}"</span>);
 
         <span class="comment">// wait bitciond is ready
-        </span>poll(<span class="string">&quot;bitcoind&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+        </span>poll(<span class="string">"bitcoind"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
             <span class="kw">let </span>info = client
                 .get_blockchain_info()
-                .context(<span class="string">&quot;bitcoind getblockchaininfo&quot;</span>)
+                .context(<span class="string">"bitcoind getblockchaininfo"</span>)
                 .map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
             <span class="kw">if </span>info.blocks &gt; <span class="number">100 </span>{
-                <span class="macro">info!</span>(<span class="string">&quot;block count: {:?}&quot;</span>, info.blocks);
+                <span class="macro">info!</span>(<span class="string">"block count: {:?}"</span>, info.blocks);
                 <span class="prelude-val">Ok</span>(())
             } <span class="kw">else </span>{
                 <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(
-                    <span class="string">&quot;not enough blocks: {}&quot;</span>,
+                    <span class="string">"not enough blocks: {}"</span>,
                     info.blocks
                 )))
             }
@@ -837,15 +839,15 @@
 
     <span class="doccomment">/// Returns the total number of blocks in the chain.
     ///
-    /// Fedimint&#39;s IBitcoindRpc considers block count the total number of
-    /// blocks, where bitcoind&#39;s rpc returns the height. Since the genesis
+    /// Fedimint's IBitcoindRpc considers block count the total number of
+    /// blocks, where bitcoind's rpc returns the height. Since the genesis
     /// block has height 0, we need to add 1 to get the total block count.
     </span><span class="kw">pub fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.client().get_block_count()<span class="question-mark">? </span>+ <span class="number">1</span>)
     }
 
     <span class="kw">pub async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">&quot;Mining bitcoin blocks&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">"Mining bitcoin blocks"</span>);
         <span class="kw">let </span>client = <span class="self">self</span>.client();
         <span class="kw">let </span>addr = client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>initial_block_count = client.get_block_count()<span class="question-mark">?</span>;
@@ -853,17 +855,17 @@
         <span class="kw">while </span>tokio::task::block_in_place(|| client.get_block_count())<span class="question-mark">?
             </span>&lt; initial_block_count + block_num
         {
-            <span class="macro">trace!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">&quot;Waiting for blocks to be mined&quot;</span>);
+            <span class="macro">trace!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">"Waiting for blocks to be mined"</span>);
             sleep(Duration::from_millis(<span class="number">200</span>)).<span class="kw">await</span>;
         }
 
-        <span class="macro">trace!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">&quot;Mined blocks&quot;</span>);
+        <span class="macro">trace!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">"Mined blocks"</span>);
 
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub async fn </span>send_to(<span class="kw-2">&amp;</span><span class="self">self</span>, addr: String, amount: u64) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Txid&gt; {
-        <span class="macro">info!</span>(target: LOG_DEVIMINT, amount, addr, <span class="string">&quot;Sending funds from bitcoind&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_DEVIMINT, amount, addr, <span class="string">"Sending funds from bitcoind"</span>);
         <span class="kw">let </span>amount = bitcoin::Amount::from_sat(amount);
         <span class="kw">let </span>tx = <span class="self">self</span>.client().send_to_address(
             <span class="kw-2">&amp;</span>bitcoin::Address::from_str(<span class="kw-2">&amp;</span>addr)<span class="question-mark">?</span>,
@@ -895,18 +897,18 @@
     }
 }
 
-<span class="kw">const </span>GATEWAY_CLN_EXTENSION: <span class="kw-2">&amp;</span>str = <span class="string">&quot;gateway-cln-extension&quot;</span>;
+<span class="kw">const </span>GATEWAY_CLN_EXTENSION: <span class="kw-2">&amp;</span>str = <span class="string">"gateway-cln-extension"</span>;
 
 <span class="kw">pub struct </span>LightningdProcessHandle(ProcessHandle);
 
 <span class="kw">impl </span>LightningdProcessHandle {
     <span class="kw">async fn </span>terminate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">if </span><span class="self">self</span>.<span class="number">0</span>.is_running().<span class="kw">await </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>stop_plugins = <span class="macro">cmd!</span>(ClnLightningCli, <span class="string">&quot;plugin&quot;</span>, <span class="string">&quot;stop&quot;</span>, GATEWAY_CLN_EXTENSION);
+            <span class="kw">let </span><span class="kw-2">mut </span>stop_plugins = <span class="macro">cmd!</span>(ClnLightningCli, <span class="string">"plugin"</span>, <span class="string">"stop"</span>, GATEWAY_CLN_EXTENSION);
             <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = stop_plugins.out_string().<span class="kw">await </span>{
                 <span class="macro">warn!</span>(
                     target: LOG_DEVIMINT,
-                    <span class="string">&quot;failed to terminate lightningd plugins: {e:?}&quot;
+                    <span class="string">"failed to terminate lightningd plugins: {e:?}"
                 </span>);
             }
             <span class="self">self</span>.<span class="number">0</span>.terminate().<span class="kw">await
@@ -918,12 +920,12 @@
 
 <span class="kw">impl </span>Drop <span class="kw">for </span>LightningdProcessHandle {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="comment">// cln don&#39;t like to be killed and may leave running processes. So let&#39;s
+        <span class="comment">// cln don't like to be killed and may leave running processes. So let's
         // terminate it in a controlled way
         </span>block_in_place(<span class="kw">move </span>|| {
             block_on(<span class="kw">async move </span>{
                 <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.terminate().<span class="kw">await </span>{
-                    <span class="macro">warn!</span>(target: LOG_DEVIMINT, <span class="string">&quot;failed to terminate lightningd: {e:?}&quot;</span>);
+                    <span class="macro">warn!</span>(target: LOG_DEVIMINT, <span class="string">"failed to terminate lightningd: {e:?}"</span>);
                 }
             })
         });
@@ -941,18 +943,18 @@
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>cln_dir = <span class="kw-2">&amp;</span>process_mgr.globals.FM_CLN_DIR;
         <span class="kw">let </span>conf = <span class="macro">format!</span>(
-            <span class="macro">include_str!</span>(<span class="string">&quot;cfg/lightningd.conf&quot;</span>),
+            <span class="macro">include_str!</span>(<span class="string">"cfg/lightningd.conf"</span>),
             port = process_mgr.globals.FM_PORT_CLN,
             bitcoin_rpcport = process_mgr.globals.FM_PORT_BTC_RPC,
         );
-        write_overwrite_async(process_mgr.globals.FM_CLN_DIR.join(<span class="string">&quot;config&quot;</span>), conf).<span class="kw">await</span><span class="question-mark">?</span>;
+        write_overwrite_async(process_mgr.globals.FM_CLN_DIR.join(<span class="string">"config"</span>), conf).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>process = Lightningd::start(process_mgr, cln_dir).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>socket_cln = cln_dir.join(<span class="string">&quot;regtest/lightning-rpc&quot;</span>);
-        poll(<span class="string">&quot;lightningd&quot;</span>, <span class="number">10</span>, || <span class="kw">async </span>{
+        <span class="kw">let </span>socket_cln = cln_dir.join(<span class="string">"regtest/lightning-rpc"</span>);
+        poll(<span class="string">"lightningd"</span>, <span class="number">10</span>, || <span class="kw">async </span>{
             ClnRpc::new(socket_cln.clone())
                 .<span class="kw">await
-                </span>.context(<span class="string">&quot;connect to lightningd&quot;</span>)
+                </span>.context(<span class="string">"connect to lightningd"</span>)
                 .map_err(ControlFlow::Continue)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -965,21 +967,21 @@
     }
 
     <span class="kw">pub async fn </span>start(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, cln_dir: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;ProcessHandle&gt; {
-        <span class="kw">let </span>extension_path = <span class="macro">cmd!</span>(<span class="string">&quot;which&quot;</span>, GATEWAY_CLN_EXTENSION)
+        <span class="kw">let </span>extension_path = <span class="macro">cmd!</span>(<span class="string">"which"</span>, GATEWAY_CLN_EXTENSION)
             .out_string()
             .<span class="kw">await
-            </span>.context(<span class="string">&quot;gateway-cln-extension not on path&quot;</span>)<span class="question-mark">?</span>;
+            </span>.context(<span class="string">"gateway-cln-extension not on path"</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>btc_dir = utf8(<span class="kw-2">&amp;</span>process_mgr.globals.FM_BTC_DIR);
         <span class="kw">let </span>cmd = <span class="macro">cmd!</span>(
             <span class="kw">crate</span>::util::Lightningd,
-            <span class="string">&quot;--dev-fast-gossip&quot;</span>,
-            <span class="string">&quot;--dev-bitcoind-poll=1&quot;</span>,
-            <span class="macro">format!</span>(<span class="string">&quot;--lightning-dir={}&quot;</span>, utf8(cln_dir)),
-            <span class="macro">format!</span>(<span class="string">&quot;--bitcoin-datadir={btc_dir}&quot;</span>),
-            <span class="string">&quot;--plugin={extension_path}&quot;
+            <span class="string">"--dev-fast-gossip"</span>,
+            <span class="string">"--dev-bitcoind-poll=1"</span>,
+            <span class="macro">format!</span>(<span class="string">"--lightning-dir={}"</span>, utf8(cln_dir)),
+            <span class="macro">format!</span>(<span class="string">"--bitcoin-datadir={btc_dir}"</span>),
+            <span class="string">"--plugin={extension_path}"
         </span>);
 
-        process_mgr.spawn_daemon(<span class="string">&quot;lightningd&quot;</span>, cmd).<span class="kw">await
+        process_mgr.spawn_daemon(<span class="string">"lightningd"</span>, cmd).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>request&lt;R: cln_rpc::model::IntoRequest&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, request: R) -&gt; <span class="prelude-ty">Result</span>&lt;R::Response&gt;
@@ -991,12 +993,12 @@
     }
 
     <span class="kw">pub async fn </span>await_block_processing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        poll(<span class="string">&quot;lightningd block processing&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+        poll(<span class="string">"lightningd block processing"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
             <span class="kw">let </span>btc_height = <span class="self">self
                 </span>.bitcoind
                 .client()
                 .get_blockchain_info()
-                .context(<span class="string">&quot;bitcoind getblockchaininfo&quot;</span>)
+                .context(<span class="string">"bitcoind getblockchaininfo"</span>)
                 .map_err(ControlFlow::Continue)<span class="question-mark">?
                 </span>.blocks;
             <span class="kw">let </span>lnd_height = <span class="self">self
@@ -1039,7 +1041,7 @@
             process,
         };
         <span class="comment">// wait for lnd rpc to be active
-        </span>poll(<span class="string">&quot;lnd_startup&quot;</span>, <span class="number">60</span>, || <span class="kw">async </span>{
+        </span>poll(<span class="string">"lnd_startup"</span>, <span class="number">60</span>, || <span class="kw">async </span>{
             this.pub_key().<span class="kw">await</span>.map_err(ControlFlow::Continue)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1048,7 +1050,7 @@
 
     <span class="kw">pub async fn </span>start(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;(ProcessHandle, LndClient)&gt; {
         <span class="kw">let </span>conf = <span class="macro">format!</span>(
-            <span class="macro">include_str!</span>(<span class="string">&quot;cfg/lnd.conf&quot;</span>),
+            <span class="macro">include_str!</span>(<span class="string">"cfg/lnd.conf"</span>),
             listen_port = process_mgr.globals.FM_PORT_LND_LISTEN,
             rpc_port = process_mgr.globals.FM_PORT_LND_RPC,
             rest_port = process_mgr.globals.FM_PORT_LND_REST,
@@ -1056,43 +1058,43 @@
             zmq_pub_raw_block = process_mgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK,
             zmq_pub_raw_tx = process_mgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_TX,
         );
-        write_overwrite_async(process_mgr.globals.FM_LND_DIR.join(<span class="string">&quot;lnd.conf&quot;</span>), conf).<span class="kw">await</span><span class="question-mark">?</span>;
+        write_overwrite_async(process_mgr.globals.FM_LND_DIR.join(<span class="string">"lnd.conf"</span>), conf).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>cmd = <span class="macro">cmd!</span>(
             <span class="kw">crate</span>::util::Lnd,
-            <span class="macro">format!</span>(<span class="string">&quot;--lnddir={}&quot;</span>, utf8(<span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_DIR))
+            <span class="macro">format!</span>(<span class="string">"--lnddir={}"</span>, utf8(<span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_DIR))
         );
 
-        <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">&quot;lnd&quot;</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">"lnd"</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>lnd_rpc_addr = <span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_RPC_ADDR;
         <span class="kw">let </span>lnd_macaroon = <span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_MACAROON;
         <span class="kw">let </span>lnd_tls_cert = <span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_TLS_CERT;
-        poll(<span class="string">&quot;wait for lnd files&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+        poll(<span class="string">"wait for lnd files"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
             <span class="kw">if </span>fs::try_exists(lnd_tls_cert)
                 .<span class="kw">await
-                </span>.context(<span class="string">&quot;lnd tls cert&quot;</span>)
+                </span>.context(<span class="string">"lnd tls cert"</span>)
                 .map_err(ControlFlow::Continue)<span class="question-mark">?
                 </span>&amp;&amp; fs::try_exists(lnd_macaroon)
                     .<span class="kw">await
-                    </span>.context(<span class="string">&quot;lnd macaroon&quot;</span>)
+                    </span>.context(<span class="string">"lnd macaroon"</span>)
                     .map_err(ControlFlow::Continue)<span class="question-mark">?
             </span>{
                 <span class="prelude-val">Ok</span>(())
             } <span class="kw">else </span>{
                 <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(
-                    <span class="string">&quot;lnd tls cert or lnd macaroon not found&quot;
+                    <span class="string">"lnd tls cert or lnd macaroon not found"
                 </span>)))
             }
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>client = poll(<span class="string">&quot;lnd_connect&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+        <span class="kw">let </span>client = poll(<span class="string">"lnd_connect"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
             tonic_lnd::connect(
                 lnd_rpc_addr.clone(),
                 lnd_tls_cert.clone(),
                 lnd_macaroon.clone(),
             )
             .<span class="kw">await
-            </span>.context(<span class="string">&quot;lnd connect&quot;</span>)
+            </span>.context(<span class="string">"lnd connect"</span>)
             .map_err(ControlFlow::Continue)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1102,14 +1104,14 @@
 
     <span class="kw">pub async fn </span>lightning_client_lock(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;MappedMutexGuard&lt;<span class="lifetime">&#39;_</span>, tonic_lnd::LightningClient&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;MappedMutexGuard&lt;<span class="lifetime">'_</span>, tonic_lnd::LightningClient&gt;&gt; {
         <span class="kw">let </span>guard = <span class="self">self</span>.client.lock().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(MutexGuard::map(guard, |client| client.lightning()))
     }
 
     <span class="kw">pub async fn </span>invoices_client_lock(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;MappedMutexGuard&lt;<span class="lifetime">&#39;_</span>, tonic_lnd::InvoicesClient&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;MappedMutexGuard&lt;<span class="lifetime">'_</span>, tonic_lnd::InvoicesClient&gt;&gt; {
         <span class="kw">let </span>guard = <span class="self">self</span>.client.lock().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(MutexGuard::map(guard, |client| client.invoices()))
     }
@@ -1125,21 +1127,21 @@
     }
 
     <span class="kw">pub async fn </span>await_block_processing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        poll(<span class="string">&quot;lnd block processing&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+        poll(<span class="string">"lnd block processing"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
             <span class="kw">let </span>synced = <span class="self">self
                 </span>.lightning_client_lock()
                 .<span class="kw">await
                 </span>.map_err(ControlFlow::Break)<span class="question-mark">?
                 </span>.get_info(GetInfoRequest {})
                 .<span class="kw">await
-                </span>.context(<span class="string">&quot;lnd get_info&quot;</span>)
+                </span>.context(<span class="string">"lnd get_info"</span>)
                 .map_err(ControlFlow::Continue)<span class="question-mark">?
                 </span>.into_inner()
                 .synced_to_chain;
             <span class="kw">if </span>synced {
                 <span class="prelude-val">Ok</span>(())
             } <span class="kw">else </span>{
-                <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">&quot;lnd not synced_to_chain&quot;</span>)))
+                <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"lnd not synced_to_chain"</span>)))
             }
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1158,12 +1160,12 @@
     lnd: <span class="kw-2">&amp;</span>Lnd,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="macro">tokio::try_join!</span>(cln.await_block_processing(), lnd.await_block_processing())<span class="question-mark">?</span>;
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;block sync done&quot;</span>);
+    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"block sync done"</span>);
     <span class="kw">let </span>cln_addr = cln
         .request(cln_rpc::model::requests::NewaddrRequest { addresstype: <span class="prelude-val">None </span>})
         .<span class="kw">await</span><span class="question-mark">?
         </span>.bech32
-        .context(<span class="string">&quot;bech32 should be present&quot;</span>)<span class="question-mark">?</span>;
+        .context(<span class="string">"bech32 should be present"</span>)<span class="question-mark">?</span>;
 
     bitcoind.send_to(cln_addr, <span class="number">100_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1173,17 +1175,17 @@
 
     cln.request(cln_rpc::model::requests::ConnectRequest {
         id: lnd_pubkey.parse()<span class="question-mark">?</span>,
-        host: <span class="prelude-val">Some</span>(<span class="string">&quot;127.0.0.1&quot;</span>.to_owned()),
+        host: <span class="prelude-val">Some</span>(<span class="string">"127.0.0.1"</span>.to_owned()),
         port: <span class="prelude-val">Some</span>(process_mgr.globals.FM_PORT_LND_LISTEN),
     })
     .<span class="kw">await
-    </span>.context(<span class="string">&quot;connect request&quot;</span>)<span class="question-mark">?</span>;
+    </span>.context(<span class="string">"connect request"</span>)<span class="question-mark">?</span>;
 
-    poll(<span class="string">&quot;fund channel&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+    poll(<span class="string">"fund channel"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
         cln.request(cln_rpc::model::requests::FundchannelRequest {
             id: lnd_pubkey
                 .parse()
-                .context(<span class="string">&quot;failed to parse lnd pubkey&quot;</span>)
+                .context(<span class="string">"failed to parse lnd pubkey"</span>)
                 .map_err(ControlFlow::Break)<span class="question-mark">?</span>,
             amount: cln_rpc::primitives::AmountOrAll::Amount(
                 cln_rpc::primitives::Amount::from_sat(<span class="number">10_000_000</span>),
@@ -1204,13 +1206,13 @@
     })
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    poll(<span class="string">&quot;list peers&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+    poll(<span class="string">"list peers"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
         <span class="kw">let </span>num_peers = cln
             .request(cln_rpc::model::requests::ListpeersRequest {
                 id: <span class="prelude-val">Some</span>(
                     lnd_pubkey
                         .parse()
-                        .context(<span class="string">&quot;parse lnd pubkey&quot;</span>)
+                        .context(<span class="string">"parse lnd pubkey"</span>)
                         .map_err(ControlFlow::Break)<span class="question-mark">?</span>,
                 ),
                 level: <span class="prelude-val">None</span>,
@@ -1224,7 +1226,7 @@
     .<span class="kw">await</span><span class="question-mark">?</span>;
     bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    poll(<span class="string">&quot;Wait for channel update&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+    poll(<span class="string">"Wait for channel update"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>lnd_client = lnd.client.lock().<span class="kw">await</span>;
         <span class="kw">let </span>channels = lnd_client
             .lightning()
@@ -1233,7 +1235,7 @@
                 ..Default::default()
             })
             .<span class="kw">await
-            </span>.context(<span class="string">&quot;lnd list channels&quot;</span>)
+            </span>.context(<span class="string">"lnd list channels"</span>)
             .map_err(ControlFlow::Break)<span class="question-mark">?
             </span>.into_inner();
 
@@ -1255,16 +1257,16 @@
                     <span class="kw">if </span>edge.node1_policy.is_some() {
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                     } <span class="kw">else </span>{
-                        <span class="macro">warn!</span>(<span class="question-mark">?</span>edge, <span class="string">&quot;Empty chan info&quot;</span>);
+                        <span class="macro">warn!</span>(<span class="question-mark">?</span>edge, <span class="string">"Empty chan info"</span>);
                     }
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(%e, <span class="string">&quot;Getting chan info failed&quot;</span>)
+                    <span class="macro">warn!</span>(%e, <span class="string">"Getting chan info failed"</span>)
                 }
             }
         }
 
-        <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">&quot;channel not found&quot;</span>)))
+        <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"channel not found"</span>)))
     })
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1314,31 +1316,31 @@
             .globals
             .FM_ELECTRS_DIR
             .to_str()
-            .context(<span class="string">&quot;non utf8 path&quot;</span>)<span class="question-mark">?</span>;
+            .context(<span class="string">"non utf8 path"</span>)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>daemon_dir = <span class="kw-2">&amp;</span>process_mgr.globals.FM_BTC_DIR.display();
 
         <span class="kw">let </span>conf = <span class="macro">format!</span>(
-            <span class="macro">include_str!</span>(<span class="string">&quot;cfg/electrs.toml&quot;</span>),
+            <span class="macro">include_str!</span>(<span class="string">"cfg/electrs.toml"</span>),
             rpc_port = process_mgr.globals.FM_PORT_BTC_RPC,
             p2p_port = process_mgr.globals.FM_PORT_BTC_P2P,
             electrs_port = process_mgr.globals.FM_PORT_ELECTRS,
             monitoring_port = process_mgr.globals.FM_PORT_ELECTRS_MONITORING,
         );
-        <span class="macro">debug!</span>(<span class="string">&quot;electrs conf: {:?}&quot;</span>, conf);
+        <span class="macro">debug!</span>(<span class="string">"electrs conf: {:?}"</span>, conf);
         write_overwrite_async(
-            process_mgr.globals.FM_ELECTRS_DIR.join(<span class="string">&quot;electrs.toml&quot;</span>),
+            process_mgr.globals.FM_ELECTRS_DIR.join(<span class="string">"electrs.toml"</span>),
             conf,
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>cmd = <span class="macro">cmd!</span>(
             <span class="kw">crate</span>::util::Electrs,
-            <span class="string">&quot;--conf-dir={electrs_dir}&quot;</span>,
-            <span class="string">&quot;--db-dir={electrs_dir}&quot;</span>,
-            <span class="string">&quot;--daemon-dir={daemon_dir}&quot;
+            <span class="string">"--conf-dir={electrs_dir}"</span>,
+            <span class="string">"--db-dir={electrs_dir}"</span>,
+            <span class="string">"--daemon-dir={daemon_dir}"
         </span>);
-        <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">&quot;electrs&quot;</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;electrs started&quot;</span>);
+        <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">"electrs"</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"electrs started"</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             _bitcoind: bitcoind,
@@ -1359,29 +1361,29 @@
             .globals
             .FM_BTC_DIR
             .to_str()
-            .context(<span class="string">&quot;non utf8 path&quot;</span>)<span class="question-mark">?</span>;
+            .context(<span class="string">"non utf8 path"</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>esplora_dir = process_mgr
             .globals
             .FM_ESPLORA_DIR
             .to_str()
-            .context(<span class="string">&quot;non utf8 path&quot;</span>)<span class="question-mark">?</span>;
+            .context(<span class="string">"non utf8 path"</span>)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC;
         <span class="kw">let </span>esplora_port = process_mgr.globals.FM_PORT_ESPLORA;
         <span class="comment">// spawn esplora
         </span><span class="kw">let </span>cmd = <span class="macro">cmd!</span>(
             <span class="kw">crate</span>::util::Esplora,
-            <span class="string">&quot;--daemon-dir={daemon_dir}&quot;</span>,
-            <span class="string">&quot;--db-dir={esplora_dir}&quot;</span>,
-            <span class="string">&quot;--cookie=bitcoin:bitcoin&quot;</span>,
-            <span class="string">&quot;--network=regtest&quot;</span>,
-            <span class="string">&quot;--daemon-rpc-addr=127.0.0.1:{btc_rpc_port}&quot;</span>,
-            <span class="string">&quot;--http-addr=127.0.0.1:{esplora_port}&quot;</span>,
-            <span class="string">&quot;--monitoring-addr=127.0.0.1:0&quot;</span>,
-            <span class="string">&quot;--jsonrpc-import&quot;</span>, <span class="comment">// Workaround for incompatible on-disk format
+            <span class="string">"--daemon-dir={daemon_dir}"</span>,
+            <span class="string">"--db-dir={esplora_dir}"</span>,
+            <span class="string">"--cookie=bitcoin:bitcoin"</span>,
+            <span class="string">"--network=regtest"</span>,
+            <span class="string">"--daemon-rpc-addr=127.0.0.1:{btc_rpc_port}"</span>,
+            <span class="string">"--http-addr=127.0.0.1:{esplora_port}"</span>,
+            <span class="string">"--monitoring-addr=127.0.0.1:0"</span>,
+            <span class="string">"--jsonrpc-import"</span>, <span class="comment">// Workaround for incompatible on-disk format
         </span>);
-        <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">&quot;esplora&quot;</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;esplora started&quot;</span>);
+        <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">"esplora"</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"esplora started"</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             _bitcoind: bitcoind,
@@ -1411,7 +1413,7 @@
     open_channel(process_mgr, <span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(
         target: LOG_DEVIMINT,
-        <span class="string">&quot;starting base daemons took {:?}&quot;</span>,
+        <span class="string">"starting base daemons took {:?}"</span>,
         start_time.elapsed()<span class="question-mark">?
     </span>);
     <span class="prelude-val">Ok</span>(ExternalDaemons {

@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_server/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_server/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -865,7 +867,7 @@
 <span class="kw">impl </span>ServerConfig {
     <span class="kw">pub fn </span>iter_module_instances(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-    ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span>ModuleKind)&gt; + <span class="lifetime">&#39;_ </span>{
+    ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span>ModuleKind)&gt; + <span class="lifetime">'_ </span>{
         <span class="self">self</span>.consensus.iter_module_instances()
     }
 
@@ -882,7 +884,7 @@
                         id,
                         module_inits
                             .get(<span class="kw-2">&amp;</span>config.kind)
-                            .expect(<span class="string">&quot;missing module kind gen&quot;</span>)
+                            .expect(<span class="string">"missing module kind gen"</span>)
                             .supported_api_versions(),
                     )
                 })
@@ -896,7 +898,7 @@
     <span class="doccomment">/// Secret API auth string
     </span><span class="kw">pub </span>api_auth: ApiAuth,
     <span class="doccomment">/// Secret key for TLS communication, required for peer authentication
-    </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_key&quot;</span>)]
+    </span><span class="attr">#[serde(with = <span class="string">"serde_tls_key"</span>)]
     </span><span class="kw">pub </span>tls_key: rustls::PrivateKey,
     <span class="doccomment">/// Secret key for the atomic broadcast to sign messages
     </span><span class="kw">pub </span>broadcast_secret_key: SecretKey,
@@ -920,7 +922,7 @@
     <span class="doccomment">/// Network addresses and names for all peer APIs
     </span><span class="kw">pub </span>api_endpoints: BTreeMap&lt;PeerId, PeerUrl&gt;,
     <span class="doccomment">/// Certs for TLS communication, required for peer authentication
-    </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert_map&quot;</span>)]
+    </span><span class="attr">#[serde(with = <span class="string">"serde_tls_cert_map"</span>)]
     </span><span class="kw">pub </span>tls_certs: BTreeMap&lt;PeerId, rustls::Certificate&gt;,
     <span class="doccomment">/// All configuration that needs to be the same for modules
     </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, ServerModuleConsensusConfig&gt;,
@@ -970,7 +972,7 @@
 <span class="kw">impl </span>ServerConfigConsensus {
     <span class="kw">pub fn </span>iter_module_instances(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-    ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span>ModuleKind)&gt; + <span class="lifetime">&#39;_ </span>{
+    ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span>ModuleKind)&gt; + <span class="lifetime">'_ </span>{
         <span class="self">self</span>.modules.iter().map(|(k, v)| (<span class="kw-2">*</span>k, <span class="kw-2">&amp;</span>v.kind))
     }
 
@@ -990,7 +992,7 @@
                 .map(|(k, v)| {
                     <span class="kw">let </span>gen = module_config_gens
                         .get(<span class="kw-2">&amp;</span>v.kind)
-                        .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Module gen kind={} not found&quot;</span>, v.kind))<span class="question-mark">?</span>;
+                        .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Module gen kind={} not found"</span>, v.kind))<span class="question-mark">?</span>;
                     <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>k, gen.get_client_config(<span class="kw-2">*</span>k, v)<span class="question-mark">?</span>))
                 })
                 .collect::&lt;anyhow::Result&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>,
@@ -1006,8 +1008,8 @@
     </span><span class="kw">pub fn </span>supported_api_versions() -&gt; SupportedCoreApiVersions {
         SupportedCoreApiVersions {
             core_consensus: CORE_CONSENSUS_VERSION,
-            api: MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">1 </span>}])
-                .expect(<span class="string">&quot;not version conflicts&quot;</span>),
+            api: MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">2 </span>}])
+                .expect(<span class="string">"not version conflicts"</span>),
         }
     }
     <span class="doccomment">/// Creates a new config from the results of a trusted or distributed key
@@ -1093,7 +1095,7 @@
             </span>.consensus
             .modules
             .get(<span class="kw-2">&amp;</span>id)
-            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Module {id} not found&quot;</span>))<span class="question-mark">?
+            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Module {id} not found"</span>))<span class="question-mark">?
             </span>.clone();
         <span class="kw">let </span>consensus_json = <span class="self">Self</span>::get_module_cfg_by_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules_json, id)<span class="question-mark">?</span>;
         <span class="kw">let </span>module = ServerModuleConfig::from(local, private, consensus, consensus_json);
@@ -1110,7 +1112,7 @@
             .modules
             .iter()
             .find(|(<span class="kw">_</span>, v)| v.kind == kind)
-            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Module {kind} not found&quot;</span>))<span class="question-mark">?
+            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Module {kind} not found"</span>))<span class="question-mark">?
             </span>.<span class="number">0</span>)
     }
 
@@ -1122,7 +1124,7 @@
             </span>.consensus
             .modules
             .get(<span class="kw-2">&amp;</span>id)
-            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Module {id} not found&quot;</span>))<span class="question-mark">?
+            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Module {id} not found"</span>))<span class="question-mark">?
             </span>.clone();
         <span class="kw">let </span>consensus_json = <span class="self">Self</span>::get_module_cfg_by_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules_json, id)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(ServerModuleConfig::from(
@@ -1139,7 +1141,7 @@
     ) -&gt; anyhow::Result&lt;JsonWithKind&gt; {
         <span class="prelude-val">Ok</span>(json
             .get(<span class="kw-2">&amp;</span>id)
-            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Module {id} not found&quot;</span>))
+            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Module {id} not found"</span>))
             .cloned()<span class="question-mark">?
             </span>.with_fixed_empty_value())
     }
@@ -1156,13 +1158,13 @@
         <span class="kw">let </span>my_public_key = private.broadcast_secret_key.public_key(<span class="kw-2">&amp;</span>Secp256k1::new());
 
         <span class="kw">if </span><span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>my_public_key) != consensus.broadcast_public_keys.get(identity) {
-            <span class="macro">bail!</span>(<span class="string">&quot;Broadcast secret key doesn&#39;t match corresponding public key&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Broadcast secret key doesn't match corresponding public key"</span>);
         }
         <span class="kw">if </span>peers.keys().max().copied().map(|id| id.to_usize()) != <span class="prelude-val">Some</span>(peers.len() - <span class="number">1</span>) {
-            <span class="macro">bail!</span>(<span class="string">&quot;Peer ids are not indexed from 0&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Peer ids are not indexed from 0"</span>);
         }
         <span class="kw">if </span>peers.keys().min().copied() != <span class="prelude-val">Some</span>(PeerId::from(<span class="number">0</span>)) {
-            <span class="macro">bail!</span>(<span class="string">&quot;Peer ids are not indexed from 0&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Peer ids are not indexed from 0"</span>);
         }
 
         <span class="kw">for </span>(module_id, module_kind) <span class="kw">in </span><span class="self">self
@@ -1175,7 +1177,7 @@
         {
             module_config_gens
                 .get(module_kind)
-                .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;module config gen not found {module_kind}&quot;</span>))<span class="question-mark">?
+                .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"module config gen not found {module_kind}"</span>))<span class="question-mark">?
                 </span>.validate_config(identity, <span class="self">self</span>.get_module_config(<span class="kw-2">*</span>module_id)<span class="question-mark">?</span>)<span class="question-mark">?</span>;
         }
 
@@ -1204,7 +1206,7 @@
                     module_id,
                     registry
                         .get(kind)
-                        .expect(<span class="string">&quot;Module not registered&quot;</span>)
+                        .expect(<span class="string">"Module not registered"</span>)
                         .trusted_dealer_gen(<span class="kw-2">&amp;</span>peer0.peer_ids(), module_params),
                 )
             })
@@ -1218,7 +1220,7 @@
                     params[<span class="kw-2">&amp;</span>id].clone(),
                     id,
                     broadcast_pks.clone(),
-                    <span class="kw-2">*</span>broadcast_sks.get(<span class="kw-2">&amp;</span>id).expect(<span class="string">&quot;We created this entry&quot;</span>),
+                    <span class="kw-2">*</span>broadcast_sks.get(<span class="kw-2">&amp;</span>id).expect(<span class="string">"We created this entry"</span>),
                     module_configs
                         .iter()
                         .map(|(module_id, cfgs)| (<span class="kw-2">*</span>module_id, cfgs[<span class="kw-2">&amp;</span>id].clone()))
@@ -1240,7 +1242,7 @@
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
         version_hash: String,
     ) -&gt; DkgResult&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;distributed-gen&quot;</span>).info();
+        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"distributed-gen"</span>).info();
         <span class="kw">let </span>server_conn = connect(
             params.p2p_network(),
             params.tls_config(),
@@ -1263,7 +1265,7 @@
         <span class="kw">let </span>(broadcast_sk, broadcast_pk) = secp256k1_zkp::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
 
         <span class="kw">let </span>broadcast_public_keys = broadcast_keys_exchange
-            .exchange_pubkeys(<span class="string">&quot;broadcast&quot;</span>.to_string(), broadcast_pk)
+            .exchange_pubkeys(<span class="string">"broadcast"</span>.to_string(), broadcast_pk)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// in case we are running by ourselves, avoid DKG
@@ -1277,7 +1279,7 @@
         }
         <span class="macro">info!</span>(
             target: LOG_NET_PEER_DKG,
-            <span class="string">&quot;Peer {} running distributed key generation...&quot;</span>, our_id
+            <span class="string">"Peer {} running distributed key generation..."</span>, our_id
         );
 
         <span class="comment">// BFT uses a lower threshold of signing keys (f+1)
@@ -1311,12 +1313,12 @@
 
         <span class="macro">info!</span>(
             target: LOG_NET_PEER_DKG,
-            <span class="string">&quot;Sending confirmations to other peers.&quot;
+            <span class="string">"Sending confirmations to other peers."
         </span>);
-        <span class="comment">// Note: Since our outgoing buffers are asynchronous, we don&#39;t actually know
+        <span class="comment">// Note: Since our outgoing buffers are asynchronous, we don't actually know
         // if other peers received our message, just because we received theirs.
-        // That&#39;s why we need to do a one last best effort sync.
-        </span><span class="kw">let </span>dkg_done = <span class="string">&quot;DKG DONE&quot;</span>.to_string();
+        // That's why we need to do a one last best effort sync.
+        </span><span class="kw">let </span>dkg_done = <span class="string">"DKG DONE"</span>.to_string();
         connections
             .send(
                 peers,
@@ -1327,7 +1329,7 @@
 
         <span class="macro">info!</span>(
             target: LOG_NET_PEER_DKG,
-            <span class="string">&quot;Waiting for confirmations from other peers.&quot;
+            <span class="string">"Waiting for confirmations from other peers."
         </span>);
         <span class="kw">if let </span><span class="prelude-val">Err</span>(Elapsed) = timeout(Duration::from_secs(<span class="number">30</span>), <span class="kw">async </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>done_peers = BTreeSet::from([<span class="kw-2">*</span>our_id]);
@@ -1337,19 +1339,19 @@
                     <span class="prelude-val">Ok</span>((peer_id, DkgPeerMsg::Done)) =&gt; {
                         <span class="macro">info!</span>(
                             target: LOG_NET_PEER_DKG,
-                            pper_id = %peer_id, <span class="string">&quot;Got completion confirmation&quot;</span>);
+                            pper_id = %peer_id, <span class="string">"Got completion confirmation"</span>);
                         done_peers.insert(peer_id);
                     },
                     <span class="prelude-val">Ok</span>((peer_id, msg)) =&gt; {
-                        <span class="macro">error!</span>(target: LOG_NET_PEER_DKG, %peer_id, <span class="question-mark">?</span>msg, <span class="string">&quot;Received incorrect message after dkg was supposed to be finished. Probably dkg multiplexing bug.&quot;</span>);
+                        <span class="macro">error!</span>(target: LOG_NET_PEER_DKG, %peer_id, <span class="question-mark">?</span>msg, <span class="string">"Received incorrect message after dkg was supposed to be finished. Probably dkg multiplexing bug."</span>);
                     },
-                    <span class="prelude-val">Err</span>(Cancelled) =&gt; {<span class="comment">/* ignore shutdown for time being, we&#39;ll timeout soon anyway */</span>},
+                    <span class="prelude-val">Err</span>(Cancelled) =&gt; {<span class="comment">/* ignore shutdown for time being, we'll timeout soon anyway */</span>},
                 }
             }
         })
         .<span class="kw">await
         </span>{
-            <span class="macro">error!</span>(target: LOG_NET_PEER_DKG, <span class="string">&quot;Timeout waiting for dkg completion confirmation from other peers&quot;</span>);
+            <span class="macro">error!</span>(target: LOG_NET_PEER_DKG, <span class="string">"Timeout waiting for dkg completion confirmation from other peers"</span>);
         };
 
         <span class="kw">let </span>server = ServerConfig::from(
@@ -1363,7 +1365,7 @@
 
         <span class="macro">info!</span>(
             target: LOG_NET_PEER,
-            <span class="string">&quot;Distributed key generation has completed successfully!&quot;
+            <span class="string">"Distributed key generation has completed successfully!"
         </span>);
 
         <span class="prelude-val">Ok</span>(server)
@@ -1495,7 +1497,7 @@
     task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
 ) -&gt; PeerConnections&lt;T&gt;
 <span class="kw">where
-    </span>T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + <span class="lifetime">&#39;static</span>,
+    </span>T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + <span class="lifetime">'static</span>,
 {
     <span class="kw">let </span>connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
     <span class="kw">let </span>(connections, <span class="kw">_</span>) =
@@ -1553,11 +1555,11 @@
         serializer.end()
     }
 
-    <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">&#39;de</span>, D&gt;(
+    <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">'de</span>, D&gt;(
         deserializer: D,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;BTreeMap&lt;PeerId, rustls::Certificate&gt;, D::Error&gt;
     <span class="kw">where
-        </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
+        </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
     {
         <span class="kw">let </span>map: BTreeMap&lt;PeerId, Cow&lt;str&gt;&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>certs = BTreeMap::new();
@@ -1585,9 +1587,9 @@
         Serialize::serialize(<span class="kw-2">&amp;</span>hex_str, serializer)
     }
 
-    <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">&#39;de</span>, D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;rustls::PrivateKey, D::Error&gt;
+    <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">'de</span>, D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;rustls::PrivateKey, D::Error&gt;
     <span class="kw">where
-        </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
+        </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
     {
         <span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
         <span class="kw">let </span>bytes = Vec::from_hex(<span class="kw-2">&amp;</span>hex_str).map_err(serde::de::Error::custom)<span class="question-mark">?</span>;

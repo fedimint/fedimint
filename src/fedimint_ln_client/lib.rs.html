@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-ln-client/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_ln_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-ln-client/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_ln_client/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1562,7 +1564,26 @@
 <a href="#1562" id="1562">1562</a>
 <a href="#1563" id="1563">1563</a>
 <a href="#1564" id="1564">1564</a>
-</pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
+<a href="#1565" id="1565">1565</a>
+<a href="#1566" id="1566">1566</a>
+<a href="#1567" id="1567">1567</a>
+<a href="#1568" id="1568">1568</a>
+<a href="#1569" id="1569">1569</a>
+<a href="#1570" id="1570">1570</a>
+<a href="#1571" id="1571">1571</a>
+<a href="#1572" id="1572">1572</a>
+<a href="#1573" id="1573">1573</a>
+<a href="#1574" id="1574">1574</a>
+<a href="#1575" id="1575">1575</a>
+<a href="#1576" id="1576">1576</a>
+<a href="#1577" id="1577">1577</a>
+<a href="#1578" id="1578">1578</a>
+<a href="#1579" id="1579">1579</a>
+<a href="#1580" id="1580">1580</a>
+<a href="#1581" id="1581">1581</a>
+<a href="#1582" id="1582">1582</a>
+</pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
+<span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>receive;
@@ -1574,10 +1595,12 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, ensure, format_err, Context};
+<span class="kw">use </span>api::LnFederationApi;
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin::{KeyPair, Network};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
-<span class="kw">use </span>db::{DbKeyPrefix, LightningGatewayKey, PaymentResult, PaymentResultKey};
+<span class="kw">use </span>db::{DbKeyPrefix, PaymentResult, PaymentResultKey};
+<span class="kw">use </span>fedimint_client::db::ClientMigrationFn;
 <span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
@@ -1600,7 +1623,6 @@
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
 };
-<span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::{
@@ -1610,6 +1632,7 @@
     Contract, ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract, Preimage,
     PreimageKey,
 };
+<span class="kw">use </span>fedimint_ln_common::db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 <span class="kw">use </span>fedimint_ln_common::{
     ContractOutput, LightningClientContext, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningModuleTypes,
@@ -1620,19 +1643,15 @@
 <span class="kw">use </span>lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
 };
-<span class="kw">use </span>rand::seq::IteratorRandom;
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
 <span class="kw">use </span>secp256k1::{PublicKey, ThirtyTwoByteHash};
 <span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tracing::{debug, error, warn};
+<span class="kw">use </span>tracing::{debug, error};
 
-<span class="kw">use </span><span class="kw">crate</span>::db::{
-    LightningGatewayKeyPrefix, MetaOverrides, MetaOverridesKey, MetaOverridesPrefix,
-    PaymentResultPrefix,
-};
+<span class="kw">use </span><span class="kw">crate</span>::db::{MetaOverrides, MetaOverridesKey, MetaOverridesPrefix, PaymentResultPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
 };
@@ -1651,12 +1670,12 @@
 
 <span class="kw">const </span>META_OVERRIDE_CACHE_DURATION: Duration = Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>);
 
-<span class="comment">// 24 hours. Many wallets default to 1 hour, but it&#39;s a bad user experience if
+<span class="comment">// 24 hours. Many wallets default to 1 hour, but it's a bad user experience if
 // invoices expire too quickly
 </span><span class="kw">const </span>DEFAULT_INVOICE_EXPIRY_TIME: Duration = Duration::from_secs(<span class="number">60 </span>* <span class="number">60 </span>* <span class="number">24</span>);
 
 <span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub enum </span>PayType {
     <span class="comment">// Payment from this client to another user within the federation
     </span>Internal(OperationId),
@@ -1673,8 +1692,8 @@
 
     <span class="kw">pub fn </span>payment_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
         <span class="kw">match </span><span class="self">self </span>{
-            PayType::Internal(<span class="kw">_</span>) =&gt; <span class="string">&quot;internal&quot;</span>,
-            PayType::Lightning(<span class="kw">_</span>) =&gt; <span class="string">&quot;lightning&quot;</span>,
+            PayType::Internal(<span class="kw">_</span>) =&gt; <span class="string">"internal"</span>,
+            PayType::Lightning(<span class="kw">_</span>) =&gt; <span class="string">"lightning"</span>,
         }
         .into()
     }
@@ -1683,7 +1702,7 @@
 <span class="doccomment">/// The high-level state of an pay operation internal to the federation,
 /// started with [`LightningClientModule::pay_bolt11_invoice`].
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub enum </span>InternalPayState {
     Funding,
     Preimage(Preimage),
@@ -1704,7 +1723,7 @@
 <span class="doccomment">/// The high-level state of a pay operation over lightning,
 /// started with [`LightningClientModule::pay_bolt11_invoice`].
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub enum </span>LnPayState {
     Created,
     Canceled,
@@ -1728,7 +1747,7 @@
 <span class="doccomment">/// The high-level state of a reissue operation started with
 /// [`LightningClientModule::create_bolt11_invoice`].
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub enum </span>LnReceiveState {
     Created,
     WaitingForPayment { invoice: String, timeout: Duration },
@@ -1738,7 +1757,7 @@
     Claimed,
 }
 
-<span class="kw">async fn </span>invoice_has_internal_payment_markers(
+<span class="kw">fn </span>invoice_has_internal_payment_markers(
     invoice: <span class="kw-2">&amp;</span>Bolt11Invoice,
     markers: (secp256k1::PublicKey, u64),
 ) -&gt; bool {
@@ -1752,7 +1771,7 @@
         == <span class="prelude-val">Some</span>(markers)
 }
 
-<span class="kw">async fn </span>invoice_routes_back_to_federation(
+<span class="kw">fn </span>invoice_routes_back_to_federation(
     invoice: <span class="kw-2">&amp;</span>Bolt11Invoice,
     gateways: Vec&lt;LightningGateway&gt;,
 ) -&gt; bool {
@@ -1767,7 +1786,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub struct </span>LightningOperationMetaPay {
     <span class="kw">pub </span>out_point: OutPoint,
     <span class="kw">pub </span>invoice: Bolt11Invoice,
@@ -1784,7 +1803,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub enum </span>LightningOperationMetaVariant {
     Pay(LightningOperationMetaPay),
     Receive {
@@ -1799,31 +1818,28 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>LightningClientInit {
     <span class="kw">type </span>Common = LightningCommonInit;
-    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">0</span>);
+    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">1</span>);
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
-    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">'_</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>ln_client_items: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; =
             BTreeMap::new();
         <span class="kw">let </span>filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
             prefix_names.is_empty() || prefix_names.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
         });
 
+        <span class="kw">let </span>filtered_prefixes_common = fedimint_ln_common::db::DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
+        });
+
         <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
             <span class="kw">match </span>table {
-                DbKeyPrefix::LightningGateway =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        LightningGatewayKeyPrefix,
-                        LightningGatewayKey,
-                        LightningGatewayRegistration,
-                        ln_client_items,
-                        <span class="string">&quot;Lightning Gateways&quot;
-                    </span>);
-                }
+                DbKeyPrefix::ActiveGateway =&gt; {
+                    <span class="comment">// Active gateway is deprecated
+                </span>}
                 DbKeyPrefix::PaymentResult =&gt; {
                     <span class="macro">push_db_pair_items!</span>(
                         dbtx,
@@ -1831,7 +1847,7 @@
                         PaymentResultKey,
                         PaymentResult,
                         ln_client_items,
-                        <span class="string">&quot;Payment Result&quot;
+                        <span class="string">"Payment Result"
                     </span>);
                 }
                 DbKeyPrefix::MetaOverrides =&gt; {
@@ -1841,9 +1857,22 @@
                         MetaOverridesKey,
                         MetaOverrides,
                         ln_client_items,
-                        <span class="string">&quot;Meta Overrides&quot;
+                        <span class="string">"Meta Overrides"
                     </span>);
                 }
+            }
+        }
+
+        <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes_common {
+            <span class="kw">if let </span>fedimint_ln_common::db::DbKeyPrefix::LightningGateway = table {
+                <span class="macro">push_db_pair_items!</span>(
+                    dbtx,
+                    LightningGatewayKeyPrefix,
+                    LightningGatewayKey,
+                    LightningGatewayRegistration,
+                    ln_client_items,
+                    <span class="string">"Lightning Gateways"
+                </span>);
             }
         }
 
@@ -1864,26 +1893,23 @@
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}])
-            .expect(<span class="string">&quot;no version conflicts&quot;</span>)
+            .expect(<span class="string">"no version conflicts"</span>)
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
-        <span class="kw">let </span>secp = Secp256k1::new();
-        <span class="prelude-val">Ok</span>(LightningClientModule {
-            cfg: args.cfg().clone(),
-            notifier: args.notifier().clone(),
-            redeem_key: args
-                .module_root_secret()
-                .child_key(ChildId(LightningChildKeys::RedeemKey <span class="kw">as </span>u64))
-                .to_secp_key(<span class="kw-2">&amp;</span>secp),
-            module_api: args.module_api().clone(),
-            preimage_auth: args
-                .module_root_secret()
-                .child_key(ChildId(LightningChildKeys::PreimageAuthentication <span class="kw">as </span>u64))
-                .to_secp_key(<span class="kw-2">&amp;</span>secp),
-            secp,
-            client_ctx: args.context(),
-        })
+        <span class="prelude-val">Ok</span>(LightningClientModule::new(args).<span class="kw">await</span><span class="question-mark">?</span>)
+    }
+
+    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; = BTreeMap::new();
+        migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>| {
+            Box::pin(<span class="kw">async </span>{
+                dbtx.remove_entry(<span class="kw-2">&amp;</span><span class="kw">crate</span>::db::LightningGatewayKey).<span class="kw">await</span>;
+                <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+            })
+        });
+
+        migrations
     }
 }
 
@@ -1951,23 +1977,52 @@
 }
 
 <span class="attr">#[derive(Error, Debug, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">enum </span>PayError {
-    <span class="attr">#[error(<span class="string">&quot;Lightning payment was canceled&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Lightning payment was canceled"</span>)]
     </span>Canceled,
-    <span class="attr">#[error(<span class="string">&quot;Lightning payment was refunded&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Lightning payment was refunded"</span>)]
     </span>Refunded(TransactionId),
-    <span class="attr">#[error(<span class="string">&quot;Lightning payment waiting for refund&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Lightning payment waiting for refund"</span>)]
     </span>Refundable(u32, GatewayPayError),
-    <span class="attr">#[error(<span class="string">&quot;Lightning payment failed&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Lightning payment failed"</span>)]
     </span>Failed(String),
 }
 
 <span class="kw">impl </span>LightningClientModule {
+    <span class="kw">async fn </span>new(
+        args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;LightningClientInit&gt;,
+    ) -&gt; anyhow::Result&lt;LightningClientModule&gt; {
+        <span class="kw">let </span>secp = Secp256k1::new();
+        <span class="kw">let </span>ln_module = LightningClientModule {
+            cfg: args.cfg().clone(),
+            notifier: args.notifier().clone(),
+            redeem_key: args
+                .module_root_secret()
+                .child_key(ChildId(LightningChildKeys::RedeemKey <span class="kw">as </span>u64))
+                .to_secp_key(<span class="kw-2">&amp;</span>secp),
+            module_api: args.module_api().clone(),
+            preimage_auth: args
+                .module_root_secret()
+                .child_key(ChildId(LightningChildKeys::PreimageAuthentication <span class="kw">as </span>u64))
+                .to_secp_key(<span class="kw-2">&amp;</span>secp),
+            secp,
+            client_ctx: args.context(),
+        };
+
+        <span class="comment">// Only initialize the gateway cache if it is empty
+        </span><span class="kw">let </span>gateways = ln_module.list_gateways().<span class="kw">await</span>;
+        <span class="kw">if </span>gateways.is_empty() {
+            ln_module.update_gateway_cache(<span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+
+        <span class="prelude-val">Ok</span>(ln_module)
+    }
+
     <span class="kw">async fn </span>get_prev_payment_result(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payment_hash: <span class="kw-2">&amp;</span>sha256::Hash,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     ) -&gt; PaymentResult {
         <span class="kw">let </span>prev_result = dbtx
             .get_value(<span class="kw-2">&amp;</span>PaymentResultKey {
@@ -1997,16 +2052,16 @@
             .get(
                 gateway
                     .api
-                    .join(<span class="string">&quot;id&quot;</span>)
-                    .expect(<span class="string">&quot;id contains no invalid characters for a URL&quot;</span>)
+                    .join(<span class="string">"id"</span>)
+                    .expect(<span class="string">"id contains no invalid characters for a URL"</span>)
                     .as_str(),
             )
             .send()
             .<span class="kw">await
-            </span>.context(<span class="string">&quot;Gateway is not available&quot;</span>)<span class="question-mark">?</span>;
+            </span>.context(<span class="string">"Gateway is not available"</span>)<span class="question-mark">?</span>;
         <span class="kw">if </span>!response.status().is_success() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">&quot;Gateway is not available. Returned error code: {}&quot;</span>,
+                <span class="string">"Gateway is not available. Returned error code: {}"</span>,
                 response.status()
             ));
         }
@@ -2015,14 +2070,14 @@
         <span class="kw">let </span>gateway_id = PublicKey::from_str(<span class="kw-2">&amp;</span>text_gateway_id[<span class="number">1</span>..text_gateway_id.len() - <span class="number">1</span>])<span class="question-mark">?</span>;
         <span class="kw">if </span>gateway_id != gateway.gateway_id {
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">&quot;Unexpected gateway id returned: {gateway_id}&quot;
+                <span class="string">"Unexpected gateway id returned: {gateway_id}"
             </span>));
         }
 
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Hashes the client&#39;s preimage authentication secret with the provided
+    <span class="doccomment">/// Hashes the client's preimage authentication secret with the provided
     /// `payment_hash`. The resulting hash is used when contacting the
     /// gateway to determine if this client is allowed to be shown the
     /// preimage.
@@ -2036,13 +2091,13 @@
     <span class="doccomment">/// Create an output that incentivizes a Lightning gateway to pay an invoice
     /// for us. It has time till the block height defined by `timelock`,
     /// after that we can claim our money back.
-    </span><span class="kw">async fn </span>create_outgoing_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+    </span><span class="kw">async fn </span>create_outgoing_output&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
         operation_id: OperationId,
         invoice: Bolt11Invoice,
         gateway: LightningGateway,
         fed_id: FederationId,
-        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
+        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">'a</span>,
     ) -&gt; anyhow::Result&lt;(
         ClientOutput&lt;LightningOutputV0, LightningClientStateMachines&gt;,
         ContractId,
@@ -2051,7 +2106,7 @@
         <span class="kw">let </span>invoice_currency = invoice.currency();
         <span class="macro">ensure!</span>(
             federation_currency == invoice_currency,
-            <span class="string">&quot;Invalid invoice currency: expected={:?}, got={:?}&quot;</span>,
+            <span class="string">"Invalid invoice currency: expected={:?}, got={:?}"</span>,
             federation_currency,
             invoice_currency
         );
@@ -2064,14 +2119,14 @@
             </span>.module_api
             .fetch_consensus_block_count()
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.ok_or(<span class="macro">format_err!</span>(<span class="string">&quot;Cannot get consensus block count&quot;</span>))<span class="question-mark">?</span>;
+            </span>.ok_or(<span class="macro">format_err!</span>(<span class="string">"Cannot get consensus block count"</span>))<span class="question-mark">?</span>;
         <span class="kw">let </span>absolute_timelock = consensus_count + OUTGOING_LN_CONTRACT_TIMELOCK - <span class="number">1</span>;
 
         <span class="comment">// Compute amount to lock in the outgoing contract
         </span><span class="kw">let </span>invoice_amount = Amount::from_msats(
             invoice
                 .amount_milli_satoshis()
-                .context(<span class="string">&quot;MissingInvoiceAmount&quot;</span>)<span class="question-mark">?</span>,
+                .context(<span class="string">"MissingInvoiceAmount"</span>)<span class="question-mark">?</span>,
         );
 
         <span class="kw">let </span>gateway_fee = gateway.fees.to_amount(<span class="kw-2">&amp;</span>invoice_amount);
@@ -2265,11 +2320,11 @@
     }
 
     <span class="attr">#[allow(clippy::too_many_arguments)]
-    </span><span class="kw">async fn </span>create_lightning_receive_output&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+    </span><span class="kw">async fn </span>create_lightning_receive_output&lt;<span class="lifetime">'a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
         amount: Amount,
         description: String,
-        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
+        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">'a</span>,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
         src_node_id: secp256k1::PublicKey,
         short_channel_id: u64,
@@ -2377,75 +2432,53 @@
         ))
     }
 
-    <span class="kw">pub async fn </span>select_active_gateway_opt(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;LightningGateway&gt; {
-        <span class="kw">match </span><span class="self">self</span>.select_active_gateway().<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(gw) =&gt; <span class="prelude-val">Some</span>(gw),
-            <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">warn!</span>(<span class="question-mark">?</span>e, <span class="string">&quot;Could not select a gateway&quot;</span>);
-                <span class="prelude-val">None
-            </span>}
-        }
-    }
-
-    <span class="doccomment">/// The set active gateway, or a random one if none has been set
-    </span><span class="kw">pub async fn </span>select_active_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;LightningGateway&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
-        <span class="kw">match </span>dbtx.get_value(<span class="kw-2">&amp;</span>LightningGatewayKey).<span class="kw">await </span>{
-            <span class="prelude-val">Some</span>(active_gateway) =&gt; <span class="prelude-val">Ok</span>(active_gateway.info),
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="kw">let </span>gateways = <span class="self">self</span>.fetch_registered_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>num_gateways = gateways.len();
-
-                <span class="kw">let </span>vetted = gateways
-                    .clone()
-                    .into_iter()
-                    .filter(|g| g.vetted)
-                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-                <span class="kw">if </span>!vetted.is_empty() {
-                    <span class="kw">let </span>chosen_gateway = vetted
-                        .into_iter()
-                        .map(|gw| gw.info)
-                        .choose(<span class="kw-2">&amp;mut </span>rand::thread_rng())
-                        .expect(<span class="string">&quot;vetted is non-empty&quot;</span>);
-                    <span class="macro">debug!</span>(gateway_id = %chosen_gateway.gateway_id, num_gateways, <span class="string">&quot;Choosing a vetted gateway&quot;</span>);
-                    <span class="prelude-val">Ok</span>(chosen_gateway)
-                } <span class="kw">else </span>{
-                    <span class="kw">let </span>chosen_gateway = gateways
-                        .into_iter()
-                        .map(|gw| gw.info)
-                        .choose(<span class="kw-2">&amp;mut </span>rand::thread_rng())
-                        .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Could not choose a gateway&quot;</span>))<span class="question-mark">?</span>;
-                    <span class="macro">debug!</span>(gateway_id = %chosen_gateway.gateway_id, num_gateways, <span class="string">&quot;Choosing a random gateway&quot;</span>);
-                    <span class="prelude-val">Ok</span>(chosen_gateway)
-                }
-            }
-        }
-    }
-
-    <span class="doccomment">/// Sets the gateway to be used by all other operations
-    </span><span class="kw">pub async fn </span>set_active_gateway(
+    <span class="doccomment">/// Selects a Lightning Gateway from a given `gateway_id` from the gateway
+    /// cache.
+    </span><span class="kw">pub async fn </span>select_gateway(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         gateway_id: <span class="kw-2">&amp;</span>secp256k1::PublicKey,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;LightningGateway&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction_nc().<span class="kw">await</span>;
+        <span class="kw">let </span>gateways = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix)
+            .<span class="kw">await
+            </span>.map(|(<span class="kw">_</span>, gw)| gw.info)
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>;
+        gateways.into_iter().find(|g| g.gateway_id == <span class="kw-2">*</span>gateway_id)
+    }
+
+    <span class="doccomment">/// Updates the gateway cache by fetching the latest registered gateways
+    /// from the federation.
+    </span><span class="kw">pub async fn </span>update_gateway_cache(<span class="kw-2">&amp;</span><span class="self">self</span>, apply_meta: bool) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>gateways = <span class="self">self</span>.fetch_registered_gateways(apply_meta).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
 
-        <span class="kw">let </span>gateways = <span class="self">self</span>.fetch_registered_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if </span>gateways.is_empty() {
-            <span class="macro">debug!</span>(<span class="string">&quot;Could not find any gateways&quot;</span>);
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Could not find any gateways&quot;</span>));
-        };
-        <span class="kw">let </span>gateway = gateways
-            .into_iter()
-            .find(|g| <span class="kw-2">&amp;</span>g.info.gateway_id == gateway_id)
-            .ok_or_else(|| {
-                <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Could not find gateway with gateway id {:?}&quot;</span>, gateway_id)
-            })<span class="question-mark">?</span>;
+        <span class="comment">// Remove all previous gateway entries
+        </span>dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix).<span class="kw">await</span>;
 
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>LightningGatewayKey, <span class="kw-2">&amp;</span>gateway.anchor())
+        <span class="kw">for </span>gw <span class="kw">in </span>gateways.iter() {
+            dbtx.insert_entry(
+                <span class="kw-2">&amp;</span>LightningGatewayKey(gw.info.gateway_id),
+                <span class="kw-2">&amp;</span>gw.clone().anchor(),
+            )
             .<span class="kw">await</span>;
-        dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+
+        dbtx.commit_tx().<span class="kw">await</span>;
+
         <span class="prelude-val">Ok</span>(())
     }
+
+    <span class="doccomment">/// Returns all gateways that are currently in the gateway cache.
+    </span><span class="kw">pub async fn </span>list_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;LightningGatewayAnnouncement&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction_nc().<span class="kw">await</span>;
+        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix)
+            .<span class="kw">await
+            </span>.map(|(<span class="kw">_</span>, gw)| gw.unanchor())
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Fetches the metadata overrides for a given federation
     ///
@@ -2463,7 +2496,7 @@
         federation_id: FederationId,
         override_src: String,
     ) -&gt; anyhow::Result&lt;BTreeMap&lt;String, String&gt;&gt; {
-        <span class="macro">debug!</span>(<span class="string">&quot;Fetching meta overrides from {override_src}&quot;</span>);
+        <span class="macro">debug!</span>(<span class="string">"Fetching meta overrides from {override_src}"</span>);
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(cache) = <span class="self">self
             </span>.client_ctx
@@ -2475,57 +2508,57 @@
         </span>{
             <span class="kw">let </span>elapsed = now().duration_since(cache.fetched_at).unwrap_or_default();
             <span class="kw">if </span>elapsed &lt; META_OVERRIDE_CACHE_DURATION {
-                <span class="macro">debug!</span>(<span class="string">&quot;Using cached meta overrides&quot;</span>);
+                <span class="macro">debug!</span>(<span class="string">"Using cached meta overrides"</span>);
                 <span class="kw">match </span>serde_json::from_str(<span class="kw-2">&amp;</span>cache.value) {
                     <span class="prelude-val">Ok</span>(meta) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(meta),
                     <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">error!</span>(<span class="string">&quot;Error parsing cached meta overrides: {}&quot;</span>, e);
-                        <span class="macro">debug!</span>(<span class="string">&quot;Meta override cache returned invalid json: {}&quot;</span>, cache.value);
+                        <span class="macro">error!</span>(<span class="string">"Error parsing cached meta overrides: {}"</span>, e);
+                        <span class="macro">debug!</span>(<span class="string">"Meta override cache returned invalid json: {}"</span>, cache.value);
                     }
                 }
             }
-            <span class="macro">debug!</span>(<span class="string">&quot;Cached meta overrides are stale&quot;</span>);
+            <span class="macro">debug!</span>(<span class="string">"Cached meta overrides are stale"</span>);
         };
 
         <span class="kw">let </span>response = reqwest::Client::new()
             .get(override_src.as_str())
             .send()
             .<span class="kw">await
-            </span>.context(<span class="string">&quot;Meta override request failed&quot;</span>)<span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(<span class="string">&quot;Meta override source returned status: {response:?}&quot;</span>);
+            </span>.context(<span class="string">"Meta override request failed"</span>)<span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(<span class="string">"Meta override source returned status: {response:?}"</span>);
 
         <span class="kw">let </span>meta_value = <span class="kw">match </span>response.status() {
             reqwest::StatusCode::OK =&gt; {
                 <span class="kw">let </span>txt = response.text().<span class="kw">await</span>.context(<span class="macro">format!</span>(
-                    <span class="string">&quot;Meta override source returned invalid body: {override_src}&quot;
+                    <span class="string">"Meta override source returned invalid body: {override_src}"
                 </span>))<span class="question-mark">?</span>;
                 <span class="kw">let </span>m: serde_json::Value = serde_json::from_str(<span class="kw-2">&amp;</span>txt).map_err(|<span class="kw">_</span>| {
-                    <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Meta override source returned invalid json: {txt}&quot;</span>)
+                    <span class="macro">anyhow::anyhow!</span>(<span class="string">"Meta override source returned invalid json: {txt}"</span>)
                 })<span class="question-mark">?</span>;
                 <span class="kw">if </span>!m.is_object() {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Meta override is not valid&quot;</span>));
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Meta override is not valid"</span>));
                 }
 
                 <span class="kw">match </span>m.get(<span class="kw-2">&amp;</span>federation_id.to_string()) {
                     <span class="prelude-val">Some</span>(meta_value) =&gt; {
-                        <span class="macro">debug!</span>(<span class="string">&quot;Found meta overrides for federation: {federation_id}&quot;</span>);
+                        <span class="macro">debug!</span>(<span class="string">"Found meta overrides for federation: {federation_id}"</span>);
                         meta_value.clone()
                     }
                     <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">debug!</span>(<span class="string">&quot;No meta overrides found for federation: {federation_id}&quot;</span>);
+                        <span class="macro">debug!</span>(<span class="string">"No meta overrides found for federation: {federation_id}"</span>);
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(BTreeMap::new());
                     }
                 }
             }
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">&quot;Meta override source returned error code: {}&quot;</span>,
+                <span class="string">"Meta override source returned error code: {}"</span>,
                 response.status()
             ))<span class="question-mark">?</span>,
         };
 
         <span class="kw">let </span>federation_meta: BTreeMap&lt;String, String&gt; = serde_json::from_value(meta_value.clone())
             .context(<span class="macro">format!</span>(
-                <span class="string">&quot;Meta override source returned invalid json: {meta_value}&quot;
+                <span class="string">"Meta override source returned invalid json: {meta_value}"
             </span>))<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
@@ -2543,16 +2576,17 @@
     }
 
     <span class="doccomment">/// Fetches gateways registered with the fed and applies gateway vetting
-    /// from &#39;vetted_gateways` meta field if configured
-    </span><span class="kw">pub async fn </span>fetch_registered_gateways(
+    /// from 'vetted_gateways` meta field if configured
+    </span><span class="kw">async fn </span>fetch_registered_gateways(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        apply_meta: bool,
     ) -&gt; anyhow::Result&lt;Vec&lt;LightningGatewayAnnouncement&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>gateways = <span class="self">self</span>.module_api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">if </span>!gateways.is_empty() {
+        <span class="kw">if </span>apply_meta &amp;&amp; !gateways.is_empty() {
             <span class="kw">let </span>config = <span class="self">self</span>.client_ctx.get_config().clone();
             <span class="kw">let </span>global_meta: BTreeMap&lt;String, String&gt; = config.global.meta.clone();
-            <span class="kw">let </span>federation_id = config.global.federation_id();
+            <span class="kw">let </span>federation_id = config.global.calculate_federation_id();
 
             <span class="kw">let </span>meta = <span class="kw">match </span>config.meta::&lt;String&gt;(META_OVERRIDE_URL_KEY)<span class="question-mark">? </span>{
                 <span class="prelude-val">Some</span>(override_src) =&gt; {
@@ -2565,47 +2599,48 @@
                             }
                         }
                         <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="macro">error!</span>(<span class="string">&quot;Error fetching meta overrides: {}&quot;</span>, e);
+                            <span class="macro">error!</span>(<span class="string">"Error fetching meta overrides: {}"</span>, e);
                             global_meta
                         }
                     }
                 }
                 <span class="prelude-val">None </span>=&gt; {
-                    <span class="macro">debug!</span>(<span class="string">&quot;No meta override source configured&quot;</span>);
+                    <span class="macro">debug!</span>(<span class="string">"No meta override source configured"</span>);
                     global_meta
                 }
             };
 
             <span class="kw">if </span>meta.is_empty() {
-                <span class="macro">debug!</span>(<span class="string">&quot;No meta overrides found&quot;</span>);
+                <span class="macro">debug!</span>(<span class="string">"No meta overrides found"</span>);
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(gateways);
             }
 
-            <span class="macro">debug!</span>(<span class="string">&quot;Applying vetted meta field to registered gateways&quot;</span>);
-            <span class="kw">match </span>meta.get(META_VETTED_GATEWAYS_KEY).and_then(|vetted| {
-                <span class="macro">debug!</span>(<span class="string">&quot;Found vetted gateways meta field: {vetted:?}&quot;</span>);
+            <span class="macro">debug!</span>(<span class="string">"Applying vetted meta field to registered gateways"</span>);
+            <span class="kw">let </span>vetted = meta.get(META_VETTED_GATEWAYS_KEY).and_then(|vetted| {
+                <span class="macro">debug!</span>(<span class="string">"Found vetted gateways meta field: {vetted:?}"</span>);
                 <span class="kw">match </span>serde_json::from_str::&lt;Vec&lt;String&gt;&gt;(vetted) {
                     <span class="prelude-val">Ok</span>(vetted) =&gt; <span class="prelude-val">Some</span>(vetted),
                     <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">error!</span>(<span class="string">&quot;Error parsing vetted gateways meta field: {}&quot;</span>, e);
+                        <span class="macro">error!</span>(<span class="string">"Error parsing vetted gateways meta field: {}"</span>, e);
                         <span class="prelude-val">None
                     </span>}
                 }
-            }) {
+            });
+            <span class="kw">match </span>vetted {
                 <span class="prelude-val">Some</span>(vetted) =&gt; {
-                    <span class="macro">debug!</span>(<span class="string">&quot;Found the following vetted gateways: {:?}&quot;</span>, vetted);
+                    <span class="macro">debug!</span>(<span class="string">"Found the following vetted gateways: {:?}"</span>, vetted);
                     <span class="kw">let </span>vetted_gids = vetted
                         .into_iter()
                         .map(|pk| PublicKey::from_str(<span class="kw-2">&amp;</span>pk).map_err(anyhow::Error::from))
                         .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
 
-                    <span class="macro">debug!</span>(<span class="string">&quot;Vetted gateways: {:?}&quot;</span>, vetted_gids);
+                    <span class="macro">debug!</span>(<span class="string">"Vetted gateways: {:?}"</span>, vetted_gids);
                     <span class="kw">for </span>gateway <span class="kw">in </span>gateways.iter_mut() {
                         gateway.vetted = vetted_gids.contains(<span class="kw-2">&amp;</span>gateway.info.gateway_id);
                     }
                 }
                 <span class="prelude-val">None </span>=&gt; {
-                    <span class="macro">debug!</span>(<span class="string">&quot;No vetted gateways meta field found&quot;</span>);
+                    <span class="macro">debug!</span>(<span class="string">"No vetted gateways meta field found"</span>);
                 }
             };
         }
@@ -2618,7 +2653,7 @@
     /// supplied only internal payments are possible.
     ///
     /// The `gateway` can be acquired by calling
-    /// [`LightningClientModule::select_active_gateway`].
+    /// [`LightningClientModule::select_gateway`].
     </span><span class="kw">pub async fn </span>pay_bolt11_invoice&lt;M: Serialize + MaybeSend + MaybeSync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         maybe_gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
@@ -2638,7 +2673,7 @@
         </span><span class="kw">let </span>prev_operation_id =
             <span class="self">self</span>.get_payment_operation_id(invoice.payment_hash(), prev_payment_result.index);
         <span class="kw">if </span><span class="self">self</span>.client_ctx.has_active_states(prev_operation_id).<span class="kw">await </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Previous payment attempt still in progress. Previous Operation Id: {prev_operation_id}&quot;</span>));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Previous payment attempt still in progress. Previous Operation Id: {prev_operation_id}"</span>));
         }
 
         <span class="kw">let </span>next_index = prev_payment_result.index + <span class="number">1</span>;
@@ -2657,20 +2692,19 @@
         )
         .<span class="kw">await</span>;
 
-        <span class="kw">let </span>is_internal_payment = invoice_has_internal_payment_markers(
+        <span class="kw">let </span><span class="kw-2">mut </span>is_internal_payment = invoice_has_internal_payment_markers(
             <span class="kw-2">&amp;</span>invoice,
             <span class="self">self</span>.client_ctx.get_internal_payment_markers()<span class="question-mark">?</span>,
-        )
-        .<span class="kw">await
-            </span>|| invoice_routes_back_to_federation(
-                <span class="kw-2">&amp;</span>invoice,
-                <span class="self">self</span>.fetch_registered_gateways()
-                    .<span class="kw">await</span><span class="question-mark">?
-                    </span>.into_iter()
-                    .map(|gw| gw.info)
-                    .collect(),
-            )
-            .<span class="kw">await</span>;
+        );
+        <span class="kw">if </span>!is_internal_payment {
+            <span class="kw">let </span>gateways = dbtx
+                .find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix)
+                .<span class="kw">await
+                </span>.map(|(<span class="kw">_</span>, gw)| gw.info)
+                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                .<span class="kw">await</span>;
+            is_internal_payment = invoice_routes_back_to_federation(<span class="kw-2">&amp;</span>invoice, gateways);
+        }
 
         <span class="kw">let </span>(pay_type, client_output, contract_id) = <span class="kw">if </span>is_internal_payment {
             <span class="kw">let </span>(output, contract_id) = <span class="self">self
@@ -2678,13 +2712,16 @@
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             (PayType::Internal(operation_id), output, contract_id)
         } <span class="kw">else </span>{
-            <span class="kw">let </span>gateway = maybe_gateway.context(<span class="string">&quot;No LN gateway available&quot;</span>)<span class="question-mark">?</span>;
+            <span class="kw">let </span>gateway = maybe_gateway.context(<span class="string">"No LN gateway available"</span>)<span class="question-mark">?</span>;
             <span class="kw">let </span>(output, contract_id) = <span class="self">self
                 </span>.create_outgoing_output(
                     operation_id,
                     invoice.clone(),
                     gateway,
-                    <span class="self">self</span>.client_ctx.get_config().global.federation_id(),
+                    <span class="self">self</span>.client_ctx
+                        .get_config()
+                        .global
+                        .calculate_federation_id(),
                     rand::rngs::OsRng,
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2694,7 +2731,7 @@
         <span class="comment">// Verify that no other outgoing contract exists or the value is empty
         </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(contract)) = <span class="self">self</span>.module_api.fetch_contract(contract_id).<span class="kw">await </span>{
             <span class="kw">if </span>contract.amount.msats != <span class="number">0 </span>{
-                <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Funded contract already exists. ContractId: {contract_id}&quot;</span>);
+                <span class="macro">anyhow::bail!</span>(<span class="string">"Funded contract already exists. ContractId: {contract_id}"</span>);
             }
         }
 
@@ -2708,12 +2745,12 @@
                     .checked_sub(
                         invoice
                             .amount_milli_satoshis()
-                            .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;MissingInvoiceAmount&quot;</span>))<span class="question-mark">?</span>,
+                            .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"MissingInvoiceAmount"</span>))<span class="question-mark">?</span>,
                     )
-                    .expect(<span class="string">&quot;Contract amount should be greater or equal than invoice amount&quot;</span>);
+                    .expect(<span class="string">"Contract amount should be greater or equal than invoice amount"</span>);
                 Amount::from_msats(fee_msat)
             }
-            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">&quot;User client will only create contract outputs on spend&quot;</span>),
+            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"User client will only create contract outputs on spend"</span>),
         };
 
         <span class="kw">let </span>output = <span class="self">self</span>.client_ctx.make_client_output(ClientOutput {
@@ -2723,7 +2760,7 @@
 
         <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output);
         <span class="kw">let </span>extra_meta =
-            serde_json::to_value(extra_meta).context(<span class="string">&quot;Failed to serialize extra meta&quot;</span>)<span class="question-mark">?</span>;
+            serde_json::to_value(extra_meta).context(<span class="string">"Failed to serialize extra meta"</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>operation_meta_gen = |txid, change| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
                 out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
@@ -2764,7 +2801,7 @@
         <span class="kw">let </span>LightningOperationMetaVariant::Pay(pay) =
             operation.meta::&lt;LightningOperationMeta&gt;().variant
         <span class="kw">else </span>{
-            <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Operation is not a lightning payment&quot;</span>)
+            <span class="macro">anyhow::bail!</span>(<span class="string">"Operation is not a lightning payment"</span>)
         };
         <span class="prelude-val">Ok</span>(pay)
     }
@@ -2795,7 +2832,7 @@
                             <span class="kw">_ </span>=&gt; {}
                         }
                     } <span class="kw">else </span>{
-                        <span class="kw">break </span>InternalPayState::UnexpectedError(<span class="string">&quot;Unexpected State! Expected an InternalPay state&quot;</span>.to_string())
+                        <span class="kw">break </span>InternalPayState::UnexpectedError(<span class="string">"Unexpected State! Expected an InternalPay state"</span>.to_string())
                     }
                 };
                 <span class="kw">yield </span>state;
@@ -2815,7 +2852,7 @@
                 change,
                 ..
             }) =&gt; (out_point, invoice, change),
-            <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a lightning payment&quot;</span>),
+            <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">"Operation is not a lightning payment"</span>),
         };
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
@@ -2845,7 +2882,7 @@
                             <span class="kw">match </span>client_ctx.await_primary_module_outputs(operation_id, change).<span class="kw">await </span>{
                                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
                                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                                    <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="string">&quot;Error occurred while waiting for the primary module&#39;s output&quot;</span>.to_string() };
+                                    <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="string">"Error occurred while waiting for the primary module's output"</span>.to_string() };
                                     <span class="kw">return</span>;
                                 }
                             }
@@ -2868,7 +2905,7 @@
                     <span class="kw">_ </span>=&gt; {}
                 }
 
-                <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="string">&quot;Error occurred trying to get refund. Refund was not successful&quot;</span>.to_string() };
+                <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="string">"Error occurred trying to get refund. Refund was not successful"</span>.to_string() };
             }
         }))
     }
@@ -2880,16 +2917,17 @@
         description: String,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
         extra_meta: M,
+        gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
     ) -&gt; anyhow::Result&lt;(OperationId, Bolt11Invoice, [u8; <span class="number">32</span>])&gt; {
-        <span class="kw">let </span>(src_node_id, short_channel_id, route_hints) = <span class="kw">match </span><span class="self">self</span>.select_active_gateway().<span class="kw">await
-        </span>{
-            <span class="prelude-val">Ok</span>(active_gateway) =&gt; (
-                active_gateway.node_pub_key,
-                active_gateway.mint_channel_id,
-                active_gateway.route_hints,
+        <span class="kw">let </span>(src_node_id, short_channel_id, route_hints) = <span class="kw">match </span>gateway {
+            <span class="prelude-val">Some</span>(current_gateway) =&gt; (
+                current_gateway.node_pub_key,
+                current_gateway.mint_channel_id,
+                current_gateway.route_hints,
             ),
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                <span class="kw">let </span>markers = <span class="self">self</span>.client_ctx.get_internal_payment_markers()<span class="question-mark">?</span>;
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="comment">// If no gateway is provided, this is assumed to be an internal payment.
+                </span><span class="kw">let </span>markers = <span class="self">self</span>.client_ctx.get_internal_payment_markers()<span class="question-mark">?</span>;
                 (markers.<span class="number">0</span>, markers.<span class="number">1</span>, <span class="macro">vec!</span>[])
             }
         };
@@ -2907,7 +2945,7 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>tx = TransactionBuilder::new().with_output(<span class="self">self</span>.client_ctx.make_client_output(output));
-        <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">&quot;extra_meta is serializable&quot;</span>);
+        <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">"extra_meta is serializable"</span>);
         <span class="kw">let </span>operation_meta_gen = |txid, <span class="kw">_</span>| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Receive {
                 out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
@@ -2932,7 +2970,7 @@
             .<span class="kw">await
             </span>.await_tx_accepted(txid)
             .<span class="kw">await
-            </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Offer transaction was not accepted: {e:?}&quot;</span>))<span class="question-mark">?</span>;
+            </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Offer transaction was not accepted: {e:?}"</span>))<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>((operation_id, invoice, preimage))
     }
@@ -2944,7 +2982,7 @@
         <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>(out_point, invoice) = <span class="kw">match </span>operation.meta::&lt;LightningOperationMeta&gt;().variant {
             LightningOperationMetaVariant::Receive { out_point, invoice } =&gt; (out_point, invoice),
-            <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a lightning payment&quot;</span>),
+            <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">"Operation is not a lightning payment"</span>),
         };
 
         <span class="kw">let </span>tx_accepted_future = <span class="self">self
@@ -3110,7 +3148,7 @@
 }
 
 <span class="kw">async fn </span>set_payment_result(
-    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     payment_hash: sha256::Hash,
     payment_type: PayType,
     contract_id: ContractId,

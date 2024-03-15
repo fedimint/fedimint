@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-testing/src/fixtures.rs`."><title>fixtures.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_testing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_testing/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-testing/src/fixtures.rs`."><title>fixtures.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_testing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_testing/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -242,14 +244,6 @@
 <a href="#242" id="242">242</a>
 <a href="#243" id="243">243</a>
 <a href="#244" id="244">244</a>
-<a href="#245" id="245">245</a>
-<a href="#246" id="246">246</a>
-<a href="#247" id="247">247</a>
-<a href="#248" id="248">248</a>
-<a href="#249" id="249">249</a>
-<a href="#250" id="250">250</a>
-<a href="#251" id="251">251</a>
-<a href="#252" id="252">252</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -277,7 +271,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::federation::FederationTest;
 <span class="kw">use </span><span class="kw">crate</span>::gateway::GatewayTest;
 <span class="kw">use </span><span class="kw">crate</span>::ln::mock::FakeLightningTest;
-<span class="kw">use </span><span class="kw">crate</span>::ln::real::{ClnLightningTest, LdkLightningTest, LndLightningTest};
+<span class="kw">use </span><span class="kw">crate</span>::ln::real::{ClnLightningTest, LndLightningTest};
 <span class="kw">use </span><span class="kw">crate</span>::ln::LightningTest;
 
 <span class="doccomment">/// A default timeout for things happening in tests
@@ -299,8 +293,8 @@
 
 <span class="kw">impl </span>Fixtures {
     <span class="kw">pub fn </span>new_primary(
-        client: <span class="kw">impl </span>IClientModuleInit + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-        server: <span class="kw">impl </span>IServerModuleInit + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        client: <span class="kw">impl </span>IClientModuleInit + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
+        server: <span class="kw">impl </span>IServerModuleInit + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
         params: <span class="kw">impl </span>ModuleInitParams,
     ) -&gt; <span class="self">Self </span>{
         <span class="comment">// Ensure tracing has been set once
@@ -316,10 +310,10 @@
         ) = <span class="kw">if </span>real_testing {
             <span class="kw">let </span>rpc_config = BitcoinRpcConfig::from_env_vars().unwrap();
             <span class="kw">let </span>dyn_bitcoin_rpc = create_bitcoind(<span class="kw-2">&amp;</span>rpc_config, task_group.make_handle()).unwrap();
-            <span class="kw">let </span>bitcoincore_url = env::var(<span class="string">&quot;FM_TEST_BITCOIND_RPC&quot;</span>)
-                .expect(<span class="string">&quot;Must have bitcoind RPC defined for real tests&quot;</span>)
+            <span class="kw">let </span>bitcoincore_url = env::var(<span class="string">"FM_TEST_BITCOIND_RPC"</span>)
+                .expect(<span class="string">"Must have bitcoind RPC defined for real tests"</span>)
                 .parse()
-                .expect(<span class="string">&quot;Invalid bitcoind RPC URL&quot;</span>);
+                .expect(<span class="string">"Invalid bitcoind RPC URL"</span>);
             <span class="kw">let </span>bitcoin = RealBitcoinTest::new(<span class="kw-2">&amp;</span>bitcoincore_url, dyn_bitcoin_rpc.clone());
             (dyn_bitcoin_rpc, Arc::new(bitcoin), rpc_config)
         } <span class="kw">else </span>{
@@ -345,15 +339,15 @@
     }
 
     <span class="kw">pub fn </span>is_real_test() -&gt; bool {
-        env::var(<span class="string">&quot;FM_TEST_USE_REAL_DAEMONS&quot;</span>) == <span class="prelude-val">Ok</span>(<span class="string">&quot;1&quot;</span>.to_string())
+        env::var(<span class="string">"FM_TEST_USE_REAL_DAEMONS"</span>) == <span class="prelude-val">Ok</span>(<span class="string">"1"</span>.to_string())
     }
 
     <span class="comment">// TODO: Auto-assign instance ids after removing legacy id order
     </span><span class="doccomment">/// Add a module to the fed
     </span><span class="kw">pub fn </span>with_module(
         <span class="kw-2">mut </span><span class="self">self</span>,
-        client: <span class="kw">impl </span>IClientModuleInit + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-        server: <span class="kw">impl </span>IServerModuleInit + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        client: <span class="kw">impl </span>IClientModuleInit + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
+        server: <span class="kw">impl </span>IServerModuleInit + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
         params: <span class="kw">impl </span>ModuleInitParams,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.params
@@ -367,7 +361,7 @@
 
     <span class="kw">pub fn </span>with_server_only_module(
         <span class="kw-2">mut </span><span class="self">self</span>,
-        server: <span class="kw">impl </span>IServerModuleInit + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        server: <span class="kw">impl </span>IServerModuleInit + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
         params: <span class="kw">impl </span>ModuleInitParams,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.params
@@ -386,17 +380,17 @@
 
     <span class="doccomment">/// Starts a new federation with number of peers
     </span><span class="kw">pub async fn </span>new_fed_with_peers(<span class="kw-2">&amp;</span><span class="self">self</span>, num_peers: u16, num_offline: u16) -&gt; FederationTest {
-        <span class="macro">info!</span>(target: LOG_TEST, num_peers, <span class="string">&quot;Setting federation with peers&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_TEST, num_peers, <span class="string">"Setting federation with peers"</span>);
         FederationTest::new(
             num_peers,
             num_offline,
             tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(num_peers * <span class="number">2</span>))
-                .expect(<span class="string">&quot;Failed to allocate a port range&quot;</span>),
+                .expect(<span class="string">"Failed to allocate a port range"</span>),
             <span class="self">self</span>.params.clone(),
             ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone()),
             ClientModuleInitRegistry::from(<span class="self">self</span>.clients.clone()),
             <span class="self">self</span>.primary_client,
-            <span class="string">&quot;fedimint-testing-dummy-version-hash&quot;</span>.to_owned(),
+            <span class="string">"fedimint-testing-dummy-version-hash"</span>.to_owned(),
         )
         .<span class="kw">await
     </span>}
@@ -416,13 +410,13 @@
 
         GatewayTest::new(
             tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(<span class="number">1</span>))
-                .expect(<span class="string">&quot;Failed to allocate a port range&quot;</span>),
+                .expect(<span class="string">"Failed to allocate a port range"</span>),
             cli_password,
             ln,
             decoders,
             ClientModuleInitRegistry::from_iter(clients.filter(|client| {
                 <span class="comment">// Remove LN module because the gateway adds one
-                </span>client.to_dyn_common().module_kind() != ModuleKind::from_static_str(<span class="string">&quot;ln&quot;</span>)
+                </span>client.to_dyn_common().module_kind() != ModuleKind::from_static_str(<span class="string">"ln"</span>)
             })),
             num_route_hints,
         )
@@ -445,14 +439,6 @@
         }
     }
 
-    <span class="doccomment">/// Spawns and returns a newly created LDK Node
-    </span><span class="kw">pub async fn </span>spawn_ldk(bitcoin: Arc&lt;<span class="kw">dyn </span>BitcoinTest&gt;) -&gt; LdkLightningTest {
-        <span class="kw">let </span>db_dir = test_dir(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;LDKNode-{}&quot;</span>, rand::random::&lt;u64&gt;())).<span class="number">0</span>;
-        LdkLightningTest::new(db_dir, bitcoin.clone())
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Error spawning LDK Node&quot;</span>)
-    }
-
     <span class="doccomment">/// Get a server bitcoin RPC config
     </span><span class="kw">pub fn </span>bitcoin_server(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
         <span class="self">self</span>.bitcoin_rpc.clone()
@@ -464,12 +450,12 @@
     </span><span class="kw">pub fn </span>bitcoin_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
         <span class="kw">match </span>Fixtures::is_real_test() {
             <span class="bool-val">true </span>=&gt; BitcoinRpcConfig {
-                kind: <span class="string">&quot;esplora&quot;</span>.to_string(),
+                kind: <span class="string">"esplora"</span>.to_string(),
                 url: SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                    <span class="string">&quot;http://127.0.0.1:{}/&quot;</span>,
-                    env::var(<span class="string">&quot;FM_PORT_ESPLORA&quot;</span>).unwrap_or(String::from(<span class="string">&quot;50002&quot;</span>))
+                    <span class="string">"http://127.0.0.1:{}/"</span>,
+                    env::var(<span class="string">"FM_PORT_ESPLORA"</span>).unwrap_or(String::from(<span class="string">"50002"</span>))
                 ))
-                .expect(<span class="string">&quot;Failed to parse default esplora server&quot;</span>),
+                .expect(<span class="string">"Failed to parse default esplora server"</span>),
             },
             <span class="bool-val">false </span>=&gt; <span class="self">self</span>.bitcoin_rpc.clone(),
         }
@@ -489,17 +475,17 @@
 ///
 /// Callers must hold onto the tempdir until it is no longer needed
 </span><span class="kw">pub fn </span>test_dir(pathname: <span class="kw-2">&amp;</span>str) -&gt; (PathBuf, <span class="prelude-ty">Option</span>&lt;TempDir&gt;) {
-    <span class="kw">let </span>(parent, maybe_tmp_dir_guard) = <span class="kw">match </span>env::var(<span class="string">&quot;FM_TEST_DIR&quot;</span>) {
+    <span class="kw">let </span>(parent, maybe_tmp_dir_guard) = <span class="kw">match </span>env::var(<span class="string">"FM_TEST_DIR"</span>) {
         <span class="prelude-val">Ok</span>(directory) =&gt; (directory, <span class="prelude-val">None</span>),
         <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-            <span class="kw">let </span>random = <span class="macro">format!</span>(<span class="string">&quot;test-{}&quot;</span>, rand::random::&lt;u64&gt;());
+            <span class="kw">let </span>random = <span class="macro">format!</span>(<span class="string">"test-{}"</span>, rand::random::&lt;u64&gt;());
             <span class="kw">let </span>guard = tempfile::Builder::new().prefix(<span class="kw-2">&amp;</span>random).tempdir().unwrap();
             <span class="kw">let </span>directory = guard.path().to_str().unwrap().to_owned();
             (directory, <span class="prelude-val">Some</span>(guard))
         }
     };
     <span class="kw">let </span>fullpath = PathBuf::from(parent).join(pathname);
-    fs::create_dir_all(fullpath.clone()).expect(<span class="string">&quot;Can make dirs&quot;</span>);
+    fs::create_dir_all(fullpath.clone()).expect(<span class="string">"Can make dirs"</span>);
     (fullpath, maybe_tmp_dir_guard)
 }
 </code></pre></div></section></main></body></html>

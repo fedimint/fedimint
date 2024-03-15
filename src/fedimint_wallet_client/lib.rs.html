@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-wallet-client/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_wallet_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-wallet-client/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_wallet_client/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -788,7 +790,7 @@
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>BitcoinTransactionData {
     <span class="doccomment">/// The bitcoin transaction is saved as soon as we see it so the transaction
-    /// can be re-transmitted if it&#39;s evicted from the mempool.
+    /// can be re-transmitted if it's evicted from the mempool.
     </span><span class="kw">pub </span>btc_transaction: bitcoin::Transaction,
     <span class="doccomment">/// Index of the deposit output
     </span><span class="kw">pub </span>out_idx: u32,
@@ -854,9 +856,9 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
-    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">'_</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>wallet_client_items: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; =
             BTreeMap::new();
         <span class="kw">let </span>filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
@@ -868,7 +870,7 @@
                 DbKeyPrefix::NextPegInTweakIndex =&gt; {
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(index) = dbtx.get_value(<span class="kw-2">&amp;</span>NextPegInTweakIndexKey).<span class="kw">await </span>{
                         wallet_client_items
-                            .insert(<span class="string">&quot;NextPegInTweakIndex&quot;</span>.to_string(), Box::new(index));
+                            .insert(<span class="string">"NextPegInTweakIndex"</span>.to_string(), Box::new(index));
                     }
                 }
             }
@@ -884,7 +886,7 @@
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}])
-            .expect(<span class="string">&quot;no version conflicts&quot;</span>)
+            .expect(<span class="string">"no version conflicts"</span>)
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
@@ -918,7 +920,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub enum </span>WalletOperationMetaVariant {
     Deposit {
         address: bitcoin::Address,
@@ -926,7 +928,7 @@
     },
     Withdraw {
         address: bitcoin::Address,
-        <span class="attr">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]
+        <span class="attr">#[serde(with = <span class="string">"bitcoin::util::amount::serde::as_sat"</span>)]
         </span>amount: bitcoin::Amount,
         fee: PegOutFees,
         change: Vec&lt;OutPoint&gt;,
@@ -1005,7 +1007,7 @@
         <span class="kw">if let </span><span class="prelude-val">Ok</span>(rpc_config) = BitcoinRpcConfig::from_env_vars() {
             <span class="comment">// TODO: Wallet client cannot support bitcoind RPC until the bitcoin dep is
             // updated to 0.30
-            </span><span class="kw">if </span>rpc_config.kind != <span class="string">&quot;bitcoind&quot; </span>{
+            </span><span class="kw">if </span>rpc_config.kind != <span class="string">"bitcoind" </span>{
                 rpc_config
             } <span class="kw">else </span>{
                 cfg.default_bitcoin_rpc.clone()
@@ -1022,7 +1024,7 @@
     <span class="kw">pub async fn </span>get_deposit_address_inner(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         valid_until: SystemTime,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     ) -&gt; (OperationId, WalletClientStates, Address) {
         <span class="kw">let </span>secret_tweak_key = <span class="self">self
             </span>.module_root_secret
@@ -1068,7 +1070,7 @@
         <span class="self">self</span>.module_api
             .fetch_peg_out_fees(<span class="kw-2">&amp;</span>address, amount)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.context(<span class="string">&quot;Federation didn&#39;t return peg-out fees&quot;</span>)
+            </span>.context(<span class="string">"Federation didn't return peg-out fees"</span>)
     }
 
     <span class="kw">pub async fn </span>create_withdraw_output(
@@ -1124,7 +1126,7 @@
         valid_until: SystemTime,
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;(OperationId, Address)&gt; {
-        <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">&quot;extra meta is serializable&quot;</span>);
+        <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">"extra meta is serializable"</span>);
 
         <span class="kw">let </span>(operation_id, address) = <span class="self">self
             </span>.client_ctx
@@ -1167,7 +1169,7 @@
                 AutocommitError::CommitFailed {
                     last_error,
                     attempts,
-                } =&gt; last_error.context(<span class="macro">format!</span>(<span class="string">&quot;Failed to commit after {attempts} attempts&quot;</span>)),
+                } =&gt; last_error.context(<span class="macro">format!</span>(<span class="string">"Failed to commit after {attempts} attempts"</span>)),
                 AutocommitError::ClosureError { error, .. } =&gt; error,
             })<span class="question-mark">?</span>;
 
@@ -1182,10 +1184,10 @@
             </span>.client_ctx
             .get_operation(operation_id)
             .<span class="kw">await
-            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found: {operation_id}&quot;</span>))<span class="question-mark">?</span>;
+            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">"Operation not found: {operation_id}"</span>))<span class="question-mark">?</span>;
 
         <span class="kw">if </span>operation_log_entry.operation_module_kind() != WalletCommonInit::KIND.as_str() {
-            <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a wallet operation&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Operation is not a wallet operation"</span>);
         }
 
         <span class="kw">let </span>operation_meta = operation_log_entry.meta::&lt;WalletOperationMeta&gt;();
@@ -1194,7 +1196,7 @@
             operation_meta.variant,
             WalletOperationMetaVariant::Deposit { .. }
         ) {
-            <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a deposit operation&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Operation is not a deposit operation"</span>);
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>operation_stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
@@ -1210,7 +1212,7 @@
                             <span class="kw">yield </span>DepositState::WaitingForTransaction;
                         },
                         <span class="prelude-val">Some</span>(s) =&gt; {
-                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
+                            <span class="macro">panic!</span>(<span class="string">"Unexpected state {s:?}"</span>)
                         },
                         <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
                     }
@@ -1222,11 +1224,11 @@
                             tx_data
                         },
                         <span class="prelude-val">Some</span>(DepositStates::TimedOut(<span class="kw">_</span>)) =&gt; {
-                            <span class="kw">yield </span>DepositState::Failed(<span class="string">&quot;Deposit timed out&quot;</span>.to_string());
+                            <span class="kw">yield </span>DepositState::Failed(<span class="string">"Deposit timed out"</span>.to_string());
                             <span class="kw">return</span>;
                         },
                         <span class="prelude-val">Some</span>(s) =&gt; {
-                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
+                            <span class="macro">panic!</span>(<span class="string">"Unexpected state {s:?}"</span>)
                         },
                         <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
                     };
@@ -1234,21 +1236,21 @@
                     <span class="kw">let </span>claiming = <span class="kw">match </span>next_deposit_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
                         <span class="prelude-val">Some</span>(DepositStates::Claiming(claiming)) =&gt; claiming,
                         <span class="prelude-val">Some</span>(s) =&gt; {
-                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
+                            <span class="macro">panic!</span>(<span class="string">"Unexpected state {s:?}"</span>)
                         },
                         <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
                     };
                     <span class="kw">yield </span>DepositState::Confirmed(tx_data.clone());
 
                     <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = tx_subscriber.await_tx_accepted(claiming.transaction_id).<span class="kw">await </span>{
-                        <span class="kw">yield </span>DepositState::Failed(<span class="macro">format!</span>(<span class="string">&quot;Failed to claim: {e:?}&quot;</span>));
+                        <span class="kw">yield </span>DepositState::Failed(<span class="macro">format!</span>(<span class="string">"Failed to claim: {e:?}"</span>));
                         <span class="kw">return</span>;
                     }
 
 
                     client_ctx.await_primary_module_outputs(operation_id, claiming.change)
                         .<span class="kw">await
-                        </span>.expect(<span class="string">&quot;Cannot fail if tx was accepted and federation is honest&quot;</span>);
+                        </span>.expect(<span class="string">"Cannot fail if tx was accepted and federation is honest"</span>);
 
                     <span class="kw">yield </span>DepositState::Claimed(tx_data.clone());
                 }
@@ -1277,7 +1279,7 @@
                 .with_output(<span class="self">self</span>.client_ctx.make_client_output(withdraw_output));
 
             <span class="kw">let </span>extra_meta =
-                serde_json::to_value(extra_meta).expect(<span class="string">&quot;Failed to serialize extra meta&quot;</span>);
+                serde_json::to_value(extra_meta).expect(<span class="string">"Failed to serialize extra meta"</span>);
             <span class="self">self</span>.client_ctx
                 .finalize_and_submit_transaction(
                     operation_id,
@@ -1316,7 +1318,7 @@
         <span class="kw">let </span>tx_builder = TransactionBuilder::new()
             .with_output(<span class="self">self</span>.client_ctx.make_client_output(withdraw_output));
 
-        <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">&quot;Failed to serialize extra meta&quot;</span>);
+        <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">"Failed to serialize extra meta"</span>);
         <span class="self">self</span>.client_ctx
             .finalize_and_submit_transaction(
                 operation_id,
@@ -1343,10 +1345,10 @@
             </span>.client_ctx
             .get_operation(operation_id)
             .<span class="kw">await
-            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found: {operation_id}&quot;</span>))<span class="question-mark">?</span>;
+            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">"Operation not found: {operation_id}"</span>))<span class="question-mark">?</span>;
 
         <span class="kw">if </span>operation.operation_module_kind() != WalletCommonInit::KIND.as_str() {
-            <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a wallet operation&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Operation is not a wallet operation"</span>);
         }
 
         <span class="kw">let </span>operation_meta = operation.meta::&lt;WalletOperationMeta&gt;();
@@ -1354,7 +1356,7 @@
         <span class="kw">let </span>(WalletOperationMetaVariant::Withdraw { change, .. }
         | WalletOperationMetaVariant::RbfWithdraw { change, .. }) = operation_meta.variant
         <span class="kw">else </span>{
-            <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a withdraw operation&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Operation is not a withdraw operation"</span>);
         };
 
         <span class="kw">let </span><span class="kw-2">mut </span>operation_stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
@@ -1368,7 +1370,7 @@
                             <span class="kw">yield </span>WithdrawState::Created;
                         },
                         <span class="prelude-val">Some</span>(s) =&gt; {
-                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
+                            <span class="macro">panic!</span>(<span class="string">"Unexpected state {s:?}"</span>)
                         },
                         <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
                     }
@@ -1390,7 +1392,7 @@
                             <span class="kw">yield </span>WithdrawState::Succeeded(inner.txid);
                         },
                         <span class="prelude-val">Some</span>(s) =&gt; {
-                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
+                            <span class="macro">panic!</span>(<span class="string">"Unexpected state {s:?}"</span>)
                         },
                         <span class="prelude-val">None </span>=&gt; {},
                     }
@@ -1403,14 +1405,14 @@
 <span class="kw">fn </span>check_address(address: <span class="kw-2">&amp;</span>Address, network: Network) -&gt; anyhow::Result&lt;()&gt; {
     <span class="macro">ensure!</span>(
         address.is_valid_for_network(network),
-        <span class="string">&quot;Address isn&#39;t compatible with the federation&#39;s network: {network:?}&quot;
+        <span class="string">"Address isn't compatible with the federation's network: {network:?}"
     </span>);
 
     <span class="prelude-val">Ok</span>(())
 }
 
 <span class="doccomment">/// Returns the child index to derive the next peg-in tweak key from.
-</span><span class="kw">async fn </span>get_next_peg_in_tweak_child_id(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; ChildId {
+</span><span class="kw">async fn </span>get_next_peg_in_tweak_child_id(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; ChildId {
     <span class="kw">let </span>index = dbtx.get_value(<span class="kw-2">&amp;</span>NextPegInTweakIndexKey).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
     dbtx.insert_entry(<span class="kw-2">&amp;</span>NextPegInTweakIndexKey, <span class="kw-2">&amp;</span>(index + <span class="number">1</span>))
         .<span class="kw">await</span>;

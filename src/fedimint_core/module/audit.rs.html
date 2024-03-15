@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/module/audit.rs`."><title>audit.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_core/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/module/audit.rs`."><title>audit.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_core/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -293,7 +295,7 @@
 <span class="kw">impl </span>Audit {
     <span class="kw">pub fn </span>net_assets(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AuditItem {
         AuditItem {
-            name: <span class="string">&quot;Net assets (sats)&quot;</span>.to_string(),
+            name: <span class="string">"Net assets (sats)"</span>.to_string(),
             milli_sat: calculate_net_assets(<span class="self">self</span>.items.iter()),
             module_instance_id: <span class="prelude-val">None</span>,
         }
@@ -301,12 +303,12 @@
 
     <span class="kw">pub async fn </span>add_items&lt;KP, F&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         module_instance_id: ModuleInstanceId,
         key_prefix: <span class="kw-2">&amp;</span>KP,
         to_milli_sat: F,
     ) <span class="kw">where
-        </span>KP: DatabaseLookup + <span class="lifetime">&#39;static </span>+ MaybeSend + MaybeSync,
+        </span>KP: DatabaseLookup + <span class="lifetime">'static </span>+ MaybeSend + MaybeSync,
         KP::Record: DatabaseKey,
         F: Fn(KP::Record, &lt;&lt;KP <span class="kw">as </span>DatabaseLookup&gt;::Record <span class="kw">as </span>DatabaseRecord&gt;::Value) -&gt; i64,
     {
@@ -314,7 +316,7 @@
             .find_by_prefix(key_prefix)
             .<span class="kw">await
             </span>.map(|(key, value)| {
-                <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">&quot;{key:?}&quot;</span>);
+                <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"{key:?}"</span>);
                 <span class="kw">let </span>milli_sat = to_milli_sat(key, value);
                 AuditItem {
                     name,
@@ -330,11 +332,11 @@
 
 <span class="kw">impl </span>Display <span class="kw">for </span>Audit {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, formatter: <span class="kw-2">&amp;mut </span>Formatter) -&gt; std::fmt::Result {
-        formatter.write_str(<span class="string">&quot;- Balance Sheet -&quot;</span>)<span class="question-mark">?</span>;
+        formatter.write_str(<span class="string">"- Balance Sheet -"</span>)<span class="question-mark">?</span>;
         <span class="kw">for </span>item <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.items {
-            formatter.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;\n{item}&quot;</span>))<span class="question-mark">?</span>;
+            formatter.write_fmt(<span class="macro">format_args!</span>(<span class="string">"\n{item}"</span>))<span class="question-mark">?</span>;
         }
-        formatter.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;\n{}&quot;</span>, <span class="self">self</span>.net_assets()))
+        formatter.write_fmt(<span class="macro">format_args!</span>(<span class="string">"\n{}"</span>, <span class="self">self</span>.net_assets()))
     }
 }
 
@@ -347,7 +349,7 @@
 <span class="kw">impl </span>Display <span class="kw">for </span>AuditItem {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, formatter: <span class="kw-2">&amp;mut </span>Formatter) -&gt; std::fmt::Result {
         <span class="kw">let </span>sats = (<span class="self">self</span>.milli_sat <span class="kw">as </span>f64) / <span class="number">1000.0</span>;
-        formatter.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;{:&gt;+15.3}|{}&quot;</span>, sats, <span class="self">self</span>.name))
+        formatter.write_fmt(<span class="macro">format_args!</span>(<span class="string">"{:&gt;+15.3}|{}"</span>, sats, <span class="self">self</span>.name))
     }
 }
 
@@ -382,8 +384,8 @@
     }
 }
 
-<span class="kw">fn </span>generate_module_summaries&lt;<span class="lifetime">&#39;a</span>&gt;(
-    audit_items: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>AuditItem&gt;,
+<span class="kw">fn </span>generate_module_summaries&lt;<span class="lifetime">'a</span>&gt;(
+    audit_items: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">'a </span>AuditItem&gt;,
     module_instance_id_to_kind: <span class="kw-2">&amp;</span>HashMap&lt;ModuleInstanceId, String&gt;,
 ) -&gt; HashMap&lt;ModuleInstanceId, ModuleSummary&gt; {
     audit_items
@@ -397,7 +399,7 @@
         .map(|(module_instance_id, module_audit_items)| {
             <span class="kw">let </span>kind = module_instance_id_to_kind
                 .get(module_instance_id)
-                .expect(<span class="string">&quot;module instance id should have a kind&quot;</span>)
+                .expect(<span class="string">"module instance id should have a kind"</span>)
                 .to_string();
             (
                 <span class="kw-2">*</span>module_instance_id,
@@ -410,7 +412,7 @@
         .collect()
 }
 
-<span class="kw">fn </span>calculate_net_assets&lt;<span class="lifetime">&#39;a</span>&gt;(items: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>AuditItem&gt;) -&gt; i64 {
+<span class="kw">fn </span>calculate_net_assets&lt;<span class="lifetime">'a</span>&gt;(items: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">'a </span>AuditItem&gt;) -&gt; i64 {
     items.map(|item| item.milli_sat).sum()
 }
 
@@ -419,7 +421,7 @@
 // etc), which is useful for downstream consumers of AuditSummaries.
 </span><span class="kw">fn </span>create_empty_module_placeholder(module_instance_id: ModuleInstanceId) -&gt; AuditItem {
     AuditItem {
-        name: <span class="string">&quot;Module placeholder&quot;</span>.to_string(),
+        name: <span class="string">"Module placeholder"</span>.to_string(),
         milli_sat: <span class="number">0</span>,
         module_instance_id: <span class="prelude-val">Some</span>(module_instance_id),
     }
@@ -430,37 +432,37 @@
     <span class="kw">let </span>audit = Audit {
         items: <span class="macro">vec!</span>[
             AuditItem {
-                name: <span class="string">&quot;ContractKey(...)&quot;</span>.to_string(),
+                name: <span class="string">"ContractKey(...)"</span>.to_string(),
                 milli_sat: -<span class="number">101_000</span>,
                 module_instance_id: <span class="prelude-val">Some</span>(<span class="number">0</span>),
             },
             AuditItem {
-                name: <span class="string">&quot;IssuanceTotal&quot;</span>.to_string(),
+                name: <span class="string">"IssuanceTotal"</span>.to_string(),
                 milli_sat: -<span class="number">50_100_000</span>,
                 module_instance_id: <span class="prelude-val">Some</span>(<span class="number">1</span>),
             },
             AuditItem {
-                name: <span class="string">&quot;Redemption(...)&quot;</span>.to_string(),
+                name: <span class="string">"Redemption(...)"</span>.to_string(),
                 milli_sat: <span class="number">101_000</span>,
                 module_instance_id: <span class="prelude-val">Some</span>(<span class="number">1</span>),
             },
             AuditItem {
-                name: <span class="string">&quot;RedemptionTotal&quot;</span>.to_string(),
+                name: <span class="string">"RedemptionTotal"</span>.to_string(),
                 milli_sat: <span class="number">100_000</span>,
                 module_instance_id: <span class="prelude-val">Some</span>(<span class="number">1</span>),
             },
             AuditItem {
-                name: <span class="string">&quot;UTXOKey(...)&quot;</span>.to_string(),
+                name: <span class="string">"UTXOKey(...)"</span>.to_string(),
                 milli_sat: <span class="number">20_000_000</span>,
                 module_instance_id: <span class="prelude-val">Some</span>(<span class="number">2</span>),
             },
             AuditItem {
-                name: <span class="string">&quot;UTXOKey(...)&quot;</span>.to_string(),
+                name: <span class="string">"UTXOKey(...)"</span>.to_string(),
                 milli_sat: <span class="number">10_000_000</span>,
                 module_instance_id: <span class="prelude-val">Some</span>(<span class="number">2</span>),
             },
             AuditItem {
-                name: <span class="string">&quot;UTXOKey(...)&quot;</span>.to_string(),
+                name: <span class="string">"UTXOKey(...)"</span>.to_string(),
                 milli_sat: <span class="number">20_000_000</span>,
                 module_instance_id: <span class="prelude-val">Some</span>(<span class="number">2</span>),
             },
@@ -470,9 +472,9 @@
     <span class="kw">let </span>audit_summary = AuditSummary::from_audit(
         <span class="kw-2">&amp;</span>audit,
         <span class="kw-2">&amp;</span>HashMap::from([
-            (<span class="number">0</span>, <span class="string">&quot;ln&quot;</span>.to_string()),
-            (<span class="number">1</span>, <span class="string">&quot;mint&quot;</span>.to_string()),
-            (<span class="number">2</span>, <span class="string">&quot;wallet&quot;</span>.to_string()),
+            (<span class="number">0</span>, <span class="string">"ln"</span>.to_string()),
+            (<span class="number">1</span>, <span class="string">"mint"</span>.to_string()),
+            (<span class="number">2</span>, <span class="string">"wallet"</span>.to_string()),
         ]),
     );
     <span class="kw">let </span>expected_audit_summary = AuditSummary {
@@ -482,21 +484,21 @@
                 <span class="number">0</span>,
                 ModuleSummary {
                     net_assets: -<span class="number">101_000</span>,
-                    kind: <span class="string">&quot;ln&quot;</span>.to_string(),
+                    kind: <span class="string">"ln"</span>.to_string(),
                 },
             ),
             (
                 <span class="number">1</span>,
                 ModuleSummary {
                     net_assets: -<span class="number">49_899_000</span>,
-                    kind: <span class="string">&quot;mint&quot;</span>.to_string(),
+                    kind: <span class="string">"mint"</span>.to_string(),
                 },
             ),
             (
                 <span class="number">2</span>,
                 ModuleSummary {
                     net_assets: <span class="number">50_000_000</span>,
-                    kind: <span class="string">&quot;wallet&quot;</span>.to_string(),
+                    kind: <span class="string">"wallet"</span>.to_string(),
                 },
             ),
         ]),
@@ -510,9 +512,9 @@
     <span class="kw">let </span>audit_summary = AuditSummary::from_audit(
         <span class="kw-2">&amp;</span>Audit::default(),
         <span class="kw-2">&amp;</span>HashMap::from([
-            (<span class="number">0</span>, <span class="string">&quot;ln&quot;</span>.to_string()),
-            (<span class="number">1</span>, <span class="string">&quot;mint&quot;</span>.to_string()),
-            (<span class="number">2</span>, <span class="string">&quot;wallet&quot;</span>.to_string()),
+            (<span class="number">0</span>, <span class="string">"ln"</span>.to_string()),
+            (<span class="number">1</span>, <span class="string">"mint"</span>.to_string()),
+            (<span class="number">2</span>, <span class="string">"wallet"</span>.to_string()),
         ]),
     );
     <span class="kw">let </span>expected_audit_summary = AuditSummary {
@@ -522,21 +524,21 @@
                 <span class="number">0</span>,
                 ModuleSummary {
                     net_assets: <span class="number">0</span>,
-                    kind: <span class="string">&quot;ln&quot;</span>.to_string(),
+                    kind: <span class="string">"ln"</span>.to_string(),
                 },
             ),
             (
                 <span class="number">1</span>,
                 ModuleSummary {
                     net_assets: <span class="number">0</span>,
-                    kind: <span class="string">&quot;mint&quot;</span>.to_string(),
+                    kind: <span class="string">"mint"</span>.to_string(),
                 },
             ),
             (
                 <span class="number">2</span>,
                 ModuleSummary {
                     net_assets: <span class="number">0</span>,
-                    kind: <span class="string">&quot;wallet&quot;</span>.to_string(),
+                    kind: <span class="string">"wallet"</span>.to_string(),
                 },
             ),
         ]),

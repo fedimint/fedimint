@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-wallet-client/src/deposit.rs`."><title>deposit.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_wallet_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-wallet-client/src/deposit.rs`."><title>deposit.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_wallet_client/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -373,10 +375,10 @@
 ///
 /// ```mermaid
 /// graph LR
-///     Created -- Transaction seen --&gt; AwaitingConfirmations[&quot;Waiting for confirmations&quot;]
+///     Created -- Transaction seen --&gt; AwaitingConfirmations["Waiting for confirmations"]
 ///     AwaitingConfirmations -- Confirmations received --&gt; Claiming
-///     AwaitingConfirmations -- &quot;Retransmit seen tx (planned)&quot; --&gt; AwaitingConfirmations
-///     Created -- &quot;No transactions seen for [time]&quot; --&gt; Timeout[&quot;Timed out&quot;]
+///     AwaitingConfirmations -- "Retransmit seen tx (planned)" --&gt; AwaitingConfirmations
+///     Created -- "No transactions seen for [time]" --&gt; Timeout["Timed out"]
 /// ```
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>DepositStateMachine {
@@ -455,7 +457,7 @@
     <span class="kw">loop </span>{
         <span class="kw">match </span>context.rpc.watch_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break</span>,
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">warn!</span>(<span class="string">&quot;Error while awaiting btc tx submitting: {e}&quot;</span>),
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">warn!</span>(<span class="string">"Error while awaiting btc tx submitting: {e}"</span>),
         }
         sleep(TRANSACTION_STATUS_FETCH_INTERVAL).<span class="kw">await</span>;
     }
@@ -470,7 +472,7 @@
             <span class="prelude-val">Ok</span>(received) =&gt; {
                 <span class="comment">// TODO: fix
                 </span><span class="kw">if </span>received.len() &gt; <span class="number">1 </span>{
-                    <span class="macro">warn!</span>(<span class="string">&quot;More than one transaction was sent to deposit address, only considering the first one&quot;</span>);
+                    <span class="macro">warn!</span>(<span class="string">"More than one transaction was sent to deposit address, only considering the first one"</span>);
                 }
 
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(transaction) = received.into_iter().next() {
@@ -485,15 +487,15 @@
                                 <span class="prelude-val">None
                             </span>}
                         })
-                        .expect(<span class="string">&quot;TODO: handle invalid tx returned by API&quot;</span>);
+                        .expect(<span class="string">"TODO: handle invalid tx returned by API"</span>);
 
                     <span class="kw">return </span>(transaction, out_idx);
                 } <span class="kw">else </span>{
-                    <span class="macro">trace!</span>(<span class="string">&quot;No transactions received yet for script {script:?}&quot;</span>);
+                    <span class="macro">trace!</span>(<span class="string">"No transactions received yet for script {script:?}"</span>);
                 }
             }
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;Error fetching transaction history for {script:?}: {e}&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">"Error fetching transaction history for {script:?}: {e}"</span>);
             }
         }
     }
@@ -520,7 +522,7 @@
                 out_idx,
             }),
         },
-        state =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Invalid previous state: {state:?}&quot;</span>),
+        state =&gt; <span class="macro">panic!</span>(<span class="string">"Invalid previous state: {state:?}"</span>),
     }
 }
 
@@ -533,7 +535,7 @@
 <span class="kw">async fn </span>transition_deposit_timeout(old_state: DepositStateMachine) -&gt; DepositStateMachine {
     <span class="macro">assert!</span>(
         <span class="macro">matches!</span>(old_state.state, DepositStates::Created(<span class="kw">_</span>)),
-        <span class="string">&quot;Invalid previous state&quot;
+        <span class="string">"Invalid previous state"
     </span>);
 
     DepositStateMachine {
@@ -542,7 +544,7 @@
     }
 }
 
-<span class="attr">#[instrument(skip_all, level = <span class="string">&quot;debug&quot;</span>)]
+<span class="attr">#[instrument(skip_all, level = <span class="string">"debug"</span>)]
 </span><span class="kw">async fn </span>await_btc_transaction_confirmed(
     context: WalletClientContext,
     global_context: DynGlobalClientContext,
@@ -558,12 +560,12 @@
         </span>{
             <span class="prelude-val">Ok</span>(consensus_block_count) =&gt; consensus_block_count,
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;Failed to fetch consensus block count from federation: {e}&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">"Failed to fetch consensus block count from federation: {e}"</span>);
                 sleep(TRANSACTION_STATUS_FETCH_INTERVAL).<span class="kw">await</span>;
                 <span class="kw">continue</span>;
             }
         };
-        <span class="macro">debug!</span>(consensus_block_count, <span class="string">&quot;Fetched consensus block count&quot;</span>);
+        <span class="macro">debug!</span>(consensus_block_count, <span class="string">"Fetched consensus block count"</span>);
 
         <span class="kw">let </span>confirmation_block_count = <span class="kw">match </span>context
             .rpc
@@ -573,7 +575,7 @@
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(confirmation_height)) =&gt; <span class="prelude-val">Some</span>(confirmation_height + <span class="number">1</span>),
             <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; <span class="prelude-val">None</span>,
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;Failed to fetch confirmation height: {e:?}&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">"Failed to fetch confirmation height: {e:?}"</span>);
                 sleep(TRANSACTION_STATUS_FETCH_INTERVAL).<span class="kw">await</span>;
                 <span class="kw">continue</span>;
             }
@@ -581,14 +583,14 @@
 
         <span class="macro">debug!</span>(
             <span class="question-mark">?</span>confirmation_block_count,
-            <span class="string">&quot;Fetched confirmation block count&quot;
+            <span class="string">"Fetched confirmation block count"
         </span>);
 
         <span class="kw">if </span>!confirmation_block_count
             .map(|confirmation_block_count| consensus_block_count &gt;= confirmation_block_count)
             .unwrap_or(<span class="bool-val">false</span>)
         {
-            <span class="macro">trace!</span>(<span class="string">&quot;Not confirmed yet, confirmation_block_count={confirmation_block_count:?}, consensus_block_count={consensus_block_count}&quot;</span>);
+            <span class="macro">trace!</span>(<span class="string">"Not confirmed yet, confirmation_block_count={confirmation_block_count:?}, consensus_block_count={consensus_block_count}"</span>);
             sleep(TRANSACTION_STATUS_FETCH_INTERVAL).<span class="kw">await</span>;
             <span class="kw">continue</span>;
         }
@@ -601,27 +603,27 @@
         </span>{
             <span class="prelude-val">Ok</span>(txout_proof) =&gt; txout_proof,
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;Failed to fetch transaction proof: {e:?}&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">"Failed to fetch transaction proof: {e:?}"</span>);
                 sleep(TRANSACTION_STATUS_FETCH_INTERVAL).<span class="kw">await</span>;
                 <span class="kw">continue</span>;
             }
         };
 
-        <span class="macro">debug!</span>(proof_block_hash = <span class="question-mark">?</span>txout_proof.block_header.block_hash(), <span class="string">&quot;Generated merkle proof&quot;</span>);
+        <span class="macro">debug!</span>(proof_block_hash = <span class="question-mark">?</span>txout_proof.block_header.block_hash(), <span class="string">"Generated merkle proof"</span>);
 
         <span class="kw">return </span>txout_proof;
     }
 }
 
 <span class="kw">async fn </span>transition_btc_tx_confirmed(
-    dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+    dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
     global_context: DynGlobalClientContext,
     old_state: DepositStateMachine,
     txout_proof: TxOutProof,
 ) -&gt; DepositStateMachine {
     <span class="kw">let </span>awaiting_confirmation_state = <span class="kw">match </span>old_state.state {
         DepositStates::WaitingForConfirmations(s) =&gt; s,
-        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;Invalid previous state&quot;</span>),
+        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Invalid previous state"</span>),
     };
 
     <span class="kw">let </span>wallet_input = WalletInput::new_v0(
@@ -631,7 +633,7 @@
             awaiting_confirmation_state.out_idx,
             awaiting_confirmation_state.tweak_key.public_key(),
         )
-        .expect(<span class="string">&quot;TODO: handle API returning faulty proofs&quot;</span>),
+        .expect(<span class="string">"TODO: handle API returning faulty proofs"</span>),
     );
     <span class="kw">let </span>client_input = ClientInput::&lt;WalletInput, WalletClientStates&gt; {
         input: wallet_input,
@@ -666,12 +668,12 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>WaitingForConfirmationsDepositState {
-    <span class="doccomment">/// Key pair of which the public was used to tweak the federation&#39;s wallet
+    <span class="doccomment">/// Key pair of which the public was used to tweak the federation's wallet
     /// descriptor. The secret key is later used to sign the fedimint claim
     /// transaction.
     </span>tweak_key: KeyPair,
     <span class="doccomment">/// The bitcoin transaction is saved as soon as we see it so the transaction
-    /// can be re-transmitted if it&#39;s evicted from the mempool.
+    /// can be re-transmitted if it's evicted from the mempool.
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) btc_transaction: bitcoin::Transaction,
     <span class="doccomment">/// Index of the deposit output
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) out_idx: u32,

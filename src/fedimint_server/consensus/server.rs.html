@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/consensus/server.rs`."><title>server.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_server/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/consensus/server.rs`."><title>server.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_server/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -910,7 +912,7 @@
 
         apply_migrations_server(
             <span class="kw-2">&amp;</span>db,
-            <span class="string">&quot;fedimint-server&quot;</span>.to_string(),
+            <span class="string">"fedimint-server"</span>.to_string(),
             GLOBAL_DATABASE_VERSION,
             get_global_database_migrations(),
         )
@@ -920,11 +922,11 @@
             <span class="kw">let </span>kind = module_cfg.kind.clone();
             <span class="kw">let </span><span class="prelude-val">Some</span>(init) = module_inits.get(<span class="kw-2">&amp;</span>kind) <span class="kw">else </span>{
                 <span class="macro">bail!</span>(
-                    <span class="string">&quot;Detected configuration for unsupported module id: {module_id}, kind: {kind}&quot;
+                    <span class="string">"Detected configuration for unsupported module id: {module_id}, kind: {kind}"
                 </span>);
             };
             <span class="macro">info!</span>(target: LOG_CORE,
-                module_instance_id = <span class="kw-2">*</span>module_id, kind = %kind, <span class="string">&quot;Init module&quot;</span>);
+                module_instance_id = <span class="kw-2">*</span>module_id, kind = %kind, <span class="string">"Init module"</span>);
 
             apply_migrations(
                 <span class="kw-2">&amp;</span>db,
@@ -1070,7 +1072,7 @@
             )
             .<span class="kw">await</span>;
 
-            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Session {session_index} completed&quot;</span>);
+            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Session {session_index} completed"</span>);
 
             <span class="comment">// if the submission channel is closed we are shutting down
             </span><span class="kw">if </span><span class="self">self</span>.submission_receiver.is_closed() {
@@ -1078,7 +1080,7 @@
             }
         }
 
-        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Consensus task shut down&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Consensus task shut down"</span>);
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -1094,10 +1096,10 @@
 
             <span class="self">self</span>.run_session(session_index).<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Session {session_index} completed&quot;</span>);
+            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Session {session_index} completed"</span>);
         }
 
-        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Consensus task shut down&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Consensus task shut down"</span>);
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -1106,21 +1108,21 @@
         <span class="kw">let </span>our_hash = <span class="self">self</span>.cfg.consensus.consensus_hash();
         <span class="kw">let </span>federation_api = DynGlobalApi::from_endpoints(<span class="self">self</span>.api_endpoints.clone());
 
-        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Waiting for peers config {our_hash}&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Waiting for peers config {our_hash}"</span>);
 
         <span class="kw">loop </span>{
             <span class="kw">match </span>federation_api.server_config_consensus_hash().<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(consensus_hash) =&gt; {
                     <span class="kw">if </span>consensus_hash != our_hash {
-                        <span class="macro">bail!</span>(<span class="string">&quot;Our consensus config doesn&#39;t match peers!&quot;</span>)
+                        <span class="macro">bail!</span>(<span class="string">"Our consensus config doesn't match peers!"</span>)
                     }
 
-                    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Confirmed peers config {our_hash}&quot;</span>);
+                    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Confirmed peers config {our_hash}"</span>);
 
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Could not check consensus config hash: {}&quot;</span>, OptStacktrace(e))
+                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">"Could not check consensus config hash: {}"</span>, OptStacktrace(e))
                 }
             }
 
@@ -1171,7 +1173,7 @@
             delay_config,
             Duration::from_secs(<span class="number">100 </span>* <span class="number">365 </span>* <span class="number">24 </span>* <span class="number">60 </span>* <span class="number">60</span>),
         )
-        .expect(<span class="string">&quot;The exponential slowdown we defined exceeds 100 years&quot;</span>);
+        .expect(<span class="string">"The exponential slowdown we defined exceeds 100 years"</span>);
 
         <span class="comment">// we can use an unbounded channel here since the number and size of units
         // ordered in a single aleph session is bounded as described above
@@ -1182,7 +1184,7 @@
         <span class="kw">let </span>(loader, saver) = atomic_broadcast::backup::load_session(<span class="self">self</span>.db.clone()).<span class="kw">await</span>;
 
         <span class="kw">let </span>aleph_handle = spawn(
-            <span class="string">&quot;aleph run session&quot;</span>,
+            <span class="string">"aleph run session"</span>,
             aleph_bft::run_session(
                 config,
                 aleph_bft::LocalIO::new(
@@ -1194,10 +1196,10 @@
                 Network::new(<span class="self">self</span>.connections.clone()),
                 <span class="self">self</span>.keychain.clone(),
                 Spawner::new(),
-                aleph_bft_types::Terminator::create_root(terminator_receiver, <span class="string">&quot;Terminator&quot;</span>),
+                aleph_bft_types::Terminator::create_root(terminator_receiver, <span class="string">"Terminator"</span>),
             ),
         )
-        .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
+        .expect(<span class="string">"some handle on non-wasm"</span>);
 
         <span class="comment">// this is the minimum number of batches data that will be ordered before we
         // reach the exponential_slowdown_offset since at least f + 1 batches are
@@ -1312,7 +1314,7 @@
                         <span class="kw">if </span><span class="self">self</span>.keychain.verify(<span class="kw-2">&amp;</span>header, <span class="kw-2">&amp;</span>signature, to_node_index(peer)){
                             signatures.insert(peer, signature);
                         } <span class="kw">else </span>{
-                            <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Received invalid signature from peer {peer}&quot;</span>);
+                            <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">"Received invalid signature from peer {peer}"</span>);
                         }
                     }
                 }
@@ -1365,12 +1367,12 @@
             .<span class="kw">await
             </span>.is_some()
         {
-            <span class="macro">panic!</span>(<span class="string">&quot;We tried to overwrite a signed session outcome&quot;</span>);
+            <span class="macro">panic!</span>(<span class="string">"We tried to overwrite a signed session outcome"</span>);
         }
 
         dbtx.commit_tx_result()
             .<span class="kw">await
-            </span>.expect(<span class="string">&quot;This is the only place where we write to this key&quot;</span>);
+            </span>.expect(<span class="string">"This is the only place where we write to this key"</span>);
     }
 
     <span class="kw">pub async fn </span>process_consensus_item(
@@ -1380,9 +1382,9 @@
         item: ConsensusItem,
         peer: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;process_consensus_item&quot;</span>);
+        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"process_consensus_item"</span>);
 
-        <span class="macro">debug!</span>(%peer, item = <span class="question-mark">?</span>FmtDbgConsensusItem(<span class="kw-2">&amp;</span>item), <span class="string">&quot;Processing consensus item&quot;</span>);
+        <span class="macro">debug!</span>(%peer, item = <span class="question-mark">?</span>FmtDbgConsensusItem(<span class="kw-2">&amp;</span>item), <span class="string">"Processing consensus item"</span>);
 
         <span class="self">self</span>.latest_contribution_by_peer
             .write()
@@ -1404,7 +1406,7 @@
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
 
-            <span class="macro">bail!</span>(<span class="string">&quot;Item was discarded previously&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Item was discarded previously"</span>);
         }
 
         <span class="self">self</span>.process_consensus_item_with_db_transaction(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), item.clone(), peer)
@@ -1421,7 +1423,7 @@
 
         <span class="kw">for </span>(module_instance_id, <span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             <span class="kw">let </span>_module_audit_timing =
-                TimeReporter::new(<span class="macro">format!</span>(<span class="string">&quot;audit module {module_instance_id}&quot;</span>));
+                TimeReporter::new(<span class="macro">format!</span>(<span class="string">"audit module {module_instance_id}"</span>));
             module
                 .audit(
                     <span class="kw-2">&amp;mut </span>dbtx
@@ -1434,19 +1436,19 @@
         </span>}
 
         <span class="kw">if </span>audit.net_assets().milli_sat &lt; <span class="number">0 </span>{
-            <span class="macro">panic!</span>(<span class="string">&quot;Balance sheet of the fed has gone negative, this should never happen! {audit}&quot;</span>)
+            <span class="macro">panic!</span>(<span class="string">"Balance sheet of the fed has gone negative, this should never happen! {audit}"</span>)
         }
 
         dbtx.commit_tx_result()
             .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Committing consensus epoch failed&quot;</span>);
+            </span>.expect(<span class="string">"Committing consensus epoch failed"</span>);
 
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">async fn </span>process_consensus_item_with_db_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         consensus_item: ConsensusItem,
         peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt; {
@@ -1470,7 +1472,7 @@
                     .<span class="kw">await
                     </span>.is_some()
                 {
-                    <span class="macro">bail!</span>(<span class="string">&quot;Transaction is already accepted&quot;</span>);
+                    <span class="macro">bail!</span>(<span class="string">"Transaction is already accepted"</span>);
                 }
 
                 <span class="kw">let </span>txid = transaction.tx_hash();
@@ -1492,9 +1494,9 @@
             ConsensusItem::Default { variant, .. } =&gt; {
                 <span class="macro">warn!</span>(
                     target: LOG_CONSENSUS,
-                    <span class="string">&quot;Minor consensus version mismatch: unexpected consensus item type: {variant}&quot;
+                    <span class="string">"Minor consensus version mismatch: unexpected consensus item type: {variant}"
                 </span>);
-                <span class="macro">bail!</span>(<span class="string">&quot;Unexpected consensus item type: {variant}&quot;</span>)
+                <span class="macro">bail!</span>(<span class="string">"Unexpected consensus item type: {variant}"</span>)
             }
         }
     }
@@ -1520,7 +1522,7 @@
                             )
                         }) {
                     <span class="bool-val">true </span>=&gt; <span class="prelude-val">Ok</span>(signed_session_outcome),
-                    <span class="bool-val">false </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Invalid signatures&quot;</span>)),
+                    <span class="bool-val">false </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"Invalid signatures"</span>)),
                 }
             }
             <span class="prelude-val">Err</span>(error) =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(error.to_string())),
@@ -1545,7 +1547,7 @@
             <span class="kw">match </span>result {
                 <span class="prelude-val">Ok</span>(signed_session_outcome) =&gt; <span class="kw">return </span>signed_session_outcome,
                 <span class="prelude-val">Err</span>(error) =&gt; {
-                    <span class="macro">tracing::error!</span>(<span class="string">&quot;Error while requesting signed session outcome: {}&quot;</span>, error)
+                    <span class="macro">tracing::error!</span>(<span class="string">"Error while requesting signed session outcome: {}"</span>, error)
                 }
             }
         }
@@ -1558,7 +1560,7 @@
     </span>}
 }
 
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>get_finished_session_count_static(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; u64 {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>get_finished_session_count_static(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; u64 {
     dbtx.find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>SignedSessionOutcomePrefix)
         .<span class="kw">await
         </span>.next()
@@ -1575,7 +1577,7 @@
 ) {
     task_group
         .spawn(
-            <span class="string">&quot;submit_module_consensus_items&quot;</span>,
+            <span class="string">"submit_module_consensus_items"</span>,
             <span class="kw">move </span>|task_handle| <span class="kw">async move </span>{
                 <span class="kw">while </span>!task_handle.is_shutting_down() {
                     <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;

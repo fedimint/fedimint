@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/net/api.rs`."><title>api.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_server/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/net/api.rs`."><title>api.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_server/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -586,22 +588,101 @@
 <a href="#586" id="586">586</a>
 <a href="#587" id="587">587</a>
 <a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
+<span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, Instant};
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256;
+<span class="kw">use </span>fedimint_aead::{encrypt, get_encryption_key, random_salt};
 <span class="kw">use </span>fedimint_core::api::{
-    FederationStatus, PeerConnectionStatus, PeerStatus, ServerStatus, StatusResponse,
+    FederationStatus, GuardianConfigBackup, PeerConnectionStatus, PeerStatus, ServerStatus,
+    StatusResponse,
 };
 <span class="kw">use </span>fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, JsonWithKind};
-<span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
+<span class="kw">use </span>fedimint_core::core::backup::{SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES};
 <span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -609,9 +690,10 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
-    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
+    CLIENT_CONFIG_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT,
+    MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+    VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::audit::{Audit, AuditSummary};
@@ -632,6 +714,9 @@
 <span class="kw">use </span>tracing::{debug, info};
 
 <span class="kw">use </span><span class="kw">super</span>::peers::PeerStatusChannels;
+<span class="kw">use </span><span class="kw">crate</span>::config::io::{
+    CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
+};
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::process_transaction_with_dbtx;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::server::{get_finished_session_count_static, LatestContributionByPeer};
@@ -654,8 +739,8 @@
 }
 
 <span class="kw">impl</span>&lt;M: Debug&gt; Debug <span class="kw">for </span>RpcHandlerCtx&lt;M&gt; {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        f.write_str(<span class="string">&quot;State { ... }&quot;</span>)
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        f.write_str(<span class="string">"State { ... }"</span>)
     }
 }
 
@@ -690,7 +775,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId, TransactionError&gt; {
         <span class="kw">let </span>txid = transaction.tx_hash();
 
-        <span class="macro">debug!</span>(%txid, <span class="string">&quot;Received mint transaction&quot;</span>);
+        <span class="macro">debug!</span>(%txid, <span class="string">"Received mint transaction"</span>);
 
         <span class="comment">// we already processed the transaction before
         </span><span class="kw">if </span><span class="self">self
@@ -723,7 +808,7 @@
     <span class="kw">pub async fn </span>await_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         txid: TransactionId,
-    ) -&gt; (Vec&lt;ModuleInstanceId&gt;, DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, Committable&gt;) {
+    ) -&gt; (Vec&lt;ModuleInstanceId&gt;, DatabaseTransaction&lt;<span class="lifetime">'_</span>, Committable&gt;) {
         <span class="self">self</span>.db
             .wait_key_check(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid), std::convert::identity)
             .<span class="kw">await
@@ -738,7 +823,7 @@
         <span class="kw">let </span>module_id = module_ids
             .into_iter()
             .nth(outpoint.out_idx <span class="kw">as </span>usize)
-            .ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Outpoint index out of bounds {:?}&quot;</span>, outpoint))<span class="question-mark">?</span>;
+            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Outpoint index out of bounds {:?}"</span>, outpoint))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>outcome = <span class="self">self
             </span>.modules
@@ -749,7 +834,7 @@
                 module_id,
             )
             .<span class="kw">await
-            </span>.expect(<span class="string">&quot;The transaction is accepted&quot;</span>);
+            </span>.expect(<span class="string">"The transaction is accepted"</span>);
 
         <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>outcome).into())
     }
@@ -780,7 +865,7 @@
             Ordering::Less =&gt; SessionStatus::Complete(
                 dbtx.get_value(<span class="kw-2">&amp;</span>SignedSessionOutcomeKey(session_index))
                     .<span class="kw">await
-                    </span>.expect(<span class="string">&quot;There are no gaps in session outcomes&quot;</span>)
+                    </span>.expect(<span class="string">"There are no gaps in session outcomes"</span>)
                     .session_outcome,
             ),
         }
@@ -799,7 +884,7 @@
                 <span class="kw">let </span>connection_status = <span class="kw">match </span>connection_status {
                     <span class="prelude-val">Ok</span>(status) =&gt; status,
                     <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">debug!</span>(target: LOG_NET_API, %peer, <span class="string">&quot;Unable to get peer connection status: {e}&quot;</span>);
+                        <span class="macro">debug!</span>(target: LOG_NET_API, %peer, <span class="string">"Unable to get peer connection status: {e}"</span>);
                         PeerConnectionStatus::Disconnected
                     }
                 };
@@ -865,24 +950,84 @@
         ))
     }
 
-    <span class="kw">async fn </span>handle_backup_request&lt;<span class="lifetime">&#39;s</span>, <span class="lifetime">&#39;dbtx</span>, <span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;dbtx </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+    <span class="doccomment">/// Uses the in-memory config to write a config backup tar archive that
+    /// guardians can download. Private keys are encrypted with the guardian
+    /// password, so it should be safe to store anywhere, this also means the
+    /// backup is useless without the password.
+    </span><span class="kw">async fn </span>get_guardian_config_backup(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        password: String,
+    ) -&gt; ApiResult&lt;GuardianConfigBackup&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>tar_archive_builder = tar::Builder::new(Vec::new());
+
+        <span class="kw">let </span><span class="kw-2">mut </span>append = |name: <span class="kw-2">&amp;</span>Path, data: <span class="kw-2">&amp;</span>[u8]| {
+            <span class="kw">let </span><span class="kw-2">mut </span>header = tar::Header::new_gnu();
+            header.set_path(name).expect(<span class="string">"Error setting path"</span>);
+            header.set_size(data.len() <span class="kw">as </span>u64);
+            header.set_mode(<span class="number">0o644</span>);
+            header.set_cksum();
+            tar_archive_builder
+                .append(<span class="kw-2">&amp;</span>header, data)
+                .expect(<span class="string">"Error adding data to tar archive"</span>);
+        };
+
+        append(
+            <span class="kw-2">&amp;</span>PathBuf::from(LOCAL_CONFIG).with_extension(JSON_EXT),
+            <span class="kw-2">&amp;</span>serde_json::to_vec(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.local).expect(<span class="string">"Error encoding local config"</span>),
+        );
+
+        append(
+            <span class="kw-2">&amp;</span>PathBuf::from(CONSENSUS_CONFIG).with_extension(JSON_EXT),
+            <span class="kw-2">&amp;</span>serde_json::to_vec(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.consensus).expect(<span class="string">"Error encoding consensus config"</span>),
+        );
+
+        <span class="comment">// Note that the encrypted config returned here uses a different salt than the
+        // on-disk version. While this may be confusing it shouldn't be a problem since
+        // the content and encryption key are the same. It's unpractical to read the
+        // on-disk version here since the server/api aren't aware of the config dir and
+        // ideally we can keep it that way.
+        </span><span class="kw">let </span>encryption_salt = random_salt();
+        append(<span class="kw-2">&amp;</span>PathBuf::from(SALT_FILE), encryption_salt.as_bytes());
+
+        <span class="kw">let </span>private_config_bytes =
+            serde_json::to_vec(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.private).expect(<span class="string">"Error encoding private config"</span>);
+        <span class="kw">let </span>encryption_key = get_encryption_key(<span class="kw-2">&amp;</span>password, <span class="kw-2">&amp;</span>encryption_salt)
+            .expect(<span class="string">"Generating key from password failed"</span>);
+        <span class="kw">let </span>private_config_encrypted =
+            hex::encode(encrypt(private_config_bytes, <span class="kw-2">&amp;</span>encryption_key).expect(<span class="string">"Encryption failed"</span>));
+        append(
+            <span class="kw-2">&amp;</span>PathBuf::from(PRIVATE_CONFIG).with_extension(ENCRYPTED_EXT),
+            private_config_encrypted.as_bytes(),
+        );
+
+        <span class="kw">let </span>tar_archive_bytes = tar_archive_builder
+            .into_inner()
+            .expect(<span class="string">"Error building tar archive"</span>);
+
+        <span class="prelude-val">Ok</span>(GuardianConfigBackup { tar_archive_bytes })
+    }
+
+    <span class="kw">async fn </span>handle_backup_request&lt;<span class="lifetime">'s</span>, <span class="lifetime">'dbtx</span>, <span class="lifetime">'a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'s </span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">'dbtx </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">'a</span>&gt;,
         request: SignedBackupRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {
         <span class="kw">let </span>request = request
             .verify_valid(SECP256K1)
-            .map_err(|<span class="kw">_</span>| ApiError::bad_request(<span class="string">&quot;invalid request&quot;</span>.into()))<span class="question-mark">?</span>;
+            .map_err(|<span class="kw">_</span>| ApiError::bad_request(<span class="string">"invalid request"</span>.into()))<span class="question-mark">?</span>;
 
-        <span class="macro">debug!</span>(target: LOG_NET_API, id = %request.id, len = request.payload.len(), <span class="string">&quot;Received client backup request&quot;</span>);
+        <span class="kw">if </span>request.payload.len() &gt; BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">"snapshot too large"</span>.into()));
+        }
+        <span class="macro">debug!</span>(target: LOG_NET_API, id = %request.id, len = request.payload.len(), <span class="string">"Received client backup request"</span>);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(prev) = dbtx.get_value(<span class="kw-2">&amp;</span>ClientBackupKey(request.id)).<span class="kw">await </span>{
             <span class="kw">if </span>request.timestamp &lt;= prev.timestamp {
-                <span class="macro">debug!</span>(id = %request.id, len = request.payload.len(), <span class="string">&quot;Received client backup request with old timestamp - ignoring&quot;</span>);
-                <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">&quot;timestamp too small&quot;</span>.into()));
+                <span class="macro">debug!</span>(id = %request.id, len = request.payload.len(), <span class="string">"Received client backup request with old timestamp - ignoring"</span>);
+                <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">"timestamp too small"</span>.into()));
             }
         }
 
-        <span class="macro">info!</span>(target: LOG_NET_API, id = %request.id, len = request.payload.len(), <span class="string">&quot;Storing new client backup&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_NET_API, id = %request.id, len = request.payload.len(), <span class="string">"Storing new client backup"</span>);
         dbtx.insert_entry(
             <span class="kw-2">&amp;</span>ClientBackupKey(request.id),
             <span class="kw-2">&amp;</span>ClientBackupSnapshot {
@@ -897,7 +1042,7 @@
 
     <span class="kw">async fn </span>handle_recover_request(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         id: secp256k1_zkp::PublicKey,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>ClientBackupKey(id)).<span class="kw">await
@@ -910,7 +1055,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         request: <span class="kw-2">&amp;</span>ApiRequestErased,
         id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
-    ) -&gt; (<span class="kw-2">&amp;</span>ConsensusApi, ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;) {
+    ) -&gt; (<span class="kw-2">&amp;</span>ConsensusApi, ApiEndpointContext&lt;<span class="lifetime">'_</span>&gt;) {
         <span class="kw">let </span><span class="kw-2">mut </span>db = <span class="self">self</span>.db.clone();
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = id {
@@ -935,10 +1080,10 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         request: <span class="kw-2">&amp;</span>ApiRequestErased,
         id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
-    ) -&gt; (<span class="kw-2">&amp;</span>DynServerModule, ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;) {
+    ) -&gt; (<span class="kw-2">&amp;</span>DynServerModule, ApiEndpointContext&lt;<span class="lifetime">'_</span>&gt;) {
         <span class="kw">let </span>(<span class="kw">_</span>, context): (<span class="kw-2">&amp;</span>ConsensusApi, <span class="kw">_</span>) = <span class="self">self</span>.context(request, id).<span class="kw">await</span>;
         (
-            <span class="self">self</span>.modules.get_expect(id.expect(<span class="string">&quot;required module id&quot;</span>)),
+            <span class="self">self</span>.modules.get_expect(id.expect(<span class="string">"required module id"</span>)),
             context,
         )
     }
@@ -970,11 +1115,11 @@
             AWAIT_TRANSACTION_ENDPOINT,
             ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, tx_hash: TransactionId| -&gt; TransactionId {
-                <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Received request&quot;</span>);
+                <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">"Received request"</span>);
 
                 fedimint.await_transaction(tx_hash).<span class="kw">await</span>;
 
-                <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Sending outcome&quot;</span>);
+                <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">"Sending outcome"</span>);
 
                 <span class="prelude-val">Ok</span>(tx_hash)
             }
@@ -1060,6 +1205,15 @@
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; AuditSummary {
                 check_auth(context)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(fedimint.get_federation_audit().<span class="kw">await</span><span class="question-mark">?</span>)
+            }
+        },
+        <span class="macro">api_endpoint! </span>{
+            GUARDIAN_CONFIG_BACKUP_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">2</span>),
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; GuardianConfigBackup {
+                check_auth(context)<span class="question-mark">?</span>;
+                <span class="kw">let </span>password = context.request_auth().expect(<span class="string">"Auth was checked before"</span>).<span class="number">0</span>;
+                <span class="prelude-val">Ok</span>(fedimint.get_guardian_config_backup(password).<span class="kw">await</span><span class="question-mark">?</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{

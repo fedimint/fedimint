@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/fmt_utils.rs`."><title>fmt_utils.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_core/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/fmt_utils.rs`."><title>fmt_utils.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_core/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -251,7 +253,7 @@
 <span class="kw">pub fn </span>rust_log_full_enabled() -&gt; bool {
     <span class="comment">// this will be called only once per-thread for best performance
     </span><span class="macro">thread_local!</span>(<span class="kw">static </span>RUST_LOG_FULL: bool = {
-        std::env::var_os(<span class="string">&quot;RUST_LOG_FULL&quot;</span>)
+        std::env::var_os(<span class="string">"RUST_LOG_FULL"</span>)
             .map(|val| !val.is_empty())
             .unwrap_or(<span class="bool-val">false</span>)
     });
@@ -270,7 +272,7 @@
 <span class="kw">where
     </span>T: fmt::Debug + fmt::Display,
 {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
         <span class="kw">if </span>rust_log_full_enabled() {
             fmt::Debug::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, f)
         } <span class="kw">else </span>{
@@ -283,22 +285,22 @@
 ///
 /// Will truncate values longer than 64 bytes, unless `RUST_LOG_FULL`
 /// environment variable is set to a non-empty value.
-</span><span class="kw">pub struct </span>AbbreviateHexBytes&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw">pub </span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>[u8]);
+</span><span class="kw">pub struct </span>AbbreviateHexBytes&lt;<span class="lifetime">'a</span>&gt;(<span class="kw">pub </span><span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u8]);
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; fmt::Display <span class="kw">for </span>AbbreviateHexBytes&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; fmt::Display <span class="kw">for </span>AbbreviateHexBytes&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
         <span class="kw">if </span><span class="self">self</span>.<span class="number">0</span>.len() &lt;= <span class="number">64 </span>|| rust_log_full_enabled() {
             bitcoin_hashes::hex::format_hex(<span class="self">self</span>.<span class="number">0</span>, f)<span class="question-mark">?</span>;
         } <span class="kw">else </span>{
             bitcoin_hashes::hex::format_hex(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>[..<span class="number">64</span>], f)<span class="question-mark">?</span>;
-            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;-{}&quot;</span>, <span class="self">self</span>.<span class="number">0</span>.len()))<span class="question-mark">?</span>;
+            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"-{}"</span>, <span class="self">self</span>.<span class="number">0</span>.len()))<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(())
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; fmt::Debug <span class="kw">for </span>AbbreviateHexBytes&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; fmt::Debug <span class="kw">for </span>AbbreviateHexBytes&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
         fmt::Display::fmt(<span class="self">self</span>, f)
     }
 }
@@ -308,7 +310,7 @@
 /// Notably, unlike normal `fmt::Debug` for `serde_json::Value` it does not
 /// respect pretty-printing and other formatting settings on the `formatter`.
 /// Which for debugging &amp; logs should be OK.
-</span><span class="kw">pub struct </span>AbbreviateJson&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw">pub </span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>serde_json::Value);
+</span><span class="kw">pub struct </span>AbbreviateJson&lt;<span class="lifetime">'a</span>&gt;(<span class="kw">pub </span><span class="kw-2">&amp;</span><span class="lifetime">'a </span>serde_json::Value);
 
 <span class="comment">// TODO: use `str::floor_char_boundary` instead (when it becomes stable)
 // https://github.com/rust-lang/rust/blob/97872b792c9dd6a9bc5c3f4e62a0bd5958b09cdc/library/core/src/str/mod.rs#L258
@@ -333,81 +335,81 @@
     }
 }
 
-<span class="doccomment">/// Format json string value if it&#39;s too long
-</span><span class="kw">fn </span>fmt_abbreviated_str(value: <span class="kw-2">&amp;</span>str, formatter: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
+<span class="doccomment">/// Format json string value if it's too long
+</span><span class="kw">fn </span>fmt_abbreviated_str(value: <span class="kw-2">&amp;</span>str, formatter: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
     <span class="kw">const </span>STRING_ABBR_LEN: usize = <span class="number">128</span>;
     fmt::Debug::fmt(
         <span class="kw-2">&amp;</span>value[..floor_char_boundary(value, cmp::min(STRING_ABBR_LEN, value.len()))],
         formatter,
     )<span class="question-mark">?</span>;
     <span class="kw">if </span>STRING_ABBR_LEN &lt; value.len() {
-        formatter.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;... {} total&quot;</span>, value.len()))<span class="question-mark">?</span>;
+        formatter.write_fmt(<span class="macro">format_args!</span>(<span class="string">"... {} total"</span>, value.len()))<span class="question-mark">?</span>;
     }
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="doccomment">/// Format json array value truncating elements if there&#39;s too many, and values
+<span class="doccomment">/// Format json array value truncating elements if there's too many, and values
 /// if they are too long
 </span><span class="kw">fn </span>fmt_abbreviated_vec(vec: <span class="kw-2">&amp;</span>[Value], formatter: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
     <span class="kw">const </span>ARRAY_ABBR_LEN: usize = <span class="number">64</span>;
-    formatter.write_str(<span class="string">&quot;[&quot;</span>)<span class="question-mark">?</span>;
+    formatter.write_str(<span class="string">"["</span>)<span class="question-mark">?</span>;
     <span class="kw">for </span>(i, v) <span class="kw">in </span>vec.iter().enumerate().take(ARRAY_ABBR_LEN) {
         fmt::Debug::fmt(<span class="kw-2">&amp;</span>AbbreviateJson(v), formatter)<span class="question-mark">?</span>;
         <span class="kw">if </span>i != vec.len() - <span class="number">1 </span>{
-            formatter.write_str(<span class="string">&quot;, &quot;</span>)<span class="question-mark">?</span>;
+            formatter.write_str(<span class="string">", "</span>)<span class="question-mark">?</span>;
         }
     }
     <span class="kw">if </span>ARRAY_ABBR_LEN &lt; vec.len() {
-        formatter.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;... {} total&quot;</span>, vec.len()))<span class="question-mark">?</span>;
+        formatter.write_fmt(<span class="macro">format_args!</span>(<span class="string">"... {} total"</span>, vec.len()))<span class="question-mark">?</span>;
     }
-    formatter.write_str(<span class="string">&quot;]&quot;</span>)<span class="question-mark">?</span>;
+    formatter.write_str(<span class="string">"]"</span>)<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="doccomment">/// Format json object value truncating keys if there&#39;s too many, and keys and
+<span class="doccomment">/// Format json object value truncating keys if there's too many, and keys and
 /// values if they are too long
 </span><span class="kw">fn </span>fmt_abbreviated_object(
     map: <span class="kw-2">&amp;</span>serde_json::Map&lt;String, Value&gt;,
     formatter: <span class="kw-2">&amp;mut </span>fmt::Formatter,
 ) -&gt; fmt::Result {
     <span class="kw">const </span>MAP_ABBR_LEN: usize = <span class="number">64</span>;
-    formatter.write_str(<span class="string">&quot;{&quot;</span>)<span class="question-mark">?</span>;
+    formatter.write_str(<span class="string">"{"</span>)<span class="question-mark">?</span>;
     <span class="kw">for </span>(i, (k, v)) <span class="kw">in </span>map.iter().enumerate().take(MAP_ABBR_LEN) {
         fmt_abbreviated_str(k, formatter)<span class="question-mark">?</span>;
-        formatter.write_str(<span class="string">&quot;: &quot;</span>)<span class="question-mark">?</span>;
+        formatter.write_str(<span class="string">": "</span>)<span class="question-mark">?</span>;
         fmt::Debug::fmt(<span class="kw-2">&amp;</span>AbbreviateJson(v), formatter)<span class="question-mark">?</span>;
         <span class="kw">if </span>i != map.len() - <span class="number">1 </span>{
-            formatter.write_str(<span class="string">&quot;, &quot;</span>)<span class="question-mark">?</span>;
+            formatter.write_str(<span class="string">", "</span>)<span class="question-mark">?</span>;
         }
     }
     <span class="kw">if </span>MAP_ABBR_LEN &lt; map.len() {
-        formatter.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;... {} total&quot;</span>, map.len()))<span class="question-mark">?</span>;
+        formatter.write_fmt(<span class="macro">format_args!</span>(<span class="string">"... {} total"</span>, map.len()))<span class="question-mark">?</span>;
     }
-    formatter.write_str(<span class="string">&quot;}&quot;</span>)<span class="question-mark">?</span>;
+    formatter.write_str(<span class="string">"}"</span>)<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; fmt::Debug <span class="kw">for </span>AbbreviateJson&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, formatter: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; fmt::Debug <span class="kw">for </span>AbbreviateJson&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, formatter: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
         <span class="kw">if </span>rust_log_full_enabled() {
             std::fmt::Debug::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, formatter)
         } <span class="kw">else </span>{
             <span class="comment">// modified https://github.com/serde-rs/json/blob/e41ee42d92022dbffc00f4ed50580fa5e060a379/src/value/mod.rs#L177
             </span><span class="kw">match </span><span class="self">self</span>.<span class="number">0 </span>{
-                Value::Null =&gt; formatter.write_str(<span class="string">&quot;Null&quot;</span>),
-                Value::Bool(boolean) =&gt; <span class="macro">write!</span>(formatter, <span class="string">&quot;Bool({boolean})&quot;</span>),
+                Value::Null =&gt; formatter.write_str(<span class="string">"Null"</span>),
+                Value::Bool(boolean) =&gt; <span class="macro">write!</span>(formatter, <span class="string">"Bool({boolean})"</span>),
                 Value::Number(number) =&gt; fmt::Debug::fmt(number, formatter),
                 Value::String(string) =&gt; {
-                    formatter.write_str(<span class="string">&quot;String(&quot;</span>)<span class="question-mark">?</span>;
+                    formatter.write_str(<span class="string">"String("</span>)<span class="question-mark">?</span>;
                     fmt_abbreviated_str(string, formatter)<span class="question-mark">?</span>;
-                    formatter.write_str(<span class="string">&quot;)&quot;</span>)
+                    formatter.write_str(<span class="string">")"</span>)
                 }
                 Value::Array(vec) =&gt; {
-                    formatter.write_str(<span class="string">&quot;Array &quot;</span>)<span class="question-mark">?</span>;
+                    formatter.write_str(<span class="string">"Array "</span>)<span class="question-mark">?</span>;
                     fmt_abbreviated_vec(vec, formatter)
                 }
                 Value::Object(map) =&gt; {
-                    formatter.write_str(<span class="string">&quot;Object &quot;</span>)<span class="question-mark">?</span>;
+                    formatter.write_str(<span class="string">"Object "</span>)<span class="question-mark">?</span>;
                     fmt_abbreviated_object(map, formatter)
                 }
             }
@@ -417,7 +419,7 @@
 
 <span class="doccomment">/// Something that can be debug-formatted in an abbreviated way
 </span><span class="kw">pub trait </span>AbbreviatedDebug {
-    <span class="kw">fn </span>abbreviated_fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result;
+    <span class="kw">fn </span>abbreviated_fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result;
 }
 
 <span class="doccomment">/// A wrapper that causes the inner `T` to be debug-formatted using
@@ -432,7 +434,7 @@
 <span class="kw">where
     </span>T: AbbreviatedDebug,
 {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
         <span class="self">self</span>.<span class="number">0</span>.abbreviated_fmt(f)
     }
 }
@@ -446,19 +448,19 @@
 }
 
 <span class="kw">impl </span>AbbreviatedDebug <span class="kw">for </span>serde_json::Value {
-    <span class="kw">fn </span>abbreviated_fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
+    <span class="kw">fn </span>abbreviated_fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
         fmt::Debug::fmt(<span class="kw-2">&amp;</span>AbbreviateJson(<span class="self">self</span>), f)
     }
 }
 
 <span class="kw">impl</span>&lt;<span class="kw">const </span>N: usize&gt; AbbreviatedDebug <span class="kw">for </span>[u8; N] {
-    <span class="kw">fn </span>abbreviated_fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
+    <span class="kw">fn </span>abbreviated_fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
         fmt::Debug::fmt(<span class="kw-2">&amp;</span>AbbreviateHexBytes(<span class="self">self</span>), f)
     }
 }
 
 <span class="kw">impl </span>AbbreviatedDebug <span class="kw">for </span><span class="kw-2">&amp;</span>[serde_json::Value] {
-    <span class="kw">fn </span>abbreviated_fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
+    <span class="kw">fn </span>abbreviated_fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
         fmt_abbreviated_vec(<span class="self">self</span>, f)
     }
 }
@@ -473,20 +475,20 @@
             <span class="macro">serde_json::json!</span>(null),
             <span class="macro">serde_json::json!</span>(<span class="bool-val">true</span>),
             <span class="macro">serde_json::json!</span>(<span class="bool-val">false</span>),
-            <span class="macro">serde_json::json!</span>(<span class="string">&quot;foo&quot;</span>),
+            <span class="macro">serde_json::json!</span>(<span class="string">"foo"</span>),
             <span class="macro">serde_json::json!</span>({}),
             <span class="macro">serde_json::json!</span>([]),
             <span class="macro">serde_json::json!</span>([<span class="number">1</span>]),
             <span class="macro">serde_json::json!</span>([<span class="number">1</span>, <span class="number">3</span>, <span class="number">4</span>]),
-            <span class="macro">serde_json::json!</span>({<span class="string">&quot;a&quot;</span>: <span class="string">&quot;b&quot;</span>}),
-            <span class="macro">serde_json::json!</span>({<span class="string">&quot;a&quot;</span>: <span class="string">&quot;b&quot;</span>, <span class="string">&quot;c&quot;</span>: <span class="string">&quot;d&quot;</span>}),
-            <span class="macro">serde_json::json!</span>({<span class="string">&quot;a&quot;</span>: { <span class="string">&quot;foo&quot;</span>: <span class="string">&quot;bar&quot;</span>}, <span class="string">&quot;c&quot;</span>: <span class="string">&quot;d&quot;</span>}),
-            <span class="macro">serde_json::json!</span>({<span class="string">&quot;a&quot;</span>: [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>], <span class="string">&quot;b&quot;</span>: {<span class="string">&quot;c&quot;</span>: <span class="string">&quot;d&quot;</span>}}),
-            <span class="macro">serde_json::json!</span>([{<span class="string">&quot;a&quot;</span>: <span class="string">&quot;b&quot;</span>}]),
-            <span class="macro">serde_json::json!</span>([{<span class="string">&quot;a&quot;</span>: <span class="string">&quot;b&quot;</span>}, {<span class="string">&quot;d&quot;</span>: <span class="string">&quot;f&quot;</span>}]),
+            <span class="macro">serde_json::json!</span>({<span class="string">"a"</span>: <span class="string">"b"</span>}),
+            <span class="macro">serde_json::json!</span>({<span class="string">"a"</span>: <span class="string">"b"</span>, <span class="string">"c"</span>: <span class="string">"d"</span>}),
+            <span class="macro">serde_json::json!</span>({<span class="string">"a"</span>: { <span class="string">"foo"</span>: <span class="string">"bar"</span>}, <span class="string">"c"</span>: <span class="string">"d"</span>}),
+            <span class="macro">serde_json::json!</span>({<span class="string">"a"</span>: [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>], <span class="string">"b"</span>: {<span class="string">"c"</span>: <span class="string">"d"</span>}}),
+            <span class="macro">serde_json::json!</span>([{<span class="string">"a"</span>: <span class="string">"b"</span>}]),
+            <span class="macro">serde_json::json!</span>([{<span class="string">"a"</span>: <span class="string">"b"</span>}, {<span class="string">"d"</span>: <span class="string">"f"</span>}]),
             <span class="macro">serde_json::json!</span>([null]),
         ] {
-            <span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="kw-2">&amp;</span>v), <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, AbbreviateJson(<span class="kw-2">&amp;</span>v)));
+            <span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{:?}"</span>, <span class="kw-2">&amp;</span>v), <span class="macro">format!</span>(<span class="string">"{:?}"</span>, AbbreviateJson(<span class="kw-2">&amp;</span>v)));
         }
     }
 }

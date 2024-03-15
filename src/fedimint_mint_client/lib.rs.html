@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-mint-client/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_mint_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-mint-client/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_mint_client/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1948,6 +1950,44 @@
 <a href="#1948" id="1948">1948</a>
 <a href="#1949" id="1949">1949</a>
 <a href="#1950" id="1950">1950</a>
+<a href="#1951" id="1951">1951</a>
+<a href="#1952" id="1952">1952</a>
+<a href="#1953" id="1953">1953</a>
+<a href="#1954" id="1954">1954</a>
+<a href="#1955" id="1955">1955</a>
+<a href="#1956" id="1956">1956</a>
+<a href="#1957" id="1957">1957</a>
+<a href="#1958" id="1958">1958</a>
+<a href="#1959" id="1959">1959</a>
+<a href="#1960" id="1960">1960</a>
+<a href="#1961" id="1961">1961</a>
+<a href="#1962" id="1962">1962</a>
+<a href="#1963" id="1963">1963</a>
+<a href="#1964" id="1964">1964</a>
+<a href="#1965" id="1965">1965</a>
+<a href="#1966" id="1966">1966</a>
+<a href="#1967" id="1967">1967</a>
+<a href="#1968" id="1968">1968</a>
+<a href="#1969" id="1969">1969</a>
+<a href="#1970" id="1970">1970</a>
+<a href="#1971" id="1971">1971</a>
+<a href="#1972" id="1972">1972</a>
+<a href="#1973" id="1973">1973</a>
+<a href="#1974" id="1974">1974</a>
+<a href="#1975" id="1975">1975</a>
+<a href="#1976" id="1976">1976</a>
+<a href="#1977" id="1977">1977</a>
+<a href="#1978" id="1978">1978</a>
+<a href="#1979" id="1979">1979</a>
+<a href="#1980" id="1980">1980</a>
+<a href="#1981" id="1981">1981</a>
+<a href="#1982" id="1982">1982</a>
+<a href="#1983" id="1983">1983</a>
+<a href="#1984" id="1984">1984</a>
+<a href="#1985" id="1985">1985</a>
+<a href="#1986" id="1986">1986</a>
+<a href="#1987" id="1987">1987</a>
+<a href="#1988" id="1988">1988</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2028,7 +2068,7 @@
 
 <span class="kw">const </span>MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
 
-<span class="kw">pub const </span>LOG_TARGET: <span class="kw-2">&amp;</span>str = <span class="string">&quot;client::module::mint&quot;</span>;
+<span class="kw">pub const </span>LOG_TARGET: <span class="kw-2">&amp;</span>str = <span class="string">"client::module::mint"</span>;
 
 <span class="doccomment">/// An encapsulation of [`FederationId`] and e-cash notes in the form of
 /// [`TieredMulti&lt;SpendableNote&gt;`] for the purpose of spending e-cash
@@ -2091,7 +2131,7 @@
                 OOBNotesData::Invite { federation_id, .. } =&gt; <span class="prelude-val">Some</span>(federation_id.to_prefix()),
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
             })
-            .expect(<span class="string">&quot;Invariant violated: OOBNotes does not contain a FederationIdPrefix&quot;</span>)
+            .expect(<span class="string">"Invariant violated: OOBNotes does not contain a FederationIdPrefix"</span>)
     }
 
     <span class="kw">pub fn </span>notes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>TieredMulti&lt;SpendableNote&gt; {
@@ -2101,7 +2141,7 @@
                 OOBNotesData::Notes(notes) =&gt; <span class="prelude-val">Some</span>(notes),
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
             })
-            .expect(<span class="string">&quot;Invariant violated: OOBNotes does not contain any notes&quot;</span>)
+            .expect(<span class="string">"Invariant violated: OOBNotes does not contain any notes"</span>)
     }
 
     <span class="kw">pub fn </span>federation_invite(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
@@ -2116,7 +2156,7 @@
             <span class="kw">let </span>(peer_id, api) = peer_apis
                 .first()
                 .cloned()
-                .expect(<span class="string">&quot;Decoding makes sure peer_apis isn&#39;t empty&quot;</span>);
+                .expect(<span class="string">"Decoding makes sure peer_apis isn't empty"</span>);
             <span class="prelude-val">Some</span>(InviteCode::new(api, peer_id, <span class="kw-2">*</span>federation_id))
         })
     }
@@ -2135,7 +2175,7 @@
             .any(|data| <span class="macro">matches!</span>(data, OOBNotesData::Notes(<span class="kw">_</span>)))
         {
             <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::from_str(
-                <span class="string">&quot;No e-cash notes were found in OOBNotes data&quot;</span>,
+                <span class="string">"No e-cash notes were found in OOBNotes data"</span>,
             ));
         }
 
@@ -2156,13 +2196,13 @@
             (<span class="prelude-val">Some</span>(p), <span class="prelude-val">Some</span>((ip, <span class="kw">_</span>))) =&gt; {
                 <span class="kw">if </span>p != ip.to_prefix() {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::from_str(
-                        <span class="string">&quot;Inconsistent Federation ID provided in OOBNotes data&quot;</span>,
+                        <span class="string">"Inconsistent Federation ID provided in OOBNotes data"</span>,
                     ));
                 }
             }
             (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>) =&gt; {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::from_str(
-                    <span class="string">&quot;No Federation ID provided in OOBNotes data&quot;</span>,
+                    <span class="string">"No Federation ID provided in OOBNotes data"</span>,
                 ));
             }
             <span class="kw">_ </span>=&gt; {}
@@ -2170,7 +2210,7 @@
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, invite)) = maybe_invite {
             <span class="kw">if </span>invite.is_empty() {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::from_str(<span class="string">&quot;Invite didn&#39;t contain API endpoints&quot;</span>));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::from_str(<span class="string">"Invite didn't contain API endpoints"</span>));
             }
         }
 
@@ -2198,7 +2238,7 @@
             <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
         )<span class="question-mark">?</span>;
 
-        <span class="macro">ensure!</span>(!oob_notes.notes().is_empty(), <span class="string">&quot;OOBNotes cannot be empty&quot;</span>);
+        <span class="macro">ensure!</span>(!oob_notes.notes().is_empty(), <span class="string">"OOBNotes cannot be empty"</span>);
 
         <span class="prelude-val">Ok</span>(oob_notes)
     }
@@ -2206,9 +2246,9 @@
 
 <span class="kw">impl </span>Display <span class="kw">for </span>OOBNotes {
     <span class="doccomment">/// Base64 encode a set of e-cash notes for out-of-band spending.
-    </span><span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+    </span><span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
-        Encodable::consensus_encode(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>bytes).expect(<span class="string">&quot;encodes correctly&quot;</span>);
+        Encodable::consensus_encode(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>bytes).expect(<span class="string">"encodes correctly"</span>);
         f.write_str(<span class="kw-2">&amp;</span>base64::engine::general_purpose::STANDARD.encode(<span class="kw-2">&amp;</span>bytes))
     }
 }
@@ -2222,10 +2262,10 @@
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>OOBNotes {
+<span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>OOBNotes {
     <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
     <span class="kw">where
-        </span>D: serde::Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
+        </span>D: serde::Deserializer&lt;<span class="lifetime">'de</span>&gt;,
     {
         <span class="kw">let </span>s = String::deserialize(deserializer)<span class="question-mark">?</span>;
         FromStr::from_str(<span class="kw-2">&amp;</span>s).map_err(serde::de::Error::custom)
@@ -2288,14 +2328,14 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub enum </span>MintOperationMetaVariant {
     <span class="comment">// TODO: add migrations for operation log and clean up schema
     </span><span class="doccomment">/// Either `legacy_out_point` or both `txid` and `out_point_indices` will be
     /// present.
     </span>Reissuance {
         <span class="comment">// Removed in 0.3.0:
-        </span><span class="attr">#[serde(skip_serializing, default, rename = <span class="string">&quot;out_point&quot;</span>)]
+        </span><span class="attr">#[serde(skip_serializing, default, rename = <span class="string">"out_point"</span>)]
         </span>legacy_out_point: <span class="prelude-ty">Option</span>&lt;OutPoint&gt;,
         <span class="comment">// Introduced in 0.3.0:
         </span><span class="attr">#[serde(default)]
@@ -2320,9 +2360,9 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
-    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">'_</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>mint_client_items: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; =
             BTreeMap::new();
         <span class="kw">let </span>filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
@@ -2338,7 +2378,7 @@
                         NoteKey,
                         SpendableNote,
                         mint_client_items,
-                        <span class="string">&quot;Notes&quot;
+                        <span class="string">"Notes"
                     </span>);
                 }
                 DbKeyPrefix::NextECashNoteIndex =&gt; {
@@ -2348,7 +2388,7 @@
                         NextECashNoteIndexKey,
                         u64,
                         mint_client_items,
-                        <span class="string">&quot;NextECashNoteIndex&quot;
+                        <span class="string">"NextECashNoteIndex"
                     </span>);
                 }
                 DbKeyPrefix::CancelledOOBSpend =&gt; {
@@ -2358,7 +2398,7 @@
                         CancelledOOBSpendKey,
                         (),
                         mint_client_items,
-                        <span class="string">&quot;CancelledOOBSpendKey&quot;
+                        <span class="string">"CancelledOOBSpendKey"
                     </span>);
                 }
                 DbKeyPrefix::RecoveryState =&gt; {}
@@ -2376,7 +2416,7 @@
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}])
-            .expect(<span class="string">&quot;no version conflicts&quot;</span>)
+            .expect(<span class="string">"no version conflicts"</span>)
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
@@ -2447,7 +2487,7 @@
 }
 
 <span class="kw">impl </span>MintClientContext {
-    <span class="kw">fn </span>await_cancel_oob_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; BoxFuture&lt;<span class="lifetime">&#39;static</span>, ()&gt; {
+    <span class="kw">fn </span>await_cancel_oob_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; BoxFuture&lt;<span class="lifetime">'static</span>, ()&gt; {
         <span class="kw">let </span>db = <span class="self">self</span>.module_db.clone();
         Box::pin(<span class="kw">async move </span>{
             db.wait_key_exists(<span class="kw-2">&amp;</span>CancelledOOBSpendKey(operation_id))
@@ -2505,7 +2545,7 @@
     ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
         <span class="kw">if </span>args.is_empty() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(
-                <span class="string">&quot;Expected to be called with at leas 1 arguments: &lt;command&gt; …&quot;
+                <span class="string">"Expected to be called with at leas 1 arguments: &lt;command&gt; …"
             </span>));
         }
 
@@ -2513,17 +2553,17 @@
 
         <span class="comment">// FIXME: make instance-aware
         </span><span class="kw">match </span>command.as_ref() {
-            <span class="string">&quot;reissue&quot; </span>=&gt; {
+            <span class="string">"reissue" </span>=&gt; {
                 <span class="kw">if </span>args.len() != <span class="number">2 </span>{
                     <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(
-                        <span class="string">&quot;`reissue` command expects 1 argument: &lt;notes&gt;&quot;
+                        <span class="string">"`reissue` command expects 1 argument: &lt;notes&gt;"
                     </span>));
                 }
 
                 <span class="kw">let </span>oob_notes = args[<span class="number">1</span>]
                     .to_string_lossy()
                     .parse::&lt;OOBNotes&gt;()
-                    .map_err(|e| <span class="macro">anyhow::format_err!</span>(<span class="string">&quot;invalid notes format: {e}&quot;</span>))<span class="question-mark">?</span>;
+                    .map_err(|e| <span class="macro">anyhow::format_err!</span>(<span class="string">"invalid notes format: {e}"</span>))<span class="question-mark">?</span>;
 
                 <span class="kw">let </span>amount = oob_notes.total_amount();
 
@@ -2536,16 +2576,16 @@
 
                 <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
                     <span class="kw">if let </span>ReissueExternalNotesState::Failed(e) = update {
-                        <span class="macro">bail!</span>(<span class="string">&quot;Reissue failed: {e}&quot;</span>);
+                        <span class="macro">bail!</span>(<span class="string">"Reissue failed: {e}"</span>);
                     }
 
-                    <span class="macro">info!</span>(<span class="string">&quot;Update: {:?}&quot;</span>, update);
+                    <span class="macro">info!</span>(<span class="string">"Update: {:?}"</span>, update);
                 }
 
                 <span class="prelude-val">Ok</span>(serde_json::to_value(amount).unwrap())
             }
             command =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(
-                <span class="string">&quot;Unknown command: {command}, supported commands: reissue&quot;
+                <span class="string">"Unknown command: {command}, supported commands: reissue"
             </span>)),
         }
     }
@@ -2566,7 +2606,7 @@
             </span>.map_err(|e| <span class="kw">match </span>e {
                 AutocommitError::ClosureError { error, .. } =&gt; error,
                 AutocommitError::CommitFailed { last_error, .. } =&gt; {
-                    <span class="macro">anyhow!</span>(<span class="string">&quot;Commit to DB failed: {last_error}&quot;</span>)
+                    <span class="macro">anyhow!</span>(<span class="string">"Commit to DB failed: {last_error}"</span>)
                 }
             })
     }
@@ -2577,7 +2617,7 @@
 
     <span class="kw">async fn </span>create_sufficient_input(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         operation_id: OperationId,
         min_amount: Amount,
     ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt;&gt; {
@@ -2586,11 +2626,11 @@
 
     <span class="kw">async fn </span>create_exact_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         operation_id: OperationId,
         amount: Amount,
     ) -&gt; Vec&lt;ClientOutput&lt;MintOutput, MintClientStateMachines&gt;&gt; {
-        <span class="comment">// FIXME: don&#39;t hardcode notes per denomination
+        <span class="comment">// FIXME: don't hardcode notes per denomination
         </span><span class="self">self</span>.create_output(dbtx, operation_id, <span class="number">2</span>, amount).<span class="kw">await
     </span>}
 
@@ -2602,11 +2642,11 @@
         <span class="self">self</span>.await_output_finalized(operation_id, out_point).<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
+    <span class="kw">async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; Amount {
         <span class="self">self</span>.get_wallet_summary(dbtx).<span class="kw">await</span>.total_amount()
     }
 
-    <span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, ()&gt; {
+    <span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">'static</span>, ()&gt; {
         Box::pin(
             <span class="self">self</span>.notifier
                 .subscribe_all_operations()
@@ -2633,14 +2673,14 @@
         )
     }
 
-    <span class="kw">async fn </span>leave(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>leave(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>balance = ClientModule::get_balance(<span class="self">self</span>, dbtx).<span class="kw">await</span>;
         <span class="kw">if </span>Amount::from_sats(<span class="number">0</span>) &lt; balance {
-            <span class="macro">bail!</span>(<span class="string">&quot;Outstanding balance: {balance}&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Outstanding balance: {balance}"</span>);
         }
 
         <span class="kw">if </span>!<span class="self">self</span>.client_ctx.get_own_active_states().<span class="kw">await</span>.is_empty() {
-            <span class="macro">bail!</span>(<span class="string">&quot;Pending operations&quot;</span>)
+            <span class="macro">bail!</span>(<span class="string">"Pending operations"</span>)
         }
         <span class="prelude-val">Ok</span>(())
     }
@@ -2648,7 +2688,7 @@
 
 <span class="kw">impl </span>MintClientModule {
     <span class="doccomment">/// Returns the number of held e-cash notes per denomination
-    </span><span class="kw">pub async fn </span>get_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; TieredSummary {
+    </span><span class="kw">pub async fn </span>get_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; TieredSummary {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix)
             .<span class="kw">await
             </span>.fold(
@@ -2661,20 +2701,20 @@
             .<span class="kw">await
     </span>}
 
-    <span class="comment">// TODO: put &quot;notes per denomination&quot; default into cfg
+    <span class="comment">// TODO: put "notes per denomination" default into cfg
     </span><span class="doccomment">/// Creates a mint output with exactly the given `amount`, issuing e-cash
     /// notes such that the client holds `notes_per_denomination` notes of each
     /// e-cash note denomination held.
     </span><span class="kw">pub async fn </span>create_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         operation_id: OperationId,
         notes_per_denomination: u16,
         exact_amount: Amount,
     ) -&gt; Vec&lt;ClientOutput&lt;MintOutput, MintClientStateMachines&gt;&gt; {
         <span class="macro">assert!</span>(
             exact_amount &gt; Amount::ZERO,
-            <span class="string">&quot;zero-amount outputs are not supported&quot;
+            <span class="string">"zero-amount outputs are not supported"
         </span>);
 
         <span class="kw">let </span>denominations = TieredSummary::represent_amount(
@@ -2705,7 +2745,7 @@
 
                 <span class="macro">debug!</span>(
                     %amount,
-                    <span class="string">&quot;Generated issuance request&quot;
+                    <span class="string">"Generated issuance request"
                 </span>);
 
                 outputs.push(ClientOutput {
@@ -2741,9 +2781,9 @@
 
                 <span class="kw">match </span>state.state {
                     MintOutputStates::Succeeded(succeeded) =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(succeeded.amount)),
-                    MintOutputStates::Aborted(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Transaction was rejected&quot;</span>))),
+                    MintOutputStates::Aborted(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"Transaction was rejected"</span>))),
                     MintOutputStates::Failed(failed) =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
-                        <span class="string">&quot;Failed to finalize transaction: {}&quot;</span>,
+                        <span class="string">"Failed to finalize transaction: {}"</span>,
                         failed.error
                     ))),
                     <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
@@ -2758,19 +2798,24 @@
     </span><span class="doccomment">/// Creates a mint input of at least `min_amount`.
     </span><span class="kw">pub async fn </span>create_input(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         operation_id: OperationId,
         min_amount: Amount,
     ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt;&gt; {
         <span class="macro">assert!</span>(
             min_amount &gt; Amount::ZERO,
-            <span class="string">&quot;zero-amount inputs are not supported&quot;
+            <span class="string">"zero-amount inputs are not supported"
         </span>);
 
-        <span class="kw">let </span>spendable_selected_notes =
-            <span class="self">Self</span>::select_notes(dbtx, <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount, min_amount).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>selected_notes = <span class="self">Self</span>::select_notes(
+            dbtx,
+            <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount,
+            min_amount,
+            <span class="self">self</span>.cfg.fee_consensus.note_spend_abs,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">for </span>(amount, note) <span class="kw">in </span>spendable_selected_notes.iter_items() {
+        <span class="kw">for </span>(amount, note) <span class="kw">in </span>selected_notes.iter_items() {
             dbtx.remove_entry(<span class="kw-2">&amp;</span>NoteKey {
                 amount,
                 nonce: note.nonce(),
@@ -2778,7 +2823,7 @@
             .<span class="kw">await</span>;
         }
 
-        <span class="self">self</span>.create_input_from_notes(operation_id, spendable_selected_notes)
+        <span class="self">self</span>.create_input_from_notes(operation_id, selected_notes)
             .<span class="kw">await
     </span>}
 
@@ -2795,12 +2840,12 @@
                 </span>.cfg
                 .tbs_pks
                 .get(amount)
-                .ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Invalid amount tier: {amount}&quot;</span>))<span class="question-mark">?</span>;
+                .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Invalid amount tier: {amount}"</span>))<span class="question-mark">?</span>;
 
             <span class="kw">let </span>note = spendable_note.note();
 
             <span class="kw">if </span>!note.verify(<span class="kw-2">*</span>key) {
-                <span class="macro">bail!</span>(<span class="string">&quot;Invalid note&quot;</span>);
+                <span class="macro">bail!</span>(<span class="string">"Invalid note"</span>);
             }
 
             <span class="kw">let </span>sm_gen = Arc::new(<span class="kw">move </span>|txid, input_idx| {
@@ -2829,9 +2874,9 @@
 
     <span class="kw">async fn </span>spend_notes_oob(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector&lt;SpendableNote&gt;,
-        requested_amount: Amount,
+        amount: Amount,
         try_cancel_after: Duration,
     ) -&gt; anyhow::Result&lt;(
         OperationId,
@@ -2839,16 +2884,15 @@
         TieredMulti&lt;SpendableNote&gt;,
     )&gt; {
         <span class="macro">ensure!</span>(
-            requested_amount &gt; Amount::ZERO,
-            <span class="string">&quot;zero-amount out-of-band spends are not supported&quot;
+            amount &gt; Amount::ZERO,
+            <span class="string">"zero-amount out-of-band spends are not supported"
         </span>);
 
-        <span class="kw">let </span>spendable_selected_notes =
-            <span class="self">Self</span>::select_notes(dbtx, notes_selector, requested_amount).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>selected_notes = <span class="self">Self</span>::select_notes(dbtx, notes_selector, amount, Amount::ZERO).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>operation_id = spendable_notes_to_operation_id(<span class="kw-2">&amp;</span>spendable_selected_notes);
+        <span class="kw">let </span>operation_id = spendable_notes_to_operation_id(<span class="kw-2">&amp;</span>selected_notes);
 
-        <span class="kw">for </span>(amount, note) <span class="kw">in </span>spendable_selected_notes.iter_items() {
+        <span class="kw">for </span>(amount, note) <span class="kw">in </span>selected_notes.iter_items() {
             dbtx.remove_entry(<span class="kw-2">&amp;</span>NoteKey {
                 amount,
                 nonce: note.nonce(),
@@ -2858,7 +2902,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>state_machines = Vec::new();
 
-        <span class="kw">for </span>(amount, spendable_note) <span class="kw">in </span>spendable_selected_notes.clone() {
+        <span class="kw">for </span>(amount, spendable_note) <span class="kw">in </span>selected_notes.clone() {
             state_machines.push(MintClientStateMachines::OOB(MintOOBStateMachine {
                 operation_id,
                 state: MintOOBStates::Created(MintOOBStatesCreated {
@@ -2869,7 +2913,7 @@
             }));
         }
 
-        <span class="prelude-val">Ok</span>((operation_id, state_machines, spendable_selected_notes))
+        <span class="prelude-val">Ok</span>((operation_id, state_machines, selected_notes))
     }
 
     <span class="kw">pub async fn </span>await_spend_oob_refund(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; SpendOOBRefund {
@@ -2901,21 +2945,23 @@
 
     <span class="doccomment">/// Select notes with `requested_amount` using `notes_selector`.
     </span><span class="kw">async fn </span>select_notes(
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector&lt;SpendableNote&gt;,
         requested_amount: Amount,
+        fee_per_note_input: Amount,
     ) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
         <span class="kw">let </span>note_stream = dbtx
             .find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>NoteKeyPrefix)
             .<span class="kw">await
             </span>.map(|(key, note)| (key.amount, note));
+
         notes_selector
-            .select_notes(note_stream, requested_amount)
+            .select_notes(note_stream, requested_amount, fee_per_note_input)
             .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>get_all_spendable_notes(
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     ) -&gt; TieredMulti&lt;SpendableNote&gt; {
         TieredMulti::from_iter(
             (dbtx
@@ -2930,7 +2976,7 @@
 
     <span class="kw">async fn </span>get_next_note_index(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         amount: Amount,
     ) -&gt; NoteIndex {
         NoteIndex(
@@ -2940,10 +2986,10 @@
         )
     }
 
-    <span class="doccomment">/// Derive the note `DerivableSecret` from the Mint&#39;s `secret` the `amount`
+    <span class="doccomment">/// Derive the note `DerivableSecret` from the Mint's `secret` the `amount`
     /// tier and `note_idx`
     ///
-    /// Static to help re-use in other places, that don&#39;t have a whole [`Self`]
+    /// Static to help re-use in other places, that don't have a whole [`Self`]
     /// available
     ///
     /// # E-Cash Note Creation
@@ -2961,7 +3007,7 @@
         note_idx: NoteIndex,
     ) -&gt; DerivableSecret {
         <span class="macro">assert_eq!</span>(secret.level(), <span class="number">2</span>);
-        <span class="macro">debug!</span>(<span class="question-mark">?</span>secret, %amount, %note_idx, <span class="string">&quot;Deriving new mint note&quot;</span>);
+        <span class="macro">debug!</span>(<span class="question-mark">?</span>secret, %amount, %note_idx, <span class="string">"Deriving new mint note"</span>);
         secret
             .child_key(MINT_E_CASH_TYPE_CHILD_ID) <span class="comment">// TODO: cache
             </span>.child_key(ChildId(note_idx.as_u64()))
@@ -2974,7 +3020,7 @@
     </span><span class="kw">async fn </span>new_note_secret(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     ) -&gt; DerivableSecret {
         <span class="kw">let </span>new_idx = <span class="self">self</span>.get_next_note_index(dbtx, amount).<span class="kw">await</span>;
         dbtx.insert_entry(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>new_idx.next().as_u64())
@@ -2985,7 +3031,7 @@
     <span class="kw">pub async fn </span>new_ecash_note(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     ) -&gt; (NoteIssuanceRequest, BlindNonce) {
         <span class="kw">let </span>secret = <span class="self">self</span>.new_note_secret(amount, dbtx).<span class="kw">await</span>;
         NoteIssuanceRequest::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, secret)
@@ -3004,11 +3050,11 @@
 
         <span class="macro">ensure!</span>(
             notes.total_amount() &gt; Amount::ZERO,
-            <span class="string">&quot;Reissuing zero-amount e-cash isn&#39;t supported&quot;
+            <span class="string">"Reissuing zero-amount e-cash isn't supported"
         </span>);
 
         <span class="kw">if </span>federation_id_prefix != <span class="self">self</span>.federation_id.to_prefix() {
-            <span class="macro">bail!</span>(<span class="string">&quot;Federation ID does not match&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Federation ID does not match"</span>);
         }
 
         <span class="kw">let </span>operation_id = OperationId(
@@ -3024,11 +3070,11 @@
             TransactionBuilder::new().with_inputs(<span class="self">self</span>.client_ctx.map_dyn(mint_input).collect());
 
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
-            .expect(<span class="string">&quot;MintClientModule::reissue_external_notes extra_meta is serializable&quot;</span>);
+            .expect(<span class="string">"MintClientModule::reissue_external_notes extra_meta is serializable"</span>);
         <span class="kw">let </span>operation_meta_gen = <span class="kw">move </span>|txid, out_points: Vec&lt;OutPoint&gt;| {
             <span class="macro">assert!</span>(
                 out_points.iter().all(|out_point| out_point.txid == txid),
-                <span class="string">&quot;Change outpoints didn&#39;t all have consistent transaction id.&quot;
+                <span class="string">"Change outpoints didn't all have consistent transaction id."
             </span>);
 
             MintOperationMeta {
@@ -3053,7 +3099,7 @@
                 tx,
             )
             .<span class="kw">await
-            </span>.context(<span class="string">&quot;We already reissued these notes&quot;</span>)<span class="question-mark">?</span>;
+            </span>.context(<span class="string">"We already reissued these notes"</span>)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(operation_id)
     }
@@ -3075,7 +3121,7 @@
                 // have a source for the txid
                 </span><span class="kw">let </span>txid = txid
                     .or(legacy_out_point.map(|out_point| out_point.txid))
-                    .context(<span class="string">&quot;Empty reissuance not permitted, this should never happen&quot;</span>)<span class="question-mark">?</span>;
+                    .context(<span class="string">"Empty reissuance not permitted, this should never happen"</span>)<span class="question-mark">?</span>;
 
                 <span class="kw">let </span>out_points = out_point_indices
                     .into_iter()
@@ -3085,7 +3131,7 @@
 
                 (txid, out_points)
             }
-            <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a reissuance&quot;</span>),
+            <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">"Operation is not a reissuance"</span>),
         };
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
@@ -3104,7 +3150,7 @@
                         <span class="kw">yield </span>ReissueExternalNotesState::Issuing;
                     }
                     <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="kw">yield </span>ReissueExternalNotesState::Failed(<span class="macro">format!</span>(<span class="string">&quot;Transaction not accepted {e:?}&quot;</span>));
+                        <span class="kw">yield </span>ReissueExternalNotesState::Failed(<span class="macro">format!</span>(<span class="string">"Transaction not accepted {e:?}"</span>));
                         <span class="kw">return</span>;
                     }
                 }
@@ -3123,7 +3169,7 @@
     <span class="doccomment">/// Fetches and removes notes of *at least* amount `min_amount` from the
     /// wallet to be sent to the recipient out of band. These spends can be
     /// canceled by calling [`MintClientModule::try_cancel_spend_notes`] as long
-    /// as the recipient hasn&#39;t reissued the e-cash notes themselves yet.
+    /// as the recipient hasn't reissued the e-cash notes themselves yet.
     ///
     /// The client will also automatically attempt to cancel the operation after
     /// `try_cancel_after` time has passed. This is a safety mechanism to avoid
@@ -3159,7 +3205,7 @@
     ) -&gt; anyhow::Result&lt;(OperationId, OOBNotes)&gt; {
         <span class="kw">let </span>federation_id_prefix = <span class="self">self</span>.federation_id.to_prefix();
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
-            .expect(<span class="string">&quot;MintClientModule::spend_notes extra_meta is serializable&quot;</span>);
+            .expect(<span class="string">"MintClientModule::spend_notes extra_meta is serializable"</span>);
 
         <span class="self">self</span>.client_ctx
             .module_autocommit(
@@ -3206,7 +3252,7 @@
             </span>.map_err(|e| <span class="kw">match </span>e {
                 AutocommitError::ClosureError { error, .. } =&gt; error,
                 AutocommitError::CommitFailed { last_error, .. } =&gt; {
-                    <span class="macro">anyhow!</span>(<span class="string">&quot;Commit to DB failed: {last_error}&quot;</span>)
+                    <span class="macro">anyhow!</span>(<span class="string">"Commit to DB failed: {last_error}"</span>)
                 }
             })
     }
@@ -3221,7 +3267,7 @@
         <span class="kw">let </span>notes = oob_notes.notes().clone();
 
         <span class="kw">if </span>federation_id_prefix != <span class="self">self</span>.federation_id.to_prefix() {
-            <span class="macro">bail!</span>(<span class="string">&quot;Federation ID does not match&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Federation ID does not match"</span>);
         }
 
         <span class="kw">let </span>tbs_pks = <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.tbs_pks;
@@ -3229,16 +3275,16 @@
         <span class="kw">for </span>(idx, (amt, snote)) <span class="kw">in </span>notes.iter_items().enumerate() {
             <span class="kw">let </span>key = tbs_pks
                 .get(amt)
-                .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Note {idx} uses an invalid amount tier {amt}&quot;</span>))<span class="question-mark">?</span>;
+                .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">"Note {idx} uses an invalid amount tier {amt}"</span>))<span class="question-mark">?</span>;
 
             <span class="kw">let </span>note = snote.note();
             <span class="kw">if </span>!note.verify(<span class="kw-2">*</span>key) {
-                <span class="macro">bail!</span>(<span class="string">&quot;Note {idx} has an invalid federation signature&quot;</span>);
+                <span class="macro">bail!</span>(<span class="string">"Note {idx} has an invalid federation signature"</span>);
             }
 
             <span class="kw">let </span>expected_nonce = Nonce(snote.spend_key.public_key());
             <span class="kw">if </span>note.nonce != expected_nonce {
-                <span class="macro">bail!</span>(<span class="string">&quot;Note {idx} cannot be spent using the supplied spend key&quot;</span>);
+                <span class="macro">bail!</span>(<span class="string">"Note {idx} cannot be spent using the supplied spend key"</span>);
             }
         }
 
@@ -3254,7 +3300,7 @@
         dbtx.insert_entry(<span class="kw-2">&amp;</span>CancelledOOBSpendKey(operation_id), <span class="kw-2">&amp;</span>())
             .<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = dbtx.commit_tx_result().<span class="kw">await </span>{
-            <span class="macro">warn!</span>(<span class="string">&quot;We tried to cancel the same OOB spend multiple times concurrently: {e}&quot;</span>);
+            <span class="macro">warn!</span>(<span class="string">"We tried to cancel the same OOB spend multiple times concurrently: {e}"</span>);
         }
     }
 
@@ -3269,7 +3315,7 @@
             operation.meta::&lt;MintOperationMeta&gt;().variant,
             MintOperationMetaVariant::SpendOOB { .. }
         ) {
-            <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a out-of-band spend&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Operation is not a out-of-band spend"</span>);
         };
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
@@ -3326,7 +3372,7 @@
         <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">if </span>operation.operation_module_kind() != MintCommonInit::KIND.as_str() {
-            <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a mint operation&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Operation is not a mint operation"</span>);
         }
 
         <span class="prelude-val">Ok</span>(operation)
@@ -3354,15 +3400,16 @@
     /// The stream must produce items in non- decreasing order of amount.
     </span><span class="kw">async fn </span>select_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="comment">// FIXME: async trait doesn&#39;t like maybe_add_send
-        </span><span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt; + Send,
-        <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt;,
+        <span class="comment">// FIXME: async trait doesn't like maybe_add_send
+        </span><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt; + Send,
+        <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt;,
         requested_amount: Amount,
+        fee_per_note_input: Amount,
     ) -&gt; anyhow::Result&lt;TieredMulti&lt;Note&gt;&gt;;
 }
 
 <span class="doccomment">/// Select notes with total amount of *at least* `request_amount`. If more than
-/// requested amount of notes are returned it was because exact change couldn&#39;t
+/// requested amount of notes are returned it was because exact change couldn't
 /// be made, and the next smallest amount will be returned.
 ///
 /// The caller can request change from the federation.
@@ -3372,11 +3419,12 @@
 </span><span class="kw">impl</span>&lt;Note: Send&gt; NotesSelector&lt;Note&gt; <span class="kw">for </span>SelectNotesWithAtleastAmount {
     <span class="kw">async fn </span>select_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt; + Send,
-        <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt;,
+        <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt; + Send,
+        <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt;,
         requested_amount: Amount,
+        fee_per_note_input: Amount,
     ) -&gt; anyhow::Result&lt;TieredMulti&lt;Note&gt;&gt; {
-        <span class="prelude-val">Ok</span>(select_notes_from_stream(stream, requested_amount).<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(select_notes_from_stream(stream, requested_amount, fee_per_note_input).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 }
 
@@ -3389,15 +3437,16 @@
 </span><span class="kw">impl</span>&lt;Note: Send&gt; NotesSelector&lt;Note&gt; <span class="kw">for </span>SelectNotesWithExactAmount {
     <span class="kw">async fn </span>select_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt; + Send,
-        <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt;,
+        <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt; + Send,
+        <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt;,
         requested_amount: Amount,
+        note_fee: Amount,
     ) -&gt; anyhow::Result&lt;TieredMulti&lt;Note&gt;&gt; {
-        <span class="kw">let </span>notes = select_notes_from_stream(stream, requested_amount).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>notes = select_notes_from_stream(stream, requested_amount, note_fee).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">if </span>notes.total_amount() != requested_amount {
             <span class="macro">bail!</span>(
-                <span class="string">&quot;Could not select notes with exact amount. Requested amount: {}. Selected amount: {}&quot;</span>,
+                <span class="string">"Could not select notes with exact amount. Requested amount: {}. Selected amount: {}"</span>,
                 requested_amount,
                 notes.total_amount()
             );
@@ -3409,12 +3458,13 @@
 
 <span class="comment">// We are using a greedy algorithm to select notes. We start with the largest
 // then proceed to the lowest tiers/denominations.
-// But there is a catch: we don&#39;t know if there are enough notes in the lowest
+// But there is a catch: we don't know if there are enough notes in the lowest
 // tiers, so we need to save a big note in case the sum of the following
 // small notes are not enough.
 </span><span class="kw">async fn </span>select_notes_from_stream&lt;Note&gt;(
     stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt;,
     requested_amount: Amount,
+    fee_per_note_input: Amount,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;Note&gt;, InsufficientBalanceError&gt; {
     <span class="kw">if </span>requested_amount == Amount::ZERO {
         <span class="kw">return </span><span class="prelude-val">Ok</span>(TieredMulti::default());
@@ -3432,37 +3482,61 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>((note_amount, note)) = stream.next().<span class="kw">await </span>{
             <span class="macro">assert!</span>(
                 previous_amount.map_or(<span class="bool-val">true</span>, |previous| previous &gt;= note_amount),
-                <span class="string">&quot;notes are not sorted in descending order&quot;
+                <span class="string">"notes are not sorted in descending order"
             </span>);
             previous_amount = <span class="prelude-val">Some</span>(note_amount);
-            <span class="kw">match </span>note_amount.cmp(<span class="kw-2">&amp;</span>pending_amount) {
+
+            <span class="kw">if </span>note_amount &lt;= fee_per_note_input {
+                <span class="kw">continue</span>;
+            }
+
+            <span class="kw">match </span>note_amount.cmp(<span class="kw-2">&amp;</span>(pending_amount + fee_per_note_input)) {
                 Ordering::Less =&gt; {
                     <span class="comment">// keep adding notes until we have enough
-                    </span>pending_amount -= note_amount;
+                    </span>pending_amount += fee_per_note_input;
+                    pending_amount -= note_amount;
                     selected.push((note_amount, note))
                 }
                 Ordering::Greater =&gt; {
-                    <span class="comment">// probably we don&#39;t need this big note, but we&#39;ll keep it in case the
-                    // following small notes don&#39;t add up to the
+                    <span class="comment">// probably we don't need this big note, but we'll keep it in case the
+                    // following small notes don't add up to the
                     // requested amount
                     </span>last_big_note_checkpoint = <span class="prelude-val">Some</span>((note_amount, note, selected.len()));
                 }
                 Ordering::Equal =&gt; {
                     <span class="comment">// exactly enough notes, return
                     </span>selected.push((note_amount, note));
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(selected.into_iter().collect());
+
+                    <span class="kw">let </span>notes: TieredMulti&lt;Note&gt; = selected.into_iter().collect();
+
+                    <span class="macro">assert!</span>(
+                        notes.total_amount().msats
+                            &gt;= requested_amount.msats
+                                + notes.count_items() <span class="kw">as </span>u64 * fee_per_note_input.msats
+                    );
+
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(notes);
                 }
             }
         } <span class="kw">else </span>{
             <span class="macro">assert!</span>(pending_amount &gt; Amount::ZERO);
             <span class="kw">if let </span><span class="prelude-val">Some</span>((big_note_amount, big_note, checkpoint)) = last_big_note_checkpoint {
-                <span class="comment">// the sum of the small notes don&#39;t add up to the pending amount, remove
+                <span class="comment">// the sum of the small notes don't add up to the pending amount, remove
                 // them
                 </span>selected.truncate(checkpoint);
                 <span class="comment">// and use the big note to cover it
                 </span>selected.push((big_note_amount, big_note));
+
+                <span class="kw">let </span>notes: TieredMulti&lt;Note&gt; = selected.into_iter().collect();
+
+                <span class="macro">assert!</span>(
+                    notes.total_amount().msats
+                        &gt;= requested_amount.msats
+                            + notes.count_items() <span class="kw">as </span>u64 * fee_per_note_input.msats
+                );
+
                 <span class="comment">// so now we have enough to cover the requested amount, return
-                </span><span class="kw">return </span><span class="prelude-val">Ok</span>(selected.into_iter().collect());
+                </span><span class="kw">return </span><span class="prelude-val">Ok</span>(notes);
             } <span class="kw">else </span>{
                 <span class="kw">let </span>total_amount = requested_amount - pending_amount;
                 <span class="comment">// not enough notes, return
@@ -3482,10 +3556,10 @@
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>InsufficientBalanceError {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
         <span class="macro">write!</span>(
             f,
-            <span class="string">&quot;Insufficient balance: requested {} but only {} available&quot;</span>,
+            <span class="string">"Insufficient balance: requested {} but only {} available"</span>,
             <span class="self">self</span>.requested_amount, <span class="self">self</span>.total_amount
         )
     }
@@ -3630,7 +3704,7 @@
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>NoteIndex {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
         <span class="self">self</span>.<span class="number">0</span>.fmt(f)
     }
 }
@@ -3640,7 +3714,7 @@
 <span class="kw">impl </span>sha256t::Tag <span class="kw">for </span>OOBSpendTag {
     <span class="kw">fn </span>engine() -&gt; sha256::HashEngine {
         <span class="kw">let </span><span class="kw-2">mut </span>engine = sha256::HashEngine::default();
-        engine.input(<span class="string">b&quot;oob-spend&quot;</span>);
+        engine.input(<span class="string">b"oob-spend"</span>);
         engine
     }
 }
@@ -3650,7 +3724,7 @@
 <span class="kw">impl </span>sha256t::Tag <span class="kw">for </span>OOBReissueTag {
     <span class="kw">fn </span>engine() -&gt; sha256::HashEngine {
         <span class="kw">let </span><span class="kw-2">mut </span>engine = sha256::HashEngine::default();
-        engine.input(<span class="string">b&quot;oob-reissue&quot;</span>);
+        engine.input(<span class="string">b"oob-reissue"</span>);
         engine
     }
 }
@@ -3684,8 +3758,12 @@
         <span class="kw">let </span><span class="kw-2">mut </span>total_notes = <span class="number">0</span>;
         <span class="kw">for </span>multiplier <span class="kw">in </span><span class="number">1</span>..<span class="number">100 </span>{
             <span class="kw">let </span>stream = reverse_sorted_note_stream(tiered.iter().collect());
-            <span class="kw">let </span>select =
-                select_notes_from_stream(stream, Amount::from_sats(multiplier * <span class="number">1000</span>)).<span class="kw">await</span>;
+            <span class="kw">let </span>select = select_notes_from_stream(
+                stream,
+                Amount::from_sats(multiplier * <span class="number">1000</span>),
+                Amount::ZERO,
+            )
+            .<span class="kw">await</span>;
             total_notes += select.unwrap().into_iter_items().count();
         }
         <span class="macro">assert_eq!</span>(total_notes / <span class="number">100</span>, <span class="number">10</span>);
@@ -3701,13 +3779,13 @@
             ])
         };
         <span class="macro">assert_eq!</span>(
-            select_notes_from_stream(f(), Amount::from_sats(<span class="number">7</span>))
+            select_notes_from_stream(f(), Amount::from_sats(<span class="number">7</span>), Amount::ZERO)
                 .<span class="kw">await
                 </span>.unwrap(),
             notes(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">1</span>), <span class="number">2</span>), (Amount::from_sats(<span class="number">5</span>), <span class="number">1</span>)])
         );
         <span class="macro">assert_eq!</span>(
-            select_notes_from_stream(f(), Amount::from_sats(<span class="number">20</span>))
+            select_notes_from_stream(f(), Amount::from_sats(<span class="number">20</span>), Amount::ZERO)
                 .<span class="kw">await
                 </span>.unwrap(),
             notes(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">20</span>), <span class="number">1</span>)])
@@ -3722,7 +3800,7 @@
             (Amount::from_sats(<span class="number">20</span>), <span class="number">5</span>),
         ]);
         <span class="macro">assert_eq!</span>(
-            select_notes_from_stream(stream, Amount::from_sats(<span class="number">7</span>))
+            select_notes_from_stream(stream, Amount::from_sats(<span class="number">7</span>), Amount::ZERO)
                 .<span class="kw">await
                 </span>.unwrap(),
             notes(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">5</span>), <span class="number">2</span>)])
@@ -3737,7 +3815,7 @@
             (Amount::from_sats(<span class="number">20</span>), <span class="number">2</span>),
         ]);
         <span class="macro">assert_eq!</span>(
-            select_notes_from_stream(stream, Amount::from_sats(<span class="number">39</span>))
+            select_notes_from_stream(stream, Amount::from_sats(<span class="number">39</span>), Amount::ZERO)
                 .<span class="kw">await
                 </span>.unwrap(),
             notes(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">20</span>), <span class="number">2</span>)])
@@ -3747,7 +3825,7 @@
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>select_notes_returns_error_if_amount_is_too_large() {
         <span class="kw">let </span>stream = reverse_sorted_note_stream(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">10</span>), <span class="number">1</span>)]);
-        <span class="kw">let </span>error = select_notes_from_stream(stream, Amount::from_sats(<span class="number">100</span>))
+        <span class="kw">let </span>error = select_notes_from_stream(stream, Amount::from_sats(<span class="number">100</span>), Amount::ZERO)
             .<span class="kw">await
             </span>.unwrap_err();
         <span class="macro">assert_eq!</span>(error.total_amount, Amount::from_sats(<span class="number">10</span>));
@@ -3760,7 +3838,7 @@
             notes
                 .into_iter()
                 <span class="comment">// We are creating `number` dummy notes of `amount` value
-                </span>.flat_map(|(amount, number)| <span class="macro">vec!</span>[(amount, <span class="string">&quot;dummy note&quot;</span>.into()); number])
+                </span>.flat_map(|(amount, number)| <span class="macro">vec!</span>[(amount, <span class="string">"dummy note"</span>.into()); number])
                 .sorted()
                 .rev(),
         )
@@ -3769,7 +3847,7 @@
     <span class="kw">fn </span>notes(notes: Vec&lt;(Amount, usize)&gt;) -&gt; TieredMulti&lt;String&gt; {
         notes
             .into_iter()
-            .flat_map(|(amount, number)| <span class="macro">vec!</span>[(amount, <span class="string">&quot;dummy note&quot;</span>.into()); number])
+            .flat_map(|(amount, number)| <span class="macro">vec!</span>[(amount, <span class="string">"dummy note"</span>.into()); number])
             .collect()
     }
 
@@ -3780,7 +3858,7 @@
 
         <span class="kw">let </span>res = oob_notes_string.parse::&lt;OOBNotes&gt;();
 
-        <span class="macro">assert!</span>(res.is_err(), <span class="string">&quot;An empty OOB notes string should not parse&quot;</span>);
+        <span class="macro">assert!</span>(res.is_err(), <span class="string">"An empty OOB notes string should not parse"</span>);
     }
 
     <span class="kw">fn </span>test_roundtrip_serialize_str&lt;T, F&gt;(data: T, assertions: F)
@@ -3791,7 +3869,7 @@
     {
         <span class="kw">let </span>data_str = data.to_string();
         assertions(data);
-        <span class="kw">let </span>data_parsed = data_str.parse().expect(<span class="string">&quot;Deserialization failed&quot;</span>);
+        <span class="kw">let </span>data_parsed = data_str.parse().expect(<span class="string">"Deserialization failed"</span>);
         assertions(data_parsed);
     }
 
@@ -3804,7 +3882,7 @@
 
         <span class="kw">let </span>notes = <span class="macro">vec!</span>[(
             Amount::from_sats(<span class="number">1</span>),
-            SpendableNote::consensus_decode_hex(<span class="string">&quot;a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd&quot;</span>, <span class="kw-2">&amp;</span>Default::default()).unwrap(),
+            SpendableNote::consensus_decode_hex(<span class="string">"a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd"</span>, <span class="kw-2">&amp;</span>Default::default()).unwrap(),
         )]
         .into_iter()
         .collect::&lt;TieredMulti&lt;<span class="kw">_</span>&gt;&gt;();
@@ -3819,7 +3897,7 @@
 
         <span class="comment">// Can decode notes with invite
         </span><span class="kw">let </span>invite = InviteCode::new(
-            <span class="string">&quot;wss://foo.bar&quot;</span>.parse().unwrap(),
+            <span class="string">"wss://foo.bar"</span>.parse().unwrap(),
             PeerId::from(<span class="number">0</span>),
             federation_id_1,
         );
@@ -3835,7 +3913,7 @@
         </span><span class="kw">let </span>notes_no_prefix = OOBNotes(<span class="macro">vec!</span>[
             OOBNotesData::Notes(notes.clone()),
             OOBNotesData::Invite {
-                peer_apis: <span class="macro">vec!</span>[(PeerId::from(<span class="number">0</span>), <span class="string">&quot;wss://foo.bar&quot;</span>.parse().unwrap())],
+                peer_apis: <span class="macro">vec!</span>[(PeerId::from(<span class="number">0</span>), <span class="string">"wss://foo.bar"</span>.parse().unwrap())],
                 federation_id: federation_id_1,
             },
         ]);
@@ -3848,7 +3926,7 @@
         </span><span class="kw">let </span>notes_inconsistent = OOBNotes(<span class="macro">vec!</span>[
             OOBNotesData::Notes(notes),
             OOBNotesData::Invite {
-                peer_apis: <span class="macro">vec!</span>[(PeerId::from(<span class="number">0</span>), <span class="string">&quot;wss://foo.bar&quot;</span>.parse().unwrap())],
+                peer_apis: <span class="macro">vec!</span>[(PeerId::from(<span class="number">0</span>), <span class="string">"wss://foo.bar"</span>.parse().unwrap())],
                 federation_id: federation_id_1,
             },
             OOBNotesData::FederationIdPrefix(federation_id_prefix_2),
@@ -3865,13 +3943,13 @@
         };
 
         <span class="kw">let </span>old_meta_json = <span class="macro">json!</span>({
-            <span class="string">&quot;reissuance&quot;</span>: {
-                <span class="string">&quot;out_point&quot;</span>: dummy_outpoint
+            <span class="string">"reissuance"</span>: {
+                <span class="string">"out_point"</span>: dummy_outpoint
             }
         });
 
         <span class="kw">let </span>old_meta: MintOperationMetaVariant =
-            serde_json::from_value(old_meta_json).expect(<span class="string">&quot;parsing old reissuance meta failed&quot;</span>);
+            serde_json::from_value(old_meta_json).expect(<span class="string">"parsing old reissuance meta failed"</span>);
         <span class="macro">assert_eq!</span>(
             old_meta,
             MintOperationMetaVariant::Reissuance {
@@ -3886,13 +3964,13 @@
             txid: <span class="prelude-val">Some</span>(dummy_outpoint.txid),
             out_point_indices: <span class="macro">vec!</span>[<span class="number">0</span>],
         })
-        .expect(<span class="string">&quot;serializing always works&quot;</span>);
+        .expect(<span class="string">"serializing always works"</span>);
         <span class="macro">assert_eq!</span>(
             new_meta_json,
             <span class="macro">json!</span>({
-                <span class="string">&quot;reissuance&quot;</span>: {
-                    <span class="string">&quot;txid&quot;</span>: dummy_outpoint.txid,
-                    <span class="string">&quot;out_point_indices&quot;</span>: [dummy_outpoint.out_idx],
+                <span class="string">"reissuance"</span>: {
+                    <span class="string">"txid"</span>: dummy_outpoint.txid,
+                    <span class="string">"out_point_indices"</span>: [dummy_outpoint.out_idx],
                 }
             })
         );

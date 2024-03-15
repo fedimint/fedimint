@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-ln-client/src/pay.rs`."><title>pay.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_ln_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-ln-client/src/pay.rs`."><title>pay.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_ln_client/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -671,7 +673,6 @@
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, IdentifiableContract};
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
@@ -683,6 +684,7 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, error, warn};
 
+<span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
 <span class="kw">use crate</span>::{set_payment_result, LightningClientStateMachines, PayType};
 
 <span class="kw">const </span>GATEWAY_API_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);
@@ -834,7 +836,7 @@
                         error = e.to_string(),
                         transaction_id = txid.to_string(),
                         contract_id = contract_id.to_string(),
-                        <span class="string">&quot;Retrying in {}s&quot;</span>,
+                        <span class="string">"Retrying in {}s"</span>,
                         RETRY_DELAY.as_secs_f64()
                     );
                     sleep(RETRY_DELAY).<span class="kw">await</span>;
@@ -854,7 +856,7 @@
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     e.report_if_important();
                     <span class="macro">debug!</span>(
-                        <span class="string">&quot;Fetching contract failed, retrying in {}s&quot;</span>,
+                        <span class="string">"Fetching contract failed, retrying in {}s"</span>,
                         RETRY_DELAY.as_secs_f64()
                     );
                     sleep(RETRY_DELAY).<span class="kw">await</span>;
@@ -913,14 +915,14 @@
 <span class="attr">#[derive(
     Error, Debug, Hash, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq,
 )]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub enum </span>GatewayPayError {
-    <span class="attr">#[error(<span class="string">&quot;Lightning Gateway failed to pay invoice. ErrorCode: {error_code:?} ErrorMessage: {error_message}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Lightning Gateway failed to pay invoice. ErrorCode: {error_code:?} ErrorMessage: {error_message}"</span>)]
     </span>GatewayInternalError {
         error_code: <span class="prelude-ty">Option</span>&lt;u16&gt;,
         error_message: String,
     },
-    <span class="attr">#[error(<span class="string">&quot;OutgoingContract was not created in the federation&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"OutgoingContract was not created in the federation"</span>)]
     </span>OutgoingContractError,
 }
 
@@ -954,7 +956,7 @@
         gateway: LightningGateway,
         payload: PayInvoicePayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;String, GatewayPayError&gt; {
-        <span class="comment">// Abort the payment if we can&#39;t reach the gateway within 30 seconds
+        <span class="comment">// Abort the payment if we can't reach the gateway within 30 seconds
         // to prevent unexpected delays for the user.
         </span><span class="kw">let </span>deadline = fedimint_core::time::now() + GATEWAY_API_TIMEOUT;
 
@@ -963,14 +965,14 @@
             <span class="kw">match </span><span class="self">Self</span>::try_gateway_pay_invoice(gateway.clone(), payload.clone()).<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(preimage) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage),
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(<span class="string">&quot;Error while trying to reach gateway: {e}&quot;</span>);
+                    <span class="macro">warn!</span>(<span class="string">"Error while trying to reach gateway: {e}"</span>);
                     last_error = <span class="prelude-val">Some</span>(e);
                     sleep(RETRY_DELAY).<span class="kw">await</span>;
                 }
             }
         }
 
-        <span class="prelude-val">Err</span>(last_error.expect(<span class="string">&quot;Error was set&quot;</span>))
+        <span class="prelude-val">Err</span>(last_error.expect(<span class="string">"Error was set"</span>))
     }
 
     <span class="kw">async fn </span>try_gateway_pay_invoice(
@@ -981,8 +983,8 @@
             .post(
                 gateway
                     .api
-                    .join(<span class="string">&quot;pay_invoice&quot;</span>)
-                    .expect(<span class="string">&quot;&#39;pay_invoice&#39; contains no invalid characters for a URL&quot;</span>)
+                    .join(<span class="string">"pay_invoice"</span>)
+                    .expect(<span class="string">"'pay_invoice' contains no invalid characters for a URL"</span>)
                     .as_str(),
             )
             .json(<span class="kw-2">&amp;</span>payload)
@@ -999,7 +1001,7 @@
                 error_message: response
                     .text()
                     .<span class="kw">await
-                    </span>.expect(<span class="string">&quot;Could not retrieve text from response&quot;</span>),
+                    </span>.expect(<span class="string">"Could not retrieve text from response"</span>),
             });
         }
 
@@ -1009,7 +1011,7 @@
                 .<span class="kw">await
                 </span>.map_err(|<span class="kw">_</span>| GatewayPayError::GatewayInternalError {
                     error_code: <span class="prelude-val">None</span>,
-                    error_message: <span class="string">&quot;Error retrieving preimage from response&quot;</span>.to_string(),
+                    error_message: <span class="string">"Error retrieving preimage from response"</span>.to_string(),
                 })<span class="question-mark">?</span>;
         <span class="kw">let </span>length = preimage.len();
         <span class="prelude-val">Ok</span>(preimage[<span class="number">1</span>..length - <span class="number">1</span>].to_string())
@@ -1020,7 +1022,7 @@
         old_state: LightningPayStateMachine,
         contract_id: ContractId,
         timelock: u32,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         payment_hash: sha256::Hash,
         common: LightningPayCommon,
     ) -&gt; LightningPayStateMachine {
@@ -1102,7 +1104,7 @@
     </span><span class="kw">async fn </span>try_refund_outgoing_contract(
         old_state: LightningPayStateMachine,
         common: LightningPayCommon,
-        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         global_context: DynGlobalClientContext,
     ) -&gt; LightningPayStateMachine {
         <span class="kw">let </span>contract_data = common.contract;
@@ -1141,7 +1143,7 @@
             </span>{
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">return</span>,
                 <span class="prelude-val">Err</span>(error) =&gt; {
-                    <span class="macro">error!</span>(<span class="string">&quot;Error waiting for outgoing contract to be cancelled: {error:?}&quot;</span>);
+                    <span class="macro">error!</span>(<span class="string">"Error waiting for outgoing contract to be cancelled: {error:?}"</span>);
                 }
             }
 
@@ -1157,7 +1159,7 @@
                 .<span class="kw">await
             </span>{
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">return</span>,
-                <span class="prelude-val">Err</span>(error) =&gt; <span class="macro">error!</span>(<span class="string">&quot;Error waiting for block height: {timelock} {error:?}&quot;</span>),
+                <span class="prelude-val">Err</span>(error) =&gt; <span class="macro">error!</span>(<span class="string">"Error waiting for block height: {timelock} {error:?}"</span>),
             }
 
             sleep(RETRY_DELAY).<span class="kw">await</span>;
@@ -1217,7 +1219,7 @@
                 </span>LightningPayStateMachine {
                     common: old_state.common,
                     state: LightningPayStates::Failure(
-                        <span class="string">&quot;Refund Transaction was rejected.&quot;</span>.to_string(),
+                        <span class="string">"Refund Transaction was rejected."</span>.to_string(),
                     ),
                 }
             }
@@ -1250,7 +1252,7 @@
             federation_id: common.federation_id,
             preimage_auth: common.preimage_auth,
             payment_data: PaymentData::PrunedInvoice(
-                common.invoice.try_into().expect(<span class="string">&quot;Invoice has amount&quot;</span>),
+                common.invoice.try_into().expect(<span class="string">"Invoice has amount"</span>),
             ),
         }
     }
@@ -1259,7 +1261,7 @@
 <span class="doccomment">/// Data needed to pay an invoice, may be the whole invoice or only the required
 /// parts of it.
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub enum </span>PaymentData {
     Invoice(Bolt11Invoice),
     PrunedInvoice(PrunedInvoice),

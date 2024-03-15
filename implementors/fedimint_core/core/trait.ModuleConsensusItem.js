@@ -1,7 +1,0 @@
-(function() {var implementors = {
-"fedimint_dummy_common":[["impl ModuleConsensusItem for <a class=\"struct\" href=\"fedimint_dummy_common/struct.DummyConsensusItem.html\" title=\"struct fedimint_dummy_common::DummyConsensusItem\">DummyConsensusItem</a>"]],
-"fedimint_ln_common":[["impl ModuleConsensusItem for <a class=\"enum\" href=\"fedimint_ln_common/enum.LightningConsensusItem.html\" title=\"enum fedimint_ln_common::LightningConsensusItem\">LightningConsensusItem</a>"]],
-"fedimint_mint_common":[["impl ModuleConsensusItem for <a class=\"enum\" href=\"fedimint_mint_common/enum.MintConsensusItem.html\" title=\"enum fedimint_mint_common::MintConsensusItem\">MintConsensusItem</a>"]],
-"fedimint_unknown_common":[["impl ModuleConsensusItem for <a class=\"struct\" href=\"fedimint_unknown_common/struct.UnknownConsensusItem.html\" title=\"struct fedimint_unknown_common::UnknownConsensusItem\">UnknownConsensusItem</a>"]],
-"fedimint_wallet_common":[["impl ModuleConsensusItem for <a class=\"enum\" href=\"fedimint_wallet_common/enum.WalletConsensusItem.html\" title=\"enum fedimint_wallet_common::WalletConsensusItem\">WalletConsensusItem</a>"]]
-};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

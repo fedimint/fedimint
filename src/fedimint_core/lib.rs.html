@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_core/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_core/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -594,7 +596,6 @@
 <a href="#594" id="594">594</a>
 <a href="#595" id="595">595</a>
 <a href="#596" id="596">596</a>
-<a href="#597" id="597">597</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span><span class="self">self </span><span class="kw">as </span>fedimint_core;
 
@@ -621,8 +622,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
-<span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
-</span><span class="kw">pub mod </span>admin_client;
+<span class="kw">pub mod </span>admin_client;
 <span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>backup;
 <span class="kw">pub mod </span>bitcoin_migration;
@@ -658,7 +658,7 @@
     TransactionId,
     Sha256,
     <span class="number">32</span>,
-    doc = <span class="string">&quot;A transaction id for peg-ins, peg-outs and reissuances&quot;
+    doc = <span class="string">"A transaction id for peg-ins, peg-outs and reissuances"
 </span>);
 
 <span class="attr">#[derive(
@@ -689,7 +689,7 @@
 
 <span class="doccomment">/// Represents an amount of BTC inside the system. The base denomination is
 /// milli satoshi for now, this is also why the amount type from rust-bitcoin
-/// isn&#39;t used instead.
+/// isn't used instead.
 </span><span class="attr">#[derive(
     Debug,
     Clone,
@@ -738,10 +738,10 @@
         }
     }
 
-    <span class="comment">// Makes sure we&#39;re dealing with a precision of satoshi or higher
+    <span class="comment">// Makes sure we're dealing with a precision of satoshi or higher
     </span><span class="kw">pub fn </span>ensure_sats_precision(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">if </span><span class="self">self</span>.msats % <span class="number">1000 </span>!= <span class="number">0 </span>{
-            <span class="macro">bail!</span>(<span class="string">&quot;Amount is using a precision smaller than satoshi, cannot convert to satoshis&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">"Amount is using a precision smaller than satoshi, cannot convert to satoshis"</span>);
         }
         <span class="prelude-val">Ok</span>(())
     }
@@ -762,7 +762,7 @@
 
 <span class="doccomment">/// Shorthand for [`Amount::from_msats`]
 ///
-/// Useful only for tests, but it&#39;s so common that it makes sense to have
+/// Useful only for tests, but it's so common that it makes sense to have
 /// it in the main `fedimint-api` crate.
 </span><span class="kw">pub fn </span>msats(msats: u64) -&gt; Amount {
     Amount::from_msats(msats)
@@ -778,7 +778,7 @@
         <span class="kw">pub mod </span>as_msat {
             <span class="doccomment">//! Serialize and deserialize [`Amount`](crate::Amount) as integers
             //! denominated in milli-satoshi. Use with
-            //! `#[serde(with = &quot;amount::serde::as_msat&quot;)]`.
+            //! `#[serde(with = "amount::serde::as_msat")]`.
 
             </span><span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -786,27 +786,27 @@
                 u64::serialize(<span class="kw-2">&amp;</span>a.msats, s)
             }
 
-            <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">&#39;d</span>, D: Deserializer&lt;<span class="lifetime">&#39;d</span>&gt;&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">crate</span>::Amount, D::Error&gt; {
+            <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">'d</span>, D: Deserializer&lt;<span class="lifetime">'d</span>&gt;&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">crate</span>::Amount, D::Error&gt; {
                 <span class="prelude-val">Ok</span>(<span class="kw">crate</span>::Amount::from_msats(u64::deserialize(d)<span class="question-mark">?</span>))
             }
         }
     }
 }
 
-<span class="doccomment">/// Amount of bitcoin to send, or &quot;all&quot; to send all available funds
+<span class="doccomment">/// Amount of bitcoin to send, or "all" to send all available funds
 </span><span class="attr">#[derive(Debug, Eq, PartialEq, Copy, Hash, Clone, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub enum </span>BitcoinAmountOrAll {
     All,
     <span class="attr">#[serde(untagged)]
-    </span>Amount(<span class="attr">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)] </span>bitcoin::Amount),
+    </span>Amount(<span class="attr">#[serde(with = <span class="string">"bitcoin::util::amount::serde::as_sat"</span>)] </span>bitcoin::Amount),
 }
 
 <span class="kw">impl </span>FromStr <span class="kw">for </span>BitcoinAmountOrAll {
     <span class="kw">type </span><span class="prelude-val">Err </span>= anyhow::Error;
 
     <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; std::result::Result&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
-        <span class="kw">if </span>s == <span class="string">&quot;all&quot; </span>{
+        <span class="kw">if </span>s == <span class="string">"all" </span>{
             <span class="prelude-val">Ok</span>(BitcoinAmountOrAll::All)
         } <span class="kw">else </span>{
             <span class="kw">let </span>amount = <span class="kw">crate</span>::Amount::from_str(s)<span class="question-mark">?</span>;
@@ -842,9 +842,9 @@
 
 <span class="attr">#[derive(Error, Debug)]
 </span><span class="kw">pub enum </span>ParseAmountError {
-    <span class="attr">#[error(<span class="string">&quot;Error parsing string as integer: {0}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Error parsing string as integer: {0}"</span>)]
     </span>NotANumber(<span class="attr">#[from] </span>ParseIntError),
-    <span class="attr">#[error(<span class="string">&quot;Error parsing string as a bitcoin amount: {0}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">"Error parsing string as a bitcoin amount: {0}"</span>)]
     </span>WrongBitcoinAmount(<span class="attr">#[from] </span>bitcoin::util::amount::ParseAmountError),
 }
 
@@ -911,8 +911,8 @@
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>PeerId {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, <span class="self">self</span>.<span class="number">0</span>)
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"{}"</span>, <span class="self">self</span>.<span class="number">0</span>)
     }
 }
 
@@ -929,14 +929,14 @@
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>Amount {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;{} msat&quot;</span>, <span class="self">self</span>.msats)
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"{} msat"</span>, <span class="self">self</span>.msats)
     }
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>OutPoint {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;{}:{}&quot;</span>, <span class="self">self</span>.txid, <span class="self">self</span>.out_idx)
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"{}:{}"</span>, <span class="self">self</span>.txid, <span class="self">self</span>.out_idx)
     }
 }
 
@@ -1111,8 +1111,8 @@
 
 <span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>CoreError {
-    <span class="attr">#[error(<span class="string">&quot;Mismatching outcome variant: expected {0}, got {1}&quot;</span>)]
-    </span>MismatchingVariant(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str),
+    <span class="attr">#[error(<span class="string">"Mismatching outcome variant: expected {0}, got {1}"</span>)]
+    </span>MismatchingVariant(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str),
 }
 
 <span class="attr">#[cfg(test)]
@@ -1145,47 +1145,47 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_amount_parsing() {
         <span class="comment">// msats
-        </span><span class="macro">assert_eq!</span>(Amount::from_msats(<span class="number">123</span>), Amount::from_str(<span class="string">&quot;123&quot;</span>).unwrap());
+        </span><span class="macro">assert_eq!</span>(Amount::from_msats(<span class="number">123</span>), Amount::from_str(<span class="string">"123"</span>).unwrap());
         <span class="macro">assert_eq!</span>(
             Amount::from_msats(<span class="number">123</span>),
-            Amount::from_str(<span class="string">&quot;123msat&quot;</span>).unwrap()
+            Amount::from_str(<span class="string">"123msat"</span>).unwrap()
         );
         <span class="macro">assert_eq!</span>(
             Amount::from_msats(<span class="number">123</span>),
-            Amount::from_str(<span class="string">&quot;123 msat&quot;</span>).unwrap()
+            Amount::from_str(<span class="string">"123 msat"</span>).unwrap()
         );
         <span class="macro">assert_eq!</span>(
             Amount::from_msats(<span class="number">123</span>),
-            Amount::from_str(<span class="string">&quot;123 msats&quot;</span>).unwrap()
+            Amount::from_str(<span class="string">"123 msats"</span>).unwrap()
         );
         <span class="comment">// sats
-        </span><span class="macro">assert_eq!</span>(Amount::from_sats(<span class="number">123</span>), Amount::from_str(<span class="string">&quot;123sat&quot;</span>).unwrap());
-        <span class="macro">assert_eq!</span>(Amount::from_sats(<span class="number">123</span>), Amount::from_str(<span class="string">&quot;123 sat&quot;</span>).unwrap());
+        </span><span class="macro">assert_eq!</span>(Amount::from_sats(<span class="number">123</span>), Amount::from_str(<span class="string">"123sat"</span>).unwrap());
+        <span class="macro">assert_eq!</span>(Amount::from_sats(<span class="number">123</span>), Amount::from_str(<span class="string">"123 sat"</span>).unwrap());
         <span class="macro">assert_eq!</span>(
             Amount::from_sats(<span class="number">123</span>),
-            Amount::from_str(<span class="string">&quot;123satoshi&quot;</span>).unwrap()
+            Amount::from_str(<span class="string">"123satoshi"</span>).unwrap()
         );
         <span class="macro">assert_eq!</span>(
             Amount::from_sats(<span class="number">123</span>),
-            Amount::from_str(<span class="string">&quot;123satoshis&quot;</span>).unwrap()
+            Amount::from_str(<span class="string">"123satoshis"</span>).unwrap()
         );
         <span class="comment">// btc
         </span><span class="macro">assert_eq!</span>(
             Amount::from_bitcoins(<span class="number">123</span>),
-            Amount::from_str(<span class="string">&quot;123btc&quot;</span>).unwrap()
+            Amount::from_str(<span class="string">"123btc"</span>).unwrap()
         );
         <span class="macro">assert_eq!</span>(
             Amount::from_sats(<span class="number">12_345_600_000</span>),
-            Amount::from_str(<span class="string">&quot;123.456btc&quot;</span>).unwrap()
+            Amount::from_str(<span class="string">"123.456btc"</span>).unwrap()
         );
     }
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_deserialize_amount_or_all() {
-        <span class="kw">let </span>all: BitcoinAmountOrAll = serde_json::from_str(<span class="string">&quot;\&quot;all\&quot;&quot;</span>).unwrap();
+        <span class="kw">let </span>all: BitcoinAmountOrAll = serde_json::from_str(<span class="string">"\"all\""</span>).unwrap();
         <span class="macro">assert_eq!</span>(all, BitcoinAmountOrAll::All);
 
-        <span class="kw">let </span>all: BitcoinAmountOrAll = serde_json::from_str(<span class="string">&quot;12345&quot;</span>).unwrap();
+        <span class="kw">let </span>all: BitcoinAmountOrAll = serde_json::from_str(<span class="string">"12345"</span>).unwrap();
         <span class="macro">assert_eq!</span>(
             all,
             BitcoinAmountOrAll::Amount(bitcoin::Amount::from_sat(<span class="number">12345</span>))

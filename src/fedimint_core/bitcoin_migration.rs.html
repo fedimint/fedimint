@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/bitcoin_migration.rs`."><title>bitcoin_migration.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_core/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/bitcoin_migration.rs`."><title>bitcoin_migration.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_core/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -204,7 +206,7 @@
 
 <span class="kw">pub fn </span>bitcoin29_to_bitcoin30_public_key(pk: bitcoin::PublicKey) -&gt; bitcoin30::PublicKey {
     bitcoin30::PublicKey::from_slice(<span class="kw-2">&amp;</span>pk.to_bytes())
-        .expect(<span class="string">&quot;Failed to convert bitcoin v29 public key to bitcoin v30 public key&quot;</span>)
+        .expect(<span class="string">"Failed to convert bitcoin v29 public key to bitcoin v30 public key"</span>)
 }
 
 <span class="kw">pub fn </span>bitcoin29_to_bitcoin30_network(network: bitcoin::Network) -&gt; bitcoin30::Network {
@@ -222,7 +224,7 @@
 
 <span class="kw">pub fn </span>bitcoin30_to_bitcoin29_address(address: bitcoin30::Address) -&gt; bitcoin::Address {
     bitcoin::Address::from_str(<span class="kw-2">&amp;</span>address.to_string())
-        .expect(<span class="string">&quot;Failed to convert bitcoin v30 address to bitcoin v29 address&quot;</span>)
+        .expect(<span class="string">"Failed to convert bitcoin v30 address to bitcoin v29 address"</span>)
 }
 
 <span class="kw">pub fn </span>bitcoin29_to_bitcoin30_ripemd160_hash(
@@ -252,7 +254,7 @@
 
     <span class="kw">fn </span>bitcoin30_to_bitcoin29_public_key(pk: bitcoin30::PublicKey) -&gt; bitcoin::PublicKey {
         bitcoin::PublicKey::from_slice(<span class="kw-2">&amp;</span>pk.to_bytes())
-            .expect(<span class="string">&quot;Failed to convert bitcoin v30 public key to bitcoin v29 public key&quot;</span>)
+            .expect(<span class="string">"Failed to convert bitcoin v30 public key to bitcoin v29 public key"</span>)
     }
 
     <span class="kw">fn </span>bitcoin29_to_bitcoin30_script(script: bitcoin::Script) -&gt; bitcoin30::ScriptBuf {
@@ -262,9 +264,9 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_bitcoin29_to_bitcoin30_and_back_public_key() {
         <span class="kw">let </span>bitcoin29_pk: bitcoin::PublicKey =
-            <span class="string">&quot;037703ba67395870e5237787f380708f1b13751f7bdd97682e8f5af3f3a10a0a52&quot;
+            <span class="string">"037703ba67395870e5237787f380708f1b13751f7bdd97682e8f5af3f3a10a0a52"
                 </span>.parse()
-                .expect(<span class="string">&quot;Failed to parse bitcoin v29 public key&quot;</span>);
+                .expect(<span class="string">"Failed to parse bitcoin v29 public key"</span>);
 
         <span class="kw">let </span>bitcoin30_pk = bitcoin29_to_bitcoin30_public_key(bitcoin29_pk);
         <span class="kw">let </span>bitcoin29_pk_back = bitcoin30_to_bitcoin29_public_key(bitcoin30_pk);
@@ -275,9 +277,9 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_bitcoin30_to_bitcoin29_and_back_public_key() {
         <span class="kw">let </span>bitcoin30_pk: bitcoin30::PublicKey =
-            <span class="string">&quot;0355aba9599a27e71eb515c813252f630c5914eb76b199b11db4265107619e8dcc&quot;
+            <span class="string">"0355aba9599a27e71eb515c813252f630c5914eb76b199b11db4265107619e8dcc"
                 </span>.parse()
-                .expect(<span class="string">&quot;Failed to parse bitcoin v30 public key&quot;</span>);
+                .expect(<span class="string">"Failed to parse bitcoin v30 public key"</span>);
 
         <span class="kw">let </span>bitcoin29_pk = bitcoin30_to_bitcoin29_public_key(bitcoin30_pk);
         <span class="kw">let </span>bitcoin30_pk_back = bitcoin29_to_bitcoin30_public_key(bitcoin29_pk);
@@ -345,12 +347,12 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_bitcoin29_to_bitcoin30_ripemd160_hash() {
         <span class="kw">let </span>bitcoin29_hash =
-            bitcoin::hashes::ripemd160::Hash::from_hex(<span class="string">&quot;0123456789012345678901234567890123456789&quot;</span>)
-                .expect(<span class="string">&quot;Failed to parse bitcoin v29 ripemd160 hash&quot;</span>);
+            bitcoin::hashes::ripemd160::Hash::from_hex(<span class="string">"0123456789012345678901234567890123456789"</span>)
+                .expect(<span class="string">"Failed to parse bitcoin v29 ripemd160 hash"</span>);
         <span class="kw">let </span>bitcoin30_hash = bitcoin30::hashes::ripemd160::Hash::from_str(
-            <span class="string">&quot;0123456789012345678901234567890123456789&quot;</span>,
+            <span class="string">"0123456789012345678901234567890123456789"</span>,
         )
-        .expect(<span class="string">&quot;Failed to parse bitcoin v30 ripemd160 hash&quot;</span>);
+        .expect(<span class="string">"Failed to parse bitcoin v30 ripemd160 hash"</span>);
 
         <span class="comment">// Assert that bitcoin29-&gt;bitcoin30 ripemd160 hash is the same as native
         // bitcoin30 ripemd160 hash.
@@ -363,11 +365,11 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_bitcoin29_to_bitcoin30_hash160_hash() {
         <span class="kw">let </span>bitcoin29_hash =
-            bitcoin::hashes::hash160::Hash::from_hex(<span class="string">&quot;0123456789012345678901234567890123456789&quot;</span>)
-                .expect(<span class="string">&quot;Failed to parse bitcoin v29 hash160 hash&quot;</span>);
+            bitcoin::hashes::hash160::Hash::from_hex(<span class="string">"0123456789012345678901234567890123456789"</span>)
+                .expect(<span class="string">"Failed to parse bitcoin v29 hash160 hash"</span>);
         <span class="kw">let </span>bitcoin30_hash =
-            bitcoin30::hashes::hash160::Hash::from_str(<span class="string">&quot;0123456789012345678901234567890123456789&quot;</span>)
-                .expect(<span class="string">&quot;Failed to parse bitcoin v30 hash160 hash&quot;</span>);
+            bitcoin30::hashes::hash160::Hash::from_str(<span class="string">"0123456789012345678901234567890123456789"</span>)
+                .expect(<span class="string">"Failed to parse bitcoin v30 hash160 hash"</span>);
 
         <span class="comment">// Assert that bitcoin29-&gt;bitcoin30 hash160 hash is the same as native bitcoin30
         // hash160 hash.
@@ -380,13 +382,13 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_bitcoin29_to_bitcoin30_sha256_hash() {
         <span class="kw">let </span>bitcoin29_hash = bitcoin::hashes::sha256::Hash::from_hex(
-            <span class="string">&quot;0123456789012345678901234567890123456789012345678901234567890123&quot;</span>,
+            <span class="string">"0123456789012345678901234567890123456789012345678901234567890123"</span>,
         )
-        .expect(<span class="string">&quot;Failed to parse bitcoin v29 sha256 hash&quot;</span>);
+        .expect(<span class="string">"Failed to parse bitcoin v29 sha256 hash"</span>);
         <span class="kw">let </span>bitcoin30_hash = bitcoin30::hashes::sha256::Hash::from_str(
-            <span class="string">&quot;0123456789012345678901234567890123456789012345678901234567890123&quot;</span>,
+            <span class="string">"0123456789012345678901234567890123456789012345678901234567890123"</span>,
         )
-        .expect(<span class="string">&quot;Failed to parse bitcoin v30 sha256 hash&quot;</span>);
+        .expect(<span class="string">"Failed to parse bitcoin v30 sha256 hash"</span>);
 
         <span class="comment">// Assert that bitcoin29-&gt;bitcoin30 sha256 hash is the same as native bitcoin30
         // sha256 hash.

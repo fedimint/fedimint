@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/sm/state.rs`."><title>state.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/sm/state.rs`."><title>state.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_client/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -497,9 +499,9 @@
     + Decodable
     + MaybeSend
     + MaybeSync
-    + <span class="lifetime">&#39;static
+    + <span class="lifetime">'static
 </span>{
-    <span class="doccomment">/// Additional resources made available in this module&#39;s state transitions
+    <span class="doccomment">/// Additional resources made available in this module's state transitions
     </span><span class="kw">type </span>ModuleContext: Context;
 
     <span class="doccomment">/// All possible transitions from the current state to other states. See
@@ -554,30 +556,30 @@
 
 <span class="doccomment">/// Additional data made available to state machines of a module (e.g. API
 /// clients)
-</span><span class="kw">pub trait </span>Context: std::fmt::Debug + MaybeSend + MaybeSync + <span class="lifetime">&#39;static </span>{}
+</span><span class="kw">pub trait </span>Context: std::fmt::Debug + MaybeSend + MaybeSync + <span class="lifetime">'static </span>{}
 
 <span class="kw">impl </span>Context <span class="kw">for </span>() {}
 
 <span class="doccomment">/// Type-erased version of [`Context`]
 </span><span class="kw">impl</span>&lt;T&gt; IContext <span class="kw">for </span>T
 <span class="kw">where
-    </span>T: Context + <span class="lifetime">&#39;static </span>+ MaybeSend + MaybeSync,
+    </span>T: Context + <span class="lifetime">'static </span>+ MaybeSend + MaybeSync,
 {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Any)) {
         <span class="self">self
     </span>}
 }
 
-<span class="kw">type </span>TriggerFuture = Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Future&lt;Output = serde_json::Value&gt; + <span class="lifetime">&#39;static</span>)&gt;&gt;;
+<span class="kw">type </span>TriggerFuture = Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Future&lt;Output = serde_json::Value&gt; + <span class="lifetime">'static</span>)&gt;&gt;;
 
 <span class="comment">// TODO: remove Arc, maybe make it a fn pointer?
 </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">type </span>StateTransitionFunction&lt;S&gt; = Arc&lt;
     <span class="macro">maybe_add_send_sync!</span>(
-        <span class="kw">dyn for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(
-            <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        <span class="kw">dyn for</span>&lt;<span class="lifetime">'a</span>&gt; Fn(
+            <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
             serde_json::Value,
             S,
-        ) -&gt; BoxFuture&lt;<span class="lifetime">&#39;a</span>, S&gt;
+        ) -&gt; BoxFuture&lt;<span class="lifetime">'a</span>, S&gt;
     ),
 &gt;;
 
@@ -619,25 +621,25 @@
         transition: TransitionFn,
     ) -&gt; StateTransition&lt;S&gt;
     <span class="kw">where
-        </span>S: MaybeSend + MaybeSync + Clone + <span class="lifetime">&#39;static</span>,
+        </span>S: MaybeSend + MaybeSync + Clone + <span class="lifetime">'static</span>,
         V: serde::Serialize + serde::de::DeserializeOwned + Send,
-        Trigger: Future&lt;Output = V&gt; + MaybeSend + <span class="lifetime">&#39;static</span>,
-        TransitionFn: <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;, V, S) -&gt; BoxFuture&lt;<span class="lifetime">&#39;a</span>, S&gt;
+        Trigger: Future&lt;Output = V&gt; + MaybeSend + <span class="lifetime">'static</span>,
+        TransitionFn: <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; Fn(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;, V, S) -&gt; BoxFuture&lt;<span class="lifetime">'a</span>, S&gt;
             + MaybeSend
             + MaybeSync
             + Clone
-            + <span class="lifetime">&#39;static</span>,
+            + <span class="lifetime">'static</span>,
     {
         StateTransition {
             trigger: Box::pin(<span class="kw">async move </span>{
                 <span class="kw">let </span>val = trigger.<span class="kw">await</span>;
-                serde_json::to_value(val).expect(<span class="string">&quot;Value could not be serialized&quot;</span>)
+                serde_json::to_value(val).expect(<span class="string">"Value could not be serialized"</span>)
             }),
             transition: Arc::new(<span class="kw">move </span>|dbtx, val, state| {
                 <span class="kw">let </span>transition = transition.clone();
                 Box::pin(<span class="kw">async move </span>{
                     <span class="kw">let </span>typed_val: V = serde_json::from_value(val)
-                        .expect(<span class="string">&quot;Deserialize trigger return value failed&quot;</span>);
+                        .expect(<span class="string">"Deserialize trigger return value failed"</span>);
                     transition(dbtx, typed_val, state.clone()).<span class="kw">await
                 </span>})
             }),
@@ -660,14 +662,14 @@
     ) -&gt; Vec&lt;StateTransition&lt;DynState&gt;&gt; {
         &lt;T <span class="kw">as </span>State&gt;::transitions(
             <span class="self">self</span>,
-            context.as_any().downcast_ref().expect(<span class="string">&quot;Wrong module&quot;</span>),
+            context.as_any().downcast_ref().expect(<span class="string">"Wrong module"</span>),
             global_context,
         )
         .into_iter()
         .map(|st| StateTransition {
             trigger: st.trigger,
             transition: Arc::new(
-                <span class="kw">move </span>|dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;, val, state: DynState| {
+                <span class="kw">move </span>|dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;, val, state: DynState| {
                     <span class="kw">let </span>transition = st.transition.clone();
                     Box::pin(<span class="kw">async move </span>{
                         <span class="kw">let </span>new_state = transition(
@@ -676,7 +678,7 @@
                             state
                                 .as_any()
                                 .downcast_ref::&lt;T&gt;()
-                                .expect(<span class="string">&quot;Wrong module&quot;</span>)
+                                .expect(<span class="string">"Wrong module"</span>)
                                 .clone(),
                         )
                         .<span class="kw">await</span>;
@@ -700,7 +702,7 @@
         <span class="kw">let </span>other: <span class="kw-2">&amp;</span>T = other
             .as_any()
             .downcast_ref()
-            .expect(<span class="string">&quot;Type is ensured in previous step&quot;</span>);
+            .expect(<span class="string">"Type is ensured in previous step"</span>);
 
         <span class="self">self </span>== other
     }
@@ -713,12 +715,12 @@
 <span class="doccomment">/// A type-erased state of a state machine belonging to a module instance, see
 /// [`State`]
 </span><span class="kw">pub struct </span>DynState(
-    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>)&gt;,
+    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;,
     ModuleInstanceId,
 );
 
 <span class="kw">impl </span>std::ops::Deref <span class="kw">for </span>DynState {
-    <span class="kw">type </span>Target = <span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>);
+    <span class="kw">type </span>Target = <span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>);
 
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
         <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="number">0
@@ -739,21 +741,21 @@
 
     <span class="kw">pub fn </span>from_typed&lt;I&gt;(module_instance_id: ModuleInstanceId, typed: I) -&gt; <span class="self">Self
     </span><span class="kw">where
-        </span>I: IState + <span class="lifetime">&#39;static</span>,
+        </span>I: IState + <span class="lifetime">'static</span>,
     {
         <span class="self">Self</span>(Box::new(typed), module_instance_id)
     }
 
     <span class="kw">pub fn </span>from_parts(
         module_instance_id: ::fedimint_core::core::ModuleInstanceId,
-        dynbox: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">&#39;static</span>)&gt;,
+        dynbox: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(dynbox, module_instance_id)
     }
 }
 
 <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>DynState {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
         std::fmt::Debug::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, f)
     }
 }
@@ -813,7 +815,7 @@
     <span class="kw">pub </span>state: S,
 }
 
-<span class="doccomment">/// Wrapper for states that don&#39;t want to carry around their operation id. `S`
+<span class="doccomment">/// Wrapper for states that don't want to carry around their operation id. `S`
 /// is allowed to panic when `operation_id` is called.
 </span><span class="kw">impl</span>&lt;S&gt; State <span class="kw">for </span>OperationState&lt;S&gt;
 <span class="kw">where
