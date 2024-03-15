@@ -4,6 +4,7 @@ use bitcoin_hashes::sha256;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_ln_common::LightningGatewayRegistration;
+use secp256k1::PublicKey;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -13,11 +14,10 @@ use crate::OutgoingLightningPayment;
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     // Deprecated
-    // Lightning Gateway cache records are stored the same way as the server, using 0x45
-    // [`fedimint_ln_common::db::DbKeyPrefix::LightningGateway`].
     ActiveGateway = 0x28,
     PaymentResult = 0x29,
     MetaOverrides = 0x30,
+    LightningGateway = 0x45,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -27,19 +27,19 @@ impl std::fmt::Display for DbKeyPrefix {
 }
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct LightningGatewayKey;
+pub struct ActiveGatewayKey;
 
 #[derive(Debug, Encodable, Decodable)]
-pub struct LightningGatewayKeyPrefix;
+pub struct ActiveGatewayKeyPrefix;
 
 impl_db_record!(
-    key = LightningGatewayKey,
+    key = ActiveGatewayKey,
     value = LightningGatewayRegistration,
     db_prefix = DbKeyPrefix::ActiveGateway,
 );
 impl_db_lookup!(
-    key = LightningGatewayKey,
-    query_prefix = LightningGatewayKeyPrefix
+    key = ActiveGatewayKey,
+    query_prefix = ActiveGatewayKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -83,3 +83,19 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = MetaOverridesKey, query_prefix = MetaOverridesPrefix);
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct LightningGatewayKey(pub PublicKey);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct LightningGatewayKeyPrefix;
+
+impl_db_record!(
+    key = LightningGatewayKey,
+    value = LightningGatewayRegistration,
+    db_prefix = DbKeyPrefix::LightningGateway,
+);
+impl_db_lookup!(
+    key = LightningGatewayKey,
+    query_prefix = LightningGatewayKeyPrefix
+);
