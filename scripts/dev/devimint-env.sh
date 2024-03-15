@@ -26,6 +26,6 @@ function devimint_env {
 }
 export -f devimint_env
 
-env RUST_LOG=warn,jsonrpsee-client=off \
+env RUST_LOG="${RUST_LOG:-info,jsonrpsee-client=off}" \
   devimint --link-test-dir "${CARGO_BUILD_TARGET_DIR:-$PWD/target}/devimint" "$@" dev-fed \
     --exec bash -c devimint_env
