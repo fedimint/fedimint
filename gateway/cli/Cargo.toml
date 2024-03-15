@@ -19,8 +19,8 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.81"
 async-trait = "0.1.77"
-axum = "0.6.20"
-axum-macros = "0.3.8"
+axum = "0.7.4"
+axum-macros = "0.4.1"
 bitcoin = { version = "0.29.2", features = ["serde"] }
 clap = { version = "4.5.2", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
 ln-gateway = { version = "0.3.0-alpha", package = "fedimint-ln-gateway", path= "../ln-gateway" }

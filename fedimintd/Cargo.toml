@@ -33,7 +33,7 @@ bitcoin = "0.29.2"
 bytes = "1.5.0"
 clap = { version = "4.5.2", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
 futures = "0.3.30"
-itertools = "0.10.5"
+itertools = "0.12.1"
 jsonrpsee = { version = "0.22.2", features = ["server"] }
 fedimint-bitcoind = { version = "0.3.0-alpha", path = "../fedimint-bitcoind" }
 fedimint-core = { version = "0.3.0-alpha", path = "../fedimint-core" }
@@ -63,12 +63,12 @@ url = { version = "2.5.0", features = ["serde"] }
 threshold_crypto = { workspace = true }
 
 # setup dependencies
-axum = { version = "0.6.20", default-features = false, features = [ "form", "tokio" ] }
+axum = { version = "0.7.4", default-features = false, features = [ "form", "tokio" ] }
 http = "1.1"
 http-body = "1.0"
 hyper = { version = "1.2", features = ["full"] }
 tower = { version = "0.4", features = ["util"] }
-console-subscriber = "0.1.10"
+console-subscriber = "0.2.0"
 
 [build-dependencies]
 fedimint-build = { version = "0.3.0-alpha", path = "../fedimint-build" }

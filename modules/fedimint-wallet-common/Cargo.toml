@@ -19,22 +19,22 @@ path = "src/lib.rs"
 anyhow = "1.0.81"
 async-trait = "0.1.77"
 bitcoin = { version = "0.29.2", features = [ "rand", "serde"] }
-erased-serde = "0.3"
+erased-serde = "0.4"
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
 futures = "0.3"
 miniscript = { version = "10.0.0", features = [ "compiler", "serde" ] }
 miniscript9 = { package = "miniscript", version = "9.0.2" }
-impl-tools = "0.8.0"
+impl-tools = "0.10.0"
 rand = "0.8"
 secp256k1 = { version = "0.24.3", features = [ "serde" ] }
 serde = { version = "1.0.197", features = [ "derive" ] }
-strum = "0.24"
-strum_macros = "0.24"
+strum = "0.26"
+strum_macros = "0.26"
 thiserror = "1.0.58"
 tokio = { version = "1.36.0", features = ["sync"], optional = true }
 tracing ="0.1.40"
 url = "2.5.0"
-validator = { version = "0.16", features = ["derive"] }
+validator = { version = "0.17", features = ["derive"] }
 
 [dev-dependencies]
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }

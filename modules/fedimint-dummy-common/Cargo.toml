@@ -19,14 +19,14 @@ path = "src/lib.rs"
 anyhow = "1.0.81"
 async-trait = "0.1.77"
 bitcoin_hashes = "0.11.0"
-erased-serde = "0.3"
+erased-serde = "0.4"
 futures = "0.3"
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
 rand = "0.8"
 serde = { version = "1.0.197", features = [ "derive" ] }
 secp256k1 = "0.24.3"
-strum = "0.24"
-strum_macros = "0.24"
+strum = "0.26"
+strum_macros = "0.26"
 thiserror = "1.0.58"
 tracing = "0.1.40"
 threshold_crypto = { workspace = true }
