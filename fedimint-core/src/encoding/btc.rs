@@ -20,11 +20,11 @@ macro_rules! impl_encode_decode_bridge {
         }
 
         impl crate::encoding::Decodable for $btc_type {
-            fn consensus_decode<D: std::io::Read>(
+            fn consensus_decode_from_finite_reader<D: std::io::Read>(
                 d: &mut D,
                 _modules: &$crate::module::registry::ModuleDecoderRegistry,
             ) -> Result<Self, crate::encoding::DecodeError> {
-                bitcoin::consensus::Decodable::consensus_decode(d)
+                bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(d)
                     .map_err(crate::encoding::DecodeError::from_err)
             }
         }
@@ -56,11 +56,11 @@ where
     <Self as FromStr>::Err: ToString + std::error::Error + Send + Sync + 'static,
     K: MiniscriptKey,
 {
-    fn consensus_decode<D: std::io::Read>(
+    fn consensus_decode_from_finite_reader<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let descriptor_str = String::consensus_decode(d, modules)?;
+        let descriptor_str = String::consensus_decode_from_finite_reader(d, modules)?;
         Descriptor::<K>::from_str(&descriptor_str).map_err(DecodeError::from_err)
     }
 }

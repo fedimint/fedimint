@@ -311,15 +311,18 @@ macro_rules! module_plugin_dyn_newtype_encode_decode {
         }
 
         impl Decodable for $name {
-            fn consensus_decode<R: std::io::Read>(
+            fn consensus_decode_from_finite_reader<R: std::io::Read>(
                 reader: &mut R,
                 modules: &$crate::module::registry::ModuleDecoderRegistry,
             ) -> Result<Self, fedimint_core::encoding::DecodeError> {
                 let module_instance_id =
-                    fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)?;
+                    fedimint_core::core::ModuleInstanceId::consensus_decode_from_finite_reader(
+                        reader, modules,
+                    )?;
                 let val = match modules.get(module_instance_id) {
                     Some(decoder) => {
-                        let total_len_u64 = u64::consensus_decode(reader, modules)?;
+                        let total_len_u64 =
+                            u64::consensus_decode_from_finite_reader(reader, modules)?;
                         let mut reader = std::io::Read::take(reader, total_len_u64);
                         let v = decoder.decode(&mut reader, module_instance_id, modules)?;
 
@@ -343,10 +346,12 @@ macro_rules! module_plugin_dyn_newtype_encode_decode {
                         }
                         $crate::module::registry::DecodingMode::Fallback => $name::from_typed(
                             module_instance_id,
-                            $crate::core::DynUnknown(Vec::<u8>::consensus_decode(
-                                reader,
-                                &Default::default(),
-                            )?),
+                            $crate::core::DynUnknown(
+                                Vec::<u8>::consensus_decode_from_finite_reader(
+                                    reader,
+                                    &Default::default(),
+                                )?,
+                            ),
                         ),
                     },
                 };
