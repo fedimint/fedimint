@@ -85,7 +85,7 @@ pub struct EmptyClientInit;
 #[apply(async_trait_maybe_send!)]
 impl ModuleInit for EmptyClientInit {
     type Common = EmptyCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(2);
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     async fn dump_database(
         &self,
