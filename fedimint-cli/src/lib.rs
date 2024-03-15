@@ -480,7 +480,8 @@ impl FedimintCli {
             .init()
             .expect("tracing initializes");
 
-        debug!("Starting fedimint-cli (version: {})", version_hash);
+        let version = env!("CARGO_PKG_VERSION");
+        debug!("Starting fedimint-cli (version: {version} version_hash: {version_hash})");
 
         Ok(Self {
             module_inits: ClientModuleInitRegistry::new(),

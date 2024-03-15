@@ -1,3 +1,5 @@
+mod metrics;
+
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -31,6 +33,7 @@ use tokio::select;
 use tracing::{debug, error, info, warn};
 
 use crate::envs::FM_DISABLE_META_MODULE_ENV;
+use crate::fedimintd::metrics::APP_START_TS;
 use crate::{attach_default_module_init_params, attach_unknown_module_init_params};
 
 /// Time we will wait before forcefully shutting down tasks
@@ -151,7 +154,12 @@ impl Fedimintd {
 
         handle_version_hash_command(version_hash);
 
-        info!("Starting fedimintd (version_hash: {})", version_hash);
+        let version = env!("CARGO_PKG_VERSION");
+        info!("Starting fedimintd (version: {version} version_hash: {version_hash})");
+
+        APP_START_TS
+            .with_label_values(&[version, version_hash])
+            .set(fedimint_core::time::duration_since_epoch().as_secs() as i64);
 
         Ok(Self {
             server_gens: ServerModuleInitRegistry::new(),
