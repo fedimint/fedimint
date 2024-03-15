@@ -91,4 +91,4 @@ You can then interact with the guardians and lightning gateway through the mproc
 If you want to run with UIs, see the [UI](https://github.com/fedimint/ui) repo for developer environment instructions.
 
 # Contributing
-For contribution guidelines and how to get involved, please refer to the [CONTRIBUTING.md](https://github.com/fedimint/fedimint/blob/master/CONTRIBUTING.md) file.
+For contribution guidelines, Areas of contributions and how to get involved, please refer to the [Contributing Guidelines](https://github.com/fedimint/fedimint/blob/master/CONTRIBUTING.md).
