@@ -1336,7 +1336,7 @@
 
 <span class="attr">#[derive(Debug, Error, Eq, PartialEq, Encodable, Decodable, Hash, Clone)]
 </span><span class="kw">pub enum </span>LightningInputError {
-    <span class="attr">#[error(<span class="string">"The the input contract {0} does not exist"</span>)]
+    <span class="attr">#[error(<span class="string">"The input contract {0} does not exist"</span>)]
     </span>UnknownContract(ContractId),
     <span class="attr">#[error(<span class="string">"The input contract has too little funds, got {0}, input spends {1}"</span>)]
     </span>InsufficientFunds(Amount, Amount),
@@ -1352,7 +1352,7 @@
 
 <span class="attr">#[derive(Debug, Error, Eq, PartialEq, Encodable, Decodable, Hash, Clone)]
 </span><span class="kw">pub enum </span>LightningOutputError {
-    <span class="attr">#[error(<span class="string">"The the input contract {0} does not exist"</span>)]
+    <span class="attr">#[error(<span class="string">"The input contract {0} does not exist"</span>)]
     </span>UnknownContract(ContractId),
     <span class="attr">#[error(<span class="string">"Output contract value may not be zero unless it's an offer output"</span>)]
     </span>ZeroOutput,

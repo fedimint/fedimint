@@ -4096,7 +4096,7 @@
     <span class="kw">let </span>diff = balances_after.mine.immature + balances_after.mine.trusted
         - balances_before.mine.immature
         - balances_before.mine.trusted;
-    <span class="comment">// Funds from descriptors should match the the fed's utxos
+    <span class="comment">// Funds from descriptors should match the fed's utxos
     </span><span class="macro">assert_eq!</span>(diff.to_sat(), total_fed_sats);
     <span class="macro">info!</span>(<span class="string">"Recovering using epochs method"</span>);
     <span class="kw">let </span>outputs = <span class="kw">loop </span>{

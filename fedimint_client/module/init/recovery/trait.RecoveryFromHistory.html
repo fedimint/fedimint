@@ -136,7 +136,7 @@ continue recovery if it was previously terminated before completion.</p>
     Self: 'async_trait,
     'life0: 'async_trait,
     'life1: 'async_trait,
-    'life2: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Delete the the recovery state from the database</p>
+    'life2: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Delete the recovery state from the database</p>
 <p>See <a href="trait.RecoveryFromHistory.html#tymethod.load_dbtx"><code>Self::load_dbtx</code></a>.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="tymethod.load_finalized" class="method"><a class="src rightside" href="../../../../src/fedimint_client/module/init/recovery.rs.html#83">source</a><h4 class="code-header">fn <a href="#tymethod.load_finalized" class="fn">load_finalized</a>&lt;'life0, 'life1, 'async_trait&gt;(
     dbtx: &amp;'life0 mut DatabaseTransaction&lt;'life1&gt;
@@ -159,7 +159,7 @@ continue recovery if it was previously terminated before completion.</p>
     'life0: 'async_trait,
     'life1: 'async_trait,
     'life2: 'async_trait,
-    'life3: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Finalize the recovery converting the tracked state to to final
+    'life3: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Finalize the recovery converting the tracked state to final
 changes in the database.</p>
 <p>This is the only place during recovery where module gets a chance to
 create state machines, etc. and that’s why <code>dbtx</code> is of

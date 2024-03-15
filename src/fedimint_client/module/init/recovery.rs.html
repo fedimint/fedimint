@@ -537,7 +537,7 @@
         common: <span class="kw-2">&amp;</span>RecoveryFromHistoryCommon,
     );
 
-    <span class="doccomment">/// Delete the the recovery state from the database
+    <span class="doccomment">/// Delete the recovery state from the database
     ///
     /// See [`Self::load_dbtx`].
     </span><span class="kw">async fn </span>delete_dbtx(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;);
@@ -671,7 +671,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Finalize the recovery converting the tracked state to to final
+    <span class="doccomment">/// Finalize the recovery converting the tracked state to final
     /// changes in the database.
     ///
     /// This is the only place during recovery where module gets a chance to
