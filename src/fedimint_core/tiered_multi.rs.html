@@ -410,6 +410,8 @@
 <a href="#408" id="408">408</a>
 <a href="#409" id="409">409</a>
 <a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::marker::PhantomData;
@@ -603,11 +605,13 @@
 <span class="kw">where
     </span>C: Decodable + <span class="lifetime">'static</span>,
 {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(TieredMulti(BTreeMap::consensus_decode(d, modules)<span class="question-mark">?</span>))
+        <span class="prelude-val">Ok</span>(TieredMulti(BTreeMap::consensus_decode_from_finite_reader(
+            d, modules,
+        )<span class="question-mark">?</span>))
     }
 }
 

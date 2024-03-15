@@ -214,11 +214,11 @@
         }
 
         <span class="kw">impl </span><span class="kw">crate</span>::encoding::Decodable <span class="kw">for </span><span class="macro-nonterminal">$btc_type </span>{
-            <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+            <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
                 d: <span class="kw-2">&amp;mut </span>D,
                 _modules: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$crate::module::registry::ModuleDecoderRegistry</span>,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
-                bitcoin::consensus::Decodable::consensus_decode(d)
+                bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(d)
                     .map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)
             }
         }
@@ -250,11 +250,11 @@
     &lt;<span class="self">Self </span><span class="kw">as </span>FromStr&gt;::Err: ToString + std::error::Error + Send + Sync + <span class="lifetime">'static</span>,
     K: MiniscriptKey,
 {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+    <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>descriptor_str = String::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>descriptor_str = String::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
         Descriptor::&lt;K&gt;::from_str(<span class="kw-2">&amp;</span>descriptor_str).map_err(DecodeError::from_err)
     }
 }

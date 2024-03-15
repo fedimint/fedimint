@@ -14,13 +14,17 @@
 <a href="#12" id="12">12</a>
 <a href="#13" id="13">13</a>
 <a href="#14" id="14">14</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{<span class="self">self</span>, Decodable, Encodable};
 
 <span class="kw">pub fn </span>test_decodable&lt;T&gt;(data: <span class="kw-2">&amp;</span>[u8])
 <span class="kw">where
     </span>T: Decodable + Encodable,
 {
     <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = T::consensus_decode(<span class="kw-2">&amp;mut &amp;</span>data[..], <span class="kw-2">&amp;</span>Default::default()) {
+        <span class="macro">assert!</span>(data.len() &lt;= encoding::MAX_DECODE_SIZE);
+
         <span class="kw">let </span>encoded_vec = v.consensus_encode_to_vec();
         <span class="comment">// helps debugging to have it standalone
         </span><span class="kw">let </span>encoded = encoded_vec.as_slice();
