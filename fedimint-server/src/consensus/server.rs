@@ -48,7 +48,8 @@ use crate::db::{
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{
     CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
-    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_SESSION_COUNT,
+    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS,
+    CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
 use crate::net::api::{ConsensusApi, ExpiringCache};
 use crate::net::connect::{Connector, TlsTcpConnector};
@@ -70,6 +71,11 @@ pub struct ConsensusServer {
     cfg: ServerConfig,
     submission_receiver: Receiver<ConsensusItem>,
     latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
+
+    /// Just a string version of `cfg.local.identity` for performance
+    self_id_str: String,
+    /// Just a string version of peer ids for performance
+    peer_id_str: Vec<String>,
 }
 
 impl ConsensusServer {
@@ -209,6 +215,10 @@ impl ConsensusServer {
             db,
             keychain,
             api_endpoints,
+            self_id_str: cfg.local.identity.to_string(),
+            peer_id_str: (0..cfg.consensus.api_endpoints.len())
+                .map(|x| x.to_string())
+                .collect(),
             cfg: cfg.clone(),
             submission_receiver,
             latest_contribution_by_peer,
@@ -585,7 +595,7 @@ impl ConsensusServer {
         item: ConsensusItem,
         peer: PeerId,
     ) -> anyhow::Result<()> {
-        let peer_id_str = peer.to_string();
+        let peer_id_str = &self.peer_id_str[peer.to_usize()];
         let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item");
         let timing_prom = CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS
             .with_label_values(&[&peer_id_str])
@@ -597,6 +607,10 @@ impl ConsensusServer {
             .write()
             .await
             .insert(peer, session_index);
+
+        CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX
+            .with_label_values(&[&self.self_id_str, &peer_id_str])
+            .set(session_index as i64);
 
         let mut dbtx = self.db.begin_transaction().await;
 

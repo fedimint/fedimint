@@ -3,8 +3,8 @@ pub(crate) mod jsonrpsee;
 use fedimint_core::backup::ClientBackupKeyPrefix;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_metrics::prometheus::{
-    register_histogram_vec_with_registry, register_int_gauge_with_registry, HistogramVec,
-    IntCounterVec, IntGauge,
+    register_histogram_vec_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry, HistogramVec, IntCounterVec, IntGauge, IntGaugeVec,
 };
 use fedimint_metrics::{
     histogram_opts, opts, register_histogram_with_registry, register_int_counter_vec_with_registry,
@@ -94,6 +94,16 @@ lazy_static! {
         REGISTRY
     )
     .unwrap();
+    pub(crate) static ref CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX: IntGaugeVec =
+        register_int_gauge_vec_with_registry!(
+            opts!(
+                "consensus_peer_contribution_session_idx",
+                "Latest contribution session idx by peer_id",
+            ),
+            &["self_id", "peer_id"],
+            REGISTRY
+        )
+        .unwrap();
     pub(crate) static ref BACKUP_WRITE_SIZE_BYTES: Histogram = register_histogram_with_registry!(
         histogram_opts!(
             "backup_write_size_bytes",
