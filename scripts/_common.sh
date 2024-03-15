@@ -61,6 +61,13 @@ function run_test_for_versions() {
     unset FM_RUN_TEST_VERSIONS
   fi
 
+  if [[ ("$client_version"  == "v0.2.1" || "$client_version"  == "v0.2.2" ) && "$fed_version" == "current" ]]; then
+    # support(v0.2.1):
+    # support(v0.2.2):
+    # in the v0.2.1 and v0.2.2 there was a bug crashing client in the presence of unknown modules
+    export FM_DISABLE_META_MODULE=1
+   fi
+
   $fn_name
 }
 export -f run_test_for_versions

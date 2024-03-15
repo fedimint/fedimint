@@ -28,7 +28,7 @@ use fedimint_core::session_outcome::{
 use fedimint_core::task::{sleep, spawn, RwLock, TaskGroup, TaskHandle};
 use fedimint_core::timing::TimeReporter;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{timing, PeerId};
+use fedimint_core::{timing, NumPeers, PeerId};
 use futures::StreamExt;
 use tokio::sync::watch;
 use tracing::{debug, info, warn};
@@ -141,6 +141,7 @@ impl ConsensusServer {
             let isolated_db = db.with_prefix_module_id(*module_id);
             let module = init
                 .init(
+                    NumPeers::from(cfg.consensus.api_endpoints.len()),
                     cfg.get_module_config(*module_id)?,
                     isolated_db,
                     task_group,

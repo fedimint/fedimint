@@ -19,6 +19,7 @@ use fedimint_core::timing;
 use fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::TracingSetup;
+use fedimint_meta_server::MetaInit;
 use fedimint_mint_server::MintInit;
 use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
@@ -29,6 +30,7 @@ use futures::FutureExt;
 use tokio::select;
 use tracing::{debug, error, info, warn};
 
+use crate::envs::FM_DISABLE_META_MODULE_ENV;
 use crate::{attach_default_module_init_params, attach_unknown_module_init_params};
 
 /// Time we will wait before forcefully shutting down tasks
@@ -188,6 +190,12 @@ impl Fedimintd {
             .with_module(LightningInit)
             .with_module(MintInit)
             .with_module(WalletInit);
+
+        let s = if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
+            s.with_module(MetaInit)
+        } else {
+            s
+        };
 
         if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
             s.with_module(UnknownInit)

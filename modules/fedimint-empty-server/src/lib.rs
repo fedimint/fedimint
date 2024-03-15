@@ -38,7 +38,7 @@ pub struct EmptyInit;
 #[async_trait]
 impl ModuleInit for EmptyInit {
     type Common = EmptyCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     /// Dumps all database items for debugging
     async fn dump_database(

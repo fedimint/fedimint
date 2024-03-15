@@ -1,16 +1,19 @@
 use bitcoin::Network;
+use envs::FM_DISABLE_META_MODULE_ENV;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
+use fedimint_core::envs::is_env_var_set;
 use fedimint_core::module::ServerModuleInit;
 use fedimint_core::util::SafeUrl;
 use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
 use fedimint_ln_server::LightningInit;
+use fedimint_meta_server::{MetaGenParams, MetaGenParamsConsensus, MetaGenParamsLocal, MetaInit};
 use fedimint_mint_server::common::config::{FeeConsensus, MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_server::MintInit;
 use fedimint_unknown_common::config::{
@@ -24,6 +27,8 @@ use fedimint_wallet_server::WalletInit;
 
 /// Module for creating `fedimintd` binary with custom modules
 pub mod fedimintd;
+
+pub mod envs;
 
 /// Generates the configuration for the modules configured in the server binary
 pub fn attach_default_module_init_params(
@@ -65,6 +70,16 @@ pub fn attach_default_module_init_params(
                 consensus: LightningGenParamsConsensus { network },
             },
         );
+
+    if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
+        module_init_params.append_config_gen_params(
+            MetaInit::kind(),
+            MetaGenParams {
+                local: MetaGenParamsLocal,
+                consensus: MetaGenParamsConsensus,
+            },
+        );
+    }
 }
 
 pub fn attach_unknown_module_init_params(

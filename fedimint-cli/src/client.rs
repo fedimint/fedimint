@@ -166,9 +166,12 @@ pub enum ClientCmd {
         limit: usize,
     },
     /// Call a module subcommand
+    // Make `--help` be passed to the module handler, not root cli one
+    #[command(disable_help_flag = true)]
     Module {
         /// Module selector (either module id or module kind)
         module: ModuleSelector,
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<ffi::OsString>,
     },
     /// Returns the client config
@@ -580,7 +583,6 @@ pub async fn handle_command(
                     .get_first_instance(&kind)
                     .context("No module with this kind found")?,
             };
-
             client
                 .get_module_client_dyn(module_instance_id)
                 .context("Module not found")?

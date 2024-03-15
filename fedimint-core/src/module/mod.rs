@@ -36,7 +36,8 @@ use crate::net::peers::MuxPeerConnections;
 use crate::server::DynServerModule;
 use crate::task::{MaybeSend, TaskGroup};
 use crate::{
-    apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync, Amount, OutPoint, PeerId,
+    apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync, Amount, NumPeers, OutPoint,
+    PeerId,
 };
 
 #[derive(Debug, PartialEq)]
@@ -484,6 +485,7 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
     /// Initialize the [`DynServerModule`] instance from its config
     async fn init(
         &self,
+        peer_num: NumPeers,
         cfg: ServerModuleConfig,
         db: Database,
         task_group: &mut TaskGroup,
@@ -567,6 +569,7 @@ where
     db: Database,
     task_group: TaskGroup,
     our_peer_id: PeerId,
+    num_peers: NumPeers,
     // ClientModuleInitArgs needs a bound because sometimes we need
     // to pass associated-types data, so let's just put it here right away
     _marker: marker::PhantomData<S>,
@@ -579,8 +582,13 @@ where
     pub fn cfg(&self) -> &ServerModuleConfig {
         &self.cfg
     }
+
     pub fn db(&self) -> &Database {
         &self.db
+    }
+
+    pub fn num_peers(&self) -> NumPeers {
+        self.num_peers
     }
 
     pub fn task_group(&self) -> &TaskGroup {
@@ -671,6 +679,7 @@ where
 
     async fn init(
         &self,
+        num_peers: NumPeers,
         cfg: ServerModuleConfig,
         db: Database,
         task_group: &mut TaskGroup,
@@ -679,6 +688,7 @@ where
         <Self as ServerModuleInit>::init(
             self,
             &ServerModuleInitArgs {
+                num_peers,
                 cfg,
                 db,
                 task_group: task_group.clone(),

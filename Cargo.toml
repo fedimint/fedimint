@@ -28,6 +28,9 @@ members = [
     "modules/fedimint-dummy-common",
     "modules/fedimint-dummy-client",
     "modules/fedimint-dummy-server",
+    "modules/fedimint-meta-common",
+    "modules/fedimint-meta-client",
+    "modules/fedimint-meta-server",
     "modules/fedimint-unknown-common",
     "modules/fedimint-unknown-server",
     "modules/fedimint-dummy-tests",
@@ -67,6 +70,8 @@ keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 threshold_crypto = { version = "0.1", package = "fedimint-threshold-crypto" }
 tonic_lnd = { version = "0.2.0", package="fedimint-tonic-lnd", features = ["lightningrpc", "routerrpc"] }
 cln-rpc = { package = "fedimint-cln-rpc", version = "0.4.0" }
+clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
+serde_json = "1.0.91"
 
 # Workaround: https://github.com/rust-lang/cargo/issues/12457 which causes
 #             https://github.com/ipetkov/crane/issues/370
