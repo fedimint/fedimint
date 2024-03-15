@@ -4,6 +4,7 @@
 "fedimint_cli":[["impl CommandFactory for <a class=\"struct\" href=\"fedimint_cli/struct.Opts.html\" title=\"struct fedimint_cli::Opts\">Opts</a>"]],
 "fedimint_dbtool":[["impl CommandFactory for <a class=\"struct\" href=\"fedimint_dbtool/struct.Options.html\" title=\"struct fedimint_dbtool::Options\">Options</a>"]],
 "fedimint_load_test_tool":[["impl CommandFactory for <a class=\"struct\" href=\"fedimint_load_test_tool/struct.Opts.html\" title=\"struct fedimint_load_test_tool::Opts\">Opts</a>"]],
+"fedimint_meta_client":[["impl CommandFactory for <a class=\"enum\" href=\"fedimint_meta_client/cli/enum.Opts.html\" title=\"enum fedimint_meta_client::cli::Opts\">Opts</a>"]],
 "fedimintd":[["impl CommandFactory for <a class=\"struct\" href=\"fedimintd/fedimintd/struct.ServerOpts.html\" title=\"struct fedimintd::fedimintd::ServerOpts\">ServerOpts</a>"]],
 "gateway_cli":[["impl CommandFactory for <a class=\"struct\" href=\"gateway_cli/struct.Cli.html\" title=\"struct gateway_cli::Cli\">Cli</a>"]],
 "gateway_cln_extension":[["impl CommandFactory for <a class=\"struct\" href=\"gateway_cln_extension/struct.ClnExtensionOpts.html\" title=\"struct gateway_cln_extension::ClnExtensionOpts\">ClnExtensionOpts</a>"]],

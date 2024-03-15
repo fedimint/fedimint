@@ -5,6 +5,8 @@
 "fedimint_empty_server":[["impl ModuleInit for <a class=\"struct\" href=\"fedimint_empty_server/struct.EmptyInit.html\" title=\"struct fedimint_empty_server::EmptyInit\">EmptyInit</a>"]],
 "fedimint_ln_client":[["impl ModuleInit for <a class=\"struct\" href=\"fedimint_ln_client/struct.LightningClientInit.html\" title=\"struct fedimint_ln_client::LightningClientInit\">LightningClientInit</a>"]],
 "fedimint_ln_server":[["impl ModuleInit for <a class=\"struct\" href=\"fedimint_ln_server/struct.LightningInit.html\" title=\"struct fedimint_ln_server::LightningInit\">LightningInit</a>"]],
+"fedimint_meta_client":[["impl ModuleInit for <a class=\"struct\" href=\"fedimint_meta_client/struct.MetaClientInit.html\" title=\"struct fedimint_meta_client::MetaClientInit\">MetaClientInit</a>"]],
+"fedimint_meta_server":[["impl ModuleInit for <a class=\"struct\" href=\"fedimint_meta_server/struct.MetaInit.html\" title=\"struct fedimint_meta_server::MetaInit\">MetaInit</a>"]],
 "fedimint_mint_client":[["impl ModuleInit for <a class=\"struct\" href=\"fedimint_mint_client/struct.MintClientInit.html\" title=\"struct fedimint_mint_client::MintClientInit\">MintClientInit</a>"]],
 "fedimint_mint_server":[["impl ModuleInit for <a class=\"struct\" href=\"fedimint_mint_server/struct.MintInit.html\" title=\"struct fedimint_mint_server::MintInit\">MintInit</a>"]],
 "fedimint_unknown_server":[["impl ModuleInit for <a class=\"struct\" href=\"fedimint_unknown_server/struct.UnknownInit.html\" title=\"struct fedimint_unknown_server::UnknownInit\">UnknownInit</a>"]],

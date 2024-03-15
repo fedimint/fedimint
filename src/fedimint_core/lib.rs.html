@@ -596,6 +596,26 @@
 <a href="#594" id="594">594</a>
 <a href="#595" id="595">595</a>
 <a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span><span class="self">self </span><span class="kw">as </span>fedimint_core;
 
@@ -848,38 +868,58 @@
     </span>WrongBitcoinAmount(<span class="attr">#[from] </span>bitcoin::util::amount::ParseAmountError),
 }
 
-<span class="kw">impl</span>&lt;T&gt; NumPeers <span class="kw">for </span>BTreeMap&lt;PeerId, T&gt; {
+<span class="kw">impl</span>&lt;T&gt; NumPeersExt <span class="kw">for </span>BTreeMap&lt;PeerId, T&gt; {
     <span class="kw">fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.len()
     }
 }
 
-<span class="kw">impl </span>NumPeers <span class="kw">for </span><span class="kw-2">&amp;</span>[PeerId] {
+<span class="attr">#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+</span><span class="kw">pub struct </span>NumPeers(usize);
+
+<span class="kw">impl </span>From&lt;usize&gt; <span class="kw">for </span>NumPeers {
+    <span class="kw">fn </span>from(value: usize) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(value)
+    }
+}
+<span class="kw">impl </span>NumPeers {
+    <span class="kw">pub fn </span>as_usize(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.<span class="number">0
+    </span>}
+}
+
+<span class="kw">impl </span>NumPeersExt <span class="kw">for </span>NumPeers {
+    <span class="kw">fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.<span class="number">0
+    </span>}
+}
+
+<span class="kw">impl </span>NumPeersExt <span class="kw">for </span><span class="kw-2">&amp;</span>[PeerId] {
     <span class="kw">fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.len()
     }
 }
 
-<span class="kw">impl </span>NumPeers <span class="kw">for </span>Vec&lt;PeerId&gt; {
+<span class="kw">impl </span>NumPeersExt <span class="kw">for </span>Vec&lt;PeerId&gt; {
     <span class="kw">fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.len()
     }
 }
 
-<span class="kw">impl </span>NumPeers <span class="kw">for </span>Vec&lt;PeerUrl&gt; {
+<span class="kw">impl </span>NumPeersExt <span class="kw">for </span>Vec&lt;PeerUrl&gt; {
     <span class="kw">fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.len()
     }
 }
 
-<span class="kw">impl </span>NumPeers <span class="kw">for </span>BTreeSet&lt;PeerId&gt; {
+<span class="kw">impl </span>NumPeersExt <span class="kw">for </span>BTreeSet&lt;PeerId&gt; {
     <span class="kw">fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.len()
     }
 }
 
 <span class="doccomment">/// for consensus-related calculations given the number of peers
-</span><span class="kw">pub trait </span>NumPeers {
+</span><span class="kw">pub trait </span>NumPeersExt {
     <span class="kw">fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
 
     <span class="doccomment">/// number of peers that can be evil without disrupting the federation

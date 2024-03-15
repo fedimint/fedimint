@@ -2,6 +2,7 @@
 "fedimint_dummy_client":[["impl ClientModule for <a class=\"struct\" href=\"fedimint_dummy_client/struct.DummyClientModule.html\" title=\"struct fedimint_dummy_client::DummyClientModule\">DummyClientModule</a>"]],
 "fedimint_empty_client":[["impl ClientModule for <a class=\"struct\" href=\"fedimint_empty_client/struct.EmptyClientModule.html\" title=\"struct fedimint_empty_client::EmptyClientModule\">EmptyClientModule</a>"]],
 "fedimint_ln_client":[["impl ClientModule for <a class=\"struct\" href=\"fedimint_ln_client/struct.LightningClientModule.html\" title=\"struct fedimint_ln_client::LightningClientModule\">LightningClientModule</a>"]],
+"fedimint_meta_client":[["impl ClientModule for <a class=\"struct\" href=\"fedimint_meta_client/struct.MetaClientModule.html\" title=\"struct fedimint_meta_client::MetaClientModule\">MetaClientModule</a>"]],
 "fedimint_mint_client":[["impl ClientModule for <a class=\"struct\" href=\"fedimint_mint_client/struct.MintClientModule.html\" title=\"struct fedimint_mint_client::MintClientModule\">MintClientModule</a>"]],
 "fedimint_wallet_client":[["impl ClientModule for <a class=\"struct\" href=\"fedimint_wallet_client/struct.WalletClientModule.html\" title=\"struct fedimint_wallet_client::WalletClientModule\">WalletClientModule</a>"]],
 "ln_gateway":[["impl ClientModule for <a class=\"struct\" href=\"ln_gateway/state_machine/struct.GatewayClientModule.html\" title=\"struct ln_gateway::state_machine::GatewayClientModule\">GatewayClientModule</a>"]]

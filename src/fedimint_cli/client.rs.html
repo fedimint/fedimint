@@ -784,6 +784,8 @@
 <a href="#782" id="782">782</a>
 <a href="#783" id="783">783</a>
 <a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -952,10 +954,13 @@
         </span>limit: usize,
     },
     <span class="doccomment">/// Call a module subcommand
+    </span><span class="comment">// Make `--help` be passed to the module handler, not root cli one
+    </span><span class="attr">#[command(disable_help_flag = <span class="bool-val">true</span>)]
     </span>Module {
         <span class="doccomment">/// Module selector (either module id or module kind)
         </span>module: ModuleSelector,
-        args: Vec&lt;ffi::OsString&gt;,
+        <span class="attr">#[arg(allow_hyphen_values = <span class="bool-val">true</span>, trailing_var_arg = <span class="bool-val">true</span>)]
+        </span>args: Vec&lt;ffi::OsString&gt;,
     },
     <span class="doccomment">/// Returns the client config
     </span>Config,
@@ -1366,7 +1371,6 @@
                     .get_first_instance(<span class="kw-2">&amp;</span>kind)
                     .context(<span class="string">"No module with this kind found"</span>)<span class="question-mark">?</span>,
             };
-
             client
                 .get_module_client_dyn(module_instance_id)
                 .context(<span class="string">"Module not found"</span>)<span class="question-mark">?

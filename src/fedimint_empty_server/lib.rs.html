@@ -265,7 +265,7 @@
 </span><span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>EmptyInit {
     <span class="kw">type </span>Common = EmptyCommonInit;
-    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">1</span>);
+    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">0</span>);
 
     <span class="doccomment">/// Dumps all database items for debugging
     </span><span class="kw">async fn </span>dump_database(

@@ -433,7 +433,7 @@
             <span class="kw-2">&amp;mut </span>task_group,
         )
         .<span class="kw">await
-        </span>.unwrap();
+        </span>.context(<span class="string">"Setting up consensus server"</span>)<span class="question-mark">?</span>;
 
         <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting consensus API"</span>);
 

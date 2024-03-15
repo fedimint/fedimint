@@ -25,6 +25,9 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_ln_server",["",[],["lib.rs"]]],\
 ["fedimint_load_test_tool",["",[],["common.rs","main.rs"]]],\
 ["fedimint_logging",["",[],["lib.rs"]]],\
+["fedimint_meta_client",["",[],["api.rs","cli.rs","db.rs","lib.rs","states.rs"]]],\
+["fedimint_meta_common",["",[],["config.rs","endpoint.rs","lib.rs"]]],\
+["fedimint_meta_server",["",[],["db.rs","lib.rs"]]],\
 ["fedimint_metrics",["",[],["lib.rs"]]],\
 ["fedimint_mint_client",["",[["backup",[],["recovery.rs"]]],["backup.rs","client_db.rs","input.rs","lib.rs","oob.rs","output.rs"]]],\
 ["fedimint_mint_common",["",[],["common.rs","config.rs","db.rs","lib.rs"]]],\
@@ -39,7 +42,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_wallet_common",["",[],["config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]]],\
 ["fedimint_wallet_server",["",[],["lib.rs"]]],\
 ["fedimint_wasm_tests",["",[],["lib.rs"]]],\
-["fedimintd",["",[],["fedimintd.rs","lib.rs"]]],\
+["fedimintd",["",[],["envs.rs","fedimintd.rs","lib.rs"]]],\
 ["gateway_cli",["",[],["main.rs"]]],\
 ["gateway_cln_extension",["",[],["cln_extension.rs"]]],\
 ["gatewayd",["",[],["gatewayd.rs"]]],\

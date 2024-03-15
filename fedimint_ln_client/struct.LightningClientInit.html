@@ -60,6 +60,7 @@ wrapper. <a>Read more</a></div></details></div></details><details class="toggle 
     &amp;'life0 self,
     final_client: FinalClient,
     federation_id: FederationId,
+    num_peers: NumPeers,
     cfg: ClientModuleConfig,
     db: Database,
     instance_id: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u16.html">u16</a>,
@@ -68,6 +69,7 @@ wrapper. <a>Read more</a></div></details></div></details><details class="toggle 
     module_root_secret: DerivableSecret,
     notifier: Notifier,
     api: DynGlobalApi,
+    admin_auth: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ApiAuth&gt;,
     snapshot: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;'life1 DynModuleBackup&gt;,
     progress_tx: Sender&lt;RecoveryProgress&gt;
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, <a class="struct" href="https://docs.rs/anyhow/1.0.81/anyhow/struct.Error.html" title="struct anyhow::Error">Error</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
@@ -77,6 +79,7 @@ wrapper. <a>Read more</a></div></details></div></details><details class="toggle 
     &amp;'life0 self,
     final_client: FinalClient,
     federation_id: FederationId,
+    peer_num: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.usize.html">usize</a>,
     cfg: ClientModuleConfig,
     db: Database,
     instance_id: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u16.html">u16</a>,
@@ -84,7 +87,8 @@ wrapper. <a>Read more</a></div></details></div></details><details class="toggle 
     module_api_version: ApiVersion,
     module_root_secret: DerivableSecret,
     notifier: Notifier,
-    api: DynGlobalApi
+    api: DynGlobalApi,
+    admin_auth: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;ApiAuth&gt;
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;DynClientModule, <a class="struct" href="https://docs.rs/anyhow/1.0.81/anyhow/struct.Error.html" title="struct anyhow::Error">Error</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
     'life0: 'async_trait,
     T: 'async_trait,</div></h4></section><section id="method.get_database_migrations-1" class="method trait-impl"><a href="#method.get_database_migrations-1" class="anchor">§</a><h4 class="code-header">fn <a class="fn">get_database_migrations</a>(

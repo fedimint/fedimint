@@ -1804,8 +1804,8 @@
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, ModuleDecoderRegistry, NumPeers, OutPoint,
-    PeerId, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, ModuleDecoderRegistry, NumPeersExt,
+    OutPoint, PeerId, TransactionId,
 };
 <span class="kw">use </span>fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
 <span class="kw">use </span>futures::stream::FuturesUnordered;

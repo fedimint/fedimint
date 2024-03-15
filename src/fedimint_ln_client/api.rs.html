@@ -360,7 +360,7 @@
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::query::{ThresholdOrDeadline, UnionResponses};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
-<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeers, PeerId};
+<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 <span class="kw">use </span>fedimint_ln_common::contracts::{

@@ -914,6 +914,15 @@
 <a href="#912" id="912">912</a>
 <a href="#913" id="913">913</a>
 <a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
@@ -937,7 +946,7 @@
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 <span class="kw">use </span>fedimint_client::module::ClientModule <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
-<span class="kw">use </span>fedimint_client::{Client, ClientBuilder, ClientHandle};
+<span class="kw">use </span>fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandle};
 <span class="kw">use </span>fedimint_core::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, InviteCode, WsFederationApi,
 };
@@ -949,6 +958,7 @@
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, task, PeerId, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::LightningClientInit;
 <span class="kw">use </span>fedimint_logging::{TracingSetup, LOG_CLIENT};
+<span class="kw">use </span>fedimint_meta_client::MetaClientInit;
 <span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintClientModule, SpendableNote};
 <span class="kw">use </span>fedimint_server::config::io::SALT_FILE;
 <span class="kw">use </span>fedimint_wallet_client::api::WalletFederationApi;
@@ -1415,6 +1425,7 @@ Examples:
         <span class="self">self</span>.with_module(LightningClientInit)
             .with_module(MintClientInit)
             .with_module(WalletClientInit::default())
+            .with_module(MetaClientInit)
     }
 
     <span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
@@ -1465,7 +1476,14 @@ Examples:
     }
 
     <span class="kw">async fn </span>client_open(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cli: <span class="kw-2">&amp;</span>Opts) -&gt; CliResult&lt;ClientHandle&gt; {
-        <span class="kw">let </span>client_builder = <span class="self">self</span>.make_client_builder(cli).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = <span class="self">self</span>.make_client_builder(cli).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(our_id) = cli.our_id {
+            client_builder.set_admin_creds(AdminCreds {
+                peer_id: our_id,
+                auth: cli.auth()<span class="question-mark">?</span>,
+            });
+        }
 
         <span class="kw">let </span>mnemonic = Mnemonic::from_entropy(
             <span class="kw-2">&amp;</span>Client::load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;(client_builder.db())

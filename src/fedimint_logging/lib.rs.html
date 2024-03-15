@@ -156,6 +156,8 @@
 <a href="#154" id="154">154</a>
 <a href="#155" id="155">155</a>
 <a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fs::File;
 <span class="kw">use </span>std::{env, io};
 
@@ -179,11 +181,13 @@
 <span class="kw">pub const </span>LOG_TIMING: <span class="kw-2">&amp;</span>str = <span class="string">"timing"</span>;
 <span class="kw">pub const </span>LOG_WALLET: <span class="kw-2">&amp;</span>str = <span class="string">"wallet"</span>;
 <span class="kw">pub const </span>LOG_CLIENT: <span class="kw-2">&amp;</span>str = <span class="string">"client"</span>;
+<span class="kw">pub const </span>LOG_SERVER_MODULE_META: <span class="kw-2">&amp;</span>str = <span class="string">"server::module::meta"</span>;
 <span class="kw">pub const </span>LOG_CLIENT_REACTOR: <span class="kw-2">&amp;</span>str = <span class="string">"client::reactor"</span>;
 <span class="kw">pub const </span>LOG_CLIENT_NET_API: <span class="kw-2">&amp;</span>str = <span class="string">"client::net::api"</span>;
 <span class="kw">pub const </span>LOG_CLIENT_BACKUP: <span class="kw-2">&amp;</span>str = <span class="string">"client::backup"</span>;
 <span class="kw">pub const </span>LOG_CLIENT_RECOVERY: <span class="kw-2">&amp;</span>str = <span class="string">"client::recovery"</span>;
 <span class="kw">pub const </span>LOG_CLIENT_RECOVERY_MINT: <span class="kw-2">&amp;</span>str = <span class="string">"client::recovery::mint"</span>;
+<span class="kw">pub const </span>LOG_CLIENT_MODULE_META: <span class="kw-2">&amp;</span>str = <span class="string">"client::module::meta"</span>;
 
 <span class="doccomment">/// Consolidates the setup of server tracing into a helper
 </span><span class="attr">#[derive(Default)]

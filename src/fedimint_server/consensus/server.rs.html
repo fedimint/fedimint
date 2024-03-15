@@ -824,6 +824,7 @@
 <a href="#822" id="822">822</a>
 <a href="#823" id="823">823</a>
 <a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -854,7 +855,7 @@
 <span class="kw">use </span>fedimint_core::task::{sleep, spawn, RwLock, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::timing::TimeReporter;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::{timing, PeerId};
+<span class="kw">use </span>fedimint_core::{timing, NumPeers, PeerId};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tracing::{debug, info, warn};
@@ -967,6 +968,7 @@
             <span class="kw">let </span>isolated_db = db.with_prefix_module_id(<span class="kw-2">*</span>module_id);
             <span class="kw">let </span>module = init
                 .init(
+                    NumPeers::from(cfg.consensus.api_endpoints.len()),
                     cfg.get_module_config(<span class="kw-2">*</span>module_id)<span class="question-mark">?</span>,
                     isolated_db,
                     task_group,

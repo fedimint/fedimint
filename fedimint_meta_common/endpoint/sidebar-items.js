@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["GET_CONSENSUS_ENDPOINT","GET_CONSENSUS_REV_ENDPOINT","GET_SUBMISSIONS_ENDPOINT","SUBMIT_ENDPOINT"],"struct":["GetConsensusRequest","GetSubmissionsRequest","SubmitRequest"],"type":["GetSubmissionResponse"]};

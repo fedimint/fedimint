@@ -2341,6 +2341,38 @@
 <a href="#2339" id="2339">2339</a>
 <a href="#2340" id="2340">2340</a>
 <a href="#2341" id="2341">2341</a>
+<a href="#2342" id="2342">2342</a>
+<a href="#2343" id="2343">2343</a>
+<a href="#2344" id="2344">2344</a>
+<a href="#2345" id="2345">2345</a>
+<a href="#2346" id="2346">2346</a>
+<a href="#2347" id="2347">2347</a>
+<a href="#2348" id="2348">2348</a>
+<a href="#2349" id="2349">2349</a>
+<a href="#2350" id="2350">2350</a>
+<a href="#2351" id="2351">2351</a>
+<a href="#2352" id="2352">2352</a>
+<a href="#2353" id="2353">2353</a>
+<a href="#2354" id="2354">2354</a>
+<a href="#2355" id="2355">2355</a>
+<a href="#2356" id="2356">2356</a>
+<a href="#2357" id="2357">2357</a>
+<a href="#2358" id="2358">2358</a>
+<a href="#2359" id="2359">2359</a>
+<a href="#2360" id="2360">2360</a>
+<a href="#2361" id="2361">2361</a>
+<a href="#2362" id="2362">2362</a>
+<a href="#2363" id="2363">2363</a>
+<a href="#2364" id="2364">2364</a>
+<a href="#2365" id="2365">2365</a>
+<a href="#2366" id="2366">2366</a>
+<a href="#2367" id="2367">2367</a>
+<a href="#2368" id="2368">2368</a>
+<a href="#2369" id="2369">2369</a>
+<a href="#2370" id="2370">2370</a>
+<a href="#2371" id="2371">2371</a>
+<a href="#2372" id="2372">2372</a>
+<a href="#2373" id="2373">2373</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2441,7 +2473,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{
-    ApiVersion, MultiApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions,
+    ApiAuth, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions,
     SupportedModuleApiVersions,
 };
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
@@ -2449,7 +2481,7 @@
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
-    maybe_add_send, maybe_add_send_sync, Amount, OutPoint, TransactionId,
+    maybe_add_send, maybe_add_send_sync, Amount, NumPeers, OutPoint, PeerId, TransactionId,
 };
 <span class="kw">pub use </span>fedimint_derive_secret <span class="kw">as </span>derivable_secret;
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
@@ -4077,9 +4109,15 @@
     </span>}
 }
 
+<span class="kw">pub struct </span>AdminCreds {
+    <span class="kw">pub </span>peer_id: PeerId,
+    <span class="kw">pub </span>auth: ApiAuth,
+}
+
 <span class="kw">pub struct </span>ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
+    admin_creds: <span class="prelude-ty">Option</span>&lt;AdminCreds&gt;,
     db: Database,
     stopped: bool,
 }
@@ -4089,6 +4127,7 @@
         ClientBuilder {
             module_inits: Default::default(),
             primary_module_instance: Default::default(),
+            admin_creds: <span class="prelude-val">None</span>,
             db,
             stopped: <span class="bool-val">false</span>,
         }
@@ -4164,6 +4203,10 @@
         };
 
         <span class="prelude-val">Ok</span>(config)
+    }
+
+    <span class="kw">pub fn </span>set_admin_creds(<span class="kw-2">&amp;mut </span><span class="self">self</span>, creds: AdminCreds) {
+        <span class="self">self</span>.admin_creds = <span class="prelude-val">Some</span>(creds);
     }
 
     <span class="kw">async fn </span>init(
@@ -4350,6 +4393,17 @@
         <span class="prelude-val">Ok</span>(client)
     }
 
+    <span class="kw">fn </span>admin_api_from_id(id: PeerId, cfg: <span class="kw-2">&amp;</span>ClientConfig) -&gt; anyhow::Result&lt;DynGlobalApi&gt; {
+        <span class="kw">let </span>url = cfg
+            .global
+            .api_endpoints
+            .get(<span class="kw-2">&amp;</span>id)
+            .ok_or_else(|| <span class="macro">anyhow::format_err!</span>(<span class="string">"Invalid admin peer_id: {id}"</span>))<span class="question-mark">?
+            </span>.url
+            .clone();
+        <span class="prelude-val">Ok</span>(DynGlobalApi::from_single_endpoint(id, url))
+    }
+
     <span class="doccomment">/// Build a [`Client`] but do not start the executor
     </span><span class="kw">async fn </span>build_stopped(
         <span class="self">self</span>,
@@ -4360,7 +4414,11 @@
         <span class="kw">let </span>config = <span class="self">Self</span>::config_decoded(config, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
         <span class="kw">let </span>fed_id = config.calculate_federation_id();
         <span class="kw">let </span>db = <span class="self">self</span>.db.with_decoders(decoders.clone());
-        <span class="kw">let </span>api = DynGlobalApi::from_config(<span class="kw-2">&amp;</span>config);
+        <span class="kw">let </span>api = <span class="kw">if let </span><span class="prelude-val">Some</span>(admin_creds) = <span class="self">self</span>.admin_creds.as_ref() {
+            <span class="self">Self</span>::admin_api_from_id(admin_creds.peer_id, <span class="kw-2">&amp;</span>config)<span class="question-mark">?
+        </span>} <span class="kw">else </span>{
+            DynGlobalApi::from_config(<span class="kw-2">&amp;</span>config)
+        };
         <span class="kw">let </span>task_group = TaskGroup::new();
 
         <span class="comment">// Migrate the database before interacting with it in case any on-disk data
@@ -4419,11 +4477,13 @@
                 </span><span class="kw">let </span>start_module_recover_fn =
                     |snapshot: <span class="prelude-ty">Option</span>&lt;ClientBackup&gt;, progress: RecoveryProgress| {
                         <span class="kw">let </span>module_config = module_config.clone();
+                        <span class="kw">let </span>num_peers = NumPeers::from(config.global.api_endpoints.len());
                         <span class="kw">let </span>db = db.clone();
                         <span class="kw">let </span>kind = kind.clone();
                         <span class="kw">let </span>notifier = notifier.clone();
                         <span class="kw">let </span>api = api.clone();
                         <span class="kw">let </span>root_secret = root_secret.clone();
+                        <span class="kw">let </span>admin_auth = <span class="self">self</span>.admin_creds.as_ref().map(|creds| creds.auth.clone());
                         <span class="kw">let </span>final_client = final_client.clone();
                         <span class="kw">let </span>(progress_tx, progress_rx) = tokio::sync::watch::channel(progress);
                         <span class="kw">let </span>module_init = module_init.clone();
@@ -4433,6 +4493,7 @@
                                         .recover(
                                             final_client.clone(),
                                             fed_id,
+                                        num_peers,
                                             module_config.clone(),
                                             db.clone(),
                                             module_instance_id,
@@ -4441,6 +4502,7 @@
                                             root_secret.derive_module_secret(module_instance_id),
                                             notifier.clone(),
                                             api.clone(),
+                                        admin_auth,
                                             snapshot.as_ref().and_then(|s| s.modules.get(<span class="kw-2">&amp;</span>module_instance_id).to_owned()),
                                             progress_tx,
                                         )
@@ -4501,6 +4563,7 @@
                         .init(
                             final_client.clone(),
                             fed_id,
+                            config.global.api_endpoints.len(),
                             module_config,
                             db.clone(),
                             module_instance_id,
@@ -4513,6 +4576,7 @@
                             </span>root_secret.derive_module_secret(module_instance_id),
                             notifier.clone(),
                             api.clone(),
+                            <span class="self">self</span>.admin_creds.as_ref().map(|cred| cred.auth.clone()),
                         )
                         .<span class="kw">await</span><span class="question-mark">?</span>;
 

@@ -346,6 +346,14 @@
 <a href="#344" id="344">344</a>
 <a href="#345" id="345">345</a>
 <a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -367,6 +375,7 @@
 <span class="kw">use </span>fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
 <span class="kw">use </span>fedimint_ln_server::LightningInit;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
+<span class="kw">use </span>fedimint_meta_server::MetaInit;
 <span class="kw">use </span>fedimint_mint_server::MintInit;
 <span class="kw">use </span>fedimint_server::config::api::ConfigGenSettings;
 <span class="kw">use </span>fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
@@ -377,6 +386,7 @@
 <span class="kw">use </span>tokio::select;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
+<span class="kw">use </span><span class="kw">crate</span>::envs::FM_DISABLE_META_MODULE_ENV;
 <span class="kw">use crate</span>::{attach_default_module_init_params, attach_unknown_module_init_params};
 
 <span class="doccomment">/// Time we will wait before forcefully shutting down tasks
@@ -536,6 +546,12 @@
             </span>.with_module(LightningInit)
             .with_module(MintInit)
             .with_module(WalletInit);
+
+        <span class="kw">let </span>s = <span class="kw">if </span>!is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
+            s.with_module(MetaInit)
+        } <span class="kw">else </span>{
+            s
+        };
 
         <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
             s.with_module(UnknownInit)

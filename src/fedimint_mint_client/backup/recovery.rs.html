@@ -497,7 +497,7 @@
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, Amount, NumPeers, OutPoint, PeerId, Tiered, TieredMulti,
+    apply, async_trait_maybe_send, Amount, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti,
 };
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_RECOVERY_MINT;
