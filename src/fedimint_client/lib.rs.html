@@ -2332,6 +2332,15 @@
 <a href="#2330" id="2330">2330</a>
 <a href="#2331" id="2331">2331</a>
 <a href="#2332" id="2332">2332</a>
+<a href="#2333" id="2333">2333</a>
+<a href="#2334" id="2334">2334</a>
+<a href="#2335" id="2335">2335</a>
+<a href="#2336" id="2336">2336</a>
+<a href="#2337" id="2337">2337</a>
+<a href="#2338" id="2338">2338</a>
+<a href="#2339" id="2339">2339</a>
+<a href="#2340" id="2340">2340</a>
+<a href="#2341" id="2341">2341</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2887,24 +2896,51 @@
         <span class="self">self</span>.as_inner().start_executor().<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Block for the `client` to no longer contain any strong references.
+    <span class="doccomment">/// Shutdown the client.
     ///
-    /// Some parts of the code can temporarily clone client to perform some
-    /// actions. No further strong references guarantees that the `client`
-    /// is no longer used inside the system.
-    </span><span class="kw">pub async fn </span>wait_until_fully_dropped(<span class="self">self</span>) {
-        <span class="kw">let </span>weak = <span class="self">self</span>.downgrade();
-        drop(<span class="self">self</span>);
+    /// Returns Err if there are other clones of [`ClientHandle`].
+    </span><span class="kw">pub async fn </span>shutdown(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), ClientHandle&gt; {
+        <span class="kw">match </span>Arc::try_unwrap(<span class="self">self</span>.inner) {
+            <span class="prelude-val">Ok</span>(<span class="kw-2">mut </span>inner) =&gt; {
+                inner.shutdown().<span class="kw">await</span>;
+                <span class="prelude-val">Ok</span>(())
+            }
+            <span class="prelude-val">Err</span>(inner) =&gt; <span class="prelude-val">Err</span>(<span class="self">Self </span>{ inner }),
+        }
+    }
+}
 
-        <span class="kw">for </span>attempt <span class="kw">in </span><span class="number">0u64</span>.. {
-            <span class="kw">if </span>Weak::strong_count(<span class="kw-2">&amp;</span>weak.inner) == <span class="number">0 </span>{
-                <span class="kw">break</span>;
-            }
-            <span class="comment">// we want to retry fast, give feedback, but not spam
-            </span><span class="kw">if </span>attempt % <span class="number">100 </span>== <span class="number">0 </span>{
-                <span class="macro">info!</span>(<span class="string">"Waiting for ArcClient to stop being used"</span>);
-            }
-            fedimint_core::task::sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
+<span class="kw">impl </span>ClientHandleShared {
+    <span class="kw">async fn </span>shutdown(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">let </span><span class="prelude-val">Some</span>(inner) = <span class="self">self</span>.inner.take() <span class="kw">else </span>{
+            <span class="macro">error!</span>(<span class="string">"ClientHandleShared::shutdown called twice"</span>);
+            <span class="kw">return</span>;
+        };
+        inner.executor.stop_executor();
+        <span class="kw">let </span>db = inner.db.clone();
+        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Waiting for client task group to shut down"</span>);
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = inner
+            .task_group
+            .clone()
+            .shutdown_join_all(<span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">30</span>)))
+            .<span class="kw">await
+        </span>{
+            <span class="macro">warn!</span>(target: LOG_CLIENT, %err, <span class="string">"Error waiting for client task group to shut down"</span>);
+        }
+
+        <span class="kw">let </span>client_strong_count = Arc::strong_count(<span class="kw-2">&amp;</span>inner);
+        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Dropping last handle to Client"</span>);
+        <span class="comment">// We are sure that no background tasks are running in the client anymore, so we
+        // can drop the (usually) last inner reference.
+        </span>drop(inner);
+
+        <span class="kw">if </span>client_strong_count != <span class="number">1 </span>{
+            <span class="macro">debug!</span>(target: LOG_CLIENT, count = client_strong_count - <span class="number">1</span>, LOG_CLIENT, <span class="string">"External Client references remaining after last handle dropped"</span>);
+        }
+
+        <span class="kw">let </span>db_strong_count = db.strong_count();
+        <span class="kw">if </span>db_strong_count != <span class="number">1 </span>{
+            <span class="macro">debug!</span>(target:  LOG_CLIENT, count = db_strong_count - <span class="number">1</span>, <span class="string">"External DB references remaining after last handle dropped"</span>);
         }
     }
 }
@@ -2963,49 +2999,31 @@
 /// `Arc&lt;Client&gt;`s such that at least one `Executor` never gets dropped.
 </span><span class="kw">impl </span>Drop <span class="kw">for </span>ClientHandleShared {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Shutting down the Client on last handle drop"</span>);
-        <span class="kw">let </span>inner = <span class="self">self</span>.inner.take().expect(<span class="string">"Must have inner client set"</span>);
-        inner.executor.stop_executor();
-
-        <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-        </span>{
-            <span class="kw">if </span>RuntimeHandle::current().runtime_flavor() == RuntimeFlavor::CurrentThread {
-                <span class="comment">// We can't use block_on in single-threaded mode
-                </span><span class="kw">return</span>;
-            }
-
-            <span class="kw">let </span>db = inner.db.clone();
-
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(<span class="kw">async </span>{
-                        <span class="comment">// futures::executor::block_on(async {
-                        </span><span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Waiting for client task group to shut down"</span>);
-                        <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = inner
-                            .task_group
-                            .clone()
-                            .shutdown_join_all(<span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">30</span>)))
-                            .<span class="kw">await
-                        </span>{
-                            <span class="macro">warn!</span>(target: LOG_CLIENT, %err, <span class="string">"Error waiting for client task group to shut down"</span>);
-                        }
-                    });
-            });
-
-            <span class="kw">let </span>client_strong_count = Arc::strong_count(<span class="kw-2">&amp;</span>inner);
-            <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Dropping last handle to Client"</span>);
-            <span class="comment">// We are sure that no background tasks are running in the client anymore, so we
-            // can drop the (usually) last inner reference.
-            </span>drop(inner);
-
-            <span class="kw">if </span>client_strong_count != <span class="number">1 </span>{
-                <span class="macro">debug!</span>(target: LOG_CLIENT, count = client_strong_count - <span class="number">1</span>, LOG_CLIENT, <span class="string">"External Client references remaining after last handle dropped"</span>);
-            }
-
-            <span class="kw">let </span>db_strong_count = db.strong_count();
-            <span class="kw">if </span>db_strong_count != <span class="number">1 </span>{
-                <span class="macro">debug!</span>(target:  LOG_CLIENT, count = db_strong_count - <span class="number">1</span>, <span class="string">"External DB references remaining after last handle dropped"</span>);
-            }
+        <span class="kw">if </span><span class="self">self</span>.inner.is_none() {
+            <span class="kw">return</span>;
         }
+
+        <span class="comment">// We can't use block_on in single-threaded mode or wasm
+        </span><span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
+        </span><span class="kw">let </span>can_block = <span class="bool-val">false</span>;
+        <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+        </span><span class="kw">let </span>can_block = RuntimeHandle::current().runtime_flavor() != RuntimeFlavor::CurrentThread;
+        <span class="kw">if </span>!can_block {
+            <span class="kw">let </span>inner = <span class="self">self</span>.inner.take().expect(<span class="string">"Must have inner client set"</span>);
+            inner.executor.stop_executor();
+            <span class="kw">if </span><span class="macro">cfg!</span>(target_family = <span class="string">"wasm"</span>) {
+                <span class="macro">error!</span>(target: LOG_CLIENT, <span class="string">"Automatic client shutdown is not possible on wasm, call ClientHandle::shutdown manually."</span>);
+            } <span class="kw">else </span>{
+                <span class="macro">error!</span>(target: LOG_CLIENT, <span class="string">"Automatic client shutdown is not possible on current thread runtime, call ClientHandle::shutdown manually."</span>);
+            }
+            <span class="kw">return</span>;
+        }
+
+        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Shutting down the Client on last handle drop"</span>);
+        <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+        </span>tokio::task::block_in_place(|| {
+            RuntimeHandle::current().block_on(<span class="self">self</span>.shutdown());
+        });
     }
 }
 
