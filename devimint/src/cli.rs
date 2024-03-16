@@ -7,6 +7,8 @@ use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_overwrite_async;
+use rand::distributions::Alphanumeric;
+use rand::Rng as _;
 use tokio::fs;
 use tokio::net::TcpStream;
 use tracing::{debug, error, info, warn};
@@ -14,6 +16,15 @@ use tracing::{debug, error, info, warn};
 use crate::federation::Fedimintd;
 use crate::util::{poll, ProcessManager};
 use crate::{dev_fed, external_daemons, vars, ExternalDaemons};
+
+fn random_test_dir_suffix() -> String {
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .filter(|c| c.is_ascii_digit())
+        .take(3)
+        .map(char::from)
+        .collect::<String>()
+}
 
 #[derive(Parser, Clone)]
 pub struct CommonArgs {
@@ -25,6 +36,9 @@ pub struct CommonArgs {
     #[clap(long, env = "FM_LINK_TEST_DIR")]
     /// Create a link to the test dir under this path
     pub link_test_dir: Option<PathBuf>,
+
+    #[clap(long, default_value_t = random_test_dir_suffix())]
+    pub link_test_dir_suffix: String,
 
     /// Run degraded federation with FM_OFFLINE_NODES shutdown
     #[clap(long, env = "FM_OFFLINE_NODES", default_value = "0")]
@@ -43,7 +57,11 @@ impl CommonArgs {
 
     pub fn test_dir(&self) -> PathBuf {
         self.test_dir.clone().unwrap_or_else(|| {
-            std::env::temp_dir().join(format!("devimint-{}", std::process::id()))
+            std::env::temp_dir().join(format!(
+                "devimint-{}-{}",
+                std::process::id(),
+                self.link_test_dir_suffix
+            ))
         })
     }
 }
@@ -116,7 +134,7 @@ pub async fn update_test_dir_link(
     link_test_dir: &Path,
     test_dir: &Path,
 ) -> Result<(), anyhow::Error> {
-    if let Ok(existing) = fs::read_link(link_test_dir).await {
+    let make_link = if let Ok(existing) = fs::read_link(link_test_dir).await {
         if existing != test_dir {
             info!(
                 old = %existing.display(),
@@ -126,10 +144,17 @@ pub async fn update_test_dir_link(
             );
 
             fs::remove_file(link_test_dir).await?;
+            true
+        } else {
+            false
         }
+    } else {
+        true
+    };
+    if make_link {
+        info!(src = %test_dir.display(), dst = %link_test_dir.display(), "Linking test dir");
+        fs::symlink(&test_dir, link_test_dir).await?;
     }
-    info!(src = %test_dir.display(), dst = %link_test_dir.display(), "Linking test dir");
-    fs::symlink(&test_dir, link_test_dir).await?;
     Ok(())
 }
 

@@ -1,5 +1,16 @@
 # shellcheck shell=bash
 
+export REPO_ROOT
+
+
+if command -v git &> /dev/null; then
+  REPO_ROOT="$(git rev-parse --show-toplevel)"
+else
+  REPO_ROOT="$PWD"
+fi
+
+
+
 function add_target_dir_to_path() {
   export PATH="${CARGO_BUILD_TARGET_DIR:-$PWD/target}/${CARGO_PROFILE:-debug}:$PATH"
 }
