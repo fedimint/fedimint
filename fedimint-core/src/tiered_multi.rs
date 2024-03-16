@@ -340,6 +340,21 @@ impl TieredSummary {
     pub fn count_tiers(&self) -> usize {
         self.0.count_tiers()
     }
+
+    /// Checks if `self` is a super-multi set of `other`
+    pub fn contains(&self, other: &TieredSummary) -> bool {
+        other
+            .iter()
+            .all(|(amount, num)| self.0.get(amount).copied().unwrap_or_default() >= num)
+    }
+
+    pub fn get_tier_count(&self, amount: Amount) -> Option<&usize> {
+        self.0.get(amount)
+    }
+
+    pub fn get_tier_count_mut(&mut self, amount: Amount) -> Option<&mut usize> {
+        self.0.get_mut(amount)
+    }
 }
 
 impl FromIterator<(Amount, usize)> for TieredSummary {
@@ -419,6 +434,29 @@ mod test {
             TieredSummary::represent_amount_minimal(Amount::from_msats(5), &tiers),
             denominations(vec![(Amount::from_msats(4), 1), (Amount::from_msats(1), 1)])
         )
+    }
+
+    #[test]
+    fn test_contains() {
+        let a = TieredSummary::from_iter(vec![
+            (Amount::from_sats(1), 1),
+            (Amount::from_sats(4), 2),
+            (Amount::from_sats(8), 3),
+        ]);
+        let b = TieredSummary::from_iter(vec![
+            (Amount::from_sats(1), 1),
+            (Amount::from_sats(4), 2),
+            (Amount::from_sats(8), 1),
+        ]);
+        let c =
+            TieredSummary::from_iter(vec![(Amount::from_sats(4), 2), (Amount::from_sats(16), 1)]);
+
+        assert!(a.contains(&b));
+        assert!(!b.contains(&a));
+        assert!(!a.contains(&c));
+        assert!(!b.contains(&c));
+        assert!(!c.contains(&a));
+        assert!(!c.contains(&b));
     }
 
     fn notes(notes: Vec<(Amount, usize)>) -> TieredMulti<usize> {
