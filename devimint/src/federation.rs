@@ -37,7 +37,7 @@ pub struct Federation {
     // client is only for internal use, use cli commands instead
     pub members: BTreeMap<usize, Fedimintd>,
     pub vars: BTreeMap<usize, vars::Fedimintd>,
-    bitcoind: Bitcoind,
+    pub bitcoind: Bitcoind,
 
     /// Built in [`Client`]
     client: Client,
@@ -153,6 +153,18 @@ impl Client {
         }
 
         Ok(())
+    }
+
+    pub async fn get_deposit_addr(&self) -> Result<(String, String)> {
+        let deposit = cmd!(self, "deposit-address").out_json().await?;
+        Ok((
+            deposit["address"].as_str().unwrap().to_string(),
+            deposit["operation_id"].as_str().unwrap().to_string(),
+        ))
+    }
+
+    pub async fn await_deposit(&self, operation_id: &str) -> Result<()> {
+        cmd!(self, "await-deposit", operation_id).run().await
     }
 
     pub async fn cmd(&self) -> Command {
@@ -314,30 +326,20 @@ impl Federation {
 
     pub async fn pegin_client(&self, amount: u64, client: &Client) -> Result<()> {
         info!(amount, "Pegging-in client funds");
-        let deposit = cmd!(client, "deposit-address").out_json().await?;
-        let deposit_address = deposit["address"].as_str().unwrap();
-        let deposit_operation_id = deposit["operation_id"].as_str().unwrap();
 
-        self.bitcoind
-            .send_to(deposit_address.to_owned(), amount)
-            .await?;
+        let (address, operation_id) = client.get_deposit_addr().await?;
+
+        self.bitcoind.send_to(address, amount).await?;
         self.bitcoind.mine_blocks(21).await?;
 
-        cmd!(client, "await-deposit", deposit_operation_id)
-            .run()
-            .await?;
+        client.await_deposit(&operation_id).await?;
         Ok(())
     }
 
     pub async fn pegin_gateway(&self, amount: u64, gw: &super::gatewayd::Gatewayd) -> Result<()> {
         info!(amount, "Pegging-in gateway funds");
         let fed_id = self.calculate_federation_id().await;
-        let pegin_addr = cmd!(gw, "address", "--federation-id={fed_id}")
-            .out_json()
-            .await?
-            .as_str()
-            .context("address must be a string")?
-            .to_owned();
+        let pegin_addr = gw.get_pegin_addr(&fed_id).await?;
         self.bitcoind.send_to(pegin_addr, amount).await?;
         self.bitcoind.mine_blocks(21).await?;
         poll("gateway pegin", None, || async {

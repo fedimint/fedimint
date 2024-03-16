@@ -96,4 +96,13 @@ impl Gatewayd {
         .await?;
         Ok(())
     }
+
+    pub async fn get_pegin_addr(&self, fed_id: &str) -> Result<String> {
+        Ok(cmd!(self, "address", "--federation-id={fed_id}")
+            .out_json()
+            .await?
+            .as_str()
+            .context("address must be a string")?
+            .to_owned())
+    }
 }
