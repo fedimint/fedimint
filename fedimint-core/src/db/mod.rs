@@ -1864,15 +1864,19 @@ pub async fn apply_migrations(
 ) -> Result<(), anyhow::Error> {
     db.ensure_global()?;
 
-    let mut global_dbtx = db.begin_transaction().await;
-    migrate_database_version(
-        &mut global_dbtx.to_ref_nc(),
-        target_db_version,
-        module_instance_id,
-        kind.clone(),
-    )
-    .await?;
+    {
+        let mut global_dbtx = db.begin_transaction().await;
+        migrate_database_version(
+            &mut global_dbtx.to_ref_nc(),
+            target_db_version,
+            module_instance_id,
+            kind.clone(),
+        )
+        .await?;
+        global_dbtx.commit_tx_result().await?;
+    }
 
+    let mut global_dbtx = db.begin_transaction().await;
     let module_instance_id_key = module_instance_id_or_global(module_instance_id);
 
     let disk_version = global_dbtx
