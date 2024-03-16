@@ -224,7 +224,7 @@ parsed_test_commands=$(printf "%s\n" "${tests_with_versions[@]}")
 parallel_args=()
 export parallel_jobs='1'
 
-if [ -z "${CI:-}" ]; then
+if [ -z "${CI:-}" ] && [[ -t 1 ]] && [ -z "${FM_TEST_CI_ALL_DISABLE_ETA:-}" ]; then
   parallel_args+=(--eta)
 fi
 
