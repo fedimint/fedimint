@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Cmd","RpcCmd"],"fn":["cleanup_on_exit","exec_user_command","handle_command","rpc_command","run_ui","setup","update_test_dir_link","write_ready_file"],"struct":["CommonArgs"]};
+window.SIDEBAR_ITEMS = {"enum":["Cmd","RpcCmd"],"fn":["cleanup_on_exit","exec_user_command","handle_command","random_test_dir_suffix","rpc_command","run_ui","setup","update_test_dir_link","write_ready_file"],"struct":["CommonArgs"]};
