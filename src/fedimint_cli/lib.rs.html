@@ -926,6 +926,7 @@
 <a href="#924" id="924">924</a>
 <a href="#925" id="925">925</a>
 <a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
@@ -1408,7 +1409,8 @@ Examples:
             .init()
             .expect(<span class="string">"tracing initializes"</span>);
 
-        <span class="macro">debug!</span>(<span class="string">"Starting fedimint-cli (version: {})"</span>, version_hash);
+        <span class="kw">let </span>version = <span class="macro">env!</span>(<span class="string">"CARGO_PKG_VERSION"</span>);
+        <span class="macro">debug!</span>(<span class="string">"Starting fedimint-cli (version: {version} version_hash: {version_hash})"</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             module_inits: ClientModuleInitRegistry::new(),
