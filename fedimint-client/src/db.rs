@@ -326,6 +326,12 @@ pub async fn apply_migrations_client(
 ) -> Result<(), anyhow::Error> {
     db.ensure_global()?;
 
+    // TODO(support:v0.3):
+    // https://github.com/fedimint/fedimint/issues/3481
+    // Somewhere after 0.3 is no longer supported,
+    // we should have no need to try to migrate the key, as all
+    // clients that ever ran the fixed version, should have it
+    // migrated or created in the new place from the start.
     {
         let mut global_dbtx = db.begin_transaction().await;
         migrate_database_version(
