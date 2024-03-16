@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 use std::ffi;
 use std::fmt::{Display, Formatter};
 use std::io::Read;
+use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -32,7 +33,7 @@ use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, AwaitTxAcceptedLru, DynGlobalClientContext};
 use fedimint_core::api::InviteCode;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -494,6 +495,10 @@ pub struct MintClientContext {
     // FIXME: putting a DB ref here is an antipattern, global context should become more powerful
     // but we need to consider it more carefully as its APIs will be harder to change.
     pub module_db: Database,
+
+    /// Small LRU used to merge multiple state machine requests for the same
+    /// outcome from this module
+    await_tx_accepted_lru: AwaitTxAcceptedLru,
 }
 
 impl MintClientContext {
@@ -523,6 +528,9 @@ impl ClientModule for MintClientModule {
             peer_tbs_pks: self.cfg.peer_tbs_pks.clone(),
             secret: self.secret.clone(),
             module_db: self.client_ctx.module_db().clone(),
+            await_tx_accepted_lru: Arc::new(tokio::sync::Mutex::new(lru::LruCache::new(
+                NonZeroUsize::new(32).expect("not a zero"),
+            ))),
         }
     }
 

@@ -120,7 +120,7 @@ use secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrat
 use thiserror::Error;
 #[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
-use tokio::sync::watch;
+use tokio::sync::{watch, OnceCell};
 use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, error, info, warn};
 
@@ -288,9 +288,36 @@ dyn_newtype_define! {
     pub DynGlobalClientContext(Arc<IGlobalClientContext>)
 }
 
+pub type AwaitTxAcceptedLruInner = lru::LruCache<TransactionId, Arc<OnceCell<Result<(), String>>>>;
+pub type AwaitTxAcceptedLru = Arc<tokio::sync::Mutex<AwaitTxAcceptedLruInner>>;
+
 impl DynGlobalClientContext {
     pub fn new_fake() -> Self {
         DynGlobalClientContext::from(())
+    }
+
+    pub async fn await_tx_accepted_with_cache(
+        &self,
+        txid: TransactionId,
+        cache: Option<&AwaitTxAcceptedLru>,
+    ) -> Result<(), String> {
+        let Some(cache) = cache else {
+            return self.await_tx_accepted(txid).await;
+        };
+
+        let mut lru_lock = cache.lock().await;
+
+        let entry_arc = lru_lock
+            .get_or_insert(txid, || Arc::new(OnceCell::new()))
+            .clone();
+
+        // we drop the lru lock so requests for other `session_idx` can work in parallel
+        drop(lru_lock);
+
+        entry_arc
+            .get_or_init(|| self.await_tx_accepted(txid))
+            .await
+            .clone()
     }
 
     pub async fn await_tx_accepted(&self, query_txid: TransactionId) -> Result<(), String> {

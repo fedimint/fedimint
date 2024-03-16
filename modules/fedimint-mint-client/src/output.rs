@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{AwaitTxAcceptedLru, DynGlobalClientContext};
 use fedimint_core::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
@@ -126,7 +126,11 @@ impl MintOutputStatesCreated {
         vec![
             // Check if transaction was rejected
             StateTransition::new(
-                Self::await_tx_rejected(global_context.clone(), common),
+                Self::await_tx_rejected(
+                    global_context.clone(),
+                    common,
+                    context.await_tx_accepted_lru.clone(),
+                ),
                 |_dbtx, (), state| Box::pin(Self::transition_tx_rejected(state)),
             ),
             // Check for output outcome
@@ -151,9 +155,13 @@ impl MintOutputStatesCreated {
         ]
     }
 
-    async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
+    async fn await_tx_rejected(
+        global_context: DynGlobalClientContext,
+        common: MintOutputCommon,
+        cache: AwaitTxAcceptedLru,
+    ) {
         if global_context
-            .await_tx_accepted(common.out_point.txid)
+            .await_tx_accepted_with_cache(common.out_point.txid, Some(&cache))
             .await
             .is_err()
         {

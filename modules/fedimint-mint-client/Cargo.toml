@@ -27,6 +27,7 @@ bitcoin_hashes = "0.11.0"
 erased-serde = "0.4"
 futures = "0.3"
 itertools = "0.12.1"
+lru = "0.12.3"
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
 fedimint-client = { version = "0.3.0-alpha", path = "../../fedimint-client" }
 fedimint-derive-secret = { version = "0.3.0-alpha", path = "../../crypto/derive-secret"}
