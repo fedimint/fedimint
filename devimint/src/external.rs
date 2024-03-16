@@ -82,12 +82,21 @@ impl Bitcoind {
 
     pub(crate) async fn init(client: &bitcoincore_rpc::Client) -> Result<()> {
         // create RPC wallet
-        while let Err(e) = client.create_wallet("", None, None, None, None) {
-            if e.to_string().contains("Database already exists") {
-                break;
+        for attempt in 0.. {
+            match client.create_wallet("", None, None, None, None) {
+                Ok(_) => {
+                    break;
+                }
+                Err(err) => {
+                    if err.to_string().contains("Database already exists") {
+                        break;
+                    }
+                    if attempt % 20 == 19 {
+                        debug!(target: LOG_DEVIMINT, %attempt, %err, "Waiting for initial bitcoind wallet initialization");
+                    }
+                    sleep(Duration::from_millis(100)).await;
+                }
             }
-            warn!(target: LOG_DEVIMINT, "Failed to create wallet ... retrying {}", e);
-            sleep(Duration::from_secs(1)).await
         }
 
         // mine blocks
