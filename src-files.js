@@ -22,7 +22,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_fuzz",["",[],["lib.rs"]]],\
 ["fedimint_ln_client",["",[],["api.rs","db.rs","incoming.rs","lib.rs","pay.rs","receive.rs"]]],\
 ["fedimint_ln_common",["",[["contracts",[],["incoming.rs","mod.rs","outgoing.rs"]]],["config.rs","db.rs","lib.rs"]]],\
-["fedimint_ln_server",["",[],["lib.rs"]]],\
+["fedimint_ln_server",["",[],["lib.rs","metrics.rs"]]],\
 ["fedimint_load_test_tool",["",[],["common.rs","main.rs"]]],\
 ["fedimint_logging",["",[],["lib.rs"]]],\
 ["fedimint_meta_client",["",[],["api.rs","cli.rs","db.rs","lib.rs","states.rs"]]],\
