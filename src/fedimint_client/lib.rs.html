@@ -2373,6 +2373,29 @@
 <a href="#2371" id="2371">2371</a>
 <a href="#2372" id="2372">2372</a>
 <a href="#2373" id="2373">2373</a>
+<a href="#2374" id="2374">2374</a>
+<a href="#2375" id="2375">2375</a>
+<a href="#2376" id="2376">2376</a>
+<a href="#2377" id="2377">2377</a>
+<a href="#2378" id="2378">2378</a>
+<a href="#2379" id="2379">2379</a>
+<a href="#2380" id="2380">2380</a>
+<a href="#2381" id="2381">2381</a>
+<a href="#2382" id="2382">2382</a>
+<a href="#2383" id="2383">2383</a>
+<a href="#2384" id="2384">2384</a>
+<a href="#2385" id="2385">2385</a>
+<a href="#2386" id="2386">2386</a>
+<a href="#2387" id="2387">2387</a>
+<a href="#2388" id="2388">2388</a>
+<a href="#2389" id="2389">2389</a>
+<a href="#2390" id="2390">2390</a>
+<a href="#2391" id="2391">2391</a>
+<a href="#2392" id="2392">2392</a>
+<a href="#2393" id="2393">2393</a>
+<a href="#2394" id="2394">2394</a>
+<a href="#2395" id="2395">2395</a>
+<a href="#2396" id="2396">2396</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2888,40 +2911,32 @@
     })
 }
 
-<span class="doccomment">/// Shared, inner data of [`ClientHandle`]
-///
-/// The primary responsibility of this struct (and two levels of Arc),
-/// is shutting down `Client` on the drop of last [`ClientHandle`]. See
-/// [`ClientHandleShared::drop`] for details.
-</span><span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">struct </span>ClientHandleShared {
-    inner: <span class="prelude-ty">Option</span>&lt;Arc&lt;Client&gt;&gt;,
-}
-
 <span class="doccomment">/// User handle to [`Client`]
 ///
-/// Clonable. On the drop of last [`ClientHandle`] the client
-/// will be shut-down, and resources it used freed.
+/// On the drop of [`ClientHandle`] the client will be shut-down, and resources
+/// it used freed.
 ///
 /// Notably it [`ops::Deref`]s to the [`Client`] where most
 /// methods live.
-</span><span class="attr">#[derive(Debug, Clone)]
+///
+/// Put this in an Arc to clone it.
+</span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>ClientHandle {
-    inner: Arc&lt;ClientHandleShared&gt;,
+    inner: <span class="prelude-ty">Option</span>&lt;Arc&lt;Client&gt;&gt;,
 }
+
+<span class="kw">pub type </span>ClientHandleArc = Arc&lt;ClientHandle&gt;;
 
 <span class="kw">impl </span>ClientHandle {
     <span class="doccomment">/// Create
     </span><span class="kw">fn </span>new(inner: Arc&lt;Client&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            inner: Arc::new(ClientHandleShared {
-                inner: inner.into(),
-            }),
+        ClientHandle {
+            inner: inner.into(),
         }
     }
 
     <span class="kw">fn </span>as_inner(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Arc&lt;Client&gt; {
-        <span class="self">self</span>.inner.inner.as_ref().expect(<span class="string">"Inner always set"</span>)
+        <span class="self">self</span>.inner.as_ref().expect(<span class="string">"Inner always set"</span>)
     }
 
     <span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) {
@@ -2929,21 +2944,11 @@
     </span>}
 
     <span class="doccomment">/// Shutdown the client.
-    ///
-    /// Returns Err if there are other clones of [`ClientHandle`].
-    </span><span class="kw">pub async fn </span>shutdown(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), ClientHandle&gt; {
-        <span class="kw">match </span>Arc::try_unwrap(<span class="self">self</span>.inner) {
-            <span class="prelude-val">Ok</span>(<span class="kw-2">mut </span>inner) =&gt; {
-                inner.shutdown().<span class="kw">await</span>;
-                <span class="prelude-val">Ok</span>(())
-            }
-            <span class="prelude-val">Err</span>(inner) =&gt; <span class="prelude-val">Err</span>(<span class="self">Self </span>{ inner }),
-        }
-    }
-}
+    </span><span class="kw">pub async fn </span>shutdown(<span class="kw-2">mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.shutdown_inner().<span class="kw">await
+    </span>}
 
-<span class="kw">impl </span>ClientHandleShared {
-    <span class="kw">async fn </span>shutdown(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+    <span class="kw">async fn </span>shutdown_inner(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span><span class="prelude-val">Some</span>(inner) = <span class="self">self</span>.inner.take() <span class="kw">else </span>{
             <span class="macro">error!</span>(<span class="string">"ClientHandleShared::shutdown called twice"</span>);
             <span class="kw">return</span>;
@@ -2975,23 +2980,44 @@
             <span class="macro">debug!</span>(target:  LOG_CLIENT, count = db_strong_count - <span class="number">1</span>, <span class="string">"External DB references remaining after last handle dropped"</span>);
         }
     }
+
+    <span class="doccomment">/// Restart the client
+    ///
+    /// Returns false if there are other clones of [`ClientHandle`], or starting
+    /// the client again failed for some reason.
+    ///
+    /// Notably it will re-use the original [`Database`] handle, and not attempt
+    /// to open it again.
+    </span><span class="kw">pub async fn </span>restart(<span class="self">self</span>) -&gt; anyhow::Result&lt;ClientHandle&gt; {
+        <span class="kw">let </span>(builder, config, root_secret) = {
+            <span class="kw">let </span>client = <span class="self">self
+                </span>.inner
+                .as_ref()
+                .ok_or_else(|| <span class="macro">anyhow::format_err!</span>(<span class="string">"Already stopped"</span>))<span class="question-mark">?</span>;
+            <span class="kw">let </span>builder = ClientBuilder::from_existing(client);
+            <span class="kw">let </span>config = client.config.clone();
+            <span class="kw">let </span>root_secret = client.root_secret.clone();
+
+            (builder, config, root_secret)
+        };
+        <span class="self">self</span>.shutdown().<span class="kw">await</span>;
+
+        builder.build(root_secret, config, <span class="bool-val">false</span>).<span class="kw">await
+    </span>}
 }
 
 <span class="kw">impl </span>ops::Deref <span class="kw">for </span>ClientHandle {
     <span class="kw">type </span>Target = Client;
 
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
-        <span class="self">self</span>.inner
-            .inner
-            .as_ref()
-            .expect(<span class="string">"Must have inner client set"</span>)
+        <span class="self">self</span>.inner.as_ref().expect(<span class="string">"Must have inner client set"</span>)
     }
 }
 
 <span class="kw">impl </span>ClientHandle {
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>downgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientWeak {
         ClientWeak {
-            inner: Arc::downgrade(<span class="self">self</span>.inner.inner.as_ref().expect(<span class="string">"Inner always set"</span>)),
+            inner: Arc::downgrade(<span class="self">self</span>.inner.as_ref().expect(<span class="string">"Inner always set"</span>)),
         }
     }
 }
@@ -3029,7 +3055,7 @@
 /// `ExecutorInner` should already take care of that. The reason is that as long
 /// as the executor task is active there may be a cycle in the
 /// `Arc&lt;Client&gt;`s such that at least one `Executor` never gets dropped.
-</span><span class="kw">impl </span>Drop <span class="kw">for </span>ClientHandleShared {
+</span><span class="kw">impl </span>Drop <span class="kw">for </span>ClientHandle {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">if </span><span class="self">self</span>.inner.is_none() {
             <span class="kw">return</span>;
@@ -3054,7 +3080,7 @@
         <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Shutting down the Client on last handle drop"</span>);
         <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
         </span>tokio::task::block_in_place(|| {
-            RuntimeHandle::current().block_on(<span class="self">self</span>.shutdown());
+            RuntimeHandle::current().block_on(<span class="self">self</span>.shutdown_inner());
         });
     }
 }
@@ -4133,6 +4159,15 @@
         }
     }
 
+    <span class="kw">fn </span>from_existing(client: <span class="kw-2">&amp;</span>Client) -&gt; <span class="self">Self </span>{
+        ClientBuilder {
+            module_inits: client.module_inits.clone(),
+            primary_module_instance: <span class="prelude-val">Some</span>(client.primary_module_instance),
+            admin_creds: <span class="prelude-val">None</span>,
+            db: client.db.clone(),
+            stopped: <span class="bool-val">false</span>,
+        }
+    }
     <span class="doccomment">/// Replace module generator registry entirely
     </span><span class="kw">pub fn </span>with_module_inits(<span class="kw-2">&amp;mut </span><span class="self">self</span>, module_inits: ClientModuleInitRegistry) {
         <span class="self">self</span>.module_inits = module_inits;
@@ -4246,14 +4281,10 @@
 
             dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
         }
-        <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
 
-        <span class="kw">let </span>client = <span class="self">self</span>.build_stopped(root_secret, config).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if </span>!stopped {
-            client.as_inner().start_executor().<span class="kw">await</span>;
-        }
-        <span class="prelude-val">Ok</span>(client)
-    }
+        <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
+        <span class="self">self</span>.build(root_secret, config, stopped).<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Join a new Federation
     ///
@@ -4402,6 +4433,21 @@
             </span>.url
             .clone();
         <span class="prelude-val">Ok</span>(DynGlobalApi::from_single_endpoint(id, url))
+    }
+
+    <span class="doccomment">/// Build a [`Client`] but do not start the executor
+    </span><span class="kw">async fn </span>build(
+        <span class="self">self</span>,
+        root_secret: DerivableSecret,
+        config: ClientConfig,
+        stopped: bool,
+    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
+        <span class="kw">let </span>client = <span class="self">self</span>.build_stopped(root_secret, config).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if </span>!stopped {
+            client.as_inner().start_executor().<span class="kw">await</span>;
+        }
+
+        <span class="prelude-val">Ok</span>(client)
     }
 
     <span class="doccomment">/// Build a [`Client`] but do not start the executor

@@ -1643,6 +1643,8 @@
 <a href="#1641" id="1641">1641</a>
 <a href="#1642" id="1642">1642</a>
 <a href="#1643" id="1643">1643</a>
+<a href="#1644" id="1644">1644</a>
+<a href="#1645" id="1645">1645</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1678,7 +1680,7 @@
     GATEWAYD_DATABASE_VERSION,
 };
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
-<span class="kw">use </span>fedimint_client::ClientHandle;
+<span class="kw">use </span>fedimint_client::ClientHandleArc;
 <span class="kw">use </span>fedimint_core::api::{FederationError, InviteCode};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{
@@ -1872,7 +1874,7 @@
 
 <span class="kw">type </span>ScidToFederationMap = Arc&lt;RwLock&lt;BTreeMap&lt;u64, FederationId&gt;&gt;&gt;;
 <span class="kw">type </span>FederationToClientMap =
-    Arc&lt;RwLock&lt;BTreeMap&lt;FederationId, Spanned&lt;fedimint_client::ClientHandle&gt;&gt;&gt;&gt;;
+    Arc&lt;RwLock&lt;BTreeMap&lt;FederationId, Spanned&lt;fedimint_client::ClientHandleArc&gt;&gt;&gt;&gt;;
 
 <span class="doccomment">/// Represents an active connection to the lightning node.
 </span><span class="attr">#[derive(Clone, Debug)]
@@ -2917,8 +2919,10 @@
             </span>)))<span class="question-mark">?
             </span>.into_value();
 
-        <span class="kw">if </span>client.shutdown().<span class="kw">await</span>.is_err() {
-            <span class="macro">warn!</span>(<span class="string">"failed to shutdown client"</span>);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = Arc::into_inner(client) {
+            client.shutdown().<span class="kw">await</span>;
+        } <span class="kw">else </span>{
+            <span class="macro">error!</span>(<span class="string">"client is not unique, failed to remove client"</span>);
         }
 
         <span class="comment">// Remove previously assigned scid from `scid_to_federation` map
@@ -2932,7 +2936,7 @@
     <span class="kw">pub async fn </span>remove_client_hack(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id: FederationId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Spanned&lt;fedimint_client::ClientHandle&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Spanned&lt;fedimint_client::ClientHandleArc&gt;&gt; {
         <span class="kw">let </span>client = <span class="self">self</span>.clients.write().<span class="kw">await</span>.remove(<span class="kw-2">&amp;</span>federation_id).ok_or(
             GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">"No federation with id {federation_id}"</span>)),
         )<span class="question-mark">?</span>;
@@ -2942,7 +2946,7 @@
     <span class="kw">pub async fn </span>select_client(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id: FederationId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Spanned&lt;fedimint_client::ClientHandle&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Spanned&lt;fedimint_client::ClientHandleArc&gt;&gt; {
         <span class="self">self</span>.clients
             .read()
             .<span class="kw">await
@@ -3092,7 +3096,7 @@
 
     <span class="kw">async fn </span>make_federation_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        client: <span class="kw-2">&amp;</span>ClientHandle,
+        client: <span class="kw-2">&amp;</span>ClientHandleArc,
         federation_id: FederationId,
     ) -&gt; FederationInfo {
         <span class="kw">let </span>balance_msat = client.get_balance().<span class="kw">await</span>;

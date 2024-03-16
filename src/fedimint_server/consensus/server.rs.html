@@ -825,6 +825,20 @@
 <a href="#823" id="823">823</a>
 <a href="#824" id="824">824</a>
 <a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -875,7 +889,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::metrics::{
     CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
-    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_SESSION_COUNT,
+    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS,
+    CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache};
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
@@ -897,6 +912,11 @@
     cfg: ServerConfig,
     submission_receiver: Receiver&lt;ConsensusItem&gt;,
     latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt;,
+
+    <span class="doccomment">/// Just a string version of `cfg.local.identity` for performance
+    </span>self_id_str: String,
+    <span class="doccomment">/// Just a string version of peer ids for performance
+    </span>peer_id_str: Vec&lt;String&gt;,
 }
 
 <span class="kw">impl </span>ConsensusServer {
@@ -1037,6 +1057,10 @@
             db,
             keychain,
             api_endpoints,
+            self_id_str: cfg.local.identity.to_string(),
+            peer_id_str: (<span class="number">0</span>..cfg.consensus.api_endpoints.len())
+                .map(|x| x.to_string())
+                .collect(),
             cfg: cfg.clone(),
             submission_receiver,
             latest_contribution_by_peer,
@@ -1413,7 +1437,7 @@
         item: ConsensusItem,
         peer: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>peer_id_str = peer.to_string();
+        <span class="kw">let </span>peer_id_str = <span class="kw-2">&amp;</span><span class="self">self</span>.peer_id_str[peer.to_usize()];
         <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"process_consensus_item"</span>);
         <span class="kw">let </span>timing_prom = CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS
             .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>peer_id_str])
@@ -1425,6 +1449,10 @@
             .write()
             .<span class="kw">await
             </span>.insert(peer, session_index);
+
+        CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="self">self</span>.self_id_str, <span class="kw-2">&amp;</span>peer_id_str])
+            .set(session_index <span class="kw">as </span>i64);
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
 

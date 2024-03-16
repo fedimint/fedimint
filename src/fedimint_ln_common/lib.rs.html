@@ -763,7 +763,7 @@
 <span class="kw">use </span>config::LightningClientConfig;
 <span class="kw">use </span>fedimint_client::oplog::OperationLogEntry;
 <span class="kw">use </span>fedimint_client::sm::Context;
-<span class="kw">use </span>fedimint_client::ClientHandle;
+<span class="kw">use </span>fedimint_client::ClientHandleArc;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1373,7 +1373,7 @@
 }
 
 <span class="kw">pub async fn </span>ln_operation(
-    client: <span class="kw-2">&amp;</span>ClientHandle,
+    client: <span class="kw-2">&amp;</span>ClientHandleArc,
     operation_id: OperationId,
 ) -&gt; anyhow::Result&lt;OperationLogEntry&gt; {
     <span class="kw">let </span>operation = client

@@ -807,6 +807,34 @@
 <a href="#805" id="805">805</a>
 <a href="#806" id="806">806</a>
 <a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -840,6 +868,9 @@
 <span class="kw">use </span>tracing::{debug, info, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::Recipient;
+<span class="kw">use </span><span class="kw">crate</span>::metrics::{
+    PEER_BANS_COUNT, PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT,
+};
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{AnyConnector, SharedAnyConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::framed::AnyFramedTransport;
 
@@ -862,6 +893,7 @@
 </span><span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>ReconnectPeerConnections&lt;T&gt; {
     connections: HashMap&lt;PeerId, PeerConnection&lt;T&gt;&gt;,
+    self_id: PeerId,
 }
 
 <span class="attr">#[derive(Clone)]
@@ -986,7 +1018,9 @@
     incoming: async_channel::Sender&lt;M&gt;,
     outgoing: async_channel::Receiver&lt;M&gt;,
     our_id: PeerId,
+    our_id_str: String,
     peer_id: PeerId,
+    peer_id_str: String,
     peer_address: SafeUrl,
     delay_calculator: DelayCalculator,
     connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
@@ -1028,6 +1062,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>connection_senders = HashMap::new();
         <span class="kw">let </span><span class="kw-2">mut </span>status_query_senders = HashMap::new();
         <span class="kw">let </span><span class="kw-2">mut </span>connections = HashMap::new();
+        <span class="kw">let </span>self_id = cfg.identity;
 
         <span class="kw">for </span>(peer, peer_address) <span class="kw">in </span>cfg.peers.iter().filter(|(<span class="kw-2">&amp;</span>peer, <span class="kw">_</span>)| peer != cfg.identity) {
             <span class="kw">let </span>(connection_sender, connection_receiver) =
@@ -1057,7 +1092,10 @@
             })
             .<span class="kw">await</span>;
         (
-            ReconnectPeerConnections { connections },
+            ReconnectPeerConnections {
+                connections,
+                self_id,
+            },
             PeerStatusChannels(status_query_senders),
         )
     }
@@ -1160,6 +1198,9 @@
 
     <span class="kw">async fn </span>ban_peer(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId) {
         <span class="self">self</span>.connections.remove(<span class="kw-2">&amp;</span>peer);
+        PEER_BANS_COUNT
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="self">self</span>.self_id.to_string(), <span class="kw-2">&amp;</span>peer.to_string()])
+            .inc();
         <span class="macro">warn!</span>(target: LOG_NET_PEER, <span class="string">"Peer {} banned."</span>, peer);
     }
 }
@@ -1257,6 +1298,7 @@
                 <span class="kw">match </span>message_res {
                     <span class="prelude-val">Ok</span>(peer_message) =&gt; {
                         <span class="kw">if let </span>PeerMessage::Message(msg) = peer_message {
+                            PEER_MESSAGES_COUNT.with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="self">self</span>.our_id_str, <span class="kw-2">&amp;</span><span class="self">self</span>.peer_id_str, <span class="string">"incoming"</span>]).inc();
                             <span class="kw">if </span><span class="self">self</span>.incoming.try_send(msg).is_err(){
                                 <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">"Could not relay incoming message since the channel is full"</span>);
                             }
@@ -1297,6 +1339,9 @@
     }
 
     <span class="kw">fn </span>disconnect(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>disconnect_count: u64) -&gt; PeerConnectionState&lt;M&gt; {
+        PEER_DISCONNECT_COUNT
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="self">self</span>.our_id_str, <span class="kw-2">&amp;</span><span class="self">self</span>.peer_id_str])
+            .inc();
         disconnect_count += <span class="number">1</span>;
 
         <span class="kw">let </span>reconnect_at = {
@@ -1332,6 +1377,10 @@
         <span class="kw-2">mut </span>connected: ConnectedPeerConnectionState&lt;M&gt;,
         peer_message: PeerMessage&lt;M&gt;,
     ) -&gt; PeerConnectionState&lt;M&gt; {
+        PEER_MESSAGES_COUNT
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="self">self</span>.our_id_str, <span class="kw-2">&amp;</span><span class="self">self</span>.peer_id_str, <span class="string">"outgoing"</span>])
+            .inc();
+
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = connected.connection.send(peer_message).<span class="kw">await </span>{
             <span class="kw">return </span><span class="self">self</span>.disconnect_err(e, <span class="number">0</span>);
         }
@@ -1353,6 +1402,8 @@
             new_connection_res = <span class="self">self</span>.incoming_connections.recv() =&gt; {
                 <span class="kw">match </span>new_connection_res {
                     <span class="prelude-val">Some</span>(new_connection) =&gt; {
+                        PEER_CONNECT_COUNT.with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="self">self</span>.our_id_str, <span class="kw-2">&amp;</span><span class="self">self</span>.peer_id_str, <span class="string">"incoming"</span>])
+                        .inc();
                         <span class="self">self</span>.receive_connection(disconnected, new_connection).<span class="kw">await
                     </span>},
                     <span class="prelude-val">None </span>=&gt; {
@@ -1393,6 +1444,9 @@
     ) -&gt; PeerConnectionState&lt;M&gt; {
         <span class="kw">match </span><span class="self">self</span>.try_reconnect().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(conn) =&gt; {
+                PEER_CONNECT_COUNT
+                    .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="self">self</span>.our_id_str, <span class="kw-2">&amp;</span><span class="self">self</span>.peer_id_str, <span class="string">"outgoing"</span>])
+                    .inc();
                 <span class="self">self</span>.connect(conn, disconnected.failed_reconnect_counter)
                     .<span class="kw">await
             </span>}
@@ -1494,7 +1548,9 @@
         <span class="kw">let </span>common = CommonPeerConnectionState {
             incoming,
             outgoing,
+            our_id_str: our_id.to_string(),
             our_id,
+            peer_id_str: peer_id.to_string(),
             peer_id,
             peer_address,
             delay_calculator,

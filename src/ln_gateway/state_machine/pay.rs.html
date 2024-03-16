@@ -930,7 +930,7 @@
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput};
-<span class="kw">use </span>fedimint_client::{ClientHandle, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_client::{ClientHandleArc, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
@@ -1390,7 +1390,7 @@
     }
 
     <span class="kw">async fn </span>buy_preimage_via_direct_swap(
-        client: ClientHandle,
+        client: ClientHandleArc,
         payment_data: PaymentData,
         contract: OutgoingContractAccount,
         common: GatewayPayCommon,
@@ -1554,7 +1554,7 @@
     </span><span class="kw">async fn </span>check_swap_to_federation(
         context: GatewayClientContext,
         payment_data: PaymentData,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandle&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandleArc&gt;&gt; {
         <span class="kw">let </span>rhints = payment_data.route_hints();
         <span class="kw">match </span>rhints.first().and_then(|rh| rh.<span class="number">0</span>.last()) {
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,

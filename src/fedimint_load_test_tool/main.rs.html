@@ -1364,7 +1364,7 @@
 };
 <span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>devimint::util::{GatewayClnCli, GatewayLndCli};
-<span class="kw">use </span>fedimint_client::ClientHandle;
+<span class="kw">use </span>fedimint_client::ClientHandleArc;
 <span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
@@ -1839,7 +1839,7 @@
 <span class="kw">async fn </span>get_notes_for_users(
     users: u16,
     notes_per_user: u16,
-    coordinator: ClientHandle,
+    coordinator: ClientHandleArc,
     note_denomination: Amount,
 ) -&gt; anyhow::Result&lt;HashMap&lt;u16, Vec&lt;OOBNotes&gt;&gt;&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>users_notes = HashMap::new();
@@ -1859,7 +1859,7 @@
     n: u16,
     db_path: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
     invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
-) -&gt; anyhow::Result&lt;Vec&lt;ClientHandle&gt;&gt; {
+) -&gt; anyhow::Result&lt;Vec&lt;ClientHandleArc&gt;&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>users_clients = Vec::with_capacity(n.into());
     <span class="kw">for </span>u <span class="kw">in </span><span class="number">0</span>..n {
         <span class="kw">let </span>(client, <span class="kw">_</span>) = get_user_client(u, <span class="kw-2">&amp;</span>db_path, <span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1872,7 +1872,7 @@
     user_index: u16,
     db_path: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
     invite_code: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
-) -&gt; anyhow::Result&lt;(ClientHandle, <span class="prelude-ty">Option</span>&lt;InviteCode&gt;)&gt; {
+) -&gt; anyhow::Result&lt;(ClientHandleArc, <span class="prelude-ty">Option</span>&lt;InviteCode&gt;)&gt; {
     <span class="kw">let </span>user_db = db_path
         .as_ref()
         .map(|db_path| db_path.join(<span class="macro">format!</span>(<span class="string">"user_{user_index}.db"</span>)));
@@ -1885,7 +1885,7 @@
     <span class="prelude-val">Ok</span>((client, invite_code))
 }
 
-<span class="kw">async fn </span>print_coordinator_notes(coordinator: <span class="kw-2">&amp;</span>ClientHandle) -&gt; anyhow::Result&lt;()&gt; {
+<span class="kw">async fn </span>print_coordinator_notes(coordinator: <span class="kw-2">&amp;</span>ClientHandleArc) -&gt; anyhow::Result&lt;()&gt; {
     <span class="macro">info!</span>(<span class="string">"Note summary:"</span>);
     <span class="kw">let </span>summary = get_note_summary(coordinator).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">for </span>(k, v) <span class="kw">in </span>summary.iter() {
@@ -1895,7 +1895,7 @@
 }
 
 <span class="kw">async fn </span>get_required_notes(
-    coordinator: <span class="kw-2">&amp;</span>ClientHandle,
+    coordinator: <span class="kw-2">&amp;</span>ClientHandleArc,
     minimum_amount_required: Amount,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
@@ -1919,7 +1919,7 @@
 
 <span class="kw">async fn </span>reissue_initial_notes(
     initial_notes: <span class="prelude-ty">Option</span>&lt;OOBNotes&gt;,
-    coordinator: <span class="kw-2">&amp;</span>ClientHandle,
+    coordinator: <span class="kw-2">&amp;</span>ClientHandleArc,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">if let </span><span class="prelude-val">Some</span>(notes) = initial_notes {
@@ -1933,7 +1933,7 @@
 <span class="kw">async fn </span>get_coordinator_client(
     db_path: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
     invite_code: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
-) -&gt; anyhow::Result&lt;(ClientHandle, <span class="prelude-ty">Option</span>&lt;InviteCode&gt;)&gt; {
+) -&gt; anyhow::Result&lt;(ClientHandleArc, <span class="prelude-ty">Option</span>&lt;InviteCode&gt;)&gt; {
     <span class="kw">let </span>(client, invite_code) = <span class="kw">if let </span><span class="prelude-val">Some</span>(db_path) = db_path {
         <span class="kw">let </span>coordinator_db = db_path.join(<span class="string">"coordinator.db"</span>);
         <span class="kw">if </span>coordinator_db.exists() {
@@ -1967,7 +1967,7 @@
 }
 
 <span class="kw">async fn </span>get_lightning_gateway(
-    client: <span class="kw-2">&amp;</span>ClientHandle,
+    client: <span class="kw-2">&amp;</span>ClientHandleArc,
     gateway_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
 ) -&gt; <span class="prelude-ty">Option</span>&lt;LightningGateway&gt; {
     <span class="kw">let </span>gateway_id = parse_gateway_id(gateway_id.or(<span class="prelude-val">None</span>)<span class="question-mark">?</span>.as_str()).expect(<span class="string">"Invalid gateway id"</span>);
@@ -1978,7 +1978,7 @@
 <span class="attr">#[allow(clippy::too_many_arguments)]
 </span><span class="kw">async fn </span>do_load_test_user_task(
     prefix: String,
-    client: ClientHandle,
+    client: ClientHandleArc,
     oob_notes: Vec&lt;OOBNotes&gt;,
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
@@ -2131,7 +2131,7 @@
 <span class="attr">#[allow(clippy::too_many_arguments)]
 </span><span class="kw">async fn </span>do_ln_circular_test_user_task(
     prefix: String,
-    client: ClientHandle,
+    client: ClientHandleArc,
     invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
     oob_notes: Vec&lt;OOBNotes&gt;,
     test_duration: Duration,
@@ -2207,7 +2207,7 @@
     invoice_generation: <span class="kw-2">&amp;mut </span>LnInvoiceGeneration,
     invoice_amount: <span class="kw-2">&amp;</span>Amount,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
-    client: <span class="kw-2">&amp;</span>ClientHandle,
+    client: <span class="kw-2">&amp;</span>ClientHandleArc,
     ln_gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     <span class="kw">let </span>create_invoice_time = fedimint_core::time::now();
@@ -2284,7 +2284,7 @@
 
 <span class="kw">async fn </span>do_self_payment(
     prefix: <span class="kw-2">&amp;</span>str,
-    client: <span class="kw-2">&amp;</span>ClientHandle,
+    client: <span class="kw-2">&amp;</span>ClientHandleArc,
     invoice_amount: Amount,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
@@ -2310,8 +2310,8 @@
 
 <span class="kw">async fn </span>do_partner_ping_pong(
     prefix: <span class="kw-2">&amp;</span>str,
-    client: <span class="kw-2">&amp;</span>ClientHandle,
-    partner: <span class="kw-2">&amp;</span>ClientHandle,
+    client: <span class="kw-2">&amp;</span>ClientHandleArc,
+    partner: <span class="kw-2">&amp;</span>ClientHandleArc,
     invoice_amount: Amount,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
@@ -2359,7 +2359,7 @@
 <span class="kw">async fn </span>wait_invoice_payment(
     prefix: <span class="kw-2">&amp;</span>str,
     gateway_name: <span class="kw-2">&amp;</span>str,
-    client: <span class="kw-2">&amp;</span>ClientHandle,
+    client: <span class="kw-2">&amp;</span>ClientHandleArc,
     operation_id: fedimint_core::core::OperationId,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
     pay_invoice_time: std::time::SystemTime,
@@ -2407,7 +2407,7 @@
 }
 
 <span class="kw">async fn </span>client_create_invoice(
-    client: <span class="kw-2">&amp;</span>ClientHandle,
+    client: <span class="kw-2">&amp;</span>ClientHandleArc,
     invoice_amount: Amount,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
     ln_gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,

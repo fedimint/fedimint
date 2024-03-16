@@ -323,7 +323,12 @@
 <a href="#321" id="321">321</a>
 <a href="#322" id="322">322</a>
 <a href="#323" id="323">323</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_core::api::InviteCode;
@@ -358,7 +363,7 @@
     builder
 }
 
-<span class="kw">async fn </span>client(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientHandle&gt; {
+<span class="kw">async fn </span>client(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientHandleArc&gt; {
     <span class="kw">let </span>client_config = ClientConfig::download_from_invite_code(invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>builder = make_client_builder();
     <span class="kw">let </span>client_secret = load_or_generate_mnemonic(builder.db()).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -369,7 +374,8 @@
             client_config.to_owned(),
         )
         .<span class="kw">await
-</span>}
+        </span>.map(Arc::new)
+}
 
 <span class="kw">mod </span>faucet {
     <span class="kw">pub async fn </span>invite_code() -&gt; anyhow::Result&lt;String&gt; {
@@ -443,7 +449,7 @@
     }
 
     <span class="kw">async fn </span>get_gateway(
-        client: <span class="kw-2">&amp;</span>fedimint_client::ClientHandle,
+        client: <span class="kw-2">&amp;</span>fedimint_client::ClientHandleArc,
     ) -&gt; anyhow::Result&lt;LightningGateway&gt; {
         <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
         <span class="kw">let </span>gws = lightning_module.list_gateways().<span class="kw">await</span>;
@@ -470,7 +476,7 @@
     }
 
     <span class="kw">async fn </span>receive_once(
-        client: fedimint_client::ClientHandle,
+        client: fedimint_client::ClientHandleArc,
         amount: Amount,
         gateway: LightningGateway,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -509,7 +515,7 @@
     }
 
     <span class="kw">async fn </span>pay_once(
-        client: fedimint_client::ClientHandle,
+        client: fedimint_client::ClientHandleArc,
         ln_gateway: LightningGateway,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
         <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
@@ -564,7 +570,7 @@
     }
 
     <span class="kw">async fn </span>send_and_recv_ecash_once(
-        client: fedimint_client::ClientHandle,
+        client: fedimint_client::ClientHandleArc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
         <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;();
         <span class="kw">let </span>(<span class="kw">_</span>, notes) = mint
@@ -591,7 +597,7 @@
     }
 
     <span class="kw">async fn </span>send_ecash_exact(
-        client: fedimint_client::ClientHandle,
+        client: fedimint_client::ClientHandleArc,
         amount: Amount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
         <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;();

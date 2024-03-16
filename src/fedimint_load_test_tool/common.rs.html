@@ -396,8 +396,10 @@
 <a href="#394" id="394">394</a>
 <a href="#395" id="395">395</a>
 <a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
@@ -406,7 +408,7 @@
 <span class="kw">use </span>devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::transaction::TransactionBuilder;
-<span class="kw">use </span>fedimint_client::{Client, ClientHandle};
+<span class="kw">use </span>fedimint_client::{Client, ClientHandleArc};
 <span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, OperationId};
@@ -459,7 +461,7 @@
 </span>}
 
 <span class="kw">pub async fn </span>reissue_notes(
-    client: <span class="kw-2">&amp;</span>ClientHandle,
+    client: <span class="kw-2">&amp;</span>ClientHandleArc,
     oob_notes: OOBNotes,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
@@ -483,7 +485,7 @@
 }
 
 <span class="kw">pub async fn </span>do_spend_notes(
-    mint: <span class="kw-2">&amp;</span>ClientHandle,
+    mint: <span class="kw-2">&amp;</span>ClientHandleArc,
     amount: Amount,
 ) -&gt; anyhow::Result&lt;(OperationId, OOBNotes)&gt; {
     <span class="kw">let </span>mint = <span class="kw-2">&amp;</span>mint.get_first_module::&lt;MintClientModule&gt;();
@@ -507,7 +509,7 @@
 }
 
 <span class="kw">pub async fn </span>await_spend_notes_finish(
-    client: <span class="kw-2">&amp;</span>ClientHandle,
+    client: <span class="kw-2">&amp;</span>ClientHandleArc,
     operation_id: OperationId,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>updates = client
@@ -531,7 +533,7 @@
 <span class="kw">pub async fn </span>build_client(
     invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
     rocksdb: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>PathBuf&gt;,
-) -&gt; anyhow::Result&lt;(ClientHandle, <span class="prelude-ty">Option</span>&lt;InviteCode&gt;)&gt; {
+) -&gt; anyhow::Result&lt;(ClientHandleArc, <span class="prelude-ty">Option</span>&lt;InviteCode&gt;)&gt; {
     <span class="kw">let </span>db = <span class="kw">if let </span><span class="prelude-val">Some</span>(rocksdb) = rocksdb {
         Database::new(
             fedimint_rocksdb::RocksDb::open(rocksdb)<span class="question-mark">?</span>,
@@ -560,7 +562,7 @@
     } <span class="kw">else </span>{
         client_builder.open(root_secret).<span class="kw">await
     </span>}<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>((client, invite_code))
+    <span class="prelude-val">Ok</span>((Arc::new(client), invite_code))
 }
 
 <span class="kw">pub async fn </span>lnd_create_invoice(amount: Amount) -&gt; anyhow::Result&lt;(Bolt11Invoice, String)&gt; {
@@ -613,7 +615,7 @@
 <span class="kw">pub async fn </span>gateway_pay_invoice(
     prefix: <span class="kw-2">&amp;</span>str,
     gateway_name: <span class="kw-2">&amp;</span>str,
-    client: <span class="kw-2">&amp;</span>ClientHandle,
+    client: <span class="kw-2">&amp;</span>ClientHandleArc,
     invoice: Bolt11Invoice,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
     ln_gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
@@ -726,7 +728,7 @@
     secp256k1::PublicKey::from_str(s)
 }
 
-<span class="kw">pub async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientHandle) -&gt; anyhow::Result&lt;TieredSummary&gt; {
+<span class="kw">pub async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientHandleArc) -&gt; anyhow::Result&lt;TieredSummary&gt; {
     <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;();
     <span class="kw">let </span>summary = mint_client
         .get_wallet_summary(
@@ -741,7 +743,7 @@
 }
 
 <span class="kw">pub async fn </span>remint_denomination(
-    client: <span class="kw-2">&amp;</span>ClientHandle,
+    client: <span class="kw-2">&amp;</span>ClientHandleArc,
     denomination: Amount,
     quantity: u16,
 ) -&gt; anyhow::Result&lt;()&gt; {

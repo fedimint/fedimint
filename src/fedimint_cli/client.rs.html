@@ -797,7 +797,7 @@
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_client::backup::Metadata;
-<span class="kw">use </span>fedimint_client::ClientHandle;
+<span class="kw">use </span>fedimint_client::ClientHandleArc;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
@@ -968,7 +968,7 @@
 
 <span class="kw">pub async fn </span>handle_command(
     command: ClientCmd,
-    client: ClientHandle,
+    client: ClientHandleArc,
 ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
     <span class="kw">match </span>command {
         ClientCmd::Info =&gt; get_note_summary(<span class="kw-2">&amp;</span>client).<span class="kw">await</span>,
@@ -1434,7 +1434,7 @@
 }
 
 <span class="kw">async fn </span>wait_for_ln_payment(
-    client: <span class="kw-2">&amp;</span>ClientHandle,
+    client: <span class="kw-2">&amp;</span>ClientHandleArc,
     payment_type: PayType,
     contract_id: ContractId,
     return_on_funding: bool,
@@ -1522,7 +1522,7 @@
     <span class="macro">bail!</span>(<span class="string">"Lightning Payment failed"</span>)
 }
 
-<span class="kw">async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientHandle) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
+<span class="kw">async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientHandleArc) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
     <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;();
     <span class="kw">let </span>wallet_client = client.get_first_module::&lt;WalletClientModule&gt;();
     <span class="kw">let </span>summary = mint_client
@@ -1546,7 +1546,7 @@
 }
 
 <span class="kw">async fn </span>get_gateway(
-    client: <span class="kw-2">&amp;</span>ClientHandle,
+    client: <span class="kw-2">&amp;</span>ClientHandleArc,
     gateway_id: <span class="prelude-ty">Option</span>&lt;secp256k1::PublicKey&gt;,
 ) -&gt; <span class="prelude-ty">Option</span>&lt;LightningGateway&gt; {
     <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();

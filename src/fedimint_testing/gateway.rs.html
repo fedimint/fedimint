@@ -281,7 +281,7 @@
 <span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
-<span class="kw">use </span>fedimint_client::ClientHandle;
+<span class="kw">use </span>fedimint_client::ClientHandleArc;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -335,7 +335,7 @@
     /// Note: this makes the database opened, which can lead to gateway
     /// wanting to rejoin it. Better get your own client instead of being
     /// lazy here.
-    </span><span class="kw">pub async fn </span>remove_client_hack(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; ClientHandle {
+    </span><span class="kw">pub async fn </span>remove_client_hack(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; ClientHandleArc {
         <span class="self">self</span>.gateway
             .remove_client_hack(fed.id())
             .<span class="kw">await
@@ -343,7 +343,7 @@
             .into_value()
     }
 
-    <span class="kw">pub async fn </span>select_client(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; ClientHandle {
+    <span class="kw">pub async fn </span>select_client(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; ClientHandleArc {
         <span class="self">self</span>.gateway
             .select_client(federation_id)
             .<span class="kw">await

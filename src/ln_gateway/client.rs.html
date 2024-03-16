@@ -125,9 +125,12 @@
 <a href="#123" id="123">123</a>
 <a href="#124" id="124">124</a>
 <a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
@@ -172,7 +175,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: FederationConfig,
         gateway: Gateway,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientHandle&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientHandleArc&gt; {
         <span class="kw">let </span>FederationConfig {
             invite_code,
             mint_channel_id,
@@ -225,6 +228,7 @@
                 </span>.join(root_secret, client_config.to_owned())
                 .<span class="kw">await
         </span>}
+        .map(Arc::new)
         .map_err(GatewayError::ClientStateMachineError)
     }
 
