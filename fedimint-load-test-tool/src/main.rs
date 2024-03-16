@@ -1025,7 +1025,7 @@ async fn wait_invoice_payment(
         .await?
         .into_stream();
     while let Some(update) = updates.next().await {
-        info!("{prefix} Update: {update:?}");
+        debug!(%prefix, ?update, "Invoice payment update");
         match update {
             LnReceiveState::Claimed => {
                 let elapsed: Duration = pay_invoice_time.elapsed()?;

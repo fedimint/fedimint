@@ -569,7 +569,7 @@ pub async fn run_dkg(
         let name = followers_names
             .get(peer_id)
             .context("missing follower name")?;
-        info!("calling set_config_gen_connections for {peer_id} {name}");
+        debug!("calling set_config_gen_connections for {peer_id} {name}");
         client
             .set_config_gen_connections(
                 ConfigGenConnectionsRequest {

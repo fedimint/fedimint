@@ -637,7 +637,7 @@ impl ExecutorInner {
                         currently_running_sms.remove(&state),
                         "State must have been recorded"
                     );
-                    info!(
+                    debug!(
                         target: LOG_CLIENT_REACTOR,
                         operation_id = %state.operation_id(),
                         outcome_active = outcome.is_active(),

@@ -104,11 +104,11 @@ impl Bitcoind {
         // mine blocks
         let blocks = 101;
         let address = client.get_new_address(None, None)?;
-        info!("Beginning to mine {blocks:?} blocks to address {address:?}");
+        debug!(target: LOG_DEVIMINT, blocks_num=blocks, %address, "Mining blocks to address");
         client
             .generate_to_address(blocks, &address)
             .context("Failed to generate blocks")?;
-        info!("Mined {blocks:?} blocks to address {address:?}");
+        trace!(target: LOG_DEVIMINT, blocks_num=blocks, %address, "Mining blocks to address complete");
 
         // wait bitciond is ready
         poll("bitcoind", None, || async {

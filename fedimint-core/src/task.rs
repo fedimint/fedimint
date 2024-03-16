@@ -326,7 +326,7 @@ impl TaskGroup {
 
             match join_future.await {
                 Ok(Ok(())) => {
-                    info!(target: LOG_TASK, task=%name, "Task finished");
+                    debug!(target: LOG_TASK, task=%name, "Task finished");
                 }
                 Ok(Err(e)) => {
                     error!(target: LOG_TASK, task=%name, error=%e, "Task panicked");

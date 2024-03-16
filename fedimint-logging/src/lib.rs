@@ -28,6 +28,7 @@ pub const LOG_CLIENT_BACKUP: &str = "client::backup";
 pub const LOG_CLIENT_RECOVERY: &str = "client::recovery";
 pub const LOG_CLIENT_RECOVERY_MINT: &str = "client::recovery::mint";
 pub const LOG_CLIENT_MODULE_META: &str = "client::module::meta";
+pub const LOG_CLIENT_MODULE_MINT: &str = "client::module::mint";
 
 /// Consolidates the setup of server tracing into a helper
 #[derive(Default)]

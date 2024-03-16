@@ -21,6 +21,7 @@ use fedimint_ln_client::{
 };
 use fedimint_ln_common::contracts::ContractId;
 use fedimint_ln_common::LightningGateway;
+use fedimint_logging::LOG_CLIENT;
 use fedimint_mint_client::{
     MintClientModule, OOBNotes, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
 };
@@ -201,7 +202,7 @@ pub async fn handle_command(
                     bail!("Reissue failed: {e}");
                 }
 
-                info!("Update: {update:?}");
+                debug!(target: LOG_CLIENT, ?update, "Reissue external notes state update");
             }
 
             Ok(serde_json::to_value(amount).unwrap())
@@ -347,7 +348,7 @@ pub async fn handle_command(
                     _ => {}
                 }
 
-                info!("Update: {update:?}");
+                debug!(target: LOG_CLIENT, ?update, "Await invoice state update");
             }
 
             Err(anyhow::anyhow!(
@@ -449,7 +450,7 @@ pub async fn handle_command(
                 .into_stream();
 
             while let Some(update) = updates.next().await {
-                info!("Update: {update:?}");
+                debug!(target: LOG_CLIENT, ?update, "Await deposit state update");
             }
 
             Ok(serde_json::to_value(()).unwrap())
@@ -555,7 +556,7 @@ pub async fn handle_command(
                 .into_stream();
 
             while let Some(update) = updates.next().await {
-                info!("Update: {update:?}");
+                debug!(target: LOG_CLIENT, ?update, "Withdraw state update");
 
                 match update {
                     WithdrawState::Succeeded(txid) => {
@@ -692,7 +693,7 @@ async fn wait_for_ln_payment(
                         bail!("FundingFailed: {error}")
                     }
                 }
-                info!("Update: {update:?}");
+                debug!(target: LOG_CLIENT, ?update, "Wait for ln payment state update");
             }
         }
         PayType::Lightning(operation_id) => {
@@ -727,7 +728,7 @@ async fn wait_for_ln_payment(
                         bail!("UnexpectedError: {error_message}")
                     }
                 }
-                info!("Update: {update:?}");
+                debug!(target: LOG_CLIENT, ?update, "Wait for ln payment state update");
             }
         }
     };
