@@ -500,7 +500,7 @@ impl ExecutorInner {
                         ExecutorLoopEvent::Triggered(first_completed_result)
                     }));
 
-                    info!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), transitions_num, "Started new active state machine.");
+                    debug!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), transitions_num, "Started new active state machine.");
                 }
                 ExecutorLoopEvent::Triggered(TransitionForActiveState {
                     outcome,
@@ -530,12 +530,12 @@ impl ExecutorInner {
                         let global_context_gen = global_context_gen.clone();
                         Box::pin(
                             async move {
-                                info!(
+                                debug!(
                                     target: LOG_CLIENT_REACTOR,
                                     operation_id = %state.operation_id(),
                                     "Executing state transition",
                                 );
-                                debug!(
+                                trace!(
                                     target: LOG_CLIENT_REACTOR,
                                     operation_id = %state.operation_id(),
                                     ?state,
