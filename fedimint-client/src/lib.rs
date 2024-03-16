@@ -1808,7 +1808,7 @@ impl ClientBuilder {
             for (module_id, module_cfg) in client_config.modules {
                 let kind = module_cfg.kind.clone();
                 let Some(init) = self.module_inits.get(&kind) else {
-                    debug!("Detected configuration for unsupported module id: {module_id}, kind: {kind}");
+                    // normal, expected and already logged about when building the client
                     continue;
                 };
 
@@ -2377,7 +2377,7 @@ pub fn client_decoders<'a>(
     let mut modules = BTreeMap::new();
     for (id, kind) in module_kinds {
         let Some(init) = registry.get(kind) else {
-            info!("Detected configuration for unsupported module id: {id}, kind: {kind}");
+            debug!("Detected configuration for unsupported module id: {id}, kind: {kind}");
             continue;
         };
 

@@ -346,7 +346,7 @@ impl ExecutorInner {
         global_context_gen: ContextGen,
         sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
     ) {
-        info!("Starting state machine executor task");
+        debug!(target: LOG_CLIENT_REACTOR, "Starting state machine executor task");
         if let Err(err) = self
             .run_state_machines_executor_inner(global_context_gen, sm_update_rx)
             .await
