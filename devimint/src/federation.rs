@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::path::PathBuf;
+use std::time::Duration;
 use std::{env, fs};
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -497,14 +498,17 @@ pub async fn run_dkg(
 ) -> Result<()> {
     let auth_for = |peer: &PeerId| -> ApiAuth { params[peer].local.api_auth.clone() };
     for (peer_id, client) in &admin_clients {
-        const MAX_RETRIES: usize = 20;
-        poll("trying-to-connect-to-peers", MAX_RETRIES, || async {
-            client
-                .status()
-                .await
-                .context("dkg status")
-                .map_err(ControlFlow::Continue)
-        })
+        poll(
+            "trying-to-connect-to-peers",
+            Duration::from_secs(15),
+            || async {
+                client
+                    .status()
+                    .await
+                    .context("dkg status")
+                    .map_err(ControlFlow::Continue)
+            },
+        )
         .await?;
         info!("Connected to {peer_id}")
     }
@@ -632,9 +636,8 @@ pub async fn run_dkg(
     info!("DKG successfully complete. Starting consensus...");
     for (peer_id, client) in &admin_clients {
         if let Err(e) = client.start_consensus(auth_for(peer_id)).await {
-            tracing::info!("Error calling start_consensus: {e:?}, trying to continue...")
+            tracing::debug!("Error calling start_consensus: {e:?}, trying to continue...")
         }
-
         wait_server_status(client, ServerStatus::ConsensusRunning).await?;
     }
     info!("Consensus is running");
@@ -673,8 +676,7 @@ async fn set_config_gen_params(
 }
 
 async fn wait_server_status(client: &DynGlobalApi, expected_status: ServerStatus) -> Result<()> {
-    const RETRIES: usize = 60;
-    poll("waiting-server-status", RETRIES, || async {
+    poll("waiting-server-status", Duration::from_secs(30), || async {
         let server_status = client
             .status()
             .await

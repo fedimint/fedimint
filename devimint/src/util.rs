@@ -10,6 +10,7 @@ use std::{env, unreachable};
 use anyhow::{anyhow, bail, format_err, Context, Result};
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::task::{self, block_in_place};
+use fedimint_core::time::now;
 use fedimint_logging::LOG_DEVIMINT;
 use futures::executor::block_on;
 use semver::Version;
@@ -322,7 +323,7 @@ macro_rules! poll_eq {
 // Allow macro to be used within the crate. See https://stackoverflow.com/a/31749071.
 pub(crate) use cmd;
 
-const DEFAULT_RETRIES: usize = 30;
+const DEFAULT_POLL_TIMEOUT: Duration = Duration::from_secs(30);
 /// Will retry calling `f`.
 /// - if `f` return Ok(val), this returns with Ok(val).
 /// - if `f` return Err(Control::Break(err)), this returns Err(err)
@@ -331,25 +332,37 @@ const DEFAULT_RETRIES: usize = 30;
 pub async fn poll<Fut, R>(
     name: &str,
     // TODO: this should be `Duration`, not number of retries --dpc
-    retries: impl Into<Option<usize>>,
+    timeout: impl Into<Option<Duration>>,
     f: impl Fn() -> Fut,
 ) -> Result<R>
 where
     Fut: Future<Output = Result<R, ControlFlow<anyhow::Error, anyhow::Error>>>,
 {
-    let retries = retries.into().unwrap_or(DEFAULT_RETRIES);
-    for i in 0.. {
+    let start = now();
+    let timeout = timeout.into().unwrap_or(DEFAULT_POLL_TIMEOUT);
+    for attempt in 0u64.. {
+        let attempt_start = now();
         match f().await {
             Ok(value) => return Ok(value),
             Err(ControlFlow::Break(err)) => {
                 return Err(err).with_context(|| format!("polling {name}"));
             }
-            Err(ControlFlow::Continue(err)) if i <= retries => {
-                debug!("polling {name} failed with: {err:?}, will retry... ({i}/{retries})");
-                task::sleep(Duration::from_secs(1)).await;
+            Err(ControlFlow::Continue(err))
+                if attempt_start
+                    .duration_since(start)
+                    .expect("time goes forward")
+                    < timeout =>
+            {
+                debug!(target: LOG_DEVIMINT, %attempt, %err, "Polling {name} failed, will retry...");
+                task::sleep(Duration::from_millis(attempt.min(1000))).await;
             }
             Err(ControlFlow::Continue(err)) => {
-                return Err(err).with_context(|| format!("polling {name} after {retries} retries"));
+                return Err(err).with_context(|| {
+                    format!(
+                        "Polling {name} failed after {attempt} retries (timeout: {}s)",
+                        timeout.as_secs()
+                    )
+                });
             }
         }
     }
