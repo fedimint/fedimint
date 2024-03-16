@@ -552,11 +552,11 @@ pub async fn open_channel(
                     if edge.node1_policy.is_some() {
                         return Ok(());
                     } else {
-                        warn!(?edge, "Empty chan info");
+                        debug!(?edge, "Empty chan info");
                     }
                 }
                 Err(e) => {
-                    warn!(%e, "Getting chan info failed")
+                    debug!(%e, "Getting chan info failed")
                 }
             }
         }
