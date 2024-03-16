@@ -19,12 +19,13 @@ use fedimint_core::db::{
 };
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
+use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
 use futures::future::BoxFuture;
 use futures::{FutureExt, StreamExt};
 use rand::rngs::OsRng;
 use rand::RngCore;
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::envs::FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV;
 
@@ -239,7 +240,10 @@ async fn get_temp_database(
 ) -> anyhow::Result<Database> {
     let snapshot_dirs = get_project_root().unwrap().join("db/migrations");
     if snapshot_dirs.exists() {
-        for file in fs::read_dir(snapshot_dirs)?.flatten() {
+        for file in fs::read_dir(&snapshot_dirs)
+            .with_context(|| format!("Reading dir content: {}", snapshot_dirs.display()))?
+            .flatten()
+        {
             let name = file
                 .file_name()
                 .into_string()
@@ -403,6 +407,8 @@ fn open_temp_db_and_copy(
 /// Helper function that recursively copies all of the contents from
 /// `atomic_broadcast` to `dst`.
 pub fn copy_directory(src: &Path, dst: &Path) -> io::Result<()> {
+    trace!(target: LOG_TEST, src = %src.display(), dst = %dst.display(), "Copy dir");
+
     // Create the destination directory if it doesn't exist
     fs::create_dir_all(dst)?;
 
@@ -413,6 +419,7 @@ pub fn copy_directory(src: &Path, dst: &Path) -> io::Result<()> {
             copy_directory(&path, &dst.join(entry.file_name()))?;
         } else {
             let dst_path = dst.join(entry.file_name());
+            trace!(target: LOG_TEST, src = %path.display(), dst = %dst_path.display(), "Copy file");
             fs::copy(&path, &dst_path)?;
         }
     }
