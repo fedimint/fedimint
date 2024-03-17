@@ -194,17 +194,27 @@ impl Command {
             .join(" ")
     }
 
-    /// Run the command and get its output as json.
+    /// Run the command and get its output as string.
     pub async fn out_string(&mut self) -> Result<String> {
         let output = self
-            .run_inner()
+            .run_inner(true)
             .await
             .with_context(|| format!("command: {}", self.command_debug()))?;
         let output = String::from_utf8(output.stdout)?;
         Ok(output.trim().to_owned())
     }
 
-    pub async fn run_inner(&mut self) -> Result<std::process::Output> {
+    /// Returns the json error if the command has a non-zero exit code.
+    pub async fn expect_err_json(&mut self) -> Result<serde_json::Value> {
+        let output = self
+            .run_inner(false)
+            .await
+            .with_context(|| format!("command: {}", self.command_debug()))?;
+        let output = String::from_utf8(output.stdout)?;
+        Ok(serde_json::from_str(output.trim())?)
+    }
+
+    pub async fn run_inner(&mut self, expect_success: bool) -> Result<std::process::Output> {
         debug!(target: LOG_DEVIMINT, "> {}", self.command_debug());
         let output = self
             .cmd
@@ -213,7 +223,8 @@ impl Command {
             .spawn()?
             .wait_with_output()
             .await?;
-        if !output.status.success() {
+
+        if output.status.success() != expect_success {
             bail!(
                 "{}\nstdout:\n{}",
                 output.status,
@@ -226,7 +237,7 @@ impl Command {
     /// Run the command ignoring its output.
     pub async fn run(&mut self) -> Result<()> {
         let _ = self
-            .run_inner()
+            .run_inner(true)
             .await
             .with_context(|| format!("command: {}", self.command_debug()))?;
         Ok(())
