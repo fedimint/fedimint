@@ -2243,6 +2243,22 @@
 <a href="#2241" id="2241">2241</a>
 <a href="#2242" id="2242">2242</a>
 <a href="#2243" id="2243">2243</a>
+<a href="#2244" id="2244">2244</a>
+<a href="#2245" id="2245">2245</a>
+<a href="#2246" id="2246">2246</a>
+<a href="#2247" id="2247">2247</a>
+<a href="#2248" id="2248">2248</a>
+<a href="#2249" id="2249">2249</a>
+<a href="#2250" id="2250">2250</a>
+<a href="#2251" id="2251">2251</a>
+<a href="#2252" id="2252">2252</a>
+<a href="#2253" id="2253">2253</a>
+<a href="#2254" id="2254">2254</a>
+<a href="#2255" id="2255">2255</a>
+<a href="#2256" id="2256">2256</a>
+<a href="#2257" id="2257">2257</a>
+<a href="#2258" id="2258">2258</a>
+<a href="#2259" id="2259">2259</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -4277,6 +4293,7 @@
 
 <span class="kw">pub async fn </span>cannot_replay_tx_test(dev_fed: DevFed) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
 
     <span class="attr">#[allow(unused_variables)]
     </span><span class="kw">let </span>DevFed {
@@ -4341,10 +4358,25 @@
         CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
     );
 
-    <span class="macro">cmd!</span>(double_spend_client, <span class="string">"reissue"</span>, double_spend_notes)
-        .run()
-        .<span class="kw">await
-        </span>.expect_err(<span class="string">"double spend must fail"</span>);
+    <span class="comment">// TODO(support:v0.2): remove
+    </span><span class="kw">if </span>VersionReq::parse(<span class="string">"&gt;=0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
+        <span class="kw">let </span>reissue_error = <span class="macro">cmd!</span>(double_spend_client, <span class="string">"reissue"</span>, double_spend_notes)
+            .expect_err_json()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.get(<span class="string">"error"</span>)
+            .expect(<span class="string">"json error contains error field"</span>)
+            .as_str()
+            .context(<span class="string">"not a string"</span>)<span class="question-mark">?
+            </span>.to_owned();
+
+        <span class="macro">assert!</span>(reissue_error.contains(<span class="string">"The transaction had an invalid input"</span>));
+    } <span class="kw">else </span>{
+        <span class="comment">// v0.2 clients don't write json errors to stdout, so we can't parse
+        </span><span class="macro">cmd!</span>(double_spend_client, <span class="string">"reissue"</span>, double_spend_notes)
+            .run()
+            .<span class="kw">await
+            </span>.expect_err(<span class="string">"double spend must fail"</span>);
+    }
 
     <span class="kw">let </span>double_spend_client_post_spend_balance = double_spend_client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">assert_eq!</span>(

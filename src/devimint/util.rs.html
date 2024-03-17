@@ -789,6 +789,17 @@
 <a href="#787" id="787">787</a>
 <a href="#788" id="788">788</a>
 <a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -985,17 +996,27 @@
             .join(<span class="string">" "</span>)
     }
 
-    <span class="doccomment">/// Run the command and get its output as json.
+    <span class="doccomment">/// Run the command and get its output as string.
     </span><span class="kw">pub async fn </span>out_string(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span>output = <span class="self">self
-            </span>.run_inner()
+            </span>.run_inner(<span class="bool-val">true</span>)
             .<span class="kw">await
             </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"command: {}"</span>, <span class="self">self</span>.command_debug()))<span class="question-mark">?</span>;
         <span class="kw">let </span>output = String::from_utf8(output.stdout)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(output.trim().to_owned())
     }
 
-    <span class="kw">pub async fn </span>run_inner(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;std::process::Output&gt; {
+    <span class="doccomment">/// Returns the json error if the command has a non-zero exit code.
+    </span><span class="kw">pub async fn </span>expect_err_json(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value&gt; {
+        <span class="kw">let </span>output = <span class="self">self
+            </span>.run_inner(<span class="bool-val">false</span>)
+            .<span class="kw">await
+            </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"command: {}"</span>, <span class="self">self</span>.command_debug()))<span class="question-mark">?</span>;
+        <span class="kw">let </span>output = String::from_utf8(output.stdout)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(serde_json::from_str(output.trim())<span class="question-mark">?</span>)
+    }
+
+    <span class="kw">pub async fn </span>run_inner(<span class="kw-2">&amp;mut </span><span class="self">self</span>, expect_success: bool) -&gt; <span class="prelude-ty">Result</span>&lt;std::process::Output&gt; {
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"&gt; {}"</span>, <span class="self">self</span>.command_debug());
         <span class="kw">let </span>output = <span class="self">self
             </span>.cmd
@@ -1004,7 +1025,8 @@
             .spawn()<span class="question-mark">?
             </span>.wait_with_output()
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if </span>!output.status.success() {
+
+        <span class="kw">if </span>output.status.success() != expect_success {
             <span class="macro">bail!</span>(
                 <span class="string">"{}\nstdout:\n{}"</span>,
                 output.status,
@@ -1017,7 +1039,7 @@
     <span class="doccomment">/// Run the command ignoring its output.
     </span><span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let _ </span>= <span class="self">self
-            </span>.run_inner()
+            </span>.run_inner(<span class="bool-val">true</span>)
             .<span class="kw">await
             </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"command: {}"</span>, <span class="self">self</span>.command_debug()))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
