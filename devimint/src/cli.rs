@@ -8,12 +8,13 @@ use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_overwrite_async;
+use fedimint_logging::LOG_DEVIMINT;
 use rand::distributions::Alphanumeric;
 use rand::Rng as _;
 use tokio::fs;
 use tokio::net::TcpStream;
 use tokio::time::Instant;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::federation::Fedimintd;
 use crate::util::{poll, ProcessManager};
@@ -210,6 +211,8 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
             task_group.make_handle().make_shutdown_rx().await.await;
         }
         Cmd::DevFed { exec } => {
+            trace!(target: LOG_DEVIMINT, "Starting dev fed");
+            let start_time = Instant::now();
             let (process_mgr, task_group) = setup(common_args).await?;
             let main = {
                 let task_group = task_group.clone();
@@ -265,6 +268,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                     let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
 
                     if let Some(exec) = exec {
+                        debug!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed().as_millis(), "Starting exec command");
                         exec_user_command(exec).await?;
                         task_group.shutdown();
                     }

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use fedimint_logging::LOG_DEVIMINT;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::external::{Bitcoind, Electrs, Esplora, Lightningd, Lnd};
 use crate::federation::Federation;
