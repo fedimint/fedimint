@@ -1,5 +1,8 @@
 #![cfg_attr(target_family = "wasm", allow(dead_code))]
 
+/// Just-in-time initialization
+pub mod jit;
+
 use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::{pin, Pin};
