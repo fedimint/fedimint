@@ -35,11 +35,17 @@ impl LockedBuilder {
                 .open(lock_path)
                 .with_context(|| format!("Failed to open {}", lock_path.display()))?;
 
-            // TODO: Use https://github.com/cargo-bins/cargo-binstall/pull/1496 to
-            // give user feedback only when the initial `new_try_exclusive` failed.
-            info!(target: LOG_CLIENT, "Acquiring database lock");
-            let lock =
-                fs_lock::FileLock::new_exclusive(file).context("Failed to acquire a lock file")?;
+            debug!(target: LOG_CLIENT, "Acquiring database lock");
+
+            let lock = match fs_lock::FileLock::new_try_exclusive(file) {
+                Ok(lock) => lock,
+                Err((file, _)) => {
+                    info!(target: LOG_CLIENT, "Waiting for the database lock");
+
+                    fs_lock::FileLock::new_exclusive(file)
+                        .context("Failed to acquire a lock file")?
+                }
+            };
             debug!(target: LOG_CLIENT, "Acquired database lock");
 
             Ok(LockedBuilder { lock })
