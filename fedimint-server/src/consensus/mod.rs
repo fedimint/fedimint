@@ -1,6 +1,6 @@
 #![allow(clippy::let_unit_value)]
 
-pub mod debug;
+pub(crate) mod debug_fmt;
 pub mod server;
 
 use fedimint_core::db::DatabaseTransaction;
