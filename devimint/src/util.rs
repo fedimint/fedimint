@@ -68,7 +68,7 @@ impl ProcessHandle {
     pub async fn terminate(&self) -> Result<()> {
         let mut inner = self.0.lock().await;
         if let Some(mut child) = inner.child.take() {
-            info!(
+            debug!(
                 target: LOG_DEVIMINT,
                 "sending SIGTERM to {} and waiting for it to exit", inner.name
             );

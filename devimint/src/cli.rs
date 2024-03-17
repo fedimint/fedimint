@@ -12,6 +12,7 @@ use rand::distributions::Alphanumeric;
 use rand::Rng as _;
 use tokio::fs;
 use tokio::net::TcpStream;
+use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
 
 use crate::federation::Fedimintd;
@@ -113,6 +114,7 @@ pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
         .with_file(Some(log_file))
         .init()?;
 
+    info!(target: LOG_DEVIMINT, path=%globals.FM_DATA_DIR.display() , "Setting up test dir");
     if let Some(link_test_dir) = arg.link_test_dir.as_ref() {
         update_test_dir_link(link_test_dir, &arg.test_dir()).await?;
     }
@@ -124,7 +126,6 @@ pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
         std::env::set_var(var, value);
     }
     write_overwrite_async(globals.FM_TEST_DIR.join("env"), env_string).await?;
-    info!("Test setup in {:?}", globals.FM_DATA_DIR);
     let process_mgr = ProcessManager::new(globals);
     let task_group = TaskGroup::new();
     task_group.install_kill_handler();
@@ -137,7 +138,7 @@ pub async fn update_test_dir_link(
 ) -> Result<(), anyhow::Error> {
     let make_link = if let Ok(existing) = fs::read_link(link_test_dir).await {
         if existing != test_dir {
-            info!(
+            debug!(
                 old = %existing.display(),
                 new = %test_dir.display(),
                 link = %link_test_dir.display(),
@@ -153,7 +154,7 @@ pub async fn update_test_dir_link(
         true
     };
     if make_link {
-        info!(src = %test_dir.display(), dst = %link_test_dir.display(), "Linking test dir");
+        debug!(src = %test_dir.display(), dst = %link_test_dir.display(), "Linking test dir");
         fs::symlink(&test_dir, link_test_dir).await?;
     }
     Ok(())
@@ -173,15 +174,15 @@ pub async fn cleanup_on_exit<T>(
             Ok(())
         }
         Ok(Ok(v)) => {
-            info!("Main process finished successfully, will wait for shutdown signal");
+            debug!(target: LOG_DEVIMINT, "Main process finished successfully, will wait for shutdown signal");
             task_group.make_handle().make_shutdown_rx().await.await;
-            info!("Received shutdown signal, shutting down");
+            debug!(target: LOG_DEVIMINT, "Received shutdown signal, shutting down");
             drop(v); // execute destructors
             Ok(())
         }
-        Ok(Err(e)) => {
-            warn!("Main process failed with {e:?}, will shutdown");
-            Err(e)
+        Ok(Err(err)) => {
+            warn!(target: LOG_DEVIMINT, %err, "Main process failed, will shutdown");
+            Err(err)
         }
     }
 }
@@ -215,6 +216,10 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                 async move {
                     let dev_fed = dev_fed(&process_mgr).await?;
                     let fed_id = dev_fed.fed.calculate_federation_id().await;
+
+                    let pegin_start_time = Instant::now();
+                    info!(target: LOG_DEVIMINT, "Peging in client and gateways");
+
                     let gw_pegin_amount = 20_000;
                     let client_pegin_amount = 10_000;
                     let (deposit_op_id, _, _) = tokio::try_join!(
@@ -253,6 +258,9 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                         .await_deposit(&deposit_op_id)
                         .await?;
 
+                    info!(target: LOG_DEVIMINT,
+                        elapsed_ms = %pegin_start_time.elapsed().as_millis(),
+                        "Pegins completed");
                     std::env::set_var("FM_INVITE_CODE", dev_fed.fed.invite_code()?);
                     let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
 
