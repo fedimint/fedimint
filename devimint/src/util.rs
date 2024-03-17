@@ -18,7 +18,7 @@ use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
 use tokio::sync::Mutex;
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 // If a binary doesn't provide a clap version, default to the first stable
 // release (v0.2.1)
@@ -68,7 +68,7 @@ impl ProcessHandle {
     pub async fn terminate(&self) -> Result<()> {
         let mut inner = self.0.lock().await;
         if let Some(mut child) = inner.child.take() {
-            info!(
+            debug!(
                 target: LOG_DEVIMINT,
                 "sending SIGTERM to {} and waiting for it to exit", inner.name
             );
@@ -96,7 +96,7 @@ impl Drop for ProcessHandleInner {
         let name = self.name.clone();
         block_in_place(move || {
             block_on(async move {
-                info!(
+                debug!(
                     target: LOG_DEVIMINT,
                     "sending SIGKILL to {name} and waiting for it to exit"
                 );

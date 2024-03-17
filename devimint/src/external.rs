@@ -16,6 +16,7 @@ use fedimint_testing::gateway::LightningNodeType;
 use futures::executor::block_on;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
+use tokio::time::Instant;
 use tonic_lnd::lnrpc::policy_update_request::Scope;
 use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, PolicyUpdateRequest};
 use tonic_lnd::Client as LndClient;
@@ -81,6 +82,7 @@ impl Bitcoind {
     }
 
     pub(crate) async fn init(client: &bitcoincore_rpc::Client) -> Result<()> {
+        debug!("Setting up bitcoind");
         // create RPC wallet
         for attempt in 0.. {
             match client.create_wallet("", None, None, None, None) {
@@ -115,7 +117,6 @@ impl Bitcoind {
                 .context("bitcoind getblockchaininfo")
                 .map_err(ControlFlow::Continue)?;
             if info.blocks > 100 {
-                info!("block count: {:?}", info.blocks);
                 Ok(())
             } else {
                 Err(ControlFlow::Continue(anyhow!(
@@ -125,6 +126,7 @@ impl Bitcoind {
             }
         })
         .await?;
+        debug!("Bitcoind ready");
         Ok(())
     }
 
@@ -142,7 +144,8 @@ impl Bitcoind {
     }
 
     pub async fn mine_blocks(&self, block_num: u64) -> Result<()> {
-        info!(target: LOG_DEVIMINT, ?block_num, "Mining bitcoin blocks");
+        let start_time = Instant::now();
+        debug!(target: LOG_DEVIMINT, ?block_num, "Mining bitcoin blocks");
         let client = self.client();
         let addr = client.get_new_address(None, None)?;
         let initial_block_count = client.get_block_count()?;
@@ -151,10 +154,12 @@ impl Bitcoind {
             < initial_block_count + block_num
         {
             trace!(target: LOG_DEVIMINT, ?block_num, "Waiting for blocks to be mined");
-            sleep(Duration::from_millis(200)).await;
+            sleep(Duration::from_millis(100)).await;
         }
 
-        trace!(target: LOG_DEVIMINT, ?block_num, "Mined blocks");
+        debug!(target: LOG_DEVIMINT,
+            elapsed_ms = %start_time.elapsed().as_millis(),
+            ?block_num, "Mined blocks");
 
         Ok(())
     }
@@ -608,6 +613,7 @@ pub struct Electrs {
 
 impl Electrs {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
+        debug!(target: LOG_DEVIMINT, "Starting electrs");
         let electrs_dir = process_mgr
             .globals
             .FM_ELECTRS_DIR
@@ -636,7 +642,7 @@ impl Electrs {
             "--daemon-dir={daemon_dir}"
         );
         let process = process_mgr.spawn_daemon("electrs", cmd).await?;
-        info!(target: LOG_DEVIMINT, "electrs started");
+        debug!(target: LOG_DEVIMINT, "Electrs ready");
 
         Ok(Self {
             _bitcoind: bitcoind,
@@ -653,6 +659,7 @@ pub struct Esplora {
 
 impl Esplora {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
+        debug!("Starting esplora");
         let daemon_dir = process_mgr
             .globals
             .FM_BTC_DIR
@@ -679,7 +686,7 @@ impl Esplora {
             "--jsonrpc-import", // Workaround for incompatible on-disk format
         );
         let process = process_mgr.spawn_daemon("esplora", cmd).await?;
-        info!(target: LOG_DEVIMINT, "esplora started");
+        debug!(target: LOG_DEVIMINT, "Esplora ready");
 
         Ok(Self {
             _bitcoind: bitcoind,

@@ -25,6 +25,7 @@ use fs_lock::FileLock;
 use futures::future::join_all;
 use rand::Rng;
 use semver::VersionReq;
+use tokio::time::Instant;
 use tracing::{debug, info};
 
 use super::external::Bitcoind;
@@ -394,6 +395,8 @@ impl Federation {
     }
 
     pub async fn await_gateways_registered(&self) -> Result<()> {
+        let start_time = Instant::now();
+        debug!(target: LOG_DEVIMINT, "Awaiting LN gateways registration");
         let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
         let command = if VersionReq::parse("<0.3.0-alpha")?.matches(&fedimint_cli_version) {
             "list-gateways"
@@ -413,6 +416,9 @@ impl Federation {
             poll_eq!(num_gateways, 2)
         })
         .await?;
+        debug!(target: LOG_DEVIMINT,
+            elapsed_ms = %start_time.elapsed().as_millis(),
+            "Gateways registered");
         Ok(())
     }
 
@@ -473,7 +479,7 @@ impl Fedimintd {
         peer_id: usize,
         env: &vars::Fedimintd,
     ) -> Result<Self> {
-        info!("fedimintd-{peer_id} started");
+        debug!("Starting fedimintd-{peer_id}");
         let process = process_mgr
             .spawn_daemon(
                 &format!("fedimintd-{peer_id}"),
@@ -510,7 +516,7 @@ pub async fn run_dkg(
             },
         )
         .await?;
-        info!("Connected to {peer_id}")
+        debug!("Connected to {peer_id}")
     }
     for (peer_id, client) in &admin_clients {
         assert_eq!(
@@ -616,7 +622,7 @@ pub async fn run_dkg(
     let dkg_results = admin_clients
         .iter()
         .map(|(peer_id, client)| client.run_dkg(auth_for(peer_id)));
-    info!("Running DKG...");
+    info!(target: LOG_DEVIMINT, "Running DKG");
     let (dkg_results, leader_wait_result) = tokio::join!(
         join_all(dkg_results),
         wait_server_status(leader, ServerStatus::VerifyingConfigs)
@@ -633,14 +639,15 @@ pub async fn run_dkg(
         hashes.insert(client.get_verify_config_hash(auth_for(peer_id)).await?);
     }
     assert_eq!(hashes.len(), 1);
-    info!("DKG successfully complete. Starting consensus...");
+    debug!(target: LOG_DEVIMINT, "DKG ready");
+    info!(target: LOG_DEVIMINT, "Starting consensus");
     for (peer_id, client) in &admin_clients {
         if let Err(e) = client.start_consensus(auth_for(peer_id)).await {
             tracing::debug!("Error calling start_consensus: {e:?}, trying to continue...")
         }
         wait_server_status(client, ServerStatus::ConsensusRunning).await?;
     }
-    info!("Consensus is running");
+    debug!("Consensus is running");
     Ok(())
 }
 
