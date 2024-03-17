@@ -160,7 +160,7 @@ impl Bitcoind {
     }
 
     pub async fn send_to(&self, addr: String, amount: u64) -> Result<bitcoin::Txid> {
-        info!(target: LOG_DEVIMINT, amount, addr, "Sending funds from bitcoind");
+        debug!(target: LOG_DEVIMINT, amount, addr, "Sending funds from bitcoind");
         let amount = bitcoin::Amount::from_sat(amount);
         let tx = self.client().send_to_address(
             &bitcoin::Address::from_str(&addr)?,
@@ -454,8 +454,9 @@ pub async fn open_channel(
     cln: &Lightningd,
     lnd: &Lnd,
 ) -> Result<()> {
+    debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
-    info!(target: LOG_DEVIMINT, "block sync done");
+    debug!(target: LOG_DEVIMINT, "Opening LN channel between the nodes...");
     let cln_addr = cln
         .request(cln_rpc::model::requests::NewaddrRequest { addresstype: None })
         .await?

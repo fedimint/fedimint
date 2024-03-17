@@ -240,7 +240,7 @@ impl Federation {
             .await
             .context("moving invite-code file")?;
         }
-        info!("moved invite-code files to client data directory");
+        debug!("Moved invite-code files to client data directory");
 
         Ok(Self {
             members,
