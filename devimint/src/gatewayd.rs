@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::ops::ControlFlow;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use ln_gateway::rpc::V1_API_ENDPOINT;
@@ -86,7 +87,7 @@ impl Gatewayd {
 
     pub async fn connect_fed(&self, fed: &Federation) -> Result<()> {
         let invite_code = fed.invite_code()?;
-        poll("gateway connect-fed", 60, || async {
+        poll("gateway connect-fed", Duration::from_secs(30), || async {
             cmd!(self, "connect-fed", invite_code.clone())
                 .run()
                 .await
@@ -95,5 +96,14 @@ impl Gatewayd {
         })
         .await?;
         Ok(())
+    }
+
+    pub async fn get_pegin_addr(&self, fed_id: &str) -> Result<String> {
+        Ok(cmd!(self, "address", "--federation-id={fed_id}")
+            .out_json()
+            .await?
+            .as_str()
+            .context("address must be a string")?
+            .to_owned())
     }
 }

@@ -1461,7 +1461,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     let cln_info: GatewayInfo = serde_json::from_value(cln_value)?;
     poll(
         "Waiting for CLN Gateway Running state after reboot",
-        10,
+        Duration::from_secs(15),
         || async {
             let mut new_cln_cmd = cmd!(new_gw_cln, "info");
             let cln_value = new_cln_cmd.out_json().await.map_err(ControlFlow::Continue)?;
@@ -1481,7 +1481,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     let lnd_info: GatewayInfo = serde_json::from_value(lnd_value)?;
     poll(
         "Waiting for LND Gateway Running state after reboot",
-        10,
+        Duration::from_secs(15),
         || async {
             let mut new_lnd_cmd = cmd!(new_gw_lnd, "info");
             let lnd_value = new_lnd_cmd.out_json().await.map_err(ControlFlow::Continue)?;
@@ -2001,7 +2001,7 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
         .await
         .expect("could not restart fedimintd");
 
-    poll("Peer catches up again", Some(30), || async {
+    poll("Peer catches up again", Duration::from_secs(30), || async {
         let block_count = cmd!(
             client,
             "dev",

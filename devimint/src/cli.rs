@@ -2,6 +2,7 @@ use std::ffi;
 use std::fmt::Write;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
@@ -213,13 +214,45 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                 let task_group = task_group.clone();
                 async move {
                     let dev_fed = dev_fed(&process_mgr).await?;
-                    tokio::try_join!(
-                        dev_fed
-                            .fed
-                            .pegin_client(10_000, dev_fed.fed.internal_client()),
-                        dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
-                        dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
+                    let fed_id = dev_fed.fed.calculate_federation_id().await;
+                    let gw_pegin_amount = 20_000;
+                    let client_pegin_amount = 10_000;
+                    let (deposit_op_id, _, _) = tokio::try_join!(
+                        async {
+                            let (address, operation_id) =
+                                dev_fed.fed.internal_client().get_deposit_addr().await?;
+                            dev_fed
+                                .fed
+                                .bitcoind
+                                .send_to(address, client_pegin_amount)
+                                .await?;
+                            Ok(operation_id)
+                        },
+                        async {
+                            let pegin_addr = dev_fed.gw_cln.get_pegin_addr(&fed_id).await?;
+                            dev_fed
+                                .fed
+                                .bitcoind
+                                .send_to(pegin_addr, gw_pegin_amount)
+                                .await
+                        },
+                        async {
+                            let pegin_addr = dev_fed.gw_lnd.get_pegin_addr(&fed_id).await?;
+                            dev_fed
+                                .fed
+                                .bitcoind
+                                .send_to(pegin_addr, gw_pegin_amount)
+                                .await?;
+                            Ok(())
+                        },
                     )?;
+                    dev_fed.fed.bitcoind.mine_blocks(11).await?;
+                    dev_fed
+                        .fed
+                        .internal_client()
+                        .await_deposit(&deposit_op_id)
+                        .await?;
+
                     std::env::set_var("FM_INVITE_CODE", dev_fed.fed.invite_code()?);
                     let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
 
@@ -289,7 +322,7 @@ pub async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
         }
         RpcCmd::Wait => {
             let ready_file = common.test_dir().join("ready");
-            poll("ready file", 60, || async {
+            poll("ready file", Duration::from_secs(60), || async {
                 if fs::try_exists(&ready_file)
                     .await
                     .context("ready file")

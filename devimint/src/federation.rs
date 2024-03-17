@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::path::PathBuf;
+use std::time::Duration;
 use std::{env, fs};
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -37,7 +38,7 @@ pub struct Federation {
     // client is only for internal use, use cli commands instead
     pub members: BTreeMap<usize, Fedimintd>,
     pub vars: BTreeMap<usize, vars::Fedimintd>,
-    bitcoind: Bitcoind,
+    pub bitcoind: Bitcoind,
 
     /// Built in [`Client`]
     client: Client,
@@ -153,6 +154,18 @@ impl Client {
         }
 
         Ok(())
+    }
+
+    pub async fn get_deposit_addr(&self) -> Result<(String, String)> {
+        let deposit = cmd!(self, "deposit-address").out_json().await?;
+        Ok((
+            deposit["address"].as_str().unwrap().to_string(),
+            deposit["operation_id"].as_str().unwrap().to_string(),
+        ))
+    }
+
+    pub async fn await_deposit(&self, operation_id: &str) -> Result<()> {
+        cmd!(self, "await-deposit", operation_id).run().await
     }
 
     pub async fn cmd(&self) -> Command {
@@ -314,30 +327,20 @@ impl Federation {
 
     pub async fn pegin_client(&self, amount: u64, client: &Client) -> Result<()> {
         info!(amount, "Pegging-in client funds");
-        let deposit = cmd!(client, "deposit-address").out_json().await?;
-        let deposit_address = deposit["address"].as_str().unwrap();
-        let deposit_operation_id = deposit["operation_id"].as_str().unwrap();
 
-        self.bitcoind
-            .send_to(deposit_address.to_owned(), amount)
-            .await?;
+        let (address, operation_id) = client.get_deposit_addr().await?;
+
+        self.bitcoind.send_to(address, amount).await?;
         self.bitcoind.mine_blocks(21).await?;
 
-        cmd!(client, "await-deposit", deposit_operation_id)
-            .run()
-            .await?;
+        client.await_deposit(&operation_id).await?;
         Ok(())
     }
 
     pub async fn pegin_gateway(&self, amount: u64, gw: &super::gatewayd::Gatewayd) -> Result<()> {
         info!(amount, "Pegging-in gateway funds");
         let fed_id = self.calculate_federation_id().await;
-        let pegin_addr = cmd!(gw, "address", "--federation-id={fed_id}")
-            .out_json()
-            .await?
-            .as_str()
-            .context("address must be a string")?
-            .to_owned();
+        let pegin_addr = gw.get_pegin_addr(&fed_id).await?;
         self.bitcoind.send_to(pegin_addr, amount).await?;
         self.bitcoind.mine_blocks(21).await?;
         poll("gateway pegin", None, || async {
@@ -495,14 +498,17 @@ pub async fn run_dkg(
 ) -> Result<()> {
     let auth_for = |peer: &PeerId| -> ApiAuth { params[peer].local.api_auth.clone() };
     for (peer_id, client) in &admin_clients {
-        const MAX_RETRIES: usize = 20;
-        poll("trying-to-connect-to-peers", MAX_RETRIES, || async {
-            client
-                .status()
-                .await
-                .context("dkg status")
-                .map_err(ControlFlow::Continue)
-        })
+        poll(
+            "trying-to-connect-to-peers",
+            Duration::from_secs(15),
+            || async {
+                client
+                    .status()
+                    .await
+                    .context("dkg status")
+                    .map_err(ControlFlow::Continue)
+            },
+        )
         .await?;
         info!("Connected to {peer_id}")
     }
@@ -630,9 +636,8 @@ pub async fn run_dkg(
     info!("DKG successfully complete. Starting consensus...");
     for (peer_id, client) in &admin_clients {
         if let Err(e) = client.start_consensus(auth_for(peer_id)).await {
-            tracing::info!("Error calling start_consensus: {e:?}, trying to continue...")
+            tracing::debug!("Error calling start_consensus: {e:?}, trying to continue...")
         }
-
         wait_server_status(client, ServerStatus::ConsensusRunning).await?;
     }
     info!("Consensus is running");
@@ -671,8 +676,7 @@ async fn set_config_gen_params(
 }
 
 async fn wait_server_status(client: &DynGlobalApi, expected_status: ServerStatus) -> Result<()> {
-    const RETRIES: usize = 60;
-    poll("waiting-server-status", RETRIES, || async {
+    poll("waiting-server-status", Duration::from_secs(30), || async {
         let server_status = client
             .status()
             .await

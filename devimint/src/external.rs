@@ -82,12 +82,21 @@ impl Bitcoind {
 
     pub(crate) async fn init(client: &bitcoincore_rpc::Client) -> Result<()> {
         // create RPC wallet
-        while let Err(e) = client.create_wallet("", None, None, None, None) {
-            if e.to_string().contains("Database already exists") {
-                break;
+        for attempt in 0.. {
+            match client.create_wallet("", None, None, None, None) {
+                Ok(_) => {
+                    break;
+                }
+                Err(err) => {
+                    if err.to_string().contains("Database already exists") {
+                        break;
+                    }
+                    if attempt % 20 == 19 {
+                        debug!(target: LOG_DEVIMINT, %attempt, %err, "Waiting for initial bitcoind wallet initialization");
+                    }
+                    sleep(Duration::from_millis(100)).await;
+                }
             }
-            warn!(target: LOG_DEVIMINT, "Failed to create wallet ... retrying {}", e);
-            sleep(Duration::from_secs(1)).await
         }
 
         // mine blocks
@@ -237,7 +246,7 @@ impl Lightningd {
         let process = Lightningd::start(process_mgr, cln_dir).await?;
 
         let socket_cln = cln_dir.join("regtest/lightning-rpc");
-        poll("lightningd", 10, || async {
+        poll("lightningd", Duration::from_secs(15), || async {
             ClnRpc::new(socket_cln.clone())
                 .await
                 .context("connect to lightningd")
@@ -327,7 +336,7 @@ impl Lnd {
             process,
         };
         // wait for lnd rpc to be active
-        poll("lnd_startup", 60, || async {
+        poll("lnd_startup", Duration::from_secs(15), || async {
             this.pub_key().await.map_err(ControlFlow::Continue)
         })
         .await?;
@@ -543,11 +552,11 @@ pub async fn open_channel(
                     if edge.node1_policy.is_some() {
                         return Ok(());
                     } else {
-                        warn!(?edge, "Empty chan info");
+                        debug!(?edge, "Empty chan info");
                     }
                 }
                 Err(e) => {
-                    warn!(%e, "Getting chan info failed")
+                    debug!(%e, "Getting chan info failed")
                 }
             }
         }
