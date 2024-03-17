@@ -3706,7 +3706,7 @@
     <span class="kw">let </span>cln_info: GatewayInfo = serde_json::from_value(cln_value)<span class="question-mark">?</span>;
     poll(
         <span class="string">"Waiting for CLN Gateway Running state after reboot"</span>,
-        <span class="number">10</span>,
+        Duration::from_secs(<span class="number">15</span>),
         || <span class="kw">async </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>new_cln_cmd = <span class="macro">cmd!</span>(new_gw_cln, <span class="string">"info"</span>);
             <span class="kw">let </span>cln_value = new_cln_cmd.out_json().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
@@ -3726,7 +3726,7 @@
     <span class="kw">let </span>lnd_info: GatewayInfo = serde_json::from_value(lnd_value)<span class="question-mark">?</span>;
     poll(
         <span class="string">"Waiting for LND Gateway Running state after reboot"</span>,
-        <span class="number">10</span>,
+        Duration::from_secs(<span class="number">15</span>),
         || <span class="kw">async </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>new_lnd_cmd = <span class="macro">cmd!</span>(new_gw_lnd, <span class="string">"info"</span>);
             <span class="kw">let </span>lnd_value = new_lnd_cmd.out_json().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
@@ -4246,7 +4246,7 @@
         .<span class="kw">await
         </span>.expect(<span class="string">"could not restart fedimintd"</span>);
 
-    poll(<span class="string">"Peer catches up again"</span>, <span class="prelude-val">Some</span>(<span class="number">30</span>), || <span class="kw">async </span>{
+    poll(<span class="string">"Peer catches up again"</span>, Duration::from_secs(<span class="number">30</span>), || <span class="kw">async </span>{
         <span class="kw">let </span>block_count = <span class="macro">cmd!</span>(
             client,
             <span class="string">"dev"</span>,

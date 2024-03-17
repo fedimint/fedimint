@@ -364,10 +364,44 @@
 <a href="#362" id="362">362</a>
 <a href="#363" id="363">363</a>
 <a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>clap::{Parser, Subcommand};
@@ -579,13 +613,45 @@
                 <span class="kw">let </span>task_group = task_group.clone();
                 <span class="kw">async move </span>{
                     <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="macro">tokio::try_join!</span>(
-                        dev_fed
-                            .fed
-                            .pegin_client(<span class="number">10_000</span>, dev_fed.fed.internal_client()),
-                        dev_fed.fed.pegin_gateway(<span class="number">20_000</span>, <span class="kw-2">&amp;</span>dev_fed.gw_cln),
-                        dev_fed.fed.pegin_gateway(<span class="number">20_000</span>, <span class="kw-2">&amp;</span>dev_fed.gw_lnd),
+                    <span class="kw">let </span>fed_id = dev_fed.fed.calculate_federation_id().<span class="kw">await</span>;
+                    <span class="kw">let </span>gw_pegin_amount = <span class="number">20_000</span>;
+                    <span class="kw">let </span>client_pegin_amount = <span class="number">10_000</span>;
+                    <span class="kw">let </span>(deposit_op_id, <span class="kw">_</span>, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
+                        <span class="kw">async </span>{
+                            <span class="kw">let </span>(address, operation_id) =
+                                dev_fed.fed.internal_client().get_deposit_addr().<span class="kw">await</span><span class="question-mark">?</span>;
+                            dev_fed
+                                .fed
+                                .bitcoind
+                                .send_to(address, client_pegin_amount)
+                                .<span class="kw">await</span><span class="question-mark">?</span>;
+                            <span class="prelude-val">Ok</span>(operation_id)
+                        },
+                        <span class="kw">async </span>{
+                            <span class="kw">let </span>pegin_addr = dev_fed.gw_cln.get_pegin_addr(<span class="kw-2">&amp;</span>fed_id).<span class="kw">await</span><span class="question-mark">?</span>;
+                            dev_fed
+                                .fed
+                                .bitcoind
+                                .send_to(pegin_addr, gw_pegin_amount)
+                                .<span class="kw">await
+                        </span>},
+                        <span class="kw">async </span>{
+                            <span class="kw">let </span>pegin_addr = dev_fed.gw_lnd.get_pegin_addr(<span class="kw-2">&amp;</span>fed_id).<span class="kw">await</span><span class="question-mark">?</span>;
+                            dev_fed
+                                .fed
+                                .bitcoind
+                                .send_to(pegin_addr, gw_pegin_amount)
+                                .<span class="kw">await</span><span class="question-mark">?</span>;
+                            <span class="prelude-val">Ok</span>(())
+                        },
                     )<span class="question-mark">?</span>;
+                    dev_fed.fed.bitcoind.mine_blocks(<span class="number">11</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                    dev_fed
+                        .fed
+                        .internal_client()
+                        .await_deposit(<span class="kw-2">&amp;</span>deposit_op_id)
+                        .<span class="kw">await</span><span class="question-mark">?</span>;
+
                     std::env::set_var(<span class="string">"FM_INVITE_CODE"</span>, dev_fed.fed.invite_code()<span class="question-mark">?</span>);
                     <span class="kw">let </span>daemons = write_ready_file(<span class="kw-2">&amp;</span>process_mgr.globals, <span class="prelude-val">Ok</span>(dev_fed)).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -655,7 +721,7 @@
         }
         RpcCmd::Wait =&gt; {
             <span class="kw">let </span>ready_file = common.test_dir().join(<span class="string">"ready"</span>);
-            poll(<span class="string">"ready file"</span>, <span class="number">60</span>, || <span class="kw">async </span>{
+            poll(<span class="string">"ready file"</span>, Duration::from_secs(<span class="number">60</span>), || <span class="kw">async </span>{
                 <span class="kw">if </span>fs::try_exists(<span class="kw-2">&amp;</span>ready_file)
                     .<span class="kw">await
                     </span>.context(<span class="string">"ready file"</span>)

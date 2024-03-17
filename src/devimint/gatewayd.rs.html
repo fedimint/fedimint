@@ -99,8 +99,19 @@
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
 <a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>ln_gateway::rpc::V1_API_ENDPOINT;
@@ -187,7 +198,7 @@
 
     <span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>Federation) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>invite_code = fed.invite_code()<span class="question-mark">?</span>;
-        poll(<span class="string">"gateway connect-fed"</span>, <span class="number">60</span>, || <span class="kw">async </span>{
+        poll(<span class="string">"gateway connect-fed"</span>, Duration::from_secs(<span class="number">30</span>), || <span class="kw">async </span>{
             <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"connect-fed"</span>, invite_code.clone())
                 .run()
                 .<span class="kw">await
@@ -196,6 +207,15 @@
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">pub async fn </span>get_pegin_addr(<span class="kw-2">&amp;</span><span class="self">self</span>, fed_id: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+        <span class="prelude-val">Ok</span>(<span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"address"</span>, <span class="string">"--federation-id={fed_id}"</span>)
+            .out_json()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.as_str()
+            .context(<span class="string">"address must be a string"</span>)<span class="question-mark">?
+            </span>.to_owned())
     }
 }
 </code></pre></div></section></main></body></html>

@@ -776,6 +776,19 @@
 <a href="#774" id="774">774</a>
 <a href="#775" id="775">775</a>
 <a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -788,6 +801,7 @@
 <span class="kw">use </span>anyhow::{anyhow, bail, format_err, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>fedimint_core::envs::is_env_var_set;
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, block_in_place};
+<span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>futures::executor::block_on;
 <span class="kw">use </span>semver::Version;
@@ -1100,7 +1114,7 @@
 <span class="comment">// Allow macro to be used within the crate. See https://stackoverflow.com/a/31749071.
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>cmd;
 
-<span class="kw">const </span>DEFAULT_RETRIES: usize = <span class="number">30</span>;
+<span class="kw">const </span>DEFAULT_POLL_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);
 <span class="doccomment">/// Will retry calling `f`.
 /// - if `f` return Ok(val), this returns with Ok(val).
 /// - if `f` return Err(Control::Break(err)), this returns Err(err)
@@ -1109,25 +1123,37 @@
 </span><span class="kw">pub async fn </span>poll&lt;Fut, R&gt;(
     name: <span class="kw-2">&amp;</span>str,
     <span class="comment">// TODO: this should be `Duration`, not number of retries --dpc
-    </span>retries: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;usize&gt;&gt;,
+    </span>timeout: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;Duration&gt;&gt;,
     f: <span class="kw">impl </span>Fn() -&gt; Fut,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt;
 <span class="kw">where
     </span>Fut: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;R, ControlFlow&lt;anyhow::Error, anyhow::Error&gt;&gt;&gt;,
 {
-    <span class="kw">let </span>retries = retries.into().unwrap_or(DEFAULT_RETRIES);
-    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>.. {
+    <span class="kw">let </span>start = now();
+    <span class="kw">let </span>timeout = timeout.into().unwrap_or(DEFAULT_POLL_TIMEOUT);
+    <span class="kw">for </span>attempt <span class="kw">in </span><span class="number">0u64</span>.. {
+        <span class="kw">let </span>attempt_start = now();
         <span class="kw">match </span>f().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(value) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(value),
             <span class="prelude-val">Err</span>(ControlFlow::Break(err)) =&gt; {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(err).with_context(|| <span class="macro">format!</span>(<span class="string">"polling {name}"</span>));
             }
-            <span class="prelude-val">Err</span>(ControlFlow::Continue(err)) <span class="kw">if </span>i &lt;= retries =&gt; {
-                <span class="macro">debug!</span>(<span class="string">"polling {name} failed with: {err:?}, will retry... ({i}/{retries})"</span>);
-                task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+            <span class="prelude-val">Err</span>(ControlFlow::Continue(err))
+                <span class="kw">if </span>attempt_start
+                    .duration_since(start)
+                    .expect(<span class="string">"time goes forward"</span>)
+                    &lt; timeout =&gt;
+            {
+                <span class="macro">debug!</span>(target: LOG_DEVIMINT, %attempt, %err, <span class="string">"Polling {name} failed, will retry..."</span>);
+                task::sleep(Duration::from_millis(attempt.min(<span class="number">1000</span>))).<span class="kw">await</span>;
             }
             <span class="prelude-val">Err</span>(ControlFlow::Continue(err)) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(err).with_context(|| <span class="macro">format!</span>(<span class="string">"polling {name} after {retries} retries"</span>));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(err).with_context(|| {
+                    <span class="macro">format!</span>(
+                        <span class="string">"Polling {name} failed after {attempt} retries (timeout: {}s)"</span>,
+                        timeout.as_secs()
+                    )
+                });
             }
         }
     }

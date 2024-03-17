@@ -692,9 +692,14 @@
 <a href="#690" id="690">690</a>
 <a href="#691" id="691">691</a>
 <a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{env, fs};
 
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
@@ -731,7 +736,7 @@
     <span class="comment">// client is only for internal use, use cli commands instead
     </span><span class="kw">pub </span>members: BTreeMap&lt;usize, Fedimintd&gt;,
     <span class="kw">pub </span>vars: BTreeMap&lt;usize, vars::Fedimintd&gt;,
-    bitcoind: Bitcoind,
+    <span class="kw">pub </span>bitcoind: Bitcoind,
 
     <span class="doccomment">/// Built in [`Client`]
     </span>client: Client,
@@ -848,6 +853,18 @@
 
         <span class="prelude-val">Ok</span>(())
     }
+
+    <span class="kw">pub async fn </span>get_deposit_addr(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(String, String)&gt; {
+        <span class="kw">let </span>deposit = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"deposit-address"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>((
+            deposit[<span class="string">"address"</span>].as_str().unwrap().to_string(),
+            deposit[<span class="string">"operation_id"</span>].as_str().unwrap().to_string(),
+        ))
+    }
+
+    <span class="kw">pub async fn </span>await_deposit(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"await-deposit"</span>, operation_id).run().<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
         <span class="macro">cmd!</span>(
@@ -1008,30 +1025,20 @@
 
     <span class="kw">pub async fn </span>pegin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, client: <span class="kw-2">&amp;</span>Client) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">info!</span>(amount, <span class="string">"Pegging-in client funds"</span>);
-        <span class="kw">let </span>deposit = <span class="macro">cmd!</span>(client, <span class="string">"deposit-address"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>deposit_address = deposit[<span class="string">"address"</span>].as_str().unwrap();
-        <span class="kw">let </span>deposit_operation_id = deposit[<span class="string">"operation_id"</span>].as_str().unwrap();
 
-        <span class="self">self</span>.bitcoind
-            .send_to(deposit_address.to_owned(), amount)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(address, operation_id) = client.get_deposit_addr().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="self">self</span>.bitcoind.send_to(address, amount).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="macro">cmd!</span>(client, <span class="string">"await-deposit"</span>, deposit_operation_id)
-            .run()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        client.await_deposit(<span class="kw-2">&amp;</span>operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub async fn </span>pegin_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::gatewayd::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">info!</span>(amount, <span class="string">"Pegging-in gateway funds"</span>);
         <span class="kw">let </span>fed_id = <span class="self">self</span>.calculate_federation_id().<span class="kw">await</span>;
-        <span class="kw">let </span>pegin_addr = <span class="macro">cmd!</span>(gw, <span class="string">"address"</span>, <span class="string">"--federation-id={fed_id}"</span>)
-            .out_json()
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.as_str()
-            .context(<span class="string">"address must be a string"</span>)<span class="question-mark">?
-            </span>.to_owned();
+        <span class="kw">let </span>pegin_addr = gw.get_pegin_addr(<span class="kw-2">&amp;</span>fed_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.bitcoind.send_to(pegin_addr, amount).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         poll(<span class="string">"gateway pegin"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
@@ -1189,14 +1196,17 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="kw">let </span>auth_for = |peer: <span class="kw-2">&amp;</span>PeerId| -&gt; ApiAuth { params[peer].local.api_auth.clone() };
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
-        <span class="kw">const </span>MAX_RETRIES: usize = <span class="number">20</span>;
-        poll(<span class="string">"trying-to-connect-to-peers"</span>, MAX_RETRIES, || <span class="kw">async </span>{
-            client
-                .status()
-                .<span class="kw">await
-                </span>.context(<span class="string">"dkg status"</span>)
-                .map_err(ControlFlow::Continue)
-        })
+        poll(
+            <span class="string">"trying-to-connect-to-peers"</span>,
+            Duration::from_secs(<span class="number">15</span>),
+            || <span class="kw">async </span>{
+                client
+                    .status()
+                    .<span class="kw">await
+                    </span>.context(<span class="string">"dkg status"</span>)
+                    .map_err(ControlFlow::Continue)
+            },
+        )
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">info!</span>(<span class="string">"Connected to {peer_id}"</span>)
     }
@@ -1324,9 +1334,8 @@
     <span class="macro">info!</span>(<span class="string">"DKG successfully complete. Starting consensus..."</span>);
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client.start_consensus(auth_for(peer_id)).<span class="kw">await </span>{
-            <span class="macro">tracing::info!</span>(<span class="string">"Error calling start_consensus: {e:?}, trying to continue..."</span>)
+            <span class="macro">tracing::debug!</span>(<span class="string">"Error calling start_consensus: {e:?}, trying to continue..."</span>)
         }
-
         wait_server_status(client, ServerStatus::ConsensusRunning).<span class="kw">await</span><span class="question-mark">?</span>;
     }
     <span class="macro">info!</span>(<span class="string">"Consensus is running"</span>);
@@ -1365,8 +1374,7 @@
 }
 
 <span class="kw">async fn </span>wait_server_status(client: <span class="kw-2">&amp;</span>DynGlobalApi, expected_status: ServerStatus) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="kw">const </span>RETRIES: usize = <span class="number">60</span>;
-    poll(<span class="string">"waiting-server-status"</span>, RETRIES, || <span class="kw">async </span>{
+    poll(<span class="string">"waiting-server-status"</span>, Duration::from_secs(<span class="number">30</span>), || <span class="kw">async </span>{
         <span class="kw">let </span>server_status = client
             .status()
             .<span class="kw">await

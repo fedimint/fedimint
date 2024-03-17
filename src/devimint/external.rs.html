@@ -712,6 +712,15 @@
 <a href="#710" id="710">710</a>
 <a href="#711" id="711">711</a>
 <a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -796,13 +805,22 @@
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>init(client: <span class="kw-2">&amp;</span>bitcoincore_rpc::Client) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="comment">// create RPC wallet
-        </span><span class="kw">while let </span><span class="prelude-val">Err</span>(e) = client.create_wallet(<span class="string">""</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>) {
-            <span class="kw">if </span>e.to_string().contains(<span class="string">"Database already exists"</span>) {
-                <span class="kw">break</span>;
+        </span><span class="kw">for </span>attempt <span class="kw">in </span><span class="number">0</span>.. {
+            <span class="kw">match </span>client.create_wallet(<span class="string">""</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>) {
+                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                    <span class="kw">break</span>;
+                }
+                <span class="prelude-val">Err</span>(err) =&gt; {
+                    <span class="kw">if </span>err.to_string().contains(<span class="string">"Database already exists"</span>) {
+                        <span class="kw">break</span>;
+                    }
+                    <span class="kw">if </span>attempt % <span class="number">20 </span>== <span class="number">19 </span>{
+                        <span class="macro">debug!</span>(target: LOG_DEVIMINT, %attempt, %err, <span class="string">"Waiting for initial bitcoind wallet initialization"</span>);
+                    }
+                    sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+                }
             }
-            <span class="macro">warn!</span>(target: LOG_DEVIMINT, <span class="string">"Failed to create wallet ... retrying {}"</span>, e);
-            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
-        </span>}
+        }
 
         <span class="comment">// mine blocks
         </span><span class="kw">let </span>blocks = <span class="number">101</span>;
@@ -951,7 +969,7 @@
         <span class="kw">let </span>process = Lightningd::start(process_mgr, cln_dir).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>socket_cln = cln_dir.join(<span class="string">"regtest/lightning-rpc"</span>);
-        poll(<span class="string">"lightningd"</span>, <span class="number">10</span>, || <span class="kw">async </span>{
+        poll(<span class="string">"lightningd"</span>, Duration::from_secs(<span class="number">15</span>), || <span class="kw">async </span>{
             ClnRpc::new(socket_cln.clone())
                 .<span class="kw">await
                 </span>.context(<span class="string">"connect to lightningd"</span>)
@@ -1041,7 +1059,7 @@
             process,
         };
         <span class="comment">// wait for lnd rpc to be active
-        </span>poll(<span class="string">"lnd_startup"</span>, <span class="number">60</span>, || <span class="kw">async </span>{
+        </span>poll(<span class="string">"lnd_startup"</span>, Duration::from_secs(<span class="number">15</span>), || <span class="kw">async </span>{
             this.pub_key().<span class="kw">await</span>.map_err(ControlFlow::Continue)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1257,11 +1275,11 @@
                     <span class="kw">if </span>edge.node1_policy.is_some() {
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                     } <span class="kw">else </span>{
-                        <span class="macro">warn!</span>(<span class="question-mark">?</span>edge, <span class="string">"Empty chan info"</span>);
+                        <span class="macro">debug!</span>(<span class="question-mark">?</span>edge, <span class="string">"Empty chan info"</span>);
                     }
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(%e, <span class="string">"Getting chan info failed"</span>)
+                    <span class="macro">debug!</span>(%e, <span class="string">"Getting chan info failed"</span>)
                 }
             }
         }
