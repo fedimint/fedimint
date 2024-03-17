@@ -122,6 +122,8 @@ impl TracingSetup {
         let telemetry_layer_opt = || -> Option<Box<dyn Layer<_> + Send + Sync + 'static>> {
             #[cfg(feature = "telemetry")]
             if self.with_jaeger {
+                // TODO: https://github.com/fedimint/fedimint/issues/4591
+                #[allow(deprecated)]
                 let tracer = opentelemetry_jaeger::new_agent_pipeline()
                     .with_service_name("fedimint")
                     .install_simple()
