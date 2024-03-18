@@ -755,7 +755,7 @@ impl FedimintCli {
                 client
                     .wait_for_all_active_state_machines()
                     .await
-                    .map_err_cli()?;
+                    .map_err_cli_msg("failed to wait for all active state machines")?;
                 Ok(CliOutput::Raw(serde_json::Value::Null))
             }
             Command::Dev(DevCmd::Decode { decode_type }) => match decode_type {
@@ -764,7 +764,9 @@ impl FedimintCli {
                     federation_id: invite_code.federation_id(),
                 }),
                 DecodeType::Notes { notes } => {
-                    let notes_json = notes.notes_json().map_err_cli_general()?;
+                    let notes_json = notes
+                        .notes_json()
+                        .map_err_cli_msg("failed to decode notes")?;
                     Ok(CliOutput::Raw(notes_json))
                 }
             },
@@ -777,10 +779,10 @@ impl FedimintCli {
                     invite_code: InviteCode::new(url, peer, federation_id),
                 }),
                 EncodeType::Notes { notes_json } => {
-                    let notes =
-                        serde_json::from_str::<OOBNotesJson>(&notes_json).map_err_cli_general()?;
-                    let prefix = FederationIdPrefix::from_str(&notes.federation_id_prefix)
-                        .map_err_cli_general()?;
+                    let notes = serde_json::from_str::<OOBNotesJson>(&notes_json)
+                        .map_err_cli_msg("invalid JSON for notes")?;
+                    let prefix =
+                        FederationIdPrefix::from_str(&notes.federation_id_prefix).map_err_cli()?;
                     let notes = OOBNotes::new(prefix, notes.notes);
                     Ok(CliOutput::Raw(notes.to_string().into()))
                 }
