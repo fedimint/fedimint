@@ -362,14 +362,14 @@ macro_rules! poll_eq {
 pub(crate) use cmd;
 
 const DEFAULT_POLL_TIMEOUT: Duration = Duration::from_secs(30);
-/// Will retry calling `f`.
+/// Retry until `f` succeeds or timeout is reached
+///
 /// - if `f` return Ok(val), this returns with Ok(val).
 /// - if `f` return Err(Control::Break(err)), this returns Err(err)
-/// - if `f` return Err(ControlFlow::Continue(err)), retries a maximum of
-///   `retries` times.
+/// - if `f` return Err(ControlFlow::Continue(err)), retries untile timeout
+///   reached
 pub async fn poll<Fut, R>(
     name: &str,
-    // TODO: this should be `Duration`, not number of retries --dpc
     timeout: impl Into<Option<Duration>>,
     f: impl Fn() -> Fut,
 ) -> Result<R>
@@ -392,7 +392,7 @@ where
                     < timeout =>
             {
                 debug!(target: LOG_DEVIMINT, %attempt, %err, "Polling {name} failed, will retry...");
-                task::sleep(Duration::from_millis(attempt.min(1000))).await;
+                task::sleep(Duration::from_millis((attempt * 10).min(1000))).await;
             }
             Err(ControlFlow::Continue(err)) => {
                 return Err(err).with_context(|| {
