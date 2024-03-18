@@ -118,7 +118,8 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
 
     let client = fed.new_joined_client("latency-tests-client").await?;
     client.use_gateway(&gw_cln).await?;
-    fed.pegin_client(10_000_000, &client).await?;
+    let initial_balance_sats = 100_000_000;
+    fed.pegin_client(initial_balance_sats, &client).await?;
 
     // LN operations take longer, we need less iterations
     let iterations = 20;
@@ -132,8 +133,13 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             // for enough time to catch up a session end
             let iterations = 30;
             let mut reissues = Vec::with_capacity(iterations);
+            let amount_per_iteration_msats =
+                // use a highest 2^-1 amount that fits, to try to use as many notes as possible
+                ((initial_balance_sats * 1000 / iterations as u64).next_power_of_two() >> 1) - 1;
             for _ in 0..iterations {
-                let notes = cmd!(client, "spend", "1000000").out_json().await?["notes"]
+                let notes = cmd!(client, "spend", amount_per_iteration_msats.to_string())
+                    .out_json()
+                    .await?["notes"]
                     .as_str()
                     .context("note must be a string")?
                     .to_owned();
