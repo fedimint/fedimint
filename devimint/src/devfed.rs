@@ -1,6 +1,6 @@
 use anyhow::Result;
 use fedimint_logging::LOG_DEVIMINT;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::external::{Bitcoind, Electrs, Esplora, Lightningd, Lnd};
 use crate::federation::Federation;
@@ -29,20 +29,22 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
     );
 
     let start_time = fedimint_core::time::now();
+    info!("Starting dev federation");
     let bitcoind = Bitcoind::new(process_mgr).await?;
     let ((cln, lnd, gw_cln, gw_lnd), electrs, esplora, mut fed) = tokio::try_join!(
         async {
+            debug!(target: LOG_DEVIMINT, "Starting LN nodes");
             let (cln, lnd) = tokio::try_join!(
                 Lightningd::new(process_mgr, bitcoind.clone()),
                 Lnd::new(process_mgr, bitcoind.clone())
             )?;
-            info!(target: LOG_DEVIMINT, "lightning started");
+            debug!(target: LOG_DEVIMINT, "Starting LN gateways & opening LN channel");
             let (gw_cln, gw_lnd, _) = tokio::try_join!(
                 Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
                 Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
                 open_channel(process_mgr, &bitcoind, &cln, &lnd),
             )?;
-            info!(target: LOG_DEVIMINT, "gateways started");
+            debug!(target: LOG_DEVIMINT, "LN gateways ready");
             Ok((cln, lnd, gw_cln, gw_lnd))
         },
         Electrs::new(process_mgr, bitcoind.clone()),
@@ -50,7 +52,7 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
         Federation::new(process_mgr, bitcoind.clone(), fed_size),
     )?;
 
-    info!(target: LOG_DEVIMINT, "federation and gateways started");
+    info!(target: LOG_DEVIMINT, "Federation and gateways started");
 
     std::env::set_var("FM_GWID_CLN", gw_cln.gateway_id().await?);
     std::env::set_var("FM_GWID_LND", gw_lnd.gateway_id().await?);
@@ -61,15 +63,13 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
         cmd!(fed.internal_client(), "join-federation", fed.invite_code()?)
             .run()
             .await?;
-        info!(target: LOG_DEVIMINT, "Generating first epoch");
+        debug!(target: LOG_DEVIMINT, "Generating first epoch");
         fed.mine_then_wait_blocks_sync(10).await?;
         Ok(())
     })?;
 
     // Initialize fedimint-cli
-    info!(target: LOG_DEVIMINT, "await gateways registered");
     fed.await_gateways_registered().await?;
-    info!(target: LOG_DEVIMINT, "gateways registered");
 
     // Create a degraded federation if there are offline nodes
     fed.degrade_federation(process_mgr).await?;
@@ -78,8 +78,8 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
         target: LOG_DEVIMINT,
         fed_size,
         offline_nodes,
-        "finished creating dev federation, took {:?}",
-        start_time.elapsed()?
+        elapsed_ms = %start_time.elapsed()?.as_millis(),
+        "Dev federation ready",
     );
 
     Ok(DevFed {

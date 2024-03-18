@@ -284,15 +284,15 @@ impl Executor {
             let task_group_shutdown_rx = task_handle.make_shutdown_rx().await;
             select! {
                 _ = task_group_shutdown_rx => {
-                    info!("Shutting down state machine executor runner due to task group shutdown signal");
+                    debug!("Shutting down state machine executor runner due to task group shutdown signal");
                 },
                 shutdown_happened_sender = shutdown_receiver => {
                     match shutdown_happened_sender {
                         Ok(()) => {
-                            info!("Shutting down state machine executor runner due to explicit shutdown signal");
+                            debug!("Shutting down state machine executor runner due to explicit shutdown signal");
                         },
                         Err(_) => {
-                            error!("Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)");
+                            warn!("Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)");
                         }
                     }
                 },
