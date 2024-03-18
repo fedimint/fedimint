@@ -170,6 +170,16 @@ impl FederationError {
             e.report_if_important(*peer_id)
         }
     }
+
+    /// Get the general error if any.
+    pub fn get_general_error(&self) -> Option<&anyhow::Error> {
+        self.general.as_ref()
+    }
+
+    /// Get errors from different peers.
+    pub fn get_peer_errors(&self) -> impl Iterator<Item = (PeerId, &PeerError)> {
+        self.peers.iter().map(|(peer, error)| (*peer, error))
+    }
 }
 
 type OutputOutcomeResult<O> = result::Result<O, OutputOutcomeError>;
