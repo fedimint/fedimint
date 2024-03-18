@@ -17,7 +17,7 @@ use fedimint_logging::LOG_CORE;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
-use tracing::{debug, info, Instrument, Span};
+use tracing::{debug, warn, Instrument, Span};
 use url::{Host, ParseError, Url};
 
 use crate::task::{self, MaybeSend};
@@ -334,18 +334,28 @@ where
         attempts += 1;
         match op_fn().await {
             Ok(result) => return Ok(result),
-            Err(err) if attempts < max_attempts => {
+            Err(error) if attempts < max_attempts => {
                 // run closure op_fn again
-                info!(
+                debug!(
                     target: LOG_CORE,
-                    "{} failed with error: {}. Retrying in {} seconds",
+                    %error,
+                    %attempts,
+                    interval = interval.as_secs(),
+                    "{} failed, retrying",
                     op_name,
-                    err,
-                    interval.as_secs()
                 );
                 task::sleep(interval).await;
             }
-            Err(err) => return Err(err),
+            Err(error) => {
+                warn!(
+                    target: LOG_CORE,
+                    %error,
+                    %attempts,
+                    "{} failed",
+                    op_name,
+                );
+                return Err(error);
+            }
         }
     }
 }
