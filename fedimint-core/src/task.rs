@@ -9,15 +9,11 @@ use std::time::{Duration, Instant, SystemTime};
 use anyhow::bail;
 use fedimint_core::time::now;
 use fedimint_logging::{LOG_TASK, LOG_TEST};
-#[cfg(target_family = "wasm")]
-use futures::channel::oneshot;
 use futures::future::{self, Either};
 use futures::lock::Mutex;
 pub use imp::*;
 use thiserror::Error;
-#[cfg(not(target_family = "wasm"))]
-use tokio::sync::oneshot;
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 #[cfg(not(target_family = "wasm"))]
 use tokio::task::{JoinError, JoinHandle};
 use tracing::{error, info, warn};
