@@ -47,7 +47,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["gateway_cln_extension",["",[],["cln_extension.rs"]]],\
 ["gatewayd",["",[],["gatewayd.rs"]]],\
 ["hkdf",["",[],["lib.rs"]]],\
-["ln_gateway",["",[["lightning",[],["cln.rs","lnd.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]],["state_machine",[],["complete.rs","mod.rs","pay.rs"]]],["client.rs","db.rs","envs.rs","lib.rs","types.rs","utils.rs"]]],\
+["ln_gateway",["",[["lightning",[],["cln.rs","lnd.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]],["state_machine",[],["complete.rs","mod.rs","pay.rs"]]],["client.rs","db.rs","envs.rs","lib.rs","types.rs"]]],\
 ["recoverytool",["",[],["main.rs"]]],\
 ["session_outcome",["",[],["session_outcome.rs"]]],\
 ["string",["",[],["string.rs"]]],\

@@ -1097,13 +1097,6 @@
 <a href="#1095" id="1095">1095</a>
 <a href="#1096" id="1096">1096</a>
 <a href="#1097" id="1097">1097</a>
-<a href="#1098" id="1098">1098</a>
-<a href="#1099" id="1099">1099</a>
-<a href="#1100" id="1100">1100</a>
-<a href="#1101" id="1101">1101</a>
-<a href="#1102" id="1102">1102</a>
-<a href="#1103" id="1103">1103</a>
-<a href="#1104" id="1104">1104</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1112,7 +1105,7 @@
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{anyhow, bail, format_err, Context};
+<span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::hex::{format_hex, FromHex};
 <span class="kw">use </span>bitcoin_hashes::sha256::{Hash <span class="kw">as </span>Sha256, HashEngine};
@@ -1124,7 +1117,6 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
-<span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 <span class="kw">use </span>fedimint_logging::LOG_CORE;
@@ -1345,20 +1337,14 @@
     ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
         <span class="macro">debug!</span>(<span class="string">"Downloading client config from {:?}"</span>, invite_code);
 
-        <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">10 </span>{
-            <span class="kw">match </span><span class="self">Self</span>::try_download_client_config(invite_code).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(cfg) =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(cfg);
-                }
-                <span class="prelude-val">Err</span>(error) =&gt; {
-                    <span class="macro">debug!</span>(<span class="string">"Failed to download client config {:?}"</span>, error);
-
-                    sleep(Duration::from_millis(<span class="number">500</span>)).<span class="kw">await</span>;
-                }
-            }
-        }
-
-        <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"Failed to download client config"</span>))
+        fedimint_core::util::retry(
+            <span class="string">"Downloading client config"</span>,
+            || <span class="self">Self</span>::try_download_client_config(invite_code),
+            Duration::from_millis(<span class="number">500</span>),
+            <span class="number">10</span>,
+        )
+        .<span class="kw">await
+        </span>.context(<span class="string">"Failed to download client config"</span>)
     }
 
     <span class="kw">async fn </span>try_download_client_config(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; anyhow::Result&lt;ClientConfig&gt; {
