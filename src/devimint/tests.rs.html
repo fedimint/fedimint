@@ -2259,6 +2259,12 @@
 <a href="#2257" id="2257">2257</a>
 <a href="#2258" id="2258">2258</a>
 <a href="#2259" id="2259">2259</a>
+<a href="#2260" id="2260">2260</a>
+<a href="#2261" id="2261">2261</a>
+<a href="#2262" id="2262">2262</a>
+<a href="#2263" id="2263">2263</a>
+<a href="#2264" id="2264">2264</a>
+<a href="#2265" id="2265">2265</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2379,7 +2385,8 @@
 
     <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"latency-tests-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     client.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
-    fed.pegin_client(<span class="number">10_000_000</span>, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>initial_balance_sats = <span class="number">100_000_000</span>;
+    fed.pegin_client(initial_balance_sats, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// LN operations take longer, we need less iterations
     </span><span class="kw">let </span>iterations = <span class="number">20</span>;
@@ -2393,8 +2400,13 @@
             // for enough time to catch up a session end
             </span><span class="kw">let </span>iterations = <span class="number">30</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>reissues = Vec::with_capacity(iterations);
+            <span class="kw">let </span>amount_per_iteration_msats =
+                <span class="comment">// use a highest 2^-1 amount that fits, to try to use as many notes as possible
+                </span>((initial_balance_sats * <span class="number">1000 </span>/ iterations <span class="kw">as </span>u64).next_power_of_two() &gt;&gt; <span class="number">1</span>) - <span class="number">1</span>;
             <span class="kw">for _ in </span><span class="number">0</span>..iterations {
-                <span class="kw">let </span>notes = <span class="macro">cmd!</span>(client, <span class="string">"spend"</span>, <span class="string">"1000000"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"notes"</span>]
+                <span class="kw">let </span>notes = <span class="macro">cmd!</span>(client, <span class="string">"spend"</span>, amount_per_iteration_msats.to_string())
+                    .out_json()
+                    .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"notes"</span>]
                     .as_str()
                     .context(<span class="string">"note must be a string"</span>)<span class="question-mark">?
                     </span>.to_owned();
