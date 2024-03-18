@@ -55,17 +55,15 @@ pub async fn run_api_server(
 
     let handle = task_group.make_handle();
     let shutdown_rx = handle.make_shutdown_rx().await;
-    task_group
-        .spawn("Metrics Api", move |_| async move {
-            let graceful = serve.with_graceful_shutdown(async {
-                shutdown_rx.await;
-            });
+    task_group.spawn("Metrics Api", move |_| async move {
+        let graceful = serve.with_graceful_shutdown(async {
+            shutdown_rx.await;
+        });
 
-            if let Err(e) = graceful.await {
-                error!("Error shutting down metrics api: {e:?}");
-            }
-        })
-        .await;
+        if let Err(e) = graceful.await {
+            error!("Error shutting down metrics api: {e:?}");
+        }
+    });
     let shutdown_receiver = handle.make_shutdown_rx().await;
 
     Ok(shutdown_receiver)

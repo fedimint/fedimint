@@ -241,75 +241,73 @@ impl ConfigGenApi {
 
         let self_clone = self.clone();
         let sub_group = self.task_group.make_subgroup().await;
-        sub_group
-            .spawn("run dkg", move |_handle| async move {
-                // Followers wait for leader to signal readiness for DKG
-                if let Some(client) = leader {
-                    loop {
-                        let status = client.status().await.map_err(|_| {
-                            ApiError::not_found("Unable to connect to the leader".to_string())
-                        })?;
-                        if status.server == ServerStatus::ReadyForConfigGen {
-                            break;
-                        }
-                        sleep(Duration::from_millis(100)).await;
+        sub_group.spawn("run dkg", move |_handle| async move {
+            // Followers wait for leader to signal readiness for DKG
+            if let Some(client) = leader {
+                loop {
+                    let status = client.status().await.map_err(|_| {
+                        ApiError::not_found("Unable to connect to the leader".to_string())
+                    })?;
+                    if status.server == ServerStatus::ReadyForConfigGen {
+                        break;
                     }
-                };
+                    sleep(Duration::from_millis(100)).await;
+                }
+            };
 
-                // Get params and registry
-                let request = self_clone.get_requested_params()?;
-                let response = self_clone.consensus_config_gen_params(&request).await?;
-                let (params, registry) = {
-                    let state: MutexGuard<'_, ConfigGenState> =
-                        self_clone.require_status(ServerStatus::ReadyForConfigGen)?;
-                    let params = state.get_config_gen_params(&request, response.consensus)?;
-                    let registry = state.settings.registry.clone();
-                    (params, registry)
-                };
+            // Get params and registry
+            let request = self_clone.get_requested_params()?;
+            let response = self_clone.consensus_config_gen_params(&request).await?;
+            let (params, registry) = {
+                let state: MutexGuard<'_, ConfigGenState> =
+                    self_clone.require_status(ServerStatus::ReadyForConfigGen)?;
+                let params = state.get_config_gen_params(&request, response.consensus)?;
+                let registry = state.settings.registry.clone();
+                (params, registry)
+            };
 
-                // Run DKG
-                let mut task_group: TaskGroup = self_clone.task_group.make_subgroup().await;
-                let config = ServerConfig::distributed_gen(
-                    &params,
-                    registry,
-                    DelayCalculator::PROD_DEFAULT,
-                    &mut task_group,
-                    self_clone.version_hash.clone(),
-                )
-                .await;
-                task_group
-                    .shutdown_join_all(None)
-                    .await
-                    .expect("shuts down");
+            // Run DKG
+            let mut task_group: TaskGroup = self_clone.task_group.make_subgroup().await;
+            let config = ServerConfig::distributed_gen(
+                &params,
+                registry,
+                DelayCalculator::PROD_DEFAULT,
+                &mut task_group,
+                self_clone.version_hash.clone(),
+            )
+            .await;
+            task_group
+                .shutdown_join_all(None)
+                .await
+                .expect("shuts down");
 
-                {
-                    let mut state = self_clone.state.lock().expect("lock poisoned");
-                    match config {
-                        Ok(config) => {
-                            self_clone.stage_configs(&config, &state)?;
-                            state.status = ServerStatus::VerifyingConfigs;
-                            state.config = Some(config);
-                            info!(
-                                target: fedimint_logging::LOG_NET_PEER_DKG,
-                                "Set config for config gen"
-                            );
-                        }
-                        Err(e) => {
-                            error!(
-                                target: fedimint_logging::LOG_NET_PEER_DKG,
-                                "DKG failed with {:?}", e
-                            );
-                            state.status = ServerStatus::ConfigGenFailed;
-                            info!(
-                                target: fedimint_logging::LOG_NET_PEER_DKG,
-                                "Update config gen status to 'Config gen failed'"
-                            );
-                        }
+            {
+                let mut state = self_clone.state.lock().expect("lock poisoned");
+                match config {
+                    Ok(config) => {
+                        self_clone.stage_configs(&config, &state)?;
+                        state.status = ServerStatus::VerifyingConfigs;
+                        state.config = Some(config);
+                        info!(
+                            target: fedimint_logging::LOG_NET_PEER_DKG,
+                            "Set config for config gen"
+                        );
+                    }
+                    Err(e) => {
+                        error!(
+                            target: fedimint_logging::LOG_NET_PEER_DKG,
+                            "DKG failed with {:?}", e
+                        );
+                        state.status = ServerStatus::ConfigGenFailed;
+                        info!(
+                            target: fedimint_logging::LOG_NET_PEER_DKG,
+                            "Update config gen status to 'Config gen failed'"
+                        );
                     }
                 }
-                self_clone.update_leader().await
-            })
-            .await;
+            }
+            self_clone.update_leader().await
+        });
 
         Ok(())
     }
@@ -470,21 +468,19 @@ impl ConfigGenApi {
         // The leader will signal this by setting it's status to AwaitingPassword
         let self_clone = self.clone();
         let sub_group = self.task_group.make_subgroup().await;
-        sub_group
-            .spawn("restart", move |_handle| async move {
-                if let Some(client) = leader {
-                    self_clone.await_leader_restart(&client).await?;
-                } else {
-                    self_clone.await_peer_restart().await;
-                }
-                // Progress status to AwaitingPassword
-                {
-                    let mut state = self_clone.state.lock().expect("lock poisoned");
-                    state.reset();
-                }
-                self_clone.update_leader().await
-            })
-            .await;
+        sub_group.spawn("restart", move |_handle| async move {
+            if let Some(client) = leader {
+                self_clone.await_leader_restart(&client).await?;
+            } else {
+                self_clone.await_peer_restart().await;
+            }
+            // Progress status to AwaitingPassword
+            {
+                let mut state = self_clone.state.lock().expect("lock poisoned");
+                state.reset();
+            }
+            self_clone.update_leader().await
+        });
 
         Ok(())
     }

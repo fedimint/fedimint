@@ -249,11 +249,9 @@ where
             status_query_senders.insert(*peer, status_query_sender);
             connections.insert(*peer, connection);
         }
-        task_group
-            .spawn("listen task", move |handle| {
-                Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
-            })
-            .await;
+        task_group.spawn("listen task", move |handle| {
+            Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
+        });
         (
             ReconnectPeerConnections {
                 connections,
@@ -651,26 +649,24 @@ where
         let (outgoing_sender, outgoing_receiver) = async_channel::bounded(1024);
         let (incoming_sender, incoming_receiver) = async_channel::bounded(1024);
 
-        task_group
-            .spawn(
-                format!("io-thread-peer-{peer_id}"),
-                move |handle| async move {
-                    Self::run_io_thread(
-                        incoming_sender,
-                        outgoing_receiver,
-                        our_id,
-                        peer_id,
-                        peer_address,
-                        delay_calculator,
-                        connect,
-                        incoming_connections,
-                        status_query_receiver,
-                        &handle,
-                    )
-                    .await
-                },
-            )
-            .await;
+        task_group.spawn(
+            format!("io-thread-peer-{peer_id}"),
+            move |handle| async move {
+                Self::run_io_thread(
+                    incoming_sender,
+                    outgoing_receiver,
+                    our_id,
+                    peer_id,
+                    peer_address,
+                    delay_calculator,
+                    connect,
+                    incoming_connections,
+                    status_query_receiver,
+                    &handle,
+                )
+                .await
+            },
+        );
 
         PeerConnection {
             outgoing: outgoing_sender,

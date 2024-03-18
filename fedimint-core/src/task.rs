@@ -9,15 +9,10 @@ use std::time::{Duration, Instant, SystemTime};
 use anyhow::bail;
 use fedimint_core::time::now;
 use fedimint_logging::{LOG_TASK, LOG_TEST};
-#[cfg(target_family = "wasm")]
-use futures::channel::oneshot;
 use futures::future::{self, Either};
-use futures::lock::Mutex;
 pub use imp::*;
 use thiserror::Error;
-#[cfg(not(target_family = "wasm"))]
-use tokio::sync::oneshot;
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 #[cfg(not(target_family = "wasm"))]
 use tokio::task::{JoinError, JoinHandle};
 use tracing::{error, info, warn};
@@ -37,7 +32,9 @@ struct TaskGroupInner {
     // It is necessary to keep at least one `Receiver` around,
     // otherwise shutdown writes are lost.
     on_shutdown_rx: watch::Receiver<bool>,
-    join: Mutex<VecDeque<(String, JoinHandle<()>)>>,
+    // using blocking Mutex to avoid `async` in `spawn`
+    // it's OK as we don't ever need to yield
+    join: std::sync::Mutex<VecDeque<(String, JoinHandle<()>)>>,
     // using blocking Mutex to avoid `async` in `shutdown`
     // it's OK as we don't ever need to yield
     subgroups: std::sync::Mutex<Vec<TaskGroup>>,
@@ -49,7 +46,7 @@ impl Default for TaskGroupInner {
         Self {
             on_shutdown_tx,
             on_shutdown_rx,
-            join: Mutex::new(Default::default()),
+            join: std::sync::Mutex::new(Default::default()),
             subgroups: std::sync::Mutex::new(vec![]),
         }
     }
@@ -170,7 +167,7 @@ impl TaskGroup {
     }
 
     #[cfg(not(target_family = "wasm"))]
-    pub async fn spawn<Fut, R>(
+    pub fn spawn<Fut, R>(
         &self,
         name: impl Into<String>,
         f: impl FnOnce(TaskHandle) -> Fut + Send + 'static,
@@ -203,7 +200,11 @@ impl TaskGroup {
             }
             .instrument(span)
         }) {
-            self.inner.join.lock().await.push_back((name, handle));
+            self.inner
+                .join
+                .lock()
+                .expect("lock poison")
+                .push_back((name, handle));
         }
         guard.completed = true;
 
@@ -229,13 +230,17 @@ impl TaskGroup {
         if let Some(handle) = self::imp::spawn_local(name.as_str(), async move {
             f(handle).await;
         }) {
-            self.inner.join.lock().await.push_back((name, handle));
+            self.inner
+                .join
+                .lock()
+                .expect("lock poison")
+                .push_back((name, handle));
         }
         guard.completed = true;
     }
     // TODO: Send vs lack of Send bound; do something about it
     #[cfg(target_family = "wasm")]
-    pub async fn spawn<Fut, R>(
+    pub fn spawn<Fut, R>(
         &self,
         name: impl Into<String>,
         f: impl FnOnce(TaskHandle) -> Fut + 'static,
@@ -256,7 +261,11 @@ impl TaskGroup {
         if let Some(handle) = self::imp::spawn(name.as_str(), async move {
             let _ = tx.send(f(handle).await);
         }) {
-            self.inner.join.lock().await.push_back((name, handle));
+            self.inner
+                .join
+                .lock()
+                .expect("lock poison")
+                .push_back((name, handle));
         }
         guard.completed = true;
 
@@ -287,7 +296,11 @@ impl TaskGroup {
             info!(target: LOG_TASK, "Subgroup finished");
         }
 
-        while let Some((name, join)) = self.inner.join.lock().await.pop_front() {
+        // drop lock earl
+        while let Some((name, join)) = {
+            let mut lock = self.inner.join.lock().expect("lock poison");
+            lock.pop_front()
+        } {
             info!(target: LOG_TASK, task=%name, "Waiting for task to finish");
 
             let timeout = deadline.map(|deadline| {
@@ -657,8 +670,7 @@ mod tests {
         let tg = TaskGroup::new();
         tg.spawn("shutdown waiter", |handle| async move {
             handle.make_shutdown_rx().await.await
-        })
-        .await;
+        });
         sleep(Duration::from_millis(10)).await;
         tg.shutdown_join_all(None).await?;
         Ok(())
@@ -670,8 +682,7 @@ mod tests {
         tg.spawn("shutdown waiter", |handle| async move {
             sleep(Duration::from_millis(10)).await;
             handle.make_shutdown_rx().await.await
-        })
-        .await;
+        });
         tg.shutdown_join_all(None).await?;
         Ok(())
     }
@@ -683,8 +694,7 @@ mod tests {
             .await
             .spawn("shutdown waiter", |handle| async move {
                 handle.make_shutdown_rx().await.await
-            })
-            .await;
+            });
         sleep(Duration::from_millis(10)).await;
         tg.shutdown_join_all(None).await?;
         Ok(())
@@ -698,8 +708,7 @@ mod tests {
             .spawn("shutdown waiter", |handle| async move {
                 sleep(Duration::from_millis(10)).await;
                 handle.make_shutdown_rx().await.await
-            })
-            .await;
+            });
         tg.shutdown_join_all(None).await?;
         Ok(())
     }

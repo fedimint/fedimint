@@ -1432,31 +1432,29 @@ impl Client {
             let db = db.clone();
             // Separate task group, because we actually don't want to be waiting for this to
             // finish, and it's just best effort.
-            task_group
-                .spawn(
-                    "refresh_common_api_version_static",
-                    |task_handle| async move {
-                        let ok_or_canceled = task_handle
-                            .cancel_on_shutdown(async {
-                                if let Err(e) = Self::refresh_common_api_version_static(
-                                    &config,
-                                    &module_inits,
-                                    &api,
-                                    &db,
-                                    DiscoverCommonApiVersionMode::Full,
-                                )
-                                .await
-                                {
-                                    warn!("Failed to discover common api versions: {e}");
-                                }
-                            })
-                            .await;
-                        if ok_or_canceled.is_err() {
-                            debug!("Refreshing common api task version canceled");
-                        };
-                    },
-                )
-                .await;
+            task_group.spawn(
+                "refresh_common_api_version_static",
+                |task_handle| async move {
+                    let ok_or_canceled = task_handle
+                        .cancel_on_shutdown(async {
+                            if let Err(e) = Self::refresh_common_api_version_static(
+                                &config,
+                                &module_inits,
+                                &api,
+                                &db,
+                                DiscoverCommonApiVersionMode::Full,
+                            )
+                            .await
+                            {
+                                warn!("Failed to discover common api versions: {e}");
+                            }
+                        })
+                        .await;
+                    if ok_or_canceled.is_err() {
+                        debug!("Refreshing common api task version canceled");
+                    };
+                },
+            );
 
             return Ok(v.0);
         }
@@ -1627,8 +1625,7 @@ impl Client {
                     module_recovery_progress_receivers,
                 )
                 .await
-            })
-            .await;
+            });
     }
 
     async fn run_module_recoveries_task(

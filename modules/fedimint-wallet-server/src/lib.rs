@@ -787,11 +787,9 @@ impl Wallet {
     ) -> Result<Wallet, WalletCreationError> {
         let broadcaster_bitcoind_rpc = bitcoind.clone();
         let broadcaster_db = db.clone();
-        task_group
-            .spawn("broadcast pending", |handle| async move {
-                run_broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc, &handle).await;
-            })
-            .await;
+        task_group.spawn("broadcast pending", |handle| async move {
+            run_broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc, &handle).await;
+        });
 
         let bitcoind_rpc = bitcoind;
 
