@@ -696,6 +696,13 @@
 <a href="#694" id="694">694</a>
 <a href="#695" id="695">695</a>
 <a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
@@ -723,6 +730,7 @@
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>semver::VersionReq;
+<span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tracing::{debug, info};
 
 <span class="kw">use </span><span class="kw">super</span>::external::Bitcoind;
@@ -938,7 +946,7 @@
             .<span class="kw">await
             </span>.context(<span class="string">"moving invite-code file"</span>)<span class="question-mark">?</span>;
         }
-        <span class="macro">info!</span>(<span class="string">"moved invite-code files to client data directory"</span>);
+        <span class="macro">debug!</span>(<span class="string">"Moved invite-code files to client data directory"</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             members,
@@ -1092,6 +1100,8 @@
     }
 
     <span class="kw">pub async fn </span>await_gateways_registered(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>start_time = Instant::now();
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Awaiting LN gateways registration"</span>);
         <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
         <span class="kw">let </span>command = <span class="kw">if </span>VersionReq::parse(<span class="string">"&lt;0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
             <span class="string">"list-gateways"
@@ -1111,6 +1121,9 @@
             <span class="macro">poll_eq!</span>(num_gateways, <span class="number">2</span>)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT,
+            elapsed_ms = %start_time.elapsed().as_millis(),
+            <span class="string">"Gateways registered"</span>);
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -1171,7 +1184,7 @@
         peer_id: usize,
         env: <span class="kw-2">&amp;</span>vars::Fedimintd,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="macro">info!</span>(<span class="string">"fedimintd-{peer_id} started"</span>);
+        <span class="macro">debug!</span>(<span class="string">"Starting fedimintd-{peer_id}"</span>);
         <span class="kw">let </span>process = process_mgr
             .spawn_daemon(
                 <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"fedimintd-{peer_id}"</span>),
@@ -1208,7 +1221,7 @@
             },
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(<span class="string">"Connected to {peer_id}"</span>)
+        <span class="macro">debug!</span>(<span class="string">"Connected to {peer_id}"</span>)
     }
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
         <span class="macro">assert_eq!</span>(
@@ -1314,7 +1327,7 @@
     <span class="kw">let </span>dkg_results = admin_clients
         .iter()
         .map(|(peer_id, client)| client.run_dkg(auth_for(peer_id)));
-    <span class="macro">info!</span>(<span class="string">"Running DKG..."</span>);
+    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Running DKG"</span>);
     <span class="kw">let </span>(dkg_results, leader_wait_result) = <span class="macro">tokio::join!</span>(
         join_all(dkg_results),
         wait_server_status(leader, ServerStatus::VerifyingConfigs)
@@ -1331,14 +1344,15 @@
         hashes.insert(client.get_verify_config_hash(auth_for(peer_id)).<span class="kw">await</span><span class="question-mark">?</span>);
     }
     <span class="macro">assert_eq!</span>(hashes.len(), <span class="number">1</span>);
-    <span class="macro">info!</span>(<span class="string">"DKG successfully complete. Starting consensus..."</span>);
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"DKG ready"</span>);
+    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Starting consensus"</span>);
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client.start_consensus(auth_for(peer_id)).<span class="kw">await </span>{
             <span class="macro">tracing::debug!</span>(<span class="string">"Error calling start_consensus: {e:?}, trying to continue..."</span>)
         }
         wait_server_status(client, ServerStatus::ConsensusRunning).<span class="kw">await</span><span class="question-mark">?</span>;
     }
-    <span class="macro">info!</span>(<span class="string">"Consensus is running"</span>);
+    <span class="macro">debug!</span>(<span class="string">"Consensus is running"</span>);
     <span class="prelude-val">Ok</span>(())
 }
 

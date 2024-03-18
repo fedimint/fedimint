@@ -721,6 +721,14 @@
 <a href="#719" id="719">719</a>
 <a href="#720" id="720">720</a>
 <a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -739,6 +747,7 @@
 <span class="kw">use </span>futures::executor::block_on;
 <span class="kw">use </span>tokio::fs;
 <span class="kw">use </span>tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
+<span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tonic_lnd::lnrpc::policy_update_request::Scope;
 <span class="kw">use </span>tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, PolicyUpdateRequest};
 <span class="kw">use </span>tonic_lnd::Client <span class="kw">as </span>LndClient;
@@ -804,6 +813,7 @@
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>init(client: <span class="kw-2">&amp;</span>bitcoincore_rpc::Client) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="macro">debug!</span>(<span class="string">"Setting up bitcoind"</span>);
         <span class="comment">// create RPC wallet
         </span><span class="kw">for </span>attempt <span class="kw">in </span><span class="number">0</span>.. {
             <span class="kw">match </span>client.create_wallet(<span class="string">""</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>) {
@@ -838,7 +848,6 @@
                 .context(<span class="string">"bitcoind getblockchaininfo"</span>)
                 .map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
             <span class="kw">if </span>info.blocks &gt; <span class="number">100 </span>{
-                <span class="macro">info!</span>(<span class="string">"block count: {:?}"</span>, info.blocks);
                 <span class="prelude-val">Ok</span>(())
             } <span class="kw">else </span>{
                 <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(
@@ -848,6 +857,7 @@
             }
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(<span class="string">"Bitcoind ready"</span>);
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -865,7 +875,8 @@
     }
 
     <span class="kw">pub async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">"Mining bitcoin blocks"</span>);
+        <span class="kw">let </span>start_time = Instant::now();
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">"Mining bitcoin blocks"</span>);
         <span class="kw">let </span>client = <span class="self">self</span>.client();
         <span class="kw">let </span>addr = client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>initial_block_count = client.get_block_count()<span class="question-mark">?</span>;
@@ -874,16 +885,18 @@
             </span>&lt; initial_block_count + block_num
         {
             <span class="macro">trace!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">"Waiting for blocks to be mined"</span>);
-            sleep(Duration::from_millis(<span class="number">200</span>)).<span class="kw">await</span>;
+            sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
         }
 
-        <span class="macro">trace!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">"Mined blocks"</span>);
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT,
+            elapsed_ms = %start_time.elapsed().as_millis(),
+            <span class="question-mark">?</span>block_num, <span class="string">"Mined blocks"</span>);
 
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub async fn </span>send_to(<span class="kw-2">&amp;</span><span class="self">self</span>, addr: String, amount: u64) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Txid&gt; {
-        <span class="macro">info!</span>(target: LOG_DEVIMINT, amount, addr, <span class="string">"Sending funds from bitcoind"</span>);
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT, amount, addr, <span class="string">"Sending funds from bitcoind"</span>);
         <span class="kw">let </span>amount = bitcoin::Amount::from_sat(amount);
         <span class="kw">let </span>tx = <span class="self">self</span>.client().send_to_address(
             <span class="kw-2">&amp;</span>bitcoin::Address::from_str(<span class="kw-2">&amp;</span>addr)<span class="question-mark">?</span>,
@@ -1177,8 +1190,9 @@
     cln: <span class="kw-2">&amp;</span>Lightningd,
     lnd: <span class="kw-2">&amp;</span>Lnd,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Await block ln nodes block processing"</span>);
     <span class="macro">tokio::try_join!</span>(cln.await_block_processing(), lnd.await_block_processing())<span class="question-mark">?</span>;
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"block sync done"</span>);
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening LN channel between the nodes..."</span>);
     <span class="kw">let </span>cln_addr = cln
         .request(cln_rpc::model::requests::NewaddrRequest { addresstype: <span class="prelude-val">None </span>})
         .<span class="kw">await</span><span class="question-mark">?
@@ -1330,6 +1344,7 @@
 
 <span class="kw">impl </span>Electrs {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting electrs"</span>);
         <span class="kw">let </span>electrs_dir = process_mgr
             .globals
             .FM_ELECTRS_DIR
@@ -1358,7 +1373,7 @@
             <span class="string">"--daemon-dir={daemon_dir}"
         </span>);
         <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">"electrs"</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"electrs started"</span>);
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Electrs ready"</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             _bitcoind: bitcoind,
@@ -1375,6 +1390,7 @@
 
 <span class="kw">impl </span>Esplora {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="macro">debug!</span>(<span class="string">"Starting esplora"</span>);
         <span class="kw">let </span>daemon_dir = process_mgr
             .globals
             .FM_BTC_DIR
@@ -1401,7 +1417,7 @@
             <span class="string">"--jsonrpc-import"</span>, <span class="comment">// Workaround for incompatible on-disk format
         </span>);
         <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">"esplora"</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"esplora started"</span>);
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Esplora ready"</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             _bitcoind: bitcoind,

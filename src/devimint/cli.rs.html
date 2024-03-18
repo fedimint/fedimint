@@ -397,6 +397,15 @@
 <a href="#395" id="395">395</a>
 <a href="#396" id="396">396</a>
 <a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -407,10 +416,12 @@
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::write_overwrite_async;
+<span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>rand::distributions::Alphanumeric;
 <span class="kw">use </span>rand::Rng <span class="kw">as _</span>;
 <span class="kw">use </span>tokio::fs;
 <span class="kw">use </span>tokio::net::TcpStream;
+<span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::federation::Fedimintd;
@@ -512,6 +523,7 @@
         .with_file(<span class="prelude-val">Some</span>(log_file))
         .init()<span class="question-mark">?</span>;
 
+    <span class="macro">info!</span>(target: LOG_DEVIMINT, path=%globals.FM_DATA_DIR.display() , <span class="string">"Setting up test dir"</span>);
     <span class="kw">if let </span><span class="prelude-val">Some</span>(link_test_dir) = arg.link_test_dir.as_ref() {
         update_test_dir_link(link_test_dir, <span class="kw-2">&amp;</span>arg.test_dir()).<span class="kw">await</span><span class="question-mark">?</span>;
     }
@@ -523,7 +535,6 @@
         </span>std::env::set_var(var, value);
     }
     write_overwrite_async(globals.FM_TEST_DIR.join(<span class="string">"env"</span>), env_string).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(<span class="string">"Test setup in {:?}"</span>, globals.FM_DATA_DIR);
     <span class="kw">let </span>process_mgr = ProcessManager::new(globals);
     <span class="kw">let </span>task_group = TaskGroup::new();
     task_group.install_kill_handler();
@@ -536,7 +547,7 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     <span class="kw">let </span>make_link = <span class="kw">if let </span><span class="prelude-val">Ok</span>(existing) = fs::read_link(link_test_dir).<span class="kw">await </span>{
         <span class="kw">if </span>existing != test_dir {
-            <span class="macro">info!</span>(
+            <span class="macro">debug!</span>(
                 old = %existing.display(),
                 new = %test_dir.display(),
                 link = %link_test_dir.display(),
@@ -552,7 +563,7 @@
         <span class="bool-val">true
     </span>};
     <span class="kw">if </span>make_link {
-        <span class="macro">info!</span>(src = %test_dir.display(), dst = %link_test_dir.display(), <span class="string">"Linking test dir"</span>);
+        <span class="macro">debug!</span>(src = %test_dir.display(), dst = %link_test_dir.display(), <span class="string">"Linking test dir"</span>);
         fs::symlink(<span class="kw-2">&amp;</span>test_dir, link_test_dir).<span class="kw">await</span><span class="question-mark">?</span>;
     }
     <span class="prelude-val">Ok</span>(())
@@ -572,15 +583,15 @@
             <span class="prelude-val">Ok</span>(())
         }
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(v)) =&gt; {
-            <span class="macro">info!</span>(<span class="string">"Main process finished successfully, will wait for shutdown signal"</span>);
+            <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Main process finished successfully, will wait for shutdown signal"</span>);
             task_group.make_handle().make_shutdown_rx().<span class="kw">await</span>.<span class="kw">await</span>;
-            <span class="macro">info!</span>(<span class="string">"Received shutdown signal, shutting down"</span>);
+            <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Received shutdown signal, shutting down"</span>);
             drop(v); <span class="comment">// execute destructors
             </span><span class="prelude-val">Ok</span>(())
         }
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
-            <span class="macro">warn!</span>(<span class="string">"Main process failed with {e:?}, will shutdown"</span>);
-            <span class="prelude-val">Err</span>(e)
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(err)) =&gt; {
+            <span class="macro">warn!</span>(target: LOG_DEVIMINT, %err, <span class="string">"Main process failed, will shutdown"</span>);
+            <span class="prelude-val">Err</span>(err)
         }
     }
 }
@@ -614,6 +625,10 @@
                 <span class="kw">async move </span>{
                     <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">let </span>fed_id = dev_fed.fed.calculate_federation_id().<span class="kw">await</span>;
+
+                    <span class="kw">let </span>pegin_start_time = Instant::now();
+                    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Peging in client and gateways"</span>);
+
                     <span class="kw">let </span>gw_pegin_amount = <span class="number">20_000</span>;
                     <span class="kw">let </span>client_pegin_amount = <span class="number">10_000</span>;
                     <span class="kw">let </span>(deposit_op_id, <span class="kw">_</span>, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
@@ -652,6 +667,9 @@
                         .await_deposit(<span class="kw-2">&amp;</span>deposit_op_id)
                         .<span class="kw">await</span><span class="question-mark">?</span>;
 
+                    <span class="macro">info!</span>(target: LOG_DEVIMINT,
+                        elapsed_ms = %pegin_start_time.elapsed().as_millis(),
+                        <span class="string">"Pegins completed"</span>);
                     std::env::set_var(<span class="string">"FM_INVITE_CODE"</span>, dev_fed.fed.invite_code()<span class="question-mark">?</span>);
                     <span class="kw">let </span>daemons = write_ready_file(<span class="kw-2">&amp;</span>process_mgr.globals, <span class="prelude-val">Ok</span>(dev_fed)).<span class="kw">await</span><span class="question-mark">?</span>;
 

@@ -97,7 +97,7 @@
 <a href="#95" id="95">95</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
-<span class="kw">use </span>tracing::info;
+<span class="kw">use </span>tracing::{debug, info};
 
 <span class="kw">use </span><span class="kw">crate</span>::external::{Bitcoind, Electrs, Esplora, Lightningd, Lnd};
 <span class="kw">use </span><span class="kw">crate</span>::federation::Federation;
@@ -126,20 +126,22 @@
     </span>);
 
     <span class="kw">let </span>start_time = fedimint_core::time::now();
+    <span class="macro">info!</span>(<span class="string">"Starting dev federation"</span>);
     <span class="kw">let </span>bitcoind = Bitcoind::new(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>((cln, lnd, gw_cln, gw_lnd), electrs, esplora, <span class="kw-2">mut </span>fed) = <span class="macro">tokio::try_join!</span>(
         <span class="kw">async </span>{
+            <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting LN nodes"</span>);
             <span class="kw">let </span>(cln, lnd) = <span class="macro">tokio::try_join!</span>(
                 Lightningd::new(process_mgr, bitcoind.clone()),
                 Lnd::new(process_mgr, bitcoind.clone())
             )<span class="question-mark">?</span>;
-            <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"lightning started"</span>);
+            <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting LN gateways &amp; opening LN channel"</span>);
             <span class="kw">let </span>(gw_cln, gw_lnd, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
                 Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
                 Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
                 open_channel(process_mgr, <span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd),
             )<span class="question-mark">?</span>;
-            <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"gateways started"</span>);
+            <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"LN gateways ready"</span>);
             <span class="prelude-val">Ok</span>((cln, lnd, gw_cln, gw_lnd))
         },
         Electrs::new(process_mgr, bitcoind.clone()),
@@ -147,7 +149,7 @@
         Federation::new(process_mgr, bitcoind.clone(), fed_size),
     )<span class="question-mark">?</span>;
 
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"federation and gateways started"</span>);
+    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Federation and gateways started"</span>);
 
     std::env::set_var(<span class="string">"FM_GWID_CLN"</span>, gw_cln.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>);
     std::env::set_var(<span class="string">"FM_GWID_LND"</span>, gw_lnd.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>);
@@ -158,15 +160,13 @@
         <span class="macro">cmd!</span>(fed.internal_client(), <span class="string">"join-federation"</span>, fed.invite_code()<span class="question-mark">?</span>)
             .run()
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Generating first epoch"</span>);
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Generating first epoch"</span>);
         fed.mine_then_wait_blocks_sync(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     })<span class="question-mark">?</span>;
 
     <span class="comment">// Initialize fedimint-cli
-    </span><span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"await gateways registered"</span>);
-    fed.await_gateways_registered().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"gateways registered"</span>);
+    </span>fed.await_gateways_registered().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// Create a degraded federation if there are offline nodes
     </span>fed.degrade_federation(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -175,9 +175,9 @@
         target: LOG_DEVIMINT,
         fed_size,
         offline_nodes,
-        <span class="string">"finished creating dev federation, took {:?}"</span>,
-        start_time.elapsed()<span class="question-mark">?
-    </span>);
+        elapsed_ms = %start_time.elapsed()<span class="question-mark">?</span>.as_millis(),
+        <span class="string">"Dev federation ready"</span>,
+    );
 
     <span class="prelude-val">Ok</span>(DevFed {
         bitcoind,

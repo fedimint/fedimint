@@ -820,7 +820,7 @@
 <span class="kw">use </span>tokio::fs::OpenOptions;
 <span class="kw">use </span>tokio::process::Child;
 <span class="kw">use </span>tokio::sync::Mutex;
-<span class="kw">use </span>tracing::{debug, info, warn};
+<span class="kw">use </span>tracing::{debug, warn};
 
 <span class="comment">// If a binary doesn't provide a clap version, default to the first stable
 // release (v0.2.1)
@@ -870,7 +870,7 @@
     <span class="kw">pub async fn </span>terminate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>inner = <span class="self">self</span>.<span class="number">0</span>.lock().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>child) = inner.child.take() {
-            <span class="macro">info!</span>(
+            <span class="macro">debug!</span>(
                 target: LOG_DEVIMINT,
                 <span class="string">"sending SIGTERM to {} and waiting for it to exit"</span>, inner.name
             );
@@ -898,7 +898,7 @@
         <span class="kw">let </span>name = <span class="self">self</span>.name.clone();
         block_in_place(<span class="kw">move </span>|| {
             block_on(<span class="kw">async move </span>{
-                <span class="macro">info!</span>(
+                <span class="macro">debug!</span>(
                     target: LOG_DEVIMINT,
                     <span class="string">"sending SIGKILL to {name} and waiting for it to exit"
                 </span>);
