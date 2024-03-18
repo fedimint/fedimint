@@ -615,17 +615,17 @@ mod fedimint_migration_tests {
     };
     use fedimint_wallet_client::client_db::NextPegInTweakIndexKey;
     use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
-    use fedimint_wallet_common::db::{
+    use fedimint_wallet_common::{
+        PegOutFees, Rbf, SpendableUTXO, WalletCommonInit, WalletOutputOutcome,
+    };
+    use fedimint_wallet_server::db::{
         BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
         FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction,
         PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
         PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
         UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey,
     };
-    use fedimint_wallet_common::{
-        PegOutFees, PendingTransaction, Rbf, SpendableUTXO, UnsignedTransaction, WalletCommonInit,
-        WalletOutputOutcome,
-    };
+    use fedimint_wallet_server::{PendingTransaction, UnsignedTransaction};
     use futures::StreamExt;
     use rand::rngs::OsRng;
     use secp256k1::Message;

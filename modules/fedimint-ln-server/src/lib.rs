@@ -1,3 +1,5 @@
+pub mod db;
+
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -41,14 +43,6 @@ use fedimint_ln_common::contracts::{
     EncryptedPreimage, FundedContract, IdentifiableContract, Preimage, PreimageDecryptionShare,
     PreimageKey,
 };
-use fedimint_ln_common::db::{
-    AgreedDecryptionShareContractIdPrefix, AgreedDecryptionShareKey,
-    AgreedDecryptionShareKeyPrefix, BlockCountVoteKey, BlockCountVotePrefix, ContractKey,
-    ContractKeyPrefix, ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix,
-    EncryptedPreimageIndexKey, EncryptedPreimageIndexKeyPrefix, LightningAuditItemKey,
-    LightningAuditItemKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey,
-    OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
-};
 use fedimint_ln_common::{
     create_gateway_remove_message, ContractAccount, LightningCommonInit, LightningConsensusItem,
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
@@ -62,6 +56,15 @@ use rand::rngs::OsRng;
 use secp256k1::PublicKey;
 use strum::IntoEnumIterator;
 use tracing::{debug, error, info, info_span, trace, warn};
+
+use crate::db::{
+    AgreedDecryptionShareContractIdPrefix, AgreedDecryptionShareKey,
+    AgreedDecryptionShareKeyPrefix, BlockCountVoteKey, BlockCountVotePrefix, ContractKey,
+    ContractKeyPrefix, ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix,
+    EncryptedPreimageIndexKey, EncryptedPreimageIndexKeyPrefix, LightningAuditItemKey,
+    LightningAuditItemKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey,
+    OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
+};
 
 mod metrics;
 
@@ -1248,11 +1251,11 @@ mod tests {
         DecryptedPreimage, EncryptedPreimage, FundedContract, IdentifiableContract, Preimage,
         PreimageKey,
     };
-    use fedimint_ln_common::db::{ContractKey, LightningAuditItemKey};
     use fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
     use rand::rngs::OsRng;
     use secp256k1::{generate_keypair, PublicKey};
 
+    use crate::db::{ContractKey, LightningAuditItemKey};
     use crate::{Lightning, LightningInit};
 
     const MINTS: usize = 4;

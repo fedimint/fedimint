@@ -33,12 +33,12 @@ use fedimint_rocksdb::{RocksDb, RocksDbReadOnly};
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::db::SignedSessionOutcomePrefix;
 use fedimint_wallet_server::common::config::WalletConfig;
-use fedimint_wallet_server::common::db::{UTXOKey, UTXOPrefixKey};
 use fedimint_wallet_server::common::keys::CompressedPublicKey;
 use fedimint_wallet_server::common::tweakable::Tweakable;
 use fedimint_wallet_server::common::{
     PegInDescriptor, SpendableUTXO, WalletCommonInit, WalletInput,
 };
+use fedimint_wallet_server::db::{UTXOKey, UTXOPrefixKey};
 use fedimint_wallet_server::{nonce_from_idx, Wallet};
 use futures::stream::StreamExt;
 use miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};

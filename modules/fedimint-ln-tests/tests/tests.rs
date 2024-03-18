@@ -466,18 +466,18 @@ mod fedimint_migration_tests {
         outgoing, ContractId, DecryptedPreimage, EncryptedPreimage, FundedContract,
         PreimageDecryptionShare, PreimageKey,
     };
-    use fedimint_ln_common::db::{
+    use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
+    use fedimint_ln_common::{
+        ContractAccount, LightningCommonInit, LightningGateway, LightningGatewayRegistration,
+        LightningOutputOutcomeV0,
+    };
+    use fedimint_ln_server::db::{
         AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, BlockCountVoteKey,
         BlockCountVotePrefix, ContractKey, ContractKeyPrefix, ContractUpdateKey,
         ContractUpdateKeyPrefix, DbKeyPrefix, EncryptedPreimageIndexKey,
         EncryptedPreimageIndexKeyPrefix, LightningAuditItemKey, LightningAuditItemKeyPrefix,
         LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
         ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
-    };
-    use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
-    use fedimint_ln_common::{
-        ContractAccount, LightningCommonInit, LightningGateway, LightningGatewayRegistration,
-        LightningOutputOutcomeV0,
     };
     use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
@@ -668,7 +668,13 @@ mod fedimint_migration_tests {
         };
 
         dbtx.insert_new_entry(
-            &fedimint_ln_client::db::LightningGatewayKey,
+            &fedimint_ln_client::db::ActiveGatewayKey,
+            &lightning_gateway_registration,
+        )
+        .await;
+
+        dbtx.insert_new_entry(
+            &fedimint_ln_client::db::LightningGatewayKey(pk),
             &lightning_gateway_registration,
         )
         .await;
@@ -875,7 +881,7 @@ mod fedimint_migration_tests {
                         fedimint_ln_client::db::DbKeyPrefix::ActiveGateway => {
                             // Active gateway is deprecated, there should be no records
                             let active_gateway = dbtx
-                                .get_value(&fedimint_ln_client::db::LightningGatewayKey)
+                                .get_value(&fedimint_ln_client::db::ActiveGatewayKey)
                                 .await;
                             ensure!(
                                 active_gateway.is_none(),
@@ -907,6 +913,19 @@ mod fedimint_migration_tests {
                                 "validate_migrations was not able to read any MetaOverrides"
                             );
                             info!("Validated MetaOverrides");
+                        }
+                        fedimint_ln_client::db::DbKeyPrefix::LightningGateway => {
+                            let gateways = dbtx
+                                .find_by_prefix(&LightningGatewayKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_gateways = gateways.len();
+                            ensure!(
+                                num_gateways > 0,
+                                "validate_migrations was not able to read any LightningGateways"
+                            );
+                            info!("Validated LightningGateways");
                         }
                     }
                 }

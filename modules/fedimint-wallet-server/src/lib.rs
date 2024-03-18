@@ -1,9 +1,12 @@
+pub mod db;
+
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::Infallible;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
 
 use anyhow::{bail, format_err, Context};
+use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -14,15 +17,10 @@ use bitcoin::{
     Transaction, TxIn, TxOut, Txid,
 };
 use common::config::WalletConfigConsensus;
-use common::db::{
-    BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
-    PegOutNonceKey,
-};
 use common::{
-    proprietary_tweak_key, PegOutFees, PegOutSignatureItem, PendingTransaction,
-    ProcessPegOutSigError, SpendableUTXO, UnsignedTransaction, WalletCommonInit,
-    WalletConsensusItem, WalletCreationError, WalletInput, WalletModuleTypes, WalletOutput,
-    WalletOutputOutcome, CONFIRMATION_TARGET,
+    proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
+    WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput, WalletModuleTypes,
+    WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET,
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_script;
@@ -34,7 +32,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
-use fedimint_core::encoding::Encodable;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
 };
@@ -49,8 +47,8 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::sleep;
 use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, Feerate,
-    NumPeersExt, OutPoint, PeerId, ServerModule,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeersExt,
+    OutPoint, PeerId, ServerModule,
 };
 use fedimint_metrics::prometheus::{
     register_histogram_with_registry, register_int_gauge_with_registry, IntGauge,
@@ -61,12 +59,6 @@ use fedimint_metrics::{
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
-use fedimint_wallet_common::db::{
-    BlockHashKey, BlockHashKeyPrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
-    PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
-    PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
-    UnsignedTransactionPrefixKey,
-};
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{Rbf, WalletInputError, WalletOutputError, WalletOutputV0};
@@ -75,8 +67,17 @@ use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
 use miniscript9::psbt::PsbtExt;
 use rand::rngs::OsRng;
 use secp256k1::{Message, Scalar};
+use serde::Serialize;
 use strum::IntoEnumIterator;
 use tracing::{debug, error, info, instrument, trace, warn};
+
+use crate::db::{
+    BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
+    FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
+    PegOutNonceKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
+    PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
+    UnsignedTransactionPrefixKey,
+};
 
 lazy_static! {
     static ref WALLET_PEGIN_SATS: Histogram = register_histogram_with_registry!(
@@ -743,14 +744,22 @@ impl ServerModule for Wallet {
     }
 }
 
-fn calculate_pegin_metrics(dbtx: &mut DatabaseTransaction<'_>, amount: Amount, fee: Amount) {
+fn calculate_pegin_metrics(
+    dbtx: &mut DatabaseTransaction<'_>,
+    amount: fedimint_core::Amount,
+    fee: fedimint_core::Amount,
+) {
     dbtx.on_commit(move || {
         WALLET_PEGIN_SATS.observe(amount.sats_f64());
         WALLET_PEGIN_FEES_SATS.observe(fee.sats_f64());
     });
 }
 
-fn calculate_pegout_metrics(dbtx: &mut DatabaseTransaction<'_>, amount: Amount, fee: Amount) {
+fn calculate_pegout_metrics(
+    dbtx: &mut DatabaseTransaction<'_>,
+    amount: fedimint_core::Amount,
+    fee: fedimint_core::Amount,
+) {
     dbtx.on_commit(move || {
         WALLET_PEGOUT_SATS.observe(amount.sats_f64());
         WALLET_PEGOUT_FEES_SATS.observe(fee.sats_f64());
@@ -1596,6 +1605,65 @@ pub fn nonce_from_idx(nonce_idx: u64) -> [u8; 33] {
     nonce[1..].copy_from_slice(&nonce_idx.consensus_hash::<sha256::Hash>()[..]);
 
     nonce
+}
+
+/// A peg-out tx that is ready to be broadcast with a tweak for the change UTXO
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct PendingTransaction {
+    pub tx: Transaction,
+    pub tweak: [u8; 33],
+    pub change: bitcoin::Amount,
+    pub destination: Script,
+    pub fees: PegOutFees,
+    pub selected_utxos: Vec<(UTXOKey, SpendableUTXO)>,
+    pub peg_out_amount: bitcoin::Amount,
+    pub rbf: Option<Rbf>,
+}
+
+impl Serialize for PendingTransaction {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut bytes = Vec::new();
+        self.consensus_encode(&mut bytes).unwrap();
+
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&bytes.to_hex())
+        } else {
+            serializer.serialize_bytes(&bytes)
+        }
+    }
+}
+
+/// A PSBT that is awaiting enough signatures from the federation to becoming a
+/// `PendingTransaction`
+#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable)]
+pub struct UnsignedTransaction {
+    pub psbt: PartiallySignedTransaction,
+    pub signatures: Vec<(PeerId, PegOutSignatureItem)>,
+    pub change: bitcoin::Amount,
+    pub fees: PegOutFees,
+    pub destination: Script,
+    pub selected_utxos: Vec<(UTXOKey, SpendableUTXO)>,
+    pub peg_out_amount: bitcoin::Amount,
+    pub rbf: Option<Rbf>,
+}
+
+impl Serialize for UnsignedTransaction {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut bytes = Vec::new();
+        self.consensus_encode(&mut bytes).unwrap();
+
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&bytes.to_hex())
+        } else {
+            serializer.serialize_bytes(&bytes)
+        }
+    }
 }
 
 #[cfg(test)]

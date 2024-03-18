@@ -1,3 +1,5 @@
+pub mod db;
+
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::bail;
@@ -26,11 +28,6 @@ use fedimint_mint_common::config::{
     MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate,
     MintGenParams,
 };
-use fedimint_mint_common::db::{
-    DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix, MintAuditItemKey,
-    MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix, NonceKey,
-    NonceKeyPrefix,
-};
 pub use fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 use fedimint_mint_common::{
     MintCommonInit, MintConsensusItem, MintInput, MintInputError, MintModuleTypes, MintOutput,
@@ -50,6 +47,12 @@ use threshold_crypto::ff::Field;
 use threshold_crypto::group::Curve;
 use threshold_crypto::{G2Projective, Scalar};
 use tracing::{debug, info};
+
+use crate::db::{
+    DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix, MintAuditItemKey,
+    MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix, NonceKey,
+    NonceKeyPrefix,
+};
 
 lazy_static! {
     static ref MINT_REDEEMED_ECASH_SATS: Histogram = register_histogram_with_registry!(
