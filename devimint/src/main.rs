@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use devimint::cli::CommonArgs;
+use devimint::envs::FM_TEST_DIR_ENV;
 use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::util::{handle_version_hash_command, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
@@ -44,11 +45,11 @@ async fn main() -> anyhow::Result<()> {
     let res = match handle_command().await {
         Ok(r) => Ok(r),
         Err(e) => {
-            if let Ok(test_dir) = env::var("FM_TEST_DIR") {
+            if let Ok(test_dir) = env::var(FM_TEST_DIR_ENV) {
                 let ready_file = PathBuf::from(test_dir).join("ready");
                 write_overwrite_async(ready_file, "ERROR").await?;
             } else {
-                warn!(target: LOG_DEVIMINT, "FM_TEST_DIR was not set");
+                warn!(target: LOG_DEVIMINT, "{}", &format!("{} was not set", FM_TEST_DIR_ENV));
             }
             Err(e)
         }

@@ -40,57 +40,59 @@ use tokio::select;
 use tracing::{debug, error, info, warn};
 
 use crate::default_esplora_server;
-use crate::envs::FM_DISABLE_META_MODULE_ENV;
+use crate::envs::{
+    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV,
+    FM_BITCOIN_NETWORK_ENV, FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_EXTRA_DKG_META_VAR_ENV,
+    FM_FINALITY_DELAY_ENV, FM_P2P_URL_ENV, FM_PASSWORD_ENV, FM_TOKIO_CONSOLE_BIND_ENV,
+};
 use crate::fedimintd::metrics::APP_START_TS;
 
 /// Time we will wait before forcefully shutting down tasks
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub const FM_EXTRA_DKG_META_VAR: &str = "FM_EXTRA_DKG_META";
-
 #[derive(Parser)]
 #[command(version)]
 pub struct ServerOpts {
     /// Path to folder containing federation config files
-    #[arg(long = "data-dir", env = "FM_DATA_DIR")]
+    #[arg(long = "data-dir", env = FM_DATA_DIR_ENV)]
     pub data_dir: PathBuf,
     /// Password to encrypt sensitive config files
     // TODO: should probably never send password to the server directly, rather send the hash via
     // the API
-    #[arg(long, env = "FM_PASSWORD")]
+    #[arg(long, env = FM_PASSWORD_ENV)]
     pub password: Option<String>,
     /// Enable tokio console logging
-    #[arg(long, env = "FM_TOKIO_CONSOLE_BIND")]
+    #[arg(long, env = FM_TOKIO_CONSOLE_BIND_ENV)]
     pub tokio_console_bind: Option<SocketAddr>,
     /// Enable telemetry logging
     #[arg(long, default_value = "false")]
     pub with_telemetry: bool,
 
     /// Address we bind to for federation communication
-    #[arg(long, env = "FM_BIND_P2P", default_value = "127.0.0.1:8173")]
+    #[arg(long, env = FM_BIND_P2P_ENV, default_value = "127.0.0.1:8173")]
     bind_p2p: SocketAddr,
     /// Our external address for communicating with our peers
-    #[arg(long, env = "FM_P2P_URL", default_value = "fedimint://127.0.0.1:8173")]
+    #[arg(long, env = FM_P2P_URL_ENV, default_value = "fedimint://127.0.0.1:8173")]
     p2p_url: SafeUrl,
     /// Address we bind to for exposing the API
-    #[arg(long, env = "FM_BIND_API", default_value = "127.0.0.1:8174")]
+    #[arg(long, env = FM_BIND_API_ENV, default_value = "127.0.0.1:8174")]
     bind_api: SocketAddr,
     /// Our API address for clients to connect to us
-    #[arg(long, env = "FM_API_URL", default_value = "ws://127.0.0.1:8174")]
+    #[arg(long, env = FM_API_URL_ENV, default_value = "ws://127.0.0.1:8174")]
     api_url: SafeUrl,
     /// The bitcoin network that fedimint will be running on
-    #[arg(long, env = "FM_BITCOIN_NETWORK", default_value = "regtest")]
+    #[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = "regtest")]
     network: bitcoin::network::constants::Network,
     /// The bitcoin network that fedimint will be running on
-    #[arg(long, env = "FM_FINALITY_DELAY", default_value = "10")]
+    #[arg(long, env = FM_FINALITY_DELAY_ENV, default_value = "10")]
     finality_delay: u32,
 
-    #[arg(long, env = "FM_BIND_METRICS_API")]
+    #[arg(long, env = FM_BIND_METRICS_API_ENV)]
     bind_metrics_api: Option<SocketAddr>,
 
     /// List of default meta values to use during config generation (format:
     /// `key1=value1,key2=value,...`)
-    #[arg(long, env = FM_EXTRA_DKG_META_VAR, value_parser = parse_map, default_value="")]
+    #[arg(long, env = FM_EXTRA_DKG_META_VAR_ENV, value_parser = parse_map, default_value="")]
     extra_dkg_meta: BTreeMap<String, String>,
 }
 

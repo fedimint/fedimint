@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use ln_gateway::rpc::V1_API_ENDPOINT;
 
 use crate::cmd;
+use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
 use crate::external::LightningNode;
 use crate::federation::Federation;
 use crate::util::{poll, Command, ProcessHandle, ProcessManager};
@@ -29,14 +30,14 @@ impl Gatewayd {
         let addr = format!("http://127.0.0.1:{port}/{V1_API_ENDPOINT}");
         let gateway_env: HashMap<String, String> = HashMap::from_iter([
             (
-                "FM_GATEWAY_DATA_DIR".to_owned(),
+                FM_GATEWAY_DATA_DIR_ENV.to_owned(),
                 format!("{}/{ln_name}", utf8(test_dir)),
             ),
             (
-                "FM_GATEWAY_LISTEN_ADDR".to_owned(),
+                FM_GATEWAY_LISTEN_ADDR_ENV.to_owned(),
                 format!("127.0.0.1:{port}"),
             ),
-            ("FM_GATEWAY_API_ADDR".to_owned(), addr.clone()),
+            (FM_GATEWAY_API_ADDR_ENV.to_owned(), addr.clone()),
         ]);
         let process = process_mgr
             .spawn_daemon(

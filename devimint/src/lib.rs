@@ -7,6 +7,7 @@ pub use gatewayd::Gatewayd;
 
 pub mod cli;
 pub mod devfed;
+pub mod envs;
 pub mod external;
 pub mod federation;
 pub mod gatewayd;

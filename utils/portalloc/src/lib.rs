@@ -16,6 +16,7 @@
 //! sure a given port is actually free
 
 pub mod data;
+pub mod envs;
 pub mod util;
 
 use std::net::TcpListener;
@@ -27,6 +28,7 @@ use rand::{thread_rng, Rng};
 use tracing::warn;
 
 use crate::data::DataDir;
+use crate::envs::FM_PORTALLOC_DATA_DIR_ENV;
 
 type UnixTimestamp = u64;
 
@@ -35,7 +37,7 @@ pub fn now_ts() -> UnixTimestamp {
 }
 
 pub fn data_dir() -> anyhow::Result<PathBuf> {
-    if let Some(env) = std::env::var_os("FM_PORTALLOC_DATA_DIR") {
+    if let Some(env) = std::env::var_os(FM_PORTALLOC_DATA_DIR_ENV) {
         Ok(PathBuf::from(env))
     } else if let Some(dir) = dirs::cache_dir() {
         Ok(dir.join("fm-portalloc"))
