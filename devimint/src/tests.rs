@@ -2099,16 +2099,9 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
 
     // TODO(support:v0.2): remove
     if VersionReq::parse(">=0.3.0-alpha")?.matches(&fedimint_cli_version) {
-        let reissue_error = cmd!(double_spend_client, "reissue", double_spend_notes)
-            .expect_err_json()
-            .await?
-            .get("error")
-            .expect("json error contains error field")
-            .as_str()
-            .context("not a string")?
-            .to_owned();
-
-        assert!(reissue_error.contains("The transaction had an invalid input"));
+        cmd!(double_spend_client, "reissue", double_spend_notes)
+            .assert_error_contains("The transaction had an invalid input")
+            .await?;
     } else {
         // v0.2 clients don't write json errors to stdout, so we can't parse
         cmd!(double_spend_client, "reissue", double_spend_notes)

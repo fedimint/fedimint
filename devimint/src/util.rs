@@ -214,6 +214,33 @@ impl Command {
         Ok(serde_json::from_str(output.trim())?)
     }
 
+    /// Run the command expecting an error, which is parsed using a closure.
+    /// Returns an Err if the closure returns false.
+    pub async fn assert_error(
+        &mut self,
+        predicate: impl Fn(serde_json::Value) -> bool,
+    ) -> Result<()> {
+        let parsed_error = self.expect_err_json().await?;
+        anyhow::ensure!(predicate(parsed_error));
+        Ok(())
+    }
+
+    /// Returns an Err if the command doesn't return an error containing the
+    /// provided error string.
+    pub async fn assert_error_contains(&mut self, error: &str) -> Result<()> {
+        self.assert_error(|err_json| {
+            let error_string = err_json
+                .get("error")
+                .expect("json error contains error field")
+                .as_str()
+                .expect("not a string")
+                .to_owned();
+
+            error_string.contains(error)
+        })
+        .await
+    }
+
     pub async fn run_inner(&mut self, expect_success: bool) -> Result<std::process::Output> {
         debug!(target: LOG_DEVIMINT, "> {}", self.command_debug());
         let output = self
