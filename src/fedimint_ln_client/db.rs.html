@@ -85,12 +85,29 @@
 <a href="#83" id="83">83</a>
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
 <span class="kw">use </span>fedimint_ln_common::LightningGatewayRegistration;
+<span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 
@@ -100,11 +117,10 @@
 #[derive(Clone, EnumIter, Debug)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     <span class="comment">// Deprecated
-    // Lightning Gateway cache records are stored the same way as the server, using 0x45
-    // [`fedimint_ln_common::db::DbKeyPrefix::LightningGateway`].
     </span>ActiveGateway = <span class="number">0x28</span>,
     PaymentResult = <span class="number">0x29</span>,
     MetaOverrides = <span class="number">0x30</span>,
+    LightningGateway = <span class="number">0x45</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -114,19 +130,19 @@
 }
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>LightningGatewayKey;
+</span><span class="kw">pub struct </span>ActiveGatewayKey;
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>LightningGatewayKeyPrefix;
+</span><span class="kw">pub struct </span>ActiveGatewayKeyPrefix;
 
 <span class="macro">impl_db_record!</span>(
-    key = LightningGatewayKey,
+    key = ActiveGatewayKey,
     value = LightningGatewayRegistration,
     db_prefix = DbKeyPrefix::ActiveGateway,
 );
 <span class="macro">impl_db_lookup!</span>(
-    key = LightningGatewayKey,
-    query_prefix = LightningGatewayKeyPrefix
+    key = ActiveGatewayKey,
+    query_prefix = ActiveGatewayKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -170,4 +186,20 @@
 );
 
 <span class="macro">impl_db_lookup!</span>(key = MetaOverridesKey, query_prefix = MetaOverridesPrefix);
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>LightningGatewayKey(<span class="kw">pub </span>PublicKey);
+
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>LightningGatewayKeyPrefix;
+
+<span class="macro">impl_db_record!</span>(
+    key = LightningGatewayKey,
+    value = LightningGatewayRegistration,
+    db_prefix = DbKeyPrefix::LightningGateway,
+);
+<span class="macro">impl_db_lookup!</span>(
+    key = LightningGatewayKey,
+    query_prefix = LightningGatewayKeyPrefix
+);
 </code></pre></div></section></main></body></html>

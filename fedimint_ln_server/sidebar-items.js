@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["record_funded_contract_metric"],"mod":["metrics"],"struct":["Lightning","LightningInit"]};
+window.SIDEBAR_ITEMS = {"fn":["record_funded_contract_metric"],"mod":["db","metrics"],"struct":["Lightning","LightningInit"]};

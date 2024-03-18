@@ -1473,7 +1473,12 @@
 <a href="#1471" id="1471">1471</a>
 <a href="#1472" id="1472">1472</a>
 <a href="#1473" id="1473">1473</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#1474" id="1474">1474</a>
+<a href="#1475" id="1475">1475</a>
+<a href="#1476" id="1476">1476</a>
+</pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
+
+<span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, Context};
@@ -1516,14 +1521,6 @@
     EncryptedPreimage, FundedContract, IdentifiableContract, Preimage, PreimageDecryptionShare,
     PreimageKey,
 };
-<span class="kw">use </span>fedimint_ln_common::db::{
-    AgreedDecryptionShareContractIdPrefix, AgreedDecryptionShareKey,
-    AgreedDecryptionShareKeyPrefix, BlockCountVoteKey, BlockCountVotePrefix, ContractKey,
-    ContractKeyPrefix, ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix,
-    EncryptedPreimageIndexKey, EncryptedPreimageIndexKeyPrefix, LightningAuditItemKey,
-    LightningAuditItemKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey,
-    OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
-};
 <span class="kw">use </span>fedimint_ln_common::{
     create_gateway_remove_message, ContractAccount, LightningCommonInit, LightningConsensusItem,
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
@@ -1537,6 +1534,15 @@
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tracing::{debug, error, info, info_span, trace, warn};
+
+<span class="kw">use </span><span class="kw">crate</span>::db::{
+    AgreedDecryptionShareContractIdPrefix, AgreedDecryptionShareKey,
+    AgreedDecryptionShareKeyPrefix, BlockCountVoteKey, BlockCountVotePrefix, ContractKey,
+    ContractKeyPrefix, ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix,
+    EncryptedPreimageIndexKey, EncryptedPreimageIndexKeyPrefix, LightningAuditItemKey,
+    LightningAuditItemKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey,
+    OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
+};
 
 <span class="kw">mod </span>metrics;
 
@@ -2723,11 +2729,11 @@
         DecryptedPreimage, EncryptedPreimage, FundedContract, IdentifiableContract, Preimage,
         PreimageKey,
     };
-    <span class="kw">use </span>fedimint_ln_common::db::{ContractKey, LightningAuditItemKey};
     <span class="kw">use </span>fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>secp256k1::{generate_keypair, PublicKey};
 
+    <span class="kw">use </span><span class="kw">crate</span>::db::{ContractKey, LightningAuditItemKey};
     <span class="kw">use crate</span>::{Lightning, LightningInit};
 
     <span class="kw">const </span>MINTS: usize = <span class="number">4</span>;

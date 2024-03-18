@@ -800,7 +800,12 @@
 <a href="#798" id="798">798</a>
 <a href="#799" id="799">799</a>
 <a href="#800" id="800">800</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+</pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
+
+<span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>fedimint_core::config::{
@@ -828,11 +833,6 @@
     MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate,
     MintGenParams,
 };
-<span class="kw">use </span>fedimint_mint_common::db::{
-    DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix, MintAuditItemKey,
-    MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix, NonceKey,
-    NonceKeyPrefix,
-};
 <span class="kw">pub use </span>fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 <span class="kw">use </span>fedimint_mint_common::{
     MintCommonInit, MintConsensusItem, MintInput, MintInputError, MintModuleTypes, MintOutput,
@@ -852,6 +852,12 @@
 <span class="kw">use </span>threshold_crypto::group::Curve;
 <span class="kw">use </span>threshold_crypto::{G2Projective, Scalar};
 <span class="kw">use </span>tracing::{debug, info};
+
+<span class="kw">use </span><span class="kw">crate</span>::db::{
+    DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix, MintAuditItemKey,
+    MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix, NonceKey,
+    NonceKeyPrefix,
+};
 
 <span class="macro">lazy_static! </span>{
     <span class="kw">static </span><span class="kw-2">ref </span>MINT_REDEEMED_ECASH_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(

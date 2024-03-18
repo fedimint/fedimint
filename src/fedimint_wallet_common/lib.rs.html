@@ -323,96 +323,25 @@
 <a href="#321" id="321">321</a>
 <a href="#322" id="322">322</a>
 <a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a>
-<a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
-<a href="#345" id="345">345</a>
-<a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a>
-<a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
-<a href="#352" id="352">352</a>
-<a href="#353" id="353">353</a>
-<a href="#354" id="354">354</a>
-<a href="#355" id="355">355</a>
-<a href="#356" id="356">356</a>
-<a href="#357" id="357">357</a>
-<a href="#358" id="358">358</a>
-<a href="#359" id="359">359</a>
-<a href="#360" id="360">360</a>
-<a href="#361" id="361">361</a>
-<a href="#362" id="362">362</a>
-<a href="#363" id="363">363</a>
-<a href="#364" id="364">364</a>
-<a href="#365" id="365">365</a>
-<a href="#366" id="366">366</a>
-<a href="#367" id="367">367</a>
-<a href="#368" id="368">368</a>
-<a href="#369" id="369">369</a>
-<a href="#370" id="370">370</a>
-<a href="#371" id="371">371</a>
-<a href="#372" id="372">372</a>
-<a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::hash::Hasher;
 
-<span class="kw">use </span>bitcoin::hashes::hex::ToHex;
 <span class="kw">use </span>bitcoin::util::psbt::raw::ProprietaryKey;
-<span class="kw">use </span>bitcoin::util::psbt::PartiallySignedTransaction;
-<span class="kw">use </span>bitcoin::{Address, Amount, BlockHash, Network, Script, Transaction, Txid};
+<span class="kw">use </span>bitcoin::{Address, Amount, BlockHash, Network, Txid};
 <span class="kw">use </span>config::WalletClientConfig;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-<span class="kw">use </span>fedimint_core::{
-    extensible_associated_module_type, plugin_types_trait_impl_common, Feerate, PeerId,
-};
+<span class="kw">use </span>fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Feerate};
 <span class="kw">use </span>impl_tools::autoimpl;
 <span class="kw">use </span>miniscript::Descriptor;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::error;
 
-<span class="kw">use </span><span class="kw">crate</span>::db::UTXOKey;
 <span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use </span><span class="kw">crate</span>::txoproof::{PegInProof, PegInProofError};
 
 <span class="kw">pub mod </span>config;
-<span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>keys;
 <span class="kw">pub mod </span>tweakable;
 <span class="kw">pub mod </span>txoproof;
@@ -474,65 +403,6 @@
     </span><span class="kw">pub </span>tweak: [u8; <span class="number">33</span>],
     <span class="attr">#[serde(with = <span class="string">"bitcoin::util::amount::serde::as_sat"</span>)]
     </span><span class="kw">pub </span>amount: bitcoin::Amount,
-}
-
-<span class="doccomment">/// A peg-out tx that is ready to be broadcast with a tweak for the change UTXO
-</span><span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>PendingTransaction {
-    <span class="kw">pub </span>tx: Transaction,
-    <span class="kw">pub </span>tweak: [u8; <span class="number">33</span>],
-    <span class="kw">pub </span>change: bitcoin::Amount,
-    <span class="kw">pub </span>destination: Script,
-    <span class="kw">pub </span>fees: PegOutFees,
-    <span class="kw">pub </span>selected_utxos: Vec&lt;(UTXOKey, SpendableUTXO)&gt;,
-    <span class="kw">pub </span>peg_out_amount: Amount,
-    <span class="kw">pub </span>rbf: <span class="prelude-ty">Option</span>&lt;Rbf&gt;,
-}
-
-<span class="kw">impl </span>Serialize <span class="kw">for </span>PendingTransaction {
-    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
-    <span class="kw">where
-        </span>S: serde::Serializer,
-    {
-        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes).unwrap();
-
-        <span class="kw">if </span>serializer.is_human_readable() {
-            serializer.serialize_str(<span class="kw-2">&amp;</span>bytes.to_hex())
-        } <span class="kw">else </span>{
-            serializer.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
-        }
-    }
-}
-
-<span class="doccomment">/// A PSBT that is awaiting enough signatures from the federation to becoming a
-/// `PendingTransaction`
-</span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>UnsignedTransaction {
-    <span class="kw">pub </span>psbt: PartiallySignedTransaction,
-    <span class="kw">pub </span>signatures: Vec&lt;(PeerId, PegOutSignatureItem)&gt;,
-    <span class="kw">pub </span>change: bitcoin::Amount,
-    <span class="kw">pub </span>fees: PegOutFees,
-    <span class="kw">pub </span>destination: Script,
-    <span class="kw">pub </span>selected_utxos: Vec&lt;(UTXOKey, SpendableUTXO)&gt;,
-    <span class="kw">pub </span>peg_out_amount: Amount,
-    <span class="kw">pub </span>rbf: <span class="prelude-ty">Option</span>&lt;Rbf&gt;,
-}
-
-<span class="kw">impl </span>Serialize <span class="kw">for </span>UnsignedTransaction {
-    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
-    <span class="kw">where
-        </span>S: serde::Serializer,
-    {
-        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes).unwrap();
-
-        <span class="kw">if </span>serializer.is_human_readable() {
-            serializer.serialize_str(<span class="kw-2">&amp;</span>bytes.to_hex())
-        } <span class="kw">else </span>{
-            serializer.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
-        }
-    }
 }
 
 <span class="attr">#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]

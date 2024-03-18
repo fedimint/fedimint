@@ -21,8 +21,8 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_empty_server",["",[],["db.rs","lib.rs"]]],\
 ["fedimint_fuzz",["",[],["lib.rs"]]],\
 ["fedimint_ln_client",["",[],["api.rs","db.rs","incoming.rs","lib.rs","pay.rs","receive.rs"]]],\
-["fedimint_ln_common",["",[["contracts",[],["incoming.rs","mod.rs","outgoing.rs"]]],["config.rs","db.rs","lib.rs"]]],\
-["fedimint_ln_server",["",[],["lib.rs","metrics.rs"]]],\
+["fedimint_ln_common",["",[["contracts",[],["incoming.rs","mod.rs","outgoing.rs"]]],["config.rs","lib.rs"]]],\
+["fedimint_ln_server",["",[],["db.rs","lib.rs","metrics.rs"]]],\
 ["fedimint_load_test_tool",["",[],["common.rs","main.rs"]]],\
 ["fedimint_logging",["",[],["lib.rs"]]],\
 ["fedimint_meta_client",["",[],["api.rs","cli.rs","db.rs","lib.rs","states.rs"]]],\
@@ -30,8 +30,8 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_meta_server",["",[],["db.rs","lib.rs"]]],\
 ["fedimint_metrics",["",[],["lib.rs"]]],\
 ["fedimint_mint_client",["",[["backup",[],["recovery.rs"]]],["backup.rs","client_db.rs","input.rs","lib.rs","oob.rs","output.rs"]]],\
-["fedimint_mint_common",["",[],["common.rs","config.rs","db.rs","lib.rs"]]],\
-["fedimint_mint_server",["",[],["lib.rs"]]],\
+["fedimint_mint_common",["",[],["common.rs","config.rs","lib.rs"]]],\
+["fedimint_mint_server",["",[],["db.rs","lib.rs"]]],\
 ["fedimint_portalloc",["",[["data",[],["dto.rs"]]],["data.rs","lib.rs","util.rs"]]],\
 ["fedimint_rocksdb",["",[],["lib.rs"]]],\
 ["fedimint_server",["",[["atomic_broadcast",[],["backup.rs","data_provider.rs","finalization_handler.rs","keychain.rs","mod.rs","network.rs","spawner.rs"]],["config",[],["api.rs","distributedgen.rs","io.rs","mod.rs"]],["consensus",[],["debug_fmt.rs","mod.rs","server.rs"]],["metrics",[],["jsonrpsee.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","peers_reliable.rs","queue.rs"]]],["db.rs","envs.rs","lib.rs","metrics.rs","multiplexed.rs"]]],\
@@ -39,8 +39,8 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_unknown_common",["",[],["config.rs","lib.rs"]]],\
 ["fedimint_unknown_server",["",[],["db.rs","lib.rs"]]],\
 ["fedimint_wallet_client",["",[],["api.rs","client_db.rs","deposit.rs","lib.rs","withdraw.rs"]]],\
-["fedimint_wallet_common",["",[],["config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]]],\
-["fedimint_wallet_server",["",[],["lib.rs"]]],\
+["fedimint_wallet_common",["",[],["config.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]]],\
+["fedimint_wallet_server",["",[],["db.rs","lib.rs"]]],\
 ["fedimint_wasm_tests",["",[],["lib.rs"]]],\
 ["fedimintd",["",[["fedimintd",[],["metrics.rs"]]],["envs.rs","fedimintd.rs","lib.rs"]]],\
 ["gateway_cli",["",[],["main.rs"]]],\

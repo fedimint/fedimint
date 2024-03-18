@@ -1576,12 +1576,6 @@
 <a href="#1574" id="1574">1574</a>
 <a href="#1575" id="1575">1575</a>
 <a href="#1576" id="1576">1576</a>
-<a href="#1577" id="1577">1577</a>
-<a href="#1578" id="1578">1578</a>
-<a href="#1579" id="1579">1579</a>
-<a href="#1580" id="1580">1580</a>
-<a href="#1581" id="1581">1581</a>
-<a href="#1582" id="1582">1582</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -1599,7 +1593,9 @@
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin::{KeyPair, Network};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
-<span class="kw">use </span>db::{DbKeyPrefix, PaymentResult, PaymentResultKey};
+<span class="kw">use </span>db::{
+    DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
+};
 <span class="kw">use </span>fedimint_client::db::ClientMigrationFn;
 <span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -1632,7 +1628,6 @@
     Contract, ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract, Preimage,
     PreimageKey,
 };
-<span class="kw">use </span>fedimint_ln_common::db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 <span class="kw">use </span>fedimint_ln_common::{
     ContractOutput, LightningClientContext, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningModuleTypes,
@@ -1831,10 +1826,6 @@
             prefix_names.is_empty() || prefix_names.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
         });
 
-        <span class="kw">let </span>filtered_prefixes_common = fedimint_ln_common::db::DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
-        });
-
         <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
             <span class="kw">match </span>table {
                 DbKeyPrefix::ActiveGateway =&gt; {
@@ -1860,19 +1851,16 @@
                         <span class="string">"Meta Overrides"
                     </span>);
                 }
-            }
-        }
-
-        <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes_common {
-            <span class="kw">if let </span>fedimint_ln_common::db::DbKeyPrefix::LightningGateway = table {
-                <span class="macro">push_db_pair_items!</span>(
-                    dbtx,
-                    LightningGatewayKeyPrefix,
-                    LightningGatewayKey,
-                    LightningGatewayRegistration,
-                    ln_client_items,
-                    <span class="string">"Lightning Gateways"
-                </span>);
+                DbKeyPrefix::LightningGateway =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        LightningGatewayKeyPrefix,
+                        LightningGatewayKey,
+                        LightningGatewayRegistration,
+                        ln_client_items,
+                        <span class="string">"Lightning Gateways"
+                    </span>);
+                }
             }
         }
 
@@ -1904,7 +1892,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; = BTreeMap::new();
         migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>| {
             Box::pin(<span class="kw">async </span>{
-                dbtx.remove_entry(<span class="kw-2">&amp;</span><span class="kw">crate</span>::db::LightningGatewayKey).<span class="kw">await</span>;
+                dbtx.remove_entry(<span class="kw-2">&amp;</span><span class="kw">crate</span>::db::ActiveGatewayKey).<span class="kw">await</span>;
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
             })
         });

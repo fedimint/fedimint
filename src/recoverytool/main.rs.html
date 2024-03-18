@@ -530,12 +530,12 @@
 <span class="kw">use </span>fedimint_server::config::io::read_server_config;
 <span class="kw">use </span>fedimint_server::db::SignedSessionOutcomePrefix;
 <span class="kw">use </span>fedimint_wallet_server::common::config::WalletConfig;
-<span class="kw">use </span>fedimint_wallet_server::common::db::{UTXOKey, UTXOPrefixKey};
 <span class="kw">use </span>fedimint_wallet_server::common::keys::CompressedPublicKey;
 <span class="kw">use </span>fedimint_wallet_server::common::tweakable::Tweakable;
 <span class="kw">use </span>fedimint_wallet_server::common::{
     PegInDescriptor, SpendableUTXO, WalletCommonInit, WalletInput,
 };
+<span class="kw">use </span>fedimint_wallet_server::db::{UTXOKey, UTXOPrefixKey};
 <span class="kw">use </span>fedimint_wallet_server::{nonce_from_idx, Wallet};
 <span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
