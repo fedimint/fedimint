@@ -151,6 +151,9 @@
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::Duration;
@@ -209,7 +212,10 @@
     ///
     /// **This state is final**
     </span>Rejected(TransactionId, String),
-    <span class="attr">#[deprecated(since = <span class="string">"0.2.2"</span>, note = <span class="string">"all errors should be retried"</span>)]
+    <span class="comment">// Ideally this would be uncommented:
+    // #[deprecated(since = "0.2.2", note = "all errors should be retried")]
+    // but due to some rust bug/limitation it seem impossible to prevent
+    // existing usages from spamming compilation output with warnings.
     </span>NonRetryableError(String),
 }
 
