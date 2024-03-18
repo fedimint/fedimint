@@ -268,6 +268,10 @@ impl ServerConfig {
         )
     }
 
+    pub fn get_federation_id(&self) -> FederationId {
+        FederationId(self.consensus.api_endpoints.consensus_hash())
+    }
+
     pub fn add_modules(&mut self, modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>) {
         for (name, config) in modules.into_iter() {
             let ServerModuleConfig {
