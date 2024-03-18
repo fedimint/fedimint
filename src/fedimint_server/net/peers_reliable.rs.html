@@ -845,10 +845,6 @@
 <a href="#843" id="843">843</a>
 <a href="#844" id="844">844</a>
 <a href="#845" id="845">845</a>
-<a href="#846" id="846">846</a>
-<a href="#847" id="847">847</a>
-<a href="#848" id="848">848</a>
-<a href="#849" id="849">849</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -1031,11 +1027,9 @@
             status_query_senders.insert(<span class="kw-2">*</span>peer, status_query_sender);
             connections.insert(<span class="kw-2">*</span>peer, connection);
         }
-        task_group
-            .spawn(<span class="string">"listen task"</span>, <span class="kw">move </span>|handle| {
-                <span class="self">Self</span>::run_listen_task(cfg, shared_connector, connection_senders, handle)
-            })
-            .<span class="kw">await</span>;
+        task_group.spawn(<span class="string">"listen task"</span>, <span class="kw">move </span>|handle| {
+            <span class="self">Self</span>::run_listen_task(cfg, shared_connector, connection_senders, handle)
+        });
         (
             ReconnectPeerConnectionsReliable { connections },
             PeerStatusChannels(status_query_senders),
@@ -1508,26 +1502,24 @@
         <span class="kw">let </span>(outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::&lt;M&gt;(<span class="number">1024</span>);
         <span class="kw">let </span>(incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::&lt;M&gt;(<span class="number">1024</span>);
 
-        task_group
-            .spawn(
-                <span class="macro">format!</span>(<span class="string">"io-thread-peer-{peer_id}"</span>),
-                <span class="kw">move </span>|handle| <span class="kw">async move </span>{
-                    <span class="self">Self</span>::run_io_thread(
-                        incoming_sender,
-                        outgoing_receiver,
-                        our_id,
-                        peer_id,
-                        peer_address,
-                        delay_calculator,
-                        connect,
-                        incoming_connections,
-                        status_query_receiver,
-                        <span class="kw-2">&amp;</span>handle,
-                    )
-                    .<span class="kw">await
-                </span>},
-            )
-            .<span class="kw">await</span>;
+        task_group.spawn(
+            <span class="macro">format!</span>(<span class="string">"io-thread-peer-{peer_id}"</span>),
+            <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+                <span class="self">Self</span>::run_io_thread(
+                    incoming_sender,
+                    outgoing_receiver,
+                    our_id,
+                    peer_id,
+                    peer_address,
+                    delay_calculator,
+                    connect,
+                    incoming_connections,
+                    status_query_receiver,
+                    <span class="kw-2">&amp;</span>handle,
+                )
+                .<span class="kw">await
+            </span>},
+        );
 
         PeerConnection {
             outgoing: outgoing_sender,

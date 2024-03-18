@@ -224,8 +224,6 @@
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
 <a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::response::IntoResponse;
@@ -265,17 +263,15 @@
     <span class="kw">let </span>shutdown_rx = handle.make_shutdown_rx().<span class="kw">await</span>;
     <span class="kw">let </span>listener = TcpListener::bind(<span class="kw-2">&amp;</span>bind_addr).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>serve = axum::serve(listener, api_v1.into_make_service());
-    task_group
-        .spawn(<span class="string">"Gateway Webserver"</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
-            <span class="kw">let </span>graceful = serve.with_graceful_shutdown(<span class="kw">async </span>{
-                shutdown_rx.<span class="kw">await</span>;
-            });
+    task_group.spawn(<span class="string">"Gateway Webserver"</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
+        <span class="kw">let </span>graceful = serve.with_graceful_shutdown(<span class="kw">async </span>{
+            shutdown_rx.<span class="kw">await</span>;
+        });
 
-            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = graceful.<span class="kw">await </span>{
-                <span class="macro">error!</span>(<span class="string">"Error shutting down gatewayd webserver: {:?}"</span>, e);
-            }
-        })
-        .<span class="kw">await</span>;
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = graceful.<span class="kw">await </span>{
+            <span class="macro">error!</span>(<span class="string">"Error shutting down gatewayd webserver: {:?}"</span>, e);
+        }
+    });
 
     <span class="prelude-val">Ok</span>(())
 }

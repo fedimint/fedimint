@@ -837,8 +837,6 @@
 <a href="#835" id="835">835</a>
 <a href="#836" id="836">836</a>
 <a href="#837" id="837">837</a>
-<a href="#838" id="838">838</a>
-<a href="#839" id="839">839</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -1649,33 +1647,31 @@
     modules: ServerModuleRegistry,
     submission_sender: Sender&lt;ConsensusItem&gt;,
 ) {
-    task_group
-        .spawn(
-            <span class="string">"submit_module_consensus_items"</span>,
-            <span class="kw">move </span>|task_handle| <span class="kw">async move </span>{
-                <span class="kw">while </span>!task_handle.is_shutting_down() {
-                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
+    task_group.spawn(
+        <span class="string">"submit_module_consensus_items"</span>,
+        <span class="kw">move </span>|task_handle| <span class="kw">async move </span>{
+            <span class="kw">while </span>!task_handle.is_shutting_down() {
+                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
 
-                    <span class="kw">for </span>(instance_id, <span class="kw">_</span>, module) <span class="kw">in </span>modules.iter_modules() {
-                        <span class="kw">let </span>module_consensus_items = module
-                            .consensus_proposal(
-                                <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(instance_id).into_nc(),
-                                instance_id,
-                            )
-                            .<span class="kw">await</span>;
+                <span class="kw">for </span>(instance_id, <span class="kw">_</span>, module) <span class="kw">in </span>modules.iter_modules() {
+                    <span class="kw">let </span>module_consensus_items = module
+                        .consensus_proposal(
+                            <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(instance_id).into_nc(),
+                            instance_id,
+                        )
+                        .<span class="kw">await</span>;
 
-                        <span class="kw">for </span>item <span class="kw">in </span>module_consensus_items {
-                            submission_sender
-                                .send(ConsensusItem::Module(item))
-                                .<span class="kw">await
-                                </span>.ok();
-                        }
+                    <span class="kw">for </span>item <span class="kw">in </span>module_consensus_items {
+                        submission_sender
+                            .send(ConsensusItem::Module(item))
+                            .<span class="kw">await
+                            </span>.ok();
                     }
-
-                    sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
                 }
-            },
-        )
-        .<span class="kw">await</span>;
+
+                sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+            }
+        },
+    );
 }
 </code></pre></div></section></main></body></html>

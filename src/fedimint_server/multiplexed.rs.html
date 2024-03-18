@@ -272,10 +272,6 @@
 <a href="#270" id="270">270</a>
 <a href="#271" id="271">271</a>
 <a href="#272" id="272">272</a>
-<a href="#273" id="273">273</a>
-<a href="#274" id="274">274</a>
-<a href="#275" id="275">275</a>
-<a href="#276" id="276">276</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, VecDeque};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
@@ -513,39 +509,35 @@
             <span class="kw">for </span>mux_key <span class="kw">in </span>modules.clone() {
                 <span class="kw">let </span>conn1 = conn1.clone();
                 <span class="kw">let </span>task_handle = task_handle.clone();
-                task_group
-                    .spawn(<span class="macro">format!</span>(<span class="string">"sender-{mux_key}"</span>), <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
-                        <span class="kw">for </span>msg_i <span class="kw">in </span><span class="number">0</span>..NUM_MSGS_PER_MODULE {
-                            <span class="comment">// add some random jitter
-                            </span><span class="kw">if </span>OsRng.gen() {
-                                <span class="comment">// Note that randomized sleep in sender is larger than
-                                // in receiver, to avoid just running with always full
-                                // queues.
-                                </span>task::sleep(Duration::from_millis(<span class="number">2</span>)).<span class="kw">await</span>;
-                            }
-                            <span class="kw">if </span>task_handle.is_shutting_down() {
-                                <span class="kw">break</span>;
-                            }
-                            conn1.send(<span class="kw-2">&amp;</span>[peer2], mux_key, msg_i).<span class="kw">await</span>.unwrap();
+                task_group.spawn(<span class="macro">format!</span>(<span class="string">"sender-{mux_key}"</span>), <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
+                    <span class="kw">for </span>msg_i <span class="kw">in </span><span class="number">0</span>..NUM_MSGS_PER_MODULE {
+                        <span class="comment">// add some random jitter
+                        </span><span class="kw">if </span>OsRng.gen() {
+                            <span class="comment">// Note that randomized sleep in sender is larger than
+                            // in receiver, to avoid just running with always full
+                            // queues.
+                            </span>task::sleep(Duration::from_millis(<span class="number">2</span>)).<span class="kw">await</span>;
                         }
-                    })
-                    .<span class="kw">await</span>;
+                        <span class="kw">if </span>task_handle.is_shutting_down() {
+                            <span class="kw">break</span>;
+                        }
+                        conn1.send(<span class="kw-2">&amp;</span>[peer2], mux_key, msg_i).<span class="kw">await</span>.unwrap();
+                    }
+                });
             }
 
             modules.shuffle(<span class="kw-2">&amp;mut </span>thread_rng());
             <span class="kw">for </span>mux_key <span class="kw">in </span>modules.clone() {
                 <span class="kw">let </span>conn2 = conn2.clone();
-                task_group
-                    .spawn(<span class="macro">format!</span>(<span class="string">"receiver-{mux_key}"</span>), <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
-                        <span class="kw">for </span>msg_i <span class="kw">in </span><span class="number">0</span>..NUM_MSGS_PER_MODULE {
-                            <span class="comment">// add some random jitter
-                            </span><span class="kw">if </span>OsRng.gen() {
-                                task::sleep(Duration::from_millis(<span class="number">1</span>)).<span class="kw">await</span>;
-                            }
-                            <span class="macro">assert_eq!</span>(conn2.receive(mux_key).<span class="kw">await</span>.unwrap(), (peer1, msg_i));
+                task_group.spawn(<span class="macro">format!</span>(<span class="string">"receiver-{mux_key}"</span>), <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
+                    <span class="kw">for </span>msg_i <span class="kw">in </span><span class="number">0</span>..NUM_MSGS_PER_MODULE {
+                        <span class="comment">// add some random jitter
+                        </span><span class="kw">if </span>OsRng.gen() {
+                            task::sleep(Duration::from_millis(<span class="number">1</span>)).<span class="kw">await</span>;
                         }
-                    })
-                    .<span class="kw">await</span>;
+                        <span class="macro">assert_eq!</span>(conn2.receive(mux_key).<span class="kw">await</span>.unwrap(), (peer1, msg_i));
+                    }
+                });
             }
 
             task_group.join_all(<span class="prelude-val">None</span>).<span class="kw">await</span>.expect(<span class="string">"no failures"</span>);

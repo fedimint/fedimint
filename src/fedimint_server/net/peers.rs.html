@@ -831,10 +831,6 @@
 <a href="#829" id="829">829</a>
 <a href="#830" id="830">830</a>
 <a href="#831" id="831">831</a>
-<a href="#832" id="832">832</a>
-<a href="#833" id="833">833</a>
-<a href="#834" id="834">834</a>
-<a href="#835" id="835">835</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -1086,11 +1082,9 @@
             status_query_senders.insert(<span class="kw-2">*</span>peer, status_query_sender);
             connections.insert(<span class="kw-2">*</span>peer, connection);
         }
-        task_group
-            .spawn(<span class="string">"listen task"</span>, <span class="kw">move </span>|handle| {
-                <span class="self">Self</span>::run_listen_task(cfg, shared_connector, connection_senders, handle)
-            })
-            .<span class="kw">await</span>;
+        task_group.spawn(<span class="string">"listen task"</span>, <span class="kw">move </span>|handle| {
+            <span class="self">Self</span>::run_listen_task(cfg, shared_connector, connection_senders, handle)
+        });
         (
             ReconnectPeerConnections {
                 connections,
@@ -1488,26 +1482,24 @@
         <span class="kw">let </span>(outgoing_sender, outgoing_receiver) = async_channel::bounded(<span class="number">1024</span>);
         <span class="kw">let </span>(incoming_sender, incoming_receiver) = async_channel::bounded(<span class="number">1024</span>);
 
-        task_group
-            .spawn(
-                <span class="macro">format!</span>(<span class="string">"io-thread-peer-{peer_id}"</span>),
-                <span class="kw">move </span>|handle| <span class="kw">async move </span>{
-                    <span class="self">Self</span>::run_io_thread(
-                        incoming_sender,
-                        outgoing_receiver,
-                        our_id,
-                        peer_id,
-                        peer_address,
-                        delay_calculator,
-                        connect,
-                        incoming_connections,
-                        status_query_receiver,
-                        <span class="kw-2">&amp;</span>handle,
-                    )
-                    .<span class="kw">await
-                </span>},
-            )
-            .<span class="kw">await</span>;
+        task_group.spawn(
+            <span class="macro">format!</span>(<span class="string">"io-thread-peer-{peer_id}"</span>),
+            <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+                <span class="self">Self</span>::run_io_thread(
+                    incoming_sender,
+                    outgoing_receiver,
+                    our_id,
+                    peer_id,
+                    peer_address,
+                    delay_calculator,
+                    connect,
+                    incoming_connections,
+                    status_query_receiver,
+                    <span class="kw-2">&amp;</span>handle,
+                )
+                .<span class="kw">await
+            </span>},
+        );
 
         PeerConnection {
             outgoing: outgoing_sender,

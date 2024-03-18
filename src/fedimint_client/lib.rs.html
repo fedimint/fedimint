@@ -2393,9 +2393,6 @@
 <a href="#2391" id="2391">2391</a>
 <a href="#2392" id="2392">2392</a>
 <a href="#2393" id="2393">2393</a>
-<a href="#2394" id="2394">2394</a>
-<a href="#2395" id="2395">2395</a>
-<a href="#2396" id="2396">2396</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3830,31 +3827,29 @@
             <span class="kw">let </span>db = db.clone();
             <span class="comment">// Separate task group, because we actually don't want to be waiting for this to
             // finish, and it's just best effort.
-            </span>task_group
-                .spawn(
-                    <span class="string">"refresh_common_api_version_static"</span>,
-                    |task_handle| <span class="kw">async move </span>{
-                        <span class="kw">let </span>ok_or_canceled = task_handle
-                            .cancel_on_shutdown(<span class="kw">async </span>{
-                                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">Self</span>::refresh_common_api_version_static(
-                                    <span class="kw-2">&amp;</span>config,
-                                    <span class="kw-2">&amp;</span>module_inits,
-                                    <span class="kw-2">&amp;</span>api,
-                                    <span class="kw-2">&amp;</span>db,
-                                    DiscoverCommonApiVersionMode::Full,
-                                )
-                                .<span class="kw">await
-                                </span>{
-                                    <span class="macro">warn!</span>(<span class="string">"Failed to discover common api versions: {e}"</span>);
-                                }
-                            })
-                            .<span class="kw">await</span>;
-                        <span class="kw">if </span>ok_or_canceled.is_err() {
-                            <span class="macro">debug!</span>(<span class="string">"Refreshing common api task version canceled"</span>);
-                        };
-                    },
-                )
-                .<span class="kw">await</span>;
+            </span>task_group.spawn(
+                <span class="string">"refresh_common_api_version_static"</span>,
+                |task_handle| <span class="kw">async move </span>{
+                    <span class="kw">let </span>ok_or_canceled = task_handle
+                        .cancel_on_shutdown(<span class="kw">async </span>{
+                            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">Self</span>::refresh_common_api_version_static(
+                                <span class="kw-2">&amp;</span>config,
+                                <span class="kw-2">&amp;</span>module_inits,
+                                <span class="kw-2">&amp;</span>api,
+                                <span class="kw-2">&amp;</span>db,
+                                DiscoverCommonApiVersionMode::Full,
+                            )
+                            .<span class="kw">await
+                            </span>{
+                                <span class="macro">warn!</span>(<span class="string">"Failed to discover common api versions: {e}"</span>);
+                            }
+                        })
+                        .<span class="kw">await</span>;
+                    <span class="kw">if </span>ok_or_canceled.is_err() {
+                        <span class="macro">debug!</span>(<span class="string">"Refreshing common api task version canceled"</span>);
+                    };
+                },
+            );
 
             <span class="kw">return </span><span class="prelude-val">Ok</span>(v.<span class="number">0</span>);
         }
@@ -4025,8 +4020,7 @@
                     module_recovery_progress_receivers,
                 )
                 .<span class="kw">await
-            </span>})
-            .<span class="kw">await</span>;
+            </span>});
     }
 
     <span class="kw">async fn </span>run_module_recoveries_task(

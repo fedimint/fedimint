@@ -1722,8 +1722,6 @@
 <a href="#1720" id="1720">1720</a>
 <a href="#1721" id="1721">1721</a>
 <a href="#1722" id="1722">1722</a>
-<a href="#1723" id="1723">1723</a>
-<a href="#1724" id="1724">1724</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::Infallible;
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
@@ -2513,11 +2511,9 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletCreationError&gt; {
         <span class="kw">let </span>broadcaster_bitcoind_rpc = bitcoind.clone();
         <span class="kw">let </span>broadcaster_db = db.clone();
-        task_group
-            .spawn(<span class="string">"broadcast pending"</span>, |handle| <span class="kw">async move </span>{
-                run_broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc, <span class="kw-2">&amp;</span>handle).<span class="kw">await</span>;
-            })
-            .<span class="kw">await</span>;
+        task_group.spawn(<span class="string">"broadcast pending"</span>, |handle| <span class="kw">async move </span>{
+            run_broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc, <span class="kw-2">&amp;</span>handle).<span class="kw">await</span>;
+        });
 
         <span class="kw">let </span>bitcoind_rpc = bitcoind;
 

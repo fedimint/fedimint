@@ -817,8 +817,6 @@
 <a href="#815" id="815">815</a>
 <a href="#816" id="816">816</a>
 <a href="#817" id="817">817</a>
-<a href="#818" id="818">818</a>
-<a href="#819" id="819">819</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -934,8 +932,7 @@
                 failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to get node info {status:?}"</span>),
             })<span class="question-mark">?</span>;
 
-        task_group
-            .spawn(<span class="string">"LND HTLC Subscription"</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+        task_group.spawn(<span class="string">"LND HTLC Subscription"</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
                 <span class="kw">let </span>future_stream = client
                     .router()
                     .htlc_interceptor(ReceiverStream::new(lnd_rx));
@@ -1014,8 +1011,7 @@
                         }
                     }
                 }
-            })
-            .<span class="kw">await</span>;
+            });
 
         <span class="prelude-val">Ok</span>(())
     }
