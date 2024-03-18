@@ -10,9 +10,19 @@ else
 fi
 
 
+if [ -z "${CARGO_PROFILE:-}" ]; then
+  export CARGO_PROFILE="dev"
+fi
+
+if [ "$CARGO_PROFILE" = "dev" ]; then
+  export CARGO_PROFILE_DIR="debug"
+else
+  export CARGO_PROFILE_DIR="$CARGO_PROFILE"
+fi
+
 
 function add_target_dir_to_path() {
-  export PATH="${CARGO_BUILD_TARGET_DIR:-$PWD/target}/${CARGO_PROFILE:-debug}:$PATH"
+  export PATH="${CARGO_BUILD_TARGET_DIR:-$PWD/target}/${CARGO_PROFILE_DIR:-debug}:$PATH"
 }
 
 function build_workspace() {
