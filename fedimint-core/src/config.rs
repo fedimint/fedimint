@@ -6,7 +6,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, format_err, Context};
+use anyhow::{bail, format_err, Context};
 use bitcoin::secp256k1;
 use bitcoin_hashes::hex::{format_hex, FromHex};
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
@@ -18,7 +18,6 @@ use fedimint_core::encoding::{DynRawFallback, Encodable};
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use fedimint_logging::LOG_CORE;
@@ -239,20 +238,14 @@ impl ClientConfig {
     ) -> anyhow::Result<ClientConfig> {
         debug!("Downloading client config from {:?}", invite_code);
 
-        for _ in 0..10 {
-            match Self::try_download_client_config(invite_code).await {
-                Ok(cfg) => {
-                    return Ok(cfg);
-                }
-                Err(error) => {
-                    debug!("Failed to download client config {:?}", error);
-
-                    sleep(Duration::from_millis(500)).await;
-                }
-            }
-        }
-
-        Err(anyhow!("Failed to download client config"))
+        fedimint_core::util::retry(
+            "Downloading client config",
+            || Self::try_download_client_config(invite_code),
+            Duration::from_millis(500),
+            10,
+        )
+        .await
+        .context("Failed to download client config")
     }
 
     async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Result<ClientConfig> {
