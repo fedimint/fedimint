@@ -5,7 +5,6 @@ pub mod lightning;
 pub mod rpc;
 pub mod state_machine;
 mod types;
-pub mod utils;
 
 pub mod gateway_lnrpc {
     tonic::include_proto!("gateway_lnrpc");

@@ -9,16 +9,18 @@ use std::io::Write;
 use std::path::Path;
 use std::pin::Pin;
 use std::str::FromStr;
+use std::time::Duration;
 use std::{fs, io};
 
 use anyhow::format_err;
+use fedimint_logging::LOG_CORE;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
-use tracing::{debug, Instrument, Span};
+use tracing::{debug, warn, Instrument, Span};
 use url::{Host, ParseError, Url};
 
-use crate::task::MaybeSend;
+use crate::task::{self, MaybeSend};
 use crate::{apply, async_trait_maybe_send, maybe_add_send};
 
 /// Future that is `Send` unless targeting WASM
@@ -307,13 +309,67 @@ pub fn handle_version_hash_command(version_hash: &str) {
     }
 }
 
+/// Run the supplied closure `op_fn` up to `max_attempts` times. Wait for the
+/// supplied `Duration` `interval` between attempts
+///
+/// # Returns
+///
+/// - If the closure runs successfully, the result is immediately returned
+/// - If the closure did not run successfully for `max_attempts` times, the
+///   error of the closure is returned
+pub async fn retry<F, Fut, T>(
+    op_name: impl Into<String>,
+    op_fn: F,
+    interval: Duration,
+    max_attempts: u32,
+) -> Result<T, anyhow::Error>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<T, anyhow::Error>>,
+{
+    let op_name = op_name.into();
+    assert_ne!(max_attempts, 0, "max_attempts must be greater than 0");
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        match op_fn().await {
+            Ok(result) => return Ok(result),
+            Err(error) if attempts < max_attempts => {
+                // run closure op_fn again
+                debug!(
+                    target: LOG_CORE,
+                    %error,
+                    %attempts,
+                    interval = interval.as_secs(),
+                    "{} failed, retrying",
+                    op_name,
+                );
+                task::sleep(interval).await;
+            }
+            Err(error) => {
+                warn!(
+                    target: LOG_CORE,
+                    %error,
+                    %attempts,
+                    "{} failed",
+                    op_name,
+                );
+                return Err(error);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicU8, Ordering};
     use std::time::Duration;
 
+    use anyhow::anyhow;
     use fedimint_core::task::Elapsed;
     use futures::FutureExt;
 
+    use super::retry;
     use crate::task::timeout;
     use crate::util::{NextOrPending, SafeUrl};
 
@@ -376,5 +432,32 @@ mod tests {
             timeout(Duration::from_millis(100), stream.next_or_pending()).await,
             Err(Elapsed)
         ));
+    }
+    #[tokio::test]
+    async fn retry_succeed_with_one_attempt() {
+        let counter = AtomicU8::new(0);
+        let closure = || async {
+            counter.fetch_add(1, Ordering::SeqCst);
+            // always return a success
+            Ok(42)
+        };
+
+        let _ = retry("Run once".to_string(), closure, Duration::ZERO, 3).await;
+
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn retry_fail_with_three_attempts() {
+        let counter = AtomicU8::new(0);
+        let closure = || async {
+            counter.fetch_add(1, Ordering::SeqCst);
+            // always fail
+            Err::<(), anyhow::Error>(anyhow!("42"))
+        };
+
+        let _ = retry("Run 3 times".to_string(), closure, Duration::ZERO, 3).await;
+
+        assert_eq!(counter.load(Ordering::SeqCst), 3);
     }
 }
