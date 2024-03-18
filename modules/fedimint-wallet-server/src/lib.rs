@@ -1356,6 +1356,8 @@ impl<'a> StatelessWallet<'a> {
             12 + // up to 2**16-1 outputs
             out_weight + // weight of all outputs
             16; // lock time
+                // https://github.com/fedimint/fedimint/issues/4590
+        #[allow(deprecated)]
         let max_input_weight = (self
             .descriptor
             .max_satisfaction_weight()
