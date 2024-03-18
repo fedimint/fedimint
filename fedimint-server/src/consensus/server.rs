@@ -599,7 +599,7 @@ impl ConsensusServer {
         let peer_id_str = &self.peer_id_str[peer.to_usize()];
         let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item");
         let timing_prom = CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS
-            .with_label_values(&[&peer_id_str])
+            .with_label_values(&[peer_id_str])
             .start_timer();
 
         debug!(%peer, item = ?FmtDbgConsensusItem(&item), "Processing consensus item");
@@ -610,7 +610,7 @@ impl ConsensusServer {
             .insert(peer, session_index);
 
         CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX
-            .with_label_values(&[&self.self_id_str, &peer_id_str])
+            .with_label_values(&[&self.self_id_str, peer_id_str])
             .set(session_index as i64);
 
         let mut dbtx = self.db.begin_transaction().await;
@@ -672,7 +672,7 @@ impl ConsensusServer {
             .expect("Committing consensus epoch failed");
 
         CONSENSUS_ITEMS_PROCESSED_TOTAL
-            .with_label_values(&[&peer_id_str])
+            .with_label_values(&[peer_id_str])
             .inc();
         timing_prom.observe_duration();
 
