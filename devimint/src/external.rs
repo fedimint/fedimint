@@ -138,6 +138,16 @@ impl Bitcoind {
         Ok(())
     }
 
+    /// Poll until bitcoind rpc responds for basic commands
+    pub async fn poll_ready(&self) -> anyhow::Result<()> {
+        poll("btcoind rpc ready", Duration::from_secs(10), || async {
+            tokio::task::block_in_place(|| self.client().get_block_count())
+                .map_err(|e| ControlFlow::Continue::<anyhow::Error, _>(e.into()))?;
+            Ok(())
+        })
+        .await
+    }
+
     /// Client
     pub fn client(&self) -> &Arc<bitcoincore_rpc::Client> {
         &self.client
@@ -262,6 +272,9 @@ impl Lightningd {
             bitcoin_rpcport = process_mgr.globals.FM_PORT_BTC_RPC,
         );
         write_overwrite_async(process_mgr.globals.FM_CLN_DIR.join("config"), conf).await?;
+        // workaround: will crash on start if it gets a bad response from
+        // bitcoind
+        bitcoind.poll_ready().await?;
         let process = Lightningd::start(process_mgr, cln_dir).await?;
 
         let socket_cln = cln_dir.join("regtest/lightning-rpc");
@@ -348,6 +361,9 @@ pub struct Lnd {
 
 impl Lnd {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
+        // workaround: will crash on start if it gets a bad response from
+        // bitcoind
+        bitcoind.poll_ready().await?;
         let (process, client) = Lnd::start(process_mgr).await?;
         let this = Self {
             _bitcoind: bitcoind,
@@ -627,6 +643,9 @@ pub struct Electrs {
 
 impl Electrs {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
+        // workaround: will crash on start if it gets a bad response from
+        // bitcoind
+        bitcoind.poll_ready().await?;
         debug!(target: LOG_DEVIMINT, "Starting electrs");
         let electrs_dir = process_mgr
             .globals
@@ -673,6 +692,9 @@ pub struct Esplora {
 
 impl Esplora {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
+        // workaround: will crash(?) on start if it gets a bad response from
+        // bitcoind
+        bitcoind.poll_ready().await?;
         debug!("Starting esplora");
         let daemon_dir = process_mgr
             .globals
