@@ -9,6 +9,7 @@ use bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
 use bitcoincore_rpc::{bitcoin, RpcApi};
 use cln_rpc::ClnRpc;
 use fedimint_core::encoding::Encodable;
+use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, sleep};
 use fedimint_core::util::write_overwrite_async;
 use fedimint_logging::LOG_DEVIMINT;
@@ -29,6 +30,7 @@ use crate::{cmd, poll_eq};
 #[derive(Clone)]
 pub struct Bitcoind {
     pub(crate) client: Arc<bitcoincore_rpc::Client>,
+    pub(crate) wallet_client: Arc<JitTryAnyhow<Arc<bitcoincore_rpc::Client>>>,
     pub(crate) _process: ProcessHandle,
 }
 
@@ -55,12 +57,18 @@ impl Bitcoind {
         let (host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(&url)?;
         debug!("bitcoind host: {:?}, auth: {:?}", &host, auth);
         let client =
-            Arc::new(Self::new_bitcoin_rpc(&host, auth).context("Failed to connect to bitcoind")?);
+            Self::new_bitcoin_rpc(&host, auth.clone()).context("Failed to connect to bitcoind")?;
+        let wallet_client = JitTry::new_try(|| async move {
+            let client =
+                Self::new_bitcoin_rpc(&host, auth).context("Failed to connect to bitcoind")?;
+            Self::init(&client).await?;
+            Ok(Arc::new(client))
+        });
 
-        Self::init(&client).await?;
         Ok(Self {
             _process: process,
-            client,
+            client: Arc::new(client),
+            wallet_client: Arc::new(wallet_client),
         })
     }
 
@@ -130,10 +138,16 @@ impl Bitcoind {
         Ok(())
     }
 
-    pub fn client(&self) -> Arc<bitcoincore_rpc::Client> {
-        self.client.clone()
+    /// Client
+    pub fn client(&self) -> &Arc<bitcoincore_rpc::Client> {
+        &self.client
     }
 
+    /// Client that can has wallet initialized, can generate internal addresses
+    /// and send funds
+    pub async fn wallet_client(&self) -> anyhow::Result<&Arc<bitcoincore_rpc::Client>> {
+        Ok(self.wallet_client.get_try().await?)
+    }
     /// Returns the total number of blocks in the chain.
     ///
     /// Fedimint's IBitcoindRpc considers block count the total number of
@@ -146,7 +160,7 @@ impl Bitcoind {
     pub async fn mine_blocks(&self, block_num: u64) -> Result<()> {
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, ?block_num, "Mining bitcoin blocks");
-        let client = self.client();
+        let client = self.wallet_client().await?;
         let addr = client.get_new_address(None, None)?;
         let initial_block_count = client.get_block_count()?;
         tokio::task::block_in_place(|| client.generate_to_address(block_num, &addr))?;
@@ -167,7 +181,7 @@ impl Bitcoind {
     pub async fn send_to(&self, addr: String, amount: u64) -> Result<bitcoin::Txid> {
         debug!(target: LOG_DEVIMINT, amount, addr, "Sending funds from bitcoind");
         let amount = bitcoin::Amount::from_sat(amount);
-        let tx = self.client().send_to_address(
+        let tx = self.wallet_client().await?.send_to_address(
             &bitcoin::Address::from_str(&addr)?,
             amount,
             None,
@@ -192,7 +206,7 @@ impl Bitcoind {
     }
 
     pub async fn get_new_address(&self) -> Result<String> {
-        let addr = self.client().get_new_address(None, None)?;
+        let addr = self.wallet_client().await?.get_new_address(None, None)?;
         Ok(addr.to_string())
     }
 }
@@ -714,6 +728,8 @@ pub async fn external_daemons(process_mgr: &ProcessManager) -> Result<ExternalDa
         Esplora::new(process_mgr, bitcoind.clone()),
     )?;
     open_channel(process_mgr, &bitcoind, &cln, &lnd).await?;
+    // make sure the bitcoind wallet is ready
+    let _ = bitcoind.wallet_client().await?;
     info!(
         target: LOG_DEVIMINT,
         "starting base daemons took {:?}",
