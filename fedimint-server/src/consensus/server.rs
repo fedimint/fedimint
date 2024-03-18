@@ -808,32 +808,30 @@ async fn submit_module_consensus_items(
     modules: ServerModuleRegistry,
     submission_sender: Sender<ConsensusItem>,
 ) {
-    task_group
-        .spawn(
-            "submit_module_consensus_items",
-            move |task_handle| async move {
-                while !task_handle.is_shutting_down() {
-                    let mut dbtx = db.begin_transaction_nc().await;
+    task_group.spawn(
+        "submit_module_consensus_items",
+        move |task_handle| async move {
+            while !task_handle.is_shutting_down() {
+                let mut dbtx = db.begin_transaction_nc().await;
 
-                    for (instance_id, _, module) in modules.iter_modules() {
-                        let module_consensus_items = module
-                            .consensus_proposal(
-                                &mut dbtx.to_ref_with_prefix_module_id(instance_id).into_nc(),
-                                instance_id,
-                            )
-                            .await;
+                for (instance_id, _, module) in modules.iter_modules() {
+                    let module_consensus_items = module
+                        .consensus_proposal(
+                            &mut dbtx.to_ref_with_prefix_module_id(instance_id).into_nc(),
+                            instance_id,
+                        )
+                        .await;
 
-                        for item in module_consensus_items {
-                            submission_sender
-                                .send(ConsensusItem::Module(item))
-                                .await
-                                .ok();
-                        }
+                    for item in module_consensus_items {
+                        submission_sender
+                            .send(ConsensusItem::Module(item))
+                            .await
+                            .ok();
                     }
-
-                    sleep(Duration::from_secs(1)).await;
                 }
-            },
-        )
-        .await;
+
+                sleep(Duration::from_secs(1)).await;
+            }
+        },
+    );
 }

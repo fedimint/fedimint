@@ -300,7 +300,7 @@ impl Executor {
                     error!("State machine executor runner exited unexpectedly!");
                 },
             };
-        }).await;
+        });
     }
 
     /// Stops the background task that runs the state machines.

@@ -158,8 +158,7 @@ impl FederationTest {
             task.spawn("fedimintd", move |handle| async move {
                 consensus_server.run(handle).await.unwrap();
                 api_handle.stop().await;
-            })
-            .await;
+            });
         }
 
         Self {

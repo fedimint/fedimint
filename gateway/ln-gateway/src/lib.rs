@@ -468,37 +468,35 @@ impl Gateway {
 
         let gateway = self.clone();
         let subgroup = task_group.make_subgroup().await;
-        task_group
-            .spawn("Webserver", move |handle| async move {
-                while !handle.is_shutting_down() {
-                    // Re-fetch the configuration because the password has changed.
-                    let gateway_config = gateway.get_gateway_configuration().await;
-                    let mut webserver_group = subgroup.make_subgroup().await;
-                    run_webserver(
-                        gateway_config.clone(),
-                        gateway.gateway_parameters.listen,
-                        gateway.clone(),
-                        &mut webserver_group,
-                    )
-                    .await
-                    .expect("Failed to start webserver");
-                    info!("Successfully started webserver");
-                    let result = handle
-                        .cancel_on_shutdown(async {
-                            wait_for_new_password(&gateway_db, gateway_config).await;
-                            info!("GatewayConfiguration has been updated, restarting webserver...");
-                            if let Err(e) = webserver_group.shutdown_join_all(None).await {
-                                panic!("Error shutting down server: {e:?}");
-                            }
-                        })
-                        .await;
-                    if result.is_err() {
-                        info!("Received shutdown signal, exiting....");
-                        break;
-                    }
+        task_group.spawn("Webserver", move |handle| async move {
+            while !handle.is_shutting_down() {
+                // Re-fetch the configuration because the password has changed.
+                let gateway_config = gateway.get_gateway_configuration().await;
+                let mut webserver_group = subgroup.make_subgroup().await;
+                run_webserver(
+                    gateway_config.clone(),
+                    gateway.gateway_parameters.listen,
+                    gateway.clone(),
+                    &mut webserver_group,
+                )
+                .await
+                .expect("Failed to start webserver");
+                info!("Successfully started webserver");
+                let result = handle
+                    .cancel_on_shutdown(async {
+                        wait_for_new_password(&gateway_db, gateway_config).await;
+                        info!("GatewayConfiguration has been updated, restarting webserver...");
+                        if let Err(e) = webserver_group.shutdown_join_all(None).await {
+                            panic!("Error shutting down server: {e:?}");
+                        }
+                    })
+                    .await;
+                if result.is_err() {
+                    info!("Received shutdown signal, exiting....");
+                    break;
                 }
-            })
-            .await;
+            }
+        });
 
         let gateway_config = self.get_gateway_configuration().await;
         if gateway_config.is_none() {
@@ -513,10 +511,7 @@ impl Gateway {
     async fn start_gateway(&self, task_group: &mut TaskGroup) -> Result<()> {
         let mut self_copy = self.clone();
         let tg = task_group.clone();
-        task_group
-            .spawn(
-                "Subscribe to intercepted HTLCs in stream",
-                move |handle| async move {
+        task_group.spawn("Subscribe to intercepted HTLCs in stream", move |handle| async move {
                     loop {
                         if handle.is_shutting_down() {
                             info!("Gateway HTLC handler loop is shutting down");
@@ -592,9 +587,7 @@ impl Gateway {
                         warn!("Disconnected from Lightning Node. Waiting 5 seconds and trying again");
                         sleep(Duration::from_secs(5)).await;
                     }
-                },
-            )
-            .await;
+                });
 
         Ok(())
     }
@@ -1347,8 +1340,7 @@ impl Gateway {
 
     async fn register_clients_timer(&mut self, task_group: &mut TaskGroup) {
         let gateway = self.clone();
-        task_group
-            .spawn("register clients", move |handle| async move {
+        task_group.spawn("register clients", move |handle| async move {
                 let registration_loop = async {
                     loop {
                         let mut registration_result: Option<Result<()>> = None;
@@ -1389,8 +1381,7 @@ impl Gateway {
                 if handle.cancel_on_shutdown(registration_loop).await.is_err() {
                     info!("register clients task received shutdown signal");
                 }
-            })
-            .await;
+            });
     }
 
     async fn fetch_lightning_route_hints_try(

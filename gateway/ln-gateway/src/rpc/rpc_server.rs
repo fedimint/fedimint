@@ -37,17 +37,15 @@ pub async fn run_webserver(
     let shutdown_rx = handle.make_shutdown_rx().await;
     let listener = TcpListener::bind(&bind_addr).await?;
     let serve = axum::serve(listener, api_v1.into_make_service());
-    task_group
-        .spawn("Gateway Webserver", move |_| async move {
-            let graceful = serve.with_graceful_shutdown(async {
-                shutdown_rx.await;
-            });
+    task_group.spawn("Gateway Webserver", move |_| async move {
+        let graceful = serve.with_graceful_shutdown(async {
+            shutdown_rx.await;
+        });
 
-            if let Err(e) = graceful.await {
-                error!("Error shutting down gatewayd webserver: {:?}", e);
-            }
-        })
-        .await;
+        if let Err(e) = graceful.await {
+            error!("Error shutting down gatewayd webserver: {:?}", e);
+        }
+    });
 
     Ok(())
 }
