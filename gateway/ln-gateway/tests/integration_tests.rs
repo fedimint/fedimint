@@ -14,7 +14,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::task::sleep_in_test;
-use fedimint_core::util::NextOrPending;
+use fedimint_core::util::{retry, NextOrPending};
 use fedimint_core::{msats, sats, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
@@ -55,7 +55,6 @@ use ln_gateway::state_machine::{
     GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates, GatewayExtReceiveStates,
     GatewayMeta, Htlc,
 };
-use ln_gateway::utils::retry;
 use ln_gateway::{GatewayState, DEFAULT_FEES, DEFAULT_NETWORK};
 use reqwest::StatusCode;
 use secp256k1::PublicKey;
