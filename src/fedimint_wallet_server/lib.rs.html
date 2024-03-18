@@ -1722,6 +1722,8 @@
 <a href="#1720" id="1720">1720</a>
 <a href="#1721" id="1721">1721</a>
 <a href="#1722" id="1722">1722</a>
+<a href="#1723" id="1723">1723</a>
+<a href="#1724" id="1724">1724</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::Infallible;
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
@@ -3080,6 +3082,8 @@
             </span><span class="number">12 </span>+ <span class="comment">// up to 2**16-1 outputs
             </span>out_weight + <span class="comment">// weight of all outputs
             </span><span class="number">16</span>; <span class="comment">// lock time
+                // https://github.com/fedimint/fedimint/issues/4590
+        </span><span class="attr">#[allow(deprecated)]
         </span><span class="kw">let </span>max_input_weight = (<span class="self">self
             </span>.descriptor
             .max_satisfaction_weight()

@@ -158,6 +158,8 @@
 <a href="#156" id="156">156</a>
 <a href="#157" id="157">157</a>
 <a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fs::File;
 <span class="kw">use </span>std::{env, io};
 
@@ -282,7 +284,9 @@
         <span class="kw">let </span>telemetry_layer_opt = || -&gt; <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>Layer&lt;<span class="kw">_</span>&gt; + Send + Sync + <span class="lifetime">'static</span>&gt;&gt; {
             <span class="attr">#[cfg(feature = <span class="string">"telemetry"</span>)]
             </span><span class="kw">if </span><span class="self">self</span>.with_jaeger {
-                <span class="kw">let </span>tracer = opentelemetry_jaeger::new_agent_pipeline()
+                <span class="comment">// TODO: https://github.com/fedimint/fedimint/issues/4591
+                </span><span class="attr">#[allow(deprecated)]
+                </span><span class="kw">let </span>tracer = opentelemetry_jaeger::new_agent_pipeline()
                     .with_service_name(<span class="string">"fedimint"</span>)
                     .install_simple()
                     .unwrap();
