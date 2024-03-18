@@ -1469,9 +1469,10 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
 
             if reboot_info.gateway_state == "Running" {
                 info!(target: LOG_DEVIMINT, "CLN Gateway restarted, with auto-rejoin to federation");
-                // Assert that the gateway info is the same as before the reboot
-                assert_eq!(cln_info, reboot_info);
-                return Ok(());
+                if cln_info == reboot_info {
+                    return Ok(());
+                }
+                return Err(ControlFlow::Continue(anyhow!("gateway config not equal")));
             }
             Err(ControlFlow::Continue(anyhow!("gateway not running")))
         },
