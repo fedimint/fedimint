@@ -8,7 +8,7 @@ license = "MIT"
 readme = "../../README.md"
 repository = "https://github.com/fedimint/fedimint"
 
-[package.emptydata.docs.rs]
+[package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [lib]
