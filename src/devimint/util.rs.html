@@ -1191,15 +1191,15 @@
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>cmd;
 
 <span class="kw">const </span>DEFAULT_POLL_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);
-<span class="doccomment">/// Will retry calling `f`.
+<span class="doccomment">/// Retry until `f` succeeds or timeout is reached
+///
 /// - if `f` return Ok(val), this returns with Ok(val).
 /// - if `f` return Err(Control::Break(err)), this returns Err(err)
-/// - if `f` return Err(ControlFlow::Continue(err)), retries a maximum of
-///   `retries` times.
+/// - if `f` return Err(ControlFlow::Continue(err)), retries untile timeout
+///   reached
 </span><span class="kw">pub async fn </span>poll&lt;Fut, R&gt;(
     name: <span class="kw-2">&amp;</span>str,
-    <span class="comment">// TODO: this should be `Duration`, not number of retries --dpc
-    </span>timeout: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;Duration&gt;&gt;,
+    timeout: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;Duration&gt;&gt;,
     f: <span class="kw">impl </span>Fn() -&gt; Fut,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt;
 <span class="kw">where
@@ -1221,7 +1221,7 @@
                     &lt; timeout =&gt;
             {
                 <span class="macro">debug!</span>(target: LOG_DEVIMINT, %attempt, %err, <span class="string">"Polling {name} failed, will retry..."</span>);
-                task::sleep(Duration::from_millis(attempt.min(<span class="number">1000</span>))).<span class="kw">await</span>;
+                task::sleep(Duration::from_millis((attempt * <span class="number">10</span>).min(<span class="number">1000</span>))).<span class="kw">await</span>;
             }
             <span class="prelude-val">Err</span>(ControlFlow::Continue(err)) =&gt; {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(err).with_context(|| {
