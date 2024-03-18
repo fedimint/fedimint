@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["process_transaction_with_dbtx"],"mod":["debug","server"],"struct":["FundingVerifier"]};
+window.SIDEBAR_ITEMS = {"fn":["process_transaction_with_dbtx"],"mod":["debug_fmt","server"],"struct":["FundingVerifier"]};

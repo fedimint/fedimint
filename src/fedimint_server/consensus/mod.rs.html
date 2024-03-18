@@ -106,7 +106,7 @@
 <a href="#104" id="104">104</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
-</span><span class="kw">pub mod </span>debug;
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>debug_fmt;
 <span class="kw">pub mod </span>server;
 
 <span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
