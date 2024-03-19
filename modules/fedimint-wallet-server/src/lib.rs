@@ -257,6 +257,7 @@ impl ServerModuleInit for WalletInit {
                     params.consensus.finality_delay,
                     params.local.bitcoin_rpc.clone(),
                     params.consensus.client_default_bitcoin_rpc.clone(),
+                    params.consensus.fee_consensus,
                 );
                 (*id, cfg)
             })
@@ -302,6 +303,7 @@ impl ServerModuleInit for WalletInit {
             params.consensus.finality_delay,
             params.local.bitcoin_rpc.clone(),
             params.consensus.client_default_bitcoin_rpc.clone(),
+            params.consensus.fee_consensus,
         );
 
         Ok(wallet_cfg.to_erased())

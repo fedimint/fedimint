@@ -37,7 +37,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
-use fedimint_wallet_common::config::WalletClientConfig;
+use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
 use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
 use futures::{Stream, StreamExt};
@@ -284,6 +284,10 @@ impl WalletClientModule {
 
     pub fn get_network(&self) -> Network {
         self.cfg.network
+    }
+
+    pub fn get_fee_consensus(&self) -> FeeConsensus {
+        self.cfg.fee_consensus
     }
 
     pub async fn get_deposit_address_inner(
