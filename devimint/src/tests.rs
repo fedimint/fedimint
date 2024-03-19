@@ -28,7 +28,7 @@ use crate::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, Co
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::{self, Client, Federation};
 use crate::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
-use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA};
+use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0_ALPHA};
 use crate::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
 pub struct Stats {
@@ -1014,7 +1014,16 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         })
         .await?
         .bolt11;
-    try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
+    let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+    if gateway_cli_version >= *VERSION_0_4_0_ALPHA && gatewayd_version >= *VERSION_0_4_0_ALPHA {
+        try_join!(
+            gw_cln.wait_for_chain_sync(&bitcoind),
+            gw_lnd.wait_for_chain_sync(&bitcoind)
+        )?;
+    } else {
+        try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
+    }
     ln_pay(&client, invoice.clone(), lnd_gw_id.clone(), false).await?;
     let fed_id = fed.calculate_federation_id().await;
 
