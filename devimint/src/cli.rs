@@ -293,7 +293,7 @@ pub async fn exec_user_command(exec: Vec<ffi::OsString>) -> Result<(), anyhow::E
         .join(ffi::OsStr::new(" "))
         .to_string_lossy()
         .to_string();
-    info!(cmd = %cmd_str, "Executing user command");
+    debug!(target: LOG_DEVIMINT, cmd = %cmd_str, "Executing user command");
     if !tokio::process::Command::new(&exec[0])
         .args(&exec[1..])
         .kill_on_drop(true)

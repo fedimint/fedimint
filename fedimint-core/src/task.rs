@@ -15,7 +15,7 @@ use thiserror::Error;
 use tokio::sync::{oneshot, watch};
 #[cfg(not(target_family = "wasm"))]
 use tokio::task::{JoinError, JoinHandle};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 #[cfg(target_family = "wasm")]
 type JoinHandle<T> = future::Ready<anyhow::Result<T>>;
@@ -176,7 +176,7 @@ impl TaskGroup {
         Fut: Future<Output = R> + Send + 'static,
         R: Send + 'static,
     {
-        use tracing::{debug, info_span, Instrument, Span};
+        use tracing::{info_span, Instrument, Span};
 
         let name = name.into();
         // new child span of current span
@@ -296,12 +296,12 @@ impl TaskGroup {
             info!(target: LOG_TASK, "Subgroup finished");
         }
 
-        // drop lock earl
+        // drop lock early
         while let Some((name, join)) = {
             let mut lock = self.inner.join.lock().expect("lock poison");
             lock.pop_front()
         } {
-            info!(target: LOG_TASK, task=%name, "Waiting for task to finish");
+            debug!(target: LOG_TASK, task=%name, "Waiting for task to finish");
 
             let timeout = deadline.map(|deadline| {
                 deadline
@@ -326,7 +326,7 @@ impl TaskGroup {
 
             match join_future.await {
                 Ok(Ok(())) => {
-                    info!(target: LOG_TASK, task=%name, "Task finished");
+                    debug!(target: LOG_TASK, task=%name, "Task finished");
                 }
                 Ok(Err(e)) => {
                     error!(target: LOG_TASK, task=%name, error=%e, "Task panicked");

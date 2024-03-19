@@ -1245,7 +1245,7 @@ impl Drop for CommitTracker {
     fn drop(&mut self) {
         if self.has_writes && !self.is_committed {
             if self.ignore_uncommitted {
-                debug!(
+                trace!(
                     target: LOG_DB,
                     "DatabaseTransaction has writes and has not called commit, but that's expected."
                 );

@@ -346,7 +346,7 @@ impl ExecutorInner {
         global_context_gen: ContextGen,
         sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
     ) {
-        info!("Starting state machine executor task");
+        debug!(target: LOG_CLIENT_REACTOR, "Starting state machine executor task");
         if let Err(err) = self
             .run_state_machines_executor_inner(global_context_gen, sm_update_rx)
             .await
@@ -500,7 +500,7 @@ impl ExecutorInner {
                         ExecutorLoopEvent::Triggered(first_completed_result)
                     }));
 
-                    info!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), transitions_num, "Started new active state machine.");
+                    debug!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), transitions_num, "Started new active state machine.");
                 }
                 ExecutorLoopEvent::Triggered(TransitionForActiveState {
                     outcome,
@@ -530,12 +530,12 @@ impl ExecutorInner {
                         let global_context_gen = global_context_gen.clone();
                         Box::pin(
                             async move {
-                                info!(
+                                debug!(
                                     target: LOG_CLIENT_REACTOR,
                                     operation_id = %state.operation_id(),
                                     "Executing state transition",
                                 );
-                                debug!(
+                                trace!(
                                     target: LOG_CLIENT_REACTOR,
                                     operation_id = %state.operation_id(),
                                     ?state,
@@ -637,7 +637,7 @@ impl ExecutorInner {
                         currently_running_sms.remove(&state),
                         "State must have been recorded"
                     );
-                    info!(
+                    debug!(
                         target: LOG_CLIENT_REACTOR,
                         operation_id = %state.operation_id(),
                         outcome_active = outcome.is_active(),
