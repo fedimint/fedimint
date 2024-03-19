@@ -683,21 +683,25 @@ async fn set_config_gen_params(
 }
 
 async fn wait_server_status(client: &DynGlobalApi, expected_status: ServerStatus) -> Result<()> {
-    poll("waiting-server-status", Duration::from_secs(30), || async {
-        let server_status = client
-            .status()
-            .await
-            .context("server status")
-            .map_err(ControlFlow::Continue)?
-            .server;
-        if server_status == expected_status {
-            Ok(())
-        } else {
-            Err(ControlFlow::Continue(anyhow!(
-                "expected status: {expected_status:?} current status: {server_status:?}"
-            )))
-        }
-    })
+    poll(
+        &format!("waiting-server-status: {expected_status:?}"),
+        Duration::from_secs(30),
+        || async {
+            let server_status = client
+                .status()
+                .await
+                .context("server status")
+                .map_err(ControlFlow::Continue)?
+                .server;
+            if server_status == expected_status {
+                Ok(())
+            } else {
+                Err(ControlFlow::Continue(anyhow!(
+                    "expected status: {expected_status:?} current status: {server_status:?}"
+                )))
+            }
+        },
+    )
     .await?;
     Ok(())
 }

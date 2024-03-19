@@ -6,7 +6,8 @@ use devimint::cli::CommonArgs;
 use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::util::{handle_version_hash_command, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
-use tracing::warn;
+use tokio::time::Instant;
+use tracing::{debug, trace, warn};
 
 #[derive(Parser)]
 #[command(version)]
@@ -37,8 +38,10 @@ async fn handle_command() -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    trace!(target: LOG_DEVIMINT, "Started");
+    let start_time = Instant::now();
     handle_version_hash_command(fedimint_build_code_version_env!());
-    match handle_command().await {
+    let res = match handle_command().await {
         Ok(r) => Ok(r),
         Err(e) => {
             if let Ok(test_dir) = env::var("FM_TEST_DIR") {
@@ -49,5 +52,7 @@ async fn main() -> anyhow::Result<()> {
             }
             Err(e)
         }
-    }
+    };
+    debug!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed().as_millis(), "Finished");
+    res
 }

@@ -1863,19 +1863,16 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
             .collect::<Vec<_>>(),
     ))?];
     info!("Getting wallet balances before import");
-    let balances_before = bitcoind.client().get_balances()?;
+    let bitcoin_client = bitcoind.wallet_client().await?;
+    let balances_before = bitcoin_client.get_balances()?;
     info!("Importing descriptors into bitcoin wallet");
-    let request = bitcoind
-        .client()
+    let request = bitcoin_client
         .get_jsonrpc_client()
         .build_request("importdescriptors", &descriptors_json);
-    let response = bitcoind
-        .client()
-        .get_jsonrpc_client()
-        .send_request(request)?;
+    let response = bitcoin_client.get_jsonrpc_client().send_request(request)?;
     response.check_error()?;
     info!("Getting wallet balances after import");
-    let balances_after = bitcoind.client().get_balances()?;
+    let balances_after = bitcoin_client.get_balances()?;
     let diff = balances_after.mine.immature + balances_after.mine.trusted
         - balances_before.mine.immature
         - balances_before.mine.trusted;
