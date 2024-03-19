@@ -421,6 +421,14 @@
 <a href="#419" id="419">419</a>
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs::read_dir;
 <span class="kw">use </span>std::io::ErrorKind;
@@ -442,12 +450,14 @@
 };
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
+<span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>fedimint_rocksdb::RocksDb;
 <span class="kw">use </span>futures::future::BoxFuture;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::RngCore;
-<span class="kw">use </span>tracing::debug;
+<span class="kw">use </span>tempfile::TempDir;
+<span class="kw">use </span>tracing::{debug, trace};
 
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV;
 
@@ -659,10 +669,13 @@
 </span><span class="kw">async fn </span>get_temp_database(
     db_prefix: <span class="kw-2">&amp;</span>str,
     decoders: ModuleDecoderRegistry,
-) -&gt; anyhow::Result&lt;Database&gt; {
+) -&gt; anyhow::Result&lt;(Database, TempDir)&gt; {
     <span class="kw">let </span>snapshot_dirs = get_project_root().unwrap().join(<span class="string">"db/migrations"</span>);
     <span class="kw">if </span>snapshot_dirs.exists() {
-        <span class="kw">for </span>file <span class="kw">in </span>fs::read_dir(snapshot_dirs)<span class="question-mark">?</span>.flatten() {
+        <span class="kw">for </span>file <span class="kw">in </span>fs::read_dir(<span class="kw-2">&amp;</span>snapshot_dirs)
+            .with_context(|| <span class="macro">format!</span>(<span class="string">"Reading dir content: {}"</span>, snapshot_dirs.display()))<span class="question-mark">?
+            </span>.flatten()
+        {
             <span class="kw">let </span>name = file
                 .file_name()
                 .into_string()
@@ -699,7 +712,7 @@
     </span>F: Fn(Database) -&gt; Fut,
     Fut: futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt;,
 {
-    <span class="kw">let </span>db = get_temp_database(db_prefix, decoders).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>(db, _tmp_dir) = get_temp_database(db_prefix, decoders).<span class="kw">await</span><span class="question-mark">?</span>;
     apply_migrations_server(<span class="kw-2">&amp;</span>db, db_prefix.to_string(), target_db_version, migrations)
         .<span class="kw">await
         </span>.context(<span class="string">"Error applying migrations to temp database"</span>)<span class="question-mark">?</span>;
@@ -727,7 +740,7 @@
         module.module_kind(),
         module.decoder(),
     )]);
-    <span class="kw">let </span>db = get_temp_database(db_prefix, decoders).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>(db, _tmp_dir) = get_temp_database(db_prefix, decoders).<span class="kw">await</span><span class="question-mark">?</span>;
     apply_migrations(
         <span class="kw-2">&amp;</span>db,
         module.module_kind().to_string(),
@@ -766,7 +779,7 @@
         module.as_common().module_kind(),
         T::decoder(),
     )]);
-    <span class="kw">let </span>db = get_temp_database(db_prefix, decoders.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>(db, _tmp_dir) = get_temp_database(db_prefix, decoders.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
     apply_migrations_client(
         <span class="kw-2">&amp;</span>db,
         module.as_common().module_kind().to_string(),
@@ -811,21 +824,23 @@
     temp_path: String,
     src_dir: <span class="kw-2">&amp;</span>Path,
     decoders: ModuleDecoderRegistry,
-) -&gt; anyhow::Result&lt;Database&gt; {
+) -&gt; anyhow::Result&lt;(Database, TempDir)&gt; {
     <span class="comment">// First copy the contents from src_dir to the path where the database will be
     // opened
-    </span><span class="kw">let </span>path = tempfile::Builder::new()
+    </span><span class="kw">let </span>tmp_dir = tempfile::Builder::new()
         .prefix(temp_path.as_str())
         .tempdir()<span class="question-mark">?</span>;
-    copy_directory(src_dir, path.path())
+    copy_directory(src_dir, tmp_dir.path())
         .context(<span class="string">"Error copying database to temporary directory"</span>)<span class="question-mark">?</span>;
 
-    <span class="prelude-val">Ok</span>(Database::new(RocksDb::open(path)<span class="question-mark">?</span>, decoders))
+    <span class="prelude-val">Ok</span>((Database::new(RocksDb::open(<span class="kw-2">&amp;</span>tmp_dir)<span class="question-mark">?</span>, decoders), tmp_dir))
 }
 
 <span class="doccomment">/// Helper function that recursively copies all of the contents from
 /// `atomic_broadcast` to `dst`.
 </span><span class="kw">pub fn </span>copy_directory(src: <span class="kw-2">&amp;</span>Path, dst: <span class="kw-2">&amp;</span>Path) -&gt; io::Result&lt;()&gt; {
+    <span class="macro">trace!</span>(target: LOG_TEST, src = %src.display(), dst = %dst.display(), <span class="string">"Copy dir"</span>);
+
     <span class="comment">// Create the destination directory if it doesn't exist
     </span>fs::create_dir_all(dst)<span class="question-mark">?</span>;
 
@@ -836,6 +851,7 @@
             copy_directory(<span class="kw-2">&amp;</span>path, <span class="kw-2">&amp;</span>dst.join(entry.file_name()))<span class="question-mark">?</span>;
         } <span class="kw">else </span>{
             <span class="kw">let </span>dst_path = dst.join(entry.file_name());
+            <span class="macro">trace!</span>(target: LOG_TEST, src = %path.display(), dst = %dst_path.display(), <span class="string">"Copy file"</span>);
             fs::copy(<span class="kw-2">&amp;</span>path, <span class="kw-2">&amp;</span>dst_path)<span class="question-mark">?</span>;
         }
     }

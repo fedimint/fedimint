@@ -2948,6 +2948,10 @@
 <a href="#2946" id="2946">2946</a>
 <a href="#2947" id="2947">2947</a>
 <a href="#2948" id="2948">2948</a>
+<a href="#2949" id="2949">2949</a>
+<a href="#2950" id="2950">2950</a>
+<a href="#2951" id="2951">2951</a>
+<a href="#2952" id="2952">2952</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -4814,15 +4818,19 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     db.ensure_global()<span class="question-mark">?</span>;
 
-    <span class="kw">let </span><span class="kw-2">mut </span>global_dbtx = db.begin_transaction().<span class="kw">await</span>;
-    migrate_database_version(
-        <span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc(),
-        target_db_version,
-        module_instance_id,
-        kind.clone(),
-    )
-    .<span class="kw">await</span><span class="question-mark">?</span>;
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>global_dbtx = db.begin_transaction().<span class="kw">await</span>;
+        migrate_database_version(
+            <span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc(),
+            target_db_version,
+            module_instance_id,
+            kind.clone(),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+        global_dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
+    }
 
+    <span class="kw">let </span><span class="kw-2">mut </span>global_dbtx = db.begin_transaction().<span class="kw">await</span>;
     <span class="kw">let </span>module_instance_id_key = module_instance_id_or_global(module_instance_id);
 
     <span class="kw">let </span>disk_version = global_dbtx

@@ -416,14 +416,51 @@
 <a href="#414" id="414">414</a>
 <a href="#415" id="415">415</a>
 <a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
-<span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+<span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::core::OperationId;
+<span class="kw">use </span>fedimint_core::api::DynModuleApi;
+<span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
@@ -433,10 +470,10 @@
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tracing::{debug, error, info};
+<span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
-<span class="kw">use </span><span class="kw">crate</span>::LightningClientStateMachines;
+<span class="kw">use crate</span>::{LightningClientStateMachines, ReceivingKey};
 
 <span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
@@ -456,11 +493,12 @@
 /// ```
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>LightningReceiveStates {
-    SubmittedOffer(LightningReceiveSubmittedOffer),
+    SubmittedOfferV0(LightningReceiveSubmittedOfferV0),
     Canceled(LightningReceiveError),
     ConfirmedInvoice(LightningReceiveConfirmedInvoice),
     Funded(LightningReceiveFunded),
     Success(Vec&lt;OutPoint&gt;),
+    SubmittedOffer(LightningReceiveSubmittedOffer),
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -478,6 +516,16 @@
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
+            LightningReceiveStates::SubmittedOfferV0(offer) =&gt; {
+                <span class="macro">warn!</span>(<span class="question-mark">?</span>offer, <span class="string">"Got old SubmittedOfferV0 state!"</span>);
+                <span class="comment">// can just translate into the newer version
+                </span><span class="kw">let </span>new_offer = LightningReceiveSubmittedOffer {
+                    offer_txid: offer.offer_txid,
+                    invoice: offer.invoice.clone(),
+                    receiving_key: ReceivingKey::Personal(offer.payment_keypair),
+                };
+                new_offer.transitions(global_context)
+            }
             LightningReceiveStates::SubmittedOffer(submitted_offer) =&gt; {
                 submitted_offer.transitions(global_context)
             }
@@ -499,11 +547,27 @@
     }
 }
 
+<span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>LightningReceiveStateMachine {
+    <span class="kw">type </span>DynType = DynState;
+
+    <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
+        DynState::from_typed(instance_id, <span class="self">self</span>)
+    }
+}
+
+<span class="doccomment">/// Old version of LightningReceiveSubmittedOffer, used for migrations
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+</span><span class="kw">pub struct </span>LightningReceiveSubmittedOfferV0 {
+    <span class="kw">pub </span>offer_txid: TransactionId,
+    <span class="kw">pub </span>invoice: Bolt11Invoice,
+    <span class="kw">pub </span>payment_keypair: KeyPair,
+}
+
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningReceiveSubmittedOffer {
     <span class="kw">pub </span>offer_txid: TransactionId,
     <span class="kw">pub </span>invoice: Bolt11Invoice,
-    <span class="kw">pub </span>payment_keypair: KeyPair,
+    <span class="kw">pub </span>receiving_key: ReceivingKey,
 }
 
 <span class="attr">#[derive(
@@ -529,7 +593,7 @@
         <span class="kw">let </span>global_context = global_context.clone();
         <span class="kw">let </span>txid = <span class="self">self</span>.offer_txid;
         <span class="kw">let </span>invoice = <span class="self">self</span>.invoice.clone();
-        <span class="kw">let </span>payment_keypair = <span class="self">self</span>.payment_keypair;
+        <span class="kw">let </span>receiving_key = <span class="self">self</span>.receiving_key;
         <span class="macro">vec!</span>[StateTransition::new(
             <span class="self">Self</span>::await_invoice_confirmation(global_context, txid),
             <span class="kw">move </span>|_dbtx, result, old_state| {
@@ -537,7 +601,7 @@
                     result,
                     old_state,
                     invoice.clone(),
-                    payment_keypair,
+                    receiving_key,
                 ))
             },
         )]
@@ -556,14 +620,14 @@
         result: <span class="prelude-ty">Result</span>&lt;(), String&gt;,
         old_state: LightningReceiveStateMachine,
         invoice: Bolt11Invoice,
-        keypair: KeyPair,
+        receiving_key: ReceivingKey,
     ) -&gt; LightningReceiveStateMachine {
         <span class="kw">match </span>result {
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; LightningReceiveStateMachine {
                 operation_id: old_state.operation_id,
                 state: LightningReceiveStates::ConfirmedInvoice(LightningReceiveConfirmedInvoice {
                     invoice,
-                    keypair,
+                    receiving_key,
                 }),
             },
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; LightningReceiveStateMachine {
@@ -577,7 +641,7 @@
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningReceiveConfirmedInvoice {
     invoice: Bolt11Invoice,
-    keypair: KeyPair,
+    receiving_key: ReceivingKey,
 }
 
 <span class="kw">impl </span>LightningReceiveConfirmedInvoice {
@@ -586,14 +650,14 @@
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;LightningReceiveStateMachine&gt;&gt; {
         <span class="kw">let </span>invoice = <span class="self">self</span>.invoice.clone();
-        <span class="kw">let </span>keypair = <span class="self">self</span>.keypair;
+        <span class="kw">let </span>receiving_key = <span class="self">self</span>.receiving_key;
         <span class="kw">let </span>global_context = global_context.clone();
         <span class="macro">vec!</span>[StateTransition::new(
             <span class="self">Self</span>::await_incoming_contract_account(invoice, global_context.clone()),
             <span class="kw">move </span>|dbtx, contract, old_state| {
                 Box::pin(<span class="self">Self</span>::transition_funded(
                     old_state,
-                    keypair,
+                    receiving_key,
                     contract,
                     dbtx,
                     global_context.clone(),
@@ -610,7 +674,7 @@
         <span class="kw">loop </span>{
             <span class="comment">// Consider time before the api call to account for network delays
             </span><span class="kw">let </span>now_epoch = fedimint_core::time::duration_since_epoch();
-            <span class="kw">match </span>get_incoming_contract(<span class="kw-2">&amp;</span>global_context, contract_id).<span class="kw">await </span>{
+            <span class="kw">match </span>get_incoming_contract(global_context.module_api(), contract_id).<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(incoming_contract_account)) =&gt; {
                     <span class="kw">match </span>incoming_contract_account.contract.decrypted_preimage {
                         DecryptedPreimage::Pending =&gt; {
@@ -644,21 +708,33 @@
 
     <span class="kw">async fn </span>transition_funded(
         old_state: LightningReceiveStateMachine,
-        keypair: KeyPair,
+        receiving_key: ReceivingKey,
         result: <span class="prelude-ty">Result</span>&lt;IncomingContractAccount, LightningReceiveError&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         global_context: DynGlobalClientContext,
     ) -&gt; LightningReceiveStateMachine {
         <span class="kw">match </span>result {
             <span class="prelude-val">Ok</span>(contract) =&gt; {
-                <span class="kw">let </span>(txid, out_points) =
-                    <span class="self">Self</span>::claim_incoming_contract(dbtx, contract, keypair, global_context).<span class="kw">await</span>;
-                LightningReceiveStateMachine {
-                    operation_id: old_state.operation_id,
-                    state: LightningReceiveStates::Funded(LightningReceiveFunded {
-                        txid,
-                        out_points,
-                    }),
+                <span class="kw">match </span>receiving_key {
+                    ReceivingKey::Personal(keypair) =&gt; {
+                        <span class="kw">let </span>(txid, out_points) =
+                            <span class="self">Self</span>::claim_incoming_contract(dbtx, contract, keypair, global_context)
+                                .<span class="kw">await</span>;
+                        LightningReceiveStateMachine {
+                            operation_id: old_state.operation_id,
+                            state: LightningReceiveStates::Funded(LightningReceiveFunded {
+                                txid,
+                                out_points,
+                            }),
+                        }
+                    }
+                    ReceivingKey::External(<span class="kw">_</span>) =&gt; {
+                        <span class="comment">// Claim successful
+                        </span>LightningReceiveStateMachine {
+                            operation_id: old_state.operation_id,
+                            state: LightningReceiveStates::Success(<span class="macro">vec!</span>[]),
+                        }
+                    }
                 }
             }
             <span class="prelude-val">Err</span>(e) =&gt; LightningReceiveStateMachine {
@@ -697,15 +773,11 @@
     </span>invoice.would_expire(now_epoch - clock_skew_tolerance)
 }
 
-<span class="kw">async fn </span>get_incoming_contract(
-    global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
+<span class="kw">pub async fn </span>get_incoming_contract(
+    module_api: DynModuleApi,
     contract_id: fedimint_ln_common::contracts::ContractId,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;IncomingContractAccount&gt;, fedimint_core::api::FederationError&gt; {
-    <span class="kw">match </span>global_context
-        .module_api()
-        .fetch_contract(contract_id)
-        .<span class="kw">await
-    </span>{
+    <span class="kw">match </span>module_api.fetch_contract(contract_id).<span class="kw">await </span>{
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(contract)) =&gt; {
             <span class="kw">if let </span>FundedContract::Incoming(incoming) = contract.contract {
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(IncomingContractAccount {
