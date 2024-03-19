@@ -18,6 +18,8 @@ use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::{GatewayTest, DEFAULT_GATEWAY_PASSWORD};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
+use rand::rngs::OsRng;
+use secp256k1::KeyPair;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
@@ -426,6 +428,211 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn can_receive_for_other_user() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed().await;
+    let (client1, client2) = fed.two_clients().await;
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
+
+    // generate a new keypair
+    let keypair = KeyPair::new_global(&mut OsRng);
+
+    // Print money for client2
+    let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
+    client2.await_primary_module_output(op, outpoint).await?;
+
+    // TEST internal payment when there are no gateways registered
+    let desc = Description::new("with-markers".to_string())?;
+    let (op, invoice, _) = client1
+        .get_first_module::<LightningClientModule>()
+        .create_bolt11_invoice_for_user(
+            sats(250),
+            Bolt11InvoiceDescription::Direct(&desc),
+            None,
+            keypair.public_key(),
+            (),
+            None,
+        )
+        .await?;
+    let mut sub1 = client1
+        .get_first_module::<LightningClientModule>()
+        .subscribe_ln_receive(op)
+        .await?
+        .into_stream();
+    assert_eq!(sub1.ok().await?, LnReceiveState::Created);
+    assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
+
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = pay_invoice(&client2, invoice, None).await?;
+    match payment_type {
+        PayType::Internal(op_id) => {
+            let mut sub2 = client2
+                .get_first_module::<LightningClientModule>()
+                .subscribe_internal_pay(op_id)
+                .await?
+                .into_stream();
+            assert_eq!(sub2.ok().await?, InternalPayState::Funding);
+            assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
+            // goes from preimage to immediate claim because it is for another user
+            assert_eq!(sub1.ok().await?, LnReceiveState::Claimed);
+        }
+        _ => panic!("Expected internal payment!"),
+    }
+
+    // Create a new client and try to receive the locked payment
+    let new_client = fed.new_client().await;
+    let new_ln_module = new_client.get_first_module::<LightningClientModule>();
+    let operation_id = new_ln_module.scan_receive_for_user(keypair, ()).await?;
+    let mut sub3 = new_ln_module
+        .subscribe_ln_claim(operation_id)
+        .await?
+        .into_stream();
+    assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
+    assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
+    assert_eq!(new_client.get_balance().await, sats(250));
+
+    // TEST internal payment when there is a registered gateway
+    let gw = gateway(&fixtures, &fed).await;
+
+    // generate a new keypair
+    let keypair = KeyPair::new_global(&mut OsRng);
+
+    let ln_module = client1.get_first_module::<LightningClientModule>();
+    let ln_gateway = ln_module.select_gateway(&gw.gateway.gateway_id).await;
+    let desc = Description::new("with-gateway-hint".to_string())?;
+    let (op, invoice, _) = ln_module
+        .create_bolt11_invoice_for_user(
+            sats(250),
+            Bolt11InvoiceDescription::Direct(&desc),
+            None,
+            keypair.public_key(),
+            (),
+            ln_gateway,
+        )
+        .await?;
+    let mut sub1 = client1
+        .get_first_module::<LightningClientModule>()
+        .subscribe_ln_receive(op)
+        .await?
+        .into_stream();
+    assert_eq!(sub1.ok().await?, LnReceiveState::Created);
+    assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
+
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = pay_invoice(&client2, invoice, Some(gw.gateway.gateway_id)).await?;
+    match payment_type {
+        PayType::Internal(op_id) => {
+            let mut sub2 = client2
+                .get_first_module::<LightningClientModule>()
+                .subscribe_internal_pay(op_id)
+                .await?
+                .into_stream();
+            assert_eq!(sub2.ok().await?, InternalPayState::Funding);
+            assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
+            // goes from preimage to immediate claim because it is for another user
+            assert_eq!(sub1.ok().await?, LnReceiveState::Claimed);
+        }
+        _ => panic!("Expected internal payment!"),
+    }
+
+    // Create a new client and try to receive the locked payment
+    let new_client = fed.new_client().await;
+    let new_ln_module = new_client.get_first_module::<LightningClientModule>();
+    let operation_id = new_ln_module.scan_receive_for_user(keypair, ()).await?;
+    let mut sub3 = new_ln_module
+        .subscribe_ln_claim(operation_id)
+        .await?
+        .into_stream();
+    assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
+    assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
+    assert_eq!(new_client.get_balance().await, sats(250));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed().await;
+    let gw = gateway(&fixtures, &fed).await;
+    let (client1, client2) = fed.two_clients().await;
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
+
+    // Print money for client2
+    let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
+    client2.await_primary_module_output(op, outpoint).await?;
+
+    // generate a new keypair
+    let keypair = KeyPair::new_global(&mut OsRng);
+
+    let ln_module = client1.get_first_module::<LightningClientModule>();
+    let ln_gateway = ln_module.select_gateway(&gw.gateway.gateway_id).await;
+    let desc = Description::new("with-gateway-hint-tweaked".to_string())?;
+    let (op, invoice, _) = ln_module
+        .create_bolt11_invoice_for_user_tweaked(
+            sats(250),
+            Bolt11InvoiceDescription::Direct(&desc),
+            None,
+            keypair.public_key(),
+            1, // tweak with index 1
+            (),
+            ln_gateway,
+        )
+        .await?;
+    let mut sub1 = client1
+        .get_first_module::<LightningClientModule>()
+        .subscribe_ln_receive(op)
+        .await?
+        .into_stream();
+    assert_eq!(sub1.ok().await?, LnReceiveState::Created);
+    assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
+
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = pay_invoice(&client2, invoice, Some(gw.gateway.gateway_id)).await?;
+    match payment_type {
+        PayType::Internal(op_id) => {
+            let mut sub2 = client2
+                .get_first_module::<LightningClientModule>()
+                .subscribe_internal_pay(op_id)
+                .await?
+                .into_stream();
+            assert_eq!(sub2.ok().await?, InternalPayState::Funding);
+            assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
+            // goes from preimage to immediate claim because it is for another user
+            assert_eq!(sub1.ok().await?, LnReceiveState::Claimed);
+        }
+        _ => panic!("Expected internal payment!"),
+    }
+
+    // Create a new client and try to receive the locked payment
+    let new_client = fed.new_client().await;
+    let new_ln_module = new_client.get_first_module::<LightningClientModule>();
+    let claims = new_ln_module
+        .scan_receive_for_user_tweaked(keypair, vec![1], ())
+        .await;
+    for operation_id in claims {
+        let mut sub3 = new_ln_module
+            .subscribe_ln_claim(operation_id)
+            .await?
+            .into_stream();
+        assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
+        assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
+    }
+    assert_eq!(new_client.get_balance().await, sats(250));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -456,6 +663,7 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
 #[cfg(test)]
 mod fedimint_migration_tests {
     use std::str::FromStr;
+    use std::time::Duration;
 
     use anyhow::ensure;
     use bitcoin_hashes::{sha256, Hash};
@@ -472,8 +680,13 @@ mod fedimint_migration_tests {
         MetaOverrides, MetaOverridesKey, MetaOverridesPrefix, PaymentResult, PaymentResultKey,
         PaymentResultPrefix,
     };
+    use fedimint_ln_client::receive::{
+        LightningReceiveStateMachine, LightningReceiveStates, LightningReceiveSubmittedOffer,
+        LightningReceiveSubmittedOfferV0,
+    };
     use fedimint_ln_client::{
-        LightningClientInit, LightningClientModule, OutgoingLightningPayment,
+        LightningClientInit, LightningClientModule, LightningClientStateMachines,
+        OutgoingLightningPayment, ReceivingKey,
     };
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer, OfferId,
@@ -501,10 +714,11 @@ mod fedimint_migration_tests {
         validate_migrations_server, BYTE_32, BYTE_33, BYTE_8, STRING_64,
     };
     use futures::StreamExt;
-    use lightning_invoice::RoutingFees;
+    use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret, RoutingFees};
     use rand::distributions::Standard;
     use rand::prelude::Distribution;
     use rand::rngs::OsRng;
+    use secp256k1::{All, KeyPair, Secp256k1, SecretKey};
     use strum::IntoEnumIterator;
     use threshold_crypto::G1Projective;
     use tracing::info;
@@ -722,6 +936,60 @@ mod fedimint_migration_tests {
         dbtx.commit_tx().await;
     }
 
+    fn create_client_states() -> (
+        Vec<LightningClientStateMachines>,
+        Vec<LightningClientStateMachines>,
+    ) {
+        let secp: Secp256k1<All> = Secp256k1::gen_new();
+        let invoice1 = InvoiceBuilder::new(Currency::Regtest)
+            .amount_milli_satoshis(1000)
+            .payment_hash(sha256::Hash::hash(&BYTE_32))
+            .description("".to_string())
+            .payment_secret(PaymentSecret([0; 32]))
+            .current_timestamp()
+            .min_final_cltv_expiry_delta(18)
+            .expiry_time(Duration::from_secs(86400))
+            .build_signed(|m| secp.sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng)))
+            .unwrap();
+        let invoice2 = InvoiceBuilder::new(Currency::Regtest)
+            .amount_milli_satoshis(1000)
+            .payment_hash(sha256::Hash::hash(&BYTE_32))
+            .description("".to_string())
+            .payment_secret(PaymentSecret([0; 32]))
+            .current_timestamp()
+            .min_final_cltv_expiry_delta(18)
+            .expiry_time(Duration::from_secs(86400))
+            .build_signed(|m| secp.sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng)))
+            .unwrap();
+
+        // Create an active state and inactive state that will not be migrated.
+        let operation_id = OperationId::new_random();
+        let input_state = LightningClientStateMachines::Receive(LightningReceiveStateMachine {
+            operation_id,
+            state: LightningReceiveStates::SubmittedOffer(LightningReceiveSubmittedOffer {
+                offer_txid: TransactionId::all_zeros(),
+                invoice: invoice1,
+                receiving_key: ReceivingKey::Personal(KeyPair::new_global(&mut OsRng)),
+            }),
+        });
+
+        // Create and active state and inactive state that will be migrated.
+        let operation_id = OperationId::new_random();
+        let state = LightningClientStateMachines::Receive(LightningReceiveStateMachine {
+            operation_id,
+            state: LightningReceiveStates::SubmittedOfferV0(LightningReceiveSubmittedOfferV0 {
+                offer_txid: TransactionId::all_zeros(),
+                invoice: invoice2,
+                payment_keypair: KeyPair::new_global(&mut OsRng),
+            }),
+        });
+
+        (
+            vec![state.clone(), input_state.clone()],
+            vec![state, input_state],
+        )
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
         snapshot_db_migrations::<_, LightningCommonInit>("lightning-server-v0", |db| {
@@ -876,7 +1144,7 @@ mod fedimint_migration_tests {
         snapshot_db_migrations_client::<_, _, LightningCommonInit, LightningClientModule>(
             "lightning-client-v0",
             |db| Box::pin(async move { create_client_db_with_v0_data(db).await }),
-            || (Vec::new(), Vec::new()),
+            create_client_states,
         )
         .await
     }
@@ -889,7 +1157,7 @@ mod fedimint_migration_tests {
         validate_migrations_client::<_, _, LightningClientModule>(
             module,
             "lightning-client",
-            |db, _, _| async move {
+            |db, active_states, inactive_states| async move {
                 let mut dbtx = db.begin_transaction_nc().await;
 
                 for prefix in fedimint_ln_client::db::DbKeyPrefix::iter() {
@@ -945,6 +1213,35 @@ mod fedimint_migration_tests {
                         }
                     }
                 }
+
+                // Verify that after the state machine migrations, there is two `SubmittedOffer` state and no `SubmittedOfferV0` states.
+                let mut input_count = 0;
+                for active_state in active_states {
+                    if let LightningClientStateMachines::Receive(machine) = active_state {
+                        match machine.state {
+                            LightningReceiveStates::SubmittedOffer(_) => input_count += 1,
+                            LightningReceiveStates::SubmittedOfferV0(_) => panic!("State machine migration failed, active states contain unexpected state"),
+                            _ => panic!("State machine migration failed, active states contain unexpected state"),
+                        }
+                    }
+                }
+
+                // expecting two, one starting in `SubmittedOffer` and one from migrated from `SubmittedOfferV0`
+                ensure!(input_count == 2, "Expecting two `SubmittedOffer` active state, found {input_count}");
+
+                let mut input_count = 0;
+                for inactive_state in inactive_states {
+                    if let LightningClientStateMachines::Receive(machine) = inactive_state {
+                        match machine.state {
+                            LightningReceiveStates::SubmittedOffer(_) => input_count += 1,
+                            LightningReceiveStates::SubmittedOfferV0(_) => panic!("State machine migration failed, active states contain unexpected state"),
+                            _ => panic!("State machine migration failed, active states contain unexpected state"),
+                        }
+                    }
+                }
+
+                // expecting two, one starting in `SubmittedOffer` and one from migrated from `SubmittedOfferV0`
+                ensure!(input_count == 2, "Expecting two `SubmittedOffer` inactive state, found {input_count}");
 
                 Ok(())
             },
