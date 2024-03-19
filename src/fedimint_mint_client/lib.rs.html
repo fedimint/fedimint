@@ -1989,6 +1989,45 @@
 <a href="#1987" id="1987">1987</a>
 <a href="#1988" id="1988">1988</a>
 <a href="#1989" id="1989">1989</a>
+<a href="#1990" id="1990">1990</a>
+<a href="#1991" id="1991">1991</a>
+<a href="#1992" id="1992">1992</a>
+<a href="#1993" id="1993">1993</a>
+<a href="#1994" id="1994">1994</a>
+<a href="#1995" id="1995">1995</a>
+<a href="#1996" id="1996">1996</a>
+<a href="#1997" id="1997">1997</a>
+<a href="#1998" id="1998">1998</a>
+<a href="#1999" id="1999">1999</a>
+<a href="#2000" id="2000">2000</a>
+<a href="#2001" id="2001">2001</a>
+<a href="#2002" id="2002">2002</a>
+<a href="#2003" id="2003">2003</a>
+<a href="#2004" id="2004">2004</a>
+<a href="#2005" id="2005">2005</a>
+<a href="#2006" id="2006">2006</a>
+<a href="#2007" id="2007">2007</a>
+<a href="#2008" id="2008">2008</a>
+<a href="#2009" id="2009">2009</a>
+<a href="#2010" id="2010">2010</a>
+<a href="#2011" id="2011">2011</a>
+<a href="#2012" id="2012">2012</a>
+<a href="#2013" id="2013">2013</a>
+<a href="#2014" id="2014">2014</a>
+<a href="#2015" id="2015">2015</a>
+<a href="#2016" id="2016">2016</a>
+<a href="#2017" id="2017">2017</a>
+<a href="#2018" id="2018">2018</a>
+<a href="#2019" id="2019">2019</a>
+<a href="#2020" id="2020">2020</a>
+<a href="#2021" id="2021">2021</a>
+<a href="#2022" id="2022">2022</a>
+<a href="#2023" id="2023">2023</a>
+<a href="#2024" id="2024">2024</a>
+<a href="#2025" id="2025">2025</a>
+<a href="#2026" id="2026">2026</a>
+<a href="#2027" id="2027">2027</a>
+<a href="#2028" id="2028">2028</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2013,6 +2052,7 @@
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>backup::recovery::MintRecovery;
 <span class="kw">use </span>base64::Engine <span class="kw">as _</span>;
+<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>bitcoin_hashes::{sha256, sha256t, Hash, HashEngine <span class="kw">as </span>BitcoinHashEngine};
 <span class="kw">use </span>client_db::DbKeyPrefix;
 <span class="kw">use </span>fedimint_client::module::init::{
@@ -2144,6 +2184,44 @@
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
             })
             .expect(<span class="string">"Invariant violated: OOBNotes does not contain any notes"</span>)
+    }
+
+    <span class="kw">pub fn </span>notes_json(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, serde_json::Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>notes_map = serde_json::Map::new();
+        <span class="kw">for </span>notes <span class="kw">in </span><span class="self">self</span>.<span class="number">0</span>.iter() {
+            <span class="kw">match </span>notes {
+                OOBNotesData::Notes(notes) =&gt; {
+                    <span class="kw">let </span>notes_json = serde_json::to_value(notes)<span class="question-mark">?</span>;
+                    notes_map.insert(<span class="string">"notes"</span>.to_string(), notes_json);
+                }
+                OOBNotesData::FederationIdPrefix(prefix) =&gt; {
+                    notes_map.insert(
+                        <span class="string">"federation_id_prefix"</span>.to_string(),
+                        serde_json::to_value(prefix.to_string())<span class="question-mark">?</span>,
+                    );
+                }
+                OOBNotesData::Invite {
+                    peer_apis,
+                    federation_id,
+                } =&gt; {
+                    <span class="kw">let </span>(peer_id, api) = peer_apis
+                        .first()
+                        .cloned()
+                        .expect(<span class="string">"Decoding makes sure peer_apis isn't empty"</span>);
+                    notes_map.insert(
+                        <span class="string">"invite"</span>.to_string(),
+                        serde_json::to_value(InviteCode::new(api, peer_id, <span class="kw-2">*</span>federation_id))<span class="question-mark">?</span>,
+                    );
+                }
+                OOBNotesData::Default { variant, bytes } =&gt; {
+                    notes_map.insert(
+                        <span class="macro">format!</span>(<span class="string">"default_{}"</span>, variant),
+                        serde_json::to_value(bytes.to_hex())<span class="question-mark">?</span>,
+                    );
+                }
+            }
+        }
+        <span class="prelude-val">Ok</span>(serde_json::Value::Object(notes_map))
     }
 
     <span class="kw">pub fn </span>federation_invite(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {

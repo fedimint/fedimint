@@ -2258,6 +2258,28 @@
 <a href="#2256" id="2256">2256</a>
 <a href="#2257" id="2257">2257</a>
 <a href="#2258" id="2258">2258</a>
+<a href="#2259" id="2259">2259</a>
+<a href="#2260" id="2260">2260</a>
+<a href="#2261" id="2261">2261</a>
+<a href="#2262" id="2262">2262</a>
+<a href="#2263" id="2263">2263</a>
+<a href="#2264" id="2264">2264</a>
+<a href="#2265" id="2265">2265</a>
+<a href="#2266" id="2266">2266</a>
+<a href="#2267" id="2267">2267</a>
+<a href="#2268" id="2268">2268</a>
+<a href="#2269" id="2269">2269</a>
+<a href="#2270" id="2270">2270</a>
+<a href="#2271" id="2271">2271</a>
+<a href="#2272" id="2272">2272</a>
+<a href="#2273" id="2273">2273</a>
+<a href="#2274" id="2274">2274</a>
+<a href="#2275" id="2275">2275</a>
+<a href="#2276" id="2276">2276</a>
+<a href="#2277" id="2277">2277</a>
+<a href="#2278" id="2278">2278</a>
+<a href="#2279" id="2279">2279</a>
+<a href="#2280" id="2280">2280</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2612,7 +2634,6 @@
 }
 
 <span class="kw">pub async fn </span>cli_tests(dev_fed: DevFed) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>data_dir = env::var(<span class="string">"FM_DATA_DIR"</span>)<span class="question-mark">?</span>;
 
@@ -2679,10 +2700,29 @@
 
     <span class="kw">let </span>fed_id = fed.calculate_federation_id().<span class="kw">await</span>;
     <span class="kw">let </span>invite = fed.invite_code()<span class="question-mark">?</span>;
-    <span class="kw">let </span>invite_code = <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"decode-invite-code"</span>, invite.clone())
-        .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">anyhow::ensure!</span>(
+
+    <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+    <span class="kw">let </span>version_req = VersionReq::parse(<span class="string">"&gt;=0.3.0-alpha"</span>)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span>invite_code = <span class="kw">if </span>version_req.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
+        <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"decode"</span>, <span class="string">"invite-code"</span>, invite.clone())
+    } <span class="kw">else </span>{
+        <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"decode-invite-code"</span>, invite.clone())
+    }
+    .out_json()
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>encode_invite_output = <span class="kw">if </span>version_req.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
+        <span class="macro">cmd!</span>(
+            client,
+            <span class="string">"dev"</span>,
+            <span class="string">"encode"</span>,
+            <span class="string">"invite-code"</span>,
+            <span class="macro">format!</span>(<span class="string">"--url={}"</span>, invite_code[<span class="string">"url"</span>].as_str().unwrap()),
+            <span class="string">"--federation_id={fed_id}"</span>,
+            <span class="string">"--peer=0"
+        </span>)
+    } <span class="kw">else </span>{
         <span class="macro">cmd!</span>(
             client,
             <span class="string">"dev"</span>,
@@ -2691,10 +2731,14 @@
             <span class="string">"--federation_id={fed_id}"</span>,
             <span class="string">"--peer=0"
         </span>)
-        .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"invite_code"</span>]
+    }
+    .out_json()
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="macro">anyhow::ensure!</span>(
+        encode_invite_output[<span class="string">"invite_code"</span>]
             .as_str()
-            .unwrap()
+            .expect(<span class="string">"invite_code must be a string"</span>)
             == invite,
         <span class="string">"failed to decode and encode the client invite code"</span>,
     );
