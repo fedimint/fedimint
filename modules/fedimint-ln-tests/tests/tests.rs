@@ -482,6 +482,18 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         _ => panic!("Expected internal payment!"),
     }
 
+    // Create a new client and try to receive the locked payment
+    let new_client = fed.new_client().await;
+    let new_ln_module = new_client.get_first_module::<LightningClientModule>();
+    let operation_id = new_ln_module.scan_receive_for_user(keypair, ()).await?;
+    let mut sub3 = new_ln_module
+        .subscribe_ln_claim(operation_id)
+        .await?
+        .into_stream();
+    assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
+    assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
+    assert_eq!(new_client.get_balance().await, sats(250));
+
     // TEST internal payment when there is a registered gateway
     let gw = gateway(&fixtures, &fed).await;
 
@@ -528,6 +540,94 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         }
         _ => panic!("Expected internal payment!"),
     }
+
+    // Create a new client and try to receive the locked payment
+    let new_client = fed.new_client().await;
+    let new_ln_module = new_client.get_first_module::<LightningClientModule>();
+    let operation_id = new_ln_module.scan_receive_for_user(keypair, ()).await?;
+    let mut sub3 = new_ln_module
+        .subscribe_ln_claim(operation_id)
+        .await?
+        .into_stream();
+    assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
+    assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
+    assert_eq!(new_client.get_balance().await, sats(250));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed().await;
+    let gw = gateway(&fixtures, &fed).await;
+    let (client1, client2) = fed.two_clients().await;
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
+
+    // Print money for client2
+    let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
+    client2.await_primary_module_output(op, outpoint).await?;
+
+    // generate a new keypair
+    let keypair = KeyPair::new_global(&mut OsRng);
+
+    let ln_module = client1.get_first_module::<LightningClientModule>();
+    let ln_gateway = ln_module.select_gateway(&gw.gateway.gateway_id).await;
+    let desc = Description::new("with-gateway-hint-tweaked".to_string())?;
+    let (op, invoice, _) = ln_module
+        .create_bolt11_invoice_for_user_tweaked(
+            sats(250),
+            Bolt11InvoiceDescription::Direct(&desc),
+            None,
+            keypair.public_key(),
+            1, // tweak with index 1
+            (),
+            ln_gateway,
+        )
+        .await?;
+    let mut sub1 = client1
+        .get_first_module::<LightningClientModule>()
+        .subscribe_ln_receive(op)
+        .await?
+        .into_stream();
+    assert_eq!(sub1.ok().await?, LnReceiveState::Created);
+    assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
+
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = pay_invoice(&client2, invoice, Some(gw.gateway.gateway_id)).await?;
+    match payment_type {
+        PayType::Internal(op_id) => {
+            let mut sub2 = client2
+                .get_first_module::<LightningClientModule>()
+                .subscribe_internal_pay(op_id)
+                .await?
+                .into_stream();
+            assert_eq!(sub2.ok().await?, InternalPayState::Funding);
+            assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
+            // goes from preimage to immediate claim because it is for another user
+            assert_eq!(sub1.ok().await?, LnReceiveState::Claimed);
+        }
+        _ => panic!("Expected internal payment!"),
+    }
+
+    // Create a new client and try to receive the locked payment
+    let new_client = fed.new_client().await;
+    let new_ln_module = new_client.get_first_module::<LightningClientModule>();
+    let claims = new_ln_module
+        .scan_receive_for_user_tweaked(keypair, vec![1], ())
+        .await;
+    for operation_id in claims {
+        let mut sub3 = new_ln_module
+            .subscribe_ln_claim(operation_id)
+            .await?
+            .into_stream();
+        assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
+        assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
+    }
+    assert_eq!(new_client.get_balance().await, sats(250));
 
     Ok(())
 }

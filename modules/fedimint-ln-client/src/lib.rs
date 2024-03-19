@@ -26,7 +26,7 @@ use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::{FederationId, META_OVERRIDE_URL_KEY, META_VETTED_GATEWAYS_KEY};
@@ -52,8 +52,8 @@ use fedimint_ln_common::contracts::{
 };
 use fedimint_ln_common::{
     ContractOutput, LightningClientContext, LightningCommonInit, LightningGateway,
-    LightningGatewayAnnouncement, LightningGatewayRegistration, LightningModuleTypes,
-    LightningOutput, LightningOutputV0,
+    LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
+    LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 use futures::{FutureExt, StreamExt};
 use incoming::IncomingSmError;
@@ -77,8 +77,8 @@ use crate::pay::{
     LightningPayStateMachine, LightningPayStates,
 };
 use crate::receive::{
-    LightningReceiveError, LightningReceiveStateMachine, LightningReceiveStates,
-    LightningReceiveSubmittedOffer,
+    get_incoming_contract, LightningReceiveError, LightningReceiveStateMachine,
+    LightningReceiveStates, LightningReceiveSubmittedOffer,
 };
 
 /// Number of blocks until outgoing lightning contracts times out and user
@@ -247,6 +247,9 @@ pub enum LightningOperationMetaVariant {
     Receive {
         out_point: OutPoint,
         invoice: Bolt11Invoice,
+    },
+    Claim {
+        out_points: Vec<OutPoint>,
     },
 }
 
@@ -1351,6 +1354,81 @@ impl LightningClientModule {
         }))
     }
 
+    /// Scan unspent incoming contracts for a payment hash that matches a
+    /// tweaked keys in the `indices` vector
+    pub async fn scan_receive_for_user_tweaked<M: Serialize + Send + Sync + Clone>(
+        &self,
+        key_pair: KeyPair,
+        indices: Vec<u64>,
+        extra_meta: M,
+    ) -> Vec<OperationId> {
+        let mut claims = Vec::new();
+        for i in indices {
+            let key_pair_tweaked = tweak_user_secret_key(&self.secp, key_pair, i);
+            if let Ok(operation_id) = self
+                .scan_receive_for_user(key_pair_tweaked, extra_meta.clone())
+                .await
+            {
+                claims.push(operation_id);
+            }
+        }
+
+        claims
+    }
+
+    /// Scan unspent incoming contracts for a payment hash that matches a public
+    /// key and claim the incoming contract
+    pub async fn scan_receive_for_user<M: Serialize + Send + Sync>(
+        &self,
+        key_pair: KeyPair,
+        extra_meta: M,
+    ) -> anyhow::Result<OperationId> {
+        let preimage_key: [u8; 33] = key_pair.public_key().serialize();
+        let preimage = sha256::Hash::hash(&preimage_key);
+        let contract_id = ContractId::from_hash(sha256::Hash::hash(&preimage));
+        self.claim_funded_incoming_contract(key_pair, contract_id, extra_meta)
+            .await
+    }
+
+    /// Claim the funded, unspent incoming contract by submitting a transaction
+    /// to the federation and awaiting the primary module's outputs
+    async fn claim_funded_incoming_contract<M: Serialize + Send + Sync>(
+        &self,
+        key_pair: KeyPair,
+        contract_id: ContractId,
+        extra_meta: M,
+    ) -> anyhow::Result<OperationId> {
+        let incoming_contract_account = get_incoming_contract(self.module_api.clone(), contract_id)
+            .await?
+            .ok_or(anyhow::anyhow!("No contract account found"))
+            .with_context(|| format!("No contract found for {contract_id:?}"))?;
+
+        let input = incoming_contract_account.claim();
+        let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
+            input,
+            keys: vec![key_pair],
+            state_machines: Arc::new(|_, _| vec![]),
+        };
+
+        let tx =
+            TransactionBuilder::new().with_input(self.client_ctx.make_client_input(client_input));
+        let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
+        let operation_meta_gen = |_, out_points| LightningOperationMeta {
+            variant: LightningOperationMetaVariant::Claim { out_points },
+            extra_meta: extra_meta.clone(),
+        };
+        let operation_id = OperationId::new_random();
+        self.client_ctx
+            .finalize_and_submit_transaction(
+                operation_id,
+                LightningCommonInit::KIND.as_str(),
+                operation_meta_gen,
+                tx,
+            )
+            .await?;
+        Ok(operation_id)
+    }
+
     /// Receive over LN with a new invoice
     pub async fn create_bolt11_invoice<M: Serialize + Send + Sync>(
         &self,
@@ -1487,6 +1565,31 @@ impl LightningClientModule {
         Ok((operation_id, invoice, preimage))
     }
 
+    pub async fn subscribe_ln_claim(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
+        let operation = self.client_ctx.get_operation(operation_id).await?;
+        let out_points = match operation.meta::<LightningOperationMeta>().variant {
+            LightningOperationMetaVariant::Claim { out_points } => out_points,
+            _ => bail!("Operation is not a lightning claim"),
+        };
+
+        let client_ctx = self.client_ctx.clone();
+
+        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, move || {
+            stream! {
+                yield LnReceiveState::AwaitingFunds;
+
+                if client_ctx.await_primary_module_outputs(operation_id, out_points).await.is_ok() {
+                    yield LnReceiveState::Claimed;
+                } else {
+                    yield LnReceiveState::Canceled { reason: LightningReceiveError::ClaimRejected }
+                }
+            }
+        }))
+    }
+
     pub async fn subscribe_ln_receive(
         &self,
         operation_id: OperationId,
@@ -1519,12 +1622,12 @@ impl LightningClientModule {
                 yield LnReceiveState::WaitingForPayment { invoice: invoice.to_string(), timeout: invoice.expiry_time() };
 
                 match self_ref.await_receive_success(operation_id).await {
-                    Ok(is_external) => {
+                    Ok(is_external) if is_external => {
                         // If the payment was external, we can consider it claimed
-                        if is_external {
-                            yield LnReceiveState::Claimed;
-                            return;
-                        }
+                        yield LnReceiveState::Claimed;
+                        return;
+                    }
+                    Ok(_) => {
 
                         yield LnReceiveState::Funded;
 
@@ -1685,7 +1788,7 @@ async fn set_payment_result(
 
 /// Tweak a user key with an index, this is used to generate a new key for each
 /// invoice. This is done to not be able to link invoices to the same user.
-fn tweak_user_key<Ctx: Verification + Signing>(
+pub fn tweak_user_key<Ctx: Verification + Signing>(
     secp: &Secp256k1<Ctx>,
     user_key: PublicKey,
     index: u64,
@@ -1697,4 +1800,23 @@ fn tweak_user_key<Ctx: Verification + Signing>(
     user_key
         .add_exp_tweak(secp, &Scalar::from_be_bytes(tweak).expect("can't fail"))
         .expect("tweak is always 32 bytes, other failure modes are negligible")
+}
+
+/// Tweak a secret key with an index, this is used to claim an unspent incoming
+/// contract.
+fn tweak_user_secret_key<Ctx: Verification + Signing>(
+    secp: &Secp256k1<Ctx>,
+    key_pair: KeyPair,
+    index: u64,
+) -> KeyPair {
+    let public_key = key_pair.public_key();
+    let mut hasher = HmacEngine::<sha256::Hash>::new(&public_key.serialize()[..]);
+    hasher.input(&index.to_be_bytes());
+    let tweak = Hmac::from_engine(hasher).into_inner();
+
+    let secret_key = key_pair.secret_key();
+    let sk_tweaked = secret_key
+        .add_tweak(&Scalar::from_be_bytes(tweak).expect("Cant fail"))
+        .expect("Cant fail");
+    KeyPair::from_secret_key(secp, &sk_tweaked)
 }

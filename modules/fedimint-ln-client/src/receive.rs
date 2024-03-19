@@ -5,6 +5,7 @@ use bitcoin::util::key::KeyPair;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::api::DynModuleApi;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
@@ -62,7 +63,7 @@ impl State for LightningReceiveStateMachine {
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
             LightningReceiveStates::SubmittedOfferV0(offer) => {
-                warn!("Got old SubmittedOfferV0 state!");
+                warn!(?offer, "Got old SubmittedOfferV0 state!");
                 // can just translate into the newer version
                 let new_offer = LightningReceiveSubmittedOffer {
                     offer_txid: offer.offer_txid,
@@ -219,7 +220,7 @@ impl LightningReceiveConfirmedInvoice {
         loop {
             // Consider time before the api call to account for network delays
             let now_epoch = fedimint_core::time::duration_since_epoch();
-            match get_incoming_contract(&global_context, contract_id).await {
+            match get_incoming_contract(global_context.module_api(), contract_id).await {
                 Ok(Some(incoming_contract_account)) => {
                     match incoming_contract_account.contract.decrypted_preimage {
                         DecryptedPreimage::Pending => {
@@ -318,15 +319,11 @@ fn has_invoice_expired(
     invoice.would_expire(now_epoch - clock_skew_tolerance)
 }
 
-async fn get_incoming_contract(
-    global_context: &DynGlobalClientContext,
+pub async fn get_incoming_contract(
+    module_api: DynModuleApi,
     contract_id: fedimint_ln_common::contracts::ContractId,
 ) -> Result<Option<IncomingContractAccount>, fedimint_core::api::FederationError> {
-    match global_context
-        .module_api()
-        .fetch_contract(contract_id)
-        .await
-    {
+    match module_api.fetch_contract(contract_id).await {
         Ok(Some(contract)) => {
             if let FundedContract::Incoming(incoming) = contract.contract {
                 Ok(Some(IncomingContractAccount {
