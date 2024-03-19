@@ -2,11 +2,11 @@ use anyhow::Result;
 use fedimint_logging::LOG_DEVIMINT;
 use tracing::{debug, info};
 
-use crate::external::{Bitcoind, Electrs, Esplora, Lightningd, Lnd};
+use crate::external::{open_channel_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd};
 use crate::federation::Federation;
 use crate::gatewayd::Gatewayd;
 use crate::util::ProcessManager;
-use crate::{cmd, open_channel, LightningNode};
+use crate::{cmd, LightningNode};
 
 #[derive(Clone)]
 pub struct DevFed {
@@ -39,11 +39,12 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
                 Lnd::new(process_mgr, bitcoind.clone())
             )?;
             debug!(target: LOG_DEVIMINT, "Starting LN gateways & opening LN channel");
-            let (gw_cln, gw_lnd, _) = tokio::try_join!(
+            let (gw_cln, gw_lnd) = tokio::try_join!(
                 Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
                 Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
-                open_channel(process_mgr, &bitcoind, &cln, &lnd),
             )?;
+            open_channel_between_gateways(process_mgr, &bitcoind, &cln, &gw_cln, &lnd, &gw_lnd)
+                .await?;
             debug!(target: LOG_DEVIMINT, "LN gateways ready");
             Ok((cln, lnd, gw_cln, gw_lnd))
         },

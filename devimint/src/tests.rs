@@ -807,7 +807,18 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         })
         .await?
         .bolt11;
-    tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
+    let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+    if VersionReq::parse(">=0.3.0-alpha")?.matches(&gateway_cli_version)
+        && VersionReq::parse(">=0.3.0-alpha")?.matches(&gatewayd_version)
+    {
+        tokio::try_join!(
+            gw_cln.wait_for_chain_sync(&bitcoind),
+            gw_lnd.wait_for_chain_sync(&bitcoind)
+        )?;
+    } else {
+        tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
+    }
     ln_pay(&client, invoice.clone(), lnd_gw_id.clone(), false).await?;
     let fed_id = fed.calculate_federation_id().await;
 

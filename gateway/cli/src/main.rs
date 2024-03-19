@@ -254,7 +254,7 @@ async fn main() -> anyhow::Result<()> {
             }
             LightningCommands::GetFundingAddress => {
                 let response = client().get_funding_address().await?;
-                print_response(response).await;
+                println!("{response}");
             }
             LightningCommands::OpenChannel {
                 pubkey,

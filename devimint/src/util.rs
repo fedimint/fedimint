@@ -596,6 +596,14 @@ impl Gatewayd {
             &[GATEWAYD_FALLBACK],
         ))
     }
+
+    /// Returns the gatewayd version from clap or default min version
+    pub async fn version_or_default() -> Version {
+        match cmd!(Gatewayd, "--version").out_string().await {
+            Ok(version) => parse_clap_version(&version),
+            Err(_) => DEFAULT_VERSION,
+        }
+    }
 }
 
 pub struct FedimintCli;
@@ -639,6 +647,14 @@ impl GatewayCli {
                 .map(String::as_str)
                 .collect::<Vec<_>>(),
         ))
+    }
+
+    /// Returns the gateway-cli version from clap or default min version
+    pub async fn version_or_default() -> Version {
+        match cmd!(GatewayCli, "--version").out_string().await {
+            Ok(version) => parse_clap_version(&version),
+            Err(_) => DEFAULT_VERSION,
+        }
     }
 }
 
