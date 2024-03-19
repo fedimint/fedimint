@@ -1632,9 +1632,6 @@
 <a href="#1630" id="1630">1630</a>
 <a href="#1631" id="1631">1631</a>
 <a href="#1632" id="1632">1632</a>
-<a href="#1633" id="1633">1633</a>
-<a href="#1634" id="1634">1634</a>
-<a href="#1635" id="1635">1635</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -2133,15 +2130,6 @@
                 }
             }
         });
-
-        <span class="kw">let </span>gateway_config = <span class="self">self</span>.get_gateway_configuration().<span class="kw">await</span>;
-        <span class="kw">if </span>gateway_config.is_none() {
-            <span class="self">self</span>.set_gateway_state(GatewayState::Configuring).<span class="kw">await</span>;
-            <span class="macro">info!</span>(<span class="string">"Waiting for gateway to be configured..."</span>);
-            <span class="self">self</span>.gateway_db
-                .wait_key_exists(<span class="kw-2">&amp;</span>GatewayConfigurationKey)
-                .<span class="kw">await</span>;
-        }
     }
 
     <span class="kw">async fn </span>start_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -2170,19 +2158,27 @@
 
                                 <span class="kw">match </span>fetch_lightning_node_info(ln_client.clone()).<span class="kw">await </span>{
                                     <span class="prelude-val">Ok</span>((lightning_public_key, lightning_alias, lightning_network)) =&gt; {
-                                        <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = self_copy.get_gateway_configuration().<span class="kw">await </span>{
-                                            <span class="kw">if </span>config.network != lightning_network {
-                                                <span class="macro">warn!</span>(<span class="string">"Lightning node does not match previously configured gateway network : ({:?})"</span>, config.network);
-                                                <span class="macro">info!</span>(<span class="string">"Changing gateway network to match lightning node network : ({:?})"</span>, lightning_network);
-                                                self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
-                                                self_copy.handle_set_configuration_msg(SetConfigurationPayload {
-                                                    password: <span class="prelude-val">Some</span>(config.password),
-                                                    network: <span class="prelude-val">Some</span>(lightning_network),
-                                                    num_route_hints: <span class="prelude-val">None</span>,
-                                                    routing_fees: <span class="prelude-val">None</span>,
-                                                }).<span class="kw">await</span>.expect(<span class="string">"Failed to set gateway configuration"</span>);
-                                                <span class="kw">continue</span>;
-                                            }
+                                        <span class="kw">let </span>gateway_config = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = self_copy.get_gateway_configuration().<span class="kw">await </span>{
+                                            config
+                                        } <span class="kw">else </span>{
+                                            self_copy.set_gateway_state(GatewayState::Configuring).<span class="kw">await</span>;
+                                            <span class="macro">info!</span>(<span class="string">"Waiting for gateway to be configured..."</span>);
+                                            self_copy.gateway_db
+                                                .wait_key_exists(<span class="kw-2">&amp;</span>GatewayConfigurationKey)
+                                                .<span class="kw">await
+                                        </span>};
+
+                                        <span class="kw">if </span>gateway_config.network != lightning_network {
+                                            <span class="macro">warn!</span>(<span class="string">"Lightning node does not match previously configured gateway network : ({:?})"</span>, gateway_config.network);
+                                            <span class="macro">info!</span>(<span class="string">"Changing gateway network to match lightning node network : ({:?})"</span>, lightning_network);
+                                            self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
+                                            self_copy.handle_set_configuration_msg(SetConfigurationPayload {
+                                                password: <span class="prelude-val">Some</span>(gateway_config.password),
+                                                network: <span class="prelude-val">Some</span>(lightning_network),
+                                                num_route_hints: <span class="prelude-val">None</span>,
+                                                routing_fees: <span class="prelude-val">None</span>,
+                                            }).<span class="kw">await</span>.expect(<span class="string">"Failed to set gateway configuration"</span>);
+                                            <span class="kw">continue</span>;
                                         }
 
                                         <span class="macro">info!</span>(<span class="string">"Successfully loaded Gateway clients."</span>);
@@ -2730,15 +2726,12 @@
 
             prev_config
         } <span class="kw">else </span>{
-            <span class="kw">if </span>password.is_none() {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::GatewayConfigurationError(
-                    <span class="string">"The password field is required when initially configuring the gateway"
-                        </span>.to_string(),
-                ));
-            }
+            <span class="kw">let </span>password = password.ok_or(GatewayError::GatewayConfigurationError(
+                <span class="string">"The password field is required when initially configuring the gateway"</span>.to_string(),
+            ))<span class="question-mark">?</span>;
 
             GatewayConfiguration {
-                password: password.unwrap(),
+                password,
                 network: lightning_network,
                 num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
                 routing_fees: DEFAULT_FEES,
@@ -2862,11 +2855,12 @@
             <span class="kw">return </span><span class="prelude-val">Some</span>(gateway_config);
         }
 
+        <span class="comment">// If the password is not provided, return None
+        </span><span class="kw">let </span>password = <span class="self">self</span>.gateway_parameters.password.as_ref()<span class="question-mark">?</span>;
+
         <span class="comment">// If the DB does not have the gateway configuration, we can construct one from
         // the provided password (required) and the defaults.
-        </span><span class="self">self</span>.gateway_parameters.password.as_ref()<span class="question-mark">?</span>;
-
-        <span class="comment">// Use gateway parameters provided by the environment or CLI
+        // Use gateway parameters provided by the environment or CLI
         </span><span class="kw">let </span>num_route_hints = <span class="self">self</span>.gateway_parameters.num_route_hints;
         <span class="kw">let </span>routing_fees = <span class="self">self
             </span>.gateway_parameters
@@ -2875,7 +2869,7 @@
             .unwrap_or(GatewayFee(DEFAULT_FEES));
         <span class="kw">let </span>network = <span class="self">self</span>.gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
         <span class="kw">let </span>gateway_config = GatewayConfiguration {
-            password: <span class="self">self</span>.gateway_parameters.password.clone().unwrap(),
+            password: password.clone(),
             network,
             num_route_hints,
             routing_fees: routing_fees.<span class="number">0</span>,
