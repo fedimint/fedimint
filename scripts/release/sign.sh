@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+source "scripts/_common.sh"
+
 if [ -z "${1:-}" ]; then
   >&2 echo "First argument must be a tag (e.g. v0.2.2)"
 fi
@@ -18,7 +20,7 @@ sha256sum_path="releases/${prefix}.SHA256SUMS"
 
 # TODO: add gateway-cln-extension once available as an output
 for bin in fedimintd fedimint-cli fedimint-dbtool gateway-cli gatewayd ; do
-  out="git+file:.?ref=refs/tags/${tag}#${bin}"
+  out="git+file:${REPO_ROOT}?ref=refs/tags/${tag}#${bin}"
   nix build "$out"
   mkdir -p "${release_dir}/nixos"
   cp -f result/bin/* "${release_dir}/nixos/"
