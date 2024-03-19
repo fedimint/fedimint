@@ -25,7 +25,7 @@ use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc};
 use fedimint_core::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, InviteCode, WsFederationApi,
 };
-use fedimint_core::config::{ClientConfig, FederationId};
+use fedimint_core::config::{ClientConfig, FederationId, FederationIdPrefix};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
@@ -34,7 +34,7 @@ use fedimint_core::{fedimint_build_code_version_env, task, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{TracingSetup, LOG_CLIENT};
 use fedimint_meta_client::MetaClientInit;
-use fedimint_mint_client::{MintClientInit, MintClientModule, SpendableNote};
+use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes, SpendableNote};
 use fedimint_server::config::io::SALT_FILE;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
@@ -313,6 +313,36 @@ enum AdminCmd {
 }
 
 #[derive(Debug, Clone, Subcommand)]
+enum DecodeType {
+    /// Decode an invite code string into a JSON representation
+    InviteCode { invite_code: InviteCode },
+    /// Decode a string of ecash notes into a JSON representation
+    Notes { notes: OOBNotes },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct OOBNotesJson {
+    federation_id_prefix: String,
+    notes: TieredMulti<SpendableNote>,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+enum EncodeType {
+    /// Encode connection info from its constituent parts
+    InviteCode {
+        #[clap(long)]
+        url: SafeUrl,
+        #[clap(long = "federation_id")]
+        federation_id: FederationId,
+        #[clap(long = "peer")]
+        peer: PeerId,
+    },
+
+    /// Encode a JSON string of notes to an ecash string
+    Notes { notes_json: String },
+}
+
+#[derive(Debug, Clone, Subcommand)]
 enum DevCmd {
     /// Send direct method call to the API. If you specify --peer-id, it will
     /// just ask one server, otherwise it will try to get consensus from all
@@ -346,17 +376,16 @@ Examples:
     /// Wait for all state machines to complete
     WaitComplete,
 
-    /// Decode connection info into its JSON representation
-    DecodeInviteCode { invite_code: InviteCode },
+    /// Decode invite code or ecash notes string into a JSON representation
+    Decode {
+        #[clap(subcommand)]
+        decode_type: DecodeType,
+    },
 
-    /// Encode connection info from its constituent parts
-    EncodeInviteCode {
-        #[clap(long = "url")]
-        url: SafeUrl,
-        #[clap(long = "federation_id")]
-        federation_id: FederationId,
-        #[clap(long = "peer")]
-        peer: PeerId,
+    /// Encode an invite code or ecash notes into binary
+    Encode {
+        #[clap(subcommand)]
+        encode_type: EncodeType,
     },
 
     /// Gets the current fedimint AlephBFT block count
@@ -726,22 +755,38 @@ impl FedimintCli {
                 client
                     .wait_for_all_active_state_machines()
                     .await
-                    .map_err_cli()?;
+                    .map_err_cli_msg("failed to wait for all active state machines")?;
                 Ok(CliOutput::Raw(serde_json::Value::Null))
             }
-            Command::Dev(DevCmd::DecodeInviteCode { invite_code }) => {
-                Ok(CliOutput::DecodeInviteCode {
+            Command::Dev(DevCmd::Decode { decode_type }) => match decode_type {
+                DecodeType::InviteCode { invite_code } => Ok(CliOutput::DecodeInviteCode {
                     url: invite_code.url(),
                     federation_id: invite_code.federation_id(),
-                })
-            }
-            Command::Dev(DevCmd::EncodeInviteCode {
-                url,
-                federation_id,
-                peer,
-            }) => Ok(CliOutput::InviteCode {
-                invite_code: InviteCode::new(url, peer, federation_id),
-            }),
+                }),
+                DecodeType::Notes { notes } => {
+                    let notes_json = notes
+                        .notes_json()
+                        .map_err_cli_msg("failed to decode notes")?;
+                    Ok(CliOutput::Raw(notes_json))
+                }
+            },
+            Command::Dev(DevCmd::Encode { encode_type }) => match encode_type {
+                EncodeType::InviteCode {
+                    url,
+                    federation_id,
+                    peer,
+                } => Ok(CliOutput::InviteCode {
+                    invite_code: InviteCode::new(url, peer, federation_id),
+                }),
+                EncodeType::Notes { notes_json } => {
+                    let notes = serde_json::from_str::<OOBNotesJson>(&notes_json)
+                        .map_err_cli_msg("invalid JSON for notes")?;
+                    let prefix =
+                        FederationIdPrefix::from_str(&notes.federation_id_prefix).map_err_cli()?;
+                    let notes = OOBNotes::new(prefix, notes.notes);
+                    Ok(CliOutput::Raw(notes.to_string().into()))
+                }
+            },
             Command::Dev(DevCmd::SessionCount) => {
                 let client = self.client_open(&cli).await?;
                 let count = client.api().session_count().await?;
