@@ -1349,6 +1349,13 @@
 <a href="#1347" id="1347">1347</a>
 <a href="#1348" id="1348">1348</a>
 <a href="#1349" id="1349">1349</a>
+<a href="#1350" id="1350">1350</a>
+<a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
+<a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -1376,7 +1383,7 @@
 <span class="kw">use </span>fedimint_ln_common::LightningGateway;
 <span class="kw">use </span>fedimint_mint_client::OOBNotes;
 <span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
+<span class="kw">use </span>lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio::fs::OpenOptions;
 <span class="kw">use </span>tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufWriter};
@@ -2414,8 +2421,15 @@
 ) -&gt; anyhow::Result&lt;(fedimint_core::core::OperationId, Bolt11Invoice)&gt; {
     <span class="kw">let </span>create_invoice_time = fedimint_core::time::now();
     <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+    <span class="kw">let </span>desc = Description::new(<span class="string">"test"</span>.to_string())<span class="question-mark">?</span>;
     <span class="kw">let </span>(operation_id, invoice, <span class="kw">_</span>) = lightning_module
-        .create_bolt11_invoice(invoice_amount, <span class="string">""</span>.into(), <span class="prelude-val">None</span>, (), ln_gateway)
+        .create_bolt11_invoice(
+            invoice_amount,
+            Bolt11InvoiceDescription::Direct(<span class="kw-2">&amp;</span>desc),
+            <span class="prelude-val">None</span>,
+            (),
+            ln_gateway,
+        )
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>elapsed = create_invoice_time.elapsed()<span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">"Created invoice using gateway in {elapsed:?}"</span>);

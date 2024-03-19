@@ -2311,7 +2311,7 @@
     </span><span class="kw">async fn </span>create_lightning_receive_output&lt;<span class="lifetime">'a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
         amount: Amount,
-        description: String,
+        description: lightning_invoice::Bolt11InvoiceDescription&lt;<span class="lifetime">'a</span>&gt;,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">'a</span>,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
         src_node_id: secp256k1::PublicKey,
@@ -2366,7 +2366,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>invoice_builder = InvoiceBuilder::new(network.into())
             .amount_milli_satoshis(amount.msats)
-            .description(description)
+            .invoice_description(description)
             .payment_hash(payment_hash)
             .payment_secret(PaymentSecret(rng.gen()))
             .duration_since_epoch(duration_since_epoch)
@@ -2902,7 +2902,7 @@
     </span><span class="kw">pub async fn </span>create_bolt11_invoice&lt;M: Serialize + Send + Sync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
-        description: String,
+        description: lightning_invoice::Bolt11InvoiceDescription&lt;<span class="lifetime">'_</span>&gt;,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
         extra_meta: M,
         gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,

@@ -787,6 +787,13 @@
 <a href="#785" id="785">785</a>
 <a href="#786" id="786">786</a>
 <a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -817,7 +824,7 @@
 <span class="kw">use </span>fedimint_wallet_client::{WalletClientModule, WithdrawState};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>itertools::Itertools;
-<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
+<span class="kw">use </span>lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>time::format_description::well_known::iso8601;
@@ -1111,8 +1118,15 @@
             <span class="kw">let </span>ln_gateway = get_gateway(<span class="kw-2">&amp;</span>client, gateway_id).<span class="kw">await</span>;
 
             <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+            <span class="kw">let </span>desc = Description::new(description)<span class="question-mark">?</span>;
             <span class="kw">let </span>(operation_id, invoice, <span class="kw">_</span>) = lightning_module
-                .create_bolt11_invoice(amount, description, expiry_time, (), ln_gateway)
+                .create_bolt11_invoice(
+                    amount,
+                    Bolt11InvoiceDescription::Direct(<span class="kw-2">&amp;</span>desc),
+                    expiry_time,
+                    (),
+                    ln_gateway,
+                )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(serde_json::to_value(LnInvoiceResponse {
                 operation_id,

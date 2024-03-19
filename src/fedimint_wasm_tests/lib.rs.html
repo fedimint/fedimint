@@ -326,6 +326,14 @@
 <a href="#324" id="324">324</a>
 <a href="#325" id="325">325</a>
 <a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::Result;
@@ -435,6 +443,7 @@
     <span class="kw">use </span>fedimint_ln_client::{
         LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
     };
+    <span class="kw">use </span>fedimint_ln_common::lightning_invoice::{Bolt11InvoiceDescription, Description};
     <span class="kw">use </span>fedimint_ln_common::LightningGateway;
     <span class="kw">use </span>fedimint_mint_client::{MintClientModule, ReissueExternalNotesState, SpendOOBState};
     <span class="kw">use </span>futures::StreamExt;
@@ -481,8 +490,15 @@
         gateway: LightningGateway,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+        <span class="kw">let </span>desc = Description::new(<span class="string">"test"</span>.to_string())<span class="question-mark">?</span>;
         <span class="kw">let </span>(opid, invoice, <span class="kw">_</span>) = lightning_module
-            .create_bolt11_invoice(amount, <span class="string">"test"</span>.to_string(), <span class="prelude-val">None</span>, (), <span class="prelude-val">Some</span>(gateway))
+            .create_bolt11_invoice(
+                amount,
+                Bolt11InvoiceDescription::Direct(<span class="kw-2">&amp;</span>desc),
+                <span class="prelude-val">None</span>,
+                (),
+                <span class="prelude-val">Some</span>(gateway),
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         faucet::pay_invoice(<span class="kw-2">&amp;</span>invoice.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
 

@@ -59,7 +59,7 @@ gateway</p>
 ) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;OutPoint&gt;, <a class="enum" href="enum.PayError.html" title="enum fedimint_ln_client::PayError">PayError</a>&gt;</h4></section><section id="method.create_lightning_receive_output" class="method"><a class="src rightside" href="../src/fedimint_ln_client/lib.rs.html#733-843">source</a><h4 class="code-header">pub(crate) async fn <a href="#method.create_lightning_receive_output" class="fn">create_lightning_receive_output</a>&lt;'a&gt;(
     &amp;'a self,
     amount: Amount,
-    description: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
+    description: Bolt11InvoiceDescription&lt;'a&gt;,
     rng: impl <a class="trait" href="https://rust-random.github.io/rand/rand_core/trait.RngCore.html" title="trait rand_core::RngCore">RngCore</a> + <a class="trait" href="https://rust-random.github.io/rand/rand_core/trait.CryptoRng.html" title="trait rand_core::CryptoRng">CryptoRng</a> + 'a,
     expiry_time: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>&gt;,
     src_node_id: PublicKey,
@@ -115,7 +115,7 @@ supplied only internal payments are possible.</p>
 ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.81/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;UpdateStreamOrOutcome&lt;<a class="enum" href="enum.LnPayState.html" title="enum fedimint_ln_client::LnPayState">LnPayState</a>&gt;&gt;</h4></section><details class="toggle method-toggle" open><summary><section id="method.create_bolt11_invoice" class="method"><a class="src rightside" href="../src/fedimint_ln_client/lib.rs.html#1324-1386">source</a><h4 class="code-header">pub async fn <a href="#method.create_bolt11_invoice" class="fn">create_bolt11_invoice</a>&lt;M: <a class="trait" href="https://docs.rs/serde/1.0.197/serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize">Serialize</a> + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>&gt;(
     &amp;self,
     amount: Amount,
-    description: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
+    description: Bolt11InvoiceDescription&lt;'_&gt;,
     expiry_time: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>&gt;,
     extra_meta: M,
     gateway: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;LightningGateway&gt;
