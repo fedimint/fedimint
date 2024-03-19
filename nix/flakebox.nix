@@ -215,6 +215,11 @@ rec {
   workspaceDeps = craneLib.buildWorkspaceDepsOnly {
     buildPhaseCargoCommand = "cargoWithProfile doc --locked ; cargoWithProfile check --all-targets --locked ; cargoWithProfile build --locked --all-targets";
   };
+
+  # like `workspaceDeps` but don't run `cargo doc`
+  workspaceDepsNoDocs = craneLib.buildWorkspaceDepsOnly {
+    buildPhaseCargoCommand = "cargoWithProfile check --all-targets --locked ; cargoWithProfile build --locked --all-targets";
+  };
   workspaceBuild = craneLib.buildWorkspace {
     cargoArtifacts = workspaceDeps;
     buildPhaseCargoCommand = "cargoWithProfile doc --locked ; cargoWithProfile check --all-targets --locked ; cargoWithProfile build --locked --all-targets";
@@ -256,35 +261,30 @@ rec {
     doInstallCargoArtifacts = false;
   };
 
-  workspaceDoc = craneLib.mkCargoDerivation {
+  workspaceDoc = craneLibTests.mkCargoDerivation {
     pnameSuffix = "-workspace-docs";
     cargoArtifacts = workspaceDeps;
-    preConfigure = ''
-      export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -D warnings'
+    buildPhaseCargoCommand = ''
+      patchShebangs ./scripts
+      export FM_RUSTDOC_INDEX_MD=${../docs/rustdoc-index.md}
+      ./scripts/dev/build-docs.sh
     '';
-    buildPhaseCargoCommand = "cargoWithProfile doc --locked --workspace --no-deps --document-private-items";
     doInstallCargoArtifacts = false;
     postInstall = ''
-      cp -a target/doc/ $out
+      mkdir $out/share
+      cp -a target/doc $out/share/doc
     '';
     doCheck = false;
+    dontFixup = true;
+    dontStrip = true;
   };
 
-  # version of `workspaceDocs` with some nightly-only flags to publish
-  workspaceDocExport = craneLib.mkCargoDerivation {
-    # no need for inheriting any artifacts, as we are using it as a one-off, and only care
-    # about the docs
-    cargoArtifacts = null;
-    preConfigure = ''
-      export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -Z unstable-options --enable-index-page -D warnings'
-    '';
-    buildPhaseCargoCommand = "cargoWithProfile doc --locked --workspace --no-deps --document-private-items";
-    doInstallCargoArtifacts = false;
-    installPhase = ''
-      cp -a target/doc/ $out
-    '';
-    doCheck = false;
-  };
+  # version of `workspaceDocs` for public consumption (uploaded to https://docs.fedimint.org/)
+  workspaceDocExport = workspaceDoc.overrideAttrs (final: prev: {
+    # we actually don't want to have docs for dependencies in exported documentation
+    cargoArtifacts = workspaceDepsNoDocs;
+    nativeBuildInputs = prev.nativeBuildInputs or [ ] ++ [ pkgs.pandoc ];
+  });
 
   workspaceCargoUdepsDeps = craneLib.buildDepsOnly {
     pname = "${commonArgs.pname}-udeps-deps";
