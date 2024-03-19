@@ -2117,6 +2117,7 @@ dependencies = [
  "futures",
  "rand",
  "secp256k1 0.24.3",
+ "serde",
  "strum 0.26.2",
  "strum_macros 0.26.2",
  "tokio",

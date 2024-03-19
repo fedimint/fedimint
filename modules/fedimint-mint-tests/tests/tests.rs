@@ -16,6 +16,7 @@ use fedimint_mint_common::config::{FeeConsensus, MintGenParams, MintGenParamsCon
 use fedimint_mint_server::MintInit;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
 use futures::StreamExt;
+use serde::{Deserialize, Serialize};
 use tracing::info;
 
 const EXPECTED_MAXIMUM_FEE: Amount = Amount::from_sats(50);
@@ -37,6 +38,11 @@ fn fixtures() -> Fixtures {
     );
 
     fixtures.with_module(DummyClientInit, DummyInit, DummyGenParams::default())
+}
+
+#[derive(Serialize, Deserialize)]
+struct BackupTestMetadata {
+    custom_key: String,
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -169,24 +175,51 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn backup_encode_decode_roundtrip() -> anyhow::Result<()> {
-    // Print notes for client1
+    // Print notes for client
     let fed = fixtures().new_fed().await;
-    let (client1, _client2) = fed.two_clients().await;
-    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
-    let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
-    client1.await_primary_module_output(op, outpoint).await?;
+    let client = fed.new_client().await;
+    let client_dummy_module = client.get_first_module::<DummyClientModule>();
+    let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
+    client.await_primary_module_output(op, outpoint).await?;
 
-    let backup = client1.create_backup(Metadata::empty()).await?;
+    let metadata = Metadata::from_json_serialized(BackupTestMetadata {
+        custom_key: "custom_value".into(),
+    });
+
+    let backup = client.create_backup(metadata.clone()).await?;
 
     let backup_bin = fedimint_core::encoding::Encodable::consensus_encode_to_vec(&backup);
 
     let backup_decoded: ClientBackup = fedimint_core::encoding::Decodable::consensus_decode(
         &mut Cursor::new(&backup_bin),
-        client1.decoders(),
+        client.decoders(),
     )
     .expect("decode");
 
     assert_eq!(backup, backup_decoded);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ecash_backup_can_recover_metadata() -> anyhow::Result<()> {
+    // Print notes for client
+    let fed = fixtures().new_fed().await;
+    let client = fed.new_client().await;
+    let client_dummy_module = client.get_first_module::<DummyClientModule>();
+    let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
+    client.await_primary_module_output(op, outpoint).await?;
+
+    let metadata = Metadata::from_json_serialized(BackupTestMetadata {
+        custom_key: "custom_value".into(),
+    });
+
+    client.backup_to_federation(metadata.clone()).await?;
+    let fetched_backup = client
+        .download_backup_from_federation()
+        .await?
+        .expect("could not download backup");
+    assert_eq!(fetched_backup.metadata, metadata);
 
     Ok(())
 }
