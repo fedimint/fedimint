@@ -324,8 +324,6 @@ pub async fn apply_migrations_client(
     module_instance_id: ModuleInstanceId,
     decoders: ModuleDecoderRegistry,
 ) -> Result<(), anyhow::Error> {
-    db.ensure_global()?;
-
     // TODO(support:v0.3):
     // https://github.com/fedimint/fedimint/issues/3481
     // Somewhere after 0.3 is no longer supported,
