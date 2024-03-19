@@ -1862,8 +1862,6 @@ pub async fn apply_migrations(
     migrations: BTreeMap<DatabaseVersion, ServerMigrationFn>,
     module_instance_id: Option<ModuleInstanceId>,
 ) -> Result<(), anyhow::Error> {
-    db.ensure_global()?;
-
     {
         let mut global_dbtx = db.begin_transaction().await;
         migrate_database_version(
