@@ -17,7 +17,7 @@ use fedimint_ln_server::LightningInit;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::{GatewayTest, DEFAULT_GATEWAY_PASSWORD};
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
@@ -61,11 +61,12 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
     client2.await_primary_module_output(op, outpoint).await?;
 
     let extra_meta = "internal payment with no gateway registered".to_string();
+    let desc = Description::new("with-markers".to_string())?;
     let (op, invoice, _) = client1
         .get_first_module::<LightningClientModule>()
         .create_bolt11_invoice(
             sats(250),
-            "with-markers".to_string(),
+            Bolt11InvoiceDescription::Direct(&desc),
             None,
             extra_meta.clone(),
             None,
@@ -122,9 +123,16 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     client2.await_primary_module_output(op, outpoint).await?;
 
     // TEST internal payment when there are no gateways registered
+    let desc = Description::new("with-markers".to_string())?;
     let (op, invoice, _) = client1
         .get_first_module::<LightningClientModule>()
-        .create_bolt11_invoice(sats(250), "with-markers".to_string(), None, (), None)
+        .create_bolt11_invoice(
+            sats(250),
+            Bolt11InvoiceDescription::Direct(&desc),
+            None,
+            (),
+            None,
+        )
         .await?;
     let mut sub1 = client1
         .get_first_module::<LightningClientModule>()
@@ -330,9 +338,16 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     client2.await_primary_module_output(op, outpoint).await?;
 
     // TEST internal payment when there are no gateways registered
+    let desc = Description::new("with-markers".to_string())?;
     let (op, invoice, _) = client1
         .get_first_module::<LightningClientModule>()
-        .create_bolt11_invoice(sats(250), "with-markers".to_string(), None, (), None)
+        .create_bolt11_invoice(
+            sats(250),
+            Bolt11InvoiceDescription::Direct(&desc),
+            None,
+            (),
+            None,
+        )
         .await?;
     let mut sub1 = client1
         .get_first_module::<LightningClientModule>()
@@ -368,10 +383,11 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
 
     let ln_module = client1.get_first_module::<LightningClientModule>();
     let ln_gateway = ln_module.select_gateway(&gw.gateway.gateway_id).await;
+    let desc = Description::new("with-gateway-hint".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice(
             sats(250),
-            "with-gateway-hint".to_string(),
+            Bolt11InvoiceDescription::Direct(&desc),
             None,
             (),
             ln_gateway,

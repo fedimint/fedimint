@@ -733,7 +733,7 @@ impl LightningClientModule {
     async fn create_lightning_receive_output<'a>(
         &'a self,
         amount: Amount,
-        description: String,
+        description: lightning_invoice::Bolt11InvoiceDescription<'a>,
         mut rng: impl RngCore + CryptoRng + 'a,
         expiry_time: Option<u64>,
         src_node_id: secp256k1::PublicKey,
@@ -788,7 +788,7 @@ impl LightningClientModule {
 
         let mut invoice_builder = InvoiceBuilder::new(network.into())
             .amount_milli_satoshis(amount.msats)
-            .description(description)
+            .invoice_description(description)
             .payment_hash(payment_hash)
             .payment_secret(PaymentSecret(rng.gen()))
             .duration_since_epoch(duration_since_epoch)
@@ -1324,7 +1324,7 @@ impl LightningClientModule {
     pub async fn create_bolt11_invoice<M: Serialize + Send + Sync>(
         &self,
         amount: Amount,
-        description: String,
+        description: lightning_invoice::Bolt11InvoiceDescription<'_>,
         expiry_time: Option<u64>,
         extra_meta: M,
         gateway: Option<LightningGateway>,

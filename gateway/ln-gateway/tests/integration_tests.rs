@@ -42,7 +42,7 @@ use fedimint_testing::ln::LightningTest;
 use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
 use futures::Future;
-use lightning_invoice::{Bolt11Invoice, RoutingFees};
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description, RoutingFees};
 use ln_gateway::gateway_lnrpc::GetNodeInfoResponse;
 use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcResult};
 use ln_gateway::rpc::{
@@ -547,10 +547,11 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
         let invoice_amount = sats(100);
         let ln_module = user_client.get_first_module::<LightningClientModule>();
         let ln_gateway = ln_module.select_gateway(&gateway_id).await;
+        let desc = Description::new("description".to_string())?;
         let (_invoice_op, invoice, _) = ln_module
             .create_bolt11_invoice(
                 invoice_amount,
-                "description".into(),
+                Bolt11InvoiceDescription::Direct(&desc),
                 None,
                 "test intercept valid HTLC",
                 ln_gateway,
@@ -637,10 +638,11 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
         // User client creates invoice in federation
         let ln_module = user_client.get_first_module::<LightningClientModule>();
         let ln_gateway = ln_module.select_gateway(&gateway_id).await;
+        let desc = Description::new("description".to_string())?;
         let (_invoice_op, invoice, _) = ln_module
             .create_bolt11_invoice(
                 sats(100),
-                "description".into(),
+                Bolt11InvoiceDescription::Direct(&desc),
                 None,
                 "test intercept htlc but with no funds",
                 ln_gateway,
@@ -956,11 +958,12 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
             let gateway_id = gateway.gateway.gateway_id;
             let ln_module = user_client.get_first_module::<LightningClientModule>();
             let ln_gateway = ln_module.select_gateway(&gateway_id).await;
+            let desc = Description::new("description".to_string())?;
             let (_invoice_op, invoice, _) = user_client
                 .get_first_module::<LightningClientModule>()
                 .create_bolt11_invoice(
                     invoice_amount,
-                    "description".into(),
+                    Bolt11InvoiceDescription::Direct(&desc),
                     None,
                     format!(
                         "gateway type: {gateway_type} number of route hints: {num_route_hints}"
@@ -1411,10 +1414,11 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
             let invoice_amt = msats(2_500);
             let ln_module = client2.get_first_module::<LightningClientModule>();
             let ln_gateway = ln_module.select_gateway(&gateway_id).await;
+            let desc = Description::new("description".to_string())?;
             let (receive_op, invoice, _) = ln_module
                 .create_bolt11_invoice(
                     invoice_amt,
-                    "description".into(),
+                    Bolt11InvoiceDescription::Direct(&desc),
                     None,
                     "test gw swap between federations",
                     ln_gateway,

@@ -28,7 +28,7 @@ use fedimint_mint_client::{
 use fedimint_wallet_client::{WalletClientModule, WithdrawState};
 use futures::StreamExt;
 use itertools::Itertools;
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use time::format_description::well_known::iso8601;
@@ -322,8 +322,15 @@ pub async fn handle_command(
             let ln_gateway = get_gateway(&client, gateway_id).await;
 
             let lightning_module = client.get_first_module::<LightningClientModule>();
+            let desc = Description::new(description)?;
             let (operation_id, invoice, _) = lightning_module
-                .create_bolt11_invoice(amount, description, expiry_time, (), ln_gateway)
+                .create_bolt11_invoice(
+                    amount,
+                    Bolt11InvoiceDescription::Direct(&desc),
+                    expiry_time,
+                    (),
+                    ln_gateway,
+                )
                 .await?;
             Ok(serde_json::to_value(LnInvoiceResponse {
                 operation_id,
