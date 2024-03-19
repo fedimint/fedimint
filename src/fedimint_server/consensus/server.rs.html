@@ -1438,7 +1438,7 @@
         <span class="kw">let </span>peer_id_str = <span class="kw-2">&amp;</span><span class="self">self</span>.peer_id_str[peer.to_usize()];
         <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"process_consensus_item"</span>);
         <span class="kw">let </span>timing_prom = CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS
-            .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>peer_id_str])
+            .with_label_values(<span class="kw-2">&amp;</span>[peer_id_str])
             .start_timer();
 
         <span class="macro">debug!</span>(%peer, item = <span class="question-mark">?</span>FmtDbgConsensusItem(<span class="kw-2">&amp;</span>item), <span class="string">"Processing consensus item"</span>);
@@ -1449,7 +1449,7 @@
             </span>.insert(peer, session_index);
 
         CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX
-            .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="self">self</span>.self_id_str, <span class="kw-2">&amp;</span>peer_id_str])
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="self">self</span>.self_id_str, peer_id_str])
             .set(session_index <span class="kw">as </span>i64);
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
@@ -1511,7 +1511,7 @@
             </span>.expect(<span class="string">"Committing consensus epoch failed"</span>);
 
         CONSENSUS_ITEMS_PROCESSED_TOTAL
-            .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>peer_id_str])
+            .with_label_values(<span class="kw-2">&amp;</span>[peer_id_str])
             .inc();
         timing_prom.observe_duration();
 
