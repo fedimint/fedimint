@@ -2376,7 +2376,7 @@
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_stream();
     <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
-        <span class="macro">info!</span>(<span class="string">"{prefix} Update: {update:?}"</span>);
+        <span class="macro">debug!</span>(%prefix, <span class="question-mark">?</span>update, <span class="string">"Invoice payment update"</span>);
         <span class="kw">match </span>update {
             LnReceiveState::Claimed =&gt; {
                 <span class="kw">let </span>elapsed: Duration = pay_invoice_time.elapsed()<span class="question-mark">?</span>;

@@ -4203,8 +4203,8 @@
             <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span>client_config.modules {
                 <span class="kw">let </span>kind = module_cfg.kind.clone();
                 <span class="kw">let </span><span class="prelude-val">Some</span>(init) = <span class="self">self</span>.module_inits.get(<span class="kw-2">&amp;</span>kind) <span class="kw">else </span>{
-                    <span class="macro">debug!</span>(<span class="string">"Detected configuration for unsupported module id: {module_id}, kind: {kind}"</span>);
-                    <span class="kw">continue</span>;
+                    <span class="comment">// normal, expected and already logged about when building the client
+                    </span><span class="kw">continue</span>;
                 };
 
                 apply_migrations_client(
@@ -4772,7 +4772,7 @@
     <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
     <span class="kw">for </span>(id, kind) <span class="kw">in </span>module_kinds {
         <span class="kw">let </span><span class="prelude-val">Some</span>(init) = registry.get(kind) <span class="kw">else </span>{
-            <span class="macro">info!</span>(<span class="string">"Detected configuration for unsupported module id: {id}, kind: {kind}"</span>);
+            <span class="macro">debug!</span>(<span class="string">"Detected configuration for unsupported module id: {id}, kind: {kind}"</span>);
             <span class="kw">continue</span>;
         };
 

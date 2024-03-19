@@ -732,7 +732,7 @@
 <span class="kw">use </span>tokio::sync::{oneshot, watch};
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">use </span>tokio::task::{JoinError, JoinHandle};
-<span class="kw">use </span>tracing::{error, info, warn};
+<span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
 </span><span class="kw">type </span>JoinHandle&lt;T&gt; = future::Ready&lt;anyhow::Result&lt;T&gt;&gt;;
@@ -893,7 +893,7 @@
         </span>Fut: Future&lt;Output = R&gt; + Send + <span class="lifetime">'static</span>,
         R: Send + <span class="lifetime">'static</span>,
     {
-        <span class="kw">use </span>tracing::{debug, info_span, Instrument, Span};
+        <span class="kw">use </span>tracing::{info_span, Instrument, Span};
 
         <span class="kw">let </span>name = name.into();
         <span class="comment">// new child span of current span
@@ -1013,12 +1013,12 @@
             <span class="macro">info!</span>(target: LOG_TASK, <span class="string">"Subgroup finished"</span>);
         }
 
-        <span class="comment">// drop lock earl
+        <span class="comment">// drop lock early
         </span><span class="kw">while let </span><span class="prelude-val">Some</span>((name, join)) = {
             <span class="kw">let </span><span class="kw-2">mut </span>lock = <span class="self">self</span>.inner.join.lock().expect(<span class="string">"lock poison"</span>);
             lock.pop_front()
         } {
-            <span class="macro">info!</span>(target: LOG_TASK, task=%name, <span class="string">"Waiting for task to finish"</span>);
+            <span class="macro">debug!</span>(target: LOG_TASK, task=%name, <span class="string">"Waiting for task to finish"</span>);
 
             <span class="kw">let </span>timeout = deadline.map(|deadline| {
                 deadline
@@ -1043,7 +1043,7 @@
 
             <span class="kw">match </span>join_future.<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; {
-                    <span class="macro">info!</span>(target: LOG_TASK, task=%name, <span class="string">"Task finished"</span>);
+                    <span class="macro">debug!</span>(target: LOG_TASK, task=%name, <span class="string">"Task finished"</span>);
                 }
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
                     <span class="macro">error!</span>(target: LOG_TASK, task=%name, error=%e, <span class="string">"Task panicked"</span>);

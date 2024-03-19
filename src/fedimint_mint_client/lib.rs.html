@@ -1988,6 +1988,7 @@
 <a href="#1986" id="1986">1986</a>
 <a href="#1987" id="1987">1987</a>
 <a href="#1988" id="1988">1988</a>
+<a href="#1989" id="1989">1989</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2041,6 +2042,7 @@
     TieredMulti, TieredSummary, TransactionId,
 };
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_MINT;
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_mint_common::config::MintClientConfig;
 <span class="kw">pub use </span>fedimint_mint_common::<span class="kw-2">*</span>;
@@ -2050,7 +2052,7 @@
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tbs::AggregatePublicKey;
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tracing::{debug, info, warn};
+<span class="kw">use </span>tracing::{debug, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::EcashBackup;
 <span class="kw">use </span><span class="kw">crate</span>::client_db::{
@@ -2579,7 +2581,7 @@
                         <span class="macro">bail!</span>(<span class="string">"Reissue failed: {e}"</span>);
                     }
 
-                    <span class="macro">info!</span>(<span class="string">"Update: {:?}"</span>, update);
+                    <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, <span class="question-mark">?</span>update, <span class="string">"Reissue external notes update"</span>);
                 }
 
                 <span class="prelude-val">Ok</span>(serde_json::to_value(amount).unwrap())
