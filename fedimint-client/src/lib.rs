@@ -181,7 +181,7 @@ pub enum AddStateMachinesError {
 pub enum DiscoverCommonApiVersionMode {
     /// Get the response from only a few peers, or until a timeout
     Fast,
-    /// Try to get a reasponse from all peers, or until a timeout
+    /// Try to get a response from all peers, or until a timeout
     Full,
 }
 
