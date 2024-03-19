@@ -36,7 +36,7 @@ pub const DEFAULT_GATEWAY_PASSWORD: &str = "thereisnosecondbest";
 /// Fixture for creating a gateway
 pub struct GatewayTest {
     /// URL for the RPC
-    versioned_api: SafeUrl,
+    pub versioned_api: SafeUrl,
     /// Handle of the running gateway
     pub gateway: Gateway,
     /// Temporary dir that stores the gateway config

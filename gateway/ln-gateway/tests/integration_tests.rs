@@ -55,7 +55,7 @@ use ln_gateway::state_machine::{
     GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates, GatewayExtReceiveStates,
     GatewayMeta, Htlc,
 };
-use ln_gateway::{GatewayState, DEFAULT_FEES, DEFAULT_NETWORK};
+use ln_gateway::{DEFAULT_FEES, DEFAULT_NETWORK};
 use reqwest::StatusCode;
 use secp256k1::PublicKey;
 use tracing::info;
@@ -1076,8 +1076,6 @@ async fn test_cannot_connect_same_federation() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-// flaky: https://github.com/fedimint/fedimint/issues/4290
-#[ignore]
 async fn test_gateway_configuration() -> anyhow::Result<()> {
     let fixtures = fixtures();
 
@@ -1119,10 +1117,8 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     })
     .await;
 
-    GatewayTest::wait_for_gateway_state(gateway.gateway.clone(), |gw_state| {
-        matches!(gw_state, GatewayState::Running { .. })
-    })
-    .await?;
+    GatewayTest::wait_for_webserver(gateway.versioned_api.clone(), Some(test_password.clone()))
+        .await?;
 
     // Verify old password no longer works
     verify_gateway_rpc_failure(

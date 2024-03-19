@@ -496,15 +496,6 @@ impl Gateway {
                 }
             }
         });
-
-        let gateway_config = self.get_gateway_configuration().await;
-        if gateway_config.is_none() {
-            self.set_gateway_state(GatewayState::Configuring).await;
-            info!("Waiting for gateway to be configured...");
-            self.gateway_db
-                .wait_key_exists(&GatewayConfigurationKey)
-                .await;
-        }
     }
 
     async fn start_gateway(&self, task_group: &mut TaskGroup) -> Result<()> {
@@ -533,19 +524,27 @@ impl Gateway {
 
                                 match fetch_lightning_node_info(ln_client.clone()).await {
                                     Ok((lightning_public_key, lightning_alias, lightning_network)) => {
-                                        if let Some(config) = self_copy.get_gateway_configuration().await {
-                                            if config.network != lightning_network {
-                                                warn!("Lightning node does not match previously configured gateway network : ({:?})", config.network);
-                                                info!("Changing gateway network to match lightning node network : ({:?})", lightning_network);
-                                                self_copy.handle_disconnect(htlc_task_group).await;
-                                                self_copy.handle_set_configuration_msg(SetConfigurationPayload {
-                                                    password: Some(config.password),
-                                                    network: Some(lightning_network),
-                                                    num_route_hints: None,
-                                                    routing_fees: None,
-                                                }).await.expect("Failed to set gateway configuration");
-                                                continue;
-                                            }
+                                        let gateway_config = if let Some(config) = self_copy.get_gateway_configuration().await {
+                                            config
+                                        } else {
+                                            self_copy.set_gateway_state(GatewayState::Configuring).await;
+                                            info!("Waiting for gateway to be configured...");
+                                            self_copy.gateway_db
+                                                .wait_key_exists(&GatewayConfigurationKey)
+                                                .await
+                                        };
+
+                                        if gateway_config.network != lightning_network {
+                                            warn!("Lightning node does not match previously configured gateway network : ({:?})", gateway_config.network);
+                                            info!("Changing gateway network to match lightning node network : ({:?})", lightning_network);
+                                            self_copy.handle_disconnect(htlc_task_group).await;
+                                            self_copy.handle_set_configuration_msg(SetConfigurationPayload {
+                                                password: Some(gateway_config.password),
+                                                network: Some(lightning_network),
+                                                num_route_hints: None,
+                                                routing_fees: None,
+                                            }).await.expect("Failed to set gateway configuration");
+                                            continue;
                                         }
 
                                         info!("Successfully loaded Gateway clients.");
@@ -1093,15 +1092,12 @@ impl Gateway {
 
             prev_config
         } else {
-            if password.is_none() {
-                return Err(GatewayError::GatewayConfigurationError(
-                    "The password field is required when initially configuring the gateway"
-                        .to_string(),
-                ));
-            }
+            let password = password.ok_or(GatewayError::GatewayConfigurationError(
+                "The password field is required when initially configuring the gateway".to_string(),
+            ))?;
 
             GatewayConfiguration {
-                password: password.unwrap(),
+                password,
                 network: lightning_network,
                 num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
                 routing_fees: DEFAULT_FEES,
@@ -1225,10 +1221,11 @@ impl Gateway {
             return Some(gateway_config);
         }
 
+        // If the password is not provided, return None
+        let password = self.gateway_parameters.password.as_ref()?;
+
         // If the DB does not have the gateway configuration, we can construct one from
         // the provided password (required) and the defaults.
-        self.gateway_parameters.password.as_ref()?;
-
         // Use gateway parameters provided by the environment or CLI
         let num_route_hints = self.gateway_parameters.num_route_hints;
         let routing_fees = self
@@ -1238,7 +1235,7 @@ impl Gateway {
             .unwrap_or(GatewayFee(DEFAULT_FEES));
         let network = self.gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
         let gateway_config = GatewayConfiguration {
-            password: self.gateway_parameters.password.clone().unwrap(),
+            password: password.clone(),
             network,
             num_route_hints,
             routing_fees: routing_fees.0,
