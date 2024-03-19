@@ -264,13 +264,11 @@ impl Client {
 
     async fn load_previous_backup(&self) -> Option<ClientBackup> {
         let mut dbtx = self.db.begin_transaction_nc().await;
-        dbtx.ensure_global().expect("global tx");
         dbtx.get_value(&LastBackupKey).await
     }
 
     async fn store_last_backup(&self, backup: &ClientBackup) {
         let mut dbtx = self.db.begin_transaction().await;
-        dbtx.ensure_global().expect("global tx");
         dbtx.insert_entry(&LastBackupKey, backup).await;
         dbtx.commit_tx().await;
     }
