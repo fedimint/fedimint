@@ -326,15 +326,26 @@ pub async fn apply_migrations_client(
 ) -> Result<(), anyhow::Error> {
     db.ensure_global()?;
 
-    let mut global_dbtx = db.begin_transaction().await;
-    migrate_database_version(
-        &mut global_dbtx.to_ref_nc(),
-        target_db_version,
-        Some(module_instance_id),
-        kind.clone(),
-    )
-    .await?;
+    // TODO(support:v0.3):
+    // https://github.com/fedimint/fedimint/issues/3481
+    // Somewhere after 0.3 is no longer supported,
+    // we should have no need to try to migrate the key, as all
+    // clients that ever ran the fixed version, should have it
+    // migrated or created in the new place from the start.
+    {
+        let mut global_dbtx = db.begin_transaction().await;
+        migrate_database_version(
+            &mut global_dbtx.to_ref_nc(),
+            target_db_version,
+            Some(module_instance_id),
+            kind.clone(),
+        )
+        .await?;
 
+        global_dbtx.commit_tx_result().await?;
+    }
+
+    let mut global_dbtx = db.begin_transaction().await;
     let disk_version = global_dbtx
         .get_value(&DatabaseVersionKey(module_instance_id))
         .await;

@@ -19,12 +19,14 @@ use fedimint_core::db::{
 };
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
+use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
 use futures::future::BoxFuture;
 use futures::{FutureExt, StreamExt};
 use rand::rngs::OsRng;
 use rand::RngCore;
-use tracing::debug;
+use tempfile::TempDir;
+use tracing::{debug, trace};
 
 use crate::envs::FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV;
 
@@ -236,10 +238,13 @@ pub const TEST_MODULE_INSTANCE_ID: u16 = 0;
 async fn get_temp_database(
     db_prefix: &str,
     decoders: ModuleDecoderRegistry,
-) -> anyhow::Result<Database> {
+) -> anyhow::Result<(Database, TempDir)> {
     let snapshot_dirs = get_project_root().unwrap().join("db/migrations");
     if snapshot_dirs.exists() {
-        for file in fs::read_dir(snapshot_dirs)?.flatten() {
+        for file in fs::read_dir(&snapshot_dirs)
+            .with_context(|| format!("Reading dir content: {}", snapshot_dirs.display()))?
+            .flatten()
+        {
             let name = file
                 .file_name()
                 .into_string()
@@ -276,7 +281,7 @@ where
     F: Fn(Database) -> Fut,
     Fut: futures::Future<Output = anyhow::Result<()>>,
 {
-    let db = get_temp_database(db_prefix, decoders).await?;
+    let (db, _tmp_dir) = get_temp_database(db_prefix, decoders).await?;
     apply_migrations_server(&db, db_prefix.to_string(), target_db_version, migrations)
         .await
         .context("Error applying migrations to temp database")?;
@@ -304,7 +309,7 @@ where
         module.module_kind(),
         module.decoder(),
     )]);
-    let db = get_temp_database(db_prefix, decoders).await?;
+    let (db, _tmp_dir) = get_temp_database(db_prefix, decoders).await?;
     apply_migrations(
         &db,
         module.module_kind().to_string(),
@@ -343,7 +348,7 @@ where
         module.as_common().module_kind(),
         T::decoder(),
     )]);
-    let db = get_temp_database(db_prefix, decoders.clone()).await?;
+    let (db, _tmp_dir) = get_temp_database(db_prefix, decoders.clone()).await?;
     apply_migrations_client(
         &db,
         module.as_common().module_kind().to_string(),
@@ -388,21 +393,23 @@ fn open_temp_db_and_copy(
     temp_path: String,
     src_dir: &Path,
     decoders: ModuleDecoderRegistry,
-) -> anyhow::Result<Database> {
+) -> anyhow::Result<(Database, TempDir)> {
     // First copy the contents from src_dir to the path where the database will be
     // opened
-    let path = tempfile::Builder::new()
+    let tmp_dir = tempfile::Builder::new()
         .prefix(temp_path.as_str())
         .tempdir()?;
-    copy_directory(src_dir, path.path())
+    copy_directory(src_dir, tmp_dir.path())
         .context("Error copying database to temporary directory")?;
 
-    Ok(Database::new(RocksDb::open(path)?, decoders))
+    Ok((Database::new(RocksDb::open(&tmp_dir)?, decoders), tmp_dir))
 }
 
 /// Helper function that recursively copies all of the contents from
 /// `atomic_broadcast` to `dst`.
 pub fn copy_directory(src: &Path, dst: &Path) -> io::Result<()> {
+    trace!(target: LOG_TEST, src = %src.display(), dst = %dst.display(), "Copy dir");
+
     // Create the destination directory if it doesn't exist
     fs::create_dir_all(dst)?;
 
@@ -413,6 +420,7 @@ pub fn copy_directory(src: &Path, dst: &Path) -> io::Result<()> {
             copy_directory(&path, &dst.join(entry.file_name()))?;
         } else {
             let dst_path = dst.join(entry.file_name());
+            trace!(target: LOG_TEST, src = %path.display(), dst = %dst_path.display(), "Copy file");
             fs::copy(&path, &dst_path)?;
         }
     }
