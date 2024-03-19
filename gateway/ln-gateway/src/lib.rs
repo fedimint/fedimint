@@ -576,7 +576,7 @@ impl Gateway {
                                 }
                             }
                             Err(e) => {
-                                debug!("Failed to open HTLC stream: {e:?}");
+                                warn!("Failed to open HTLC stream: {e:?}");
                             }
                         }
 
