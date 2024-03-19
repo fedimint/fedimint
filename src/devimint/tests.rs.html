@@ -2277,9 +2277,6 @@
 <a href="#2275" id="2275">2275</a>
 <a href="#2276" id="2276">2276</a>
 <a href="#2277" id="2277">2277</a>
-<a href="#2278" id="2278">2278</a>
-<a href="#2279" id="2279">2279</a>
-<a href="#2280" id="2280">2280</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -4145,19 +4142,16 @@
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
     ))<span class="question-mark">?</span>];
     <span class="macro">info!</span>(<span class="string">"Getting wallet balances before import"</span>);
-    <span class="kw">let </span>balances_before = bitcoind.client().get_balances()<span class="question-mark">?</span>;
+    <span class="kw">let </span>bitcoin_client = bitcoind.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>balances_before = bitcoin_client.get_balances()<span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">"Importing descriptors into bitcoin wallet"</span>);
-    <span class="kw">let </span>request = bitcoind
-        .client()
+    <span class="kw">let </span>request = bitcoin_client
         .get_jsonrpc_client()
         .build_request(<span class="string">"importdescriptors"</span>, <span class="kw-2">&amp;</span>descriptors_json);
-    <span class="kw">let </span>response = bitcoind
-        .client()
-        .get_jsonrpc_client()
-        .send_request(request)<span class="question-mark">?</span>;
+    <span class="kw">let </span>response = bitcoin_client.get_jsonrpc_client().send_request(request)<span class="question-mark">?</span>;
     response.check_error()<span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">"Getting wallet balances after import"</span>);
-    <span class="kw">let </span>balances_after = bitcoind.client().get_balances()<span class="question-mark">?</span>;
+    <span class="kw">let </span>balances_after = bitcoin_client.get_balances()<span class="question-mark">?</span>;
     <span class="kw">let </span>diff = balances_after.mine.immature + balances_after.mine.trusted
         - balances_before.mine.immature
         - balances_before.mine.trusted;

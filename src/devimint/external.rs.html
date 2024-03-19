@@ -729,6 +729,44 @@
 <a href="#727" id="727">727</a>
 <a href="#728" id="728">728</a>
 <a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -740,6 +778,7 @@
 <span class="kw">use </span>bitcoincore_rpc::{bitcoin, RpcApi};
 <span class="kw">use </span>cln_rpc::ClnRpc;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 <span class="kw">use </span>fedimint_core::task::{block_in_place, sleep};
 <span class="kw">use </span>fedimint_core::util::write_overwrite_async;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
@@ -760,6 +799,7 @@
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Bitcoind {
     <span class="kw">pub</span>(<span class="kw">crate</span>) client: Arc&lt;bitcoincore_rpc::Client&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) wallet_client: Arc&lt;JitTryAnyhow&lt;Arc&lt;bitcoincore_rpc::Client&gt;&gt;&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) _process: ProcessHandle,
 }
 
@@ -786,12 +826,18 @@
         <span class="kw">let </span>(host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(<span class="kw-2">&amp;</span>url)<span class="question-mark">?</span>;
         <span class="macro">debug!</span>(<span class="string">"bitcoind host: {:?}, auth: {:?}"</span>, <span class="kw-2">&amp;</span>host, auth);
         <span class="kw">let </span>client =
-            Arc::new(<span class="self">Self</span>::new_bitcoin_rpc(<span class="kw-2">&amp;</span>host, auth).context(<span class="string">"Failed to connect to bitcoind"</span>)<span class="question-mark">?</span>);
+            <span class="self">Self</span>::new_bitcoin_rpc(<span class="kw-2">&amp;</span>host, auth.clone()).context(<span class="string">"Failed to connect to bitcoind"</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>wallet_client = JitTry::new_try(|| <span class="kw">async move </span>{
+            <span class="kw">let </span>client =
+                <span class="self">Self</span>::new_bitcoin_rpc(<span class="kw-2">&amp;</span>host, auth).context(<span class="string">"Failed to connect to bitcoind"</span>)<span class="question-mark">?</span>;
+            <span class="self">Self</span>::init(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(Arc::new(client))
+        });
 
-        <span class="self">Self</span>::init(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             _process: process,
-            client,
+            client: Arc::new(client),
+            wallet_client: Arc::new(wallet_client),
         })
     }
 
@@ -861,10 +907,26 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub fn </span>client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;bitcoincore_rpc::Client&gt; {
-        <span class="self">self</span>.client.clone()
+    <span class="doccomment">/// Poll until bitcoind rpc responds for basic commands
+    </span><span class="kw">pub async fn </span>poll_ready(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        poll(<span class="string">"btcoind rpc ready"</span>, Duration::from_secs(<span class="number">10</span>), || <span class="kw">async </span>{
+            tokio::task::block_in_place(|| <span class="self">self</span>.client().get_block_count())
+                .map_err(|e| ControlFlow::Continue::&lt;anyhow::Error, <span class="kw">_</span>&gt;(e.into()))<span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(())
+        })
+        .<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Client
+    </span><span class="kw">pub fn </span>client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Arc&lt;bitcoincore_rpc::Client&gt; {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.client
     }
 
+    <span class="doccomment">/// Client that can has wallet initialized, can generate internal addresses
+    /// and send funds
+    </span><span class="kw">pub async fn </span>wallet_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span>Arc&lt;bitcoincore_rpc::Client&gt;&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.wallet_client.get_try().<span class="kw">await</span><span class="question-mark">?</span>)
+    }
     <span class="doccomment">/// Returns the total number of blocks in the chain.
     ///
     /// Fedimint's IBitcoindRpc considers block count the total number of
@@ -877,7 +939,7 @@
     <span class="kw">pub async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>start_time = Instant::now();
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">"Mining bitcoin blocks"</span>);
-        <span class="kw">let </span>client = <span class="self">self</span>.client();
+        <span class="kw">let </span>client = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>addr = client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>initial_block_count = client.get_block_count()<span class="question-mark">?</span>;
         tokio::task::block_in_place(|| client.generate_to_address(block_num, <span class="kw-2">&amp;</span>addr))<span class="question-mark">?</span>;
@@ -898,7 +960,7 @@
     <span class="kw">pub async fn </span>send_to(<span class="kw-2">&amp;</span><span class="self">self</span>, addr: String, amount: u64) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Txid&gt; {
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, amount, addr, <span class="string">"Sending funds from bitcoind"</span>);
         <span class="kw">let </span>amount = bitcoin::Amount::from_sat(amount);
-        <span class="kw">let </span>tx = <span class="self">self</span>.client().send_to_address(
+        <span class="kw">let </span>tx = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>.send_to_address(
             <span class="kw-2">&amp;</span>bitcoin::Address::from_str(<span class="kw-2">&amp;</span>addr)<span class="question-mark">?</span>,
             amount,
             <span class="prelude-val">None</span>,
@@ -923,7 +985,7 @@
     }
 
     <span class="kw">pub async fn </span>get_new_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>addr = <span class="self">self</span>.client().get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>addr = <span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(addr.to_string())
     }
 }
@@ -979,6 +1041,9 @@
             bitcoin_rpcport = process_mgr.globals.FM_PORT_BTC_RPC,
         );
         write_overwrite_async(process_mgr.globals.FM_CLN_DIR.join(<span class="string">"config"</span>), conf).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="comment">// workaround: will crash on start if it gets a bad response from
+        // bitcoind
+        </span>bitcoind.poll_ready().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>process = Lightningd::start(process_mgr, cln_dir).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>socket_cln = cln_dir.join(<span class="string">"regtest/lightning-rpc"</span>);
@@ -1065,6 +1130,9 @@
 
 <span class="kw">impl </span>Lnd {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="comment">// workaround: will crash on start if it gets a bad response from
+        // bitcoind
+        </span>bitcoind.poll_ready().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>(process, client) = Lnd::start(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>this = <span class="self">Self </span>{
             _bitcoind: bitcoind,
@@ -1344,6 +1412,9 @@
 
 <span class="kw">impl </span>Electrs {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="comment">// workaround: will crash on start if it gets a bad response from
+        // bitcoind
+        </span>bitcoind.poll_ready().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting electrs"</span>);
         <span class="kw">let </span>electrs_dir = process_mgr
             .globals
@@ -1390,6 +1461,9 @@
 
 <span class="kw">impl </span>Esplora {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="comment">// workaround: will crash(?) on start if it gets a bad response from
+        // bitcoind
+        </span>bitcoind.poll_ready().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">debug!</span>(<span class="string">"Starting esplora"</span>);
         <span class="kw">let </span>daemon_dir = process_mgr
             .globals
@@ -1445,6 +1519,8 @@
         Esplora::new(process_mgr, bitcoind.clone()),
     )<span class="question-mark">?</span>;
     open_channel(process_mgr, <span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="comment">// make sure the bitcoind wallet is ready
+    </span><span class="kw">let _ </span>= bitcoind.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(
         target: LOG_DEVIMINT,
         <span class="string">"starting base daemons took {:?}"</span>,
