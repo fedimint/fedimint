@@ -1,5 +1,4 @@
 pub mod db;
-
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -33,6 +32,7 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeersExt, OutPoint, PeerId,
     ServerModule,
 };
+pub use fedimint_ln_common as common;
 use fedimint_ln_common::config::{
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
     LightningConfigLocal, LightningConfigPrivate, LightningGenParams,

@@ -15,6 +15,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::{OutPoint, PeerId, ServerModule};
+pub use fedimint_unknown_common as common;
 use fedimint_unknown_common::config::{
     UnknownClientConfig, UnknownConfig, UnknownConfigConsensus, UnknownConfigLocal,
     UnknownConfigPrivate, UnknownGenParams,
@@ -23,7 +24,6 @@ use fedimint_unknown_common::{
     UnknownCommonInit, UnknownConsensusItem, UnknownInput, UnknownInputError, UnknownModuleTypes,
     UnknownOutput, UnknownOutputError, UnknownOutputOutcome, CONSENSUS_VERSION,
 };
-
 pub mod db;
 
 /// Generates the module

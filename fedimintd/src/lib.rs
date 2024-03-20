@@ -1,98 +1,12 @@
 use bitcoin::Network;
-use envs::FM_DISABLE_META_MODULE_ENV;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
-use fedimint_core::core::{
-    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
-use fedimint_core::envs::is_env_var_set;
-use fedimint_core::module::ServerModuleInit;
 use fedimint_core::util::SafeUrl;
-use fedimint_ln_common::config::{
-    LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
-};
-use fedimint_ln_server::LightningInit;
-use fedimint_meta_server::{MetaGenParams, MetaGenParamsConsensus, MetaGenParamsLocal, MetaInit};
-use fedimint_mint_server::common::config::{FeeConsensus, MintGenParams, MintGenParamsConsensus};
-use fedimint_mint_server::MintInit;
-use fedimint_unknown_common::config::{
-    UnknownGenParams, UnknownGenParamsConsensus, UnknownGenParamsLocal,
-};
-use fedimint_unknown_server::UnknownInit;
-use fedimint_wallet_server::common::config::{
-    WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
-};
-use fedimint_wallet_server::WalletInit;
+pub use fedimintd::*;
 
-/// Module for creating `fedimintd` binary with custom modules
-pub mod fedimintd;
+mod fedimintd;
 
 pub mod envs;
 
-/// Generates the configuration for the modules configured in the server binary
-pub fn attach_default_module_init_params(
-    bitcoin_rpc: BitcoinRpcConfig,
-    module_init_params: &mut ServerModuleConfigGenParamsRegistry,
-    network: Network,
-    finality_delay: u32,
-) {
-    module_init_params
-        .attach_config_gen_params(
-            LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-            WalletInit::kind(),
-            WalletGenParams {
-                local: WalletGenParamsLocal {
-                    bitcoin_rpc: bitcoin_rpc.clone(),
-                },
-                consensus: WalletGenParamsConsensus {
-                    network,
-                    // TODO this is not very elegant, but I'm planning to get rid of it in a next
-                    // commit anyway
-                    finality_delay,
-                    client_default_bitcoin_rpc: default_esplora_server(network),
-                },
-            },
-        )
-        .attach_config_gen_params(
-            LEGACY_HARDCODED_INSTANCE_ID_MINT,
-            MintInit::kind(),
-            MintGenParams {
-                local: Default::default(),
-                consensus: MintGenParamsConsensus::new(2, FeeConsensus::default()),
-            },
-        )
-        .attach_config_gen_params(
-            LEGACY_HARDCODED_INSTANCE_ID_LN,
-            LightningInit::kind(),
-            LightningGenParams {
-                local: LightningGenParamsLocal { bitcoin_rpc },
-                consensus: LightningGenParamsConsensus { network },
-            },
-        );
-
-    if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
-        module_init_params.append_config_gen_params(
-            MetaInit::kind(),
-            MetaGenParams {
-                local: MetaGenParamsLocal,
-                consensus: MetaGenParamsConsensus,
-            },
-        );
-    }
-}
-
-pub fn attach_unknown_module_init_params(
-    module_init_params: &mut ServerModuleConfigGenParamsRegistry,
-) {
-    module_init_params.append_config_gen_params(
-        UnknownInit::kind(),
-        UnknownGenParams {
-            local: UnknownGenParamsLocal,
-            consensus: UnknownGenParamsConsensus,
-        },
-    );
-}
 pub fn default_esplora_server(network: Network) -> BitcoinRpcConfig {
     let url = match network {
         Network::Bitcoin => SafeUrl::parse("https://blockstream.info/api/")
