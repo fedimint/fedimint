@@ -9,6 +9,7 @@ use fedimint_core::{sats, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
+use fedimint_logging::LOG_TEST;
 use fedimint_mint_client::{
     MintClientInit, MintClientModule, OOBNotes, ReissueExternalNotesState, SpendOOBState,
 };
@@ -17,7 +18,7 @@ use fedimint_mint_server::MintInit;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{debug, info};
 
 const EXPECTED_MAXIMUM_FEE: Amount = Amount::from_sats(50);
 
@@ -249,10 +250,13 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
 
     // FIXME: UserCanceledSuccess should mean the money is in our wallet
     for _ in 0..200 {
-        sleep_in_test("sats not in wallet yet", Duration::from_millis(100)).await;
-        if client.get_balance().await >= sats(1000) - EXPECTED_MAXIMUM_FEE {
+        let balance = client.get_balance().await;
+        let expected_min_balance = sats(1000) - EXPECTED_MAXIMUM_FEE;
+        if expected_min_balance <= balance {
             return Ok(());
         }
+        debug!(target: LOG_TEST, %balance, %expected_min_balance, "Wallet balance not updated yet");
+        sleep_in_test("waiting for wallet balance", Duration::from_millis(100)).await;
     }
 
     panic!("Did not receive refund in time");
