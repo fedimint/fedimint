@@ -1215,7 +1215,7 @@
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
         poll(
             <span class="string">"trying-to-connect-to-peers"</span>,
-            Duration::from_secs(<span class="number">15</span>),
+            Duration::from_secs(<span class="number">30</span>),
             || <span class="kw">async </span>{
                 client
                     .status()
