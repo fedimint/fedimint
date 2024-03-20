@@ -18,7 +18,7 @@ use bitcoin_hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
 use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
 };
-use fedimint_client::db::ClientMigrationFn;
+use fedimint_client::db::{migrate_state, ClientMigrationFn};
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
@@ -38,6 +38,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 use fedimint_core::time::now;
+use fedimint_core::util::BoxStream;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
 };
@@ -65,7 +66,6 @@ use secp256k1::{PublicKey, Scalar, Signing, ThirtyTwoByteHash, Verification};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
-use thiserror::Error;
 use tracing::{debug, error};
 
 use crate::db::{MetaOverrides, MetaOverridesKey, MetaOverridesPrefix, PaymentResultPrefix};
@@ -73,8 +73,8 @@ use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
 };
 use crate::pay::{
-    GatewayPayError, LightningPayCommon, LightningPayCreatedOutgoingLnContract,
-    LightningPayStateMachine, LightningPayStates,
+    LightningPayCommon, LightningPayCreatedOutgoingLnContract, LightningPayStateMachine,
+    LightningPayStates,
 };
 use crate::receive::{
     get_incoming_contract, LightningReceiveError, LightningReceiveStateMachine,
@@ -164,22 +164,13 @@ pub enum InternalPayState {
 #[serde(rename_all = "snake_case")]
 pub enum LnPayState {
     Created,
-    Canceled,
-    Funded,
-    WaitingForRefund {
-        block_height: u32,
-        gateway_error: GatewayPayError,
-    },
+    FundingRejected,
+    Funded { block_height: u32 },
+    WaitingForRefund { error_reason: String },
     AwaitingChange,
-    Success {
-        preimage: String,
-    },
-    Refunded {
-        gateway_error: GatewayPayError,
-    },
-    UnexpectedError {
-        error_message: String,
-    },
+    Success { preimage: String },
+    Refunded { error_reason: String },
+    UnexpectedError { error_message: String },
 }
 
 /// The high-level state of a reissue operation started with
@@ -259,7 +250,7 @@ pub struct LightningClientInit;
 #[apply(async_trait_maybe_send!)]
 impl ModuleInit for LightningClientInit {
     type Common = LightningCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(2);
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(3);
 
     async fn dump_database(
         &self,
@@ -346,8 +337,28 @@ impl ClientModuleInit for LightningClientInit {
         migrations.insert(
             DatabaseVersion(1),
             move |_, module_instance_id, active_states, inactive_states, decoders| {
-                db::migrate_to_v2(module_instance_id, active_states, inactive_states, decoders)
-                    .boxed()
+                migrate_state::<LightningClientStateMachines>(
+                    module_instance_id,
+                    active_states,
+                    inactive_states,
+                    decoders,
+                    db::get_v1_migrated_state,
+                )
+                .boxed()
+            },
+        );
+
+        migrations.insert(
+            DatabaseVersion(2),
+            move |_, module_instance_id, active_states, inactive_states, decoders| {
+                migrate_state::<LightningClientStateMachines>(
+                    module_instance_id,
+                    active_states,
+                    inactive_states,
+                    decoders,
+                    db::get_v2_migrated_state,
+                )
+                .boxed()
             },
         );
 
@@ -416,19 +427,6 @@ impl ClientModule for LightningClientModule {
         };
         Some(amt)
     }
-}
-
-#[derive(Error, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum PayError {
-    #[error("Lightning payment was canceled")]
-    Canceled,
-    #[error("Lightning payment was refunded")]
-    Refunded(TransactionId),
-    #[error("Lightning payment waiting for refund")]
-    Refundable(u32, GatewayPayError),
-    #[error("Lightning payment failed")]
-    Failed(String),
 }
 
 impl LightningClientModule {
@@ -712,49 +710,6 @@ impl LightningClientModule {
                     LightningReceiveStates::Canceled(e) => {
                         return Err(e);
                     }
-                    _ => {}
-                },
-                Some(_) => {}
-                None => {}
-            }
-        }
-    }
-
-    // Wait for the Lightning invoice to be paid successfully or waiting for refund
-    async fn await_lightning_payment_success(
-        &self,
-        operation_id: OperationId,
-    ) -> Result<String, PayError> {
-        let mut stream = self.notifier.subscribe(operation_id).await;
-        loop {
-            match stream.next().await {
-                Some(LightningClientStateMachines::LightningPay(state)) => match state.state {
-                    LightningPayStates::Success(preimage) => {
-                        return Ok(preimage);
-                    }
-                    LightningPayStates::Refundable(refundable) => {
-                        return Err(PayError::Refundable(
-                            refundable.block_timelock,
-                            refundable.error,
-                        ));
-                    }
-                    _ => {}
-                },
-                Some(_) => {}
-                None => {}
-            }
-        }
-    }
-
-    async fn await_refund(&self, operation_id: OperationId) -> Result<Vec<OutPoint>, PayError> {
-        let mut stream = self.notifier.subscribe(operation_id).await;
-        loop {
-            match stream.next().await {
-                Some(LightningClientStateMachines::LightningPay(state)) => match state.state {
-                    LightningPayStates::Refunded(out_points) => {
-                        return Ok(out_points);
-                    }
-                    LightningPayStates::Failure(reason) => return Err(PayError::Failed(reason)),
                     _ => {}
                 },
                 Some(_) => {}
@@ -1289,7 +1244,7 @@ impl LightningClientModule {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnPayState>> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
-        let (out_point, _, change) = match operation.meta::<LightningOperationMeta>().variant {
+        let (_, _, change) = match operation.meta::<LightningOperationMeta>().variant {
             LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
                 out_point,
                 invoice,
@@ -1301,55 +1256,99 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
+        async fn get_next_pay_state(
+            stream: &mut BoxStream<'_, LightningClientStateMachines>,
+        ) -> Option<LightningPayStates> {
+            match stream.next().await {
+                Some(LightningClientStateMachines::LightningPay(state)) => Some(state.state),
+                Some(_) => panic!("Operation is not a lightning payment"),
+                None => None,
+            }
+        }
+
         Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, move || {
             stream! {
                 let self_ref = client_ctx.self_ref();
 
-                yield LnPayState::Created;
-
-                if client_ctx
-                    .transaction_updates(operation_id)
-                    .await
-                    .await_tx_accepted(out_point.txid)
-                    .await
-                    .is_err()
-                {
-                    yield LnPayState::Canceled;
-                    return;
-                }
-                yield LnPayState::Funded;
-
-                match self_ref.await_lightning_payment_success(operation_id).await {
-                    Ok(preimage) => {
-                        if !change.is_empty() {
-                            yield LnPayState::AwaitingChange;
-                            match client_ctx.await_primary_module_outputs(operation_id, change).await {
-                                Ok(_) => {}
-                                Err(_) => {
-                                    yield LnPayState::UnexpectedError { error_message: "Error occurred while waiting for the primary module's output".to_string() };
-                                    return;
-                                }
-                            }
-                        }
-
-                        yield LnPayState::Success {preimage};
+                let mut stream = self_ref.notifier.subscribe(operation_id).await;
+                let state = get_next_pay_state(&mut stream).await;
+                match state {
+                    Some(LightningPayStates::CreatedOutgoingLnContract(_)) => {
+                        yield LnPayState::Created;
+                    }
+                    Some(LightningPayStates::FundingRejected) => {
+                        yield LnPayState::FundingRejected;
                         return;
                     }
-                    Err(PayError::Refundable(block_height, error)) => {
-                        yield LnPayState::WaitingForRefund{ block_height, gateway_error: error.clone() };
+                    Some(state) => {
+                        yield LnPayState::UnexpectedError { error_message: format!("Found unexpected state during lightning payment: {state:?}") };
+                        return;
+                    }
+                    None => {
+                        error!("Unexpected end of lightning pay state machine");
+                        return;
+                    }
+                }
 
-                        if let Ok(out_points) = self_ref.await_refund(operation_id).await {
-                            // need to await primary module to get refund
-                            if client_ctx.await_primary_module_outputs(operation_id, out_points).await.is_ok() {
-                                yield LnPayState::Refunded { gateway_error: error };
-                                return;
+                let state = get_next_pay_state(&mut stream).await;
+                match state {
+                    Some(LightningPayStates::Funded(funded)) => {
+                        yield LnPayState::Funded { block_height: funded.timelock }
+                    }
+                    Some(state) => {
+                        yield LnPayState::UnexpectedError { error_message: format!("Found unexpected state during lightning payment: {state:?}") };
+                        return;
+                    }
+                    _ => {
+                        error!("Unexpected end of lightning pay state machine");
+                        return;
+                    }
+                }
+
+                let state = get_next_pay_state(&mut stream).await;
+                match state {
+                    Some(LightningPayStates::Success(preimage)) => {
+                        if !change.is_empty() {
+                            yield LnPayState::AwaitingChange;
+                            match client_ctx.await_primary_module_outputs(operation_id, change.clone()).await {
+                                Ok(_) => {
+                                    yield LnPayState::Success { preimage };
+                                }
+                                Err(e) => {
+                                    yield LnPayState::UnexpectedError {
+                                        error_message: format!("Error occurred while waiting for the change: {e:?}"),
+                                    };
+                                }
+                            }
+                        } else {
+                            yield LnPayState::Success { preimage };
+                        }
+                    }
+                    Some(LightningPayStates::Refund(refund)) => {
+                        yield LnPayState::WaitingForRefund {
+                            error_reason: refund.error_reason.clone(),
+                        };
+
+                        match client_ctx.await_primary_module_outputs(operation_id, refund.out_points).await {
+                            Ok(_) => {
+                                yield LnPayState::Refunded {
+                                    error_reason: refund.error_reason,
+                                };
+                            }
+                            Err(e) => {
+                                yield LnPayState::UnexpectedError {
+                                    error_message: format!("Error occurred trying to get refund. Refund was not successful: {e:?}"),
+                                };
                             }
                         }
                     }
-                    _ => {}
+                    Some(state) => {
+                        yield LnPayState::UnexpectedError { error_message: format!("Found unexpected state during lightning payment: {state:?}") };
+                    }
+                    None => {
+                        error!("Unexpected end of lightning pay state machine");
+                    }
                 }
-
-                yield LnPayState::UnexpectedError { error_message: "Error occurred trying to get refund. Refund was not successful".to_string() };
             }
         }))
     }

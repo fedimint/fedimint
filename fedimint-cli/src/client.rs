@@ -721,16 +721,16 @@ async fn wait_for_ln_payment(
                             .unwrap(),
                         ));
                     }
-                    LnPayState::Refunded { gateway_error } => {
-                        info!("{gateway_error}");
+                    LnPayState::Refunded { error_reason } => {
+                        info!("{error_reason}");
                         return Ok(Some(get_note_summary(client).await?));
                     }
                     LnPayState::Created
-                    | LnPayState::Canceled
+                    | LnPayState::FundingRejected
                     | LnPayState::AwaitingChange
                     | LnPayState::WaitingForRefund { .. } => {}
-                    LnPayState::Funded if return_on_funding => return Ok(None),
-                    LnPayState::Funded => {}
+                    LnPayState::Funded { .. } if return_on_funding => return Ok(None),
+                    LnPayState::Funded { .. } => {}
                     LnPayState::UnexpectedError { error_message } => {
                         bail!("UnexpectedError: {error_message}")
                     }
