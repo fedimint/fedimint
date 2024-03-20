@@ -506,7 +506,7 @@ pub async fn run_dkg(
     for (peer_id, client) in &admin_clients {
         poll(
             "trying-to-connect-to-peers",
-            Duration::from_secs(15),
+            Duration::from_secs(30),
             || async {
                 client
                     .status()
