@@ -470,31 +470,45 @@ impl Gateway {
         task_group.spawn("Webserver", move |handle| async move {
             while !handle.is_shutting_down() {
                 // Re-fetch the configuration because the password has changed.
+                info!("Getting gateway configuration...");
                 let gateway_config = gateway.get_gateway_configuration().await;
                 let mut webserver_group = subgroup.make_subgroup().await;
-                run_webserver(
+                info!("Spawning gateway webserver...");
+                if let Err(e) = run_webserver(
                     gateway_config.clone(),
                     gateway.gateway_parameters.listen,
                     gateway.clone(),
                     &mut webserver_group,
                 )
                 .await
-                .expect("Failed to start webserver");
+                {
+                    error!("Error starting the gateway webserver: {e:?}");
+                    return;
+                }
                 info!("Successfully started webserver");
-                let result = handle
+
+                let webserver_handle = webserver_group.make_handle();
+
+                // Wait for the password to change or for the task group to shutdown
+                if handle
                     .cancel_on_shutdown(async {
                         wait_for_new_password(&gateway_db, gateway_config).await;
                         info!("GatewayConfiguration has been updated, restarting webserver...");
                         if let Err(e) = webserver_group.shutdown_join_all(None).await {
-                            panic!("Error shutting down server: {e:?}");
+                            error!("Error shutting down gateway webserver: {e:?}");
                         }
                     })
-                    .await;
-                if result.is_err() {
-                    info!("Received shutdown signal, exiting....");
-                    break;
+                    .await
+                    .is_err()
+                {
+                    info!("Received cancel shutdown signal, stopping waiting for password update.");
                 }
+
+                info!("Waiting for gateway webserver to shutdown...");
+                webserver_handle.make_shutdown_rx().await;
             }
+
+            info!("Gateway Webserver Task Stopped");
         });
     }
 

@@ -11,7 +11,7 @@ use serde_json::json;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 use tower_http::validate_request::ValidateRequestHeaderLayer;
-use tracing::{error, instrument};
+use tracing::{error, info, instrument};
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, InfoPayload,
@@ -43,7 +43,9 @@ pub async fn run_webserver(
         });
 
         if let Err(e) = graceful.await {
-            error!("Error shutting down gatewayd webserver: {:?}", e);
+            error!("Error shutting down gateway webserver: {:?}", e);
+        } else {
+            info!("Successfully shutdown gateway webserver");
         }
     });
 
