@@ -14,7 +14,7 @@ use std::time::Duration;
 use std::{fs, result};
 
 use bip39::Mnemonic;
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand};
 use db_locked::LockedBuilder;
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_bip39::Bip39RootSecretStrategy;
@@ -199,9 +199,6 @@ struct Opts {
     #[arg(short = 'v', long)]
     verbose: bool,
 
-    #[arg(long, env = "FM_WS_URL")]
-    ws: Option<SafeUrl>,
-
     #[clap(subcommand)]
     command: Command,
 }
@@ -225,14 +222,6 @@ impl Opts {
     fn admin_client(&self, cfg: &ClientConfig) -> CliResult<DynGlobalApi> {
         let our_id = self.our_id.ok_or_cli_msg("Admin client needs our-id set")?;
         Self::admin_client_from_id(our_id, cfg)
-    }
-
-    fn ws_admin_client(&self) -> CliResult<DynGlobalApi> {
-        let ws = self
-            .ws
-            .clone()
-            .ok_or_cli_msg("For this operation, ws url is required")?;
-        Ok(DynGlobalApi::from_pre_peer_id_endpoint(ws))
     }
 
     fn admin_client_from_id(id: PeerId, cfg: &ClientConfig) -> CliResult<DynGlobalApi> {
@@ -325,6 +314,27 @@ enum AdminCmd {
     /// Download guardian config to back it up
     GuardianConfigBackup,
 
+    Dkg(DkgAdminArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+struct DkgAdminArgs {
+    #[arg(long, env = "FM_WS_URL")]
+    ws: SafeUrl,
+
+    #[clap(subcommand)]
+    subcommand: DkgAdminCmd,
+}
+
+impl DkgAdminArgs {
+    fn ws_admin_client(&self) -> CliResult<DynGlobalApi> {
+        let ws = self.ws.clone();
+        Ok(DynGlobalApi::from_pre_peer_id_endpoint(ws))
+    }
+}
+
+#[derive(Debug, Clone, Subcommand)]
+enum DkgAdminCmd {
     // These commands are roughly in the order they should be called
     /// Allow to access the `status` endpoint in a pre-dkg phase
     WsStatus,
@@ -333,15 +343,19 @@ enum AdminCmd {
     SetConfigGenParams {
         /// Guardian-defined key-value pairs that will be passed to the client
         /// Must be a valid JSON object (Map<String, String>)
+        #[clap(long)]
         meta_json: String,
         /// Set the params (if leader) or just the local params (if follower)
+        #[clap(long)]
         modules_json: String,
     },
     SetConfigGenConnections {
         /// Our guardian name
+        #[clap(long)]
         our_name: String,
         /// URL of "leader" guardian to send our connection info to
         /// Will be `None` if we are the leader
+        #[clap(long)]
         leader_api_url: Option<SafeUrl>,
     },
     GetConfigGenPeers,
@@ -733,82 +747,8 @@ impl FedimintCli {
                         .map_err_cli_msg("invalid response")?,
                 ))
             }
-            Command::Admin(AdminCmd::WsStatus) => {
-                let status = cli.ws_admin_client()?.status().await?;
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(status).map_err_cli_msg("invalid response")?,
-                ))
-            }
-            Command::Admin(AdminCmd::SetPassword) => {
-                cli.ws_admin_client()?.set_password(cli.auth()?).await?;
-                Ok(CliOutput::Raw(Value::Null))
-            }
-            Command::Admin(AdminCmd::GetDefaultConfigGenParams) => {
-                let default_params = cli
-                    .ws_admin_client()?
-                    .get_default_config_gen_params(cli.auth()?)
-                    .await?;
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(default_params).map_err_cli_msg("invalid response")?,
-                ))
-            }
-            Command::Admin(AdminCmd::SetConfigGenParams {
-                meta_json,
-                modules_json,
-            }) => {
-                let meta: BTreeMap<String, String> =
-                    serde_json::from_str(&meta_json).map_err_cli_msg("Invalid JSON")?;
-                let modules: ServerModuleConfigGenParamsRegistry =
-                    serde_json::from_str(&modules_json).map_err_cli_msg("Invalid JSON")?;
-                let params = ConfigGenParamsRequest { meta, modules };
-                cli.ws_admin_client()?
-                    .set_config_gen_params(params, cli.auth()?)
-                    .await?;
-                Ok(CliOutput::Raw(Value::Null))
-            }
-            Command::Admin(AdminCmd::SetConfigGenConnections {
-                our_name,
-                leader_api_url,
-            }) => {
-                let req = ConfigGenConnectionsRequest {
-                    our_name,
-                    leader_api_url,
-                };
-                cli.ws_admin_client()?
-                    .set_config_gen_connections(req, cli.auth()?)
-                    .await?;
-                Ok(CliOutput::Raw(Value::Null))
-            }
-            Command::Admin(AdminCmd::GetConfigGenPeers) => {
-                let peer_server_params = cli.ws_admin_client()?.get_config_gen_peers().await?;
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(peer_server_params).map_err_cli_msg("invalid response")?,
-                ))
-            }
-            Command::Admin(AdminCmd::ConsensusConfigGenParams) => {
-                let config_gen_params_response =
-                    cli.ws_admin_client()?.consensus_config_gen_params().await?;
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(config_gen_params_response)
-                        .map_err_cli_msg("invalid response")?,
-                ))
-            }
-            Command::Admin(AdminCmd::RunDkg) => {
-                cli.ws_admin_client()?.run_dkg(cli.auth()?).await?;
-                Ok(CliOutput::Raw(Value::Null))
-            }
-            Command::Admin(AdminCmd::GetVerifyConfigHash) => {
-                let hashes_by_peer = cli
-                    .ws_admin_client()?
-                    .get_verify_config_hash(cli.auth()?)
-                    .await?;
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(hashes_by_peer).map_err_cli_msg("invalid response")?,
-                ))
-            }
-            Command::Admin(AdminCmd::StartConsensus) => {
-                cli.ws_admin_client()?.start_consensus(cli.auth()?).await?;
-                Ok(CliOutput::Raw(Value::Null))
+            Command::Admin(AdminCmd::Dkg(dkg_args)) => {
+                self.handle_admin_dkg_command(cli, dkg_args).await
             }
             Command::Dev(DevCmd::Api {
                 method,
@@ -966,6 +906,82 @@ impl FedimintCli {
                 );
                 // HACK: prints true to stdout which is fine for shells
                 Ok(CliOutput::Raw(serde_json::Value::Bool(true)))
+            }
+        }
+    }
+
+    async fn handle_admin_dkg_command(
+        &self,
+        cli: Opts,
+        dkg_args: DkgAdminArgs,
+    ) -> Result<CliOutput, CliError> {
+        let client = dkg_args.ws_admin_client()?;
+        match &dkg_args.subcommand {
+            DkgAdminCmd::WsStatus => {
+                let status = client.status().await?;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(status).map_err_cli_msg("invalid response")?,
+                ))
+            }
+            DkgAdminCmd::SetPassword => {
+                client.set_password(cli.auth()?).await?;
+                Ok(CliOutput::Raw(Value::Null))
+            }
+            DkgAdminCmd::GetDefaultConfigGenParams => {
+                let default_params = client.get_default_config_gen_params(cli.auth()?).await?;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(default_params).map_err_cli_msg("invalid response")?,
+                ))
+            }
+            DkgAdminCmd::SetConfigGenParams {
+                meta_json,
+                modules_json,
+            } => {
+                let meta: BTreeMap<String, String> =
+                    serde_json::from_str(meta_json).map_err_cli_msg("Invalid JSON")?;
+                let modules: ServerModuleConfigGenParamsRegistry =
+                    serde_json::from_str(modules_json).map_err_cli_msg("Invalid JSON")?;
+                let params = ConfigGenParamsRequest { meta, modules };
+                client.set_config_gen_params(params, cli.auth()?).await?;
+                Ok(CliOutput::Raw(Value::Null))
+            }
+            DkgAdminCmd::SetConfigGenConnections {
+                our_name,
+                leader_api_url,
+            } => {
+                let req = ConfigGenConnectionsRequest {
+                    our_name: our_name.to_owned(),
+                    leader_api_url: leader_api_url.to_owned(),
+                };
+                client.set_config_gen_connections(req, cli.auth()?).await?;
+                Ok(CliOutput::Raw(Value::Null))
+            }
+            DkgAdminCmd::GetConfigGenPeers => {
+                let peer_server_params = client.get_config_gen_peers().await?;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(peer_server_params).map_err_cli_msg("invalid response")?,
+                ))
+            }
+            DkgAdminCmd::ConsensusConfigGenParams => {
+                let config_gen_params_response = client.consensus_config_gen_params().await?;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(config_gen_params_response)
+                        .map_err_cli_msg("invalid response")?,
+                ))
+            }
+            DkgAdminCmd::RunDkg => {
+                client.run_dkg(cli.auth()?).await?;
+                Ok(CliOutput::Raw(Value::Null))
+            }
+            DkgAdminCmd::GetVerifyConfigHash => {
+                let hashes_by_peer = client.get_verify_config_hash(cli.auth()?).await?;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(hashes_by_peer).map_err_cli_msg("invalid response")?,
+                ))
+            }
+            DkgAdminCmd::StartConsensus => {
+                client.start_consensus(cli.auth()?).await?;
+                Ok(CliOutput::Raw(Value::Null))
             }
         }
     }
