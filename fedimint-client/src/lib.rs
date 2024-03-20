@@ -755,6 +755,11 @@ impl Client {
         self.api.clone()
     }
 
+    /// Get the [`TaskGroup`] that is tied to Client's lifetime.
+    pub fn task_group(&self) -> &TaskGroup {
+        &self.task_group
+    }
+
     pub async fn get_config_from_db(db: &Database) -> Option<ClientConfig> {
         let mut dbtx = db.begin_transaction().await;
         #[allow(clippy::let_and_return)]
