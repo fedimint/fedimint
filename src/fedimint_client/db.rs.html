@@ -549,8 +549,6 @@
 <a href="#547" id="547">547</a>
 <a href="#548" id="548">548</a>
 <a href="#549" id="549">549</a>
-<a href="#550" id="550">550</a>
-<a href="#551" id="551">551</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>fedimint_core::api::ApiVersionSet;
@@ -877,8 +875,6 @@
     module_instance_id: ModuleInstanceId,
     decoders: ModuleDecoderRegistry,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
-    db.ensure_global()<span class="question-mark">?</span>;
-
     <span class="comment">// TODO(support:v0.3):
     // https://github.com/fedimint/fedimint/issues/3481
     // Somewhere after 0.3 is no longer supported,

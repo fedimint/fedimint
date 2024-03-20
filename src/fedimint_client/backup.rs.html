@@ -404,8 +404,6 @@
 <a href="#402" id="402">402</a>
 <a href="#403" id="403">403</a>
 <a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Reverse;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::io::{Cursor, Error, Read, Write};
@@ -672,13 +670,11 @@
 
     <span class="kw">async fn </span>load_previous_backup(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ClientBackup&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>;
-        dbtx.ensure_global().expect(<span class="string">"global tx"</span>);
         dbtx.get_value(<span class="kw-2">&amp;</span>LastBackupKey).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>store_last_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, backup: <span class="kw-2">&amp;</span>ClientBackup) {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
-        dbtx.ensure_global().expect(<span class="string">"global tx"</span>);
         dbtx.insert_entry(<span class="kw-2">&amp;</span>LastBackupKey, backup).<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>;
     }

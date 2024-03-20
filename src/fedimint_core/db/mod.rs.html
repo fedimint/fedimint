@@ -2950,8 +2950,6 @@
 <a href="#2948" id="2948">2948</a>
 <a href="#2949" id="2949">2949</a>
 <a href="#2950" id="2950">2950</a>
-<a href="#2951" id="2951">2951</a>
-<a href="#2952" id="2952">2952</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -4816,8 +4814,6 @@
     migrations: BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt;,
     module_instance_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
-    db.ensure_global()<span class="question-mark">?</span>;
-
     {
         <span class="kw">let </span><span class="kw-2">mut </span>global_dbtx = db.begin_transaction().<span class="kw">await</span>;
         migrate_database_version(
