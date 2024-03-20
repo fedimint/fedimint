@@ -255,7 +255,8 @@
                 ];
 
                 shellHook = ''
-                  root="$(git rev-parse --show-toplevel)"
+                  export REPO_ROOT="$(git rev-parse --show-toplevel)"
+                  export PATH="$REPO_ROOT/bin:$PATH"
 
                   # workaround https://github.com/rust-lang/cargo/issues/11020
                   cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
@@ -275,9 +276,9 @@
                   fi
 
                   export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache
-                  export CARGO_BUILD_TARGET_DIR="''${CARGO_BUILD_TARGET_DIR:-''${root}/target-nix}"
+                  export CARGO_BUILD_TARGET_DIR="''${CARGO_BUILD_TARGET_DIR:-''${REPO_ROOT}/target-nix}"
                   export FM_DISCOVER_API_VERSION_TIMEOUT=10
-                  [ -f "$root/.shrc.local" ] && source "$root/.shrc.local"
+                  [ -f "$REPO_ROOT/.shrc.local" ] && source "$REPO_ROOT/.shrc.local"
 
                   if [ ''${#TMPDIR} -ge 40 ]; then
                       >&2 echo "⚠️  TMPDIR too long. This might lead to problems running tests and regtest fed. Will try to use /tmp/ instead"
@@ -324,8 +325,9 @@
                 shellHook = ''
                   # hijack cargo for our evil purposes
                   export CARGO_ORIG_BIN="$(${pkgs.which}/bin/which cargo)"
-                  git_root="$(git rev-parse --show-toplevel)"
-                  export PATH="''${git_root}/nix/cargo-wrapper/:$PATH"
+                  export REPO_ROOT="$(git rev-parse --show-toplevel)"
+                  export PATH="$REPO_ROOT/bin:$PATH"
+                  export PATH="''${REPO_ROOT}/nix/cargo-wrapper/:$PATH"
                 '';
               });
 

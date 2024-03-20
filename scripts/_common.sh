@@ -2,11 +2,14 @@
 
 export REPO_ROOT
 
+if [ -z "${REPO_ROOT:-}" ]; then
+  if command -v git &> /dev/null; then
+    REPO_ROOT="$(git rev-parse --show-toplevel)"
+  else
+    REPO_ROOT="$PWD"
+  fi
 
-if command -v git &> /dev/null; then
-  REPO_ROOT="$(git rev-parse --show-toplevel)"
-else
-  REPO_ROOT="$PWD"
+  PATH="$REPO_ROOT/bin:$PATH"
 fi
 
 
