@@ -13,7 +13,7 @@ pub struct MetaGenParams {
 }
 
 /// Local parameters for config generation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MetaGenParamsLocal;
 
 /// Consensus parameters for config generation
