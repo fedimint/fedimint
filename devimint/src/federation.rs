@@ -1,3 +1,5 @@
+mod config;
+
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::path::PathBuf;
@@ -19,8 +21,7 @@ use fedimint_logging::LOG_DEVIMINT;
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
 use fedimint_wallet_client::config::WalletClientConfig;
-use fedimintd::attach_default_module_init_params;
-use fedimintd::fedimintd::FM_EXTRA_DKG_META_VAR;
+use fedimintd::FM_EXTRA_DKG_META_VAR;
 use fs_lock::FileLock;
 use futures::future::join_all;
 use rand::Rng;
@@ -656,7 +657,7 @@ async fn set_config_gen_params(
     auth: ApiAuth,
     mut server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -> Result<()> {
-    attach_default_module_init_params(
+    self::config::attach_default_module_init_params(
         BitcoinRpcConfig::from_env_vars()?,
         &mut server_gen_params,
         Network::Regtest,

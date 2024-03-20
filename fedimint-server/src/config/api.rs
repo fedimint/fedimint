@@ -956,7 +956,7 @@ mod tests {
                 .parse()
                 .expect("parses");
             let mut modules = ServerModuleConfigGenParamsRegistry::default();
-            modules.attach_config_gen_params(0, DummyInit::kind(), DummyGenParams::default());
+            modules.attach_config_gen_params_by_id(0, DummyInit::kind(), DummyGenParams::default());
 
             let default_params = ConfigGenParamsRequest {
                 meta: Default::default(),
@@ -1079,7 +1079,7 @@ mod tests {
         /// Sets local param to name and unique consensus amount for testing
         async fn set_config_gen_params(&self) {
             let mut modules = ServerModuleConfigGenParamsRegistry::default();
-            modules.attach_config_gen_params(
+            modules.attach_config_gen_params_by_id(
                 0,
                 DummyInit::kind(),
                 DummyGenParams {

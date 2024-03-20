@@ -105,7 +105,7 @@ impl Fixtures {
         params: impl ModuleInitParams,
     ) -> Self {
         self.params
-            .attach_config_gen_params(self.id, server.module_kind(), params);
+            .attach_config_gen_params_by_id(self.id, server.module_kind(), params);
         self.clients.push(DynClientModuleInit::from(client));
         self.servers.push(DynServerModuleInit::from(server));
         self.id += 1;
@@ -119,7 +119,7 @@ impl Fixtures {
         params: impl ModuleInitParams,
     ) -> Self {
         self.params
-            .attach_config_gen_params(self.id, server.module_kind(), params);
+            .attach_config_gen_params_by_id(self.id, server.module_kind(), params);
         self.servers.push(DynServerModuleInit::from(server));
         self.id += 1;
 

@@ -595,7 +595,7 @@ impl<M> ModuleInitRegistry<M> {
 }
 
 impl ModuleRegistry<ConfigGenModuleParams> {
-    pub fn attach_config_gen_params<T: ModuleInitParams>(
+    pub fn attach_config_gen_params_by_id<T: ModuleInitParams>(
         &mut self,
         id: ModuleInstanceId,
         kind: ModuleKind,
@@ -606,7 +606,8 @@ impl ModuleRegistry<ConfigGenModuleParams> {
         self.register_module(id, kind, params);
         self
     }
-    pub fn append_config_gen_params<T: ModuleInitParams>(
+
+    pub fn attach_config_gen_params<T: ModuleInitParams>(
         &mut self,
         kind: ModuleKind,
         gen: T,
