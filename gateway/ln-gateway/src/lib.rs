@@ -1336,48 +1336,36 @@ impl Gateway {
 
     async fn register_clients_timer(&mut self, task_group: &mut TaskGroup) {
         let gateway = self.clone();
-        task_group.spawn("register clients", move |handle| async move {
-                let registration_loop = async {
-                    loop {
-                        let mut registration_result: Option<Result<()>> = None;
-                        if let Some(gateway_config) = gateway.get_gateway_configuration().await {
-                            let gateway_state = gateway.state.read().await.clone();
-                            if let GatewayState::Running { .. } = &gateway_state {
-                                registration_result = Some(Self::register_all_federations(&gateway, &gateway_config).await);
-                            } else {
-                                // We need to retry more often if the gateway is not in the Running state
-                                const NOT_RUNNING_RETRY: Duration = Duration::from_secs(10);
-                                info!("Will not register federation yet because gateway still not in Running state. Current state: {gateway_state:?}. Will keep waiting, next retry in {NOT_RUNNING_RETRY:?}...");
-                                sleep(NOT_RUNNING_RETRY).await;
-                                continue;
-                            }
-                        } else {
-                            warn!("Cannot register clients because gateway configuration is not set.");
-                        }
-
-                        let registration_delay: Duration = if let Some(Err(GatewayError::FederationError(_))) = registration_result {
-                            // Retry to register gateway with federations in 10 seconds since it failed
-                            Duration::from_secs(10)
-                        } else {
-                        // Allow a 15% buffer of the TTL before the re-registering gateway
-                        // with the federations.
-                            GW_ANNOUNCEMENT_TTL.mul_f32(0.85)
-                        };
-
-                        sleep(registration_delay).await;
+        task_group.spawn_cancellable("register clients", async move {
+            loop {
+                let mut registration_result: Option<Result<()>> = None;
+                if let Some(gateway_config) = gateway.get_gateway_configuration().await {
+                    let gateway_state = gateway.state.read().await.clone();
+                    if let GatewayState::Running { .. } = &gateway_state {
+                        registration_result = Some(Self::register_all_federations(&gateway, &gateway_config).await);
+                    } else {
+                        // We need to retry more often if the gateway is not in the Running state
+                        const NOT_RUNNING_RETRY: Duration = Duration::from_secs(10);
+                        info!("Will not register federation yet because gateway still not in Running state. Current state: {gateway_state:?}. Will keep waiting, next retry in {NOT_RUNNING_RETRY:?}...");
+                        sleep(NOT_RUNNING_RETRY).await;
+                        continue;
                     }
+                } else {
+                    warn!("Cannot register clients because gateway configuration is not set.");
+                }
+
+                let registration_delay: Duration = if let Some(Err(GatewayError::FederationError(_))) = registration_result {
+                    // Retry to register gateway with federations in 10 seconds since it failed
+                    Duration::from_secs(10)
+                } else {
+                // Allow a 15% buffer of the TTL before the re-registering gateway
+                // with the federations.
+                    GW_ANNOUNCEMENT_TTL.mul_f32(0.85)
                 };
 
-                // The registration loop will sleep for long periods, so we allow shutdown
-                // signals to interrupt waiting for the rest of the loop to finish.
-                //
-                // If the loop is interrupted while in the middle of registering clients,
-                // start_gateway will spawn another task to register clients once a connection
-                // with the LN node is reestablished.
-                if handle.cancel_on_shutdown(registration_loop).await.is_err() {
-                    info!("register clients task received shutdown signal");
-                }
-            });
+                sleep(registration_delay).await;
+            }
+        });
     }
 
     async fn fetch_lightning_route_hints_try(
