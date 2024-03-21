@@ -14,7 +14,10 @@ version_str="${FM_RUN_TEST_VERSIONS:+ ($FM_RUN_TEST_VERSIONS)}"
 test_out_path="$(mktemp --tmpdir fm-XXXXX)"
 time_out_path="$(mktemp --tmpdir fm-XXXXX)"
 time_fmt='%e\t%M\t%w\t%c'
+
 export FM_TEST_NAME="$test_name"
+TMPDIR="$(mktemp -d --tmpdir "${FM_TEST_NAME}-XXXX")"
+FM_RUN_TEST_TMPDIR="$TMPDIR"
 
 echo "## RUN:  $test_name$version_str"
 
@@ -25,9 +28,14 @@ on_error() {
 }
 
 on_exit() {
-    rm -Rf "$CARGO_BUILD_TARGET_DIR"
+    exit_status=$?
+    if [ $exit_status -eq 0 ]; then
+        # if successful, don't waste space keeping the test dir
+        rm -Rf "$FM_RUN_TEST_TMPDIR"
+    fi
 }
 trap on_error ERR
+trap on_exit EXIT
 
 command time -q --format="$time_fmt" -o "$time_out_path" "$@" 2>&1 | ts -s > "$test_out_path"
 
