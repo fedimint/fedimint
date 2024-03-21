@@ -722,6 +722,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                 variant: LightningOperationMetaVariant::Receive {
                     out_point: OutPoint { txid, out_idx: 0 },
                     invoice: invoice.clone(),
+                    gateway_id: None,
                 },
                 extra_meta: serde_json::to_value("test intercept HTLC with invalid offer")
                     .expect("Failed to serialize string into json"),
