@@ -15,6 +15,11 @@ release_dir_base="releases/bins"
 release_dir="${release_dir_base}/${prefix}"
 sha256sum_path="releases/${prefix}.SHA256SUMS"
 
+if ! git rev-parse --verify "refs/tags/$tag" 1>/dev/null 2>/dev/null; then
+  >&2 echo "Can't find tag: $tag"
+  exit 1
+fi
+
 >&2 echo "Building..."
 
 # TODO: add gateway-cln-extension once available as an output
