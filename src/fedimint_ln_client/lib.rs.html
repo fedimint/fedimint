@@ -1822,6 +1822,14 @@
 <a href="#1820" id="1820">1820</a>
 <a href="#1821" id="1821">1821</a>
 <a href="#1822" id="1822">1822</a>
+<a href="#1823" id="1823">1823</a>
+<a href="#1824" id="1824">1824</a>
+<a href="#1825" id="1825">1825</a>
+<a href="#1826" id="1826">1826</a>
+<a href="#1827" id="1827">1827</a>
+<a href="#1828" id="1828">1828</a>
+<a href="#1829" id="1829">1829</a>
+<a href="#1830" id="1830">1830</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -2056,6 +2064,7 @@
     <span class="kw">pub </span>change: Vec&lt;OutPoint&gt;,
     <span class="kw">pub </span>is_internal_payment: bool,
     <span class="kw">pub </span>contract_id: ContractId,
+    <span class="kw">pub </span>gateway_id: <span class="prelude-ty">Option</span>&lt;secp256k1::PublicKey&gt;,
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2071,6 +2080,7 @@
     Receive {
         out_point: OutPoint,
         invoice: Bolt11Invoice,
+        gateway_id: <span class="prelude-ty">Option</span>&lt;secp256k1::PublicKey&gt;,
     },
     Claim {
         out_points: Vec&lt;OutPoint&gt;,
@@ -2929,6 +2939,7 @@
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;OutgoingLightningPayment&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span>maybe_gateway_id = maybe_gateway.as_ref().map(|g| g.gateway_id);
         <span class="kw">let </span>prev_payment_result = <span class="self">self
             </span>.get_prev_payment_result(invoice.payment_hash(), <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc())
             .<span class="kw">await</span>;
@@ -3037,6 +3048,7 @@
                 change,
                 is_internal_payment,
                 contract_id,
+                gateway_id: maybe_gateway_id,
             }),
             extra_meta: extra_meta.clone(),
         };
@@ -3332,6 +3344,7 @@
         extra_meta: M,
         gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
     ) -&gt; anyhow::Result&lt;(OperationId, Bolt11Invoice, [u8; <span class="number">32</span>])&gt; {
+        <span class="kw">let </span>gateway_id = gateway.as_ref().map(|g| g.gateway_id);
         <span class="kw">let </span>(src_node_id, short_channel_id, route_hints) = <span class="kw">match </span>gateway {
             <span class="prelude-val">Some</span>(current_gateway) =&gt; (
                 current_gateway.node_pub_key,
@@ -3364,6 +3377,7 @@
             variant: LightningOperationMetaVariant::Receive {
                 out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
                 invoice: invoice.clone(),
+                gateway_id,
             },
             extra_meta: extra_meta.clone(),
         };
@@ -3420,7 +3434,9 @@
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnReceiveState&gt;&gt; {
         <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>(out_point, invoice) = <span class="kw">match </span>operation.meta::&lt;LightningOperationMeta&gt;().variant {
-            LightningOperationMetaVariant::Receive { out_point, invoice } =&gt; (out_point, invoice),
+            LightningOperationMetaVariant::Receive {
+                out_point, invoice, ..
+            } =&gt; (out_point, invoice),
             <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">"Operation is not a lightning payment"</span>),
         };
 
