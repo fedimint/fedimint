@@ -15,7 +15,7 @@ forward in the background. All module state machines are run by a central
 <a href="sm/executor/struct.Executor.html" title="struct fedimint_client::sm::executor::Executor"><code>sm::Executor</code></a>. This means typically starting an operation shall return
 instantly.</p>
 <p>For example when doing a deposit the function starting it would immediately
-return a deposit address and a [<code>OperationId</code>] (important concept, highly
+return a deposit address and a <a href="../fedimint_core/core/struct.OperationId.html" title="struct fedimint_core::core::OperationId"><code>OperationId</code></a> (important concept, highly
 recommended to read the docs) while spawning a state machine checking the
 blockchain for incoming bitcoin transactions. The progress of these state
 machines can then be <em>observed</em> using the operation id, but no further user

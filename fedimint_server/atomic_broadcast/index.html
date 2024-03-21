@@ -2,17 +2,17 @@
     <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_server/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">fedimint_server</a>::<wbr><a class="mod" href="#">atomic_broadcast</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../../src/fedimint_server/atomic_broadcast/mod.rs.html#1-122">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This module implements fedimints custom atomic broadcast abstraction. A
 such, it is responsible for ordering serialized items in the form of byte
 vectors. The Broadcast is able to recover from a crash at any time via a
-backup that it maintains in the servers [fedimint_core::db::Database]. In
+backup that it maintains in the servers <a href="../../fedimint_core/db/struct.Database.html" title="struct fedimint_core::db::Database">fedimint_core::db::Database</a>. In
 Addition, it stores the history of accepted items in the form of
 signed session outcomes in the database as well in order to catch up fellow
 guardians which have been offline for a prolonged period of time.</p>
-<p>Though the broadcast depends on [fedimint_core] for [fedimint_core::PeerId],
-[fedimint_core::encoding::Encodable] and [fedimint_core::db::Database]
+<p>Though the broadcast depends on <a href="../../fedimint_core/index.html" title="mod fedimint_core">fedimint_core</a> for <a href="../../fedimint_core/struct.PeerId.html" title="struct fedimint_core::PeerId">fedimint_core::PeerId</a>,
+<a href="../../fedimint_core/encoding/trait.Encodable.html" title="trait fedimint_core::encoding::Encodable">fedimint_core::encoding::Encodable</a> and <a href="../../fedimint_core/db/struct.Database.html" title="struct fedimint_core::db::Database">fedimint_core::db::Database</a>
 it implements no consensus logic specific to Fedimint, to which we will
 refer as Fedimint Consensus going forward. To the broadcast a consensus item
 is merely a vector of bytes without any further structure.</p>
 <h2 id="the-journey-of-a-consensusitem"><a class="doc-anchor" href="#the-journey-of-a-consensusitem">§</a>The journey of a ConsensusItem</h2>
-<p>Let us sketch the journey of an [fedimint_core::epoch::ConsensusItem] into a
+<p>Let us sketch the journey of an <a href="../../fedimint_core/epoch/enum.ConsensusItem.html" title="enum fedimint_core::epoch::ConsensusItem">fedimint_core::epoch::ConsensusItem</a> into a
 signed session outcome.</p>
 <ul>
 <li>The node which wants to order the item calls consensus_encode to serialize
