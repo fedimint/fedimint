@@ -192,9 +192,9 @@ docs: build-docs
   main_index_path="${CARGO_BUILD_TARGET_DIR}/doc/index.html"
   fallback_index_path="${CARGO_BUILD_TARGET_DIR}/doc/fedimint_core/index.html"
   if [ -e "$main_index_path" ]; then
-    echo "http://$fallback_index_path"
+    echo "file://$fallback_index_path"
     $open_cmd "$main_index_path" || true
   else
-    echo "http://$fallback_index_path"
+    echo "file://$fallback_index_path"
     $open_cmd "$fallback_index_path" || true
   fi
