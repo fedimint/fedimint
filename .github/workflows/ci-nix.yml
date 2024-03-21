@@ -122,10 +122,11 @@ jobs:
           - macos
         include:
           - host: linux
-            runs-on: buildjet-8vcpu-ubuntu-2004
+            runs-on: ubuntu-latest
             build-in-pr: true
             timeout: 75
             run-tests: true
+            free-disk-space-ubuntu: true
           - host: macos
             runs-on: macos-14
             build-in-pr: false
@@ -138,6 +139,27 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
 
     steps:
+      - name: Free Disk Space, Ubuntu, part 1
+        if: matrix.free-disk-space-ubuntu
+        run: |
+          docker rmi `docker images -q`
+          sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /etc/sudo apt/sources.list.d
+          sudo apt -y autoremove --purge
+          sudo apt -y autoclean
+          sudo apt clean
+          rm --recursive --force "$AGENT_TOOLSDIRECTORY"
+          df -h
+
+      # Free up disk space on Ubuntu
+      - name: Free Disk Space, Ubuntu, part 2
+        if: matrix.free-disk-space-ubuntu
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # This might remove tools that are actually needed, if set to "true" but frees about 6 GB
+          tool-cache: false
+          large-packages: true
+          swap-storage: true
+
       - uses: actions/checkout@v4
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
