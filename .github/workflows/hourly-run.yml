@@ -78,9 +78,9 @@ jobs:
         run: |
           set -euo pipefail
           # first one might do nothing
-          nix build -L .#wasm32-unknown.ci.ciTestAll5Times --keep-failed
+          nix build -L .#wasm32-unknown.ci.ciTestAll5TimesSlow --keep-failed
           # but this one will run
-          nix build -L .#wasm32-unknown.ci.ciTestAll5Times --rebuild --keep-failed
+          nix build -L .#wasm32-unknown.ci.ciTestAll5TimesSlow --rebuild --keep-failed
 
       - name: Wasm Tests
         run: |

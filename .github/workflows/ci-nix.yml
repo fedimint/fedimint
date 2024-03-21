@@ -196,12 +196,12 @@ jobs:
       - name: Tests
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests
         run: |
-          nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --option keep-failed true --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).wasm32-unknown.ci.ciTestAll
+          nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --option keep-failed true --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).wasm32-unknown.ci.ciTestAllSlow
 
       - name: Tests (5 times more)
         if: github.event_name == 'merge_group' && matrix.run-tests
         run: |
-          nix build -L .#wasm32-unknown.ci.ciTestAll5Times --keep-failed
+          nix build -L .#wasm32-unknown.ci.ciTestAll5TimesSlow --keep-failed
 
       - name: Wasm Tests
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests && (matrix.host != 'macos')
