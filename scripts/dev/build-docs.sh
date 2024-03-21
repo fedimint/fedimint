@@ -23,6 +23,8 @@ if [ -e "${index_html}" ]; then
     pandoc "$fm_index_md" > "${fm_index_md}.html"
     trap 'rm -f "${fm_index_md}.html"' EXIT
 
+    sed -i 's#<title>Index of crates</title>#<title>Fedimint technical reference</title>#' "$index_html"
+
     awk -v insert_path="${fm_index_md}.html" '
       BEGIN {
         RS = ORS = "\0"; # Treat the file as a single record
