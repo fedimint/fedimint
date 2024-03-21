@@ -8,7 +8,7 @@
 
 This documentation is automatically generated from the Fedimint source code,
 and it's meant for developers, builders and people who want to understand
-Fedimint project on an implementation level.
+the Fedimint project on an implementation level.
 
 If you are looking for higher level documentation and help, please check:
 
@@ -22,7 +22,7 @@ This is a recently added document and subject of continuous change. Please repor
 
 # Overview
 
-Fedimint is implemented in [Rust](https://www.rust-lang.org/) and consists of multiple modules (called "crates" in Rust).
+Fedimint is implemented in [Rust](https://www.rust-lang.org/) and consists of multiple Rust crates.
 On a high-level Fedimint architecture consist of:
 
 * Server side: [`fedimintd`](./fedimintd/index.html) daemon typically running on Linux servers, serving a role of a a "peer" in a Federation by communicating with other "peers" to form a consensus.
@@ -42,7 +42,7 @@ In fact core functions of Fedimint are implemented as modules:
 
 Some additional built-in modules are also available:
 
-* [fedimint-meta-server](./fedimint_meta_server/index.html) and [fedimint-meta-client](./fedimint_meta_client/index.html) implement guardian managing additional ("meta"/index.html) information about the Federation.
+* [fedimint-meta-server](./fedimint_meta_server/index.html) and [fedimint-meta-client](./fedimint_meta_client/index.html) implement guardian managing additional ("meta") information about the Federation.
 * [fedimint-empty-server](./fedimint_empty_server/index.html) and [fedimint-empty-client](./fedimint_empty_client/index.html) are a reference "empty" module that can be used as a starting point for new modules.
 * [fedimint-dummy-server](./fedimint_dummy_server/index.html) and [fedimint-dummy-client](./fedimint_dummy_client/index.html) are a test-only modules, possibly useful as a simple example.
 
