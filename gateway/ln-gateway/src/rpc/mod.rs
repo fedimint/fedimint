@@ -2,6 +2,7 @@ pub mod rpc_client;
 pub mod rpc_server;
 
 use std::collections::BTreeMap;
+use std::str::FromStr;
 
 use bitcoin::{Address, Network};
 use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
@@ -15,6 +16,7 @@ pub const V1_API_ENDPOINT: &str = "v1";
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {
     pub invite_code: String,
+    pub routing_fees: Option<RoutingFeesWrapper>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -64,6 +66,8 @@ pub struct FederationInfo {
     pub balance_msat: Amount,
     pub config: ClientConfig,
     pub channel_id: Option<u64>,
+    #[serde(with = "serde_option_routing_fees")]
+    pub routing_fees: Option<RoutingFees>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -87,9 +91,49 @@ pub struct GatewayFedConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RoutingFeesWrapper {
+    pub base_msat: u32,
+    pub proportional_millionths: u32,
+}
+
+impl From<RoutingFeesWrapper> for RoutingFees {
+    fn from(val: RoutingFeesWrapper) -> Self {
+        RoutingFees {
+            base_msat: val.base_msat,
+            proportional_millionths: val.proportional_millionths,
+        }
+    }
+}
+
+impl FromStr for RoutingFeesWrapper {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split(',');
+        let base_msat = parts
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("missing base fee in millisatoshis"))?
+            .parse()?;
+        let proportional_millionths = parts
+            .next()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "missing liquidity based fee as proportional millionths of routed amount"
+                )
+            })?
+            .parse()?;
+        Ok(RoutingFeesWrapper {
+            base_msat,
+            proportional_millionths,
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SetConfigurationPayload {
     pub password: Option<String>,
     pub num_route_hints: Option<u32>,
     pub routing_fees: Option<String>,
     pub network: Option<Network>,
+    pub per_federation_routing_fees: Option<Vec<(FederationId, RoutingFeesWrapper)>>,
 }

@@ -11,7 +11,8 @@ use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
-    LeaveFedPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
+    LeaveFedPayload, RestorePayload, RoutingFeesWrapper, SetConfigurationPayload, WithdrawPayload,
+    V1_API_ENDPOINT,
 };
 use serde::Serialize;
 
@@ -64,6 +65,9 @@ pub enum Commands {
     ConnectFed {
         /// InviteCode code to connect to the federation
         invite_code: String,
+        /// Routing fees for this federation, format <base msat>,<proportional
+        /// to millionths part>
+        routing_fees: Option<RoutingFeesWrapper>,
     },
     /// Leave a federation
     LeaveFed {
@@ -95,7 +99,59 @@ pub enum Commands {
 
         #[clap(long)]
         network: Option<bitcoin::Network>,
+
+        /// Format <federation id>,<base msat>,<proportional to millionths part>
+        #[clap(long)]
+        per_federation_routing_fees: Option<Vec<FederationIdAndRoutingFeesParameter>>,
     },
+}
+
+#[derive(Clone)]
+pub struct FederationIdAndRoutingFeesParameter {
+    pub federation_id: FederationId,
+    pub base_msat: u32,
+    pub proportional_millionths: u32,
+}
+
+impl std::str::FromStr for FederationIdAndRoutingFeesParameter {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split(',');
+        let federation_id = parts
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("missing federation id"))?
+            .parse()?;
+        let base_msat = parts
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("missing base fee in millisatoshis"))?
+            .parse()?;
+        let proportional_millionths = parts
+            .next()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "missing liquidity based fee as proportional millionths of routed amount"
+                )
+            })?
+            .parse()?;
+        Ok(FederationIdAndRoutingFeesParameter {
+            federation_id,
+            base_msat,
+            proportional_millionths,
+        })
+    }
+}
+
+impl From<FederationIdAndRoutingFeesParameter> for (FederationId, RoutingFeesWrapper) {
+    fn from(val: FederationIdAndRoutingFeesParameter) -> Self {
+        (
+            val.federation_id,
+            RoutingFeesWrapper {
+                base_msat: val.base_msat,
+                proportional_millionths: val.proportional_millionths,
+            },
+        )
+    }
 }
 
 #[tokio::main]
@@ -156,9 +212,15 @@ async fn main() -> anyhow::Result<()> {
 
             print_response(response).await;
         }
-        Commands::ConnectFed { invite_code } => {
+        Commands::ConnectFed {
+            invite_code,
+            routing_fees,
+        } => {
             let response = client()
-                .connect_federation(ConnectFedPayload { invite_code })
+                .connect_federation(ConnectFedPayload {
+                    invite_code,
+                    routing_fees,
+                })
                 .await?;
 
             print_response(response).await;
@@ -188,13 +250,17 @@ async fn main() -> anyhow::Result<()> {
             num_route_hints,
             routing_fees,
             network,
+            per_federation_routing_fees,
         } => {
+            let per_federation_routing_fees = per_federation_routing_fees
+                .map(|input| input.into_iter().map(|e| e.into()).collect());
             client()
                 .set_configuration(SetConfigurationPayload {
                     password,
                     num_route_hints,
                     routing_fees,
                     network: network.map(bitcoin30_to_bitcoin29_network),
+                    per_federation_routing_fees,
                 })
                 .await?;
         }

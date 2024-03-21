@@ -260,6 +260,7 @@ async fn test_can_change_routing_fees() -> anyhow::Result<()> {
                 num_route_hints: None,
                 routing_fees: Some(fee.clone()),
                 network: None,
+                per_federation_routing_fees: None,
             };
             verify_gateway_rpc_success("set_configuration", || {
                 rpc_client.set_configuration(set_configuration_payload.clone())
@@ -317,6 +318,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                 num_route_hints: None,
                 routing_fees: Some(fee.clone()),
                 network: None,
+                per_federation_routing_fees: None,
             };
             verify_gateway_rpc_success("set_configuration", || {
                 rpc_client.set_configuration(set_configuration_payload.clone())
@@ -1059,6 +1061,7 @@ async fn test_cannot_connect_same_federation() -> anyhow::Result<()> {
     // set
     let join_payload = ConnectFedPayload {
         invite_code: fed.invite_code().to_string(),
+        routing_fees: None,
     };
 
     verify_gateway_rpc_success("connect_federation", || {
@@ -1090,6 +1093,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     // set
     let join_payload = ConnectFedPayload {
         invite_code: fed.invite_code().to_string(),
+        routing_fees: None,
     };
 
     verify_gateway_rpc_failure(
@@ -1113,6 +1117,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         num_route_hints: None,
         routing_fees: None,
         network: None,
+        per_federation_routing_fees: None,
     };
     verify_gateway_rpc_success("set_configuration", || {
         initial_rpc_client.set_configuration(set_configuration_payload.clone())
@@ -1159,6 +1164,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         num_route_hints: Some(1),
         routing_fees: Some(fee.clone()),
         network: None,
+        per_federation_routing_fees: None,
     };
     verify_gateway_rpc_success("set_configuration", || {
         initial_rpc_client_with_password.set_configuration(set_configuration_payload.clone())
@@ -1188,6 +1194,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         num_route_hints: None,
         routing_fees: None,
         network: Some(DEFAULT_NETWORK), // Same as connected lightning node's network
+        per_federation_routing_fees: None,
     };
     verify_gateway_rpc_success("set_configuration", || {
         new_password_rpc_client.set_configuration(set_configuration_payload.clone())
@@ -1201,6 +1208,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         num_route_hints: None,
         routing_fees: None,
         network: Some(Network::Testnet), // Different from connected lightning node's network
+        per_federation_routing_fees: None,
     };
     verify_gateway_rpc_failure(
         "set_configuration",
@@ -1238,6 +1246,7 @@ async fn test_gateway_supports_connecting_multiple_federations() -> anyhow::Resu
             let info = rpc
                 .connect_federation(ConnectFedPayload {
                     invite_code: invite1.to_string(),
+                    routing_fees: None,
                 })
                 .await
                 .unwrap();
@@ -1248,6 +1257,7 @@ async fn test_gateway_supports_connecting_multiple_federations() -> anyhow::Resu
             let info = rpc
                 .connect_federation(ConnectFedPayload {
                     invite_code: invite2.to_string(),
+                    routing_fees: None,
                 })
                 .await
                 .unwrap();
@@ -1327,6 +1337,7 @@ async fn test_gateway_can_leave_connected_federations() -> anyhow::Result<()> {
             let fed_info = rpc
                 .connect_federation(ConnectFedPayload {
                     invite_code: invite1.to_string(),
+                    routing_fees: None,
                 })
                 .await
                 .unwrap();
@@ -1345,6 +1356,7 @@ async fn test_gateway_can_leave_connected_federations() -> anyhow::Result<()> {
             let fed_info = rpc
                 .connect_federation(ConnectFedPayload {
                     invite_code: invite2.to_string(),
+                    routing_fees: None,
                 })
                 .await
                 .unwrap();
@@ -1544,8 +1556,11 @@ async fn connect_federations(
 ) -> anyhow::Result<()> {
     for fed in feds {
         let invite_code = fed.invite_code().to_string();
-        rpc.connect_federation(ConnectFedPayload { invite_code })
-            .await?;
+        rpc.connect_federation(ConnectFedPayload {
+            invite_code,
+            routing_fees: None,
+        })
+        .await?;
     }
     Ok(())
 }

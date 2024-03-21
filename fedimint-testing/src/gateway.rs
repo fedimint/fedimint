@@ -84,9 +84,12 @@ impl GatewayTest {
             .get_rpc()
             .await
             .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
-        rpc.connect_federation(ConnectFedPayload { invite_code })
-            .await
-            .unwrap()
+        rpc.connect_federation(ConnectFedPayload {
+            invite_code,
+            routing_fees: None,
+        })
+        .await
+        .unwrap()
     }
 
     pub fn get_gateway_id(&self) -> secp256k1::PublicKey {
