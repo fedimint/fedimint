@@ -7,12 +7,11 @@ if [ -z "${1:-}" ]; then
 fi
 
 tag="$1"
-system="$(nix eval --raw --impure --expr builtins.currentSystem)"
+system="$(nix-current-system)"
 prefix="${tag}-${system}"
 release_dir_base="releases/bins"
 release_dir="${release_dir_base}/${prefix}"
 sha256sum_path="releases/${prefix}.SHA256SUMS"
-
 
 >&2 echo "Building..."
 

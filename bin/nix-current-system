@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+exec nix eval --raw --impure --expr builtins.currentSystem
