@@ -232,6 +232,7 @@ pub struct LightningOperationMetaPay {
     pub change: Vec<OutPoint>,
     pub is_internal_payment: bool,
     pub contract_id: ContractId,
+    pub gateway_id: Option<secp256k1::PublicKey>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -247,6 +248,7 @@ pub enum LightningOperationMetaVariant {
     Receive {
         out_point: OutPoint,
         invoice: Bolt11Invoice,
+        gateway_id: Option<secp256k1::PublicKey>,
     },
     Claim {
         out_points: Vec<OutPoint>,
@@ -1105,6 +1107,7 @@ impl LightningClientModule {
         extra_meta: M,
     ) -> anyhow::Result<OutgoingLightningPayment> {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let maybe_gateway_id = maybe_gateway.as_ref().map(|g| g.gateway_id);
         let prev_payment_result = self
             .get_prev_payment_result(invoice.payment_hash(), &mut dbtx.to_ref_nc())
             .await;
@@ -1213,6 +1216,7 @@ impl LightningClientModule {
                 change,
                 is_internal_payment,
                 contract_id,
+                gateway_id: maybe_gateway_id,
             }),
             extra_meta: extra_meta.clone(),
         };
@@ -1508,6 +1512,7 @@ impl LightningClientModule {
         extra_meta: M,
         gateway: Option<LightningGateway>,
     ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+        let gateway_id = gateway.as_ref().map(|g| g.gateway_id);
         let (src_node_id, short_channel_id, route_hints) = match gateway {
             Some(current_gateway) => (
                 current_gateway.node_pub_key,
@@ -1540,6 +1545,7 @@ impl LightningClientModule {
             variant: LightningOperationMetaVariant::Receive {
                 out_point: OutPoint { txid, out_idx: 0 },
                 invoice: invoice.clone(),
+                gateway_id,
             },
             extra_meta: extra_meta.clone(),
         };
@@ -1596,7 +1602,9 @@ impl LightningClientModule {
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let (out_point, invoice) = match operation.meta::<LightningOperationMeta>().variant {
-            LightningOperationMetaVariant::Receive { out_point, invoice } => (out_point, invoice),
+            LightningOperationMetaVariant::Receive {
+                out_point, invoice, ..
+            } => (out_point, invoice),
             _ => bail!("Operation is not a lightning payment"),
         };
 
