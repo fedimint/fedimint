@@ -8,6 +8,22 @@ pub fn bitcoin29_to_bitcoin30_public_key(pk: bitcoin::PublicKey) -> bitcoin30::P
         .expect("Failed to convert bitcoin v29 public key to bitcoin v30 public key")
 }
 
+pub fn bitcoin29_to_bitcoin30_secp256k1_public_key(
+    pk: bitcoin::secp256k1::PublicKey,
+) -> bitcoin30::secp256k1::PublicKey {
+    bitcoin30::secp256k1::PublicKey::from_slice(&pk.serialize()).expect(
+        "Failed to convert bitcoin v29 secp256k1 public key to bitcoin v30 secp256k1 public key",
+    )
+}
+
+pub fn bitcoin30_to_bitcoin29_secp256k1_public_key(
+    pk: bitcoin30::secp256k1::PublicKey,
+) -> bitcoin::secp256k1::PublicKey {
+    bitcoin::secp256k1::PublicKey::from_slice(&pk.serialize()).expect(
+        "Failed to convert bitcoin v30 secp256k1 public key to bitcoin v29 secp256k1 public key",
+    )
+}
+
 pub fn bitcoin29_to_bitcoin30_secp256k1_secret_key(
     sk: bitcoin::secp256k1::SecretKey,
 ) -> bitcoin30::secp256k1::SecretKey {
@@ -22,6 +38,34 @@ pub fn bitcoin30_to_bitcoin29_secp256k1_secret_key(
     bitcoin::secp256k1::SecretKey::from_slice(&sk[..]).expect(
         "Failed to convert bitcoin v30 secp256k1 secret key to bitcoin v29 secp256k1 secret key",
     )
+}
+
+pub fn bitcoin29_to_bitcoin30_schnorr_signature(
+    signature: bitcoin::secp256k1::schnorr::Signature,
+) -> bitcoin30::secp256k1::schnorr::Signature {
+    bitcoin30::secp256k1::schnorr::Signature::from_str(&signature.to_string())
+        .expect("Failed to convert bitcoin v29 schnorr signature to bitcoin v30 schnorr signature")
+}
+
+pub fn bitcoin30_to_bitcoin29_schnorr_signature(
+    signature: bitcoin30::secp256k1::schnorr::Signature,
+) -> bitcoin::secp256k1::schnorr::Signature {
+    bitcoin::secp256k1::schnorr::Signature::from_str(&signature.to_string())
+        .expect("Failed to convert bitcoin v30 schnorr signature to bitcoin v29 schnorr signature")
+}
+
+pub fn bitcoin29_to_bitcoin30_message(
+    message: bitcoin::secp256k1::Message,
+) -> bitcoin30::secp256k1::Message {
+    bitcoin30::secp256k1::Message::from_slice(&message[..])
+        .expect("Failed to convert bitcoin v29 message to bitcoin v30 message")
+}
+
+pub fn bitcoin30_to_bitcoin29_message(
+    message: bitcoin30::secp256k1::Message,
+) -> bitcoin::secp256k1::Message {
+    bitcoin::secp256k1::Message::from_slice(&message[..])
+        .expect("Failed to convert bitcoin v30 message to bitcoin v29 message")
 }
 
 pub fn bitcoin29_to_bitcoin30_network(network: bitcoin::Network) -> bitcoin30::Network {
@@ -146,6 +190,33 @@ mod tests {
     }
 
     #[test]
+    fn test_bitcoin29_to_bitcoin30_and_back_secp256k1_public_key() {
+        let keypair = bitcoin::KeyPair::new(bitcoin::secp256k1::SECP256K1, &mut thread_rng());
+        let bitcoin29_pk: bitcoin::secp256k1::PublicKey =
+            bitcoin::secp256k1::PublicKey::from_keypair(&keypair);
+
+        let bitcoin30_pk = bitcoin29_to_bitcoin30_secp256k1_public_key(bitcoin29_pk);
+        let bitcoin29_pk_back = bitcoin30_to_bitcoin29_secp256k1_public_key(bitcoin30_pk);
+
+        assert_eq!(bitcoin29_pk, bitcoin29_pk_back);
+    }
+
+    #[test]
+    fn test_bitcoin30_to_bitcoin29_and_back_secp256k1_public_key() {
+        let keypair = bitcoin30::secp256k1::KeyPair::new(
+            &bitcoin30::secp256k1::Secp256k1::new(),
+            &mut thread_rng(),
+        );
+        let bitcoin30_pk: bitcoin30::secp256k1::PublicKey =
+            bitcoin30::secp256k1::PublicKey::from_keypair(&keypair);
+
+        let bitcoin29_pk = bitcoin30_to_bitcoin29_secp256k1_public_key(bitcoin30_pk);
+        let bitcoin30_pk_back = bitcoin29_to_bitcoin30_secp256k1_public_key(bitcoin29_pk);
+
+        assert_eq!(bitcoin30_pk, bitcoin30_pk_back);
+    }
+
+    #[test]
     fn test_bitcoin29_to_bitcoin30_and_back_secp256k1_secret_key() {
         let bitcoin29_sk: bitcoin::secp256k1::SecretKey =
             bitcoin::secp256k1::SecretKey::from_slice(&[
@@ -175,6 +246,63 @@ mod tests {
         let bitcoin30_sk_back = bitcoin29_to_bitcoin30_secp256k1_secret_key(bitcoin29_sk);
 
         assert_eq!(bitcoin30_sk, bitcoin30_sk_back);
+    }
+
+    #[test]
+    fn test_bitcoin29_to_bitcoin30_and_back_schnorr_signature() {
+        let keypair = bitcoin::KeyPair::new(bitcoin::secp256k1::SECP256K1, &mut thread_rng());
+        let bitcoin29_signature =
+            keypair.sign_schnorr(bitcoin::secp256k1::Message::from_hashed_data::<
+                bitcoin::secp256k1::hashes::sha256::Hash,
+            >(&[0x01, 0x23]));
+
+        let bitcoin30_signature = bitcoin29_to_bitcoin30_schnorr_signature(bitcoin29_signature);
+        let bitcoin29_signature_back =
+            bitcoin30_to_bitcoin29_schnorr_signature(bitcoin30_signature);
+
+        assert_eq!(bitcoin29_signature, bitcoin29_signature_back);
+    }
+
+    #[test]
+    fn test_bitcoin30_to_bitcoin29_and_back_schnorr_signature() {
+        let keypair = bitcoin30::secp256k1::KeyPair::new(
+            &bitcoin30::secp256k1::Secp256k1::new(),
+            &mut thread_rng(),
+        );
+        let bitcoin30_signature =
+            keypair.sign_schnorr(bitcoin30::secp256k1::Message::from_hashed_data::<
+                bitcoin30::secp256k1::hashes::sha256::Hash,
+            >(&[0x01, 0x23]));
+
+        let bitcoin29_signature = bitcoin30_to_bitcoin29_schnorr_signature(bitcoin30_signature);
+        let bitcoin30_signature_back =
+            bitcoin29_to_bitcoin30_schnorr_signature(bitcoin29_signature);
+
+        assert_eq!(bitcoin30_signature, bitcoin30_signature_back);
+    }
+
+    #[test]
+    fn test_bitcoin29_to_bitcoin30_and_back_message() {
+        let bitcoin29_message = bitcoin::secp256k1::Message::from_hashed_data::<
+            bitcoin::secp256k1::hashes::sha256::Hash,
+        >(&[0x01, 0x23]);
+
+        let bitcoin30_message = bitcoin29_to_bitcoin30_message(bitcoin29_message);
+        let bitcoin29_message_back = bitcoin30_to_bitcoin29_message(bitcoin30_message);
+
+        assert_eq!(bitcoin29_message, bitcoin29_message_back);
+    }
+
+    #[test]
+    fn test_bitcoin30_to_bitcoin29_and_back_message() {
+        let bitcoin30_message = bitcoin30::secp256k1::Message::from_hashed_data::<
+            bitcoin30::secp256k1::hashes::sha256::Hash,
+        >(&[0x01, 0x23]);
+
+        let bitcoin29_message = bitcoin30_to_bitcoin29_message(bitcoin30_message);
+        let bitcoin30_message_back = bitcoin29_to_bitcoin30_message(bitcoin29_message);
+
+        assert_eq!(bitcoin30_message, bitcoin30_message_back);
     }
 
     #[test]

@@ -4,8 +4,12 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::{bail, format_err};
+use bitcoin::secp256k1::PublicKey;
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
 use fedimint_core::api::InviteCode;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_public_key,
+};
 pub use fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, DkgError, DkgPeerMsg, DkgResult, FederationId,
     GlobalClientConfig, JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig,
@@ -22,7 +26,7 @@ use fedimint_core::{timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use futures::future::join_all;
 use rand::rngs::OsRng;
-use secp256k1_zkp::{PublicKey, Secp256k1, SecretKey};
+use secp256k1_zkp::{Secp256k1, SecretKey};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls;
@@ -360,7 +364,12 @@ impl ServerConfig {
 
         let my_public_key = private.broadcast_secret_key.public_key(&Secp256k1::new());
 
-        if Some(&my_public_key) != consensus.broadcast_public_keys.get(identity) {
+        if Some(my_public_key)
+            != consensus
+                .broadcast_public_keys
+                .get(identity)
+                .map(|pk| bitcoin30_to_bitcoin29_secp256k1_public_key(*pk))
+        {
             bail!("Broadcast secret key doesn't match corresponding public key");
         }
         if peers.keys().max().copied().map(|id| id.to_usize()) != Some(peers.len() - 1) {
@@ -398,7 +407,10 @@ impl ServerConfig {
         let mut broadcast_sks = BTreeMap::new();
         for peer_id in peer0.peer_ids() {
             let (broadcast_sk, broadcast_pk) = secp256k1_zkp::generate_keypair(&mut OsRng);
-            broadcast_pks.insert(peer_id, broadcast_pk);
+            broadcast_pks.insert(
+                peer_id,
+                bitcoin29_to_bitcoin30_secp256k1_public_key(broadcast_pk),
+            );
             broadcast_sks.insert(peer_id, broadcast_sk);
         }
 
@@ -468,7 +480,10 @@ impl ServerConfig {
         let (broadcast_sk, broadcast_pk) = secp256k1_zkp::generate_keypair(&mut OsRng);
 
         let broadcast_public_keys = broadcast_keys_exchange
-            .exchange_pubkeys("broadcast".to_string(), broadcast_pk)
+            .exchange_pubkeys(
+                "broadcast".to_string(),
+                bitcoin29_to_bitcoin30_secp256k1_public_key(broadcast_pk),
+            )
             .await?;
 
         // in case we are running by ourselves, avoid DKG

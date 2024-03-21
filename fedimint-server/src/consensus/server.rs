@@ -6,6 +6,7 @@ use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
 use async_channel::{Receiver, Sender};
 use fedimint_core::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::MODULE_INSTANCE_ID_GLOBAL;
 use fedimint_core::db::{
@@ -162,7 +163,11 @@ impl ConsensusServer {
 
         let keychain = Keychain::new(
             cfg.local.identity,
-            cfg.consensus.broadcast_public_keys.clone(),
+            cfg.consensus
+                .broadcast_public_keys
+                .iter()
+                .map(|(peer_id, pk)| (*peer_id, bitcoin30_to_bitcoin29_secp256k1_public_key(*pk)))
+                .collect(),
             cfg.private.broadcast_secret_key,
         );
 

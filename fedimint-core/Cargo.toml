@@ -39,7 +39,7 @@ tracing = { workspace = true }
 threshold_crypto = { workspace = true }
 url = { version = "2.5.0", features = ["serde"] }
 bitcoin = { version = "0.29.2", features = [ "rand", "serde" ] }
-bitcoin30 = { package = "bitcoin", version = "0.30.2" }
+bitcoin30 = { package = "bitcoin", version = "0.30.2", features = [ "rand-std", "std" ] }
 bitcoin_hashes = { version = "0.11", features = ["serde"] }
 erased-serde = { workspace = true }
 lightning = "0.0.118"
@@ -49,6 +49,7 @@ fedimint-logging = { version = "0.3.0-alpha", path = "../fedimint-logging" }
 rand = { workspace = true }
 miniscript = { version = "10.0.0", features = [ "compiler", "serde" ] }
 secp256k1-zkp = { version = "0.7.0", features = [ "use-serde", "bitcoin_hashes", "global-context" ] }
+secp256k1 = { version = "0.27.0", features = [ "global-context", "rand-std" ] }
 macro_rules_attribute = "0.2.0"
 bitvec = "1.0.1"
 parity-scale-codec = { version = "3.6.9", features = ["derive"] }
