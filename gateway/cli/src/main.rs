@@ -1,5 +1,9 @@
+use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
 use clap::{CommandFactory, Parser, Subcommand};
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_network,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{fedimint_build_code_version_env, BitcoinAmountOrAll};
@@ -54,7 +58,7 @@ pub enum Commands {
         amount: BitcoinAmountOrAll,
         /// The address to send the funds to
         #[clap(long)]
-        address: Address,
+        address: Address<NetworkUnchecked>,
     },
     /// Register federation with the gateway
     ConnectFed {
@@ -146,7 +150,7 @@ async fn main() -> anyhow::Result<()> {
                 .withdraw(WithdrawPayload {
                     federation_id,
                     amount,
-                    address,
+                    address: bitcoin30_to_bitcoin29_address(address.assume_checked()),
                 })
                 .await?;
 
@@ -190,7 +194,7 @@ async fn main() -> anyhow::Result<()> {
                     password,
                     num_route_hints,
                     routing_fees,
-                    network,
+                    network: network.map(bitcoin30_to_bitcoin29_network),
                 })
                 .await?;
         }
