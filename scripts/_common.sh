@@ -20,6 +20,7 @@ else
   export CARGO_PROFILE_DIR="$CARGO_PROFILE"
 fi
 
+export CARGO_BUILD_TARGET_DIR="${CARGO_BUILD_TARGET_DIR:-"$REPO_ROOT/target"}"
 
 function add_target_dir_to_path() {
   export PATH="${CARGO_BUILD_TARGET_DIR:-$PWD/target}/${CARGO_PROFILE_DIR:-debug}:$PATH"
