@@ -439,7 +439,15 @@ rec {
   };
 
   ciTestAll = ciTestAllBase { times = 1; };
+  ciTestAllSlow = ciTestAll.overrideAttrs (prev: {
+    FM_TEST_CI_ALL_JOBS = 4;
+    FM_TEST_CI_ALL_TIMEOUT = 1200;
+  });
   ciTestAll5Times = ciTestAllBase { times = 5; };
+  ciTestAll5TimesSlow = ciTestAll5Times.overrideAttrs (prev: {
+    FM_TEST_CI_ALL_JOBS = 4;
+    FM_TEST_CI_ALL_TIMEOUT = 1200;
+  });
 
   alwaysFailTest = craneLibTests.mkCargoDerivation {
     pname = "${commonCliTestArgs.pname}-always-fail";

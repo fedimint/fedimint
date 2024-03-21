@@ -238,6 +238,9 @@ else
   # on dev computers default to `num_cpus / 4 + 1` max parallel jobs
   parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 4 + 1))}")
 fi
+
+parallel_args+=(--timeout "${FM_TEST_CI_ALL_TIMEOUT:-600}")
+
 parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-1000}")
 # --delay to let nix start extracting and bump the load
 parallel_args+=(--delay "${FM_TEST_CI_ALL_DELAY:-$((64 / $(nproc) + 1))}")
@@ -248,16 +251,20 @@ joblog="$tmpdir/joblog"
 
 PATH="$(pwd)/scripts/dev/run-test/:$PATH"
 
+parallel_args+=(
+  --halt-on-error 1
+  --joblog "$joblog"
+  --noswap
+  --memfree 2G
+  --nice 15
+)
+
 >&2 echo "## Starting all tests in parallel..."
+>&2 echo "parallel ${parallel_args[*]}"
+
 # --memfree to make sure tests have enough memory to run
 # --nice to let you browse twitter without lag while the tests are running
 echo "$parsed_test_commands" | if parallel \
-  --halt-on-error 1 \
-  --joblog "$joblog" \
-  --timeout 600 \
-  --noswap \
-  --memfree 2G \
-  --nice 15 \
   "${parallel_args[@]}" ; then
   >&2 echo "All tests successful"
 else
