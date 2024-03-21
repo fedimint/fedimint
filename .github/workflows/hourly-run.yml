@@ -1,6 +1,7 @@
 on:
-  schedule:
-    - cron:  '30 * * * *' # every hour at `x:30`
+  # disable cron while debugging
+  # schedule:
+  #   - cron:  '30 * * * *' # every hour at `x:30`
   workflow_dispatch:
 
 name: Hourly check
