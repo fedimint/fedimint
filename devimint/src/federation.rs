@@ -685,7 +685,7 @@ async fn set_config_gen_params(
 async fn wait_server_status(client: &DynGlobalApi, expected_status: ServerStatus) -> Result<()> {
     poll(
         &format!("waiting-server-status: {expected_status:?}"),
-        Duration::from_secs(30),
+        Duration::from_secs(60),
         || async {
             let server_status = client
                 .status()
