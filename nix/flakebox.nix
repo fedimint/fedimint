@@ -185,7 +185,7 @@ let
     (craneLib'.overrideArgs (commonEnvsBuild // commonArgs // {
       src = filterWorkspaceBuildFiles commonSrc;
       pname = "fedimint";
-      version = "0.3.0-rc.0";
+      version = "0.3.0-rc.1";
     })).overrideArgs'' (craneLib: args:
       pkgs.lib.optionalAttrs (!(builtins.elem (craneLib.toolchainName or null) [ null "default" "stable" "nightly" ])) commonEnvsShellRocksdbLinkCross
     );
