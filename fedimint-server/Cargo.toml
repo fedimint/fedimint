@@ -31,7 +31,7 @@ hex = "0.4.3"
 itertools = "0.12.1"
 fedimint-core = { version = "0.3.0-rc.1", path = "../fedimint-core" }
 fedimint-logging = { version = "0.3.0-rc.1", path = "../fedimint-logging" }
-fedimint-metrics = { path = "../fedimint-metrics" }
+fedimint-metrics = { version = "0.3.0-rc.1", path = "../fedimint-metrics" }
 lazy_static = "1.4.0"
 pin-project = "1.1.5"
 rand = "0.8"
