@@ -8,6 +8,22 @@ pub fn bitcoin29_to_bitcoin30_public_key(pk: bitcoin::PublicKey) -> bitcoin30::P
         .expect("Failed to convert bitcoin v29 public key to bitcoin v30 public key")
 }
 
+pub fn bitcoin29_to_bitcoin30_secp256k1_secret_key(
+    sk: bitcoin::secp256k1::SecretKey,
+) -> bitcoin30::secp256k1::SecretKey {
+    bitcoin30::secp256k1::SecretKey::from_slice(&sk[..]).expect(
+        "Failed to convert bitcoin v29 secp256k1 secret key to bitcoin v30 secp256k1 secret key",
+    )
+}
+
+pub fn bitcoin30_to_bitcoin29_secp256k1_secret_key(
+    sk: bitcoin30::secp256k1::SecretKey,
+) -> bitcoin::secp256k1::SecretKey {
+    bitcoin::secp256k1::SecretKey::from_slice(&sk[..]).expect(
+        "Failed to convert bitcoin v30 secp256k1 secret key to bitcoin v29 secp256k1 secret key",
+    )
+}
+
 pub fn bitcoin29_to_bitcoin30_network(network: bitcoin::Network) -> bitcoin30::Network {
     match network {
         bitcoin::Network::Bitcoin => bitcoin30::Network::Bitcoin,
@@ -15,6 +31,49 @@ pub fn bitcoin29_to_bitcoin30_network(network: bitcoin::Network) -> bitcoin30::N
         bitcoin::Network::Signet => bitcoin30::Network::Signet,
         bitcoin::Network::Regtest => bitcoin30::Network::Regtest,
     }
+}
+
+pub fn bitcoin30_to_bitcoin29_network(network: bitcoin30::Network) -> bitcoin::Network {
+    match network {
+        bitcoin30::Network::Bitcoin => bitcoin::Network::Bitcoin,
+        bitcoin30::Network::Testnet => bitcoin::Network::Testnet,
+        bitcoin30::Network::Signet => bitcoin::Network::Signet,
+        bitcoin30::Network::Regtest => bitcoin::Network::Regtest,
+        unknown_network => panic!(
+            "Failed to convert bitcoin v30 network to bitcoin v29 network: {unknown_network}"
+        ),
+    }
+}
+
+pub fn bitcoin_29_to_bitcoin30_amount(amount: bitcoin::Amount) -> bitcoin30::Amount {
+    bitcoin30::Amount::from_sat(amount.to_sat())
+}
+
+pub fn bitcoin30_to_bitcoin29_amount(amount: bitcoin30::Amount) -> bitcoin::Amount {
+    bitcoin::Amount::from_sat(amount.to_sat())
+}
+
+pub fn bitcoin29_to_bitcoin30_outpoint(outpoint: bitcoin::OutPoint) -> bitcoin30::OutPoint {
+    bitcoin30::OutPoint {
+        txid: bitcoin29_to_bitcoin30_txid(outpoint.txid),
+        vout: outpoint.vout,
+    }
+}
+
+pub fn bitcoin30_to_bitcoin29_outpoint(outpoint: bitcoin30::OutPoint) -> bitcoin::OutPoint {
+    bitcoin::OutPoint {
+        txid: bitcoin30_to_bitcoin29_txid(outpoint.txid),
+        vout: outpoint.vout,
+    }
+}
+
+pub fn bitcoin29_to_bitcoin30_txid(txid: bitcoin::Txid) -> bitcoin30::Txid {
+    bitcoin30::Txid::from_byte_array(txid.into_inner())
+}
+
+pub fn bitcoin30_to_bitcoin29_txid(txid: bitcoin30::Txid) -> bitcoin::Txid {
+    bitcoin::Txid::from_slice(&txid[..])
+        .expect("Failed to convert bitcoin v30 txid to bitcoin v29 txid")
 }
 
 pub fn bitcoin30_to_bitcoin29_script(script: bitcoin30::ScriptBuf) -> bitcoin::Script {
@@ -87,11 +146,108 @@ mod tests {
     }
 
     #[test]
+    fn test_bitcoin29_to_bitcoin30_and_back_secp256k1_secret_key() {
+        let bitcoin29_sk: bitcoin::secp256k1::SecretKey =
+            bitcoin::secp256k1::SecretKey::from_slice(&[
+                0x01, 0x23, 0x45, 0x67, 0x89, 0x01, 0x23, 0x45, 0x67, 0x89, 0x01, 0x23, 0x45, 0x67,
+                0x89, 0x01, 0x23, 0x45, 0x67, 0x89, 0x01, 0x23, 0x45, 0x67, 0x89, 0x01, 0x23, 0x45,
+                0x67, 0x89, 0x01, 0x23,
+            ])
+            .expect("Failed to parse bitcoin v29 secp256k1 secret key");
+
+        let bitcoin30_sk = bitcoin29_to_bitcoin30_secp256k1_secret_key(bitcoin29_sk);
+        let bitcoin29_sk_back = bitcoin30_to_bitcoin29_secp256k1_secret_key(bitcoin30_sk);
+
+        assert_eq!(bitcoin29_sk, bitcoin29_sk_back);
+    }
+
+    #[test]
+    fn test_bitcoin30_to_bitcoin29_and_back_secp256k1_secret_key() {
+        let bitcoin30_sk: bitcoin30::secp256k1::SecretKey =
+            bitcoin30::secp256k1::SecretKey::from_slice(&[
+                0x01, 0x23, 0x45, 0x67, 0x89, 0x01, 0x23, 0x45, 0x67, 0x89, 0x01, 0x23, 0x45, 0x67,
+                0x89, 0x01, 0x23, 0x45, 0x67, 0x89, 0x01, 0x23, 0x45, 0x67, 0x89, 0x01, 0x23, 0x45,
+                0x67, 0x89, 0x01, 0x23,
+            ])
+            .expect("Failed to parse bitcoin v30 secp256k1 secret key");
+
+        let bitcoin29_sk = bitcoin30_to_bitcoin29_secp256k1_secret_key(bitcoin30_sk);
+        let bitcoin30_sk_back = bitcoin29_to_bitcoin30_secp256k1_secret_key(bitcoin29_sk);
+
+        assert_eq!(bitcoin30_sk, bitcoin30_sk_back);
+    }
+
+    #[test]
     fn test_network_conversions() {
         assert_eq!(
             bitcoin30::Network::Bitcoin,
             bitcoin29_to_bitcoin30_network(bitcoin::Network::Bitcoin)
         );
+
+        assert_eq!(
+            bitcoin::Network::Bitcoin,
+            bitcoin30_to_bitcoin29_network(bitcoin30::Network::Bitcoin)
+        );
+    }
+
+    #[test]
+    fn test_amount_conversions() {
+        let bitcoin29_amount = bitcoin::Amount::from_sat(123456789);
+        let bitcoin30_amount = bitcoin30::Amount::from_sat(123456789);
+
+        assert_eq!(
+            bitcoin29_amount,
+            bitcoin30_to_bitcoin29_amount(bitcoin30_amount)
+        );
+        assert_eq!(
+            bitcoin30_amount,
+            bitcoin_29_to_bitcoin30_amount(bitcoin29_amount)
+        );
+    }
+
+    #[test]
+    fn test_outpoint_conversions() {
+        let bitcoin29_txid = bitcoin::Txid::from_hex(
+            "0123456789012345678901234567890123456789012345678901234567890123",
+        )
+        .expect("Failed to parse bitcoin v29 txid");
+        let bitcoin29_outpoint = bitcoin::OutPoint {
+            txid: bitcoin29_txid,
+            vout: 0,
+        };
+
+        let bitcoin30_txid = bitcoin30::Txid::from_str(
+            "0123456789012345678901234567890123456789012345678901234567890123",
+        )
+        .expect("Failed to parse bitcoin v30 txid");
+        let bitcoin30_outpoint = bitcoin30::OutPoint {
+            txid: bitcoin30_txid,
+            vout: 0,
+        };
+
+        assert_eq!(
+            bitcoin29_outpoint,
+            bitcoin30_to_bitcoin29_outpoint(bitcoin30_outpoint)
+        );
+        assert_eq!(
+            bitcoin30_outpoint,
+            bitcoin29_to_bitcoin30_outpoint(bitcoin29_outpoint)
+        );
+    }
+
+    #[test]
+    fn test_txid_conversions() {
+        let bitcoin29_txid = bitcoin::Txid::from_hex(
+            "0123456789012345678901234567890123456789012345678901234567890123",
+        )
+        .expect("Failed to parse bitcoin v29 txid");
+        let bitcoin30_txid = bitcoin30::Txid::from_str(
+            "0123456789012345678901234567890123456789012345678901234567890123",
+        )
+        .expect("Failed to parse bitcoin v30 txid");
+
+        assert_eq!(bitcoin29_txid, bitcoin30_to_bitcoin29_txid(bitcoin30_txid));
+        assert_eq!(bitcoin30_txid, bitcoin29_to_bitcoin30_txid(bitcoin29_txid));
     }
 
     #[test]
