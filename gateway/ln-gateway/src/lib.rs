@@ -903,7 +903,7 @@ impl Gateway {
 
             let fees = payload
                 .routing_fees
-                .map(|e| e.into())
+                .map(Into::into)
                 .unwrap_or(gateway_config.routing_fees);
 
             let gw_client_cfg = FederationConfig {

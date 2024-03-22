@@ -247,7 +247,7 @@ async fn main() -> anyhow::Result<()> {
             per_federation_routing_fees,
         } => {
             let per_federation_routing_fees = per_federation_routing_fees
-                .map(|input| input.into_iter().map(|e| e.into()).collect());
+                .map(|input| input.into_iter().map(Into::into).collect());
             client()
                 .set_configuration(SetConfigurationPayload {
                     password,
