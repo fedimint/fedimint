@@ -668,6 +668,9 @@ mod fedimint_migration_tests {
     use anyhow::ensure;
     use bitcoin_hashes::{sha256, Hash};
     use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_core::bitcoin_migration::{
+        bitcoin29_to_bitcoin30_secp256k1_secret_key, bitcoin29_to_bitcoin30_sha256_hash,
+    };
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -718,7 +721,7 @@ mod fedimint_migration_tests {
     use rand::distributions::Standard;
     use rand::prelude::Distribution;
     use rand::rngs::OsRng;
-    use secp256k1::{All, KeyPair, Secp256k1, SecretKey};
+    use secp256k1::{KeyPair, SecretKey};
     use strum::IntoEnumIterator;
     use threshold_crypto::G1Projective;
     use tracing::info;
@@ -940,26 +943,41 @@ mod fedimint_migration_tests {
         Vec<LightningClientStateMachines>,
         Vec<LightningClientStateMachines>,
     ) {
-        let secp: Secp256k1<All> = Secp256k1::gen_new();
+        let secp: bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All> =
+            bitcoin::secp256k1::Secp256k1::gen_new();
         let invoice1 = InvoiceBuilder::new(Currency::Regtest)
             .amount_milli_satoshis(1000)
-            .payment_hash(sha256::Hash::hash(&BYTE_32))
+            .payment_hash(bitcoin29_to_bitcoin30_sha256_hash(sha256::Hash::hash(
+                &BYTE_32,
+            )))
             .description("".to_string())
             .payment_secret(PaymentSecret([0; 32]))
             .current_timestamp()
             .min_final_cltv_expiry_delta(18)
             .expiry_time(Duration::from_secs(86400))
-            .build_signed(|m| secp.sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng)))
+            .build_signed(|m| {
+                secp.sign_ecdsa_recoverable(
+                    m,
+                    &bitcoin29_to_bitcoin30_secp256k1_secret_key(SecretKey::new(&mut OsRng)),
+                )
+            })
             .unwrap();
         let invoice2 = InvoiceBuilder::new(Currency::Regtest)
             .amount_milli_satoshis(1000)
-            .payment_hash(sha256::Hash::hash(&BYTE_32))
+            .payment_hash(bitcoin29_to_bitcoin30_sha256_hash(sha256::Hash::hash(
+                &BYTE_32,
+            )))
             .description("".to_string())
             .payment_secret(PaymentSecret([0; 32]))
             .current_timestamp()
             .min_final_cltv_expiry_delta(18)
             .expiry_time(Duration::from_secs(86400))
-            .build_signed(|m| secp.sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng)))
+            .build_signed(|m| {
+                secp.sign_ecdsa_recoverable(
+                    m,
+                    &bitcoin29_to_bitcoin30_secp256k1_secret_key(SecretKey::new(&mut OsRng)),
+                )
+            })
             .unwrap();
 
         // Create an active state and inactive state that will not be migrated.

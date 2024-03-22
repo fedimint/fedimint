@@ -6,6 +6,9 @@ use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::KeyPair;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_secp256k1_secret_key, bitcoin29_to_bitcoin30_sha256_hash,
+};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
 use fedimint_core::Amount;
@@ -67,11 +70,13 @@ impl LightningTest for FakeLightningTest {
         amount: Amount,
         expiry_time: Option<u64>,
     ) -> ln_gateway::Result<Bolt11Invoice> {
-        let ctx = bitcoin::secp256k1::Secp256k1::new();
+        let ctx = bitcoin30::secp256k1::Secp256k1::new();
 
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .description("".to_string())
-            .payment_hash(sha256::Hash::hash(&[0; 32]))
+            .payment_hash(bitcoin29_to_bitcoin30_sha256_hash(sha256::Hash::hash(
+                &[0; 32],
+            )))
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
@@ -79,7 +84,12 @@ impl LightningTest for FakeLightningTest {
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
-            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
+            .build_signed(|m| {
+                ctx.sign_ecdsa_recoverable(
+                    m,
+                    &bitcoin29_to_bitcoin30_secp256k1_secret_key(self.gateway_node_sec_key),
+                )
+            })
             .unwrap())
     }
 

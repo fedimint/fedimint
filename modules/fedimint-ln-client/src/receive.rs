@@ -6,6 +6,7 @@ use fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTra
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::DynModuleApi;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_sha256_hash;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
@@ -216,7 +217,7 @@ impl LightningReceiveConfirmedInvoice {
         invoice: Bolt11Invoice,
         global_context: DynGlobalClientContext,
     ) -> Result<IncomingContractAccount, LightningReceiveError> {
-        let contract_id = (*invoice.payment_hash()).into();
+        let contract_id = bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()).into();
         loop {
             // Consider time before the api call to account for network delays
             let now_epoch = fedimint_core::time::duration_since_epoch();
@@ -401,6 +402,9 @@ impl LightningReceiveFunded {
 mod tests {
 
     use bitcoin_hashes::{sha256, Hash};
+    use fedimint_core::bitcoin_migration::{
+        bitcoin29_to_bitcoin30_secp256k1_secret_key, bitcoin29_to_bitcoin30_sha256_hash,
+    };
     use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
     use secp256k1::SecretKey;
 
@@ -437,16 +441,23 @@ mod tests {
     }
 
     fn invoice(now_epoch: Duration, expiry_time: Duration) -> anyhow::Result<Bolt11Invoice> {
-        let ctx = bitcoin::secp256k1::Secp256k1::new();
+        let ctx = bitcoin30::secp256k1::Secp256k1::new();
         let secret_key = SecretKey::new(&mut rand::thread_rng());
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .description("".to_string())
-            .payment_hash(sha256::Hash::hash(&[0; 32]))
+            .payment_hash(bitcoin29_to_bitcoin30_sha256_hash(sha256::Hash::hash(
+                &[0; 32],
+            )))
             .duration_since_epoch(now_epoch)
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
             .amount_milli_satoshis(1000)
             .expiry_time(expiry_time)
-            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &secret_key))?)
+            .build_signed(|m| {
+                ctx.sign_ecdsa_recoverable(
+                    m,
+                    &bitcoin29_to_bitcoin30_secp256k1_secret_key(secret_key),
+                )
+            })?)
     }
 }
