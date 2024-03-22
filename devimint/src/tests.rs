@@ -25,7 +25,7 @@ use tokio::time::timeout;
 use tracing::{debug, info};
 
 use crate::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, CommonArgs};
-use crate::federation::{Client, Federation};
+use crate::federation::{self, Client, Federation};
 use crate::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
 use crate::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
@@ -2185,6 +2185,49 @@ pub enum TestCmd {
     GuardianBackup,
     /// `devfed` then tests that spent ecash cannot be double spent
     CannotReplayTransaction,
+    UpgradeTest {
+        old_fedimintd: PathBuf,
+    },
+}
+
+async fn wait_session(client: &federation::Client) -> anyhow::Result<()> {
+    info!("Waiting for a new session");
+    let session_count = cmd!(client, "dev", "api", "session_count")
+        .out_json()
+        .await?["value"]
+        .as_u64()
+        .context("session count must be integer")?
+        .to_owned();
+    let start = Instant::now();
+    poll_with_timeout(
+        "Waiting for a new session",
+        Duration::from_secs(180),
+        || async {
+            info!("Awaiting session outcome {session_count}");
+            match cmd!(client, "dev", "api", "await_session_outcome", session_count)
+                .run()
+                .await
+            {
+                Err(e) => Err(ControlFlow::Continue(e)),
+                Ok(_) => Ok(()),
+            }
+        },
+    )
+    .await?;
+    let session_found_in = start.elapsed();
+    info!("session found in {session_found_in:?}");
+    Ok(())
+}
+
+async fn stress_test_fed(dev_fed: &DevFed) -> anyhow::Result<()> {
+    tokio::try_join!(
+        latency_tests(dev_fed.clone(), LatencyTest::Reissue),
+        latency_tests(dev_fed.clone(), LatencyTest::LnSend),
+        latency_tests(dev_fed.clone(), LatencyTest::LnReceive),
+        latency_tests(dev_fed.clone(), LatencyTest::FmPay),
+        latency_tests(dev_fed.clone(), LatencyTest::Restore),
+    )?;
+    Ok(())
 }
 
 pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()> {
@@ -2270,6 +2313,40 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             cannot_replay_tx_test(dev_fed).await?;
+        }
+        TestCmd::UpgradeTest { old_fedimintd } => {
+            let (process_mgr, _) = setup(common_args).await?;
+            std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", old_fedimintd);
+            let mut dev_fed = dev_fed(&process_mgr).await?;
+            let client = dev_fed.fed.new_joined_client("test-client").await?;
+
+            tokio::try_join!(stress_test_fed(&dev_fed), wait_session(&client))?;
+
+            info!("shutting down servers");
+            dev_fed.fed.terminate_server(3).await?;
+            // kill 3rd peer early
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            dev_fed.fed.terminate_server(0).await?;
+            dev_fed.fed.terminate_server(1).await?;
+            dev_fed.fed.terminate_server(2).await?;
+            info!("restarting servers");
+            // upgrade to fedimintd from PATH
+            std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", "fedimintd");
+            dev_fed.fed.start_server(&process_mgr, 2).await?;
+            dev_fed.fed.start_server(&process_mgr, 1).await?;
+            dev_fed.fed.start_server(&process_mgr, 0).await?;
+            // restart 3rd peer later
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            dev_fed.fed.start_server(&process_mgr, 3).await?;
+            info!("restarted waiting");
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            info!("restarted waited");
+
+            stress_test_fed(&dev_fed).await?;
+            wait_session(&client).await?;
+            // kill 1 to check if 3 is working well
+            dev_fed.fed.terminate_server(1).await?;
+            tokio::try_join!(stress_test_fed(&dev_fed), wait_session(&client))?;
         }
     }
     Ok(())
