@@ -258,11 +258,8 @@ where
     }
 }
 
-type DecodeFn = for<'a> fn(
-    Box<dyn Read + 'a>,
-    ModuleInstanceId,
-    &ModuleDecoderRegistry,
-) -> Result<Box<dyn Any>, DecodeError>;
+type DecodeFn =
+    for<'a> fn(Box<dyn Read + 'a>, ModuleInstanceId) -> Result<Box<dyn Any>, DecodeError>;
 
 #[derive(Default)]
 pub struct DecoderBuilder {
@@ -293,8 +290,8 @@ impl DecoderBuilder {
     {
         // TODO: enforce that all decoders are for the same module kind (+fix docs
         // after)
-        let decode_fn: DecodeFn = |mut reader, instance, modules| {
-            let typed_val = Type::consensus_decode(&mut reader, modules)?;
+        let decode_fn: DecodeFn = |mut reader, instance| {
+            let typed_val = Type::consensus_decode(&mut reader, &Default::default())?;
             let dyn_val = typed_val.into_dyn(instance);
             let any_val: Box<dyn Any> = Box::new(dyn_val);
             Ok(any_val)
@@ -326,11 +323,38 @@ impl Decoder {
     ///
     /// # Panics
     /// * If no decoder is registered for the `DynType`
-    pub fn decode<DynType: Any>(
+    pub fn decode_complete<DynType: Any>(
         &self,
         reader: &mut dyn Read,
-        instance_id: ModuleInstanceId,
-        modules: &ModuleDecoderRegistry,
+        total_len: u64,
+        module_id: ModuleInstanceId,
+    ) -> Result<DynType, DecodeError> {
+        let mut reader = reader.take(total_len);
+
+        let val = self.decode_partial(&mut reader, module_id)?;
+        let left = reader.limit();
+
+        if left != 0 {
+            return Err(fedimint_core::encoding::DecodeError::new_custom(
+                anyhow::anyhow!(
+                    "Dyn type did not consume all bytes during decoding; module_id={}; expected={}; left={}; type={}",
+                    module_id,
+                    total_len,
+                    left,
+                    std::any::type_name::<DynType>(),
+                ),
+            ));
+        }
+
+        Ok(val)
+    }
+
+    /// Like [`Self::decode_complete`] but does not verify that all bytes were
+    /// consumed
+    pub fn decode_partial<DynType: Any>(
+        &self,
+        reader: &mut dyn Read,
+        module_id: ModuleInstanceId,
     ) -> Result<DynType, DecodeError> {
         let decode_fn = self
             .decode_fns
@@ -343,7 +367,7 @@ impl Decoder {
                 )
             })
             .expect("Types being decoded must be registered");
-        Ok(*decode_fn(Box::new(reader), instance_id, modules)?
+        Ok(*decode_fn(Box::new(reader), module_id)?
             .downcast::<DynType>()
             .expect("Decode fn returned wrong type, can't happen due to with_decodable_type"))
     }
