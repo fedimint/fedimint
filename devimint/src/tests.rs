@@ -2,14 +2,13 @@ use std::collections::HashSet;
 use std::io::Write;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::time::{Duration, Instant};
 use std::{env, ffi};
 
 use anyhow::{anyhow, bail, Context, Result};
+use bitcoincore_rpc::bitcoin;
 use bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
 use bitcoincore_rpc::bitcoin::Txid;
-use bitcoincore_rpc::{bitcoin, RpcApi};
 use clap::Subcommand;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use fedimint_cli::LnInvoiceResponse;
@@ -954,7 +953,6 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     .expect("cannot fail, gets stuck");
 
     let tx = bitcoin::Transaction::consensus_decode_hex(&tx_hex, &Default::default()).unwrap();
-    let address = bitcoin::Address::from_str(&address).unwrap();
     assert!(tx
         .output
         .iter()
@@ -1805,7 +1803,6 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     assert_eq!(tx.input.len(), 1);
     assert_eq!(tx.output.len(), 2);
 
-    let withdrawal_address = bitcoin::Address::from_str(&withdrawal_address)?;
     let change_output = tx
         .output
         .iter()
@@ -1864,15 +1861,16 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     ))?];
     info!("Getting wallet balances before import");
     let bitcoin_client = bitcoind.wallet_client().await?;
-    let balances_before = bitcoin_client.get_balances()?;
+    let balances_before = bitcoin_client.get_balances().await?;
     info!("Importing descriptors into bitcoin wallet");
     let request = bitcoin_client
         .get_jsonrpc_client()
         .build_request("importdescriptors", &descriptors_json);
-    let response = bitcoin_client.get_jsonrpc_client().send_request(request)?;
+    let response =
+        tokio::task::block_in_place(|| bitcoin_client.get_jsonrpc_client().send_request(request))?;
     response.check_error()?;
     info!("Getting wallet balances after import");
-    let balances_after = bitcoin_client.get_balances()?;
+    let balances_after = bitcoin_client.get_balances().await?;
     let diff = balances_after.mine.immature + balances_after.mine.trusted
         - balances_before.mine.immature
         - balances_before.mine.trusted;

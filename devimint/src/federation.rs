@@ -368,7 +368,7 @@ impl Federation {
 
     pub async fn await_block_sync(&self) -> Result<u64> {
         let finality_delay = self.get_finality_delay().await?;
-        let block_count = self.bitcoind.get_block_count()?;
+        let block_count = self.bitcoind.get_block_count().await?;
         let expected = block_count.saturating_sub(finality_delay.into());
         cmd!(self.client, "dev", "wait-block-count", expected)
             .run()
