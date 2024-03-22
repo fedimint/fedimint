@@ -47,7 +47,7 @@ use ln_gateway::gateway_lnrpc::GetNodeInfoResponse;
 use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcResult};
 use ln_gateway::rpc::rpc_server::hash_password;
 use ln_gateway::rpc::{
-    BalancePayload, ConnectFedPayload, LeaveFedPayload, SetConfigurationPayload,
+    BalancePayload, ConnectFedPayload, LeaveFedPayload, RoutingFeesWrapper, SetConfigurationPayload,
 };
 use ln_gateway::state_machine::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
@@ -831,15 +831,22 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     let gateways = lightning_module.list_gateways().await;
     assert!(gateways.is_empty());
 
-    // Reconnect the federation and verify that the gateway has registered.
-    gateway_test.connect_fed(&fed).await;
+    // Reconnect the federation with new fees and verify that the gateway has
+    // registered.
+    let new_routing_fees = RoutingFeesWrapper {
+        base_msat: 10,
+        proportional_millionths: 10_000,
+    };
+    gateway_test
+        .connect_fed_with_routing_fees(&fed, new_routing_fees.clone())
+        .await;
 
     lightning_module.update_gateway_cache(true).await?;
     let gateways = lightning_module.list_gateways().await;
     assert!(!gateways.is_empty());
     assert!(gateways
         .into_iter()
-        .any(|gateway| gateway.info.fees == routing_fees));
+        .any(|gateway| gateway.info.fees == new_routing_fees.clone().into()));
 
     Ok(())
 }
@@ -1254,14 +1261,20 @@ async fn test_gateway_supports_connecting_multiple_federations() -> anyhow::Resu
             assert_eq!(info.federation_id, invite1.federation_id());
 
             let invite2 = fed2.invite_code();
+            let routing_fees_fed2 = RoutingFeesWrapper {
+                base_msat: 10,
+                proportional_millionths: 10_000,
+            };
             let info = rpc
                 .connect_federation(ConnectFedPayload {
                     invite_code: invite2.to_string(),
-                    routing_fees: None,
+                    routing_fees: Some(routing_fees_fed2.clone()),
                 })
                 .await
                 .unwrap();
             assert_eq!(info.federation_id, invite2.federation_id());
+            assert!(info.routing_fees.is_some());
+            assert_eq!(info.routing_fees.unwrap(), routing_fees_fed2.clone().into());
             drop(gateway); // keep until the end to avoid the gateway shutting down too early
             Ok(())
         },
@@ -1279,7 +1292,20 @@ async fn test_gateway_shows_info_about_all_connected_federations() -> anyhow::Re
             let id1 = fed1.invite_code().federation_id();
             let id2 = fed2.invite_code().federation_id();
 
-            connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
+            rpc.connect_federation(ConnectFedPayload {
+                invite_code: fed1.invite_code().to_string(),
+                routing_fees: None,
+            })
+            .await?;
+
+            rpc.connect_federation(ConnectFedPayload {
+                invite_code: fed2.invite_code().to_string(),
+                routing_fees: Some(RoutingFeesWrapper {
+                    base_msat: 10,
+                    proportional_millionths: 10_000,
+                }),
+            })
+            .await?;
 
             let info = rpc.get_info().await.unwrap();
 
@@ -1288,10 +1314,13 @@ async fn test_gateway_shows_info_about_all_connected_federations() -> anyhow::Re
                 .federations
                 .iter()
                 .any(|info| info.federation_id == id1 && info.balance_msat == Amount::ZERO));
-            assert!(info
-                .federations
-                .iter()
-                .any(|info| info.federation_id == id2 && info.balance_msat == Amount::ZERO));
+            assert!(info.federations.iter().any(|info| info.federation_id == id2
+                && info.balance_msat == Amount::ZERO
+                && info.routing_fees
+                    == Some(RoutingFees {
+                        base_msat: 10,
+                        proportional_millionths: 10_000,
+                    })));
             drop(gateway); // keep until the end to avoid the gateway shutting down too early
             Ok(())
         },
@@ -1337,12 +1366,22 @@ async fn test_gateway_can_leave_connected_federations() -> anyhow::Result<()> {
             let fed_info = rpc
                 .connect_federation(ConnectFedPayload {
                     invite_code: invite1.to_string(),
-                    routing_fees: None,
+                    routing_fees: Some(RoutingFeesWrapper {
+                        base_msat: 10,
+                        proportional_millionths: 10_000,
+                    }),
                 })
                 .await
                 .unwrap();
             assert_eq!(fed_info.federation_id, id1);
             assert_eq!(fed_info.channel_id, Some(3));
+            assert_eq!(
+                fed_info.routing_fees,
+                Some(RoutingFees {
+                    base_msat: 10,
+                    proportional_millionths: 10_000
+                })
+            );
 
             // remove second connected federation
             let fed_info = rpc
@@ -1413,9 +1452,22 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
             let id1 = fed1.invite_code().federation_id();
             let id2 = fed2.invite_code().federation_id();
 
-            connect_federations(&rpc, &[fed1.clone(), fed2.clone()])
-                .await
-                .unwrap();
+            let fed1_routing_fees = RoutingFeesWrapper {
+                base_msat: 15,
+                proportional_millionths: 10_000,
+            };
+            rpc.connect_federation(ConnectFedPayload {
+                invite_code: fed1.invite_code().to_string(),
+                routing_fees: Some(fed1_routing_fees.clone()),
+            })
+            .await?;
+
+            rpc.connect_federation(ConnectFedPayload {
+                invite_code: fed2.invite_code().to_string(),
+                routing_fees: None,
+            })
+            .await?;
+
             send_msats_to_gateway(&gateway, id1, 10_000).await;
             send_msats_to_gateway(&gateway, id2, 10_000).await;
 
@@ -1502,6 +1554,12 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
                 15,
             )
             .await?;
+            let proportional_fees =
+                (fed1_routing_fees.proportional_millionths as u64 * invoice_amt.msats) / 1_000_000;
+            assert_eq!(
+                fee.msats,
+                (fed1_routing_fees.base_msat as u64 + proportional_fees)
+            );
             assert_eq!(
                 post_balances[0],
                 pre_balances[0] + (invoice_amt + fee).msats

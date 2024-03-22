@@ -19,7 +19,7 @@ use lightning_invoice::RoutingFees;
 use ln_gateway::client::GatewayClientBuilder;
 use ln_gateway::lightning::{ILnRpcClient, LightningBuilder};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::{ConnectFedPayload, FederationInfo, V1_API_ENDPOINT};
+use ln_gateway::rpc::{ConnectFedPayload, FederationInfo, RoutingFeesWrapper, V1_API_ENDPOINT};
 use ln_gateway::{Gateway, GatewayState};
 use secp256k1::PublicKey;
 use tempfile::TempDir;
@@ -87,6 +87,26 @@ impl GatewayTest {
         rpc.connect_federation(ConnectFedPayload {
             invite_code,
             routing_fees: None,
+        })
+        .await
+        .unwrap()
+    }
+
+    /// Connects to a new federation passing a routing fees, and stores the info
+    pub async fn connect_fed_with_routing_fees(
+        &mut self,
+        fed: &FederationTest,
+        routing_fees: RoutingFeesWrapper,
+    ) -> FederationInfo {
+        info!(target: LOG_TEST, "Sending rpc to connect gateway to federation");
+        let invite_code = fed.invite_code().to_string();
+        let rpc = self
+            .get_rpc()
+            .await
+            .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
+        rpc.connect_federation(ConnectFedPayload {
+            invite_code,
+            routing_fees: Some(routing_fees),
         })
         .await
         .unwrap()
