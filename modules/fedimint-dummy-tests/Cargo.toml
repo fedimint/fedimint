@@ -12,7 +12,7 @@ name = "fedimint_dummy_tests"
 path = "tests/tests.rs"
 
 [dependencies]
-anyhow = "1.0.81"
+anyhow = { workspace = true }
 fedimint-client = { path = "../../fedimint-client" }
 fedimint-core ={ path = "../../fedimint-core" }
 fedimint-dummy-client = { path = "../fedimint-dummy-client" }
@@ -21,13 +21,13 @@ fedimint-dummy-server = { path = "../fedimint-dummy-server" }
 fedimint-logging = { path = "../../fedimint-logging" }
 fedimint-server = { path = "../../fedimint-server" }
 fedimint-testing = { path = "../../fedimint-testing" }
-futures = "0.3.30"
-rand = "0.8"
+futures = { workspace = true }
+rand = { workspace = true }
 secp256k1 = "0.24.3"
-strum = "0.26"
-strum_macros = "0.26"
+strum = { workspace = true }
+strum_macros = { workspace = true }
 tokio = { version = "1.36.0", features = ["sync"] }
-tracing = "0.1.40"
+tracing = { workspace = true }
 
 [dev-dependencies]
 threshold_crypto = { workspace = true }

@@ -16,15 +16,15 @@ name = "fedimint_empty_client"
 path = "src/lib.rs"
 
 [dependencies]
-async-trait = "0.1.77"
-anyhow = "1.0.81"
+async-trait = { workspace = true }
+anyhow = { workspace = true }
 fedimint-empty-common = { version = "0.3.0-alpha", path = "../fedimint-empty-common" }
 fedimint-client = { version = "0.3.0-alpha", path = "../../fedimint-client" }
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
-futures = "0.3"
-erased-serde = "0.4"
+futures = { workspace = true }
+erased-serde = { workspace = true }
 serde = {version = "1.0.197", features = [ "derive" ] }
-strum = "0.26"
-strum_macros = "0.26"
-tracing = "0.1.40"
-thiserror = "1.0.58"
+strum = { workspace = true }
+strum_macros = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
