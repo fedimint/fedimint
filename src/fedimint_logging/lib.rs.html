@@ -161,6 +161,18 @@
 <a href="#159" id="159">159</a>
 <a href="#160" id="160">160</a>
 <a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fs::File;
 <span class="kw">use </span>std::{env, io};
 
@@ -197,6 +209,7 @@
 </span><span class="attr">#[derive(Default)]
 </span><span class="kw">pub struct </span>TracingSetup {
     base_level: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    extra_directives: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="attr">#[cfg(feature = <span class="string">"telemetry"</span>)]
     </span>tokio_console_bind: <span class="prelude-ty">Option</span>&lt;std::net::SocketAddr&gt;,
     <span class="attr">#[cfg(feature = <span class="string">"telemetry"</span>)]
@@ -241,6 +254,16 @@
         <span class="self">self
     </span>}
 
+    <span class="doccomment">/// Add a filter directive.
+    </span><span class="kw">pub fn </span>with_directive(<span class="kw-2">&amp;mut </span><span class="self">self</span>, directive: <span class="kw-2">&amp;</span>str) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(old) = <span class="self">self</span>.extra_directives.as_mut() {
+            <span class="kw-2">*</span>old = <span class="macro">format!</span>(<span class="string">"{old},{directive}"</span>);
+        } <span class="kw">else </span>{
+            <span class="self">self</span>.extra_directives = <span class="prelude-val">Some</span>(directive.to_owned());
+        }
+        <span class="self">self
+    </span>}
+
     <span class="doccomment">/// Initialize the logging, must be called for tracing to begin
     </span><span class="kw">pub fn </span>init(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">use </span>tracing_subscriber::fmt::writer::{BoxMakeWriter, Tee};
@@ -250,12 +273,13 @@
             <span class="comment">// We prefix everything with a default general log level and
             // good per-module specific default. User provided RUST_LOG
             // can override one or both
-            </span><span class="string">"{},{},{},{},{}"</span>,
+            </span><span class="string">"{},{},{},{},{},{}"</span>,
             <span class="self">self</span>.base_level.as_deref().unwrap_or(<span class="string">"info"</span>),
             <span class="string">"jsonrpsee_core::client::async_client=off"</span>,
             <span class="string">"jsonrpsee_server=warn,jsonrpsee_server::transport=off"</span>,
             <span class="string">"AlephBFT-=error"</span>,
-            var
+            var,
+            <span class="self">self</span>.extra_directives.as_deref().unwrap_or(<span class="string">""</span>),
         ))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>fmt_writer = <span class="kw">if let </span><span class="prelude-val">Some</span>(file) = <span class="self">self</span>.with_file.take() {

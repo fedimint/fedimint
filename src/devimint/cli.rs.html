@@ -409,6 +409,8 @@
 <a href="#407" id="407">407</a>
 <a href="#408" id="408">408</a>
 <a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -524,6 +526,8 @@
 
     fedimint_logging::TracingSetup::default()
         .with_file(<span class="prelude-val">Some</span>(log_file))
+        <span class="comment">// jsonrpsee is expected to fail during startup
+        </span>.with_directive(<span class="string">"jsonrpsee-client=off"</span>)
         .init()<span class="question-mark">?</span>;
 
     <span class="macro">info!</span>(target: LOG_DEVIMINT, path=%globals.FM_DATA_DIR.display() , <span class="string">"Setting up test dir"</span>);
