@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_logging::LOG_DEVIMINT;
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::external::{Bitcoind, Electrs, Esplora, Lightningd, Lnd};
 use crate::federation::{Client, Federation};
@@ -25,77 +25,7 @@ pub struct DevFed {
 }
 
 pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
-    let fed_size = process_mgr.globals.FM_FED_SIZE;
-    let offline_nodes = process_mgr.globals.FM_OFFLINE_NODES;
-    anyhow::ensure!(
-        fed_size > 3 * offline_nodes,
-        "too many offline nodes ({offline_nodes}) to reach consensus"
-    );
-
-    let start_time = fedimint_core::time::now();
-    info!("Starting dev federation");
-    let bitcoind = Bitcoind::new(process_mgr).await?;
-    let ((cln, lnd, gw_cln, gw_lnd), electrs, esplora, mut fed) = tokio::try_join!(
-        async {
-            debug!(target: LOG_DEVIMINT, "Starting LN nodes");
-            let (cln, lnd) = tokio::try_join!(
-                Lightningd::new(process_mgr, bitcoind.clone()),
-                Lnd::new(process_mgr, bitcoind.clone())
-            )?;
-            debug!(target: LOG_DEVIMINT, "Starting LN gateways & opening LN channel");
-            let (gw_cln, gw_lnd, _) = tokio::try_join!(
-                Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
-                Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
-                open_channel(process_mgr, &bitcoind, &cln, &lnd),
-            )?;
-            debug!(target: LOG_DEVIMINT, "LN gateways ready");
-            Ok((cln, lnd, gw_cln, gw_lnd))
-        },
-        Electrs::new(process_mgr, bitcoind.clone()),
-        Esplora::new(process_mgr, bitcoind.clone()),
-        Federation::new(process_mgr, bitcoind.clone(), fed_size),
-    )?;
-
-    info!(target: LOG_DEVIMINT, "Federation and gateways started");
-
-    std::env::set_var("FM_GWID_CLN", gw_cln.gateway_id().await?);
-    std::env::set_var("FM_GWID_LND", gw_lnd.gateway_id().await?);
-    info!(target: LOG_DEVIMINT, "Setup gateway environment variables");
-
-    tokio::try_join!(gw_cln.connect_fed(&fed), gw_lnd.connect_fed(&fed), async {
-        info!(target: LOG_DEVIMINT, "Joining federation with the main client");
-        cmd!(fed.internal_client(), "join-federation", fed.invite_code()?)
-            .run()
-            .await?;
-        debug!(target: LOG_DEVIMINT, "Generating first epoch");
-        fed.mine_then_wait_blocks_sync(10).await?;
-        Ok(())
-    })?;
-
-    // Initialize fedimint-cli
-    fed.await_gateways_registered().await?;
-
-    // Create a degraded federation if there are offline nodes
-    fed.degrade_federation(process_mgr).await?;
-
-    info!(
-        target: LOG_DEVIMINT,
-        fed_size,
-        offline_nodes,
-        elapsed_ms = %start_time.elapsed()?.as_millis(),
-        "Dev federation ready",
-    );
-
-    Ok(DevFed {
-        bitcoind,
-        cln,
-        lnd,
-        fed,
-        gw_cln,
-        gw_lnd,
-        electrs,
-        esplora,
-    })
+    DevJitFed::new(process_mgr)?.to_dev_fed(process_mgr).await
 }
 
 type JitArc<T> = JitTryAnyhow<Arc<T>>;
@@ -353,5 +283,19 @@ impl DevJitFed {
             "Dev federation ready",
         );
         Ok(())
+    }
+
+    pub async fn to_dev_fed(self, process_mgr: &ProcessManager) -> anyhow::Result<DevFed> {
+        self.finalize(process_mgr).await?;
+        Ok(DevFed {
+            bitcoind: self.bitcoind().await?.to_owned(),
+            cln: self.cln().await?.to_owned(),
+            lnd: self.lnd().await?.to_owned(),
+            fed: self.fed().await?.to_owned(),
+            gw_cln: self.gw_cln().await?.to_owned(),
+            gw_lnd: self.gw_lnd().await?.to_owned(),
+            esplora: self.esplora().await?.to_owned(),
+            electrs: self.electrs().await?.to_owned(),
+        })
     }
 }
