@@ -18,12 +18,12 @@ path = "src/lib.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.81"
-async-trait = "0.1.77"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
 fedimint-core = { version = "0.3.0-alpha", path = "../fedimint-core" }
-futures = "0.3.30"
+futures = { workspace = true }
 rocksdb = { version = "0.22.0" }
-tracing = "0.1.40"
+tracing = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.10.1"

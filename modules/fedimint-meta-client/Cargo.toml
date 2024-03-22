@@ -21,20 +21,20 @@ cli = ["dep:clap", "dep:serde_json"]
 
 [dependencies]
 async-trait = "0.1.73"
-anyhow = "1.0.66"
+anyhow = { workspace = true }
 clap = { workspace = true, optional = true }
-hex = "0.4.3"
+hex = { workspace = true }
 serde_json = { workspace = true, optional = true }
 fedimint-meta-common = { version = "0.3.0-alpha", path = "../fedimint-meta-common" }
 fedimint-client = { version = "0.3.0-alpha", path = "../../fedimint-client" }
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
-futures = "0.3"
-erased-serde = "0.4"
-rand = "0.8.5"
+futures = { workspace = true }
+erased-serde = { workspace = true }
+rand = { workspace = true }
 secp256k1 = "0.24.2"
 serde = {version = "1.0.149", features = [ "derive" ] }
-strum = "0.24"
-strum_macros = "0.24"
-tracing = "0.1.37"
-thiserror = "1.0.39"
+strum = { workspace = true }
+strum_macros = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
