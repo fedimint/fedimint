@@ -31,11 +31,16 @@ pub enum DatabaseOperation {
     Delete(DatabaseDeleteOperation),
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct MemDatabase {
     data: tokio::sync::RwLock<OrdMap<Vec<u8>, Vec<u8>>>,
 }
 
+impl fmt::Debug for MemDatabase {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("MemDatabase {{}}",))
+    }
+}
 pub struct MemTransaction<'a> {
     operations: Vec<DatabaseOperation>,
     tx_data: OrdMap<Vec<u8>, Vec<u8>>,
