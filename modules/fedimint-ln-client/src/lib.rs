@@ -1396,7 +1396,7 @@ impl LightningClientModule {
 
     /// Claim the funded, unspent incoming contract by submitting a transaction
     /// to the federation and awaiting the primary module's outputs
-    async fn claim_funded_incoming_contract<M: Serialize + Send + Sync>(
+    pub async fn claim_funded_incoming_contract<M: Serialize + Send + Sync>(
         &self,
         key_pair: KeyPair,
         contract_id: ContractId,
