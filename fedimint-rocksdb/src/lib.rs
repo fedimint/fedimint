@@ -1,4 +1,5 @@
 #![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
+use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -33,6 +34,18 @@ impl RocksDb {
 
 fn is_power_of_two(num: usize) -> bool {
     num.count_ones() == 1
+}
+
+impl<'a> fmt::Debug for RocksDbReadOnlyTransaction<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("RocksDbTransaction")
+    }
+}
+
+impl<'a> fmt::Debug for RocksDbTransaction<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("RocksDbTransaction")
+    }
 }
 
 #[test]

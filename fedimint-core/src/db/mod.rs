@@ -163,7 +163,7 @@ pub enum AutocommitError<E> {
 #[apply(async_trait_maybe_send!)]
 pub trait IRawDatabase: Debug + MaybeSend + MaybeSync + 'static {
     /// A raw database transaction type
-    type Transaction<'a>: IRawDatabaseTransaction;
+    type Transaction<'a>: IRawDatabaseTransaction + Debug;
 
     /// Start a database transaction
     async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a>;
@@ -599,6 +599,7 @@ where
 /// operations, effectively creating an isolated partition.
 ///
 /// Produced by [`PrefixDatabase`].
+#[derive(Debug)]
 struct PrefixDatabaseTransaction<Inner> {
     inner: Inner,
     prefix: Vec<u8>,
@@ -1054,7 +1055,7 @@ pub trait IRawDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
 ///
 /// See [`IDatabase`] for more info.
 #[apply(async_trait_maybe_send!)]
-pub trait IDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
+pub trait IDatabaseTransaction: MaybeSend + IDatabaseTransactionOps + fmt::Debug {
     /// Commit the transaction
     async fn commit_tx(&mut self) -> Result<()>;
 
@@ -1090,6 +1091,7 @@ where
 
 /// Struct that implements `IRawDatabaseTransaction` and can be wrapped
 /// easier in other structs since it does not consumed `self` by move.
+#[derive(Debug)]
 struct BaseDatabaseTransaction<Tx> {
     // TODO: merge options
     raw: Option<Tx>,
@@ -1196,7 +1198,10 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOps for BaseDatabaseTransa
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<Tx: IRawDatabaseTransaction> IDatabaseTransaction for BaseDatabaseTransaction<Tx> {
+impl<Tx: IRawDatabaseTransaction> IDatabaseTransaction for BaseDatabaseTransaction<Tx>
+where
+    Tx: fmt::Debug,
+{
     async fn commit_tx(&mut self) -> Result<()> {
         self.raw
             .take()
@@ -1291,6 +1296,15 @@ pub struct DatabaseTransaction<'tx, Cap = NonCommittable> {
     commit_tracker: MaybeRef<'tx, CommitTracker>,
     on_commit_hooks: MaybeRef<'tx, Vec<Box<maybe_add_send!(dyn FnOnce())>>>,
     capability: marker::PhantomData<Cap>,
+}
+
+impl<'tx, Cap> fmt::Debug for DatabaseTransaction<'tx, Cap> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "DatabaseTransaction {{ tx: {:?}, decoders={:?} }}",
+            self.tx, self.decoders
+        ))
+    }
 }
 
 impl<'tx, Cap> WithDecoders for DatabaseTransaction<'tx, Cap> {
