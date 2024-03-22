@@ -1,6 +1,4 @@
 var srcIndex = new Map(JSON.parse('[\
-["btreemap",["",[],["btreemap.rs"]]],\
-["btreeset",["",[],["btreeset.rs"]]],\
 ["devimint",["",[],["cli.rs","devfed.rs","external.rs","federation.rs","gatewayd.rs","lib.rs","tests.rs","util.rs","vars.rs"]]],\
 ["faucet",["",[],["faucet.rs"]]],\
 ["fedimint_aead",["",[],["lib.rs"]]],\
@@ -19,7 +17,6 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_empty_client",["",[],["api.rs","db.rs","lib.rs","states.rs"]]],\
 ["fedimint_empty_common",["",[],["config.rs","lib.rs"]]],\
 ["fedimint_empty_server",["",[],["db.rs","lib.rs"]]],\
-["fedimint_fuzz",["",[],["lib.rs"]]],\
 ["fedimint_ln_client",["",[],["api.rs","db.rs","incoming.rs","lib.rs","pay.rs","receive.rs"]]],\
 ["fedimint_ln_common",["",[["contracts",[],["incoming.rs","mod.rs","outgoing.rs"]]],["config.rs","lib.rs"]]],\
 ["fedimint_ln_server",["",[],["db.rs","lib.rs","metrics.rs"]]],\
@@ -49,10 +46,6 @@ var srcIndex = new Map(JSON.parse('[\
 ["hkdf",["",[],["lib.rs"]]],\
 ["ln_gateway",["",[["lightning",[],["cln.rs","lnd.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]],["state_machine",[],["complete.rs","mod.rs","pay.rs"]]],["client.rs","db.rs","envs.rs","lib.rs","types.rs"]]],\
 ["recoverytool",["",[],["main.rs"]]],\
-["session_outcome",["",[],["session_outcome.rs"]]],\
-["string",["",[],["string.rs"]]],\
-["tbs",["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["lib.rs"]]],\
-["vec",["",[],["vec.rs"]]],\
-["vec_u8",["",[],["vec_u8.rs"]]]\
+["tbs",["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["lib.rs"]]]\
 ]'));
 createSrcSidebar();
