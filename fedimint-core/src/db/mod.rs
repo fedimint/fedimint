@@ -1091,7 +1091,6 @@ where
 
 /// Struct that implements `IRawDatabaseTransaction` and can be wrapped
 /// easier in other structs since it does not consumed `self` by move.
-#[derive(Debug)]
 struct BaseDatabaseTransaction<Tx> {
     // TODO: merge options
     raw: Option<Tx>,
@@ -1099,6 +1098,17 @@ struct BaseDatabaseTransaction<Tx> {
     notifications: Arc<Notifications>,
 }
 
+impl<Tx> fmt::Debug for BaseDatabaseTransaction<Tx>
+where
+    Tx: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "BaseDatabaseTransaction{{ raw={:?} }}",
+            self.raw
+        ))
+    }
+}
 impl<Tx> BaseDatabaseTransaction<Tx>
 where
     Tx: IRawDatabaseTransaction,
