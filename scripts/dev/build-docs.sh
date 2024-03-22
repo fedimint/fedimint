@@ -15,7 +15,7 @@ if cargo version | grep -q nightly ; then
 fi
 echo RUSTDOCFLAGS: "$RUSTDOCFLAGS"
 
-cargo doc --profile "$CARGO_PROFILE" --locked --workspace --no-deps --document-private-items
+cargo doc --exclude fedimint-fuzz --profile "$CARGO_PROFILE" --locked --workspace --no-deps --document-private-items
 
 if [ -e "${index_html}" ]; then
   if command -v pandoc >/dev/null 2>/dev/null ; then
