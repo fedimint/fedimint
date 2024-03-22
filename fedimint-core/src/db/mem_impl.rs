@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 
 use anyhow::Result;
 use bitcoin_hashes::hex::ToHex;
@@ -36,7 +36,6 @@ pub struct MemDatabase {
     data: tokio::sync::RwLock<OrdMap<Vec<u8>, Vec<u8>>>,
 }
 
-#[derive(Debug)]
 pub struct MemTransaction<'a> {
     operations: Vec<DatabaseOperation>,
     tx_data: OrdMap<Vec<u8>, Vec<u8>>,
@@ -44,6 +43,20 @@ pub struct MemTransaction<'a> {
     savepoint: OrdMap<Vec<u8>, Vec<u8>>,
     num_pending_operations: usize,
     num_savepoint_operations: usize,
+}
+
+impl<'a> fmt::Debug for MemTransaction<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "MemTransaction {{ db={:?}, operations_len={}, tx_data_len={}, savepoint_len={}, num_pending_ops={}, num_savepoint_ops={} }}",
+            self.db,
+            self.operations.len(),
+            self.tx_data.len(),
+            self.savepoint.len(),
+            self.num_pending_operations,
+            self.num_savepoint_operations,
+        ))
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
