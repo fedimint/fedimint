@@ -927,7 +927,7 @@ impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding<T> {
 
         // No recursive module decoding is supported since we give an empty decoder
         // registry to the decode function
-        decoder.decode_complete(&mut reader, total_len, module_instance)
+        decoder.decode_complete(&mut reader, total_len, module_instance, &Default::default())
     }
 }
 

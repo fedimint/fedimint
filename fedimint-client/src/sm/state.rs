@@ -319,10 +319,12 @@ impl Encodable for DynState {
 impl Decodable for DynState {
     fn consensus_decode<R: std::io::Read>(
         reader: &mut R,
-        modules: &::fedimint_core::module::registry::ModuleDecoderRegistry,
+        decoders: &::fedimint_core::module::registry::ModuleDecoderRegistry,
     ) -> Result<Self, fedimint_core::encoding::DecodeError> {
-        let key = fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)?;
-        modules.get_expect(key).decode_partial(reader, key)
+        let module_id = fedimint_core::core::ModuleInstanceId::consensus_decode(reader, decoders)?;
+        decoders
+            .get_expect(module_id)
+            .decode_partial(reader, module_id, decoders)
     }
 }
 

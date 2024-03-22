@@ -323,7 +323,12 @@ macro_rules! module_plugin_dyn_newtype_encode_decode {
                     Some(decoder) => {
                         let total_len_u64 =
                             u64::consensus_decode_from_finite_reader(reader, modules)?;
-                        decoder.decode_complete(reader, total_len_u64, module_instance_id)?
+                        decoder.decode_complete(
+                            reader,
+                            total_len_u64,
+                            module_instance_id,
+                            modules,
+                        )?
                     }
                     None => match modules.decoding_mode() {
                         $crate::module::registry::DecodingMode::Reject => {

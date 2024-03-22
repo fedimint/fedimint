@@ -1046,6 +1046,7 @@ where
                     &mut &raw[..],
                     raw.len() as u64,
                     module_instance_id,
+                    decoders,
                 )?),
                 None => DynRawFallback::Raw {
                     module_instance_id,
@@ -1082,6 +1083,7 @@ where
                     reader,
                     total_len_u64,
                     module_instance_id,
+                    decoders,
                 )?)
             }
             None => {
