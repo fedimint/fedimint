@@ -113,6 +113,8 @@ pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
 
     fedimint_logging::TracingSetup::default()
         .with_file(Some(log_file))
+        // jsonrpsee is expected to fail during startup
+        .with_directive("jsonrpsee-client=off")
         .init()?;
 
     info!(target: LOG_DEVIMINT, path=%globals.FM_DATA_DIR.display() , "Setting up test dir");

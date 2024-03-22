@@ -34,6 +34,7 @@ pub const LOG_CLIENT_MODULE_MINT: &str = "client::module::mint";
 #[derive(Default)]
 pub struct TracingSetup {
     base_level: Option<String>,
+    extra_directives: Option<String>,
     #[cfg(feature = "telemetry")]
     tokio_console_bind: Option<std::net::SocketAddr>,
     #[cfg(feature = "telemetry")]
@@ -78,6 +79,16 @@ impl TracingSetup {
         self
     }
 
+    /// Add a filter directive.
+    pub fn with_directive(&mut self, directive: &str) -> &mut Self {
+        if let Some(old) = self.extra_directives.as_mut() {
+            *old = format!("{old},{directive}");
+        } else {
+            self.extra_directives = Some(directive.to_owned());
+        }
+        self
+    }
+
     /// Initialize the logging, must be called for tracing to begin
     pub fn init(&mut self) -> anyhow::Result<()> {
         use tracing_subscriber::fmt::writer::{BoxMakeWriter, Tee};
@@ -87,12 +98,13 @@ impl TracingSetup {
             // We prefix everything with a default general log level and
             // good per-module specific default. User provided RUST_LOG
             // can override one or both
-            "{},{},{},{},{}",
+            "{},{},{},{},{},{}",
             self.base_level.as_deref().unwrap_or("info"),
             "jsonrpsee_core::client::async_client=off",
             "jsonrpsee_server=warn,jsonrpsee_server::transport=off",
             "AlephBFT-=error",
-            var
+            var,
+            self.extra_directives.as_deref().unwrap_or(""),
         ))?;
 
         let fmt_writer = if let Some(file) = self.with_file.take() {
