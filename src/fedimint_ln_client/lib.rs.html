@@ -3228,7 +3228,7 @@
 
     <span class="doccomment">/// Claim the funded, unspent incoming contract by submitting a transaction
     /// to the federation and awaiting the primary module's outputs
-    </span><span class="kw">async fn </span>claim_funded_incoming_contract&lt;M: Serialize + Send + Sync&gt;(
+    </span><span class="kw">pub async fn </span>claim_funded_incoming_contract&lt;M: Serialize + Send + Sync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         key_pair: KeyPair,
         contract_id: ContractId,
