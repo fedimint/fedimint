@@ -19,9 +19,8 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_secp256k1_public_key,
     bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_keypair,
-    bitcoin30_to_bitcoin29_sha256_hash,
+    bitcoin30_to_bitcoin29_secp256k1_public_key, bitcoin30_to_bitcoin29_sha256_hash,
 };
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
@@ -145,11 +144,10 @@ impl ClientModuleInit for GatewayClientInit {
         Ok(GatewayClientModule {
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
-            redeem_key: bitcoin30_to_bitcoin29_keypair(
-                args.module_root_secret()
-                    .child_key(ChildId(0))
-                    .to_secp_key(&Secp256k1::new()),
-            ),
+            redeem_key: args
+                .module_root_secret()
+                .child_key(ChildId(0))
+                .to_secp_key(&Secp256k1::new()),
             module_api: args.module_api().clone(),
             timelock_delta: self.timelock_delta,
             mint_channel_id: self.mint_channel_id,
@@ -206,7 +204,7 @@ impl ClientModule for GatewayClientModule {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         Self::ModuleStateMachineContext {
-            redeem_key: self.redeem_key,
+            redeem_key: bitcoin30_to_bitcoin29_keypair(self.redeem_key),
             timelock_delta: self.timelock_delta,
             secp: Secp256k1::new(),
             ln_decoder: self.decoder(),
@@ -246,13 +244,17 @@ impl GatewayClientModule {
         LightningGatewayAnnouncement {
             info: LightningGateway {
                 mint_channel_id: self.mint_channel_id,
-                gateway_redeem_key: self.redeem_key.public_key(),
-                node_pub_key: lightning_context.lightning_public_key,
+                gateway_redeem_key: bitcoin30_to_bitcoin29_secp256k1_public_key(
+                    self.redeem_key.public_key(),
+                ),
+                node_pub_key: bitcoin30_to_bitcoin29_secp256k1_public_key(
+                    lightning_context.lightning_public_key,
+                ),
                 lightning_alias: lightning_context.lightning_alias,
                 api: self.gateway.versioned_api.clone(),
                 route_hints,
                 fees,
-                gateway_id: self.gateway.gateway_id,
+                gateway_id: bitcoin30_to_bitcoin29_secp256k1_public_key(self.gateway.gateway_id),
                 supports_private_payments: lightning_context.lnrpc.supports_private_payments(),
             },
             ttl,
@@ -276,7 +278,7 @@ impl GatewayClientModule {
             &self.module_api,
             bitcoin29_to_bitcoin30_sha256_hash(htlc.payment_hash),
             htlc.outgoing_amount_msat,
-            bitcoin29_to_bitcoin30_keypair(self.redeem_key),
+            self.redeem_key,
         )
         .await?;
 
@@ -323,7 +325,7 @@ impl GatewayClientModule {
             &self.module_api,
             bitcoin29_to_bitcoin30_sha256_hash(payment_hash),
             swap.amount_msat,
-            bitcoin29_to_bitcoin30_keypair(self.redeem_key),
+            self.redeem_key,
         )
         .await?;
 
@@ -392,7 +394,7 @@ impl GatewayClientModule {
         let gateway_id = gateway_keypair.public_key();
         let challenges = self
             .module_api
-            .get_remove_gateway_challenge(bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
+            .get_remove_gateway_challenge(gateway_id)
             .await?;
 
         let fed_public_key = self.cfg.threshold_pub_key;
@@ -404,13 +406,13 @@ impl GatewayClientModule {
                     peer_id,
                     challenge.map(bitcoin30_to_bitcoin29_sha256_hash)?,
                 );
-                let signature = gateway_keypair.sign_schnorr(msg);
+                let signature = bitcoin30_to_bitcoin29_keypair(gateway_keypair).sign_schnorr(msg);
                 Some((peer_id, signature))
             })
             .collect::<BTreeMap<_, _>>();
 
         let remove_gateway_request = RemoveGatewayRequest {
-            gateway_id,
+            gateway_id: bitcoin30_to_bitcoin29_secp256k1_public_key(gateway_id),
             signatures,
         };
 

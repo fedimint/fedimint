@@ -17,6 +17,9 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_sha256_hash,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
@@ -370,7 +373,7 @@ impl LightningClientModule {
             .map_err(|e| SendPaymentError::FederationError(e.to_string()))?;
 
         let contract = OutgoingContract {
-            payment_hash: *invoice.payment_hash(),
+            payment_hash: bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()),
             amount: payment_info.send_fee_default.add_fee(invoice_msats),
             expiration: consensus_block_count + payment_info.expiration_delta_default,
             claim_pk: payment_info.public_key,
@@ -645,7 +648,9 @@ impl LightningClientModule {
             .map_err(FetchInvoiceError::GatewayError)?
             .map_err(FetchInvoiceError::CreateInvoiceError)?;
 
-        if invoice.payment_hash() != &contract.commitment.payment_hash {
+        if invoice.payment_hash()
+            != &bitcoin29_to_bitcoin30_sha256_hash(contract.commitment.payment_hash)
+        {
             return Err(FetchInvoiceError::InvalidInvoicePaymentHash);
         }
 

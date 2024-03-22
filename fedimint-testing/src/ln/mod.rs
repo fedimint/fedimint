@@ -1,12 +1,9 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bitcoin::hashes::sha256;
-use bitcoin::KeyPair;
-use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_keypair, bitcoin30_to_bitcoin29_secp256k1_secret_key,
-};
-use fedimint_core::{Amount, BitcoinHash};
+use bitcoin30::hashes::{sha256, Hash};
+use bitcoin30::key::KeyPair;
+use fedimint_core::Amount;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
 };
@@ -34,7 +31,7 @@ pub trait LightningTest: ILnRpcClient {
     /// * Mocks use hard-coded invoice description to fail the payment
     /// * Real fixtures won't be able to route to randomly generated node pubkey
     fn unpayable_invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Bolt11Invoice {
-        let ctx = bitcoin::secp256k1::Secp256k1::new();
+        let ctx = bitcoin30::secp256k1::Secp256k1::new();
         // Generate fake node keypair
         let kp = KeyPair::new(&ctx, &mut OsRng);
 
@@ -43,7 +40,7 @@ pub trait LightningTest: ILnRpcClient {
         InvoiceBuilder::new(Currency::Regtest)
             .payee_pub_key(kp.public_key())
             .description(INVALID_INVOICE_DESCRIPTION.to_string())
-            .payment_hash(sha256::Hash::hash(&[0; 32]))
+            .payment_hash(sha256::Hash::from_byte_array([0; 32]))
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
@@ -51,14 +48,7 @@ pub trait LightningTest: ILnRpcClient {
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
-            .build_signed(|m| {
-                ctx.sign_ecdsa_recoverable(
-                    m,
-                    &bitcoin30_to_bitcoin29_secp256k1_secret_key(SecretKey::from_keypair(
-                        &bitcoin29_to_bitcoin30_keypair(kp),
-                    )),
-                )
-            })
+            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &SecretKey::from_keypair(&kp)))
             .expect("Invoice creation failed")
     }
 

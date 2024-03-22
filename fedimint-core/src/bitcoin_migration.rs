@@ -286,6 +286,34 @@ pub fn bitcoin30_to_bitcoin29_address(address: bitcoin30::Address) -> bitcoin::A
         .expect("Failed to convert bitcoin v30 address to bitcoin v29 address")
 }
 
+pub fn bitcoin29_to_bitcoin30_recoverable_signature(
+    signature: &bitcoin::secp256k1::ecdsa::RecoverableSignature,
+) -> bitcoin30::secp256k1::ecdsa::RecoverableSignature {
+    let (recid, data) = signature.serialize_compact();
+    bitcoin30::secp256k1::ecdsa::RecoverableSignature::from_compact(
+        &data,
+        bitcoin30::secp256k1::ecdsa::RecoveryId::from_i32(recid.to_i32())
+            .expect("Failed to convert bitcoin v29 RecoveryId to bitcoin v30 RecoveryId"),
+    )
+    .expect(
+        "Failed to convert bitcoin v29 RecoverableSignature to bitcoin v30 RecoverableSignature",
+    )
+}
+
+pub fn bitcoin30_to_bitcoin29_recoverable_signature(
+    signature: &bitcoin30::secp256k1::ecdsa::RecoverableSignature,
+) -> bitcoin::secp256k1::ecdsa::RecoverableSignature {
+    let (recid, data) = signature.serialize_compact();
+    bitcoin::secp256k1::ecdsa::RecoverableSignature::from_compact(
+        &data,
+        bitcoin::secp256k1::ecdsa::RecoveryId::from_i32(recid.to_i32())
+            .expect("Failed to convert bitcoin v30 RecoveryId to bitcoin v29 RecoveryId"),
+    )
+    .expect(
+        "Failed to convert bitcoin v30 RecoverableSignature to bitcoin v29 RecoverableSignature",
+    )
+}
+
 pub fn bitcoin29_to_bitcoin30_ripemd160_hash(
     hash: bitcoin::hashes::ripemd160::Hash,
 ) -> bitcoin30::hashes::ripemd160::Hash {
@@ -735,6 +763,56 @@ mod tests {
     }
 
     #[test]
+    fn test_bitcoin29_to_bitcoin30_and_back_recoverable_signature() {
+        let keypair = bitcoin::KeyPair::new(bitcoin::secp256k1::SECP256K1, &mut thread_rng());
+        let bitcoin29_message = bitcoin::secp256k1::Message::from_hashed_data::<
+            bitcoin::secp256k1::hashes::sha256::Hash,
+        >(&[1, 2, 3, 4]);
+        let bitcoin29_recoverable_signature = bitcoin::secp256k1::Secp256k1::sign_ecdsa_recoverable(
+            &bitcoin::secp256k1::Secp256k1::new(),
+            &bitcoin29_message,
+            &keypair.secret_key(),
+        );
+        let bitcoin30_recoverable_signature =
+            bitcoin29_to_bitcoin30_recoverable_signature(&bitcoin29_recoverable_signature);
+        let bitcoin29_recoverable_signature_back =
+            bitcoin30_to_bitcoin29_recoverable_signature(&bitcoin30_recoverable_signature);
+
+        // Assert that bitcoin29->bitcoin30 RecoverableSignature is the same as native
+        // bitcoin30 RecoverableSignature.
+        assert_eq!(
+            bitcoin29_recoverable_signature,
+            bitcoin29_recoverable_signature_back
+        );
+    }
+
+    #[test]
+    fn test_bitcoin30_to_bitcoin29_and_back_recoverable_signature() {
+        let keypair =
+            bitcoin30::key::KeyPair::new(bitcoin30::secp256k1::SECP256K1, &mut thread_rng());
+        let bitcoin30_message = bitcoin30::secp256k1::Message::from_hashed_data::<
+            bitcoin30::secp256k1::hashes::sha256::Hash,
+        >(&[1, 2, 3, 4]);
+        let bitcoin30_recoverable_signature =
+            bitcoin30::secp256k1::Secp256k1::sign_ecdsa_recoverable(
+                &bitcoin30::secp256k1::Secp256k1::new(),
+                &bitcoin30_message,
+                &keypair.secret_key(),
+            );
+        let bitcoin29_recoverable_signature =
+            bitcoin30_to_bitcoin29_recoverable_signature(&bitcoin30_recoverable_signature);
+        let bitcoin30_recoverable_signature_back =
+            bitcoin29_to_bitcoin30_recoverable_signature(&bitcoin29_recoverable_signature);
+
+        // Assert that bitcoin30->bitcoin29 RecoverableSignature is the same as native
+        // bitcoin29 RecoverableSignature.
+        assert_eq!(
+            bitcoin30_recoverable_signature,
+            bitcoin30_recoverable_signature_back
+        );
+    }
+
+    #[test]
     fn test_bitcoin29_to_bitcoin30_ripemd160_hash() {
         let bitcoin29_hash =
             bitcoin::hashes::ripemd160::Hash::from_hex("0123456789012345678901234567890123456789")
@@ -799,7 +877,7 @@ mod tests {
         )
         .expect("Failed to parse bitcoin v30 sha256 hash");
 
-        // Assert that bitcoin30->bitcoin29 sha256 hash is the same as native bitcoin30
+        // Assert that bitcoin30->bitcoin29 sha256 hash is the same as native bitcoin29
         // sha256 hash.
         assert_eq!(
             bitcoin29_hash,

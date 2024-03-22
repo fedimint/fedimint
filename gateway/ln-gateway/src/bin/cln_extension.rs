@@ -12,6 +12,10 @@ use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
 use cln_rpc::primitives::ShortChannelId;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_sha256_hash,
+    bitcoin30_to_bitcoin29_secp256k1_public_key,
+};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_core::{fedimint_build_code_version_env, Amount};
@@ -33,7 +37,8 @@ use ln_gateway::gateway_lnrpc::{
 };
 use rand::rngs::OsRng;
 use rand::Rng;
-use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
+use secp256k1::{PublicKey, SecretKey};
+use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::{stdin, stdout};
@@ -225,7 +230,13 @@ impl ClnRpcService {
                     let alias = alias.unwrap_or_default();
                     let synced_to_chain =
                         warning_bitcoind_sync.is_none() && warning_lightningd_sync.is_none();
-                    Ok((id, alias, network, blockheight, synced_to_chain))
+                    Ok((
+                        bitcoin29_to_bitcoin30_secp256k1_public_key(id),
+                        alias,
+                        network,
+                        blockheight,
+                        synced_to_chain,
+                    ))
                 }
                 _ => Err(ClnExtensionError::RpcWrongResponse),
             })
@@ -342,11 +353,9 @@ impl GatewayLightning for ClnRpcService {
 
             let channel = match channels_response {
                 cln_rpc::Response::ListChannels(channels) => {
-                    let Some(channel) = channels
-                        .channels
-                        .into_iter()
-                        .find(|chan| chan.destination == node_info.0)
-                    else {
+                    let Some(channel) = channels.channels.into_iter().find(|chan| {
+                        chan.destination == bitcoin30_to_bitcoin29_secp256k1_public_key(node_info.0)
+                    }) else {
                         warn!(?scid, "Channel not found in graph");
                         continue;
                     };
@@ -546,7 +555,7 @@ impl GatewayLightning for ClnRpcService {
                     &lightning_invoice::Description::new(description)
                         .expect("Description is valid"),
                 ))
-                .payment_hash(payment_hash)
+                .payment_hash(bitcoin29_to_bitcoin30_sha256_hash(payment_hash))
                 .payment_secret(PaymentSecret(OsRng.gen()))
                 .duration_since_epoch(duration_since_epoch)
                 .min_final_cltv_expiry_delta(18)
@@ -561,12 +570,12 @@ impl GatewayLightning for ClnRpcService {
             Description::Hash(hash) => InvoiceBuilder::new(network)
                 .amount_milli_satoshis(amount_msat)
                 .invoice_description(lightning_invoice::Bolt11InvoiceDescription::Hash(
-                    &lightning_invoice::Sha256(
+                    &lightning_invoice::Sha256(bitcoin29_to_bitcoin30_sha256_hash(
                         bitcoin_hashes::sha256::Hash::from_slice(&hash)
                             .expect("Couldnt create hash from description hash"),
-                    ),
+                    )),
                 ))
-                .payment_hash(payment_hash)
+                .payment_hash(bitcoin29_to_bitcoin30_sha256_hash(payment_hash))
                 .payment_secret(PaymentSecret(OsRng.gen()))
                 .duration_since_epoch(duration_since_epoch)
                 .min_final_cltv_expiry_delta(18)

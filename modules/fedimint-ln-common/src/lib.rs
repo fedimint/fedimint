@@ -22,6 +22,9 @@ use bitcoin_hashes::sha256;
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::ClientHandleArc;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin29_secp256k1_public_key, bitcoin30_to_bitcoin29_sha256_hash,
+};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -419,6 +422,9 @@ plugin_types_trait_impl_common!(
 // TODO: upstream serde support to LDK
 /// Hack to get a route hint that implements `serde` traits.
 pub mod route_hints {
+    use fedimint_core::bitcoin_migration::{
+        bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_public_key,
+    };
     use fedimint_core::encoding::{Decodable, Encodable};
     use lightning_invoice::RoutingFees;
     use secp256k1::PublicKey;
@@ -454,7 +460,7 @@ pub mod route_hints {
                 self.0
                     .iter()
                     .map(|hop| lightning_invoice::RouteHintHop {
-                        src_node_id: hop.src_node_id,
+                        src_node_id: bitcoin29_to_bitcoin30_secp256k1_public_key(hop.src_node_id),
                         short_channel_id: hop.short_channel_id,
                         fees: RoutingFees {
                             base_msat: hop.base_msat,
@@ -478,7 +484,7 @@ pub mod route_hints {
     impl From<lightning_invoice::RouteHintHop> for RouteHintHop {
         fn from(rhh: lightning_invoice::RouteHintHop) -> Self {
             RouteHintHop {
-                src_node_id: rhh.src_node_id,
+                src_node_id: bitcoin30_to_bitcoin29_secp256k1_public_key(rhh.src_node_id),
                 short_channel_id: rhh.short_channel_id,
                 base_msat: rhh.fees.base_msat,
                 proportional_millionths: rhh.fees.proportional_millionths,
@@ -672,6 +678,7 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
         let destination_features = if let Some(features) = invoice.features() {
             let mut feature_bytes = vec![];
             WithoutLength(features)
+                .0
                 .write(&mut feature_bytes)
                 .expect("Writing to byte vec can't fail");
             feature_bytes
@@ -685,12 +692,14 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
                     .amount_milli_satoshis()
                     .context("invoice amount is missing")?,
             ),
-            destination: invoice
-                .payee_pub_key()
-                .cloned()
-                .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            destination: bitcoin30_to_bitcoin29_secp256k1_public_key(
+                invoice
+                    .payee_pub_key()
+                    .cloned()
+                    .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            ),
             destination_features,
-            payment_hash: *invoice.payment_hash(),
+            payment_hash: bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()),
             payment_secret: invoice.payment_secret().0,
             route_hints: invoice.route_hints().into_iter().map(Into::into).collect(),
             min_final_cltv_delta: invoice.min_final_cltv_expiry_delta(),

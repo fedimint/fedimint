@@ -7,7 +7,8 @@ use fedimint_client::transaction::{ClientInput, ClientOutput};
 use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_sha256_hash,
-    bitcoin30_to_bitcoin29_schnorr_signature, bitcoin30_to_bitcoin29_sha256_hash,
+    bitcoin30_to_bitcoin29_schnorr_signature, bitcoin30_to_bitcoin29_secp256k1_public_key,
+    bitcoin30_to_bitcoin29_sha256_hash,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
@@ -584,13 +585,15 @@ impl GatewayPayInvoice {
         payment_data: &PaymentData,
         routing_fees: RoutingFees,
     ) -> Result<PaymentParameters, OutgoingContractError> {
-        let our_pub_key = secp256k1::PublicKey::from_keypair(&redeem_key);
+        let our_pub_key =
+            secp256k1::PublicKey::from_keypair(&bitcoin29_to_bitcoin30_keypair(redeem_key));
 
         if account.contract.cancelled {
             return Err(OutgoingContractError::CancelledContract);
         }
 
-        if account.contract.gateway_key != our_pub_key {
+        if account.contract.gateway_key != bitcoin30_to_bitcoin29_secp256k1_public_key(our_pub_key)
+        {
             return Err(OutgoingContractError::NotOurKey);
         }
 
@@ -641,7 +644,11 @@ impl GatewayPayInvoice {
             None => None,
             Some(hop) => match context.gateway.state.read().await.clone() {
                 GatewayState::Running { lightning_context } => {
-                    if hop.src_node_id != lightning_context.lightning_public_key {
+                    if hop.src_node_id
+                        != bitcoin30_to_bitcoin29_secp256k1_public_key(
+                            lightning_context.lightning_public_key,
+                        )
+                    {
                         return None;
                     }
 

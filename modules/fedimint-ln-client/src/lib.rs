@@ -35,8 +35,7 @@ use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_network, bitcoin29_to_bitcoin30_secp256k1_public_key,
     bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_keypair,
-    bitcoin30_to_bitcoin29_network, bitcoin30_to_bitcoin29_secp256k1_public_key,
-    bitcoin30_to_bitcoin29_secp256k1_secret_key,
+    bitcoin30_to_bitcoin29_secp256k1_public_key, bitcoin30_to_bitcoin29_sha256_hash,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -219,7 +218,10 @@ fn invoice_has_internal_payment_markers(
         .first()
         .and_then(|rh| rh.0.last())
         .map(|hop| (hop.src_node_id, hop.short_channel_id))
-        == Some(markers)
+        == Some((
+            bitcoin29_to_bitcoin30_secp256k1_public_key(markers.0),
+            markers.1,
+        ))
 }
 
 fn invoice_routes_back_to_federation(
@@ -232,7 +234,10 @@ fn invoice_routes_back_to_federation(
             .first()
             .and_then(|rh| rh.0.last())
             .map(|hop| (hop.src_node_id, hop.short_channel_id))
-            == Some((gateway.node_pub_key, gateway.mint_channel_id))
+            == Some((
+                bitcoin29_to_bitcoin30_secp256k1_public_key(gateway.node_pub_key),
+                gateway.mint_channel_id,
+            ))
     })
 }
 
@@ -387,7 +392,6 @@ pub struct LightningClientModule {
     pub cfg: LightningClientConfig,
     notifier: ModuleNotifier<LightningClientStateMachines>,
     redeem_key: KeyPair,
-    secp24: bitcoin29::secp256k1::Secp256k1<bitcoin29::secp256k1::All>,
     secp: Secp256k1<All>,
     module_api: DynModuleApi,
     preimage_auth: KeyPair,
@@ -452,7 +456,6 @@ impl LightningClientModule {
         args: &ClientModuleInitArgs<LightningClientInit>,
         gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
     ) -> anyhow::Result<LightningClientModule> {
-        let secp24 = bitcoin29::secp256k1::Secp256k1::new();
         let secp = Secp256k1::new();
         let ln_module = LightningClientModule {
             cfg: args.cfg().clone(),
@@ -466,7 +469,6 @@ impl LightningClientModule {
                 .module_root_secret()
                 .child_key(ChildId(LightningChildKeys::PreimageAuthentication as u64))
                 .to_secp_key(&secp),
-            secp24,
             secp,
             client_ctx: args.context(),
             update_gateway_cache_merge: UpdateMerge::default(),
@@ -533,7 +535,7 @@ impl LightningClientModule {
         ClientOutput<LightningOutputV0, LightningClientStateMachines>,
         ContractId,
     )> {
-        let federation_currency: Currency = self.cfg.network.into();
+        let federation_currency: Currency = bitcoin29_to_bitcoin30_network(self.cfg.network).into();
         let invoice_currency = invoice.currency();
         ensure!(
             federation_currency == invoice_currency,
@@ -567,12 +569,10 @@ impl LightningClientModule {
 
         let user_sk = KeyPair::new(&self.secp, &mut rng);
 
-        let preimage_auth = self.get_preimage_authentication(&bitcoin29_to_bitcoin30_sha256_hash(
-            *invoice.payment_hash(),
-        ));
+        let preimage_auth = self.get_preimage_authentication(invoice.payment_hash());
         let payment_hash = *invoice.payment_hash();
         let contract = OutgoingContract {
-            hash: payment_hash,
+            hash: bitcoin30_to_bitcoin29_sha256_hash(payment_hash),
             gateway_key: gateway.gateway_redeem_key,
             timelock: absolute_timelock as u32,
             user_key: bitcoin30_to_bitcoin29_secp256k1_public_key(user_sk.public_key()),
@@ -647,7 +647,7 @@ impl LightningClientModule {
 
         let (incoming_output, amount, contract_id) = create_incoming_contract_output(
             &self.module_api,
-            bitcoin29_to_bitcoin30_sha256_hash(*payment_hash),
+            *payment_hash,
             invoice_amount,
             self.redeem_key,
         )
@@ -662,9 +662,7 @@ impl LightningClientModule {
                         common: IncomingSmCommon {
                             operation_id,
                             contract_id,
-                            payment_hash: bitcoin29_to_bitcoin30_sha256_hash(
-                                *invoice.payment_hash(),
-                            ),
+                            payment_hash: *invoice.payment_hash(),
                         },
                         state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
                     },
@@ -787,7 +785,7 @@ impl LightningClientModule {
 
         // Route hint instructing payer how to route to gateway
         let route_hint_last_hop = RouteHintHop {
-            src_node_id: bitcoin30_to_bitcoin29_secp256k1_public_key(src_node_id),
+            src_node_id,
             short_channel_id,
             fees: RoutingFees {
                 base_msat: 0,
@@ -817,31 +815,27 @@ impl LightningClientModule {
 
         let duration_since_epoch = fedimint_core::time::duration_since_epoch();
 
-        let mut invoice_builder =
-            InvoiceBuilder::new(bitcoin30_to_bitcoin29_network(network).into())
-                .amount_milli_satoshis(amount.msats)
-                .invoice_description(description)
-                .payment_hash(payment_hash)
-                .payment_secret(PaymentSecret(rng.gen()))
-                .duration_since_epoch(duration_since_epoch)
-                .min_final_cltv_expiry_delta(18)
-                .payee_pub_key(bitcoin30_to_bitcoin29_secp256k1_public_key(node_public_key))
-                .expiry_time(Duration::from_secs(
-                    expiry_time.unwrap_or(DEFAULT_INVOICE_EXPIRY_TIME.as_secs()),
-                ));
+        let mut invoice_builder = InvoiceBuilder::new(network.into())
+            .amount_milli_satoshis(amount.msats)
+            .invoice_description(description)
+            .payment_hash(bitcoin29_to_bitcoin30_sha256_hash(payment_hash))
+            .payment_secret(PaymentSecret(rng.gen()))
+            .duration_since_epoch(duration_since_epoch)
+            .min_final_cltv_expiry_delta(18)
+            .payee_pub_key(node_public_key)
+            .expiry_time(Duration::from_secs(
+                expiry_time.unwrap_or(DEFAULT_INVOICE_EXPIRY_TIME.as_secs()),
+            ));
 
         for rh in final_route_hints {
             invoice_builder = invoice_builder.private_route(rh);
         }
 
-        let invoice = invoice_builder.build_signed(|hash| {
-            self.secp24.sign_ecdsa_recoverable(
-                hash,
-                &bitcoin30_to_bitcoin29_secp256k1_secret_key(node_secret_key),
-            )
-        })?;
+        let invoice = invoice_builder
+            .build_signed(|hash| self.secp.sign_ecdsa_recoverable(hash, &node_secret_key))?;
 
-        let operation_id = OperationId(invoice.payment_hash().into_inner());
+        let operation_id =
+            OperationId(bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()).into_inner());
 
         let sm_invoice = invoice.clone();
         let sm_gen = Arc::new(move |txid: TransactionId, _input_idx: u64| {
@@ -996,10 +990,7 @@ impl LightningClientModule {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         let maybe_gateway_id = maybe_gateway.as_ref().map(|g| g.gateway_id);
         let prev_payment_result = self
-            .get_prev_payment_result(
-                &bitcoin29_to_bitcoin30_sha256_hash(*invoice.payment_hash()),
-                &mut dbtx.to_ref_nc(),
-            )
+            .get_prev_payment_result(invoice.payment_hash(), &mut dbtx.to_ref_nc())
             .await;
 
         if let Some(completed_payment) = prev_payment_result.completed_payment {
@@ -1007,19 +998,14 @@ impl LightningClientModule {
         }
 
         // Verify that no previous payment attempt is still running
-        let prev_operation_id = self.get_payment_operation_id(
-            &bitcoin29_to_bitcoin30_sha256_hash(*invoice.payment_hash()),
-            prev_payment_result.index,
-        );
+        let prev_operation_id =
+            self.get_payment_operation_id(invoice.payment_hash(), prev_payment_result.index);
         if self.client_ctx.has_active_states(prev_operation_id).await {
             return Err(anyhow!("Previous payment attempt still in progress. Previous Operation Id: {prev_operation_id}"));
         }
 
         let next_index = prev_payment_result.index + 1;
-        let operation_id = self.get_payment_operation_id(
-            &bitcoin29_to_bitcoin30_sha256_hash(*invoice.payment_hash()),
-            next_index,
-        );
+        let operation_id = self.get_payment_operation_id(invoice.payment_hash(), next_index);
 
         let new_payment_result = PaymentResult {
             index: next_index,
@@ -1028,7 +1014,7 @@ impl LightningClientModule {
 
         dbtx.insert_entry(
             &PaymentResultKey {
-                payment_hash: bitcoin29_to_bitcoin30_sha256_hash(*invoice.payment_hash()),
+                payment_hash: *invoice.payment_hash(),
             },
             &new_payment_result,
         )

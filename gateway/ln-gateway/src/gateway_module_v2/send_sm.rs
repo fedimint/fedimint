@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use bitcoin_hashes::Hash;
+use bitcoin::hashes::Hash;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint};
@@ -156,7 +157,7 @@ impl SendStateMachine {
 
             let (payload, client) = context
                 .gateway
-                .get_payload_and_client_v2(invoice.payment_hash().into_inner(), invoice_msats)
+                .get_payload_and_client_v2(invoice.payment_hash().to_byte_array(), invoice_msats)
                 .await
                 .map_err(|e| Cancelled::DirectSwapError(e.to_string()))?;
 
@@ -185,7 +186,7 @@ impl SendStateMachine {
                     invoice: invoice.to_string(),
                     max_delay,
                     max_fee_msat: max_fee.msats,
-                    payment_hash: invoice.payment_hash().to_vec(),
+                    payment_hash: invoice.payment_hash().to_byte_array().to_vec(),
                 })
                 .await
         }
@@ -213,7 +214,9 @@ impl SendStateMachine {
                         OutgoingWitness::Claim(preimage),
                     )),
                     amount: old_state.common.contract.amount,
-                    keys: vec![old_state.common.claim_keypair],
+                    keys: vec![bitcoin30_to_bitcoin29_keypair(
+                        old_state.common.claim_keypair,
+                    )],
                     state_machines: Arc::new(|_, _| vec![]),
                 };
 

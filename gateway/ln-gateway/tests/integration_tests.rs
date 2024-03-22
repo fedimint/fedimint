@@ -7,13 +7,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use assert_matches::assert_matches;
+use bitcoin::hashes::Hash;
 use bitcoin::Network;
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes::{sha256, Hash as OldHash};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_sha256_hash,
-    bitcoin30_to_bitcoin29_network,
+    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_network,
+    bitcoin30_to_bitcoin29_sha256_hash,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
@@ -71,9 +72,7 @@ async fn user_pay_invoice(
     invoice: Bolt11Invoice,
     gateway_id: &PublicKey,
 ) -> anyhow::Result<OutgoingLightningPayment> {
-    let gateway = ln_module
-        .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(*gateway_id))
-        .await;
+    let gateway = ln_module.select_gateway(gateway_id).await;
     ln_module.pay_bolt11_invoice(gateway, invoice, ()).await
 }
 
@@ -184,9 +183,7 @@ async fn gateway_pay_valid_invoice(
     gateway_id: &PublicKey,
 ) -> anyhow::Result<()> {
     let user_lightning_module = &user_client.get_first_module::<LightningClientModule>();
-    let gateway = user_lightning_module
-        .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(*gateway_id))
-        .await;
+    let gateway = user_lightning_module.select_gateway(gateway_id).await;
 
     // User client pays test invoice
     let OutgoingLightningPayment {
@@ -208,7 +205,7 @@ async fn gateway_pay_valid_invoice(
                 federation_id: user_client.federation_id(),
                 contract_id,
                 payment_data: get_payment_data(gateway, invoice),
-                preimage_auth: bitcoin29_to_bitcoin30_sha256_hash(Hash::hash(&[0; 32])),
+                preimage_auth: Hash::hash(&[0; 32]),
             };
 
             let gw_pay_op = gateway_client
@@ -425,9 +422,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
 
             let user_lightning_module = user_client.get_first_module::<LightningClientModule>();
             let gateway_id = gateway_test.gateway.gateway_id;
-            let gateway = user_lightning_module
-                .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
-                .await;
+            let gateway = user_lightning_module.select_gateway(&gateway_id).await;
             let gateway_client = gateway_test.select_client(fed.id()).await;
 
             let invoice_amount = sats(250);
@@ -459,7 +454,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                         federation_id: user_client.federation_id(),
                         contract_id,
                         payment_data: get_payment_data(gateway, invoice),
-                        preimage_auth: bitcoin29_to_bitcoin30_sha256_hash(Hash::hash(&[0; 32])),
+                        preimage_auth: Hash::hash(&[0; 32]),
                     };
 
                     let gw_pay_op = gateway_client
@@ -541,12 +536,12 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                 input: claim_input,
                 state_machines: Arc::new(|_, _| vec![]),
                 amount: outgoing_contract.amount,
-                keys: vec![gateway_module.redeem_key],
+                keys: vec![bitcoin30_to_bitcoin29_keypair(gateway_module.redeem_key)],
             };
 
             let tx = TransactionBuilder::new().with_input(client_input.into_dyn(gateway_module.id));
             let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Pay {};
-            let operation_id = OperationId(invoice.payment_hash().into_inner());
+            let operation_id = OperationId(invoice.payment_hash().to_byte_array());
             let (txid, _) = gateway_client
                 .finalize_and_submit_transaction(
                     operation_id,
@@ -584,9 +579,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
             // Create invoice that cannot be paid
             let invoice = other_lightning_client.unpayable_invoice(sats(250), None);
 
-            let gateway = lightning_module
-                .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
-                .await;
+            let gateway = lightning_module.select_gateway(&gateway_id).await;
 
             // User client pays test invoice
             let OutgoingLightningPayment {
@@ -608,7 +601,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
                         federation_id: user_client.federation_id(),
                         contract_id,
                         payment_data: get_payment_data(gateway, invoice),
-                        preimage_auth: bitcoin29_to_bitcoin30_sha256_hash(Hash::hash(&[0; 32])),
+                        preimage_auth: Hash::hash(&[0; 32]),
                     };
 
                     let gw_pay_op = gateway_client
@@ -647,9 +640,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
         // User client creates invoice in federation
         let invoice_amount = sats(100);
         let ln_module = user_client.get_first_module::<LightningClientModule>();
-        let ln_gateway = ln_module
-            .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
-            .await;
+        let ln_gateway = ln_module.select_gateway(&gateway_id).await;
         let desc = Description::new("description".to_string())?;
         let (_invoice_op, invoice, _) = ln_module
             .create_bolt11_invoice(
@@ -663,7 +654,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
 
         // Run gateway state machine
         let htlc = Htlc {
-            payment_hash: *invoice.payment_hash(),
+            payment_hash: bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()),
             incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             incoming_expiry: u32::MAX,
@@ -740,9 +731,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
         let gateway_client = gateway.select_client(fed.id()).await;
         // User client creates invoice in federation
         let ln_module = user_client.get_first_module::<LightningClientModule>();
-        let ln_gateway = ln_module
-            .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
-            .await;
+        let ln_gateway = ln_module.select_gateway(&gateway_id).await;
         let desc = Description::new("description".to_string())?;
         let (_invoice_op, invoice, _) = ln_module
             .create_bolt11_invoice(
@@ -756,7 +745,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
 
         // Run gateway state machine
         let htlc = Htlc {
-            payment_hash: *invoice.payment_hash(),
+            payment_hash: bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()),
             incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             incoming_expiry: u32::MAX,
@@ -805,7 +794,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             let preimage = BYTE_33;
             let ln_output = LightningOutput::new_v0_offer(IncomingContractOffer {
                 amount,
-                hash: *invoice.payment_hash(),
+                hash: bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()),
                 encrypted_preimage: EncryptedPreimage::new(
                     PreimageKey(preimage),
                     &user_lightning_module.cfg.threshold_pub_key,
@@ -834,7 +823,9 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                     .expect("Failed to serialize string into json"),
             };
 
-            let operation_id = OperationId(invoice.payment_hash().into_inner());
+            let operation_id = OperationId(
+                bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()).into_inner(),
+            );
             let (txid, _) = user_client
                 .finalize_and_submit_transaction(
                     operation_id,
@@ -852,7 +843,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 
             // Run gateway state machine
             let htlc = Htlc {
-                payment_hash: *invoice.payment_hash(),
+                payment_hash: bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()),
                 incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
                 outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
                 incoming_expiry: u32::MAX,
@@ -970,9 +961,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
 
             // User client pays test invoice
             let lightning_module = user_client.get_first_module::<LightningClientModule>();
-            let gateway_module = lightning_module
-                .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
-                .await;
+            let gateway_module = lightning_module.select_gateway(&gateway_id).await;
             let OutgoingLightningPayment {
                 payment_type,
                 contract_id,
@@ -992,7 +981,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                         federation_id: user_client.federation_id(),
                         contract_id,
                         payment_data: get_payment_data(gateway_module, invoice),
-                        preimage_auth: bitcoin29_to_bitcoin30_sha256_hash(Hash::hash(&[0; 32])),
+                        preimage_auth: Hash::hash(&[0; 32]),
                     };
 
                     let gw_pay_op = gateway_client
@@ -1064,9 +1053,7 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
             let invoice_amount = sats(100);
             let gateway_id = gateway.gateway.gateway_id;
             let ln_module = user_client.get_first_module::<LightningClientModule>();
-            let ln_gateway = ln_module
-                .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
-                .await;
+            let ln_gateway = ln_module.select_gateway(&gateway_id).await;
             let desc = Description::new("description".to_string())?;
             let (_invoice_op, invoice, _) = user_client
                 .get_first_module::<LightningClientModule>()
@@ -1589,9 +1576,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
             // User creates invoice in federation 2
             let invoice_amt = msats(2_500);
             let ln_module = client2.get_first_module::<LightningClientModule>();
-            let ln_gateway = ln_module
-                .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
-                .await;
+            let ln_gateway = ln_module.select_gateway(&gateway_id).await;
             let desc = Description::new("description".to_string())?;
             let (receive_op, invoice, _) = ln_module
                 .create_bolt11_invoice(

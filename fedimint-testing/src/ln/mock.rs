@@ -3,12 +3,11 @@ use std::time::Duration;
 
 use async_stream::stream;
 use async_trait::async_trait;
-use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::KeyPair;
+use bitcoin30::hashes::{sha256, Hash};
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_secp256k1_secret_key,
-    bitcoin30_to_bitcoin29_secp256k1_secret_key,
 };
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
@@ -76,11 +75,11 @@ impl LightningTest for FakeLightningTest {
         amount: Amount,
         expiry_time: Option<u64>,
     ) -> ln_gateway::Result<Bolt11Invoice> {
-        let ctx = bitcoin::secp256k1::Secp256k1::new();
+        let ctx = bitcoin30::secp256k1::Secp256k1::new();
 
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .description("".to_string())
-            .payment_hash(sha256::Hash::hash(&[0; 32]))
+            .payment_hash(sha256::Hash::from_byte_array([0; 32]))
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
@@ -88,12 +87,7 @@ impl LightningTest for FakeLightningTest {
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
-            .build_signed(|m| {
-                ctx.sign_ecdsa_recoverable(
-                    m,
-                    &bitcoin30_to_bitcoin29_secp256k1_secret_key(self.gateway_node_sec_key),
-                )
-            })
+            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
             .unwrap())
     }
 
@@ -184,7 +178,7 @@ impl ILnRpcClient for FakeLightningTest {
         &self,
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
-        let ctx = bitcoin::secp256k1::Secp256k1::new();
+        let ctx = bitcoin30::secp256k1::Secp256k1::new();
 
         let payment_hash = sha256::Hash::from_slice(&create_invoice_request.payment_hash)
             .expect("Failed to lookup FederationId");
@@ -196,12 +190,7 @@ impl ILnRpcClient for FakeLightningTest {
             .payment_secret(PaymentSecret([0; 32]))
             .amount_milli_satoshis(create_invoice_request.amount_msat)
             .expiry_time(Duration::from_secs(create_invoice_request.expiry as u64))
-            .build_signed(|m| {
-                ctx.sign_ecdsa_recoverable(
-                    m,
-                    &bitcoin30_to_bitcoin29_secp256k1_secret_key(self.gateway_node_sec_key),
-                )
-            })
+            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
             .unwrap();
 
         Ok(CreateInvoiceResponse {
@@ -211,7 +200,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn connect_to_peer(
         &self,
-        _pubkey: bitcoin::secp256k1::PublicKey,
+        _pubkey: bitcoin30::secp256k1::PublicKey,
         _host: String,
     ) -> Result<EmptyResponse, LightningRpcError> {
         unimplemented!("FakeLightningTest does not support connecting to peers")
@@ -223,7 +212,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn open_channel(
         &self,
-        _pubkey: bitcoin::secp256k1::PublicKey,
+        _pubkey: bitcoin30::secp256k1::PublicKey,
         _channel_size_sats: u64,
         _push_amount_sats: u64,
     ) -> Result<EmptyResponse, LightningRpcError> {
