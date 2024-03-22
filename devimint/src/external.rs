@@ -167,6 +167,19 @@ impl Bitcoind {
         Ok(tokio::task::block_in_place(|| self.client.get_block_count())? + 1)
     }
 
+    pub async fn mine_blocks_no_wait(&self, block_num: u64) -> Result<u64> {
+        let start_time = Instant::now();
+        debug!(target: LOG_DEVIMINT, ?block_num, "Mining bitcoin blocks");
+        let addr = self.get_new_address().await?;
+        let initial_block_count = self.get_block_count().await?;
+        self.generate_to_address(block_num, &addr).await?;
+        debug!(target: LOG_DEVIMINT,
+            elapsed_ms = %start_time.elapsed().as_millis(),
+            ?block_num, "Mined blocks (no wait)");
+
+        Ok(initial_block_count)
+    }
+
     pub async fn mine_blocks(&self, block_num: u64) -> Result<()> {
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, ?block_num, "Mining bitcoin blocks");

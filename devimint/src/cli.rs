@@ -227,7 +227,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
 
                     let gw_pegin_amount = 20_000;
                     let client_pegin_amount = 10_000;
-                    let (deposit_op_id, _, _) = tokio::try_join!(
+                    let (_, _, _) = tokio::try_join!(
                         async {
                             let (address, operation_id) = dev_fed
                                 .client_registered()
@@ -239,7 +239,12 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 .await?
                                 .send_to(address, client_pegin_amount)
                                 .await?;
-                            Ok(operation_id)
+                            dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await?;
+                            dev_fed
+                                .client_registered()
+                                .await?
+                                .await_deposit(&operation_id)
+                                .await
                         },
                         async {
                             let pegin_addr = dev_fed
@@ -251,7 +256,8 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 .bitcoind()
                                 .await?
                                 .send_to(pegin_addr, gw_pegin_amount)
-                                .await
+                                .await?;
+                            dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
                         },
                         async {
                             let pegin_addr = dev_fed
@@ -264,13 +270,8 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 .await?
                                 .send_to(pegin_addr, gw_pegin_amount)
                                 .await?;
-                            Ok(())
+                            dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
                         },
-                    )?;
-                    let client = dev_fed.client_registered().await?;
-                    tokio::try_join!(
-                        dev_fed.bitcoind().await?.mine_blocks(11),
-                        client.await_deposit(&deposit_op_id),
                     )?;
 
                     info!(target: LOG_DEVIMINT,
