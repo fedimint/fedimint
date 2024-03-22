@@ -1,3 +1,4 @@
+use anyhow::Context;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
 use clap::{CommandFactory, Parser, Subcommand};
@@ -118,21 +119,14 @@ impl std::str::FromStr for FederationIdAndRoutingFeesParameter {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split(',');
-        let federation_id = parts
-            .next()
-            .ok_or_else(|| anyhow::anyhow!("missing federation id"))?
-            .parse()?;
+        let federation_id = parts.next().context("missing federation id")?.parse()?;
         let base_msat = parts
             .next()
-            .ok_or_else(|| anyhow::anyhow!("missing base fee in millisatoshis"))?
+            .context("missing base fee in millisatoshis")?
             .parse()?;
         let proportional_millionths = parts
             .next()
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "missing liquidity based fee as proportional millionths of routed amount"
-                )
-            })?
+            .context("missing liquidity based fee as proportional millionths of routed amount")?
             .parse()?;
         Ok(FederationIdAndRoutingFeesParameter {
             federation_id,

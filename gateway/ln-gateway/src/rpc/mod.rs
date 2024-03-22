@@ -4,6 +4,7 @@ pub mod rpc_server;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
+use anyhow::Context;
 use bitcoin::{Address, Network};
 use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
@@ -112,15 +113,11 @@ impl FromStr for RoutingFeesWrapper {
         let mut parts = s.split(',');
         let base_msat = parts
             .next()
-            .ok_or_else(|| anyhow::anyhow!("missing base fee in millisatoshis"))?
+            .context("missing base fee in millisatoshis")?
             .parse()?;
         let proportional_millionths = parts
             .next()
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "missing liquidity based fee as proportional millionths of routed amount"
-                )
-            })?
+            .context("missing liquidity based fee as proportional millionths of routed amount")?
             .parse()?;
         Ok(RoutingFeesWrapper {
             base_msat,
