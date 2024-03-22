@@ -80,7 +80,7 @@ impl FederationTest {
         let mut client_builder = Client::builder(db);
         client_builder.with_module_inits(self.client_init.clone());
         client_builder.with_primary_module(self.primary_client);
-        let client_secret = Client::load_or_generate_client_secret(client_builder.db())
+        let client_secret = Client::load_or_generate_client_secret(client_builder.db_no_encoders())
             .await
             .unwrap();
         client_builder
