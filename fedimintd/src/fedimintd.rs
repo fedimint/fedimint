@@ -8,12 +8,12 @@ use std::time::Duration;
 use anyhow::format_err;
 use clap::Parser;
 use fedimint_core::admin_client::ConfigGenParamsRequest;
-use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::config::{
     ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::envs::{is_env_var_set, FM_USE_UNKNOWN_MODULE_ENV};
 use fedimint_core::module::ServerModuleInit;
 use fedimint_core::task::{sleep, TaskGroup};

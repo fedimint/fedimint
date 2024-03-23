@@ -1,9 +1,9 @@
 use std::str::FromStr;
 
 pub use bitcoin::Network;
-use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::{msats, plugin_types_trait_impl_config, Amount};
 use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
