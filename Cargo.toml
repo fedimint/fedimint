@@ -100,9 +100,6 @@ opt-level = 1
 debug = false
 opt-level = 1
 
-[profile.dev]
-warn = ["deprecated"]
-
 [profile.dev.package."*"] # external dependencies
 opt-level = 1
 
