@@ -15,6 +15,7 @@ use fedimint_core::util::write_overwrite_async;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::gateway::LightningNodeType;
 use futures::executor::block_on;
+use semver::VersionReq;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::time::Instant;
@@ -25,7 +26,7 @@ use tracing::{debug, info, trace, warn};
 
 use crate::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
-use crate::{cmd, poll_eq};
+use crate::{cmd, poll_eq, Gatewayd};
 
 #[derive(Clone)]
 pub struct Bitcoind {
@@ -319,6 +320,8 @@ impl Lightningd {
         Ok(rpc.call_typed(request).await?)
     }
 
+    // TODO(tvolk131): Remove this method and instead use
+    // `ILnRpcClient.wait_for_chain_sync()`
     pub async fn await_block_processing(&self) -> Result<()> {
         poll("lightningd block processing", None, || async {
             let btc_height = self
@@ -456,6 +459,8 @@ impl Lnd {
             .identity_pubkey)
     }
 
+    // TODO(tvolk131): Remove this method and instead use
+    // `ILnRpcClient.wait_for_chain_sync()`
     pub async fn await_block_processing(&self) -> Result<()> {
         poll("lnd block processing", None, || async {
             let synced = self
@@ -483,6 +488,8 @@ impl Lnd {
     }
 }
 
+// TODO(tvolk131): Remove this method and instead use
+// `open_channel_between_gateways()` below
 pub async fn open_channel(
     process_mgr: &ProcessManager,
     bitcoind: &Bitcoind,
@@ -593,6 +600,131 @@ pub async fn open_channel(
                 }
                 Err(e) => {
                     debug!(%e, "Getting chan info failed")
+                }
+            }
+        }
+
+        Err(ControlFlow::Continue(anyhow!("channel not found")))
+    })
+    .await?;
+
+    lnd.client
+        .lock()
+        .await
+        .lightning()
+        .update_channel_policy(PolicyUpdateRequest {
+            min_htlc_msat: 1,
+            scope: Some(Scope::Global(true)),
+            time_lock_delta: 80,
+            base_fee_msat: 0,
+            fee_rate: 0.0,
+            fee_rate_ppm: 0,
+            max_htlc_msat: 10000000000,
+            min_htlc_msat_specified: true,
+        })
+        .await?;
+
+    Ok(())
+}
+
+// TODO(tvolk131): Remove the `cln` and `lnd` arguments and instead use `gw_cln`
+// and `gw_lnd`
+pub async fn open_channel_between_gateways(
+    process_mgr: &ProcessManager,
+    bitcoind: &Bitcoind,
+    cln: &Lightningd,
+    gw_cln: &Gatewayd,
+    lnd: &Lnd,
+    gw_lnd: &Gatewayd,
+) -> Result<()> {
+    let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+    if VersionReq::parse("<0.3.0-alpha")?.matches(&gateway_cli_version)
+        || VersionReq::parse("<0.3.0-alpha")?.matches(&gatewayd_version)
+    {
+        return open_channel(process_mgr, bitcoind, cln, lnd).await;
+    }
+
+    tokio::try_join!(
+        gw_cln.wait_for_chain_sync(bitcoind),
+        gw_lnd.wait_for_chain_sync(bitcoind)
+    )?;
+    info!(target: LOG_DEVIMINT, "block sync done");
+    let cln_addr = gw_cln.get_funding_address().await?;
+
+    bitcoind.send_to(cln_addr, 100_000_000).await?;
+    bitcoind.mine_blocks(10).await?;
+
+    let lnd_pubkey = gw_lnd.lightning_pubkey().await?;
+    let cln_pubkey = gw_cln.lightning_pubkey().await?;
+
+    gw_cln
+        .connect_to_peer(
+            lnd_pubkey.parse()?,
+            format!("{}:{}", "127.0.0.1", process_mgr.globals.FM_PORT_LND_LISTEN),
+        )
+        .await?;
+
+    gw_cln
+        .open_channel(lnd_pubkey.clone(), 10_000_000, Some(5_000_000))
+        .await?;
+
+    poll("list peers", None, || async {
+        let num_peers = cln
+            .request(cln_rpc::model::requests::ListpeersRequest {
+                id: Some(
+                    lnd_pubkey
+                        .parse()
+                        .context("parse lnd pubkey")
+                        .map_err(ControlFlow::Break)?,
+                ),
+                level: None,
+            })
+            .await
+            .map_err(ControlFlow::Break)?
+            .peers
+            .len();
+        poll_eq!(num_peers, 1)
+    })
+    .await?;
+    bitcoind.mine_blocks(10).await?;
+
+    poll("Wait for channel update", None, || async {
+        let mut lnd_client = lnd.client.lock().await;
+        let channels = lnd_client
+            .lightning()
+            .list_channels(ListChannelsRequest {
+                active_only: true,
+                ..Default::default()
+            })
+            .await
+            .context("lnd list channels")
+            .map_err(ControlFlow::Break)?
+            .into_inner();
+
+        if let Some(channel) = channels
+            .channels
+            .iter()
+            .find(|channel| channel.remote_pubkey == cln_pubkey)
+        {
+            let chan_info = lnd_client
+                .lightning()
+                .get_chan_info(ChanInfoRequest {
+                    chan_id: channel.chan_id,
+                })
+                .await;
+
+            match chan_info {
+                Ok(info) => {
+                    let edge = info.into_inner();
+                    if edge.node1_policy.is_some() {
+                        return Ok(());
+                    } else {
+                        warn!(?edge, "Empty chan info");
+                    }
+                }
+                Err(e) => {
+                    warn!(%e, "Getting chan info failed")
                 }
             }
         }

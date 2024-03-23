@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use std::{env, fmt};
 
 use async_trait::async_trait;
@@ -12,8 +13,8 @@ use fedimint_core::Amount;
 use fedimint_logging::LOG_TEST;
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::gateway_lnrpc::{
-    EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
-    PayInvoiceRequest, PayInvoiceResponse,
+    EmptyResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 use ln_gateway::lightning::cln::{NetworkLnRpcClient, RouteHtlcStream};
 use ln_gateway::lightning::lnd::GatewayLndClient;
@@ -124,6 +125,40 @@ impl ILnRpcClient for ClnLightningTest {
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError> {
         self.lnrpc.complete_htlc(htlc).await
+    }
+
+    async fn connect_to_peer(
+        &self,
+        pubkey: secp256k1::PublicKey,
+        host: String,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        self.lnrpc.connect_to_peer(pubkey, host).await
+    }
+
+    async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError> {
+        self.lnrpc.get_funding_address().await
+    }
+
+    async fn open_channel(
+        &self,
+        pubkey: String,
+        channel_size_sats: u64,
+        push_amount_sats: u64,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        self.lnrpc
+            .open_channel(pubkey, channel_size_sats, push_amount_sats)
+            .await
+    }
+
+    async fn wait_for_chain_sync(
+        &self,
+        block_height: u32,
+        max_retries: u32,
+        retry_delay: Duration,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        self.lnrpc
+            .wait_for_chain_sync(block_height, max_retries, retry_delay)
+            .await
     }
 }
 
@@ -282,6 +317,40 @@ impl ILnRpcClient for LndLightningTest {
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError> {
         self.lnrpc.complete_htlc(htlc).await
+    }
+
+    async fn connect_to_peer(
+        &self,
+        pubkey: secp256k1::PublicKey,
+        host: String,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        self.lnrpc.connect_to_peer(pubkey, host).await
+    }
+
+    async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError> {
+        self.lnrpc.get_funding_address().await
+    }
+
+    async fn open_channel(
+        &self,
+        pubkey: String,
+        channel_size_sats: u64,
+        push_amount_sats: u64,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        self.lnrpc
+            .open_channel(pubkey, channel_size_sats, push_amount_sats)
+            .await
+    }
+
+    async fn wait_for_chain_sync(
+        &self,
+        block_height: u32,
+        max_retries: u32,
+        retry_delay: Duration,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        self.lnrpc
+            .wait_for_chain_sync(block_height, max_retries, retry_delay)
+            .await
     }
 }
 

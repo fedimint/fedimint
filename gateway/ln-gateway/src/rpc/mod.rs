@@ -2,6 +2,7 @@ pub mod rpc_client;
 pub mod rpc_server;
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use bitcoin::{Address, Network};
 use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
@@ -92,4 +93,24 @@ pub struct SetConfigurationPayload {
     pub num_route_hints: Option<u32>,
     pub routing_fees: Option<String>,
     pub network: Option<Network>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ConnectToPeerPayload {
+    pub pubkey: secp256k1::PublicKey,
+    pub host: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OpenChannelPayload {
+    pub pubkey: String,
+    pub channel_size_sats: u64,
+    pub push_amount_sats: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WaitForChainSyncPayload {
+    pub block_height: u32,
+    pub max_retries: u32,
+    pub retry_delay: Duration,
 }

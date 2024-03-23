@@ -3,6 +3,7 @@ pub mod lnd;
 
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use clap::Subcommand;
@@ -17,8 +18,8 @@ use thiserror::Error;
 use self::cln::{NetworkLnRpcClient, RouteHtlcStream};
 use self::lnd::GatewayLndClient;
 use crate::gateway_lnrpc::{
-    EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
-    PayInvoiceRequest, PayInvoiceResponse,
+    EmptyResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
@@ -43,6 +44,12 @@ pub enum LightningRpcError {
     FailedToOpenChannel { failure_reason: String },
     #[error("Failed to get Invoice: {failure_reason}")]
     FailedToGetInvoice { failure_reason: String },
+    #[error("Failed to get funding address: {failure_reason}")]
+    FailedToGetFundingAddress { failure_reason: String },
+    #[error("Failed to connect to peer: {failure_reason}")]
+    FailedToConnectToPeer { failure_reason: String },
+    #[error("Failed to wait for chain sync: {failure_reason}")]
+    FailedToWaitForChainSync { failure_reason: String },
 }
 
 /// A trait that the gateway uses to interact with a lightning node. This allows
@@ -107,6 +114,35 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     async fn complete_htlc(
         &self,
         htlc: InterceptHtlcResponse,
+    ) -> Result<EmptyResponse, LightningRpcError>;
+
+    /// Connect to a peer lightning node from the gateway's lightning node.
+    async fn connect_to_peer(
+        &self,
+        pubkey: secp256k1::PublicKey,
+        host: String,
+    ) -> Result<EmptyResponse, LightningRpcError>;
+
+    /// Get the funding address belonging to the gateway's lightning node
+    /// wallet.
+    async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError>;
+
+    /// Open a channel with a peer lightning node from the gateway's lightning
+    /// node.
+    async fn open_channel(
+        &self,
+        pubkey: String,
+        channel_size_sats: u64,
+        push_amount_sats: u64,
+    ) -> Result<EmptyResponse, LightningRpcError>;
+
+    /// Wait for the gateway's lightning node to sync with the blockchain up to
+    /// the given block height.
+    async fn wait_for_chain_sync(
+        &self,
+        block_height: u32,
+        max_retries: u32,
+        retry_delay: Duration,
     ) -> Result<EmptyResponse, LightningRpcError>;
 }
 
