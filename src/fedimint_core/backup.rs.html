@@ -29,7 +29,15 @@
 <a href="#27" id="27">27</a>
 <a href="#28" id="28">28</a>
 <a href="#29" id="29">29</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::time::SystemTime;
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+</pre></div><pre class="rust"><code><span class="doccomment">//! Federation-stored client backups
+//!
+//! Federations can store client-encrypted backups to help
+//! clients recover from a snapshot, instead of a blank slate.
+</span><span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
