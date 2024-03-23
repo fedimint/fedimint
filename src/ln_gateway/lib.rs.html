@@ -1590,36 +1590,6 @@
 <a href="#1588" id="1588">1588</a>
 <a href="#1589" id="1589">1589</a>
 <a href="#1590" id="1590">1590</a>
-<a href="#1591" id="1591">1591</a>
-<a href="#1592" id="1592">1592</a>
-<a href="#1593" id="1593">1593</a>
-<a href="#1594" id="1594">1594</a>
-<a href="#1595" id="1595">1595</a>
-<a href="#1596" id="1596">1596</a>
-<a href="#1597" id="1597">1597</a>
-<a href="#1598" id="1598">1598</a>
-<a href="#1599" id="1599">1599</a>
-<a href="#1600" id="1600">1600</a>
-<a href="#1601" id="1601">1601</a>
-<a href="#1602" id="1602">1602</a>
-<a href="#1603" id="1603">1603</a>
-<a href="#1604" id="1604">1604</a>
-<a href="#1605" id="1605">1605</a>
-<a href="#1606" id="1606">1606</a>
-<a href="#1607" id="1607">1607</a>
-<a href="#1608" id="1608">1608</a>
-<a href="#1609" id="1609">1609</a>
-<a href="#1610" id="1610">1610</a>
-<a href="#1611" id="1611">1611</a>
-<a href="#1612" id="1612">1612</a>
-<a href="#1613" id="1613">1613</a>
-<a href="#1614" id="1614">1614</a>
-<a href="#1615" id="1615">1615</a>
-<a href="#1616" id="1616">1616</a>
-<a href="#1617" id="1617">1617</a>
-<a href="#1618" id="1618">1618</a>
-<a href="#1619" id="1619">1619</a>
-<a href="#1620" id="1620">1620</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1868,8 +1838,8 @@
     // connection to a lightning node.
     </span>lightning_builder: Arc&lt;<span class="kw">dyn </span>LightningBuilder + Send + Sync&gt;,
 
-    <span class="comment">// CLI or environment parameters that the operator has set.
-    </span>gateway_parameters: GatewayParameters,
+    <span class="comment">// The gateway's current configuration
+    </span>gateway_config: Arc&lt;RwLock&lt;<span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt;&gt;&gt;,
 
     <span class="comment">// The current state of the Gateway.
     </span><span class="kw">pub </span>state: Arc&lt;RwLock&lt;GatewayState&gt;&gt;,
@@ -1900,12 +1870,18 @@
     <span class="comment">// Tracker for short channel ID assignments. When connecting a new federation,
     // this value is incremented and assigned to the federation as the `mint_channel_id`
     </span>max_used_scid: Arc&lt;Mutex&lt;u64&gt;&gt;,
+
+    <span class="comment">// The Gateway's API URL.
+    </span>versioned_api: SafeUrl,
+
+    <span class="comment">// The socket the gateway listens on.
+    </span>listen: SocketAddr,
 }
 
 <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>Gateway {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
         f.debug_struct(<span class="string">"Gateway"</span>)
-            .field(<span class="string">"gateway_parameters"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_parameters)
+            .field(<span class="string">"gateway_config"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_config)
             .field(<span class="string">"state"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.state)
             .field(<span class="string">"client_builder"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.client_builder)
             .field(<span class="string">"gateway_db"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_db)
@@ -2002,10 +1978,13 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
+        <span class="kw">let </span>gateway_config =
+            <span class="self">Self</span>::get_gateway_configuration(gateway_db.clone(), <span class="kw-2">&amp;</span>gateway_parameters).<span class="kw">await</span>;
+
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             lightning_builder,
             max_used_scid: Arc::new(Mutex::new(INITIAL_SCID)),
-            gateway_parameters,
+            gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
             gateway_id: <span class="self">Self</span>::get_gateway_id(gateway_db.clone()).<span class="kw">await</span>,
@@ -2013,6 +1992,8 @@
             clients: Arc::new(RwLock::new(BTreeMap::new())),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
             client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
+            versioned_api: gateway_parameters.versioned_api,
+            listen: gateway_parameters.listen,
         })
     }
 
@@ -2078,46 +2059,10 @@
         <span class="self">self</span>.load_clients().<span class="kw">await</span>;
         <span class="self">self</span>.start_gateway(tg).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// start webserver last to avoid handling requests before fully initialized
-        </span><span class="self">self</span>.start_webserver(tg).<span class="kw">await</span>;
+        </span>run_webserver(<span class="self">self</span>.clone(), tg).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>handle = tg.make_handle();
         <span class="kw">let </span>shutdown_receiver = handle.make_shutdown_rx().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(shutdown_receiver)
-    }
-
-    <span class="kw">async fn </span>start_webserver(<span class="kw-2">&amp;mut </span><span class="self">self</span>, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) {
-        <span class="kw">let </span>gateway_db = <span class="self">self</span>.gateway_db.clone();
-
-        <span class="kw">let </span>gateway = <span class="self">self</span>.clone();
-        <span class="kw">let </span>subgroup = task_group.make_subgroup().<span class="kw">await</span>;
-        task_group.spawn(<span class="string">"Webserver"</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
-            <span class="kw">while </span>!handle.is_shutting_down() {
-                <span class="comment">// Re-fetch the configuration because the password has changed.
-                </span><span class="kw">let </span>gateway_config = gateway.get_gateway_configuration().<span class="kw">await</span>;
-                <span class="kw">let </span><span class="kw-2">mut </span>webserver_group = subgroup.make_subgroup().<span class="kw">await</span>;
-                run_webserver(
-                    gateway_config.clone(),
-                    gateway.gateway_parameters.listen,
-                    gateway.clone(),
-                    <span class="kw-2">&amp;mut </span>webserver_group,
-                )
-                .<span class="kw">await
-                </span>.expect(<span class="string">"Failed to start webserver"</span>);
-                <span class="macro">info!</span>(<span class="string">"Successfully started webserver"</span>);
-                <span class="kw">let </span>result = handle
-                    .cancel_on_shutdown(<span class="kw">async </span>{
-                        wait_for_new_password(<span class="kw-2">&amp;</span>gateway_db, gateway_config).<span class="kw">await</span>;
-                        <span class="macro">info!</span>(<span class="string">"GatewayConfiguration has been updated, restarting webserver..."</span>);
-                        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = webserver_group.shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await </span>{
-                            <span class="macro">panic!</span>(<span class="string">"Error shutting down server: {e:?}"</span>);
-                        }
-                    })
-                    .<span class="kw">await</span>;
-                <span class="kw">if </span>result.is_err() {
-                    <span class="macro">info!</span>(<span class="string">"Received shutdown signal, exiting...."</span>);
-                    <span class="kw">break</span>;
-                }
-            }
-        });
     }
 
     <span class="kw">async fn </span>start_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -2146,7 +2091,8 @@
 
                                 <span class="kw">match </span>fetch_lightning_node_info(ln_client.clone()).<span class="kw">await </span>{
                                     <span class="prelude-val">Ok</span>((lightning_public_key, lightning_alias, lightning_network)) =&gt; {
-                                        <span class="kw">let </span>gateway_config = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = self_copy.get_gateway_configuration().<span class="kw">await </span>{
+                                        <span class="kw">let </span>gateway_config = self_copy.gateway_config.read().<span class="kw">await</span>.clone();
+                                        <span class="kw">let </span>gateway_config = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = gateway_config {
                                             config
                                         } <span class="kw">else </span>{
                                             self_copy.set_gateway_state(GatewayState::Configuring).<span class="kw">await</span>;
@@ -2304,9 +2250,11 @@
             <span class="comment">// `GatewayConfiguration` should always exist in the database when we are in the
             // `Running` state.
             </span><span class="kw">let </span>gateway_config = <span class="self">self
-                </span>.get_gateway_configuration()
+                </span>.gateway_config
+                .read()
                 .<span class="kw">await
-                </span>.expect(<span class="string">"Gateway configuration should be set"</span>);
+                </span>.clone()
+                .expect(<span class="string">"Gateway configuration should be set"</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>federations = Vec::new();
             <span class="kw">let </span>federation_clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>.clone().into_iter();
             <span class="kw">let </span>route_hints = <span class="self">Self</span>::fetch_lightning_route_hints(
@@ -2524,9 +2472,11 @@
             <span class="comment">// `GatewayConfiguration` should always exist in the database when we are in the
             // `Running` state.
             </span><span class="kw">let </span>gateway_config = <span class="self">self
-                </span>.get_gateway_configuration()
+                </span>.gateway_config
+                .read()
                 .<span class="kw">await
-                </span>.expect(<span class="string">"Gateway configuration should be set"</span>);
+                </span>.clone()
+                .expect(<span class="string">"Gateway configuration should be set"</span>);
 
             <span class="comment">// The gateway deterministically assigns a channel id (u64) to each federation
             // connected.
@@ -2685,7 +2635,8 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
 
-        <span class="kw">let </span>gateway_config = <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>prev_config) = <span class="self">self</span>.get_gateway_configuration().<span class="kw">await </span>{
+        <span class="kw">let </span>prev_gateway_config = <span class="self">self</span>.gateway_config.read().<span class="kw">await</span>.clone();
+        <span class="kw">let </span>new_gateway_config = <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>prev_config) = prev_gateway_config {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(password) = password {
                 prev_config.password = password;
             }
@@ -2726,11 +2677,14 @@
             }
         };
 
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKey, <span class="kw-2">&amp;</span>gateway_config)
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKey, <span class="kw-2">&amp;</span>new_gateway_config)
             .<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>;
 
-        <span class="self">self</span>.update_federation_routing_fees(routing_fees, <span class="kw-2">&amp;</span>gateway_config)
+        <span class="kw">let </span><span class="kw-2">mut </span>curr_gateway_config = <span class="self">self</span>.gateway_config.write().<span class="kw">await</span>;
+        <span class="kw-2">*</span>curr_gateway_config = <span class="prelude-val">Some</span>(new_gateway_config.clone());
+
+        <span class="self">self</span>.update_federation_routing_fees(routing_fees, <span class="kw-2">&amp;</span>new_gateway_config)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">info!</span>(<span class="string">"Set GatewayConfiguration successfully."</span>);
 
@@ -2835,8 +2789,11 @@
     /// - `GatewayConfiguration` is read from the database.
     /// - All cli or environment variables are set such that we can create a
     ///   `GatewayConfiguration`
-    </span><span class="kw">async fn </span>get_gateway_configuration(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
+    </span><span class="kw">async fn </span>get_gateway_configuration(
+        gateway_db: Database,
+        gateway_parameters: <span class="kw-2">&amp;</span>GatewayParameters,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = gateway_db.begin_transaction().<span class="kw">await</span>;
 
         <span class="comment">// Always use the gateway configuration from the database if it exists.
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = dbtx.get_value(<span class="kw-2">&amp;</span>GatewayConfigurationKey).<span class="kw">await </span>{
@@ -2844,18 +2801,17 @@
         }
 
         <span class="comment">// If the password is not provided, return None
-        </span><span class="kw">let </span>password = <span class="self">self</span>.gateway_parameters.password.as_ref()<span class="question-mark">?</span>;
+        </span><span class="kw">let </span>password = gateway_parameters.password.as_ref()<span class="question-mark">?</span>;
 
         <span class="comment">// If the DB does not have the gateway configuration, we can construct one from
         // the provided password (required) and the defaults.
         // Use gateway parameters provided by the environment or CLI
-        </span><span class="kw">let </span>num_route_hints = <span class="self">self</span>.gateway_parameters.num_route_hints;
-        <span class="kw">let </span>routing_fees = <span class="self">self
-            </span>.gateway_parameters
+        </span><span class="kw">let </span>num_route_hints = gateway_parameters.num_route_hints;
+        <span class="kw">let </span>routing_fees = gateway_parameters
             .fees
             .clone()
             .unwrap_or(GatewayFee(DEFAULT_FEES));
-        <span class="kw">let </span>network = <span class="self">self</span>.gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
+        <span class="kw">let </span>network = gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
         <span class="kw">let </span>gateway_config = GatewayConfiguration {
             password: password.clone(),
             network,
@@ -2961,7 +2917,8 @@
         task_group.spawn_cancellable(<span class="string">"register clients"</span>, <span class="kw">async move </span>{
             <span class="kw">loop </span>{
                 <span class="kw">let </span><span class="kw-2">mut </span>registration_result: <span class="prelude-ty">Option</span>&lt;<span class="prelude-ty">Result</span>&lt;()&gt;&gt; = <span class="prelude-val">None</span>;
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = gateway.get_gateway_configuration().<span class="kw">await </span>{
+                <span class="kw">let </span>gateway_config = gateway.gateway_config.read().<span class="kw">await</span>.clone();
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = gateway_config {
                     <span class="kw">let </span>gateway_state = gateway.state.read().<span class="kw">await</span>.clone();
                     <span class="kw">if let </span>GatewayState::Running { .. } = <span class="kw-2">&amp;</span>gateway_state {
                         registration_result = <span class="prelude-val">Some</span>(<span class="self">Self</span>::register_all_federations(<span class="kw-2">&amp;</span>gateway, <span class="kw-2">&amp;</span>gateway_config).<span class="kw">await</span>);
@@ -3149,23 +3106,6 @@
     <span class="kw">let </span>network = Network::from_str(network)
         .map_err(|e| GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">"Invalid network {network}: {e}"</span>)))<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>((node_pub_key, alias, network))
-}
-
-<span class="kw">async fn </span>wait_for_new_password(
-    gateway_db: <span class="kw-2">&amp;</span>Database,
-    gateway_config: <span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt;,
-) {
-    gateway_db
-        .wait_key_check(<span class="kw-2">&amp;</span>GatewayConfigurationKey, |v| {
-            v.filter(|cfg| {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(old_config) = gateway_config.clone() {
-                    old_config.password != cfg.clone().password
-                } <span class="kw">else </span>{
-                    <span class="bool-val">true
-                </span>}
-            })
-        })
-        .<span class="kw">await</span>;
 }
 
 <span class="attr">#[derive(Debug, Error)]

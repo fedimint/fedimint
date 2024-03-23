@@ -224,8 +224,75 @@
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
 <a href="#224" id="224">224</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
-
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>axum::extract::Request;
+<span class="kw">use </span>axum::http::{header, StatusCode};
+<span class="kw">use </span>axum::middleware::{<span class="self">self</span>, Next};
 <span class="kw">use </span>axum::response::IntoResponse;
 <span class="kw">use </span>axum::routing::{get, post};
 <span class="kw">use </span>axum::{Extension, Json, Router};
@@ -236,24 +303,18 @@
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tokio::net::TcpListener;
 <span class="kw">use </span>tower_http::cors::CorsLayer;
-<span class="kw">use </span>tower_http::validate_request::ValidateRequestHeaderLayer;
-<span class="kw">use </span>tracing::{error, instrument};
+<span class="kw">use </span>tracing::{error, info, instrument};
 
 <span class="kw">use super</span>::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, InfoPayload,
     LeaveFedPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
-<span class="kw">use </span><span class="kw">crate</span>::db::GatewayConfiguration;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::ConfigPayload;
 <span class="kw">use crate</span>::{Gateway, GatewayError};
 
-<span class="kw">pub async fn </span>run_webserver(
-    config: <span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt;,
-    bind_addr: SocketAddr,
-    gateway: Gateway,
-    task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span>v1_routes = v1_routes(config, gateway.clone());
+<span class="doccomment">/// Creates the webserver's routes and spawns the webserver in a separate task.
+</span><span class="kw">pub async fn </span>run_webserver(gateway: Gateway, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">let </span>v1_routes = v1_routes(gateway.clone());
     <span class="kw">let </span>api_v1 = Router::new()
         .nest(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"/{V1_API_ENDPOINT}"</span>), v1_routes.clone())
         <span class="comment">// Backwards compatibility: Continue supporting gateway APIs without versioning
@@ -261,7 +322,7 @@
 
     <span class="kw">let </span>handle = task_group.make_handle();
     <span class="kw">let </span>shutdown_rx = handle.make_shutdown_rx().<span class="kw">await</span>;
-    <span class="kw">let </span>listener = TcpListener::bind(<span class="kw-2">&amp;</span>bind_addr).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>listener = TcpListener::bind(<span class="kw-2">&amp;</span>gateway.listen).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>serve = axum::serve(listener, api_v1.into_make_service());
     task_group.spawn(<span class="string">"Gateway Webserver"</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
         <span class="kw">let </span>graceful = serve.with_graceful_shutdown(<span class="kw">async </span>{
@@ -270,49 +331,120 @@
 
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = graceful.<span class="kw">await </span>{
             <span class="macro">error!</span>(<span class="string">"Error shutting down gatewayd webserver: {:?}"</span>, e);
+        } <span class="kw">else </span>{
+            <span class="macro">info!</span>(<span class="string">"Successfully shutdown webserver"</span>);
         }
     });
 
+    <span class="macro">info!</span>(<span class="string">"Successfully started webserver"</span>);
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">fn </span>v1_routes(config: <span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt;, gateway: Gateway) -&gt; Router {
-    <span class="kw">let </span>(public_routes, admin_routes) = <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = config {
-        <span class="comment">// Public routes on gateway webserver
-        </span><span class="kw">let </span>public_routes = Router::new()
-            .route(<span class="string">"/pay_invoice"</span>, post(pay_invoice))
-            .route(<span class="string">"/id"</span>, get(get_gateway_id));
+<span class="doccomment">/// Extracts the Bearer token from the Authorization header of the request.
+</span><span class="kw">fn </span>extract_bearer_token(request: <span class="kw-2">&amp;</span>Request) -&gt; <span class="prelude-ty">Result</span>&lt;String, StatusCode&gt; {
+    <span class="kw">let </span>headers = request.headers();
+    <span class="kw">let </span>auth_header = headers.get(header::AUTHORIZATION);
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(header_value) = auth_header {
+        <span class="kw">let </span>auth_str = header_value
+            .to_str()
+            .map_err(|<span class="kw">_</span>| StatusCode::UNAUTHORIZED)<span class="question-mark">?</span>;
+        <span class="kw">let </span>token = auth_str.trim_start_matches(<span class="string">"Bearer "</span>).to_string();
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(token);
+    }
 
-        <span class="comment">// Authenticated, public routes used for gateway administration
-        </span><span class="kw">let </span>admin_routes = Router::new()
-            <span class="comment">// FIXME: deprecated &gt;= 0.3.0
-            </span>.route(<span class="string">"/info"</span>, post(handle_post_info))
-            .route(<span class="string">"/info"</span>, get(info))
-            .route(<span class="string">"/config"</span>, post(configuration))
-            .route(<span class="string">"/balance"</span>, post(balance))
-            .route(<span class="string">"/address"</span>, post(address))
-            .route(<span class="string">"/withdraw"</span>, post(withdraw))
-            .route(<span class="string">"/connect-fed"</span>, post(connect_fed))
-            .route(<span class="string">"/leave-fed"</span>, post(leave_fed))
-            .route(<span class="string">"/backup"</span>, post(backup))
-            .route(<span class="string">"/restore"</span>, post(restore))
-            .route(<span class="string">"/set_configuration"</span>, post(set_configuration))
-            .layer(ValidateRequestHeaderLayer::bearer(<span class="kw-2">&amp;</span>gateway_config.password));
-        (public_routes, admin_routes)
-    } <span class="kw">else </span>{
-        <span class="kw">let </span>public_routes = Router::new()
-            .route(<span class="string">"/set_configuration"</span>, post(set_configuration))
-            .route(<span class="string">"/config"</span>, get(configuration))
-            <span class="comment">// FIXME: deprecated &gt;= 0.3.0
-            </span>.route(<span class="string">"/info"</span>, post(handle_post_info))
-            .route(<span class="string">"/info"</span>, get(info));
-        <span class="kw">let </span>admin_routes = Router::new();
-        (public_routes, admin_routes)
-    };
+    <span class="prelude-val">Err</span>(StatusCode::UNAUTHORIZED)
+}
+
+<span class="doccomment">/// Middleware to authenticate an incoming request. Routes that are
+/// authenticated with this middleware always require a Bearer token to be
+/// supplied in the Authorization header.
+</span><span class="kw">async fn </span>auth_middleware(
+    Extension(gateway): Extension&lt;Gateway&gt;,
+    request: Request,
+    next: Next,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, StatusCode&gt; {
+    <span class="kw">let </span>gateway_config = gateway.gateway_config.read().<span class="kw">await</span>.clone();
+    <span class="comment">// These routes are not available unless the gateway's configuration is set.
+    </span><span class="kw">let </span>gateway_password = gateway_config.ok_or(StatusCode::NOT_FOUND)<span class="question-mark">?</span>.password;
+    authenticate(gateway_password, request, next).<span class="kw">await
+</span>}
+
+<span class="doccomment">/// Middleware to authenticate an incoming request. Routes that are
+/// authenticated with this middleware are un-authenticated if the gateway has
+/// not yet been configured. After the gateway is configured, this middleware
+/// enforces that a Bearer token must be supplied in the Authorization header.
+</span><span class="kw">async fn </span>auth_after_config_middleware(
+    Extension(gateway): Extension&lt;Gateway&gt;,
+    request: Request,
+    next: Next,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, StatusCode&gt; {
+    <span class="comment">// If the gateway's config has not been set, allow the request to continue, so
+    // that the gateway can be configured
+    </span><span class="kw">let </span>gateway_config = gateway.gateway_config.read().<span class="kw">await</span>.clone();
+    <span class="kw">if </span>gateway_config.is_none() {
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(next.run(request).<span class="kw">await</span>);
+    }
+
+    <span class="comment">// Otherwise, validate that the Bearer token matches the gateway's password
+    </span><span class="kw">let </span>gateway_password = gateway_config
+        .expect(<span class="string">"Already validated the gateway config is not none"</span>)
+        .password;
+    authenticate(gateway_password, request, next).<span class="kw">await
+</span>}
+
+<span class="doccomment">/// Validate that the Bearer token matches the gateway's password
+</span><span class="kw">async fn </span>authenticate(
+    gateway_password: String,
+    request: Request,
+    next: Next,
+) -&gt; <span class="prelude-ty">Result</span>&lt;axum::response::Response, StatusCode&gt; {
+    <span class="kw">let </span>token = extract_bearer_token(<span class="kw-2">&amp;</span>request)<span class="question-mark">?</span>;
+    <span class="kw">if </span>gateway_password == token {
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(next.run(request).<span class="kw">await</span>);
+    }
+
+    <span class="prelude-val">Err</span>(StatusCode::UNAUTHORIZED)
+}
+
+<span class="doccomment">/// Gateway Webserver Routes. The gateway supports three types of routes
+/// - Always Authenticated: these routes always require a Bearer token. Used by
+///   gateway administrators.
+/// - Authenticated after config: these routes are unauthenticated before
+///   configuring the gateway to allow the user
+/// to set a password. After setting the password, they become authenticated.
+/// - Un-authenticated: anyone can request these routes. Used by fedimint
+///   clients.
+</span><span class="kw">fn </span>v1_routes(gateway: Gateway) -&gt; Router {
+    <span class="comment">// Public routes on gateway webserver
+    </span><span class="kw">let </span>public_routes = Router::new()
+        .route(<span class="string">"/pay_invoice"</span>, post(pay_invoice))
+        .route(<span class="string">"/id"</span>, get(get_gateway_id));
+
+    <span class="comment">// Authenticated, public routes used for gateway administration
+    </span><span class="kw">let </span>always_authenticated_routes = Router::new()
+        .route(<span class="string">"/balance"</span>, post(balance))
+        .route(<span class="string">"/address"</span>, post(address))
+        .route(<span class="string">"/withdraw"</span>, post(withdraw))
+        .route(<span class="string">"/connect-fed"</span>, post(connect_fed))
+        .route(<span class="string">"/leave-fed"</span>, post(leave_fed))
+        .route(<span class="string">"/backup"</span>, post(backup))
+        .route(<span class="string">"/restore"</span>, post(restore))
+        .layer(middleware::from_fn(auth_middleware));
+
+    <span class="comment">// Routes that are un-authenticated before gateway configuration, then become
+    // authenticated after a password has been set.
+    </span><span class="kw">let </span>authenticated_after_config_routes = Router::new()
+        .route(<span class="string">"/set_configuration"</span>, post(set_configuration))
+        .route(<span class="string">"/config"</span>, get(configuration))
+        <span class="comment">// FIXME: deprecated &gt;= 0.3.0
+        </span>.route(<span class="string">"/info"</span>, post(handle_post_info))
+        .route(<span class="string">"/info"</span>, get(info))
+        .layer(middleware::from_fn(auth_after_config_middleware));
 
     Router::new()
         .merge(public_routes)
-        .merge(admin_routes)
+        .merge(always_authenticated_routes)
+        .merge(authenticated_after_config_routes)
         .layer(Extension(gateway))
         .layer(CorsLayer::permissive())
 }
