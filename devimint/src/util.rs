@@ -601,7 +601,11 @@ impl Gatewayd {
     pub async fn version_or_default() -> Version {
         match cmd!(Gatewayd, "--version").out_string().await {
             Ok(version) => parse_clap_version(&version),
-            Err(_) => DEFAULT_VERSION,
+            Err(_) => cmd!(Gatewayd, "version-hash")
+                .out_string()
+                .await
+                .map(|v| version_hash_to_version(&v).unwrap_or(DEFAULT_VERSION))
+                .unwrap_or(DEFAULT_VERSION),
         }
     }
 }
