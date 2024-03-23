@@ -6,7 +6,7 @@ use anyhow::{anyhow as format_err, bail};
 use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use bitcoincore_rpc::{Auth, RpcApi};
-use fedimint_core::bitcoinrpc::FM_BITCOIND_COOKIE_FILE_VAR_NAME;
+use fedimint_core::envs::FM_BITCOIND_COOKIE_FILE_VAR_NAME;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{block_in_place, TaskHandle};

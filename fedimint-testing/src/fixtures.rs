@@ -7,7 +7,7 @@ use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::module::init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
-use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::config::{
     ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };

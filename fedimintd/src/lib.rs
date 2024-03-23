@@ -1,6 +1,6 @@
 use bitcoin::Network;
 use envs::FM_DISABLE_META_MODULE_ENV;
-use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,

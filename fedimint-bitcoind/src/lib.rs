@@ -8,7 +8,7 @@ use std::time::Duration;
 use anyhow::Context;
 pub use anyhow::Result;
 use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
-use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;

@@ -8,7 +8,7 @@ use std::time::Duration;
 use anyhow::format_err;
 use clap::Parser;
 use fedimint_core::admin_client::ConfigGenParamsRequest;
-use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::config::{
     ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
