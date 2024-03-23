@@ -5,8 +5,7 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-use fedimint_core::envs::is_env_var_set;
-use fedimint_core::envs::BitcoinRpcConfig;
+use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig};
 use fedimint_core::module::ServerModuleInit;
 use fedimint_core::util::SafeUrl;
 use fedimint_ln_common::config::{

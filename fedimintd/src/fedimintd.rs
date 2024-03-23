@@ -13,8 +13,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
-use fedimint_core::envs::BitcoinRpcConfig;
-use fedimint_core::envs::{is_env_var_set, FM_USE_UNKNOWN_MODULE_ENV};
+use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
 use fedimint_core::module::ServerModuleInit;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::timing;
