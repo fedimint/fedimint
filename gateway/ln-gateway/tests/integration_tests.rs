@@ -1083,7 +1083,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     let fed = fixtures.new_fed().await;
     let lnd = fixtures.lnd().await;
     let gateway = fixtures.new_gateway(lnd, 0, None).await;
-    let rpc_client = gateway.get_rpc().await;
+    let initial_rpc_client = gateway.get_rpc().await;
 
     // Verify that we can't join a federation yet because the configuration is not
     // set
@@ -1093,13 +1093,13 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
 
     verify_gateway_rpc_failure(
         "connect_federation",
-        || rpc_client.connect_federation(join_payload.clone()),
+        || initial_rpc_client.connect_federation(join_payload.clone()),
         StatusCode::NOT_FOUND,
     )
     .await;
 
     // Verify that the gateway's state is "Configuring"
-    let gw_info = rpc_client.get_info().await?;
+    let gw_info = verify_gateway_rpc_success("get_info", || initial_rpc_client.get_info()).await;
     assert_eq!(gw_info.gateway_state, "Configuring".to_string());
 
     // Verify that the gateway's fees, and network are `None`
@@ -1114,30 +1114,29 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         network: None,
     };
     verify_gateway_rpc_success("set_configuration", || {
-        rpc_client.set_configuration(set_configuration_payload.clone())
+        initial_rpc_client.set_configuration(set_configuration_payload.clone())
     })
     .await;
 
-    GatewayTest::wait_for_webserver(gateway.versioned_api.clone(), Some(test_password.clone()))
-        .await?;
-
-    // Verify old password no longer works
+    // Verify client with no password fails since the password has been set
     verify_gateway_rpc_failure(
         "get_info",
-        || rpc_client.get_info(),
+        || initial_rpc_client.get_info(),
         StatusCode::UNAUTHORIZED,
     )
     .await;
 
     // Verify the gateway's state is "Running" with default fee and default or
     // lightning node network
-    let rpc_client = rpc_client.with_password(Some(test_password));
-    let gw_info = rpc_client.get_info().await?;
+    let initial_rpc_client_with_password = initial_rpc_client.with_password(Some(test_password));
+    let gw_info =
+        verify_gateway_rpc_success("get_info", || initial_rpc_client_with_password.get_info())
+            .await;
     assert_eq!(gw_info.gateway_state, "Running".to_string());
     assert_eq!(gw_info.fees, Some(DEFAULT_FEES));
     assert_eq!(gw_info.network, Some(DEFAULT_NETWORK));
 
-    // Verify we can change most configurations when the gateway is running
+    // Verify we can change configurations when the gateway is running
     let new_password = "new_password".to_string();
     let fee = "1000,2000".to_string();
     let set_configuration_payload = SetConfigurationPayload {
@@ -1147,27 +1146,26 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         network: None,
     };
     verify_gateway_rpc_success("set_configuration", || {
-        rpc_client.set_configuration(set_configuration_payload.clone())
+        initial_rpc_client_with_password.set_configuration(set_configuration_payload.clone())
     })
     .await;
 
     // Verify info works with the new password.
-    // Need to retry because the webserver might be restarting.
-    let rpc_client = rpc_client.with_password(Some(new_password.clone()));
-    let gw_info = retry(
-        "Get info after restart".to_string(),
-        || async {
-            let info = rpc_client.get_info().await?;
-            Ok(info)
-        },
-        Duration::from_secs(1),
-        30,
-    )
-    .await?;
+    let new_password_rpc_client = initial_rpc_client.with_password(Some(new_password.clone()));
+    let gw_info =
+        verify_gateway_rpc_success("get_info", || new_password_rpc_client.get_info()).await;
 
     assert_eq!(gw_info.gateway_state, "Running".to_string());
     assert_eq!(gw_info.fees, Some(GatewayFee::from_str(&fee)?.0));
     assert_eq!(gw_info.network, Some(DEFAULT_NETWORK));
+
+    // Verify that get_info with the old password fails
+    verify_gateway_rpc_failure(
+        "get_info",
+        || initial_rpc_client_with_password.get_info(),
+        StatusCode::UNAUTHORIZED,
+    )
+    .await;
 
     // Verify we can configure gateway to a network same as than the lightning nodes
     let set_configuration_payload = SetConfigurationPayload {
@@ -1177,7 +1175,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         network: Some(DEFAULT_NETWORK), // Same as connected lightning node's network
     };
     verify_gateway_rpc_success("set_configuration", || {
-        rpc_client.set_configuration(set_configuration_payload.clone())
+        new_password_rpc_client.set_configuration(set_configuration_payload.clone())
     })
     .await;
 
@@ -1191,7 +1189,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     };
     verify_gateway_rpc_failure(
         "set_configuration",
-        || rpc_client.set_configuration(set_configuration_payload.clone()),
+        || new_password_rpc_client.set_configuration(set_configuration_payload.clone()),
         StatusCode::INTERNAL_SERVER_ERROR,
     )
     .await;
@@ -1199,11 +1197,12 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     // Verify we can connect to a federation if the gateway is configured to use
     // the same network. Test federations are on Regtest by default
     verify_gateway_rpc_success("connect_federation", || {
-        rpc_client.connect_federation(join_payload.clone())
+        new_password_rpc_client.connect_federation(join_payload.clone())
     })
     .await;
+
     verify_gateway_rpc_success("get_balance", || {
-        rpc_client.get_balance(BalancePayload {
+        new_password_rpc_client.get_balance(BalancePayload {
             federation_id: fed.invite_code().federation_id(),
         })
     })

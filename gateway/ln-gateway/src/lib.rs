@@ -246,8 +246,8 @@ pub struct Gateway {
     // connection to a lightning node.
     lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
 
-    // CLI or environment parameters that the operator has set.
-    gateway_parameters: GatewayParameters,
+    // The gateway's current configuration
+    gateway_config: Arc<RwLock<Option<GatewayConfiguration>>>,
 
     // The current state of the Gateway.
     pub state: Arc<RwLock<GatewayState>>,
@@ -278,12 +278,18 @@ pub struct Gateway {
     // Tracker for short channel ID assignments. When connecting a new federation,
     // this value is incremented and assigned to the federation as the `mint_channel_id`
     max_used_scid: Arc<Mutex<u64>>,
+
+    // The Gateway's API URL.
+    versioned_api: SafeUrl,
+
+    // The socket the gateway listens on.
+    listen: SocketAddr,
 }
 
 impl std::fmt::Debug for Gateway {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Gateway")
-            .field("gateway_parameters", &self.gateway_parameters)
+            .field("gateway_config", &self.gateway_config)
             .field("state", &self.state)
             .field("client_builder", &self.client_builder)
             .field("gateway_db", &self.gateway_db)
@@ -380,10 +386,13 @@ impl Gateway {
         )
         .await?;
 
+        let gateway_config =
+            Self::get_gateway_configuration(gateway_db.clone(), &gateway_parameters).await;
+
         Ok(Self {
             lightning_builder,
             max_used_scid: Arc::new(Mutex::new(INITIAL_SCID)),
-            gateway_parameters,
+            gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
             gateway_id: Self::get_gateway_id(gateway_db.clone()).await,
@@ -391,6 +400,8 @@ impl Gateway {
             clients: Arc::new(RwLock::new(BTreeMap::new())),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
             client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
+            versioned_api: gateway_parameters.versioned_api,
+            listen: gateway_parameters.listen,
         })
     }
 
@@ -456,46 +467,10 @@ impl Gateway {
         self.load_clients().await;
         self.start_gateway(tg).await?;
         // start webserver last to avoid handling requests before fully initialized
-        self.start_webserver(tg).await;
+        run_webserver(self.clone(), tg).await?;
         let handle = tg.make_handle();
         let shutdown_receiver = handle.make_shutdown_rx().await;
         Ok(shutdown_receiver)
-    }
-
-    async fn start_webserver(&mut self, task_group: &mut TaskGroup) {
-        let gateway_db = self.gateway_db.clone();
-
-        let gateway = self.clone();
-        let subgroup = task_group.make_subgroup().await;
-        task_group.spawn("Webserver", move |handle| async move {
-            while !handle.is_shutting_down() {
-                // Re-fetch the configuration because the password has changed.
-                let gateway_config = gateway.get_gateway_configuration().await;
-                let mut webserver_group = subgroup.make_subgroup().await;
-                run_webserver(
-                    gateway_config.clone(),
-                    gateway.gateway_parameters.listen,
-                    gateway.clone(),
-                    &mut webserver_group,
-                )
-                .await
-                .expect("Failed to start webserver");
-                info!("Successfully started webserver");
-                let result = handle
-                    .cancel_on_shutdown(async {
-                        wait_for_new_password(&gateway_db, gateway_config).await;
-                        info!("GatewayConfiguration has been updated, restarting webserver...");
-                        if let Err(e) = webserver_group.shutdown_join_all(None).await {
-                            panic!("Error shutting down server: {e:?}");
-                        }
-                    })
-                    .await;
-                if result.is_err() {
-                    info!("Received shutdown signal, exiting....");
-                    break;
-                }
-            }
-        });
     }
 
     async fn start_gateway(&self, task_group: &mut TaskGroup) -> Result<()> {
@@ -524,7 +499,8 @@ impl Gateway {
 
                                 match fetch_lightning_node_info(ln_client.clone()).await {
                                     Ok((lightning_public_key, lightning_alias, lightning_network)) => {
-                                        let gateway_config = if let Some(config) = self_copy.get_gateway_configuration().await {
+                                        let gateway_config = self_copy.gateway_config.read().await.clone();
+                                        let gateway_config = if let Some(config) = gateway_config {
                                             config
                                         } else {
                                             self_copy.set_gateway_state(GatewayState::Configuring).await;
@@ -682,8 +658,10 @@ impl Gateway {
             // `GatewayConfiguration` should always exist in the database when we are in the
             // `Running` state.
             let gateway_config = self
-                .get_gateway_configuration()
+                .gateway_config
+                .read()
                 .await
+                .clone()
                 .expect("Gateway configuration should be set");
             let mut federations = Vec::new();
             let federation_clients = self.clients.read().await.clone().into_iter();
@@ -902,8 +880,10 @@ impl Gateway {
             // `GatewayConfiguration` should always exist in the database when we are in the
             // `Running` state.
             let gateway_config = self
-                .get_gateway_configuration()
+                .gateway_config
+                .read()
                 .await
+                .clone()
                 .expect("Gateway configuration should be set");
 
             // The gateway deterministically assigns a channel id (u64) to each federation
@@ -1063,7 +1043,8 @@ impl Gateway {
 
         let mut dbtx = self.gateway_db.begin_transaction().await;
 
-        let gateway_config = if let Some(mut prev_config) = self.get_gateway_configuration().await {
+        let prev_gateway_config = self.gateway_config.read().await.clone();
+        let new_gateway_config = if let Some(mut prev_config) = prev_gateway_config {
             if let Some(password) = password {
                 prev_config.password = password;
             }
@@ -1104,11 +1085,14 @@ impl Gateway {
             }
         };
 
-        dbtx.insert_entry(&GatewayConfigurationKey, &gateway_config)
+        dbtx.insert_entry(&GatewayConfigurationKey, &new_gateway_config)
             .await;
         dbtx.commit_tx().await;
 
-        self.update_federation_routing_fees(routing_fees, &gateway_config)
+        let mut curr_gateway_config = self.gateway_config.write().await;
+        *curr_gateway_config = Some(new_gateway_config.clone());
+
+        self.update_federation_routing_fees(routing_fees, &new_gateway_config)
             .await?;
         info!("Set GatewayConfiguration successfully.");
 
@@ -1213,8 +1197,11 @@ impl Gateway {
     /// - `GatewayConfiguration` is read from the database.
     /// - All cli or environment variables are set such that we can create a
     ///   `GatewayConfiguration`
-    async fn get_gateway_configuration(&self) -> Option<GatewayConfiguration> {
-        let mut dbtx = self.gateway_db.begin_transaction().await;
+    async fn get_gateway_configuration(
+        gateway_db: Database,
+        gateway_parameters: &GatewayParameters,
+    ) -> Option<GatewayConfiguration> {
+        let mut dbtx = gateway_db.begin_transaction().await;
 
         // Always use the gateway configuration from the database if it exists.
         if let Some(gateway_config) = dbtx.get_value(&GatewayConfigurationKey).await {
@@ -1222,18 +1209,17 @@ impl Gateway {
         }
 
         // If the password is not provided, return None
-        let password = self.gateway_parameters.password.as_ref()?;
+        let password = gateway_parameters.password.as_ref()?;
 
         // If the DB does not have the gateway configuration, we can construct one from
         // the provided password (required) and the defaults.
         // Use gateway parameters provided by the environment or CLI
-        let num_route_hints = self.gateway_parameters.num_route_hints;
-        let routing_fees = self
-            .gateway_parameters
+        let num_route_hints = gateway_parameters.num_route_hints;
+        let routing_fees = gateway_parameters
             .fees
             .clone()
             .unwrap_or(GatewayFee(DEFAULT_FEES));
-        let network = self.gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
+        let network = gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
         let gateway_config = GatewayConfiguration {
             password: password.clone(),
             network,
@@ -1339,7 +1325,8 @@ impl Gateway {
         task_group.spawn_cancellable("register clients", async move {
             loop {
                 let mut registration_result: Option<Result<()>> = None;
-                if let Some(gateway_config) = gateway.get_gateway_configuration().await {
+                let gateway_config = gateway.gateway_config.read().await.clone();
+                if let Some(gateway_config) = gateway_config {
                     let gateway_state = gateway.state.read().await.clone();
                     if let GatewayState::Running { .. } = &gateway_state {
                         registration_result = Some(Self::register_all_federations(&gateway, &gateway_config).await);
@@ -1527,23 +1514,6 @@ pub(crate) async fn fetch_lightning_node_info(
     let network = Network::from_str(network)
         .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid network {network}: {e}")))?;
     Ok((node_pub_key, alias, network))
-}
-
-async fn wait_for_new_password(
-    gateway_db: &Database,
-    gateway_config: Option<GatewayConfiguration>,
-) {
-    gateway_db
-        .wait_key_check(&GatewayConfigurationKey, |v| {
-            v.filter(|cfg| {
-                if let Some(old_config) = gateway_config.clone() {
-                    old_config.password != cfg.clone().password
-                } else {
-                    true
-                }
-            })
-        })
-        .await;
 }
 
 #[derive(Debug, Error)]
