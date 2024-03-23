@@ -1590,6 +1590,7 @@
 <a href="#1588" id="1588">1588</a>
 <a href="#1589" id="1589">1589</a>
 <a href="#1590" id="1590">1590</a>
+<a href="#1591" id="1591">1591</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1710,6 +1711,7 @@
 ];
 
 <span class="attr">#[derive(Parser)]
+#[command(version)]
 </span><span class="kw">struct </span>GatewayOpts {
     <span class="attr">#[clap(subcommand)]
     </span>mode: LightningMode,

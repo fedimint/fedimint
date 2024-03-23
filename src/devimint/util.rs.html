@@ -843,6 +843,10 @@
 <a href="#841" id="841">841</a>
 <a href="#842" id="842">842</a>
 <a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -1446,7 +1450,11 @@
     </span><span class="kw">pub async fn </span>version_or_default() -&gt; Version {
         <span class="kw">match </span><span class="macro">cmd!</span>(Gatewayd, <span class="string">"--version"</span>).out_string().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(version) =&gt; parse_clap_version(<span class="kw-2">&amp;</span>version),
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; DEFAULT_VERSION,
+            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="macro">cmd!</span>(Gatewayd, <span class="string">"version-hash"</span>)
+                .out_string()
+                .<span class="kw">await
+                </span>.map(|v| version_hash_to_version(<span class="kw-2">&amp;</span>v).unwrap_or(DEFAULT_VERSION))
+                .unwrap_or(DEFAULT_VERSION),
         }
     }
 }
