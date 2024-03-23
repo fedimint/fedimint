@@ -1,4 +1,5 @@
 pub mod db;
+mod metrics;
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -35,8 +36,8 @@ use fedimint_server::config::distributedgen::{evaluate_polynomial_g2, scalar, Pe
 use futures::StreamExt;
 use itertools::Itertools;
 use metrics::{
-    MINT_ISSUED_ECASH_FEES_SATS, MINT_ISSUED_ECASH_SATS, MINT_REDEEMED_ECASH_FEES_SATS,
-    MINT_REDEEMED_ECASH_SATS,
+    MINT_INOUT_FEES_SATS, MINT_INOUT_SATS, MINT_ISSUED_ECASH_FEES_SATS, MINT_ISSUED_ECASH_SATS,
+    MINT_REDEEMED_ECASH_FEES_SATS, MINT_REDEEMED_ECASH_SATS,
 };
 use rand::rngs::OsRng;
 use secp256k1_zkp::SECP256K1;
@@ -55,8 +56,6 @@ use crate::db::{
     MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix, NonceKey,
     NonceKeyPrefix,
 };
-
-mod metrics;
 
 #[derive(Debug, Clone)]
 pub struct MintInit;
@@ -550,6 +549,12 @@ fn calculate_mint_issued_ecash_metrics(
     fee: Amount,
 ) {
     dbtx.on_commit(move || {
+        MINT_INOUT_SATS
+            .with_label_values(&["outgoing"])
+            .observe(amount.sats_f64());
+        MINT_INOUT_FEES_SATS
+            .with_label_values(&["outgoing"])
+            .observe(fee.sats_f64());
         MINT_ISSUED_ECASH_SATS.observe(amount.sats_f64());
         MINT_ISSUED_ECASH_FEES_SATS.observe(fee.sats_f64());
     });
@@ -561,6 +566,12 @@ fn calculate_mint_redeemed_ecash_metrics(
     fee: Amount,
 ) {
     dbtx.on_commit(move || {
+        MINT_INOUT_SATS
+            .with_label_values(&["incoming"])
+            .observe(amount.sats_f64());
+        MINT_INOUT_FEES_SATS
+            .with_label_values(&["incoming"])
+            .observe(fee.sats_f64());
         MINT_REDEEMED_ECASH_SATS.observe(amount.sats_f64());
         MINT_REDEEMED_ECASH_FEES_SATS.observe(fee.sats_f64());
     });
