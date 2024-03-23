@@ -1995,19 +1995,14 @@ pub async fn migrate_database_version(
                 &mut global_dbtx
                     .to_ref_with_prefix_module_id(module_instance_id)
                     .into_nc(),
-                target_db_version,
             )
             .await
         } else {
-            remove_current_db_version_if_exists(
-                &mut global_dbtx.to_ref().into_nc(),
-                target_db_version,
-            )
-            .await
+            remove_current_db_version_if_exists(&mut global_dbtx.to_ref().into_nc()).await
         };
 
         // Write the previous `DatabaseVersion` to the new `DatabaseVersionKey`
-        info!(target: LOG_DB, "Migrating DatabaseVersionKeyV0 of {kind} to DatabaseVersionKey. Version: {current_version_in_module}");
+        info!(target: LOG_DB, "Migrating DatabaseVersionKeyV0 of {kind} to DatabaseVersionKey. Version: {current_version_in_module} Target DB Version: {target_db_version}");
         global_dbtx
             .insert_new_entry(
                 &DatabaseVersionKey(key_module_instance_id),
@@ -2020,18 +2015,18 @@ pub async fn migrate_database_version(
 }
 
 /// Removes `DatabaseVersion` from `DatabaseVersionKeyV0` if it exists.
-/// Otherwise return `target_db_version`
+/// Otherwise return `DatabaseVersion(0)`
 async fn remove_current_db_version_if_exists(
     version_dbtx: &mut DatabaseTransaction<'_>,
-    target_db_version: DatabaseVersion,
 ) -> DatabaseVersion {
     // Remove the previous `DatabaseVersion` in the isolated database. If it doesn't
-    // exist, just use the `target_db_version` from the module.
+    // exist, just use the 0 for the version so that all of the migrations are
+    // executed.
     let current_version_in_module = version_dbtx.remove_entry(&DatabaseVersionKeyV0).await;
     if let Some(database_version) = current_version_in_module {
         database_version
     } else {
-        target_db_version
+        DatabaseVersion(0)
     }
 }
 
