@@ -1,3 +1,16 @@
+//! Fedimint supports modules to allow extending it's functionality.
+//! Some of the standard functionality is implemented in form of modules as
+//! well.
+//!
+//! The top level server-side types are:
+//!
+//! * [`fedimint_core::module::ModuleInit`]
+//! * [`fedimint_core::module::ServerModule`]
+//!
+//! Top level client-side types are:
+//!
+//! * `ClientModuleInit` (in `fedimint_client`)
+//! * `ClientModule` (in `fedimint_client`)
 pub mod audit;
 pub mod registry;
 

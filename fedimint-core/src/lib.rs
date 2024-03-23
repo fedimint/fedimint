@@ -1,3 +1,21 @@
+//! Fedimint Core library
+//!
+//! `fedimint-core` contains are commonly used types, utilities and primitives,
+//! shared between both client and server code.
+//!
+//! Things that are server-side only typically live in `fedimint-server`, and
+//! client-side only in `fedimint-client`.
+//!
+//! ### Wasm support
+//!
+//! All code in `fedimint-core` needs to compile on Wasm, and `fedimint-core`
+//! includes helpers and wrappers around non-wasm-safe utitlies.
+//!
+//! In particular:
+//!
+//! * [`fedimint_core::task`] for task spawning and control
+//! * [`fedimint_core::time`] for time-related operations
+
 #![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
 extern crate self as fedimint_core;
 
@@ -24,33 +42,56 @@ pub use crate::core::server;
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
+/// Admin (guardian) client types
 pub mod admin_client;
+/// Client API request handling
 pub mod api;
+/// Federation-stored client backups
 pub mod backup;
+/// Gradual bitcoin dependency migration helpers
 pub mod bitcoin_migration;
 pub mod bitcoinrpc;
 pub mod cancellable;
+/// Federation configuration
 pub mod config;
+/// Fundamental types
 pub mod core;
+/// Database handling
 pub mod db;
+/// Consensus encoding
 pub mod encoding;
 pub mod endpoint_constants;
+/// Common environment variables
 pub mod envs;
 pub mod epoch;
+/// Formatting helpers
 pub mod fmt_utils;
+/// Hex encoding helpers
 pub mod hex;
+/// Common macros
 #[macro_use]
 pub mod macros;
+/// Extenable module sysystem
 pub mod module;
+/// Peer networking
 pub mod net;
+/// Client query system
 pub mod query;
+/// Task handling, including wasm safe logic
 pub mod task;
+/// Types handling per-denomination values
 pub mod tiered;
+/// Types handling multiple per-denomination values
 pub mod tiered_multi;
+/// Time handling, wasm safe functionality
 pub mod time;
+/// Timing helpers
 pub mod timing;
+/// Fedimint transaction (inpus + outputs + signature) types
 pub mod transaction;
+/// Peg-in txo proofs
 pub mod txoproof;
+/// General purpose utilities
 pub mod util;
 
 /// Atomic BFT unit containing consensus items
