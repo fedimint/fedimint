@@ -21,8 +21,6 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeersExt,
     OutPoint, PeerId, ServerModule, Tiered, TieredMultiZip,
 };
-use fedimint_metrics::prometheus::register_histogram_with_registry;
-use fedimint_metrics::{histogram_opts, lazy_static, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY};
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
     MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate,
@@ -36,6 +34,10 @@ use fedimint_mint_common::{
 use fedimint_server::config::distributedgen::{evaluate_polynomial_g2, scalar, PeerHandleOps};
 use futures::StreamExt;
 use itertools::Itertools;
+use metrics::{
+    MINT_ISSUED_ECASH_FEES_SATS, MINT_ISSUED_ECASH_SATS, MINT_REDEEMED_ECASH_FEES_SATS,
+    MINT_REDEEMED_ECASH_SATS,
+};
 use rand::rngs::OsRng;
 use secp256k1_zkp::SECP256K1;
 use strum::IntoEnumIterator;
@@ -54,44 +56,7 @@ use crate::db::{
     NonceKeyPrefix,
 };
 
-lazy_static! {
-    static ref MINT_REDEEMED_ECASH_SATS: Histogram = register_histogram_with_registry!(
-        histogram_opts!(
-            "mint_redeemed_ecash_sats",
-            "Value of redeemed e-cash notes in sats",
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    static ref MINT_REDEEMED_ECASH_FEES_SATS: Histogram = register_histogram_with_registry!(
-        histogram_opts!(
-            "mint_redeemed_ecash_fees_sats",
-            "Value of e-cash fees during reissue in sats",
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    static ref MINT_ISSUED_ECASH_SATS: Histogram = register_histogram_with_registry!(
-        histogram_opts!(
-            "mint_issued_ecash_sats",
-            "Value of issued e-cash notes in sats",
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    static ref MINT_ISSUED_ECASH_FEES_SATS: Histogram = register_histogram_with_registry!(
-        histogram_opts!(
-            "mint_issued_ecash_fees_sats",
-            "Value of e-cash fees during issue in sats",
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-}
+mod metrics;
 
 #[derive(Debug, Clone)]
 pub struct MintInit;
