@@ -34,6 +34,7 @@
 //! Prevented      | Prevented   | | Sqlite   | Prevented          | Prevented
 //! | Prevented           | Prevented      | Prevented   |
 
+use std::any;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{self, Debug};
@@ -162,7 +163,7 @@ pub enum AutocommitError<E> {
 #[apply(async_trait_maybe_send!)]
 pub trait IRawDatabase: Debug + MaybeSend + MaybeSync + 'static {
     /// A raw database transaction type
-    type Transaction<'a>: IRawDatabaseTransaction;
+    type Transaction<'a>: IRawDatabaseTransaction + Debug;
 
     /// Start a database transaction
     async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a>;
@@ -511,13 +512,7 @@ impl Database {
                 .await
                 .expect("Unrecoverable error when reading from database")
                 .map(|value_bytes| {
-                    trace!(
-                        "get_value: Decoding {} from bytes {:?}",
-                        std::any::type_name::<K::Value>(),
-                        value_bytes
-                    );
-                    K::Value::from_bytes(&value_bytes, &self.module_decoders)
-                        .expect("Unrecoverable error when decoding the database value")
+                    decode_value_expect(&value_bytes, &self.module_decoders, &key_bytes)
                 });
 
             if let Some(value) = checker(maybe_value_bytes) {
@@ -604,6 +599,7 @@ where
 /// operations, effectively creating an isolated partition.
 ///
 /// Produced by [`PrefixDatabase`].
+#[derive(Debug)]
 struct PrefixDatabaseTransaction<Inner> {
     inner: Inner,
     prefix: Vec<u8>,
@@ -919,13 +915,13 @@ where
     where
         K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
     {
+        let key_bytes = key.to_bytes();
         let raw = self
-            .raw_get_bytes(&key.to_bytes())
+            .raw_get_bytes(&key_bytes)
             .await
             .expect("Unrecoverable error occurred while reading and entry from the database");
         raw.map(|value_bytes| {
-            decode_value::<K::Value>(&value_bytes, self.decoders())
-                .expect("Unrecoverable error when decoding the database value")
+            decode_value_expect::<K::Value>(&value_bytes, self.decoders(), &key_bytes)
         })
     }
 
@@ -934,12 +930,12 @@ where
         K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
         K::Value: MaybeSend + MaybeSync,
     {
-        self.raw_insert_bytes(&key.to_bytes(), &value.to_bytes())
+        let key_bytes = key.to_bytes();
+        self.raw_insert_bytes(&key_bytes, &value.to_bytes())
             .await
             .expect("Unrecoverable error occurred while inserting entry into the database")
             .map(|value_bytes| {
-                decode_value::<K::Value>(&value_bytes, self.decoders())
-                    .expect("Unrecoverable error when decoding the database value")
+                decode_value_expect::<K::Value>(&value_bytes, self.decoders(), &key_bytes)
             })
     }
 
@@ -983,12 +979,8 @@ where
                 .await
                 .expect("Unrecoverable error occurred while listing entries from the database")
                 .map(move |(key_bytes, value_bytes)| {
-                    let key = KP::Record::from_bytes(&key_bytes, &decoders)
-                        .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
-                        .expect("Unrecoverable error reading DatabaseKey");
-                    let value = decode_value(&value_bytes, &decoders)
-                        .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
-                        .expect("Unrecoverable decoding DatabaseValue");
+                    let key = decode_key_expect(&key_bytes, &decoders);
+                    let value = decode_value_expect(&value_bytes, &decoders, &key_bytes);
                     (key, value)
                 }),
         )
@@ -1019,12 +1011,8 @@ where
                 .await
                 .expect("Unrecoverable error occurred while listing entries from the database")
                 .map(move |(key_bytes, value_bytes)| {
-                    let key = KP::Record::from_bytes(&key_bytes, &decoders)
-                        .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
-                        .expect("Unrecoverable error reading DatabaseKey");
-                    let value = decode_value(&value_bytes, &decoders)
-                        .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
-                        .expect("Unrecoverable decoding DatabaseValue");
+                    let key = decode_key_expect(&key_bytes, &decoders);
+                    let value = decode_value_expect(&value_bytes, &decoders, &key_bytes);
                     (key, value)
                 }),
         )
@@ -1033,12 +1021,12 @@ where
     where
         K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
     {
-        self.raw_remove_entry(&key.to_bytes())
+        let key_bytes = key.to_bytes();
+        self.raw_remove_entry(&key_bytes)
             .await
             .expect("Unrecoverable error occurred while inserting removing entry from the database")
             .map(|value_bytes| {
-                decode_value::<K::Value>(&value_bytes, self.decoders())
-                    .expect("Unrecoverable error when decoding the database value")
+                decode_value_expect::<K::Value>(&value_bytes, self.decoders(), &key_bytes)
             })
     }
     async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP)
@@ -1067,7 +1055,7 @@ pub trait IRawDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
 ///
 /// See [`IDatabase`] for more info.
 #[apply(async_trait_maybe_send!)]
-pub trait IDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
+pub trait IDatabaseTransaction: MaybeSend + IDatabaseTransactionOps + fmt::Debug {
     /// Commit the transaction
     async fn commit_tx(&mut self) -> Result<()>;
 
@@ -1110,6 +1098,17 @@ struct BaseDatabaseTransaction<Tx> {
     notifications: Arc<Notifications>,
 }
 
+impl<Tx> fmt::Debug for BaseDatabaseTransaction<Tx>
+where
+    Tx: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "BaseDatabaseTransaction{{ raw={:?} }}",
+            self.raw
+        ))
+    }
+}
 impl<Tx> BaseDatabaseTransaction<Tx>
 where
     Tx: IRawDatabaseTransaction,
@@ -1209,7 +1208,10 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOps for BaseDatabaseTransa
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<Tx: IRawDatabaseTransaction> IDatabaseTransaction for BaseDatabaseTransaction<Tx> {
+impl<Tx: IRawDatabaseTransaction> IDatabaseTransaction for BaseDatabaseTransaction<Tx>
+where
+    Tx: fmt::Debug,
+{
     async fn commit_tx(&mut self) -> Result<()> {
         self.raw
             .take()
@@ -1306,6 +1308,15 @@ pub struct DatabaseTransaction<'tx, Cap = NonCommittable> {
     capability: marker::PhantomData<Cap>,
 }
 
+impl<'tx, Cap> fmt::Debug for DatabaseTransaction<'tx, Cap> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "DatabaseTransaction {{ tx: {:?}, decoders={:?} }}",
+            self.tx, self.decoders
+        ))
+    }
+}
+
 impl<'tx, Cap> WithDecoders for DatabaseTransaction<'tx, Cap> {
     fn decoders(&self) -> &ModuleDecoderRegistry {
         &self.decoders
@@ -1322,6 +1333,37 @@ fn decode_value<V: DatabaseValue>(
         "decoding value",
     );
     V::from_bytes(value_bytes, decoders)
+}
+
+fn decode_value_expect<V: DatabaseValue>(
+    value_bytes: &[u8],
+    decoders: &ModuleDecoderRegistry,
+    key_bytes: &[u8],
+) -> V {
+    decode_value(value_bytes, decoders).unwrap_or_else(|err| {
+        panic!(
+            "Unrecoverable decoding DatabaseValue as {}; err={}, bytes={}; key_bytes={}",
+            any::type_name::<V>(),
+            err,
+            AbbreviateHexBytes(value_bytes),
+            AbbreviateHexBytes(key_bytes),
+        )
+    })
+}
+
+fn decode_key_expect<K: DatabaseKey>(key_bytes: &[u8], decoders: &ModuleDecoderRegistry) -> K {
+    trace!(
+        bytes = %AbbreviateHexBytes(key_bytes),
+        "decoding key",
+    );
+    K::from_bytes(key_bytes, decoders).unwrap_or_else(|err| {
+        panic!(
+            "Unrecoverable decoding DatabaseKey as {}; err={}; bytes={}",
+            any::type_name::<K>(),
+            err,
+            AbbreviateHexBytes(key_bytes)
+        )
+    })
 }
 
 impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
@@ -2787,12 +2829,8 @@ where
         .await
         .expect("Error doing prefix search in database")
         .map(move |(key_bytes, value_bytes)| {
-            let key = KP::Record::from_bytes(&key_bytes, &decoders)
-                .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
-                .expect("Unrecoverable error reading DatabaseKey");
-            let value = decode_value(&value_bytes, &decoders)
-                .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
-                .expect("Unrecoverable decoding DatabaseValue");
+            let key = decode_key_expect(&key_bytes, &decoders);
+            let value = decode_value_expect(&value_bytes, &decoders, &key_bytes);
             (key, value)
         })
 }

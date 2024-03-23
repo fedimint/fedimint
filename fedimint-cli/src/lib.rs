@@ -515,7 +515,7 @@ impl FedimintCli {
 
         let client_builder = self.make_client_builder(cli).await?;
 
-        let mnemonic = load_or_generate_mnemonic(client_builder.db()).await?;
+        let mnemonic = load_or_generate_mnemonic(client_builder.db_no_encoders()).await?;
 
         client_builder
             .join(
@@ -541,7 +541,7 @@ impl FedimintCli {
         }
 
         let mnemonic = Mnemonic::from_entropy(
-            &Client::load_decodable_client_secret::<Vec<u8>>(client_builder.db())
+            &Client::load_decodable_client_secret::<Vec<u8>>(client_builder.db_no_encoders())
                 .await
                 .map_err_cli()?,
         )
@@ -573,7 +573,7 @@ impl FedimintCli {
             .await
             .map_err_cli()?;
 
-        match Client::load_decodable_client_secret_opt::<Vec<u8>>(builder.db())
+        match Client::load_decodable_client_secret_opt::<Vec<u8>>(builder.db_no_encoders())
             .await
             .map_err_cli()?
         {
@@ -583,9 +583,12 @@ impl FedimintCli {
                 }
             }
             None => {
-                Client::store_encodable_client_secret(builder.db(), mnemonic.to_entropy())
-                    .await
-                    .map_err_cli()?;
+                Client::store_encodable_client_secret(
+                    builder.db_no_encoders(),
+                    mnemonic.to_entropy(),
+                )
+                .await
+                .map_err_cli()?;
             }
         }
 
