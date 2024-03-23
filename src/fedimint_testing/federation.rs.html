@@ -321,7 +321,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db);
         client_builder.with_module_inits(<span class="self">self</span>.client_init.clone());
         client_builder.with_primary_module(<span class="self">self</span>.primary_client);
-        <span class="kw">let </span>client_secret = Client::load_or_generate_client_secret(client_builder.db())
+        <span class="kw">let </span>client_secret = Client::load_or_generate_client_secret(client_builder.db_no_encoders())
             .<span class="kw">await
             </span>.unwrap();
         client_builder

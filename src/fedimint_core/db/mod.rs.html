@@ -2950,6 +2950,44 @@
 <a href="#2948" id="2948">2948</a>
 <a href="#2949" id="2949">2949</a>
 <a href="#2950" id="2950">2950</a>
+<a href="#2951" id="2951">2951</a>
+<a href="#2952" id="2952">2952</a>
+<a href="#2953" id="2953">2953</a>
+<a href="#2954" id="2954">2954</a>
+<a href="#2955" id="2955">2955</a>
+<a href="#2956" id="2956">2956</a>
+<a href="#2957" id="2957">2957</a>
+<a href="#2958" id="2958">2958</a>
+<a href="#2959" id="2959">2959</a>
+<a href="#2960" id="2960">2960</a>
+<a href="#2961" id="2961">2961</a>
+<a href="#2962" id="2962">2962</a>
+<a href="#2963" id="2963">2963</a>
+<a href="#2964" id="2964">2964</a>
+<a href="#2965" id="2965">2965</a>
+<a href="#2966" id="2966">2966</a>
+<a href="#2967" id="2967">2967</a>
+<a href="#2968" id="2968">2968</a>
+<a href="#2969" id="2969">2969</a>
+<a href="#2970" id="2970">2970</a>
+<a href="#2971" id="2971">2971</a>
+<a href="#2972" id="2972">2972</a>
+<a href="#2973" id="2973">2973</a>
+<a href="#2974" id="2974">2974</a>
+<a href="#2975" id="2975">2975</a>
+<a href="#2976" id="2976">2976</a>
+<a href="#2977" id="2977">2977</a>
+<a href="#2978" id="2978">2978</a>
+<a href="#2979" id="2979">2979</a>
+<a href="#2980" id="2980">2980</a>
+<a href="#2981" id="2981">2981</a>
+<a href="#2982" id="2982">2982</a>
+<a href="#2983" id="2983">2983</a>
+<a href="#2984" id="2984">2984</a>
+<a href="#2985" id="2985">2985</a>
+<a href="#2986" id="2986">2986</a>
+<a href="#2987" id="2987">2987</a>
+<a href="#2988" id="2988">2988</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -2986,7 +3024,8 @@
 //! Prevented      | Prevented   | | Sqlite   | Prevented          | Prevented
 //! | Prevented           | Prevented      | Prevented   |
 
-</span><span class="kw">use </span>std::collections::BTreeMap;
+</span><span class="kw">use </span>std::any;
+<span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug};
 <span class="kw">use </span>std::marker::{<span class="self">self</span>, PhantomData};
@@ -3114,7 +3153,7 @@
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>IRawDatabase: Debug + MaybeSend + MaybeSync + <span class="lifetime">'static </span>{
     <span class="doccomment">/// A raw database transaction type
-    </span><span class="kw">type </span>Transaction&lt;<span class="lifetime">'a</span>&gt;: IRawDatabaseTransaction;
+    </span><span class="kw">type </span>Transaction&lt;<span class="lifetime">'a</span>&gt;: IRawDatabaseTransaction + Debug;
 
     <span class="doccomment">/// Start a database transaction
     </span><span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Transaction&lt;<span class="lifetime">'a</span>&gt;;
@@ -3463,13 +3502,7 @@
                 .<span class="kw">await
                 </span>.expect(<span class="string">"Unrecoverable error when reading from database"</span>)
                 .map(|value_bytes| {
-                    <span class="macro">trace!</span>(
-                        <span class="string">"get_value: Decoding {} from bytes {:?}"</span>,
-                        std::any::type_name::&lt;K::Value&gt;(),
-                        value_bytes
-                    );
-                    K::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span><span class="self">self</span>.module_decoders)
-                        .expect(<span class="string">"Unrecoverable error when decoding the database value"</span>)
+                    decode_value_expect(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span><span class="self">self</span>.module_decoders, <span class="kw-2">&amp;</span>key_bytes)
                 });
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = checker(maybe_value_bytes) {
@@ -3556,6 +3589,7 @@
 /// operations, effectively creating an isolated partition.
 ///
 /// Produced by [`PrefixDatabase`].
+</span><span class="attr">#[derive(Debug)]
 </span><span class="kw">struct </span>PrefixDatabaseTransaction&lt;Inner&gt; {
     inner: Inner,
     prefix: Vec&lt;u8&gt;,
@@ -3871,13 +3905,13 @@
     <span class="kw">where
         </span>K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
     {
+        <span class="kw">let </span>key_bytes = key.to_bytes();
         <span class="kw">let </span>raw = <span class="self">self
-            </span>.raw_get_bytes(<span class="kw-2">&amp;</span>key.to_bytes())
+            </span>.raw_get_bytes(<span class="kw-2">&amp;</span>key_bytes)
             .<span class="kw">await
             </span>.expect(<span class="string">"Unrecoverable error occurred while reading and entry from the database"</span>);
         raw.map(|value_bytes| {
-            decode_value::&lt;K::Value&gt;(<span class="kw-2">&amp;</span>value_bytes, <span class="self">self</span>.decoders())
-                .expect(<span class="string">"Unrecoverable error when decoding the database value"</span>)
+            decode_value_expect::&lt;K::Value&gt;(<span class="kw-2">&amp;</span>value_bytes, <span class="self">self</span>.decoders(), <span class="kw-2">&amp;</span>key_bytes)
         })
     }
 
@@ -3886,12 +3920,12 @@
         </span>K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
         K::Value: MaybeSend + MaybeSync,
     {
-        <span class="self">self</span>.raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), <span class="kw-2">&amp;</span>value.to_bytes())
+        <span class="kw">let </span>key_bytes = key.to_bytes();
+        <span class="self">self</span>.raw_insert_bytes(<span class="kw-2">&amp;</span>key_bytes, <span class="kw-2">&amp;</span>value.to_bytes())
             .<span class="kw">await
             </span>.expect(<span class="string">"Unrecoverable error occurred while inserting entry into the database"</span>)
             .map(|value_bytes| {
-                decode_value::&lt;K::Value&gt;(<span class="kw-2">&amp;</span>value_bytes, <span class="self">self</span>.decoders())
-                    .expect(<span class="string">"Unrecoverable error when decoding the database value"</span>)
+                decode_value_expect::&lt;K::Value&gt;(<span class="kw-2">&amp;</span>value_bytes, <span class="self">self</span>.decoders(), <span class="kw-2">&amp;</span>key_bytes)
             })
     }
 
@@ -3935,12 +3969,8 @@
                 .<span class="kw">await
                 </span>.expect(<span class="string">"Unrecoverable error occurred while listing entries from the database"</span>)
                 .map(<span class="kw">move </span>|(key_bytes, value_bytes)| {
-                    <span class="kw">let </span>key = KP::Record::from_bytes(<span class="kw-2">&amp;</span>key_bytes, <span class="kw-2">&amp;</span>decoders)
-                        .with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"key: {}"</span>, AbbreviateHexBytes(<span class="kw-2">&amp;</span>key_bytes)))
-                        .expect(<span class="string">"Unrecoverable error reading DatabaseKey"</span>);
-                    <span class="kw">let </span>value = decode_value(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>decoders)
-                        .with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"key: {}"</span>, AbbreviateHexBytes(<span class="kw-2">&amp;</span>key_bytes)))
-                        .expect(<span class="string">"Unrecoverable decoding DatabaseValue"</span>);
+                    <span class="kw">let </span>key = decode_key_expect(<span class="kw-2">&amp;</span>key_bytes, <span class="kw-2">&amp;</span>decoders);
+                    <span class="kw">let </span>value = decode_value_expect(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>decoders, <span class="kw-2">&amp;</span>key_bytes);
                     (key, value)
                 }),
         )
@@ -3971,12 +4001,8 @@
                 .<span class="kw">await
                 </span>.expect(<span class="string">"Unrecoverable error occurred while listing entries from the database"</span>)
                 .map(<span class="kw">move </span>|(key_bytes, value_bytes)| {
-                    <span class="kw">let </span>key = KP::Record::from_bytes(<span class="kw-2">&amp;</span>key_bytes, <span class="kw-2">&amp;</span>decoders)
-                        .with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"key: {}"</span>, AbbreviateHexBytes(<span class="kw-2">&amp;</span>key_bytes)))
-                        .expect(<span class="string">"Unrecoverable error reading DatabaseKey"</span>);
-                    <span class="kw">let </span>value = decode_value(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>decoders)
-                        .with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"key: {}"</span>, AbbreviateHexBytes(<span class="kw-2">&amp;</span>key_bytes)))
-                        .expect(<span class="string">"Unrecoverable decoding DatabaseValue"</span>);
+                    <span class="kw">let </span>key = decode_key_expect(<span class="kw-2">&amp;</span>key_bytes, <span class="kw-2">&amp;</span>decoders);
+                    <span class="kw">let </span>value = decode_value_expect(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>decoders, <span class="kw-2">&amp;</span>key_bytes);
                     (key, value)
                 }),
         )
@@ -3985,12 +4011,12 @@
     <span class="kw">where
         </span>K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
     {
-        <span class="self">self</span>.raw_remove_entry(<span class="kw-2">&amp;</span>key.to_bytes())
+        <span class="kw">let </span>key_bytes = key.to_bytes();
+        <span class="self">self</span>.raw_remove_entry(<span class="kw-2">&amp;</span>key_bytes)
             .<span class="kw">await
             </span>.expect(<span class="string">"Unrecoverable error occurred while inserting removing entry from the database"</span>)
             .map(|value_bytes| {
-                decode_value::&lt;K::Value&gt;(<span class="kw-2">&amp;</span>value_bytes, <span class="self">self</span>.decoders())
-                    .expect(<span class="string">"Unrecoverable error when decoding the database value"</span>)
+                decode_value_expect::&lt;K::Value&gt;(<span class="kw-2">&amp;</span>value_bytes, <span class="self">self</span>.decoders(), <span class="kw-2">&amp;</span>key_bytes)
             })
     }
     <span class="kw">async fn </span>remove_by_prefix&lt;KP&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>KP)
@@ -4019,7 +4045,7 @@
 ///
 /// See [`IDatabase`] for more info.
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>IDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
+</span><span class="kw">pub trait </span>IDatabaseTransaction: MaybeSend + IDatabaseTransactionOps + fmt::Debug {
     <span class="doccomment">/// Commit the transaction
     </span><span class="kw">async fn </span>commit_tx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 
@@ -4062,6 +4088,17 @@
     notifications: Arc&lt;Notifications&gt;,
 }
 
+<span class="kw">impl</span>&lt;Tx&gt; fmt::Debug <span class="kw">for </span>BaseDatabaseTransaction&lt;Tx&gt;
+<span class="kw">where
+    </span>Tx: fmt::Debug,
+{
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        f.write_fmt(<span class="macro">format_args!</span>(
+            <span class="string">"BaseDatabaseTransaction{{ raw={:?} }}"</span>,
+            <span class="self">self</span>.raw
+        ))
+    }
+}
 <span class="kw">impl</span>&lt;Tx&gt; BaseDatabaseTransaction&lt;Tx&gt;
 <span class="kw">where
     </span>Tx: IRawDatabaseTransaction,
@@ -4161,7 +4198,10 @@
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;Tx: IRawDatabaseTransaction&gt; IDatabaseTransaction <span class="kw">for </span>BaseDatabaseTransaction&lt;Tx&gt; {
+</span><span class="kw">impl</span>&lt;Tx: IRawDatabaseTransaction&gt; IDatabaseTransaction <span class="kw">for </span>BaseDatabaseTransaction&lt;Tx&gt;
+<span class="kw">where
+    </span>Tx: fmt::Debug,
+{
     <span class="kw">async fn </span>commit_tx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.raw
             .take()
@@ -4258,6 +4298,15 @@
     capability: marker::PhantomData&lt;Cap&gt;,
 }
 
+<span class="kw">impl</span>&lt;<span class="lifetime">'tx</span>, Cap&gt; fmt::Debug <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">'tx</span>, Cap&gt; {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        f.write_fmt(<span class="macro">format_args!</span>(
+            <span class="string">"DatabaseTransaction {{ tx: {:?}, decoders={:?} }}"</span>,
+            <span class="self">self</span>.tx, <span class="self">self</span>.decoders
+        ))
+    }
+}
+
 <span class="kw">impl</span>&lt;<span class="lifetime">'tx</span>, Cap&gt; WithDecoders <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">'tx</span>, Cap&gt; {
     <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
         <span class="kw-2">&amp;</span><span class="self">self</span>.decoders
@@ -4274,6 +4323,37 @@
         <span class="string">"decoding value"</span>,
     );
     V::from_bytes(value_bytes, decoders)
+}
+
+<span class="kw">fn </span>decode_value_expect&lt;V: DatabaseValue&gt;(
+    value_bytes: <span class="kw-2">&amp;</span>[u8],
+    decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    key_bytes: <span class="kw-2">&amp;</span>[u8],
+) -&gt; V {
+    decode_value(value_bytes, decoders).unwrap_or_else(|err| {
+        <span class="macro">panic!</span>(
+            <span class="string">"Unrecoverable decoding DatabaseValue as {}; err={}, bytes={}; key_bytes={}"</span>,
+            any::type_name::&lt;V&gt;(),
+            err,
+            AbbreviateHexBytes(value_bytes),
+            AbbreviateHexBytes(key_bytes),
+        )
+    })
+}
+
+<span class="kw">fn </span>decode_key_expect&lt;K: DatabaseKey&gt;(key_bytes: <span class="kw-2">&amp;</span>[u8], decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; K {
+    <span class="macro">trace!</span>(
+        bytes = %AbbreviateHexBytes(key_bytes),
+        <span class="string">"decoding key"</span>,
+    );
+    K::from_bytes(key_bytes, decoders).unwrap_or_else(|err| {
+        <span class="macro">panic!</span>(
+            <span class="string">"Unrecoverable decoding DatabaseKey as {}; err={}; bytes={}"</span>,
+            any::type_name::&lt;K&gt;(),
+            err,
+            AbbreviateHexBytes(key_bytes)
+        )
+    })
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">'tx</span>, Cap&gt; DatabaseTransaction&lt;<span class="lifetime">'tx</span>, Cap&gt; {
@@ -5739,12 +5819,8 @@
         .<span class="kw">await
         </span>.expect(<span class="string">"Error doing prefix search in database"</span>)
         .map(<span class="kw">move </span>|(key_bytes, value_bytes)| {
-            <span class="kw">let </span>key = KP::Record::from_bytes(<span class="kw-2">&amp;</span>key_bytes, <span class="kw-2">&amp;</span>decoders)
-                .with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"key: {}"</span>, AbbreviateHexBytes(<span class="kw-2">&amp;</span>key_bytes)))
-                .expect(<span class="string">"Unrecoverable error reading DatabaseKey"</span>);
-            <span class="kw">let </span>value = decode_value(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>decoders)
-                .with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"key: {}"</span>, AbbreviateHexBytes(<span class="kw-2">&amp;</span>key_bytes)))
-                .expect(<span class="string">"Unrecoverable decoding DatabaseValue"</span>);
+            <span class="kw">let </span>key = decode_key_expect(<span class="kw-2">&amp;</span>key_bytes, <span class="kw-2">&amp;</span>decoders);
+            <span class="kw">let </span>value = decode_value_expect(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>decoders, <span class="kw-2">&amp;</span>key_bytes);
             (key, value)
         })
 }

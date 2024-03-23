@@ -907,6 +907,9 @@
 <a href="#905" id="905">905</a>
 <a href="#906" id="906">906</a>
 <a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
@@ -1424,7 +1427,7 @@ Examples:
 
         <span class="kw">let </span>client_builder = <span class="self">self</span>.make_client_builder(cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>mnemonic = load_or_generate_mnemonic(client_builder.db()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>mnemonic = load_or_generate_mnemonic(client_builder.db_no_encoders()).<span class="kw">await</span><span class="question-mark">?</span>;
 
         client_builder
             .join(
@@ -1450,7 +1453,7 @@ Examples:
         }
 
         <span class="kw">let </span>mnemonic = Mnemonic::from_entropy(
-            <span class="kw-2">&amp;</span>Client::load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;(client_builder.db())
+            <span class="kw-2">&amp;</span>Client::load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;(client_builder.db_no_encoders())
                 .<span class="kw">await
                 </span>.map_err_cli()<span class="question-mark">?</span>,
         )
@@ -1482,7 +1485,7 @@ Examples:
             .<span class="kw">await
             </span>.map_err_cli()<span class="question-mark">?</span>;
 
-        <span class="kw">match </span>Client::load_decodable_client_secret_opt::&lt;Vec&lt;u8&gt;&gt;(builder.db())
+        <span class="kw">match </span>Client::load_decodable_client_secret_opt::&lt;Vec&lt;u8&gt;&gt;(builder.db_no_encoders())
             .<span class="kw">await
             </span>.map_err_cli()<span class="question-mark">?
         </span>{
@@ -1492,9 +1495,12 @@ Examples:
                 }
             }
             <span class="prelude-val">None </span>=&gt; {
-                Client::store_encodable_client_secret(builder.db(), mnemonic.to_entropy())
-                    .<span class="kw">await
-                    </span>.map_err_cli()<span class="question-mark">?</span>;
+                Client::store_encodable_client_secret(
+                    builder.db_no_encoders(),
+                    mnemonic.to_entropy(),
+                )
+                .<span class="kw">await
+                </span>.map_err_cli()<span class="question-mark">?</span>;
             }
         }
 

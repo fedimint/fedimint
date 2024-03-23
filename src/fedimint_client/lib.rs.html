@@ -4128,7 +4128,7 @@
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
     admin_creds: <span class="prelude-ty">Option</span>&lt;AdminCreds&gt;,
-    db: Database,
+    db_no_encoders: Database,
     stopped: bool,
 }
 
@@ -4138,7 +4138,7 @@
             module_inits: Default::default(),
             primary_module_instance: Default::default(),
             admin_creds: <span class="prelude-val">None</span>,
-            db,
+            db_no_encoders: db,
             stopped: <span class="bool-val">false</span>,
         }
     }
@@ -4148,7 +4148,7 @@
             module_inits: client.module_inits.clone(),
             primary_module_instance: <span class="prelude-val">Some</span>(client.primary_module_instance),
             admin_creds: <span class="prelude-val">None</span>,
-            db: client.db.clone(),
+            db_no_encoders: client.db.with_decoders(Default::default()),
             stopped: <span class="bool-val">false</span>,
         }
     }
@@ -4212,12 +4212,12 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.db
+    <span class="kw">pub fn </span>db_no_encoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.db_no_encoders
     }
 
     <span class="kw">pub async fn </span>load_existing_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-        <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await else </span>{
+        <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_encoders).<span class="kw">await else </span>{
             <span class="macro">bail!</span>(<span class="string">"Client database not initialized"</span>)
         };
 
@@ -4234,7 +4234,7 @@
         config: ClientConfig,
         init_mode: InitMode,
     ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
-        <span class="kw">if </span>Client::is_initialized(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await </span>{
+        <span class="kw">if </span>Client::is_initialized(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_encoders).<span class="kw">await </span>{
             <span class="macro">bail!</span>(<span class="string">"Client database already initialized"</span>)
         }
 
@@ -4242,7 +4242,7 @@
         // transaction to avoid half-initialized client state.
         </span>{
             <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Initializing client database"</span>);
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db_no_encoders.begin_transaction().<span class="kw">await</span>;
             <span class="comment">// Save config to DB
             </span>dbtx.insert_new_entry(
                 <span class="kw-2">&amp;</span>ClientConfigKey {
@@ -4396,7 +4396,7 @@
     }
 
     <span class="kw">pub async fn </span>open(<span class="self">self</span>, root_secret: DerivableSecret) -&gt; anyhow::Result&lt;ClientHandle&gt; {
-        <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await else </span>{
+        <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_encoders).<span class="kw">await else </span>{
             <span class="macro">bail!</span>(<span class="string">"Client database not initialized"</span>)
         };
         <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
@@ -4443,7 +4443,7 @@
         <span class="kw">let </span>decoders = <span class="self">self</span>.decoders(<span class="kw-2">&amp;</span>config);
         <span class="kw">let </span>config = <span class="self">Self</span>::config_decoded(config, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
         <span class="kw">let </span>fed_id = config.calculate_federation_id();
-        <span class="kw">let </span>db = <span class="self">self</span>.db.with_decoders(decoders.clone());
+        <span class="kw">let </span>db = <span class="self">self</span>.db_no_encoders.with_decoders(decoders.clone());
         <span class="kw">let </span>api = <span class="kw">if let </span><span class="prelude-val">Some</span>(admin_creds) = <span class="self">self</span>.admin_creds.as_ref() {
             <span class="self">Self</span>::admin_api_from_id(admin_creds.peer_id, <span class="kw-2">&amp;</span>config)<span class="question-mark">?
         </span>} <span class="kw">else </span>{

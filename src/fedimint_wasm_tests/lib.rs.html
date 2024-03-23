@@ -374,7 +374,7 @@
 <span class="kw">async fn </span>client(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientHandleArc&gt; {
     <span class="kw">let </span>client_config = ClientConfig::download_from_invite_code(invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>builder = make_client_builder();
-    <span class="kw">let </span>client_secret = load_or_generate_mnemonic(builder.db()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>client_secret = load_or_generate_mnemonic(builder.db_no_encoders()).<span class="kw">await</span><span class="question-mark">?</span>;
     builder.stopped();
     builder
         .join(
