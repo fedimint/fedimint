@@ -40,7 +40,12 @@ final-check: lint
   just test
 
 check-wasm:
-  nix develop .#crossWasm -c cargo check --target wasm32-unknown-unknown --package fedimint-client
+  #!/usr/bin/env bash
+  env CARGO_BUILD_TARGET_DIR=${CARGO_BUILD_TARGET_DIR:$(pwd)/target}/pkgs/check-wasm \
+    nix develop .#crossWasm -c \
+      cargo check --target wasm32-unknown-unknown \
+        --package fedimint-client \
+        --package fedimint-wasm-tests
 
 # regenerate server db migration snapshots
 # ex: `just snapshot-server-db-migrations fedimint-server`
