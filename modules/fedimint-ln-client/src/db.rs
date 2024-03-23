@@ -8,13 +8,14 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_ln_common::LightningGatewayRegistration;
-use secp256k1::PublicKey;
+use lightning_invoice::Bolt11Invoice;
+use secp256k1::{KeyPair, PublicKey};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
 use crate::receive::{
-    LightningReceiveStateMachine, LightningReceiveStates, LightningReceiveSubmittedOffer,
-    LightningReceiveSubmittedOfferV0,
+    LightningReceiveConfirmedInvoice, LightningReceiveStateMachine, LightningReceiveStates,
+    LightningReceiveSubmittedOffer, LightningReceiveSubmittedOfferV0,
 };
 use crate::{LightningClientStateMachines, OutgoingLightningPayment, ReceivingKey};
 
@@ -113,6 +114,12 @@ fn get_v1_migrated_state(
     module_instance_id: ModuleInstanceId,
     decoders: &ModuleDecoderRegistry,
 ) -> anyhow::Result<Option<DynState>> {
+    #[derive(Debug, Clone, Decodable)]
+    pub struct LightningReceiveConfirmedInvoiceV0 {
+        invoice: Bolt11Invoice,
+        receiving_key: KeyPair,
+    }
+
     let mut cursor = std::io::Cursor::new(bytes);
     let key = fedimint_core::core::ModuleInstanceId::consensus_decode(&mut cursor, decoders)?;
     debug_assert_eq!(key, module_instance_id, "Unexpected module instance ID");
@@ -128,25 +135,40 @@ fn get_v1_migrated_state(
     let operation_id = OperationId::consensus_decode(&mut cursor, decoders)?;
     let receive_sm_variant = u16::consensus_decode(&mut cursor, decoders)?;
 
-    // If the receive state machine is not a SubmittedOffer variant, return None
-    if receive_sm_variant != 0 {
-        return Ok(None);
-    }
+    let new = match receive_sm_variant {
+        // SubmittedOfferV0
+        0 => {
+            let _receive_sm_len = u16::consensus_decode(&mut cursor, decoders)?;
 
-    let _receive_sm_len = u16::consensus_decode(&mut cursor, decoders)?;
+            let v0 = LightningReceiveSubmittedOfferV0::consensus_decode(&mut cursor, decoders)?;
 
-    let v0 = LightningReceiveSubmittedOfferV0::consensus_decode(&mut cursor, decoders)?;
-
-    let new_offer = LightningReceiveSubmittedOffer {
-        offer_txid: v0.offer_txid,
-        invoice: v0.invoice,
-        receiving_key: ReceivingKey::Personal(v0.payment_keypair),
+            let new_offer = LightningReceiveSubmittedOffer {
+                offer_txid: v0.offer_txid,
+                invoice: v0.invoice,
+                receiving_key: ReceivingKey::Personal(v0.payment_keypair),
+            };
+            let new_recv = LightningReceiveStateMachine {
+                operation_id,
+                state: LightningReceiveStates::SubmittedOffer(new_offer),
+            };
+            LightningClientStateMachines::Receive(new_recv)
+        }
+        // ConfirmedInvoiceV0
+        2 => {
+            let _receive_sm_len = u16::consensus_decode(&mut cursor, decoders)?;
+            let confirmed_old =
+                LightningReceiveConfirmedInvoiceV0::consensus_decode(&mut cursor, decoders)?;
+            let confirmed_new = LightningReceiveConfirmedInvoice {
+                invoice: confirmed_old.invoice,
+                receiving_key: ReceivingKey::Personal(confirmed_old.receiving_key),
+            };
+            LightningClientStateMachines::Receive(LightningReceiveStateMachine {
+                operation_id,
+                state: LightningReceiveStates::ConfirmedInvoice(confirmed_new),
+            })
+        }
+        _ => return Ok(None),
     };
-    let new_recv = LightningReceiveStateMachine {
-        operation_id,
-        state: LightningReceiveStates::SubmittedOffer(new_offer),
-    };
-    let new = LightningClientStateMachines::Receive(new_recv);
 
     Ok(Some(new.into_dyn(module_instance_id)))
 }
