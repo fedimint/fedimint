@@ -118,6 +118,7 @@ const DEFAULT_MODULE_KINDS: [(ModuleInstanceId, &ModuleKind); 2] = [
 ];
 
 #[derive(Parser)]
+#[command(version)]
 struct GatewayOpts {
     #[clap(subcommand)]
     mode: LightningMode,
