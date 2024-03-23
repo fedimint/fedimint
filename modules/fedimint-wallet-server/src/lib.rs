@@ -58,7 +58,8 @@ use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{Rbf, WalletInputError, WalletOutputError, WalletOutputV0};
 use futures::StreamExt;
 use metrics::{
-    WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS, WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
+    WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
+    WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
 };
 use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
 use miniscript9::psbt::PsbtExt;
@@ -199,6 +200,14 @@ impl ServerModuleInit for WalletInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
+        for direction in [&"incoming", "outgoing"] {
+            WALLET_INOUT_FEES_SATS
+                .with_label_values(&[direction])
+                .get_sample_count();
+            WALLET_INOUT_SATS
+                .with_label_values(&[direction])
+                .get_sample_count();
+        }
         // Eagerly initialize metrics that trigger infrequently
         WALLET_PEGIN_FEES_SATS.get_sample_count();
         WALLET_PEGIN_SATS.get_sample_count();
@@ -703,6 +712,12 @@ fn calculate_pegin_metrics(
     fee: fedimint_core::Amount,
 ) {
     dbtx.on_commit(move || {
+        WALLET_INOUT_SATS
+            .with_label_values(&["incoming"])
+            .observe(amount.sats_f64());
+        WALLET_INOUT_FEES_SATS
+            .with_label_values(&["incoming"])
+            .observe(fee.sats_f64());
         WALLET_PEGIN_SATS.observe(amount.sats_f64());
         WALLET_PEGIN_FEES_SATS.observe(fee.sats_f64());
     });
@@ -714,6 +729,12 @@ fn calculate_pegout_metrics(
     fee: fedimint_core::Amount,
 ) {
     dbtx.on_commit(move || {
+        WALLET_INOUT_SATS
+            .with_label_values(&["outgoing"])
+            .observe(amount.sats_f64());
+        WALLET_INOUT_FEES_SATS
+            .with_label_values(&["outgoing"])
+            .observe(fee.sats_f64());
         WALLET_PEGOUT_SATS.observe(amount.sats_f64());
         WALLET_PEGOUT_FEES_SATS.observe(fee.sats_f64());
     });

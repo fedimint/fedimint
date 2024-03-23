@@ -2,7 +2,8 @@
 substituters = "substituters"
 # trips on some base64 string in the test
 wel = "wel"
-
+# useful for "in/out" in the code
+inout="inout"
 
 [files]
 extend-exclude = [
