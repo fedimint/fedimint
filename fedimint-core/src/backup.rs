@@ -1,3 +1,7 @@
+//! Federation-stored client backups
+//!
+//! Federations can store client-encrypted backups to help
+//! clients recover from a snapshot, instead of a blank slate.
 use std::time::SystemTime;
 
 use fedimint_core::encoding::{Decodable, Encodable};
