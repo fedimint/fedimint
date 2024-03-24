@@ -6,7 +6,6 @@ use std::time::Duration;
 use anyhow::{bail, format_err};
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
 use fedimint_core::api::InviteCode;
-use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, DkgError, DkgPeerMsg, DkgResult, FederationId,
     GlobalClientConfig, JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig,
@@ -18,6 +17,7 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary, SupportedCoreApiVersions,
 };
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
+use fedimint_core::task::Cancelled;
 use fedimint_core::task::{timeout, Elapsed, TaskGroup};
 use fedimint_core::{timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};

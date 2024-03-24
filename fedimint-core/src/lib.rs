@@ -50,7 +50,6 @@ pub mod api;
 pub mod backup;
 /// Gradual bitcoin dependency migration helpers
 pub mod bitcoin_migration;
-pub mod cancellable;
 /// Federation configuration
 pub mod config;
 /// Fundamental types
