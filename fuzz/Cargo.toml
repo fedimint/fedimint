@@ -13,7 +13,7 @@ cargo-fuzz = true
 
 [dependencies]
 honggfuzz = { version = "0.5.55", default-features = false }
-fedimint-core = { version = "0.3.0-rc.1", path = "../fedimint-core" }
+fedimint-core = { version = "=0.3.0-rc.2", path = "../fedimint-core" }
 
 # cargo-deny just needs at least one `bin` defined
 [lib]

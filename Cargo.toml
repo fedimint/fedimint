@@ -55,11 +55,11 @@ resolver = "2"
 
 [workspace.package]
 name = "fedimint"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 
 [workspace.metadata]
 name = "fedimint"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.2"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "Fedimint is a prototype Federated Chaumian E-Cash Mint implementation, natively compatible with Bitcoin & the Lightning Network. This project is under heavy development, DO NOT USE WITH REAL FUNDS."
