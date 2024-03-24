@@ -1231,11 +1231,11 @@ fn record_funded_contract_metric(updated_contract_account: ContractAccount) {
 mod tests {
     use assert_matches::assert_matches;
     use bitcoin_hashes::{sha256, Hash as BitcoinHash};
-    use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
     use fedimint_core::config::ConfigGenModuleParams;
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     use fedimint_core::encoding::Encodable;
+    use fedimint_core::envs::BitcoinRpcConfig;
     use fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
