@@ -640,8 +640,8 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningReceiveConfirmedInvoice {
-    invoice: Bolt11Invoice,
-    receiving_key: ReceivingKey,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) invoice: Bolt11Invoice,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) receiving_key: ReceivingKey,
 }
 
 <span class="kw">impl </span>LightningReceiveConfirmedInvoice {
