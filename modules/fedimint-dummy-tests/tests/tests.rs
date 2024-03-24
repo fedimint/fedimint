@@ -201,10 +201,6 @@ mod fedimint_migration_tests {
     async fn create_client_db_with_v0_data(db: Database) {
         let mut dbtx = db.begin_transaction().await;
 
-        // Will be migrated to `DatabaseVersionKey` during `apply_migrations`
-        dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
-            .await;
-
         // Write example v0 `ClientFunds`
         dbtx.insert_new_entry(&DummyClientFundsKeyV0, &()).await;
 
