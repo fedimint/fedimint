@@ -2143,7 +2143,7 @@ name = "fedimint-recoverytool"
 version = "0.3.0-alpha"
 dependencies = [
  "anyhow",
- "bitcoin 0.29.2",
+ "bitcoin 0.30.2",
  "clap",
  "fedimint-aead",
  "fedimint-core",
@@ -2155,6 +2155,7 @@ dependencies = [
  "fedimint-server",
  "fedimint-wallet-server",
  "futures",
+ "hex",
  "miniscript 10.0.0",
  "rand",
  "secp256k1 0.24.3",
