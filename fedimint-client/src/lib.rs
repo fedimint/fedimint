@@ -718,6 +718,16 @@ where
     }
 }
 
+/// Main client type
+///
+/// A handle and API to interacting with a single Federation.
+///
+/// Under the hood managing service tasks, state machines,
+/// database and other resources required.
+///
+/// This type is shared externally and internally, and
+/// [`ClientHandle`] is responsible for external lifecycle management
+/// and resource freeing of the [`Client`].
 pub struct Client {
     config: ClientConfig,
     decoders: ModuleDecoderRegistry,
@@ -1729,11 +1739,15 @@ impl TransactionUpdates {
     }
 }
 
+/// Admin (guardian) identification and authentication
 pub struct AdminCreds {
+    /// Guardian's own `peer_id`
     pub peer_id: PeerId,
+    /// Authentication details
     pub auth: ApiAuth,
 }
 
+/// Used to configure, assemble and build [`Client`]
 pub struct ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
