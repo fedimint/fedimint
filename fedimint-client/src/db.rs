@@ -348,6 +348,14 @@ pub async fn apply_migrations_client(
         .get_value(&DatabaseVersionKey(module_instance_id))
         .await;
 
+    info!(
+        ?disk_version,
+        ?target_db_version,
+        module_instance_id,
+        kind,
+        "Migrating client module database"
+    );
+
     let db_version = if let Some(disk_version) = disk_version {
         let mut current_db_version = disk_version;
 
@@ -491,7 +499,8 @@ pub async fn remove_old_and_persist_new_active_states(
             module_instance_id,
             state: bytes,
         })
-        .await;
+        .await
+        .expect("Did not delete anything");
     }
 
     let new_active_states = new_active_states
@@ -526,7 +535,8 @@ pub async fn remove_old_and_persist_new_inactive_states(
             module_instance_id,
             state: bytes,
         })
-        .await;
+        .await
+        .expect("Did not delete anything");
     }
 
     let new_inactive_states = new_inactive_states
