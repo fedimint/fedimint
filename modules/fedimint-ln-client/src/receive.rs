@@ -186,8 +186,8 @@ impl LightningReceiveSubmittedOffer {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct LightningReceiveConfirmedInvoice {
-    invoice: Bolt11Invoice,
-    receiving_key: ReceivingKey,
+    pub(crate) invoice: Bolt11Invoice,
+    pub(crate) receiving_key: ReceivingKey,
 }
 
 impl LightningReceiveConfirmedInvoice {
