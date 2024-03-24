@@ -3,8 +3,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use fedimint_core::net::peers::{IPeerConnections, PeerConnections};
-use fedimint_core::task::{sleep, TaskHandle};
-use fedimint_core::task::{Cancellable, Cancelled};
+use fedimint_core::task::{sleep, Cancellable, Cancelled, TaskHandle};
 use fedimint_core::PeerId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;

@@ -17,8 +17,7 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary, SupportedCoreApiVersions,
 };
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
-use fedimint_core::task::Cancelled;
-use fedimint_core::task::{timeout, Elapsed, TaskGroup};
+use fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
 use fedimint_core::{timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use futures::future::join_all;
