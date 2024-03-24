@@ -2388,6 +2388,20 @@
 <a href="#2386" id="2386">2386</a>
 <a href="#2387" id="2387">2387</a>
 <a href="#2388" id="2388">2388</a>
+<a href="#2389" id="2389">2389</a>
+<a href="#2390" id="2390">2390</a>
+<a href="#2391" id="2391">2391</a>
+<a href="#2392" id="2392">2392</a>
+<a href="#2393" id="2393">2393</a>
+<a href="#2394" id="2394">2394</a>
+<a href="#2395" id="2395">2395</a>
+<a href="#2396" id="2396">2396</a>
+<a href="#2397" id="2397">2397</a>
+<a href="#2398" id="2398">2398</a>
+<a href="#2399" id="2399">2399</a>
+<a href="#2400" id="2400">2400</a>
+<a href="#2401" id="2401">2401</a>
+<a href="#2402" id="2402">2402</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3108,7 +3122,17 @@
     }
 }
 
-<span class="kw">pub struct </span>Client {
+<span class="doccomment">/// Main client type
+///
+/// A handle and API to interacting with a single Federation.
+///
+/// Under the hood managing service tasks, state machines,
+/// database and other resources required.
+///
+/// This type is shared externally and internally, and
+/// [`ClientHandle`] is responsible for external lifecycle management
+/// and resource freeing of the [`Client`].
+</span><span class="kw">pub struct </span>Client {
     config: ClientConfig,
     decoders: ModuleDecoderRegistry,
     db: Database,
@@ -4119,12 +4143,16 @@
     </span>}
 }
 
-<span class="kw">pub struct </span>AdminCreds {
-    <span class="kw">pub </span>peer_id: PeerId,
-    <span class="kw">pub </span>auth: ApiAuth,
+<span class="doccomment">/// Admin (guardian) identification and authentication
+</span><span class="kw">pub struct </span>AdminCreds {
+    <span class="doccomment">/// Guardian's own `peer_id`
+    </span><span class="kw">pub </span>peer_id: PeerId,
+    <span class="doccomment">/// Authentication details
+    </span><span class="kw">pub </span>auth: ApiAuth,
 }
 
-<span class="kw">pub struct </span>ClientBuilder {
+<span class="doccomment">/// Used to configure, assemble and build [`Client`]
+</span><span class="kw">pub struct </span>ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
     admin_creds: <span class="prelude-ty">Option</span>&lt;AdminCreds&gt;,
