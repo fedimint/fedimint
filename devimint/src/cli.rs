@@ -220,8 +220,6 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                 async move {
                     let dev_fed = DevJitFed::new(&process_mgr)?;
 
-                    let fed_id = dev_fed.fed().await?.calculate_federation_id().await;
-
                     let pegin_start_time = Instant::now();
                     info!(target: LOG_DEVIMINT, "Peging in client and gateways");
 
@@ -250,7 +248,9 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                             let pegin_addr = dev_fed
                                 .gw_cln_registered()
                                 .await?
-                                .get_pegin_addr(&fed_id)
+                                .get_pegin_addr(
+                                    &dev_fed.fed().await?.calculate_federation_id().await,
+                                )
                                 .await?;
                             dev_fed
                                 .bitcoind()
@@ -263,7 +263,9 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                             let pegin_addr = dev_fed
                                 .gw_lnd_registered()
                                 .await?
-                                .get_pegin_addr(&fed_id)
+                                .get_pegin_addr(
+                                    &dev_fed.fed().await?.calculate_federation_id().await,
+                                )
                                 .await?;
                             dev_fed
                                 .bitcoind()
