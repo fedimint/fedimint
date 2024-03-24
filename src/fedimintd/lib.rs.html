@@ -113,16 +113,14 @@
 <a href="#111" id="111">111</a>
 <a href="#112" id="112">112</a>
 <a href="#113" id="113">113</a>
-<a href="#114" id="114">114</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>envs::FM_DISABLE_META_MODULE_ENV;
-<span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 <span class="kw">use </span>fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-<span class="kw">use </span>fedimint_core::envs::is_env_var_set;
+<span class="kw">use </span>fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig};
 <span class="kw">use </span>fedimint_core::module::ServerModuleInit;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_ln_common::config::{

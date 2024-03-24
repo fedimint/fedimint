@@ -253,11 +253,11 @@
 <span class="kw">use </span>fedimint_client::module::init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
-<span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::config::{
     ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
+<span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;

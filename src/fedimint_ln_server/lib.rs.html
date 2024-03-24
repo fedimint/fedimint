@@ -2709,11 +2709,11 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>assert_matches::assert_matches;
     <span class="kw">use </span>bitcoin_hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash};
-    <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
     <span class="kw">use </span>fedimint_core::config::ConfigGenModuleParams;
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     <span class="kw">use </span>fedimint_core::encoding::Encodable;
+    <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
     <span class="kw">use </span>fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
     <span class="kw">use </span>fedimint_core::task::TaskGroup;
     <span class="kw">use </span>fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
