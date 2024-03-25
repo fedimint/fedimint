@@ -84,7 +84,7 @@ impl ConsensusServer {
         cfg: ServerConfig,
         db: Database,
         module_inits: ServerModuleInitRegistry,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
     ) -> anyhow::Result<(Self, ConsensusApi)> {
         let connector: PeerConnector<Message> =
             TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn();
@@ -109,7 +109,7 @@ impl ConsensusServer {
         module_inits: ServerModuleInitRegistry,
         connector: PeerConnector<Message>,
         delay_calculator: DelayCalculator,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
     ) -> anyhow::Result<(Self, ConsensusApi)> {
         // Check the configs are valid
         cfg.validate_config(&cfg.local.identity, &module_inits)?;
@@ -803,7 +803,7 @@ pub(crate) async fn get_finished_session_count_static(dbtx: &mut DatabaseTransac
 }
 
 async fn submit_module_consensus_items(
-    task_group: &mut TaskGroup,
+    task_group: &TaskGroup,
     db: Database,
     modules: ServerModuleRegistry,
     submission_sender: Sender<ConsensusItem>,

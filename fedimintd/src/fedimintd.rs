@@ -294,7 +294,7 @@ impl Fedimintd {
             .spawn_local("main", move |_task_handle| async move {
                 match run(
                     self.opts,
-                    task_group.clone(),
+                    &task_group,
                     self.server_gens,
                     self.server_gen_params,
                     self.version_hash,
@@ -348,19 +348,18 @@ impl Fedimintd {
 
 async fn run(
     opts: ServerOpts,
-    task_group: TaskGroup,
+    task_group: &TaskGroup,
     module_inits: ServerModuleInitRegistry,
     module_inits_params: ServerModuleConfigGenParamsRegistry,
     version_hash: String,
 ) -> anyhow::Result<()> {
-    let module_kinds = module_inits_params
-        .iter_modules()
-        .map(|(id, kind, _)| (id, kind));
-    let decoders = module_inits.available_decoders(module_kinds.into_iter())?;
-    let db = Database::new(
-        fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
-        decoders.clone(),
-    );
+    if let Some(socket_addr) = opts.bind_metrics_api.as_ref() {
+        task_group.spawn_cancellable("metrics-server", {
+            let task_group = task_group.clone();
+            let socket_addr = *socket_addr;
+            async move { fedimint_metrics::run_api_server(socket_addr, task_group).await }
+        });
+    }
 
     // TODO: Fedimintd should use the config gen API
     // on each run we want to pass the currently passed password, so we need to
@@ -370,42 +369,28 @@ async fn run(
     };
     let default_params = ConfigGenParamsRequest {
         meta: opts.extra_dkg_meta.clone(),
-        modules: module_inits_params,
+        modules: module_inits_params.clone(),
     };
-    let mut api = FedimintServer {
-        data_dir: opts.data_dir,
-        settings: ConfigGenSettings {
-            download_token_limit: None,
-            p2p_bind: opts.bind_p2p,
-            api_bind: opts.bind_api,
-            p2p_url: opts.p2p_url,
-            api_url: opts.api_url,
-            default_params,
-            max_connections: fedimint_server::config::max_connections(),
-            registry: module_inits,
-        },
-        db,
-        version_hash,
+    // TODO: meh, move, refactor
+    let settings = ConfigGenSettings {
+        download_token_limit: None,
+        p2p_bind: opts.bind_p2p,
+        api_bind: opts.bind_api,
+        p2p_url: opts.p2p_url,
+        api_url: opts.api_url,
+        default_params,
+        max_connections: fedimint_server::config::max_connections(),
+        registry: module_inits.clone(),
     };
-    if let Some(bind_metrics_api) = opts.bind_metrics_api.as_ref() {
-        let (api_result, metrics_api_result) = futures::join!(
-            api.run(task_group.clone()),
-            spawn_metrics_server(bind_metrics_api, task_group)
-        );
-        api_result?;
-        metrics_api_result?;
-    } else {
-        api.run(task_group).await?;
-    }
-    Ok(())
-}
 
-async fn spawn_metrics_server(
-    bind_address: &SocketAddr,
-    mut task_group: TaskGroup,
-) -> anyhow::Result<()> {
-    let rx = fedimint_metrics::run_api_server(bind_address, &mut task_group).await?;
-    info!("Metrics API listening on {bind_address}");
-    rx.await;
+    let db = Database::new(
+        fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
+        Default::default(),
+    );
+
+    FedimintServer::new(opts.data_dir, settings, db, version_hash)
+        .run(&module_inits, task_group.clone())
+        .await?;
+
     Ok(())
 }
