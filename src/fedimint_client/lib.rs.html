@@ -2402,6 +2402,10 @@
 <a href="#2400" id="2400">2400</a>
 <a href="#2401" id="2401">2401</a>
 <a href="#2402" id="2402">2402</a>
+<a href="#2403" id="2403">2403</a>
+<a href="#2404" id="2404">2404</a>
+<a href="#2405" id="2405">2405</a>
+<a href="#2406" id="2406">2406</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3292,6 +3296,10 @@
         instance: ModuleInstanceId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule)&gt; {
         <span class="prelude-val">Some</span>(<span class="self">self</span>.modules.get(instance)<span class="question-mark">?</span>.as_ref())
+    }
+
+    <span class="kw">pub fn </span>has_module(<span class="kw-2">&amp;</span><span class="self">self</span>, instance: ModuleInstanceId) -&gt; bool {
+        <span class="self">self</span>.modules.get(instance).is_some()
     }
 
     <span class="doccomment">/// Determines if a transaction is underfunded, overfunded or balanced
