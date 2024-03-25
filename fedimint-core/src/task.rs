@@ -684,6 +684,15 @@ pub async fn sleep_in_test(comment: impl AsRef<str>, duration: Duration) {
     sleep(duration).await;
 }
 
+/// An error used as a "cancelled" marker in [`Cancellable`].
+#[derive(Error, Debug)]
+#[error("Operation cancelled")]
+pub struct Cancelled;
+
+/// Operation that can potentially get cancelled returning no result (e.g.
+/// program shutdown).
+pub type Cancellable<T> = std::result::Result<T, Cancelled>;
+
 #[cfg(test)]
 mod tests {
     use super::*;
