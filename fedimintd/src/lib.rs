@@ -50,6 +50,7 @@ pub fn attach_default_module_init_params(
                     // commit anyway
                     finality_delay,
                     client_default_bitcoin_rpc: default_esplora_server(network),
+                    fee_consensus: Default::default(),
                 },
             },
         )

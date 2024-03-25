@@ -14,6 +14,10 @@ use serde::{Deserialize, Serialize};
 use crate::keys::CompressedPublicKey;
 use crate::{PegInDescriptor, WalletCommonInit};
 
+/// Helps against dust attacks where an attacker deposits UTXOs that, with
+/// higher fee levels, cannot be spent profitably.
+const DEFAULT_DEPOSIT_FEE_SATS: u64 = 1000;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletGenParams {
     pub local: WalletGenParamsLocal,
@@ -35,6 +39,7 @@ impl WalletGenParams {
                     ))
                     .expect("Failed to parse default esplora server"),
                 },
+                fee_consensus: Default::default(),
             },
         }
     }
@@ -51,6 +56,11 @@ pub struct WalletGenParamsConsensus {
     pub finality_delay: u32,
     /// See [`WalletConfigConsensus::client_default_bitcoin_rpc`].
     pub client_default_bitcoin_rpc: BitcoinRpcConfig,
+    /// Fees to be charged for deposits and withdraws _by the federation_ in
+    /// addition to any on-chain fees.
+    ///
+    /// Deposit fees in particular are a protection against dust attacks.
+    pub fee_consensus: FeeConsensus,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -124,7 +134,7 @@ impl std::fmt::Display for WalletClientConfig {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FeeConsensus {
     pub peg_in_abs: fedimint_core::Amount,
     pub peg_out_abs: fedimint_core::Amount,
@@ -133,13 +143,14 @@ pub struct FeeConsensus {
 impl Default for FeeConsensus {
     fn default() -> Self {
         Self {
-            peg_in_abs: fedimint_core::Amount::ZERO,
+            peg_in_abs: fedimint_core::Amount::from_sats(DEFAULT_DEPOSIT_FEE_SATS),
             peg_out_abs: fedimint_core::Amount::ZERO,
         }
     }
 }
 
 impl WalletConfig {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         pubkeys: BTreeMap<PeerId, CompressedPublicKey>,
         sk: SecretKey,
@@ -148,6 +159,7 @@ impl WalletConfig {
         finality_delay: u32,
         bitcoin_rpc: BitcoinRpcConfig,
         client_default_bitcoin_rpc: BitcoinRpcConfig,
+        fee_consensus: FeeConsensus,
     ) -> Self {
         let peg_in_descriptor = if pubkeys.len() == 1 {
             PegInDescriptor::Wpkh(
@@ -174,7 +186,7 @@ impl WalletConfig {
                 peer_peg_in_keys: pubkeys,
                 finality_delay,
                 default_fee: Feerate { sats_per_kvb: 1000 },
-                fee_consensus: Default::default(),
+                fee_consensus,
                 client_default_bitcoin_rpc,
             },
         }
