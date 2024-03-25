@@ -8,9 +8,16 @@ use std::time::Duration;
 use std::{env, unreachable};
 
 use anyhow::{anyhow, bail, format_err, Context, Result};
+use fedimint_core::admin_client::{
+    ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
+};
+use fedimint_core::api::StatusResponse;
+use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::envs::is_env_var_set;
+use fedimint_core::module::ApiAuth;
 use fedimint_core::task::{self, block_in_place, block_on};
 use fedimint_core::time::now;
+use fedimint_core::PeerId;
 use fedimint_logging::LOG_DEVIMINT;
 use semver::Version;
 use serde::de::DeserializeOwned;
@@ -650,6 +657,201 @@ impl FedimintCli {
             Ok(version) => parse_clap_version(&version),
             Err(_) => DEFAULT_VERSION,
         }
+    }
+
+    pub async fn ws_status(self, endpoint: &str) -> Result<StatusResponse> {
+        let status = cmd!(self, "admin", "dkg", "--ws", endpoint, "ws-status")
+            .out_json()
+            .await?;
+        Ok(serde_json::from_value(status)?)
+    }
+
+    pub async fn set_password(self, auth: &ApiAuth, endpoint: &str) -> Result<()> {
+        cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "dkg",
+            "--ws",
+            endpoint,
+            "set-password",
+        )
+        .run()
+        .await
+    }
+
+    pub async fn set_config_gen_params(
+        self,
+        auth: &ApiAuth,
+        endpoint: &str,
+        meta: BTreeMap<String, String>,
+        server_gen_params: ServerModuleConfigGenParamsRegistry,
+    ) -> Result<()> {
+        cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "dkg",
+            "--ws",
+            endpoint,
+            "set-config-gen-params",
+            "--meta-json",
+            serde_json::to_string(&meta)?,
+            "--modules-json",
+            serde_json::to_string(&server_gen_params)?
+        )
+        .run()
+        .await
+    }
+
+    pub async fn consensus_config_gen_params(
+        self,
+        endpoint: &str,
+    ) -> Result<ConfigGenParamsResponse> {
+        let result = cmd!(
+            self,
+            "admin",
+            "dkg",
+            "--ws",
+            endpoint,
+            "consensus-config-gen-params"
+        )
+        .out_json()
+        .await
+        .context("non-json returned for consensus_config_gen_params")?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    pub async fn get_default_config_gen_params(
+        self,
+        auth: &ApiAuth,
+        endpoint: &str,
+    ) -> Result<ConfigGenParamsRequest> {
+        let result = cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "dkg",
+            "--ws",
+            endpoint,
+            "get-default-config-gen-params"
+        )
+        .out_json()
+        .await
+        .context("non-json returned for get_default_config_gen_params")?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    pub async fn set_config_gen_connections(
+        self,
+        auth: &ApiAuth,
+        endpoint: &str,
+        our_name: &str,
+        leader_api_url: Option<&str>,
+    ) -> Result<()> {
+        // FIXME: this should be a single command
+        if let Some(leader_api_url) = leader_api_url {
+            cmd!(
+                self,
+                "--password",
+                &auth.0,
+                "admin",
+                "dkg",
+                "--ws",
+                endpoint,
+                "set-config-gen-connections",
+                "--our-name",
+                our_name,
+                "--leader-api-url",
+                leader_api_url,
+            )
+            .run()
+            .await
+        } else {
+            cmd!(
+                self,
+                "--password",
+                &auth.0,
+                "admin",
+                "dkg",
+                "--ws",
+                endpoint,
+                "set-config-gen-connections",
+                "--our-name",
+                our_name,
+            )
+            .run()
+            .await
+        }
+    }
+
+    pub async fn get_config_gen_peers(self, endpoint: &str) -> Result<Vec<PeerServerParams>> {
+        let result = cmd!(
+            self,
+            "admin",
+            "dkg",
+            "--ws",
+            endpoint,
+            "get-config-gen-peers"
+        )
+        .out_json()
+        .await
+        .context("non-json returned for get_config_gen_peers")?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    pub async fn run_dkg(self, auth: &ApiAuth, endpoint: &str) -> Result<()> {
+        cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "dkg",
+            "--ws",
+            endpoint,
+            "run-dkg"
+        )
+        .run()
+        .await
+    }
+
+    pub async fn get_verify_config_hash(
+        self,
+        auth: &ApiAuth,
+        endpoint: &str,
+    ) -> Result<BTreeMap<PeerId, bitcoincore_rpc::bitcoin::hashes::sha256::Hash>> {
+        let result = cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "dkg",
+            "--ws",
+            endpoint,
+            "get-verify-config-hash"
+        )
+        .out_json()
+        .await
+        .context("non-json returned for get_verify_config_hash")?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    pub async fn start_consensus(self, auth: &ApiAuth, endpoint: &str) -> Result<()> {
+        cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "dkg",
+            "--ws",
+            endpoint,
+            "start-consensus"
+        )
+        .run()
+        .await
     }
 }
 
