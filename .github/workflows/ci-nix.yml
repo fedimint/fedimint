@@ -348,7 +348,7 @@ jobs:
     if: github.repository == 'fedimint/fedimint'
     name: "Containers"
     runs-on: buildjet-8vcpu-ubuntu-2004
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
