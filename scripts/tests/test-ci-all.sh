@@ -268,8 +268,8 @@ echo "$parsed_test_commands" | if parallel \
   "${parallel_args[@]}" ; then
   >&2 echo "All tests successful"
 else
-  >&2 echo "Some tests failed. Full job log:"
-  cat "$joblog"
+  >&2 echo "Some tests failed:"
+  awk '{ if($7 != "0") print $0 "\n" }' < "$joblog"
   >&2 echo "Search for '## FAIL' to find the end of the failing test"
   exit 1
 fi
