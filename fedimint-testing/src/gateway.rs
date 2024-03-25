@@ -86,7 +86,7 @@ impl GatewayTest {
             .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
         rpc.connect_federation(ConnectFedPayload { invite_code })
             .await
-            .expect("connect to federation")
+            .unwrap()
     }
 
     pub fn get_gateway_id(&self) -> secp256k1::PublicKey {

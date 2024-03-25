@@ -47,7 +47,8 @@ use ln_gateway::gateway_lnrpc::GetNodeInfoResponse;
 use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcResult};
 use ln_gateway::rpc::rpc_server::hash_password;
 use ln_gateway::rpc::{
-    BalancePayload, ConnectFedPayload, LeaveFedPayload, SetConfigurationPayload,
+    BalancePayload, ConnectFedPayload, FederationRoutingFees, LeaveFedPayload,
+    SetConfigurationPayload,
 };
 use ln_gateway::state_machine::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
@@ -254,13 +255,75 @@ async fn test_can_change_default_routing_fees() -> anyhow::Result<()> {
             assert_eq!(user_client.get_balance().await, sats(1000));
 
             let fee = "10,10000".to_string();
-            let gateway_fee = GatewayFee::from_str(&fee)?;
+            let federation_fee = FederationRoutingFees::from_str(&fee)?;
             let set_configuration_payload = SetConfigurationPayload {
                 password: None,
                 num_route_hints: None,
                 default_routing_fees: Some(fee.clone()),
                 network: None,
                 per_federation_routing_fees: None,
+            };
+            verify_gateway_rpc_success("set_configuration", || {
+                rpc_client.set_configuration(set_configuration_payload.clone())
+            })
+            .await;
+
+            // we need to reconnect to set the fees as defaults from gateway
+            reconnect_federation(&rpc_client, &fed).await?;
+
+            // Update the gateway cache since the fees have changed
+            let ln_module = user_client.get_first_module::<LightningClientModule>();
+            ln_module.update_gateway_cache(true).await?;
+
+            // Create test invoice
+            let invoice_amount = sats(250);
+            let invoice = other_lightning_client.invoice(invoice_amount, None).await?;
+
+            let gateway_client = gateway.remove_client_hack(&fed).await;
+            pay_valid_invoice(
+                invoice,
+                &user_client,
+                &gateway_client,
+                &gateway.gateway.gateway_id,
+            )
+            .await?;
+
+            let fee: RoutingFees = federation_fee.into();
+            let fee_amount = fee.to_amount(&invoice_amount);
+            assert_eq!(
+                user_client.get_balance().await,
+                sats(1000 - 250) - fee_amount
+            );
+            assert_eq!(gateway_client.get_balance().await, sats(250) + fee_amount);
+
+            Ok(())
+        },
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_can_change_federation_routing_fees() -> anyhow::Result<()> {
+    single_federation_test(
+        |gateway, other_lightning_client, fed, user_client, _| async move {
+            let rpc_client = gateway
+                .get_rpc()
+                .await
+                .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
+            // Print money for user_client
+            let dummy_module = user_client.get_first_module::<DummyClientModule>();
+            let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
+            dummy_module.receive_money(outpoint).await?;
+            assert_eq!(user_client.get_balance().await, sats(1000));
+
+            let fee = "10,10000".to_string();
+            let federation_fee = FederationRoutingFees::from_str(&fee)?;
+            let set_configuration_payload = SetConfigurationPayload {
+                password: None,
+                num_route_hints: None,
+                default_routing_fees: None,
+                network: None,
+                per_federation_routing_fees: Some(vec![(fed.id(), federation_fee.clone())]),
             };
             verify_gateway_rpc_success("set_configuration", || {
                 rpc_client.set_configuration(set_configuration_payload.clone())
@@ -284,7 +347,8 @@ async fn test_can_change_default_routing_fees() -> anyhow::Result<()> {
             )
             .await?;
 
-            let fee_amount = gateway_fee.to_amount(&invoice_amount);
+            let fee: RoutingFees = federation_fee.into();
+            let fee_amount = fee.to_amount(&invoice_amount);
             assert_eq!(
                 user_client.get_balance().await,
                 sats(1000 - 250) - fee_amount
@@ -324,6 +388,10 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                 rpc_client.set_configuration(set_configuration_payload.clone())
             })
             .await;
+
+            // we need to reconnect to set the fees as defaults from gateway
+            reconnect_federation(&rpc_client, &fed).await?;
+
             info!("### Changed gateway routing fees");
 
             let user_lightning_module = user_client.get_first_module::<LightningClientModule>();
@@ -1507,6 +1575,22 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         },
     )
     .await
+}
+
+async fn reconnect_federation(rpc: &GatewayRpcClient, fed: &FederationTest) -> anyhow::Result<()> {
+    verify_gateway_rpc_success("leave_federation", || {
+        rpc.leave_federation(LeaveFedPayload {
+            federation_id: fed.id(),
+        })
+    })
+    .await;
+    verify_gateway_rpc_success("connect_federation", || {
+        rpc.connect_federation(ConnectFedPayload {
+            invite_code: fed.invite_code().to_string(),
+        })
+    })
+    .await;
+    Ok(())
 }
 
 /// Verifies that a gateway RPC succeeds. If it fails, the status code of the

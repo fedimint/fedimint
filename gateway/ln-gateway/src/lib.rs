@@ -11,7 +11,7 @@ pub mod gateway_lnrpc {
 }
 
 use std::borrow::Cow;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::env;
 use std::fmt::Display;
 use std::net::SocketAddr;
@@ -79,6 +79,7 @@ use thiserror::Error;
 use tokio::sync::{Mutex, MutexGuard};
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
+use self::rpc::FederationRoutingFees;
 use crate::db::{get_gatewayd_database_migrations, FederationConfig, FederationIdKeyPrefix};
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::lightning::cln::RouteHtlcStream;
@@ -1024,7 +1025,7 @@ impl Gateway {
             password,
             network,
             num_route_hints,
-            default_routing_fees: routing_fees,
+            default_routing_fees,
             per_federation_routing_fees,
         }: SetConfigurationPayload,
     ) -> Result<()> {
@@ -1069,7 +1070,7 @@ impl Gateway {
 
             // Using this routing fee config as a default for all federation that has none
             // routing fees specified.
-            if let Some(fees_str) = routing_fees.clone() {
+            if let Some(fees_str) = default_routing_fees.clone() {
                 let routing_fees = GatewayFee::from_str(fees_str.as_str())?.0;
                 prev_config.routing_fees = routing_fees;
             }
@@ -1090,54 +1091,97 @@ impl Gateway {
                 password_salt,
             }
         };
-
-        let per_federation_routing_fees: HashMap<FederationId, RoutingFees> =
-            per_federation_routing_fees
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect();
-
         dbtx.insert_entry(&GatewayConfigurationKey, &new_gateway_config)
             .await;
-        self.update_federation_routing_fees(
-            &mut dbtx,
-            &new_gateway_config,
-            &per_federation_routing_fees,
-        )
-        .await?;
+        if let Some(per_federation_routing_fees) = per_federation_routing_fees {
+            self.update_and_register_federation_routing_fees(
+                &mut dbtx,
+                &per_federation_routing_fees,
+                &new_gateway_config,
+            )
+            .await?;
+        }
         dbtx.commit_tx().await;
 
         let mut curr_gateway_config = self.gateway_config.write().await;
         *curr_gateway_config = Some(new_gateway_config.clone());
-
-        if let Err(e) = Self::register_all_federations(self, &new_gateway_config).await {
-            warn!("{e:?}")
-        };
 
         info!("Set GatewayConfiguration successfully.");
 
         Ok(())
     }
 
-    /// Updates the routing fees for every federation configuration.
-    async fn update_federation_routing_fees(
+    /// Updates the routing fees and register the given federation.
+    async fn update_and_register_federation_routing_fees(
         &self,
         dbtx: &mut DatabaseTransaction<'_, Committable>,
+        per_federation_routing_fees: &[(FederationId, FederationRoutingFees)],
         gateway_config: &GatewayConfiguration,
-        per_federation_routing_fees: &HashMap<FederationId, RoutingFees>,
     ) -> Result<()> {
-        let configs: Vec<(FederationIdKey, FederationConfig)> = dbtx
-            .find_by_prefix(&FederationIdKeyPrefix)
+        for (federation_id, routing_fees) in per_federation_routing_fees.iter() {
+            let federation_key = FederationIdKey { id: *federation_id };
+            if let Some(mut federation_config) = dbtx.get_value(&federation_key).await {
+                federation_config.fees = routing_fees.clone().into();
+                dbtx.insert_entry(&federation_key, &federation_config).await;
+                if let Err(e) = self
+                    .register_federation(gateway_config, federation_id, &federation_config)
+                    .await
+                {
+                    warn!("Fail to register federation {federation_id}, reason: {e:?}")
+                };
+            } else {
+                warn!("Given federation {federation_id} not found for updating routing fees");
+            }
+        }
+        Ok(())
+    }
+
+    async fn register_federation(
+        &self,
+        gateway_config: &GatewayConfiguration,
+        federation_id: &FederationId,
+        federation_config: &FederationConfig,
+    ) -> Result<()> {
+        if let Ok(lightning_context) = self.get_lightning_context().await {
+            match Self::fetch_lightning_route_hints(
+                lightning_context.lnrpc.clone(),
+                gateway_config.num_route_hints
+            )
             .await
-            .collect::<Vec<_>>()
-            .await;
-        for (id_key, mut fed_config) in configs {
-            let routing_fee = per_federation_routing_fees
-                .get(&id_key.id)
-                .unwrap_or(&gateway_config.routing_fees);
-            fed_config.fees = *routing_fee;
-            dbtx.insert_entry(&id_key, &fed_config).await;
+            {
+                Ok(route_hints) => {
+                    if let Some(client) = self.clients.read().await.get(federation_id) {
+                        if let Err(e) = async {
+                            client
+                                .value()
+                                .get_first_module::<GatewayClientModule>()
+                                .register_with_federation(
+                                    route_hints.clone(),
+                                    GW_ANNOUNCEMENT_TTL,
+                                    federation_config.fees,
+                                    lightning_context.clone(),
+                                )
+                                .await
+                        }
+                        .instrument(client.span())
+                        .await
+                        {
+                            Err(GatewayError::FederationError(FederationError::general(
+                                anyhow::anyhow!(
+                                    "Error registering federation {federation_id}: {e:?}"
+                                ),
+                            )))?
+                        }
+                    }
+                }
+                Err(e) => Err(GatewayError::LightningRpcError(
+                    LightningRpcError::FailedToGetRouteHints {
+                        failure_reason: format!(
+                            "Could not retrieve route hints, gateway will not be registered for now: {e:?}"
+                        ),
+                    },
+                ))?,
+            }
         }
         Ok(())
     }
