@@ -738,6 +738,15 @@
 <a href="#736" id="736">736</a>
 <a href="#737" id="737">737</a>
 <a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
 </pre></div><pre class="rust"><code><span class="attr">#![cfg_attr(target_family = <span class="string">"wasm"</span>, allow(dead_code))]
 
 </span><span class="doccomment">/// Just-in-time initialization
@@ -1423,6 +1432,15 @@
     );
     sleep(duration).<span class="kw">await</span>;
 }
+
+<span class="doccomment">/// An error used as a "cancelled" marker in [`Cancellable`].
+</span><span class="attr">#[derive(Error, Debug)]
+#[error(<span class="string">"Operation cancelled"</span>)]
+</span><span class="kw">pub struct </span>Cancelled;
+
+<span class="doccomment">/// Operation that can potentially get cancelled returning no result (e.g.
+/// program shutdown).
+</span><span class="kw">pub type </span>Cancellable&lt;T&gt; = std::result::Result&lt;T, Cancelled&gt;;
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {

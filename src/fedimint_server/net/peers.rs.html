@@ -830,7 +830,6 @@
 <a href="#828" id="828">828</a>
 <a href="#829" id="829">829</a>
 <a href="#830" id="830">830</a>
-<a href="#831" id="831">831</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -847,9 +846,8 @@
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::api::PeerConnectionStatus;
-<span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_core::net::peers::IPeerConnections;
-<span class="kw">use </span>fedimint_core::task::{sleep_until, TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::task::{sleep_until, Cancellable, Cancelled, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_NET_PEER;

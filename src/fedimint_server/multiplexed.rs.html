@@ -271,15 +271,13 @@
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
 <a href="#271" id="271">271</a>
-<a href="#272" id="272">272</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, VecDeque};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections};
-<span class="kw">use </span>fedimint_core::task::spawn;
+<span class="kw">use </span>fedimint_core::task::{spawn, Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_NET_PEER;
 <span class="kw">use </span>serde::de::DeserializeOwned;

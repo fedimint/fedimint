@@ -84,14 +84,12 @@
 <a href="#82" id="82">82</a>
 <a href="#83" id="83">83</a>
 <a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
 </pre></div><pre class="rust"><code><span class="doccomment">/// Fake (channel-based) implementation of [`super::PeerConnections`].
 </span><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_core::net::peers::{IPeerConnections, PeerConnections};
-<span class="kw">use </span>fedimint_core::task::{sleep, TaskHandle};
+<span class="kw">use </span>fedimint_core::task::{sleep, Cancellable, Cancelled, TaskHandle};
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
