@@ -92,13 +92,13 @@ pub struct GatewayFedConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct RoutingFeesWrapper {
+pub struct FederationRoutingFees {
     pub base_msat: u32,
     pub proportional_millionths: u32,
 }
 
-impl From<RoutingFeesWrapper> for RoutingFees {
-    fn from(val: RoutingFeesWrapper) -> Self {
+impl From<FederationRoutingFees> for RoutingFees {
+    fn from(val: FederationRoutingFees) -> Self {
         RoutingFees {
             base_msat: val.base_msat,
             proportional_millionths: val.proportional_millionths,
@@ -106,7 +106,7 @@ impl From<RoutingFeesWrapper> for RoutingFees {
     }
 }
 
-impl FromStr for RoutingFeesWrapper {
+impl FromStr for FederationRoutingFees {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -119,7 +119,7 @@ impl FromStr for RoutingFeesWrapper {
             .next()
             .context("missing liquidity based fee as proportional millionths of routed amount")?
             .parse()?;
-        Ok(RoutingFeesWrapper {
+        Ok(FederationRoutingFees {
             base_msat,
             proportional_millionths,
         })
@@ -132,5 +132,5 @@ pub struct SetConfigurationPayload {
     pub num_route_hints: Option<u32>,
     pub default_routing_fees: Option<String>,
     pub network: Option<Network>,
-    pub per_federation_routing_fees: Option<Vec<(FederationId, RoutingFeesWrapper)>>,
+    pub per_federation_routing_fees: Option<Vec<(FederationId, FederationRoutingFees)>>,
 }

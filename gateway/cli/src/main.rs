@@ -104,18 +104,18 @@ pub enum Commands {
 
         /// Format <federation id>,<base msat>,<proportional to millionths part>
         #[clap(long)]
-        per_federation_routing_fees: Option<Vec<FederationIdAndRoutingFeesParameter>>,
+        per_federation_routing_fees: Option<Vec<PerFederationRoutingFees>>,
     },
 }
 
 #[derive(Clone)]
-pub struct FederationIdAndRoutingFeesParameter {
+pub struct PerFederationRoutingFees {
     pub federation_id: FederationId,
     pub base_msat: u32,
     pub proportional_millionths: u32,
 }
 
-impl std::str::FromStr for FederationIdAndRoutingFeesParameter {
+impl std::str::FromStr for PerFederationRoutingFees {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -129,7 +129,7 @@ impl std::str::FromStr for FederationIdAndRoutingFeesParameter {
             .next()
             .context("missing liquidity based fee as proportional millionths of routed amount")?
             .parse()?;
-        Ok(FederationIdAndRoutingFeesParameter {
+        Ok(PerFederationRoutingFees {
             federation_id,
             base_msat,
             proportional_millionths,
@@ -137,11 +137,11 @@ impl std::str::FromStr for FederationIdAndRoutingFeesParameter {
     }
 }
 
-impl From<FederationIdAndRoutingFeesParameter> for (FederationId, RoutingFeesWrapper) {
-    fn from(val: FederationIdAndRoutingFeesParameter) -> Self {
+impl From<PerFederationRoutingFees> for (FederationId, FederationRoutingFees) {
+    fn from(val: PerFederationRoutingFees) -> Self {
         (
             val.federation_id,
-            RoutingFeesWrapper {
+            FederationRoutingFees {
                 base_msat: val.base_msat,
                 proportional_millionths: val.proportional_millionths,
             },
