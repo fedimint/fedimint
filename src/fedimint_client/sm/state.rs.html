@@ -470,6 +470,8 @@
 <a href="#468" id="468">468</a>
 <a href="#469" id="469">469</a>
 <a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -791,10 +793,12 @@
 <span class="kw">impl </span>Decodable <span class="kw">for </span>DynState {
     <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
         reader: <span class="kw-2">&amp;mut </span>R,
-        modules: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry,
+        decoders: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, fedimint_core::encoding::DecodeError&gt; {
-        <span class="kw">let </span>key = fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)<span class="question-mark">?</span>;
-        modules.get_expect(key).decode(reader, key, modules)
+        <span class="kw">let </span>module_id = fedimint_core::core::ModuleInstanceId::consensus_decode(reader, decoders)<span class="question-mark">?</span>;
+        decoders
+            .get_expect(module_id)
+            .decode_partial(reader, module_id, decoders)
     }
 }
 

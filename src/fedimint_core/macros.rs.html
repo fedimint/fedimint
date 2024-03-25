@@ -761,12 +761,6 @@
 <a href="#759" id="759">759</a>
 <a href="#760" id="760">760</a>
 <a href="#761" id="761">761</a>
-<a href="#762" id="762">762</a>
-<a href="#763" id="763">763</a>
-<a href="#764" id="764">764</a>
-<a href="#765" id="765">765</a>
-<a href="#766" id="766">766</a>
-<a href="#767" id="767">767</a>
 </pre></div><pre class="rust"><code><span class="doccomment">/// Define "dyn newtype" (a newtype over `dyn Trait`)
 ///
 /// This is a simple pattern that make working with `dyn Trait`s
@@ -1082,35 +1076,29 @@
         <span class="kw">impl </span>Decodable <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;R: std::io::Read&gt;(
                 reader: <span class="kw-2">&amp;mut </span>R,
-                modules: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$crate::module::registry::ModuleDecoderRegistry</span>,
+                decoders: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$crate::module::registry::ModuleDecoderRegistry</span>,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, fedimint_core::encoding::DecodeError&gt; {
                 <span class="kw">let </span>module_instance_id =
                     fedimint_core::core::ModuleInstanceId::consensus_decode_from_finite_reader(
-                        reader, modules,
+                        reader, decoders,
                     )<span class="question-mark">?</span>;
-                <span class="kw">let </span>val = <span class="kw">match </span>modules.get(module_instance_id) {
+                <span class="kw">let </span>val = <span class="kw">match </span>decoders.get(module_instance_id) {
                     <span class="prelude-val">Some</span>(decoder) =&gt; {
                         <span class="kw">let </span>total_len_u64 =
-                            u64::consensus_decode_from_finite_reader(reader, modules)<span class="question-mark">?</span>;
-                        <span class="kw">let </span><span class="kw-2">mut </span>reader = std::io::Read::take(reader, total_len_u64);
-                        <span class="kw">let </span>v = decoder.decode(<span class="kw-2">&amp;mut </span>reader, module_instance_id, modules)<span class="question-mark">?</span>;
-
-                        <span class="kw">if </span>reader.limit() != <span class="number">0 </span>{
-                            <span class="kw">return </span><span class="prelude-val">Err</span>(fedimint_core::encoding::DecodeError::new_custom(
-                                <span class="macro">anyhow::anyhow!</span>(
-                                    <span class="string">"Dyn type did not consume all bytes during decoding"
-                                </span>),
-                            ));
-                        }
-
-                        v
-                    }
-                    <span class="prelude-val">None </span>=&gt; <span class="kw">match </span>modules.decoding_mode() {
+                            u64::consensus_decode_from_finite_reader(reader, decoders)<span class="question-mark">?</span>;
+                        decoder.decode_complete(
+                            reader,
+                            total_len_u64,
+                            module_instance_id,
+                            decoders,
+                        )<span class="question-mark">?
+                    </span>}
+                    <span class="prelude-val">None </span>=&gt; <span class="kw">match </span>decoders.decoding_mode() {
                         <span class="macro-nonterminal">$crate::module::registry::DecodingMode::Reject </span>=&gt; {
                             <span class="kw">return </span><span class="prelude-val">Err</span>(fedimint_core::encoding::DecodeError::new_custom(
                                 <span class="macro">anyhow::anyhow!</span>(
-                                    <span class="string">"Module decoder not available: {module_instance_id}"
-                                </span>),
+                                    <span class="string">"Module decoder not available: {module_instance_id} when decoding {}"</span>, std::any::type_name::&lt;<span class="self">Self</span>&gt;()
+                                ),
                             ));
                         }
                         <span class="macro-nonterminal">$crate::module::registry::DecodingMode::Fallback </span>=&gt; <span class="macro-nonterminal">$name::from_typed</span>(

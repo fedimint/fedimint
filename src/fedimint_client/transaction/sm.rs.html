@@ -304,7 +304,7 @@
 }
 
 <span class="kw">pub fn </span>tx_submission_sm_decoder() -&gt; Decoder {
-    <span class="kw">let </span><span class="kw-2">mut </span>decoder_builder = Decoder::builder();
+    <span class="kw">let </span><span class="kw-2">mut </span>decoder_builder = Decoder::builder_system();
     decoder_builder.with_decodable_type::&lt;OperationState&lt;TxSubmissionStates&gt;&gt;();
     decoder_builder.build()
 }
