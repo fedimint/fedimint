@@ -4,10 +4,10 @@ pub mod rpc_server;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
-use anyhow::Context;
 use bitcoin::{Address, Network};
 use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
+use fedimint_ln_common::config::parse_routing_fees;
 use fedimint_ln_common::{route_hints, serde_option_routing_fees};
 use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
@@ -109,18 +109,10 @@ impl FromStr for FederationRoutingFees {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split(',');
-        let base_msat = parts
-            .next()
-            .context("missing base fee in millisatoshis")?
-            .parse()?;
-        let proportional_millionths = parts
-            .next()
-            .context("missing liquidity based fee as proportional millionths of routed amount")?
-            .parse()?;
+        let routing_fees = parse_routing_fees(s)?;
         Ok(FederationRoutingFees {
-            base_msat,
-            proportional_millionths,
+            base_msat: routing_fees.base_msat,
+            proportional_millionths: routing_fees.proportional_millionths,
         })
     }
 }

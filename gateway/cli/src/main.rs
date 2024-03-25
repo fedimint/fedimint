@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{bail, Context};
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
 use clap::{CommandFactory, Parser, Subcommand};
@@ -108,41 +108,27 @@ pub enum Commands {
 #[derive(Clone)]
 pub struct PerFederationRoutingFees {
     pub federation_id: FederationId,
-    pub base_msat: u32,
-    pub proportional_millionths: u32,
+    pub routing_fees: FederationRoutingFees,
 }
 
 impl std::str::FromStr for PerFederationRoutingFees {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split(',');
-        let federation_id = parts.next().context("missing federation id")?.parse()?;
-        let base_msat = parts
-            .next()
-            .context("missing base fee in millisatoshis")?
-            .parse()?;
-        let proportional_millionths = parts
-            .next()
-            .context("missing liquidity based fee as proportional millionths of routed amount")?
-            .parse()?;
-        Ok(PerFederationRoutingFees {
-            federation_id,
-            base_msat,
-            proportional_millionths,
-        })
+        if let Some((federation_id, rounting_fees)) = s.split_once(',') {
+            Ok(PerFederationRoutingFees {
+                federation_id: federation_id.parse()?,
+                routing_fees: rounting_fees.parse()?,
+            })
+        } else {
+            bail!("Wrong format, please provide: <federation id>,<base msat>,<proportional to millionths part>");
+        }
     }
 }
 
 impl From<PerFederationRoutingFees> for (FederationId, FederationRoutingFees) {
     fn from(val: PerFederationRoutingFees) -> Self {
-        (
-            val.federation_id,
-            FederationRoutingFees {
-                base_msat: val.base_msat,
-                proportional_millionths: val.proportional_millionths,
-            },
-        )
+        (val.federation_id, val.routing_fees)
     }
 }
 
