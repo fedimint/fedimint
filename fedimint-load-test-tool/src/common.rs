@@ -149,10 +149,10 @@ pub async fn build_client(
     client_builder.with_module(WalletClientInit::default());
     client_builder.with_primary_module(1);
     let client_secret =
-        Client::load_or_generate_client_secret(client_builder.db_no_encoders()).await?;
+        Client::load_or_generate_client_secret(client_builder.db_no_decoders()).await?;
     let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
 
-    let client = if !Client::is_initialized(client_builder.db_no_encoders()).await {
+    let client = if !Client::is_initialized(client_builder.db_no_decoders()).await {
         if let Some(invite_code) = &invite_code {
             let client_config = ClientConfig::download_from_invite_code(invite_code).await?;
             client_builder

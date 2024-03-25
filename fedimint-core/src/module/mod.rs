@@ -16,7 +16,6 @@ pub mod registry;
 
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Formatter};
-use std::io::Read;
 use std::marker::{self, PhantomData};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -926,23 +925,9 @@ impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding<T> {
 
         let total_len = u64::consensus_decode(&mut reader, &ModuleDecoderRegistry::default())?;
 
-        let mut reader = reader.take(total_len);
-
         // No recursive module decoding is supported since we give an empty decoder
         // registry to the decode function
-        let val = decoder.decode(
-            &mut reader,
-            module_instance,
-            &ModuleDecoderRegistry::default(),
-        )?;
-
-        if reader.limit() != 0 {
-            return Err(fedimint_core::encoding::DecodeError::new_custom(
-                anyhow::anyhow!("Dyn type did not consume all bytes during decoding"),
-            ));
-        }
-
-        Ok(val)
+        decoder.decode_complete(&mut reader, total_len, module_instance, &Default::default())
     }
 }
 

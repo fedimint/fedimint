@@ -148,7 +148,7 @@ impl IntoDynInstance for TxSubmissionStates {
 }
 
 pub fn tx_submission_sm_decoder() -> Decoder {
-    let mut decoder_builder = Decoder::builder();
+    let mut decoder_builder = Decoder::builder_system();
     decoder_builder.with_decodable_type::<OperationState<TxSubmissionStates>>();
     decoder_builder.build()
 }

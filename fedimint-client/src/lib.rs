@@ -1756,7 +1756,7 @@ pub struct ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
     admin_creds: Option<AdminCreds>,
-    db_no_encoders: Database,
+    db_no_decoders: Database,
     stopped: bool,
 }
 
@@ -1766,7 +1766,7 @@ impl ClientBuilder {
             module_inits: Default::default(),
             primary_module_instance: Default::default(),
             admin_creds: None,
-            db_no_encoders: db,
+            db_no_decoders: db,
             stopped: false,
         }
     }
@@ -1776,7 +1776,7 @@ impl ClientBuilder {
             module_inits: client.module_inits.clone(),
             primary_module_instance: Some(client.primary_module_instance),
             admin_creds: None,
-            db_no_encoders: client.db.with_decoders(Default::default()),
+            db_no_decoders: client.db.with_decoders(Default::default()),
             stopped: false,
         }
     }
@@ -1840,12 +1840,12 @@ impl ClientBuilder {
         Ok(())
     }
 
-    pub fn db_no_encoders(&self) -> &Database {
-        &self.db_no_encoders
+    pub fn db_no_decoders(&self) -> &Database {
+        &self.db_no_decoders
     }
 
     pub async fn load_existing_config(&self) -> anyhow::Result<ClientConfig> {
-        let Some(config) = Client::get_config_from_db(&self.db_no_encoders).await else {
+        let Some(config) = Client::get_config_from_db(&self.db_no_decoders).await else {
             bail!("Client database not initialized")
         };
 
@@ -1862,7 +1862,7 @@ impl ClientBuilder {
         config: ClientConfig,
         init_mode: InitMode,
     ) -> anyhow::Result<ClientHandle> {
-        if Client::is_initialized(&self.db_no_encoders).await {
+        if Client::is_initialized(&self.db_no_decoders).await {
             bail!("Client database already initialized")
         }
 
@@ -1870,7 +1870,7 @@ impl ClientBuilder {
         // transaction to avoid half-initialized client state.
         {
             debug!(target: LOG_CLIENT, "Initializing client database");
-            let mut dbtx = self.db_no_encoders.begin_transaction().await;
+            let mut dbtx = self.db_no_decoders.begin_transaction().await;
             // Save config to DB
             dbtx.insert_new_entry(
                 &ClientConfigKey {
@@ -2024,7 +2024,7 @@ impl ClientBuilder {
     }
 
     pub async fn open(self, root_secret: DerivableSecret) -> anyhow::Result<ClientHandle> {
-        let Some(config) = Client::get_config_from_db(&self.db_no_encoders).await else {
+        let Some(config) = Client::get_config_from_db(&self.db_no_decoders).await else {
             bail!("Client database not initialized")
         };
         let stopped = self.stopped;
@@ -2071,7 +2071,7 @@ impl ClientBuilder {
         let decoders = self.decoders(&config);
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
-        let db = self.db_no_encoders.with_decoders(decoders.clone());
+        let db = self.db_no_decoders.with_decoders(decoders.clone());
         let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
             Self::admin_api_from_id(admin_creds.peer_id, &config)?
         } else {

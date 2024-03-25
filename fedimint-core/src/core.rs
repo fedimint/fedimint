@@ -258,15 +258,20 @@ where
     }
 }
 
-type DecodeFn = for<'a> fn(
-    Box<dyn Read + 'a>,
-    ModuleInstanceId,
-    &ModuleDecoderRegistry,
-) -> Result<Box<dyn Any>, DecodeError>;
+type DecodeFn = Box<
+    dyn for<'a> Fn(
+            Box<dyn Read + 'a>,
+            ModuleInstanceId,
+            &ModuleDecoderRegistry,
+        ) -> Result<Box<dyn Any>, DecodeError>
+        + Send
+        + Sync,
+>;
 
 #[derive(Default)]
 pub struct DecoderBuilder {
     decode_fns: BTreeMap<TypeId, DecodeFn>,
+    transparent: bool,
 }
 
 impl DecoderBuilder {
@@ -291,14 +296,30 @@ impl DecoderBuilder {
     where
         Type: IntoDynInstance + Decodable,
     {
+        let is_transparent_decoder = self.transparent;
         // TODO: enforce that all decoders are for the same module kind (+fix docs
         // after)
-        let decode_fn: DecodeFn = |mut reader, instance, modules| {
-            let typed_val = Type::consensus_decode(&mut reader, modules)?;
-            let dyn_val = typed_val.into_dyn(instance);
-            let any_val: Box<dyn Any> = Box::new(dyn_val);
-            Ok(any_val)
-        };
+        let decode_fn: DecodeFn = Box::new(
+            move |mut reader, instance, decoders: &ModuleDecoderRegistry| {
+                // TODO: Ideally `DynTypes` decoding couldn't ever be nested, so we could just
+                // pass empty `decoders`. But the client context uses nested `DynTypes` in
+                // `DynState`, so we special-case it with a flag.
+                let decoders = if is_transparent_decoder {
+                    Cow::Borrowed(decoders)
+                } else {
+                    Cow::Owned(Default::default())
+                };
+                let typed_val = Type::consensus_decode(&mut reader, &decoders).map_err(|err| {
+                    let err: anyhow::Error = err.into();
+                    DecodeError::new_custom(
+                        err.context(format!("while decoding Dyn type module_id={instance}")),
+                    )
+                })?;
+                let dyn_val = typed_val.into_dyn(instance);
+                let any_val: Box<dyn Any> = Box::new(dyn_val);
+                Ok(any_val)
+            },
+        );
         if self
             .decode_fns
             .insert(TypeId::of::<Type::DynType>(), decode_fn)
@@ -322,15 +343,53 @@ impl Decoder {
         DecoderBuilder::default()
     }
 
+    /// System Dyn-type, don't use.
+    #[doc(hidden)]
+    pub fn builder_system() -> DecoderBuilder {
+        DecoderBuilder {
+            transparent: true,
+            ..DecoderBuilder::default()
+        }
+    }
+
     /// Decodes a specific `DynType` from the `reader` byte stream.
     ///
     /// # Panics
     /// * If no decoder is registered for the `DynType`
-    pub fn decode<DynType: Any>(
+    pub fn decode_complete<DynType: Any>(
         &self,
         reader: &mut dyn Read,
-        instance_id: ModuleInstanceId,
-        modules: &ModuleDecoderRegistry,
+        total_len: u64,
+        module_id: ModuleInstanceId,
+        decoders: &ModuleDecoderRegistry,
+    ) -> Result<DynType, DecodeError> {
+        let mut reader = reader.take(total_len);
+
+        let val = self.decode_partial(&mut reader, module_id, decoders)?;
+        let left = reader.limit();
+
+        if left != 0 {
+            return Err(fedimint_core::encoding::DecodeError::new_custom(
+                anyhow::anyhow!(
+                    "Dyn type did not consume all bytes during decoding; module_id={}; expected={}; left={}; type={}",
+                    module_id,
+                    total_len,
+                    left,
+                    std::any::type_name::<DynType>(),
+                ),
+            ));
+        }
+
+        Ok(val)
+    }
+
+    /// Like [`Self::decode_complete`] but does not verify that all bytes were
+    /// consumed
+    pub fn decode_partial<DynType: Any>(
+        &self,
+        reader: &mut dyn Read,
+        module_id: ModuleInstanceId,
+        decoders: &ModuleDecoderRegistry,
     ) -> Result<DynType, DecodeError> {
         let decode_fn = self
             .decode_fns
@@ -343,7 +402,7 @@ impl Decoder {
                 )
             })
             .expect("Types being decoded must be registered");
-        Ok(*decode_fn(Box::new(reader), instance_id, modules)?
+        Ok(*decode_fn(Box::new(reader), module_id, decoders)?
             .downcast::<DynType>()
             .expect("Decode fn returned wrong type, can't happen due to with_decodable_type"))
     }
