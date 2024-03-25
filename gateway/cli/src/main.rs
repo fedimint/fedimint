@@ -12,8 +12,8 @@ use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
-    LeaveFedPayload, RestorePayload, RoutingFeesWrapper, SetConfigurationPayload, WithdrawPayload,
-    V1_API_ENDPOINT,
+    FederationRoutingFees, LeaveFedPayload, RestorePayload, SetConfigurationPayload,
+    WithdrawPayload, V1_API_ENDPOINT,
 };
 use serde::Serialize;
 
@@ -66,9 +66,6 @@ pub enum Commands {
     ConnectFed {
         /// InviteCode code to connect to the federation
         invite_code: String,
-        /// Routing fees for this federation, format <base msat>,<proportional
-        /// to millionths part>
-        routing_fees: Option<RoutingFeesWrapper>,
     },
     /// Leave a federation
     LeaveFed {
@@ -207,15 +204,9 @@ async fn main() -> anyhow::Result<()> {
 
             print_response(response).await;
         }
-        Commands::ConnectFed {
-            invite_code,
-            routing_fees,
-        } => {
+        Commands::ConnectFed { invite_code } => {
             let response = client()
-                .connect_federation(ConnectFedPayload {
-                    invite_code,
-                    routing_fees,
-                })
+                .connect_federation(ConnectFedPayload { invite_code })
                 .await?;
 
             print_response(response).await;

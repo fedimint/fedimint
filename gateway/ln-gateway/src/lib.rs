@@ -901,16 +901,11 @@ impl Gateway {
                     ))?;
             *max_used_scid = mint_channel_id;
 
-            let fees = payload
-                .routing_fees
-                .map(Into::into)
-                .unwrap_or(gateway_config.routing_fees);
-
             let gw_client_cfg = FederationConfig {
                 invite_code,
                 mint_channel_id,
                 timelock_delta: 10,
-                fees,
+                fees: gateway_config.routing_fees,
             };
 
             let route_hints = Self::fetch_lightning_route_hints(
@@ -931,7 +926,7 @@ impl Gateway {
                 balance_msat: client.get_balance().await,
                 config: client.get_config().clone(),
                 channel_id: Some(mint_channel_id),
-                routing_fees: Some(fees),
+                routing_fees: Some(gateway_config.routing_fees),
             };
 
             self.check_federation_network(&federation_info, gateway_config.network)
