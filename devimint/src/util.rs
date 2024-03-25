@@ -109,6 +109,7 @@ impl Drop for ProcessHandleInner {
     }
 }
 
+#[derive(Clone)]
 pub struct ProcessManager {
     pub globals: super::vars::Global,
 }

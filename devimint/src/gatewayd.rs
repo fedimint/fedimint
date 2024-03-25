@@ -45,11 +45,18 @@ impl Gatewayd {
             )
             .await?;
 
-        Ok(Self {
+        let gatewayd = Self {
             ln: Some(ln),
             _process: process,
             addr,
-        })
+        };
+        poll(
+            "waiting for gateway to be ready to respond to rpc",
+            Duration::from_secs(30),
+            || async { gatewayd.gateway_id().await.map_err(ControlFlow::Continue) },
+        )
+        .await?;
+        Ok(gatewayd)
     }
 
     pub fn set_lightning_node(&mut self, ln_node: LightningNode) {

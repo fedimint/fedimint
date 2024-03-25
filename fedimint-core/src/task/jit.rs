@@ -49,7 +49,7 @@ where
 }
 
 /// A value that initializes eagerly in parallel in a falliable way
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct JitCore<T, E> {
     // on last drop it lets the inner task to know it should stop, because we don't care anymore
     _cancel_tx: sync::mpsc::Sender<()>,
@@ -59,13 +59,25 @@ pub struct JitCore<T, E> {
     #[allow(clippy::type_complexity)]
     val_rx:
         Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Receiver<std::result::Result<T, E>>>>>,
-    val: sync::OnceCell<T>,
+    val: Arc<sync::OnceCell<T>>,
 }
 
+impl<T, E> Clone for JitCore<T, E>
+where
+    T: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            _cancel_tx: self._cancel_tx.clone(),
+            val_rx: self.val_rx.clone(),
+            val: self.val.clone(),
+        }
+    }
+}
 impl<T, E> JitCore<T, E>
 where
     T: MaybeSend + 'static,
-    E: MaybeSend + 'static,
+    E: MaybeSend + 'static + fmt::Display,
 {
     /// Create `JitTry` value, and spawn a future `f` that computes its value
     ///
@@ -103,30 +115,60 @@ where
         Self {
             _cancel_tx: cancel_tx,
             val_rx: Arc::new(Some(val_rx).into()),
-            val: sync::OnceCell::new(),
+            val: sync::OnceCell::new().into(),
         }
     }
 
     /// Get the reference to the value, potentially blocking for the
     /// initialization future to complete
     pub async fn get_try(&self) -> std::result::Result<&T, OneTimeError<E>> {
-        #[allow(clippy::await_holding_lock)]
+        /// Temporarily taken data out of `arc`, that will be put back on drop,
+        /// unless canceled
+        ///
+        /// Used to achieve cancelation safety.
+        struct PutBack<'a, T> {
+            val: Option<T>,
+            arc: &'a Arc<std::sync::Mutex<Option<T>>>,
+        }
+
+        impl<'a, T> PutBack<'a, T> {
+            fn take(arc: &'a Arc<std::sync::Mutex<Option<T>>>) -> Self {
+                let val = arc.lock().expect("lock failed").take();
+                Self { val, arc }
+            }
+
+            fn cancel(mut self) {
+                self.val = None;
+            }
+
+            fn get_mut(&mut self) -> Option<&mut T> {
+                self.val.as_mut()
+            }
+        }
+        impl<'a, T> Drop for PutBack<'a, T> {
+            fn drop(&mut self) {
+                let mut lock = self.arc.lock().expect("lock failed");
+                let take = self.val.take();
+
+                *lock = take;
+            }
+        }
         self.val
             .get_or_try_init(|| async {
-                let val_res = self
-                    .val_rx
-                    // this lock gets locked only once so it's kind of useless other than making
-                    // Rust happy, but the overhead doesn't matter
-                    .try_lock()
-                    .expect("we can't ever have contention here")
-                    .as_mut()
-                    .ok_or_else(|| OneTimeError(None))?
-                    .await
-                    .unwrap_or_else(|_| {
+                let mut recv = PutBack::take(&self.val_rx);
+
+                let val_res = {
+                    let Some(recv) = recv.get_mut() else {
+                        return Err(OneTimeError(None));
+                    };
+                    recv.await.unwrap_or_else(|_| {
                         panic!("Jit value {} panicked", std::any::type_name::<T>())
-                    });
-                self.val_rx.lock().expect("locking can't fail").take();
-                val_res.map_err(|e| OneTimeError(Some(e)))
+                    })
+                };
+
+                recv.cancel();
+
+                val_res.map_err(|err| OneTimeError(Some(err)))
             })
             .await
     }
@@ -163,6 +205,8 @@ mod tests {
         });
 
         assert_eq!(*v.get().await, 3);
+        assert_eq!(*v.get().await, 3);
+        assert_eq!(*v.clone().get().await, 3);
     }
 
     #[test_log::test(tokio::test)]
@@ -173,6 +217,8 @@ mod tests {
         });
 
         assert_eq!(*v.get_try().await.expect("ok"), 3);
+        assert_eq!(*v.get_try().await.expect("ok"), 3);
+        assert_eq!(*v.clone().get_try().await.expect("ok"), 3);
     }
 
     #[test_log::test(tokio::test)]
@@ -185,5 +231,7 @@ mod tests {
         });
 
         assert!(v.get_try().await.is_err());
+        assert!(v.get_try().await.is_err());
+        assert!(v.clone().get_try().await.is_err());
     }
 }
