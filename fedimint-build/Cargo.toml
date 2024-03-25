@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-build"
-version = "0.3.0-rc.2"
+version = "0.3.0-rc.3"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "Fedimint build script utilities for including git version information in builds"
