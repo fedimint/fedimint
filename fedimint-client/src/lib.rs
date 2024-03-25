@@ -880,6 +880,10 @@ impl Client {
         Some(self.modules.get(instance)?.as_ref())
     }
 
+    pub fn has_module(&self, instance: ModuleInstanceId) -> bool {
+        self.modules.get(instance).is_some()
+    }
+
     /// Determines if a transaction is underfunded, overfunded or balanced
     ///
     /// # Panics

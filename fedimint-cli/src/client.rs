@@ -10,7 +10,7 @@ use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use fedimint_client::backup::Metadata;
 use fedimint_client::ClientHandleArc;
-use fedimint_core::config::FederationId;
+use fedimint_core::config::{ClientModuleConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::time::now;
@@ -41,6 +41,19 @@ use crate::{metadata_from_clap_cli, LnInvoiceResponse};
 pub enum ModuleSelector {
     Id(ModuleInstanceId),
     Kind(ModuleKind),
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub enum ModuleStatus {
+    Active,
+    UnsupportedByClient,
+}
+
+#[derive(Serialize)]
+struct ModuleInfo {
+    kind: ModuleKind,
+    id: u16,
+    status: ModuleStatus,
 }
 
 impl FromStr for ModuleSelector {
@@ -171,7 +184,7 @@ pub enum ClientCmd {
     #[command(disable_help_flag = true)]
     Module {
         /// Module selector (either module id or module kind)
-        module: ModuleSelector,
+        module: Option<ModuleSelector>,
         #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<ffi::OsString>,
     },
@@ -584,19 +597,41 @@ pub async fn handle_command(
         ClientCmd::DiscoverVersion => {
             Ok(json!({ "versions": client.discover_common_api_version(None).await? }))
         }
-        ClientCmd::Module { module, args } => {
-            let module_instance_id = match module {
-                ModuleSelector::Id(id) => id,
-                ModuleSelector::Kind(kind) => client
-                    .get_first_instance(&kind)
-                    .context("No module with this kind found")?,
-            };
-            client
-                .get_module_client_dyn(module_instance_id)
-                .context("Module not found")?
-                .handle_cli_command(&args)
-                .await
-        }
+        ClientCmd::Module { module, args } => match module {
+            Some(module) => {
+                let module_instance_id = match module {
+                    ModuleSelector::Id(id) => id,
+                    ModuleSelector::Kind(kind) => client
+                        .get_first_instance(&kind)
+                        .context("No module with this kind found")?,
+                };
+
+                client
+                    .get_module_client_dyn(module_instance_id)
+                    .context("Module not found")?
+                    .handle_cli_command(&args)
+                    .await
+            }
+            None => {
+                let module_list: Vec<ModuleInfo> = client
+                    .get_config()
+                    .modules
+                    .iter()
+                    .map(|(id, ClientModuleConfig { kind, .. })| ModuleInfo {
+                        kind: kind.clone(),
+                        id: *id,
+                        status: if client.has_module(*id) {
+                            ModuleStatus::Active
+                        } else {
+                            ModuleStatus::UnsupportedByClient
+                        },
+                    })
+                    .collect();
+                Ok(json!({
+                    "list": module_list,
+                }))
+            }
+        },
         ClientCmd::Config => {
             let config = client.get_config_json();
             Ok(serde_json::to_value(config).expect("Client config is serializable"))
