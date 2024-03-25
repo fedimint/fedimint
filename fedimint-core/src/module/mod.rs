@@ -488,7 +488,7 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         peer_num: NumPeers,
         cfg: ServerModuleConfig,
         db: Database,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
         our_peer_id: PeerId,
     ) -> anyhow::Result<DynServerModule>;
 
@@ -682,7 +682,7 @@ where
         num_peers: NumPeers,
         cfg: ServerModuleConfig,
         db: Database,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
         our_peer_id: PeerId,
     ) -> anyhow::Result<DynServerModule> {
         <Self as ServerModuleInit>::init(

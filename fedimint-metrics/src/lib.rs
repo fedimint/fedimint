@@ -46,8 +46,8 @@ async fn get_metrics() -> (StatusCode, String) {
 }
 
 pub async fn run_api_server(
-    bind_address: &SocketAddr,
-    task_group: &mut TaskGroup,
+    bind_address: SocketAddr,
+    task_group: TaskGroup,
 ) -> anyhow::Result<TaskShutdownToken> {
     let app = Router::new().route("/metrics", get(get_metrics));
     let listener = TcpListener::bind(bind_address).await?;
