@@ -936,9 +936,14 @@ mod tests {
         settings: ConfigGenSettings,
         amount: Amount,
         dir: PathBuf,
+        module_inits: ServerModuleInitRegistry,
     }
 
     impl TestConfigApi {
+        pub fn module_inits(&self) -> &ServerModuleInitRegistry {
+            &self.module_inits
+        }
+
         /// Creates a new test API taking up a port, with P2P endpoint on the
         /// next port
         async fn new(
@@ -955,6 +960,7 @@ mod tests {
             let p2p_url = format!("fedimint://127.0.0.1:{}", port + 1)
                 .parse()
                 .expect("parses");
+            let module_inits = ServerModuleInitRegistry::from_iter([DummyInit.into()]);
             let mut modules = ServerModuleConfigGenParamsRegistry::default();
             modules.attach_config_gen_params_by_id(0, DummyInit::kind(), DummyGenParams::default());
 
@@ -996,6 +1002,7 @@ mod tests {
                     settings,
                     amount: Amount::from_sats(port as u64),
                     dir,
+                    module_inits,
                 },
                 api,
             )
@@ -1124,7 +1131,7 @@ mod tests {
         // let mut join_handles = vec![];
         let mut apis = vec![];
         let mut followers = vec![];
-        let (mut leader, api) = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
+        let (mut test_config, api) = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
 
         apis.push(api);
 
@@ -1135,12 +1142,17 @@ mod tests {
             followers.push(follower);
         }
 
+        let module_inits = test_config.module_inits().clone();
         // Run the Fedimint servers and test concurrently
         spawn("Fedimint server apis", async move {
-            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))).await;
+            join_all(
+                apis.iter_mut()
+                    .map(|fedimint_server| fedimint_server.run(&module_inits, TaskGroup::new())),
+            )
+            .await;
         });
 
-        leader = validate_leader_setup(leader).await;
+        test_config = validate_leader_setup(test_config).await;
 
         // Setup followers and send connection info
         for follower in &mut followers {
@@ -1153,7 +1165,7 @@ mod tests {
                 .set_password(follower.auth.clone())
                 .await
                 .unwrap();
-            let leader_url = Some(leader.settings.api_url.clone());
+            let leader_url = Some(test_config.settings.api_url.clone());
             follower.set_connections(&leader_url).await.unwrap();
             follower.name = format!("{}_", follower.name);
             follower.set_connections(&leader_url).await.unwrap();
@@ -1161,7 +1173,7 @@ mod tests {
         }
 
         // Validate we can do a full fedimint setup
-        validate_full_setup(leader, followers).await;
+        validate_full_setup(test_config, followers).await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1176,9 +1188,10 @@ mod tests {
         // let mut join_handles = vec![];
         let mut apis = vec![];
         let mut followers = vec![];
-        let (mut leader, api) = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
+        let (mut test_config, fedimint_server) =
+            TestConfigApi::new(base_port, 0, data_dir.clone()).await;
 
-        apis.push(api);
+        apis.push(fedimint_server);
 
         for i in 1..PEER_NUM {
             let port = base_port + (i * PORTS_PER_PEER);
@@ -1187,12 +1200,17 @@ mod tests {
             followers.push(follower);
         }
 
+        let module_inits = test_config.module_inits().clone();
         // Run the Fedimint servers and test concurrently
         spawn("Fedimint server apis", async move {
-            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))).await;
+            join_all(
+                apis.iter_mut()
+                    .map(|api| api.run(&module_inits, TaskGroup::new())),
+            )
+            .await;
         });
 
-        leader = validate_leader_setup(leader).await;
+        test_config = validate_leader_setup(test_config).await;
 
         // Setup followers and send connection info
         for follower in &mut followers {
@@ -1205,20 +1223,20 @@ mod tests {
                 .set_password(follower.auth.clone())
                 .await
                 .unwrap();
-            let leader_url = Some(leader.settings.api_url.clone());
+            let leader_url = Some(test_config.settings.api_url.clone());
             follower.set_connections(&leader_url).await.unwrap();
             follower.name = format!("{}_", follower.name);
             follower.set_connections(&leader_url).await.unwrap();
             follower.set_config_gen_params().await;
         }
-        leader
+        test_config
             .wait_status(ServerStatus::SharingConfigGenParams)
             .await;
 
         // Leader can trigger a setup restart
-        leader
+        test_config
             .client
-            .restart_federation_setup(leader.auth.clone())
+            .restart_federation_setup(test_config.auth.clone())
             .await
             .unwrap();
 
@@ -1232,14 +1250,14 @@ mod tests {
         }
 
         // Ensure all servers have restarted
-        leader
+        test_config
             .wait_status_preconfig(ServerStatus::SetupRestarted, &followers)
             .await;
-        leader
+        test_config
             .wait_status_preconfig(ServerStatus::AwaitingPassword, &followers)
             .await;
 
-        leader = validate_leader_setup(leader).await;
+        test_config = validate_leader_setup(test_config).await;
 
         // Setup followers and send connection info
         for follower in &mut followers {
@@ -1252,13 +1270,13 @@ mod tests {
                 .set_password(follower.auth.clone())
                 .await
                 .unwrap();
-            let leader_url = Some(leader.settings.api_url.clone());
+            let leader_url = Some(test_config.settings.api_url.clone());
             follower.set_connections(&leader_url).await.unwrap();
             follower.set_config_gen_params().await;
         }
 
         // Validate we can do a full fedimint setup after a restart
-        validate_full_setup(leader, followers).await;
+        validate_full_setup(test_config, followers).await;
     }
 
     // Validate steps when leader initiates fedimint setup
