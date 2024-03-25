@@ -130,7 +130,7 @@ impl FromStr for RoutingFeesWrapper {
 pub struct SetConfigurationPayload {
     pub password: Option<String>,
     pub num_route_hints: Option<u32>,
-    pub routing_fees: Option<String>,
+    pub default_routing_fees: Option<String>,
     pub network: Option<Network>,
     pub per_federation_routing_fees: Option<Vec<(FederationId, RoutingFeesWrapper)>>,
 }

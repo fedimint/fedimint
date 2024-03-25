@@ -521,7 +521,7 @@ impl Gateway {
                                                 password: None,
                                                 network: Some(lightning_network),
                                                 num_route_hints: None,
-                                                routing_fees: None,
+                                                default_routing_fees: None,
                                                 per_federation_routing_fees: None,
                                             }).await.expect("Failed to set gateway configuration");
                                             continue;
@@ -1029,7 +1029,7 @@ impl Gateway {
             password,
             network,
             num_route_hints,
-            routing_fees,
+            default_routing_fees: routing_fees,
             per_federation_routing_fees,
         }: SetConfigurationPayload,
     ) -> Result<()> {

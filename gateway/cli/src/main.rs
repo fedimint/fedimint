@@ -95,6 +95,7 @@ pub enum Commands {
         #[clap(long)]
         num_route_hints: Option<u32>,
 
+        /// Default routing fee for all federations
         #[clap(long)]
         routing_fees: Option<String>,
 
@@ -252,8 +253,8 @@ async fn main() -> anyhow::Result<()> {
                 .set_configuration(SetConfigurationPayload {
                     password,
                     num_route_hints,
-                    routing_fees,
                     network: network.map(bitcoin30_to_bitcoin29_network),
+                    default_routing_fees: routing_fees,
                     per_federation_routing_fees,
                 })
                 .await?;

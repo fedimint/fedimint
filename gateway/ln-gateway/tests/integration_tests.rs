@@ -258,7 +258,7 @@ async fn test_can_change_routing_fees() -> anyhow::Result<()> {
             let set_configuration_payload = SetConfigurationPayload {
                 password: None,
                 num_route_hints: None,
-                routing_fees: Some(fee.clone()),
+                default_routing_fees: Some(fee.clone()),
                 network: None,
                 per_federation_routing_fees: None,
             };
@@ -316,7 +316,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
             let set_configuration_payload = SetConfigurationPayload {
                 password: None,
                 num_route_hints: None,
-                routing_fees: Some(fee.clone()),
+                default_routing_fees: Some(fee.clone()),
                 network: None,
                 per_federation_routing_fees: None,
             };
@@ -1122,7 +1122,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     let set_configuration_payload = SetConfigurationPayload {
         password: Some(test_password.clone()),
         num_route_hints: None,
-        routing_fees: None,
+        default_routing_fees: None,
         network: None,
         per_federation_routing_fees: None,
     };
@@ -1169,7 +1169,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     let set_configuration_payload = SetConfigurationPayload {
         password: Some(new_password.clone()),
         num_route_hints: Some(1),
-        routing_fees: Some(fee.clone()),
+        default_routing_fees: Some(fee.clone()),
         network: None,
         per_federation_routing_fees: None,
     };
@@ -1199,7 +1199,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     let set_configuration_payload = SetConfigurationPayload {
         password: Some(new_password.clone()),
         num_route_hints: None,
-        routing_fees: None,
+        default_routing_fees: None,
         network: Some(DEFAULT_NETWORK), // Same as connected lightning node's network
         per_federation_routing_fees: None,
     };
@@ -1213,7 +1213,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     let set_configuration_payload = SetConfigurationPayload {
         password: Some(new_password.clone()),
         num_route_hints: None,
-        routing_fees: None,
+        default_routing_fees: None,
         network: Some(Network::Testnet), // Different from connected lightning node's network
         per_federation_routing_fees: None,
     };
