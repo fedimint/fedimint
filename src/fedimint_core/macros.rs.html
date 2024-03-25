@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/macros.rs`."><title>macros.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/macros.rs`."><title>macros.rs - source</title><script> if (window.location.protocol !== "file:") document.write(`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2">`)</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (0ad927c0c 2024-03-21)" data-channel="nightly" data-search-js="search-42d8da7a6b9792c2.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-12cf3b4f4f9dc36d.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
             <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
     <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_core/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
@@ -776,7 +776,7 @@
 /// it easy to access the encapsulated operations, while hiding
 /// the boxing details.
 </span><span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>dyn_newtype_define {
+</span><span class="macro">macro_rules!</span> dyn_newtype_define {
     (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident&lt;<span class="macro-nonterminal">$lifetime</span>:lifetime&gt;(Box&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
@@ -814,7 +814,7 @@
 }
 
 <span class="attr">#[<span class="macro-nonterminal">macro_export</span>]
-</span><span class="macro">macro_rules! </span>_dyn_newtype_define_inner {
+</span><span class="macro">macro_rules!</span> _dyn_newtype_define_inner {
     (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident(<span class="macro-nonterminal">$container</span>:ident&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
@@ -879,7 +879,7 @@
 <span class="doccomment">/// Implements the `Display` trait for dyn newtypes whose traits implement
 /// `Display`
 </span><span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>dyn_newtype_display_passthrough {
+</span><span class="macro">macro_rules!</span> dyn_newtype_display_passthrough {
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
         <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span><span class="macro-nonterminal">$newtype </span>{
             <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
@@ -892,7 +892,7 @@
 <span class="doccomment">/// Define a "module plugin dyn-newtype" which is like a standard "dyn newtype",
 /// but with associated "module_instance_id".
 </span><span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>module_plugin_dyn_newtype_define{
+</span><span class="macro">macro_rules!</span> module_plugin_dyn_newtype_define{
     (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident&lt;<span class="macro-nonterminal">$lifetime</span>:lifetime&gt;(Box&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
@@ -930,7 +930,7 @@
 }
 
 <span class="attr">#[<span class="macro-nonterminal">macro_export</span>]
-</span><span class="macro">macro_rules! </span>_dyn_newtype_define_with_instance_id_inner {
+</span><span class="macro">macro_rules!</span> _dyn_newtype_define_with_instance_id_inner {
     (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident(<span class="macro-nonterminal">$container</span>:ident&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
@@ -1002,7 +1002,7 @@
 }
 
 <span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>_dyn_newtype_impl_deref_mut {
+</span><span class="macro">macro_rules!</span> _dyn_newtype_impl_deref_mut {
     (<span class="macro-nonterminal">$name</span>:ident&lt;<span class="macro-nonterminal">$lifetime</span>:lifetime&gt;) =&gt; {
         <span class="kw">impl</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; std::ops::DerefMut <span class="kw">for </span><span class="macro-nonterminal">$name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; {
             <span class="kw">fn </span>deref_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
@@ -1034,7 +1034,7 @@
 /// to just use standard `#[derive(Clone)]` to clone
 /// the `Arc` itself.
 </span><span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>dyn_newtype_impl_dyn_clone_passthrough {
+</span><span class="macro">macro_rules!</span> dyn_newtype_impl_dyn_clone_passthrough {
     (<span class="macro-nonterminal">$name</span>:ident) =&gt; {
         <span class="kw">impl </span>Clone <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
@@ -1045,7 +1045,7 @@
 }
 
 <span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>module_plugin_dyn_newtype_clone_passthrough {
+</span><span class="macro">macro_rules!</span> module_plugin_dyn_newtype_clone_passthrough {
     (<span class="macro-nonterminal">$name</span>:ident) =&gt; {
         <span class="kw">impl </span>Clone <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
@@ -1060,7 +1060,7 @@
 /// "Module dyn newtype" is just a "dyn newtype" used by general purpose
 /// Fedimint code to abstract away details of mint modules.
 </span><span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>module_plugin_dyn_newtype_encode_decode {
+</span><span class="macro">macro_rules!</span> module_plugin_dyn_newtype_encode_decode {
     (<span class="macro-nonterminal">$name</span>:ident) =&gt; {
         <span class="kw">impl </span>Encodable <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(
@@ -1142,7 +1142,7 @@
 /// "module dyn newtypes", erasing the exact type and used in a common
 /// Fedimint code.
 </span><span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>module_plugin_static_trait_define{
+</span><span class="macro">macro_rules!</span> module_plugin_static_trait_define{
     (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$dyn_newtype</span>:ident, <span class="macro-nonterminal">$static_trait</span>:ident, <span class="macro-nonterminal">$dyn_trait</span>:ident, { $(<span class="macro-nonterminal">$extra_methods</span>:tt)* }, { $(<span class="macro-nonterminal">$extra_impls</span>:tt)* }
     ) =&gt; {
@@ -1209,7 +1209,7 @@
 /// for `DynUnknown`. The macro is getting gnarly, so seems easier to
 /// copy-paste-modify, than pile up conditional argument.
 </span><span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>module_plugin_static_trait_define_config{
+</span><span class="macro">macro_rules!</span> module_plugin_static_trait_define_config{
     (   $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$dyn_newtype</span>:ident, <span class="macro-nonterminal">$static_trait</span>:ident, <span class="macro-nonterminal">$dyn_trait</span>:ident, { $(<span class="macro-nonterminal">$extra_methods</span>:tt)* }, { $(<span class="macro-nonterminal">$extra_impls</span>:tt)* }, { $(<span class="macro-nonterminal">$extra_impls_unknown</span>:tt)* }
     ) =&gt; {
@@ -1274,7 +1274,7 @@
 <span class="doccomment">/// Implements the necessary traits for all configuration related types of a
 /// `FederationServer` module.
 </span><span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>plugin_types_trait_impl_config {
+</span><span class="macro">macro_rules!</span> plugin_types_trait_impl_config {
     (<span class="macro-nonterminal">$common_gen</span>:ty, <span class="macro-nonterminal">$gen</span>:ty, <span class="macro-nonterminal">$gen_local</span>:ty, <span class="macro-nonterminal">$gen_consensus</span>:ty, <span class="macro-nonterminal">$cfg</span>:ty, <span class="macro-nonterminal">$cfg_local</span>:ty, <span class="macro-nonterminal">$cfg_private</span>:ty, <span class="macro-nonterminal">$cfg_consensus</span>:ty, <span class="macro-nonterminal">$cfg_client</span>:ty) =&gt; {
         <span class="kw">impl </span>fedimint_core::config::ModuleInitParams <span class="kw">for </span><span class="macro-nonterminal">$gen </span>{
             <span class="kw">type </span>Local = <span class="macro-nonterminal">$gen_local</span>;
@@ -1331,7 +1331,7 @@
 <span class="doccomment">/// Implements the necessary traits for all associated types of a
 /// `FederationServer` module.
 </span><span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>plugin_types_trait_impl_common {
+</span><span class="macro">macro_rules!</span> plugin_types_trait_impl_common {
     (<span class="macro-nonterminal">$types</span>:ty, <span class="macro-nonterminal">$client_config</span>:ty, <span class="macro-nonterminal">$input</span>:ty, <span class="macro-nonterminal">$output</span>:ty, <span class="macro-nonterminal">$outcome</span>:ty, <span class="macro-nonterminal">$ci</span>:ty, <span class="macro-nonterminal">$input_error</span>:ty, <span class="macro-nonterminal">$output_error</span>:ty) =&gt; {
         <span class="kw">impl </span>fedimint_core::module::ModuleCommon <span class="kw">for </span><span class="macro-nonterminal">$types </span>{
             <span class="kw">type </span>ClientConfig = <span class="macro-nonterminal">$client_config</span>;
@@ -1416,7 +1416,7 @@
 }
 
 <span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>erased_eq_no_instance_id {
+</span><span class="macro">macro_rules!</span> erased_eq_no_instance_id {
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
         <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$newtype</span>) -&gt; bool {
             <span class="kw">let </span>other: <span class="kw-2">&amp;</span><span class="self">Self </span>= other
@@ -1430,7 +1430,7 @@
 }
 
 <span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>module_plugin_dyn_newtype_eq_passthrough {
+</span><span class="macro">macro_rules!</span> module_plugin_dyn_newtype_eq_passthrough {
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
         <span class="kw">impl </span>PartialEq <span class="kw">for </span><span class="macro-nonterminal">$newtype </span>{
             <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
@@ -1446,7 +1446,7 @@
 }
 
 <span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>module_plugin_dyn_newtype_display_passthrough {
+</span><span class="macro">macro_rules!</span> module_plugin_dyn_newtype_display_passthrough {
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
         <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span><span class="macro-nonterminal">$newtype </span>{
             <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
@@ -1467,7 +1467,7 @@
 /// changes, most often other ways of introducing new functionality should be
 /// preferred (e.g. new module versions, pure client-side changes, …).
 </span><span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>extensible_associated_module_type {
+</span><span class="macro">macro_rules!</span> extensible_associated_module_type {
     (<span class="macro-nonterminal">$name</span>:ident, <span class="macro-nonterminal">$name_v0</span>:ident, <span class="macro-nonterminal">$error</span>:ident) =&gt; {
         <span class="attr">#[derive(
             Debug,

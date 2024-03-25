@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-derive/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_derive" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (0ecbd0605 2024-02-25)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c37d3936c59ababd.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-derive/src/lib.rs`."><title>lib.rs - source</title><script> if (window.location.protocol !== "file:") document.write(`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2">`)</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_derive" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (0ad927c0c 2024-03-21)" data-channel="nightly" data-search-js="search-42d8da7a6b9792c2.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-12cf3b4f4f9dc36d.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
             <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
     <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_derive/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
@@ -423,7 +423,7 @@
     };
     <span class="kw">let </span>(impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    <span class="kw">let </span>output = <span class="macro">quote! </span>{
+    <span class="kw">let </span>output = <span class="macro">quote!</span> {
         <span class="kw">impl </span>#impl_generics ::fedimint_core::encoding::Encodable <span class="kw">for </span>#ident #ty_generics #where_clause {
             <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
                 #encode_inner
@@ -443,7 +443,7 @@
             .filter(|(<span class="kw">_</span>, f)| do_not_ignore(f))
             .map(|(idx, <span class="kw">_</span>)| Index::from(idx))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="macro">quote! </span>{
+        <span class="macro">quote!</span> {
             <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
             #(len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.#field_names, writer)<span class="question-mark">?</span>;)*
             <span class="prelude-val">Ok</span>(len)
@@ -455,7 +455,7 @@
             .filter(|f| do_not_ignore(f))
             .map(|field| field.ident.clone().unwrap())
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="macro">quote! </span>{
+        <span class="macro">quote!</span> {
             <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
             #(len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.#field_names, writer)<span class="question-mark">?</span>;)*
             <span class="prelude-val">Ok</span>(len)
@@ -465,7 +465,7 @@
 
 <span class="kw">fn </span>derive_enum_encode(ident: <span class="kw-2">&amp;</span>Ident, variants: <span class="kw-2">&amp;</span>Punctuated&lt;Variant, Comma&gt;) -&gt; TokenStream2 {
     <span class="kw">if </span>variants.is_empty() {
-        <span class="kw">return </span><span class="macro">quote! </span>{
+        <span class="kw">return </span><span class="macro">quote!</span> {
             <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{}
         };
     }
@@ -487,7 +487,7 @@
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
                 <span class="kw">let </span>variant_encode_block =
                     derive_enum_variant_encode_block(variant_idx, <span class="kw-2">&amp;</span>variant_fields);
-                <span class="macro">quote! </span>{
+                <span class="macro">quote!</span> {
                     #ident::#variant_ident(#(#variant_fields,)<span class="kw-2">*</span>) =&gt; {
                         #variant_encode_block
                     }
@@ -501,7 +501,7 @@
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
                 <span class="kw">let </span>variant_encode_block =
                     derive_enum_variant_encode_block(variant_idx, <span class="kw-2">&amp;</span>variant_fields);
-                <span class="macro">quote! </span>{
+                <span class="macro">quote!</span> {
                     #ident::#variant_ident { #(#variant_fields,)<span class="kw-2">*</span>} =&gt; {
                         #variant_encode_block
                     }
@@ -513,7 +513,7 @@
         .iter()
         .find(|variant| is_default_variant_enforce_valid(variant))
         .map(|_variant| {
-            <span class="macro">quote! </span>{
+            <span class="macro">quote!</span> {
                 #ident::Default { variant, bytes } =&gt; {
                     len += ::fedimint_core::encoding::Encodable::consensus_encode(variant, writer)<span class="question-mark">?</span>;
                     len += ::fedimint_core::encoding::Encodable::consensus_encode(bytes, writer)<span class="question-mark">?</span>;
@@ -523,7 +523,7 @@
 
     <span class="kw">let </span>match_arms = non_default_match_arms.chain(default_match_arm);
 
-    <span class="macro">quote! </span>{
+    <span class="macro">quote!</span> {
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
         <span class="kw">match </span><span class="self">self </span>{
             #(#match_arms)*
@@ -533,7 +533,7 @@
 }
 
 <span class="kw">fn </span>derive_enum_variant_encode_block(idx: usize, fields: <span class="kw-2">&amp;</span>[Ident]) -&gt; TokenStream2 {
-    <span class="macro">quote! </span>{
+    <span class="macro">quote!</span> {
         len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span>(#idx <span class="kw">as </span>u64), writer)<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::&lt;u8&gt;::new();
@@ -553,7 +553,7 @@
         syn::Data::Union(<span class="kw">_</span>) =&gt; error(<span class="kw-2">&amp;</span>ident, <span class="string">"Encodable can't be derived for unions"</span>),
     };
 
-    <span class="kw">let </span>output = <span class="macro">quote! </span>{
+    <span class="kw">let </span>output = <span class="macro">quote!</span> {
         <span class="kw">impl </span>::fedimint_core::encoding::Decodable <span class="kw">for </span>#ident {
             <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_core::encoding::DecodeError&gt; {
                 #decode_inner
@@ -575,16 +575,16 @@
 }
 
 <span class="kw">fn </span>derive_struct_decode(ident: <span class="kw-2">&amp;</span>Ident, fields: <span class="kw-2">&amp;</span>Fields) -&gt; TokenStream2 {
-    <span class="kw">let </span>decode_block = derive_tuple_or_named_decode_block(<span class="macro">quote! </span>{ #ident }, <span class="macro">quote! </span>{ d }, fields);
+    <span class="kw">let </span>decode_block = derive_tuple_or_named_decode_block(<span class="macro">quote!</span> { #ident }, <span class="macro">quote!</span> { d }, fields);
 
-    <span class="macro">quote! </span>{
+    <span class="macro">quote!</span> {
         <span class="prelude-val">Ok</span>(#decode_block)
     }
 }
 
 <span class="kw">fn </span>derive_enum_decode(ident: <span class="kw-2">&amp;</span>Ident, variants: <span class="kw-2">&amp;</span>Punctuated&lt;Variant, Comma&gt;) -&gt; TokenStream2 {
     <span class="kw">if </span>variants.is_empty() {
-        <span class="kw">return </span><span class="macro">quote! </span>{
+        <span class="kw">return </span><span class="macro">quote!</span> {
             <span class="prelude-val">Err</span>(::fedimint_core::encoding::DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Enum without variants can't be instantiated"</span>)))
         };
     }
@@ -596,13 +596,13 @@
             <span class="kw">let </span>variant_idx = variant_idx <span class="kw">as </span>u64;
             <span class="kw">let </span>variant_ident = variant.ident.clone();
             <span class="kw">let </span>decode_block = derive_tuple_or_named_decode_block(
-                <span class="macro">quote! </span>{ #ident::#variant_ident },
-                <span class="macro">quote! </span>{ <span class="kw-2">&amp;mut </span>cursor },
+                <span class="macro">quote!</span> { #ident::#variant_ident },
+                <span class="macro">quote!</span> { <span class="kw-2">&amp;mut </span>cursor },
                 <span class="kw-2">&amp;</span>variant.fields,
             );
 
             <span class="comment">// FIXME: make sure we read all bytes
-            </span><span class="macro">quote! </span>{
+            </span><span class="macro">quote!</span> {
                 #variant_idx =&gt; {
                     <span class="kw">let </span>bytes: Vec&lt;u8&gt; = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
                     <span class="kw">let </span><span class="kw-2">mut </span>cursor = std::io::Cursor::new(<span class="kw-2">&amp;</span>bytes);
@@ -623,7 +623,7 @@
         });
 
     <span class="kw">let </span>default_match_arm = <span class="kw">if </span>variants.iter().any(is_default_variant_enforce_valid) {
-        <span class="macro">quote! </span>{
+        <span class="macro">quote!</span> {
             variant =&gt; {
                 <span class="kw">let </span>bytes: Vec&lt;u8&gt; = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
                 #ident::Default {
@@ -633,14 +633,14 @@
             }
         }
     } <span class="kw">else </span>{
-        <span class="macro">quote! </span>{
+        <span class="macro">quote!</span> {
             variant =&gt; {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(::fedimint_core::encoding::DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Invalid enum variant {} while decoding {}"</span>, variant, <span class="macro">stringify!</span>(#ident))));
             }
         }
     };
 
-    <span class="macro">quote! </span>{
+    <span class="macro">quote!</span> {
         <span class="kw">let </span>variant = &lt;u64 <span class="kw">as </span>::fedimint_core::encoding::Decodable&gt;::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
         <span class="kw">let </span>decoded = <span class="kw">match </span>variant {
             #(#non_default_match_arms)*
@@ -681,7 +681,7 @@
         .enumerate()
         .map(|(idx, <span class="kw">_</span>)| <span class="macro">format_ident!</span>(<span class="string">"field_{}"</span>, idx))
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-    <span class="macro">quote! </span>{
+    <span class="macro">quote!</span> {
         {
             #(<span class="kw">let </span>#field_names = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(#reader, modules)<span class="question-mark">?</span>;)*
             #constructor(#(#field_names,)<span class="kw-2">*</span>)
@@ -699,7 +699,7 @@
         .filter(|f| panic_if_ignored(f))
         .map(|field| field.ident.clone().unwrap())
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-    <span class="macro">quote! </span>{
+    <span class="macro">quote!</span> {
         {
             #(<span class="kw">let </span>#variant_fields = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(#reader, modules)<span class="question-mark">?</span>;)*
             #constructor{
