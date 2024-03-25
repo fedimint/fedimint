@@ -1077,7 +1077,7 @@
 
     <span class="kw">pub async fn </span>await_block_sync(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
         <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>block_count = <span class="self">self</span>.bitcoind.get_block_count()<span class="question-mark">?</span>;
+        <span class="kw">let </span>block_count = <span class="self">self</span>.bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>expected = block_count.saturating_sub(finality_delay.into());
         <span class="macro">cmd!</span>(<span class="self">self</span>.client, <span class="string">"dev"</span>, <span class="string">"wait-block-count"</span>, expected)
             .run()

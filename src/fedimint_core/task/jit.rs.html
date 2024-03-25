@@ -189,6 +189,54 @@
 <a href="#187" id="187">187</a>
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::sync::Arc;
@@ -240,7 +288,7 @@
 }
 
 <span class="doccomment">/// A value that initializes eagerly in parallel in a falliable way
-</span><span class="attr">#[derive(Debug, Clone)]
+</span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>JitCore&lt;T, E&gt; {
     <span class="comment">// on last drop it lets the inner task to know it should stop, because we don't care anymore
     </span>_cancel_tx: sync::mpsc::Sender&lt;()&gt;,
@@ -250,13 +298,25 @@
     </span><span class="attr">#[allow(clippy::type_complexity)]
     </span>val_rx:
         Arc&lt;std::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;tokio::sync::oneshot::Receiver&lt;std::result::Result&lt;T, E&gt;&gt;&gt;&gt;&gt;,
-    val: sync::OnceCell&lt;T&gt;,
+    val: Arc&lt;sync::OnceCell&lt;T&gt;&gt;,
 }
 
+<span class="kw">impl</span>&lt;T, E&gt; Clone <span class="kw">for </span>JitCore&lt;T, E&gt;
+<span class="kw">where
+    </span>T: Clone,
+{
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            _cancel_tx: <span class="self">self</span>._cancel_tx.clone(),
+            val_rx: <span class="self">self</span>.val_rx.clone(),
+            val: <span class="self">self</span>.val.clone(),
+        }
+    }
+}
 <span class="kw">impl</span>&lt;T, E&gt; JitCore&lt;T, E&gt;
 <span class="kw">where
     </span>T: MaybeSend + <span class="lifetime">'static</span>,
-    E: MaybeSend + <span class="lifetime">'static</span>,
+    E: MaybeSend + <span class="lifetime">'static </span>+ fmt::Display,
 {
     <span class="doccomment">/// Create `JitTry` value, and spawn a future `f` that computes its value
     ///
@@ -294,30 +354,60 @@
         <span class="self">Self </span>{
             _cancel_tx: cancel_tx,
             val_rx: Arc::new(<span class="prelude-val">Some</span>(val_rx).into()),
-            val: sync::OnceCell::new(),
+            val: sync::OnceCell::new().into(),
         }
     }
 
     <span class="doccomment">/// Get the reference to the value, potentially blocking for the
     /// initialization future to complete
     </span><span class="kw">pub async fn </span>get_try(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; std::result::Result&lt;<span class="kw-2">&amp;</span>T, OneTimeError&lt;E&gt;&gt; {
-        <span class="attr">#[allow(clippy::await_holding_lock)]
-        </span><span class="self">self</span>.val
+        <span class="doccomment">/// Temporarily taken data out of `arc`, that will be put back on drop,
+        /// unless canceled
+        ///
+        /// Used to achieve cancelation safety.
+        </span><span class="kw">struct </span>PutBack&lt;<span class="lifetime">'a</span>, T&gt; {
+            val: <span class="prelude-ty">Option</span>&lt;T&gt;,
+            arc: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Arc&lt;std::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;T&gt;&gt;&gt;,
+        }
+
+        <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T&gt; PutBack&lt;<span class="lifetime">'a</span>, T&gt; {
+            <span class="kw">fn </span>take(arc: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Arc&lt;std::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;T&gt;&gt;&gt;) -&gt; <span class="self">Self </span>{
+                <span class="kw">let </span>val = arc.lock().expect(<span class="string">"lock failed"</span>).take();
+                <span class="self">Self </span>{ val, arc }
+            }
+
+            <span class="kw">fn </span>cancel(<span class="kw-2">mut </span><span class="self">self</span>) {
+                <span class="self">self</span>.val = <span class="prelude-val">None</span>;
+            }
+
+            <span class="kw">fn </span>get_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;mut </span>T&gt; {
+                <span class="self">self</span>.val.as_mut()
+            }
+        }
+        <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T&gt; Drop <span class="kw">for </span>PutBack&lt;<span class="lifetime">'a</span>, T&gt; {
+            <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+                <span class="kw">let </span><span class="kw-2">mut </span>lock = <span class="self">self</span>.arc.lock().expect(<span class="string">"lock failed"</span>);
+                <span class="kw">let </span>take = <span class="self">self</span>.val.take();
+
+                <span class="kw-2">*</span>lock = take;
+            }
+        }
+        <span class="self">self</span>.val
             .get_or_try_init(|| <span class="kw">async </span>{
-                <span class="kw">let </span>val_res = <span class="self">self
-                    </span>.val_rx
-                    <span class="comment">// this lock gets locked only once so it's kind of useless other than making
-                    // Rust happy, but the overhead doesn't matter
-                    </span>.try_lock()
-                    .expect(<span class="string">"we can't ever have contention here"</span>)
-                    .as_mut()
-                    .ok_or_else(|| OneTimeError(<span class="prelude-val">None</span>))<span class="question-mark">?
-                    </span>.<span class="kw">await
-                    </span>.unwrap_or_else(|<span class="kw">_</span>| {
+                <span class="kw">let </span><span class="kw-2">mut </span>recv = PutBack::take(<span class="kw-2">&amp;</span><span class="self">self</span>.val_rx);
+
+                <span class="kw">let </span>val_res = {
+                    <span class="kw">let </span><span class="prelude-val">Some</span>(recv) = recv.get_mut() <span class="kw">else </span>{
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(OneTimeError(<span class="prelude-val">None</span>));
+                    };
+                    recv.<span class="kw">await</span>.unwrap_or_else(|<span class="kw">_</span>| {
                         <span class="macro">panic!</span>(<span class="string">"Jit value {} panicked"</span>, std::any::type_name::&lt;T&gt;())
-                    });
-                <span class="self">self</span>.val_rx.lock().expect(<span class="string">"locking can't fail"</span>).take();
-                val_res.map_err(|e| OneTimeError(<span class="prelude-val">Some</span>(e)))
+                    })
+                };
+
+                recv.cancel();
+
+                val_res.map_err(|err| OneTimeError(<span class="prelude-val">Some</span>(err)))
             })
             .<span class="kw">await
     </span>}
@@ -354,6 +444,8 @@
         </span>});
 
         <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>v.get().<span class="kw">await</span>, <span class="number">3</span>);
+        <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>v.get().<span class="kw">await</span>, <span class="number">3</span>);
+        <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>v.clone().get().<span class="kw">await</span>, <span class="number">3</span>);
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
@@ -364,6 +456,8 @@
         });
 
         <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>v.get_try().<span class="kw">await</span>.expect(<span class="string">"ok"</span>), <span class="number">3</span>);
+        <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>v.get_try().<span class="kw">await</span>.expect(<span class="string">"ok"</span>), <span class="number">3</span>);
+        <span class="macro">assert_eq!</span>(<span class="kw-2">*</span>v.clone().get_try().<span class="kw">await</span>.expect(<span class="string">"ok"</span>), <span class="number">3</span>);
     }
 
     <span class="attr">#[test_log::test(tokio::test)]
@@ -376,6 +470,8 @@
         });
 
         <span class="macro">assert!</span>(v.get_try().<span class="kw">await</span>.is_err());
+        <span class="macro">assert!</span>(v.get_try().<span class="kw">await</span>.is_err());
+        <span class="macro">assert!</span>(v.clone().get_try().<span class="kw">await</span>.is_err());
     }
 }
 </code></pre></div></section></main></body></html>

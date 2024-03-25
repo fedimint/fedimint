@@ -2275,20 +2275,17 @@
 <a href="#2273" id="2273">2273</a>
 <a href="#2274" id="2274">2274</a>
 <a href="#2275" id="2275">2275</a>
-<a href="#2276" id="2276">2276</a>
-<a href="#2277" id="2277">2277</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
-<span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::{Duration, Instant};
 <span class="kw">use </span>std::{env, ffi};
 
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>bitcoincore_rpc::bitcoin;
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::Txid;
-<span class="kw">use </span>bitcoincore_rpc::{bitcoin, RpcApi};
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>cln_rpc::primitives::{Amount <span class="kw">as </span>ClnRpcAmount, AmountOrAny};
 <span class="kw">use </span>fedimint_cli::LnInvoiceResponse;
@@ -3233,7 +3230,6 @@
     </span>.expect(<span class="string">"cannot fail, gets stuck"</span>);
 
     <span class="kw">let </span>tx = bitcoin::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>Default::default()).unwrap();
-    <span class="kw">let </span>address = bitcoin::Address::from_str(<span class="kw-2">&amp;</span>address).unwrap();
     <span class="macro">assert!</span>(tx
         .output
         .iter()
@@ -4084,7 +4080,6 @@
     <span class="macro">assert_eq!</span>(tx.input.len(), <span class="number">1</span>);
     <span class="macro">assert_eq!</span>(tx.output.len(), <span class="number">2</span>);
 
-    <span class="kw">let </span>withdrawal_address = bitcoin::Address::from_str(<span class="kw-2">&amp;</span>withdrawal_address)<span class="question-mark">?</span>;
     <span class="kw">let </span>change_output = tx
         .output
         .iter()
@@ -4143,15 +4138,16 @@
     ))<span class="question-mark">?</span>];
     <span class="macro">info!</span>(<span class="string">"Getting wallet balances before import"</span>);
     <span class="kw">let </span>bitcoin_client = bitcoind.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>balances_before = bitcoin_client.get_balances()<span class="question-mark">?</span>;
+    <span class="kw">let </span>balances_before = bitcoin_client.get_balances().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">"Importing descriptors into bitcoin wallet"</span>);
     <span class="kw">let </span>request = bitcoin_client
         .get_jsonrpc_client()
         .build_request(<span class="string">"importdescriptors"</span>, <span class="kw-2">&amp;</span>descriptors_json);
-    <span class="kw">let </span>response = bitcoin_client.get_jsonrpc_client().send_request(request)<span class="question-mark">?</span>;
+    <span class="kw">let </span>response =
+        tokio::task::block_in_place(|| bitcoin_client.get_jsonrpc_client().send_request(request))<span class="question-mark">?</span>;
     response.check_error()<span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">"Getting wallet balances after import"</span>);
-    <span class="kw">let </span>balances_after = bitcoin_client.get_balances()<span class="question-mark">?</span>;
+    <span class="kw">let </span>balances_after = bitcoin_client.get_balances().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>diff = balances_after.mine.immature + balances_after.mine.trusted
         - balances_before.mine.immature
         - balances_before.mine.trusted;

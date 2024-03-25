@@ -847,6 +847,7 @@
 <a href="#845" id="845">845</a>
 <a href="#846" id="846">846</a>
 <a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -958,7 +959,8 @@
     }
 }
 
-<span class="kw">pub struct </span>ProcessManager {
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>ProcessManager {
     <span class="kw">pub </span>globals: <span class="kw">super</span>::vars::Global,
 }
 

@@ -411,6 +411,25 @@
 <a href="#409" id="409">409</a>
 <a href="#410" id="410">410</a>
 <a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -429,9 +448,10 @@
 <span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tracing::{debug, error, info, trace, warn};
 
+<span class="kw">use </span><span class="kw">crate</span>::devfed::DevJitFed;
 <span class="kw">use </span><span class="kw">crate</span>::federation::Fedimintd;
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, ProcessManager};
-<span class="kw">use crate</span>::{dev_fed, external_daemons, vars, ExternalDaemons};
+<span class="kw">use crate</span>::{external_daemons, vars, ExternalDaemons};
 
 <span class="kw">fn </span>random_test_dir_suffix() -&gt; String {
     rand::thread_rng()
@@ -632,54 +652,71 @@
             <span class="kw">let </span>main = {
                 <span class="kw">let </span>task_group = task_group.clone();
                 <span class="kw">async move </span>{
-                    <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">let </span>fed_id = dev_fed.fed.calculate_federation_id().<span class="kw">await</span>;
+                    <span class="kw">let </span>dev_fed = DevJitFed::new(<span class="kw-2">&amp;</span>process_mgr)<span class="question-mark">?</span>;
 
                     <span class="kw">let </span>pegin_start_time = Instant::now();
                     <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Peging in client and gateways"</span>);
 
                     <span class="kw">let </span>gw_pegin_amount = <span class="number">20_000</span>;
                     <span class="kw">let </span>client_pegin_amount = <span class="number">10_000</span>;
-                    <span class="kw">let </span>(deposit_op_id, <span class="kw">_</span>, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
+                    <span class="kw">let </span>(<span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
                         <span class="kw">async </span>{
-                            <span class="kw">let </span>(address, operation_id) =
-                                dev_fed.fed.internal_client().get_deposit_addr().<span class="kw">await</span><span class="question-mark">?</span>;
-                            dev_fed
-                                .fed
-                                .bitcoind
-                                .send_to(address, client_pegin_amount)
+                            <span class="kw">let </span>(address, operation_id) = dev_fed
+                                .client_registered()
+                                .<span class="kw">await</span><span class="question-mark">?
+                                </span>.get_deposit_addr()
                                 .<span class="kw">await</span><span class="question-mark">?</span>;
-                            <span class="prelude-val">Ok</span>(operation_id)
-                        },
-                        <span class="kw">async </span>{
-                            <span class="kw">let </span>pegin_addr = dev_fed.gw_cln.get_pegin_addr(<span class="kw-2">&amp;</span>fed_id).<span class="kw">await</span><span class="question-mark">?</span>;
                             dev_fed
-                                .fed
-                                .bitcoind
-                                .send_to(pegin_addr, gw_pegin_amount)
+                                .bitcoind()
+                                .<span class="kw">await</span><span class="question-mark">?
+                                </span>.send_to(address, client_pegin_amount)
+                                .<span class="kw">await</span><span class="question-mark">?</span>;
+                            dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                            dev_fed
+                                .client_registered()
+                                .<span class="kw">await</span><span class="question-mark">?
+                                </span>.await_deposit(<span class="kw-2">&amp;</span>operation_id)
                                 .<span class="kw">await
                         </span>},
                         <span class="kw">async </span>{
-                            <span class="kw">let </span>pegin_addr = dev_fed.gw_lnd.get_pegin_addr(<span class="kw-2">&amp;</span>fed_id).<span class="kw">await</span><span class="question-mark">?</span>;
-                            dev_fed
-                                .fed
-                                .bitcoind
-                                .send_to(pegin_addr, gw_pegin_amount)
+                            <span class="kw">let </span>pegin_addr = dev_fed
+                                .gw_cln_registered()
+                                .<span class="kw">await</span><span class="question-mark">?
+                                </span>.get_pegin_addr(
+                                    <span class="kw-2">&amp;</span>dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.calculate_federation_id().<span class="kw">await</span>,
+                                )
                                 .<span class="kw">await</span><span class="question-mark">?</span>;
-                            <span class="prelude-val">Ok</span>(())
-                        },
+                            dev_fed
+                                .bitcoind()
+                                .<span class="kw">await</span><span class="question-mark">?
+                                </span>.send_to(pegin_addr, gw_pegin_amount)
+                                .<span class="kw">await</span><span class="question-mark">?</span>;
+                            dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await
+                        </span>},
+                        <span class="kw">async </span>{
+                            <span class="kw">let </span>pegin_addr = dev_fed
+                                .gw_lnd_registered()
+                                .<span class="kw">await</span><span class="question-mark">?
+                                </span>.get_pegin_addr(
+                                    <span class="kw-2">&amp;</span>dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.calculate_federation_id().<span class="kw">await</span>,
+                                )
+                                .<span class="kw">await</span><span class="question-mark">?</span>;
+                            dev_fed
+                                .bitcoind()
+                                .<span class="kw">await</span><span class="question-mark">?
+                                </span>.send_to(pegin_addr, gw_pegin_amount)
+                                .<span class="kw">await</span><span class="question-mark">?</span>;
+                            dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await
+                        </span>},
                     )<span class="question-mark">?</span>;
-                    dev_fed.fed.bitcoind.mine_blocks(<span class="number">11</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-                    dev_fed
-                        .fed
-                        .internal_client()
-                        .await_deposit(<span class="kw-2">&amp;</span>deposit_op_id)
-                        .<span class="kw">await</span><span class="question-mark">?</span>;
 
                     <span class="macro">info!</span>(target: LOG_DEVIMINT,
                         elapsed_ms = %pegin_start_time.elapsed().as_millis(),
                         <span class="string">"Pegins completed"</span>);
-                    std::env::set_var(<span class="string">"FM_INVITE_CODE"</span>, dev_fed.fed.invite_code()<span class="question-mark">?</span>);
+                    std::env::set_var(<span class="string">"FM_INVITE_CODE"</span>, dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.invite_code()<span class="question-mark">?</span>);
+
+                    dev_fed.finalize(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+
                     <span class="kw">let </span>daemons = write_ready_file(<span class="kw-2">&amp;</span>process_mgr.globals, <span class="prelude-val">Ok</span>(dev_fed)).<span class="kw">await</span><span class="question-mark">?</span>;
 
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(exec) = exec {
@@ -687,6 +724,7 @@
                         exec_user_command(exec).<span class="kw">await</span><span class="question-mark">?</span>;
                         task_group.shutdown();
                     }
+
                     <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(daemons)
                 }
             };
