@@ -207,8 +207,16 @@
 <a href="#205" id="205">205</a>
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_network,
+};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, BitcoinAmountOrAll};
@@ -263,7 +271,7 @@
         </span>amount: BitcoinAmountOrAll,
         <span class="doccomment">/// The address to send the funds to
         </span><span class="attr">#[clap(long)]
-        </span>address: Address,
+        </span>address: Address&lt;NetworkUnchecked&gt;,
     },
     <span class="doccomment">/// Register federation with the gateway
     </span>ConnectFed {
@@ -355,7 +363,7 @@
                 .withdraw(WithdrawPayload {
                     federation_id,
                     amount,
-                    address,
+                    address: bitcoin30_to_bitcoin29_address(address.assume_checked()),
                 })
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -399,7 +407,7 @@
                     password,
                     num_route_hints,
                     routing_fees,
-                    network,
+                    network: network.map(bitcoin30_to_bitcoin29_network),
                 })
                 .<span class="kw">await</span><span class="question-mark">?</span>;
         }
