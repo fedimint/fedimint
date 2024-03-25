@@ -406,7 +406,7 @@ impl ILnRpcClient for GatewayLndClient {
             invoice,
             max_fee_msat,
             payment_hash,
-            ..
+            max_delay,
         } = request;
         info!("LND Paying invoice {invoice:?}");
         let mut client = Self::connect(
@@ -442,6 +442,12 @@ impl ILnRpcClient for GatewayLndClient {
                         ),
                     })?;
             debug!("LND payment does not exist for invoice {invoice:?}, will attempt to pay");
+            let cltv_limit: i32 =
+                max_delay
+                    .try_into()
+                    .map_err(|error| LightningRpcError::FailedPayment {
+                        failure_reason: format!("max delay exceeds valid LND range {error:?}"),
+                    })?;
             let payments = client
                 .router()
                 .send_payment_v2(SendPaymentRequest {
@@ -449,6 +455,7 @@ impl ILnRpcClient for GatewayLndClient {
                     no_inflight_updates: false,
                     timeout_seconds: LND_PAYMENT_TIMEOUT_SECONDS,
                     fee_limit_msat,
+                    cltv_limit,
                     ..Default::default()
                 })
                 .await
