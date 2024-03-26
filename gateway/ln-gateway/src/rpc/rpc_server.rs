@@ -5,7 +5,9 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use axum_macros::debug_handler;
+use bitcoin::consensus::Encodable;
 use bitcoin_hashes::hex::ToHex;
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use serde_json::json;
@@ -71,10 +73,16 @@ async fn auth_middleware(
     request: Request,
     next: Next,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let gateway_config = gateway.gateway_config.read().await.clone();
     // These routes are not available unless the gateway's configuration is set.
-    let gateway_password = gateway_config.ok_or(StatusCode::NOT_FOUND)?.password;
-    authenticate(gateway_password, request, next).await
+    let gateway_config = gateway
+        .gateway_config
+        .read()
+        .await
+        .clone()
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let gateway_hashed_password = gateway_config.hashed_password;
+    let password_salt = gateway_config.password_salt;
+    authenticate(gateway_hashed_password, password_salt, request, next).await
 }
 
 /// Middleware to authenticate an incoming request. Routes that are
@@ -93,21 +101,24 @@ async fn auth_after_config_middleware(
         return Ok(next.run(request).await);
     }
 
-    // Otherwise, validate that the Bearer token matches the gateway's password
-    let gateway_password = gateway_config
-        .expect("Already validated the gateway config is not none")
-        .password;
-    authenticate(gateway_password, request, next).await
+    // Otherwise, validate that the Bearer token matches the gateway's hashed
+    // password
+    let gateway_config = gateway_config.expect("Already validated the gateway config is not none");
+    let gateway_hashed_password = gateway_config.hashed_password;
+    let password_salt = gateway_config.password_salt;
+    authenticate(gateway_hashed_password, password_salt, request, next).await
 }
 
-/// Validate that the Bearer token matches the gateway's password
+/// Validate that the Bearer token matches the gateway's hashed password
 async fn authenticate(
-    gateway_password: String,
+    gateway_hashed_password: sha256::Hash,
+    password_salt: [u8; 16],
     request: Request,
     next: Next,
 ) -> Result<axum::response::Response, StatusCode> {
     let token = extract_bearer_token(&request)?;
-    if gateway_password == token {
+    let hashed_password = hash_password(token, password_salt);
+    if gateway_hashed_password == hashed_password {
         return Ok(next.run(request).await);
     }
 
@@ -155,6 +166,18 @@ fn v1_routes(gateway: Gateway) -> Router {
         .merge(authenticated_after_config_routes)
         .layer(Extension(gateway))
         .layer(CorsLayer::permissive())
+}
+
+/// Creates a password hash by appending a 4 byte salt to the plaintext
+/// password.
+pub fn hash_password(plaintext_password: String, salt: [u8; 16]) -> sha256::Hash {
+    let mut bytes = Vec::<u8>::new();
+    plaintext_password
+        .consensus_encode(&mut bytes)
+        .expect("Password is encodable");
+    salt.consensus_encode(&mut bytes)
+        .expect("Salt is encodable");
+    sha256::Hash::hash(&bytes)
 }
 
 /// Display high-level information about the Gateway

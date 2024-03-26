@@ -45,6 +45,7 @@ use futures::Future;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description, RoutingFees};
 use ln_gateway::gateway_lnrpc::GetNodeInfoResponse;
 use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcResult};
+use ln_gateway::rpc::rpc_server::hash_password;
 use ln_gateway::rpc::{
     BalancePayload, ConnectFedPayload, LeaveFedPayload, SetConfigurationPayload,
 };
@@ -1117,6 +1118,20 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         initial_rpc_client.set_configuration(set_configuration_payload.clone())
     })
     .await;
+
+    // Verify that the gateway's password is stored correctly (i.e. the stored hash
+    // and salt match the password)
+    let gateway_config = gateway
+        .gateway
+        .gateway_config
+        .read()
+        .await
+        .clone()
+        .expect("Gateway config should be set");
+    assert_eq!(
+        gateway_config.hashed_password,
+        hash_password(test_password.clone(), gateway_config.password_salt)
+    );
 
     // Verify client with no password fails since the password has been set
     verify_gateway_rpc_failure(
