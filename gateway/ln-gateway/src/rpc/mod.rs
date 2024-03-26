@@ -20,6 +20,7 @@ pub struct ConnectFedPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LeaveFedPayload {
     pub federation_id: FederationId,
+    pub force_leave: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

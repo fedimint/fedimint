@@ -64,6 +64,11 @@ function gateway_reboot_test() {
 }
 export -f gateway_reboot_test
 
+function gateway_leave_fed_test() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-leave-fed-test.sh
+}
+export -f gateway_leave_fed_test
+
 function latency_test_reissue() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh reissue
 }
@@ -203,6 +208,7 @@ tests_to_run_in_parallel+=(
   "reconnect_test"
   "lightning_reconnect_test"
   "gateway_reboot_test"
+  "gateway_leave_fed_test"
   "devimint_cli_test"
   "devimint_cli_test_single"
   "load_test_tool_test"
