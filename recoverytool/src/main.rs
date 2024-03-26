@@ -10,9 +10,9 @@ use bitcoin::network::constants::Network;
 use bitcoin::OutPoint;
 use clap::{ArgGroup, Parser, Subcommand};
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_network, bitcoin29_to_bitcoin30_outpoint,
+    bitcoin29_to_bitcoin30_amount, bitcoin29_to_bitcoin30_network, bitcoin29_to_bitcoin30_outpoint,
     bitcoin29_to_bitcoin30_secp256k1_secret_key, bitcoin30_to_bitcoin29_network,
-    bitcoin30_to_bitcoin29_secp256k1_secret_key, bitcoin_29_to_bitcoin30_amount,
+    bitcoin30_to_bitcoin29_secp256k1_secret_key,
 };
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -191,7 +191,7 @@ async fn main() -> anyhow::Result<()> {
                     ImportableWallet {
                         outpoint: bitcoin29_to_bitcoin30_outpoint(outpoint),
                         descriptor,
-                        amount_sat: bitcoin_29_to_bitcoin30_amount(amount),
+                        amount_sat: bitcoin29_to_bitcoin30_amount(amount),
                     }
                 })
                 .collect()

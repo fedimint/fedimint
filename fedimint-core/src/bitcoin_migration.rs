@@ -89,7 +89,7 @@ pub fn bitcoin30_to_bitcoin29_network(network: bitcoin30::Network) -> bitcoin::N
     }
 }
 
-pub fn bitcoin_29_to_bitcoin30_amount(amount: bitcoin::Amount) -> bitcoin30::Amount {
+pub fn bitcoin29_to_bitcoin30_amount(amount: bitcoin::Amount) -> bitcoin30::Amount {
     bitcoin30::Amount::from_sat(amount.to_sat())
 }
 
@@ -329,7 +329,7 @@ mod tests {
         );
         assert_eq!(
             bitcoin30_amount,
-            bitcoin_29_to_bitcoin30_amount(bitcoin29_amount)
+            bitcoin29_to_bitcoin30_amount(bitcoin29_amount)
         );
     }
 
