@@ -49,6 +49,7 @@ use tracing::info;
 
 /// Tool to recover the on-chain wallet of a Fedimint federation
 #[derive(Debug, Parser)]
+#[command(version)]
 #[command(group(
     ArgGroup::new("keysource")
         .required(true)

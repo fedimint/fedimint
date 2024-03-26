@@ -24,6 +24,7 @@ use crate::dump::DatabaseDump;
 mod dump;
 
 #[derive(Debug, Clone, Parser)]
+#[command(version)]
 struct Options {
     #[clap(long, env = "FM_DBTOOL_DATABASE")]
     database: String,
