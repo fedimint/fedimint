@@ -1591,6 +1591,14 @@
 <a href="#1589" id="1589">1589</a>
 <a href="#1590" id="1590">1590</a>
 <a href="#1591" id="1591">1591</a>
+<a href="#1592" id="1592">1592</a>
+<a href="#1593" id="1593">1593</a>
+<a href="#1594" id="1594">1594</a>
+<a href="#1595" id="1595">1595</a>
+<a href="#1596" id="1596">1596</a>
+<a href="#1597" id="1597">1597</a>
+<a href="#1598" id="1598">1598</a>
+<a href="#1599" id="1599">1599</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1658,6 +1666,7 @@
 <span class="kw">use </span>lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>rand::rngs::OsRng;
+<span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>rpc::{
     FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, SetConfigurationPayload,
     V1_API_ENDPOINT,
@@ -1674,7 +1683,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::Forward;
 <span class="kw">use </span><span class="kw">crate</span>::lightning::cln::RouteHtlcStream;
 <span class="kw">use </span><span class="kw">crate</span>::lightning::GatewayLightningBuilder;
-<span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::run_webserver;
+<span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::{hash_password, run_webserver};
 <span class="kw">use </span><span class="kw">crate</span>::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
     WithdrawPayload,
@@ -1841,7 +1850,7 @@
     </span>lightning_builder: Arc&lt;<span class="kw">dyn </span>LightningBuilder + Send + Sync&gt;,
 
     <span class="comment">// The gateway's current configuration
-    </span>gateway_config: Arc&lt;RwLock&lt;<span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt;&gt;&gt;,
+    </span><span class="kw">pub </span>gateway_config: Arc&lt;RwLock&lt;<span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt;&gt;&gt;,
 
     <span class="comment">// The current state of the Gateway.
     </span><span class="kw">pub </span>state: Arc&lt;RwLock&lt;GatewayState&gt;&gt;,
@@ -2109,7 +2118,7 @@
                                             <span class="macro">info!</span>(<span class="string">"Changing gateway network to match lightning node network : ({:?})"</span>, lightning_network);
                                             self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
                                             self_copy.handle_set_configuration_msg(SetConfigurationPayload {
-                                                password: <span class="prelude-val">Some</span>(gateway_config.password),
+                                                password: <span class="prelude-val">None</span>,
                                                 network: <span class="prelude-val">Some</span>(lightning_network),
                                                 num_route_hints: <span class="prelude-val">None</span>,
                                                 routing_fees: <span class="prelude-val">None</span>,
@@ -2640,7 +2649,8 @@
         <span class="kw">let </span>prev_gateway_config = <span class="self">self</span>.gateway_config.read().<span class="kw">await</span>.clone();
         <span class="kw">let </span>new_gateway_config = <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>prev_config) = prev_gateway_config {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(password) = password {
-                prev_config.password = password;
+                <span class="kw">let </span>hashed_password = hash_password(password, prev_config.password_salt);
+                prev_config.hashed_password = hashed_password;
             }
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(network) = network {
@@ -2670,12 +2680,15 @@
             <span class="kw">let </span>password = password.ok_or(GatewayError::GatewayConfigurationError(
                 <span class="string">"The password field is required when initially configuring the gateway"</span>.to_string(),
             ))<span class="question-mark">?</span>;
+            <span class="kw">let </span>password_salt: [u8; <span class="number">16</span>] = rand::thread_rng().gen();
+            <span class="kw">let </span>hashed_password = hash_password(password, password_salt);
 
             GatewayConfiguration {
-                password,
+                hashed_password,
                 network: lightning_network,
                 num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
                 routing_fees: DEFAULT_FEES,
+                password_salt,
             }
         };
 
@@ -2814,11 +2827,14 @@
             .clone()
             .unwrap_or(GatewayFee(DEFAULT_FEES));
         <span class="kw">let </span>network = gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
+        <span class="kw">let </span>password_salt: [u8; <span class="number">16</span>] = rand::thread_rng().gen();
+        <span class="kw">let </span>hashed_password = hash_password(password.clone(), password_salt);
         <span class="kw">let </span>gateway_config = GatewayConfiguration {
-            password: password.clone(),
+            hashed_password,
             network,
             num_route_hints,
             routing_fees: routing_fees.<span class="number">0</span>,
+            password_salt,
         };
 
         <span class="prelude-val">Some</span>(gateway_config)

@@ -290,6 +290,29 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
 <span class="kw">use </span>axum::middleware::{<span class="self">self</span>, Next};
@@ -297,7 +320,9 @@
 <span class="kw">use </span>axum::routing::{get, post};
 <span class="kw">use </span>axum::{Extension, Json, Router};
 <span class="kw">use </span>axum_macros::debug_handler;
+<span class="kw">use </span>bitcoin::consensus::Encodable;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
+<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>serde_json::json;
@@ -363,10 +388,16 @@
     request: Request,
     next: Next,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, StatusCode&gt; {
-    <span class="kw">let </span>gateway_config = gateway.gateway_config.read().<span class="kw">await</span>.clone();
     <span class="comment">// These routes are not available unless the gateway's configuration is set.
-    </span><span class="kw">let </span>gateway_password = gateway_config.ok_or(StatusCode::NOT_FOUND)<span class="question-mark">?</span>.password;
-    authenticate(gateway_password, request, next).<span class="kw">await
+    </span><span class="kw">let </span>gateway_config = gateway
+        .gateway_config
+        .read()
+        .<span class="kw">await
+        </span>.clone()
+        .ok_or(StatusCode::NOT_FOUND)<span class="question-mark">?</span>;
+    <span class="kw">let </span>gateway_hashed_password = gateway_config.hashed_password;
+    <span class="kw">let </span>password_salt = gateway_config.password_salt;
+    authenticate(gateway_hashed_password, password_salt, request, next).<span class="kw">await
 </span>}
 
 <span class="doccomment">/// Middleware to authenticate an incoming request. Routes that are
@@ -385,21 +416,24 @@
         <span class="kw">return </span><span class="prelude-val">Ok</span>(next.run(request).<span class="kw">await</span>);
     }
 
-    <span class="comment">// Otherwise, validate that the Bearer token matches the gateway's password
-    </span><span class="kw">let </span>gateway_password = gateway_config
-        .expect(<span class="string">"Already validated the gateway config is not none"</span>)
-        .password;
-    authenticate(gateway_password, request, next).<span class="kw">await
+    <span class="comment">// Otherwise, validate that the Bearer token matches the gateway's hashed
+    // password
+    </span><span class="kw">let </span>gateway_config = gateway_config.expect(<span class="string">"Already validated the gateway config is not none"</span>);
+    <span class="kw">let </span>gateway_hashed_password = gateway_config.hashed_password;
+    <span class="kw">let </span>password_salt = gateway_config.password_salt;
+    authenticate(gateway_hashed_password, password_salt, request, next).<span class="kw">await
 </span>}
 
-<span class="doccomment">/// Validate that the Bearer token matches the gateway's password
+<span class="doccomment">/// Validate that the Bearer token matches the gateway's hashed password
 </span><span class="kw">async fn </span>authenticate(
-    gateway_password: String,
+    gateway_hashed_password: sha256::Hash,
+    password_salt: [u8; <span class="number">16</span>],
     request: Request,
     next: Next,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;axum::response::Response, StatusCode&gt; {
     <span class="kw">let </span>token = extract_bearer_token(<span class="kw-2">&amp;</span>request)<span class="question-mark">?</span>;
-    <span class="kw">if </span>gateway_password == token {
+    <span class="kw">let </span>hashed_password = hash_password(token, password_salt);
+    <span class="kw">if </span>gateway_hashed_password == hashed_password {
         <span class="kw">return </span><span class="prelude-val">Ok</span>(next.run(request).<span class="kw">await</span>);
     }
 
@@ -447,6 +481,18 @@
         .merge(authenticated_after_config_routes)
         .layer(Extension(gateway))
         .layer(CorsLayer::permissive())
+}
+
+<span class="doccomment">/// Creates a password hash by appending a 4 byte salt to the plaintext
+/// password.
+</span><span class="kw">pub fn </span>hash_password(plaintext_password: String, salt: [u8; <span class="number">16</span>]) -&gt; sha256::Hash {
+    <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::&lt;u8&gt;::new();
+    plaintext_password
+        .consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
+        .expect(<span class="string">"Password is encodable"</span>);
+    salt.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
+        .expect(<span class="string">"Salt is encodable"</span>);
+    sha256::Hash::hash(<span class="kw-2">&amp;</span>bytes)
 }
 
 <span class="doccomment">/// Display high-level information about the Gateway
