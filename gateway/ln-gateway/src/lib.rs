@@ -65,6 +65,7 @@ use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 use lightning_invoice::RoutingFees;
 use rand::rngs::OsRng;
+use rand::Rng;
 use rpc::{
     FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, SetConfigurationPayload,
     V1_API_ENDPOINT,
@@ -81,7 +82,7 @@ use crate::db::{get_gatewayd_database_migrations, FederationConfig, FederationId
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::lightning::cln::RouteHtlcStream;
 use crate::lightning::GatewayLightningBuilder;
-use crate::rpc::rpc_server::run_webserver;
+use crate::rpc::rpc_server::{hash_password, run_webserver};
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
     WithdrawPayload,
@@ -248,7 +249,7 @@ pub struct Gateway {
     lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
 
     // The gateway's current configuration
-    gateway_config: Arc<RwLock<Option<GatewayConfiguration>>>,
+    pub gateway_config: Arc<RwLock<Option<GatewayConfiguration>>>,
 
     // The current state of the Gateway.
     pub state: Arc<RwLock<GatewayState>>,
@@ -516,7 +517,7 @@ impl Gateway {
                                             info!("Changing gateway network to match lightning node network : ({:?})", lightning_network);
                                             self_copy.handle_disconnect(htlc_task_group).await;
                                             self_copy.handle_set_configuration_msg(SetConfigurationPayload {
-                                                password: Some(gateway_config.password),
+                                                password: None,
                                                 network: Some(lightning_network),
                                                 num_route_hints: None,
                                                 routing_fees: None,
@@ -1047,7 +1048,8 @@ impl Gateway {
         let prev_gateway_config = self.gateway_config.read().await.clone();
         let new_gateway_config = if let Some(mut prev_config) = prev_gateway_config {
             if let Some(password) = password {
-                prev_config.password = password;
+                let hashed_password = hash_password(password, prev_config.password_salt);
+                prev_config.hashed_password = hashed_password;
             }
 
             if let Some(network) = network {
@@ -1077,12 +1079,15 @@ impl Gateway {
             let password = password.ok_or(GatewayError::GatewayConfigurationError(
                 "The password field is required when initially configuring the gateway".to_string(),
             ))?;
+            let password_salt: [u8; 16] = rand::thread_rng().gen();
+            let hashed_password = hash_password(password, password_salt);
 
             GatewayConfiguration {
-                password,
+                hashed_password,
                 network: lightning_network,
                 num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
                 routing_fees: DEFAULT_FEES,
+                password_salt,
             }
         };
 
@@ -1221,11 +1226,14 @@ impl Gateway {
             .clone()
             .unwrap_or(GatewayFee(DEFAULT_FEES));
         let network = gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
+        let password_salt: [u8; 16] = rand::thread_rng().gen();
+        let hashed_password = hash_password(password.clone(), password_salt);
         let gateway_config = GatewayConfiguration {
-            password: password.clone(),
+            hashed_password,
             network,
             num_route_hints,
             routing_fees: routing_fees.0,
+            password_salt,
         };
 
         Some(gateway_config)
