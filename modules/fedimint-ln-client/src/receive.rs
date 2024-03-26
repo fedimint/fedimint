@@ -16,7 +16,7 @@ use fedimint_ln_common::{LightningClientContext, LightningInput};
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::api::LnFederationApi;
 use crate::{LightningClientStateMachines, ReceivingKey};
@@ -39,12 +39,11 @@ const RETRY_DELAY: Duration = Duration::from_secs(1);
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum LightningReceiveStates {
-    SubmittedOfferV0(LightningReceiveSubmittedOfferV0),
+    SubmittedOffer(LightningReceiveSubmittedOffer),
     Canceled(LightningReceiveError),
     ConfirmedInvoice(LightningReceiveConfirmedInvoice),
     Funded(LightningReceiveFunded),
     Success(Vec<OutPoint>),
-    SubmittedOffer(LightningReceiveSubmittedOffer),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -62,16 +61,6 @@ impl State for LightningReceiveStateMachine {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
-            LightningReceiveStates::SubmittedOfferV0(offer) => {
-                warn!(?offer, "Got old SubmittedOfferV0 state!");
-                // can just translate into the newer version
-                let new_offer = LightningReceiveSubmittedOffer {
-                    offer_txid: offer.offer_txid,
-                    invoice: offer.invoice.clone(),
-                    receiving_key: ReceivingKey::Personal(offer.payment_keypair),
-                };
-                new_offer.transitions(global_context)
-            }
             LightningReceiveStates::SubmittedOffer(submitted_offer) => {
                 submitted_offer.transitions(global_context)
             }

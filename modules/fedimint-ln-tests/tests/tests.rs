@@ -1274,7 +1274,6 @@ mod fedimint_migration_tests {
                     if let LightningClientStateMachines::Receive(machine) = active_state {
                         match machine.state {
                             LightningReceiveStates::SubmittedOffer(_) => input_count += 1,
-                            LightningReceiveStates::SubmittedOfferV0(_) => panic!("State machine migration failed, active states contain unexpected state"),
                             LightningReceiveStates::ConfirmedInvoice(_) => confirmed_count += 1,
                             _ => panic!("State machine migration failed, active states contain unexpected state"),
                         }
@@ -1291,7 +1290,6 @@ mod fedimint_migration_tests {
                     if let LightningClientStateMachines::Receive(machine) = inactive_state {
                         match machine.state {
                             LightningReceiveStates::SubmittedOffer(_) => input_count += 1,
-                            LightningReceiveStates::SubmittedOfferV0(_) => panic!("State machine migration failed, active states contain unexpected state"),
                             LightningReceiveStates::ConfirmedInvoice(_) => confirmed_count += 1,
                             _ => panic!("State machine migration failed, active states contain unexpected state"),
                         }
