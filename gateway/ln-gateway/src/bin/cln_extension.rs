@@ -38,6 +38,7 @@ use tracing::{debug, error, info, warn};
 const MAX_HTLC_PROCESSING_DURATION: Duration = Duration::MAX;
 
 #[derive(Parser)]
+#[command(version)]
 struct ClnExtensionOpts {
     /// Gateway CLN extension service listen address
     #[arg(long = "fm-gateway-listen", env = FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV)]
