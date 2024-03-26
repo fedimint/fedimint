@@ -41,7 +41,7 @@ final-check: lint
 
 check-wasm:
   #!/usr/bin/env bash
-  env CARGO_BUILD_TARGET_DIR=${CARGO_BUILD_TARGET_DIR:$(pwd)/target}/pkgs/check-wasm \
+  env CARGO_BUILD_TARGET_DIR=${CARGO_BUILD_TARGET_DIR:-$(pwd)/target}/pkgs/check-wasm \
     nix develop .#crossWasm -c \
       cargo check --target wasm32-unknown-unknown \
         --package fedimint-client \
