@@ -1304,15 +1304,17 @@ async fn test_gateway_can_leave_connected_federations() -> anyhow::Result<()> {
                 .any(|info| info.federation_id == id2 && info.channel_id == Some(2)));
 
             // remove first connected federation
-            let fed_info = rpc
+            // The old gateway API didn't return the federation info, so we cannot check anything in that case
+            if let Some(fed_info) = rpc
                 .leave_federation(LeaveFedPayload {
                     federation_id: id1,
                     force_leave: Some(false),
                 })
                 .await
-                .unwrap_or_else(|_| panic!("Could not leave federation {id1}."));
-            assert_eq!(fed_info.federation_id, id1);
-            assert_eq!(fed_info.channel_id, Some(1));
+                .unwrap_or_else(|_| panic!("Could not leave federation {id1}.")) {
+                assert_eq!(fed_info.federation_id, id1);
+                assert_eq!(fed_info.channel_id, Some(1));
+            };
 
             // reconnect the first federation
             let fed_info = rpc
@@ -1325,15 +1327,16 @@ async fn test_gateway_can_leave_connected_federations() -> anyhow::Result<()> {
             assert_eq!(fed_info.channel_id, Some(3));
 
             // remove second connected federation
-            let fed_info = rpc
+            if let Some(fed_info) = rpc
                 .leave_federation(LeaveFedPayload {
                     federation_id: id2,
                     force_leave: Some(false),
                 })
                 .await
-                .unwrap_or_else(|_| panic!("Could not leave federation {id2}."));
-            assert_eq!(fed_info.federation_id, id2);
-            assert_eq!(fed_info.channel_id, Some(2));
+                .unwrap_or_else(|_| panic!("Could not leave federation {id2}.")) {
+                assert_eq!(fed_info.federation_id, id2);
+                assert_eq!(fed_info.channel_id, Some(2));
+            }
 
             // reconnect the second federation
             let fed_info = rpc
