@@ -1,4 +1,4 @@
-use bitcoin::Address;
+use bitcoin29::Address;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, TransactionId};
 use reqwest::{Method, StatusCode};

@@ -3,7 +3,7 @@ pub mod rpc_server;
 
 use std::collections::BTreeMap;
 
-use bitcoin::{Address, Network};
+use bitcoin29::{Address, Network};
 use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::{route_hints, serde_option_routing_fees};

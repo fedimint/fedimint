@@ -33,7 +33,8 @@ async-trait = { workspace = true }
 axum = "0.7.4"
 axum-macros = "0.4.1"
 aquamarine = "0.5.0"
-bitcoin = { version = "0.29.2", features = ["serde"] }
+bitcoin = "0.30.2"
+bitcoin29 = { package = "bitcoin", version = "0.29.2" }
 bitcoin_hashes = { workspace = true }
 clap = { workspace = true }
 # cln-plugin made semver incompatible change

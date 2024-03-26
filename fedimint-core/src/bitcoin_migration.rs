@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use bitcoin30::address::NetworkUnchecked;
 use bitcoin30::hashes::Hash as Bitcoin30Hash;
 use bitcoin_hashes::Hash as Bitcoin29Hash;
 
@@ -122,6 +123,13 @@ pub fn bitcoin30_to_bitcoin29_txid(txid: bitcoin30::Txid) -> bitcoin::Txid {
 
 pub fn bitcoin30_to_bitcoin29_script(script: bitcoin30::ScriptBuf) -> bitcoin::Script {
     script.to_bytes().into()
+}
+
+pub fn bitcoin29_to_bitcoin30_address(
+    address: bitcoin::Address,
+) -> bitcoin30::Address<NetworkUnchecked> {
+    bitcoin30::Address::from_str(&address.to_string())
+        .expect("Failed to convert bitcoin v29 address to bitcoin v30 address")
 }
 
 pub fn bitcoin30_to_bitcoin29_address(address: bitcoin30::Address) -> bitcoin::Address {
@@ -402,6 +410,28 @@ mod tests {
         assert_eq!(
             bitcoin30_script,
             bitcoin29_to_bitcoin30_script(bitcoin29_script)
+        );
+    }
+
+    #[test]
+    fn test_bitcoin29_to_bitcoin30_address() {
+        let bitcoin30_public_key = bitcoin30::PublicKey::new(
+            bitcoin30::secp256k1::Secp256k1::new()
+                .generate_keypair(&mut thread_rng())
+                .1,
+        );
+        let bitcoin30_address: bitcoin30::Address =
+            bitcoin30::Address::p2pkh(&bitcoin30_public_key, bitcoin30::Network::Bitcoin);
+
+        let bitcoin29_public_key = bitcoin30_to_bitcoin29_public_key(bitcoin30_public_key);
+        let bitcoin29_address: bitcoin::Address =
+            bitcoin::Address::p2pkh(&bitcoin29_public_key, bitcoin::Network::Bitcoin);
+
+        // Assert that bitcoin29->bitcoin30 address is the same as native bitcoin30
+        // address.
+        assert_eq!(
+            bitcoin30_address,
+            bitcoin29_to_bitcoin30_address(bitcoin29_address).assume_checked()
         );
     }
 
