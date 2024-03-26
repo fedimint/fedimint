@@ -707,7 +707,10 @@
 <a href="#705" id="705">705</a>
 <a href="#706" id="706">706</a>
 <a href="#707" id="707">707</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
+<a href="#708" id="708">708</a>
+</pre></div><pre class="rust"><code><span class="kw">mod </span>config;
+
+<span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::time::Duration;
@@ -728,8 +731,7 @@
 <span class="kw">use </span>fedimint_server::config::ConfigGenParams;
 <span class="kw">use </span>fedimint_testing::federation::local_config_gen_params;
 <span class="kw">use </span>fedimint_wallet_client::config::WalletClientConfig;
-<span class="kw">use </span>fedimintd::attach_default_module_init_params;
-<span class="kw">use </span>fedimintd::fedimintd::FM_EXTRA_DKG_META_VAR;
+<span class="kw">use </span>fedimintd::FM_EXTRA_DKG_META_VAR;
 <span class="kw">use </span>fs_lock::FileLock;
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>rand::Rng;
@@ -1365,7 +1367,7 @@
     auth: ApiAuth,
     <span class="kw-2">mut </span>server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    attach_default_module_init_params(
+    <span class="self">self</span>::config::attach_default_module_init_params(
         BitcoinRpcConfig::from_env_vars()<span class="question-mark">?</span>,
         <span class="kw-2">&amp;mut </span>server_gen_params,
         Network::Regtest,

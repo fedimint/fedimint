@@ -218,6 +218,7 @@
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::{OutPoint, PeerId, ServerModule};
+<span class="kw">pub use </span>fedimint_unknown_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_unknown_common::config::{
     UnknownClientConfig, UnknownConfig, UnknownConfigConsensus, UnknownConfigLocal,
     UnknownConfigPrivate, UnknownGenParams,
@@ -226,7 +227,6 @@
     UnknownCommonInit, UnknownConsensusItem, UnknownInput, UnknownInputError, UnknownModuleTypes,
     UnknownOutput, UnknownOutputError, UnknownOutputOutcome, CONSENSUS_VERSION,
 };
-
 <span class="kw">pub mod </span>db;
 
 <span class="doccomment">/// Generates the module

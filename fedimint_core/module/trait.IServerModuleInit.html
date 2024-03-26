@@ -8,7 +8,7 @@
         peer_num: <a class="struct" href="../struct.NumPeers.html" title="struct fedimint_core::NumPeers">NumPeers</a>,
         cfg: <a class="struct" href="../config/struct.ServerModuleConfig.html" title="struct fedimint_core::config::ServerModuleConfig">ServerModuleConfig</a>,
         db: <a class="struct" href="../db/struct.Database.html" title="struct fedimint_core::db::Database">Database</a>,
-        task_group: &amp;'life1 mut <a class="struct" href="../task/struct.TaskGroup.html" title="struct fedimint_core::task::TaskGroup">TaskGroup</a>,
+        task_group: &amp;'life1 <a class="struct" href="../task/struct.TaskGroup.html" title="struct fedimint_core::task::TaskGroup">TaskGroup</a>,
         our_peer_id: <a class="struct" href="../struct.PeerId.html" title="struct fedimint_core::PeerId">PeerId</a>
     ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="https://docs.rs/anyhow/1.0.81/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="struct" href="../core/server/struct.DynServerModule.html" title="struct fedimint_core::core::server::DynServerModule">DynServerModule</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
        <span class="where">where Self: 'async_trait,
@@ -56,7 +56,7 @@
     peer_num: <a class="struct" href="../struct.NumPeers.html" title="struct fedimint_core::NumPeers">NumPeers</a>,
     cfg: <a class="struct" href="../config/struct.ServerModuleConfig.html" title="struct fedimint_core::config::ServerModuleConfig">ServerModuleConfig</a>,
     db: <a class="struct" href="../db/struct.Database.html" title="struct fedimint_core::db::Database">Database</a>,
-    task_group: &amp;'life1 mut <a class="struct" href="../task/struct.TaskGroup.html" title="struct fedimint_core::task::TaskGroup">TaskGroup</a>,
+    task_group: &amp;'life1 <a class="struct" href="../task/struct.TaskGroup.html" title="struct fedimint_core::task::TaskGroup">TaskGroup</a>,
     our_peer_id: <a class="struct" href="../struct.PeerId.html" title="struct fedimint_core::PeerId">PeerId</a>
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="https://docs.rs/anyhow/1.0.81/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="struct" href="../core/server/struct.DynServerModule.html" title="struct fedimint_core::core::server::DynServerModule">DynServerModule</a>&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
     Self: 'async_trait,

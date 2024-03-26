@@ -351,7 +351,7 @@
         params: <span class="kw">impl </span>ModuleInitParams,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.params
-            .attach_config_gen_params(<span class="self">self</span>.id, server.module_kind(), params);
+            .attach_config_gen_params_by_id(<span class="self">self</span>.id, server.module_kind(), params);
         <span class="self">self</span>.clients.push(DynClientModuleInit::from(client));
         <span class="self">self</span>.servers.push(DynServerModuleInit::from(server));
         <span class="self">self</span>.id += <span class="number">1</span>;
@@ -365,7 +365,7 @@
         params: <span class="kw">impl </span>ModuleInitParams,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.params
-            .attach_config_gen_params(<span class="self">self</span>.id, server.module_kind(), params);
+            .attach_config_gen_params_by_id(<span class="self">self</span>.id, server.module_kind(), params);
         <span class="self">self</span>.servers.push(DynServerModuleInit::from(server));
         <span class="self">self</span>.id += <span class="number">1</span>;
 

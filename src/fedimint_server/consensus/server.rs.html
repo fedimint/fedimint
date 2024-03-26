@@ -923,7 +923,7 @@
         cfg: ServerConfig,
         db: Database,
         module_inits: ServerModuleInitRegistry,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
     ) -&gt; anyhow::Result&lt;(<span class="self">Self</span>, ConsensusApi)&gt; {
         <span class="kw">let </span>connector: PeerConnector&lt;Message&gt; =
             TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn();
@@ -948,7 +948,7 @@
         module_inits: ServerModuleInitRegistry,
         connector: PeerConnector&lt;Message&gt;,
         delay_calculator: DelayCalculator,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
     ) -&gt; anyhow::Result&lt;(<span class="self">Self</span>, ConsensusApi)&gt; {
         <span class="comment">// Check the configs are valid
         </span>cfg.validate_config(<span class="kw-2">&amp;</span>cfg.local.identity, <span class="kw-2">&amp;</span>module_inits)<span class="question-mark">?</span>;
@@ -1642,7 +1642,7 @@
 }
 
 <span class="kw">async fn </span>submit_module_consensus_items(
-    task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+    task_group: <span class="kw-2">&amp;</span>TaskGroup,
     db: Database,
     modules: ServerModuleRegistry,
     submission_sender: Sender&lt;ConsensusItem&gt;,

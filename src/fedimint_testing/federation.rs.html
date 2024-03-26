@@ -371,7 +371,7 @@
         <span class="kw">let </span>configs = ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, server_init.clone(), version_hash);
         <span class="kw">let </span>network = MockNetwork::new();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>task = TaskGroup::new();
+        <span class="kw">let </span>task_group = TaskGroup::new();
         <span class="kw">for </span>(peer_id, config) <span class="kw">in </span>configs.clone() {
             <span class="kw">if </span>u16::from(peer_id) &gt;= num_peers - num_offline {
                 <span class="kw">continue</span>;
@@ -389,14 +389,14 @@
                 server_init.clone(),
                 connections,
                 DelayCalculator::TEST_DEFAULT,
-                <span class="kw-2">&amp;mut </span>task,
+                <span class="kw-2">&amp;</span>task_group,
             )
             .<span class="kw">await
             </span>.expect(<span class="string">"Failed to init server"</span>);
 
             <span class="kw">let </span>api_handle = FedimintServer::spawn_consensus_api(consensus_api, <span class="bool-val">false</span>).<span class="kw">await</span>;
 
-            task.spawn(<span class="string">"fedimintd"</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+            task_group.spawn(<span class="string">"fedimintd"</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
                 consensus_server.run(handle).<span class="kw">await</span>.unwrap();
                 api_handle.stop().<span class="kw">await</span>;
             });
@@ -407,7 +407,7 @@
             server_init,
             client_init,
             primary_client,
-            _task: task,
+            _task: task_group,
         }
     }
 }

@@ -118,8 +118,8 @@
 }
 
 <span class="kw">pub async fn </span>run_api_server(
-    bind_address: <span class="kw-2">&amp;</span>SocketAddr,
-    task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+    bind_address: SocketAddr,
+    task_group: TaskGroup,
 ) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
     <span class="kw">let </span>app = Router::new().route(<span class="string">"/metrics"</span>, get(get_metrics));
     <span class="kw">let </span>listener = TcpListener::bind(bind_address).<span class="kw">await</span><span class="question-mark">?</span>;

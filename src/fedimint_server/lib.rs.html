@@ -328,6 +328,70 @@
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
 <a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -335,15 +399,16 @@
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
-<span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow <span class="kw">as </span>format_err, Context};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
-<span class="kw">use </span>config::io::PLAINTEXT_PASSWORD;
+<span class="kw">use </span>config::io::{read_server_config, PLAINTEXT_PASSWORD};
 <span class="kw">use </span>config::ServerConfig;
+<span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
@@ -402,6 +467,7 @@
 }
 
 <span class="doccomment">/// Main server for running Fedimint consensus and APIs
+</span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>FedimintServer {
     <span class="doccomment">/// Location where configs are stored
     </span><span class="kw">pub </span>data_dir: PathBuf,
@@ -409,28 +475,40 @@
     </span><span class="kw">pub </span>settings: ConfigGenSettings,
     <span class="doccomment">/// Database shared by the API and consensus
     </span><span class="kw">pub </span>db: Database,
-
     <span class="doccomment">/// Version hash
     </span><span class="kw">pub </span>version_hash: String,
 }
 
 <span class="kw">impl </span>FedimintServer {
-    <span class="doccomment">/// Starts the `ConfigGenApi` unless configs already exist
-    /// After configs are generated, start `ConsensusApi` and `ConsensusServer`
-    </span><span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw-2">mut </span>task_group: TaskGroup) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">pub fn </span>new(
+        data_dir: PathBuf,
+        settings: ConfigGenSettings,
+        db: Database,
+        version_hash: String,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            data_dir,
+            settings,
+            db,
+            version_hash,
+        }
+    }
+
+    <span class="doccomment">/// Starts the `ConfigGenApi` with existing configs
+    </span><span class="kw">pub async fn </span>run_cfg(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        cfg: <span class="kw-2">&amp;</span>ServerConfig,
+        task_group: TaskGroup,
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting config gen"</span>);
 
         initialize_gauge_metrics(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await</span>;
 
-        <span class="kw">let </span>cfg = <span class="self">self
-            </span>.run_config_gen(task_group.make_subgroup().<span class="kw">await</span>)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
         <span class="kw">let </span>(consensus_server, consensus_api) = ConsensusServer::new(
-            cfg,
+            cfg.clone(),
             <span class="self">self</span>.db.clone(),
             <span class="self">self</span>.settings.registry.clone(),
-            <span class="kw-2">&amp;mut </span>task_group,
+            <span class="kw-2">&amp;</span>task_group,
         )
         .<span class="kw">await
         </span>.context(<span class="string">"Setting up consensus server"</span>)<span class="question-mark">?</span>;
@@ -449,12 +527,62 @@
         <span class="prelude-val">Ok</span>(())
     }
 
+    <span class="doccomment">/// Starts server that will run DKG
+    /// After configs are generated, start `ConsensusApi` and `ConsensusServer`
+    </span><span class="kw">pub async fn </span>run_dkg(<span class="kw-2">&amp;mut </span><span class="self">self</span>, task_group: TaskGroup) -&gt; anyhow::Result&lt;ServerConfig&gt; {
+        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting config gen"</span>);
+
+        initialize_gauge_metrics(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await</span>;
+
+        <span class="self">self</span>.generate_config(task_group.make_subgroup().<span class="kw">await</span>).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>run(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        module_inits: <span class="kw-2">&amp;</span>ServerModuleInitRegistry,
+        task_group: TaskGroup,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>cfg = <span class="kw">match </span>FedimintServer::get_config(<span class="kw-2">&amp;</span><span class="self">self</span>.data_dir).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="prelude-val">Some</span>(cfg) =&gt; cfg,
+            <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.run_dkg(task_group.clone()).<span class="kw">await</span><span class="question-mark">?</span>,
+        };
+
+        <span class="kw">let </span>decoders = module_inits.decoders_strict(
+            cfg.consensus
+                .modules
+                .iter()
+                .map(|(id, config)| (<span class="kw-2">*</span>id, <span class="kw-2">&amp;</span>config.kind)),
+        )<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>db = <span class="self">self</span>.db.with_decoders(decoders);
+
+        <span class="comment">// Reconstruct yourself, with a DB that has decoders configured
+        </span><span class="kw">let </span><span class="kw-2">mut </span>s = <span class="self">Self </span>{
+            db,
+            data_dir: <span class="self">self</span>.data_dir.clone(),
+            settings: <span class="self">self</span>.settings.clone(),
+            version_hash: <span class="self">self</span>.version_hash.clone(),
+        };
+
+        s.run_cfg(<span class="kw-2">&amp;</span>cfg, task_group.clone()).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>get_config(data_dir: <span class="kw-2">&amp;</span>Path) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;ServerConfig&gt;&gt; {
+        <span class="comment">// Attempt get the config with local password, otherwise start config gen
+        </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(password) = fs::read_to_string(data_dir.join(PLAINTEXT_PASSWORD)) {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(read_server_config(<span class="kw-2">&amp;</span>password, data_dir.to_owned())<span class="question-mark">?</span>));
+        }
+
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+    }
+
     <span class="doccomment">/// Generates the `ServerConfig`
     ///
     /// If a local password file exists, will try to read the configs from the
     /// filesystem.  Otherwise, it will start the `ConfigGenApi`.
-    </span><span class="kw">async fn </span>run_config_gen(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>task_group: TaskGroup) -&gt; anyhow::Result&lt;ServerConfig&gt; {
+    </span><span class="kw">async fn </span>generate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>task_group: TaskGroup) -&gt; anyhow::Result&lt;ServerConfig&gt; {
         <span class="kw">let </span>(config_generated_tx, <span class="kw-2">mut </span>config_generated_rx) = tokio::sync::mpsc::channel(<span class="number">1</span>);
+
         <span class="kw">let </span>config_gen = ConfigGenApi::new(
             <span class="self">self</span>.data_dir.clone(),
             <span class="self">self</span>.settings.clone(),

@@ -1380,6 +1380,24 @@
 <a href="#1378" id="1378">1378</a>
 <a href="#1379" id="1379">1379</a>
 <a href="#1380" id="1380">1380</a>
+<a href="#1381" id="1381">1381</a>
+<a href="#1382" id="1382">1382</a>
+<a href="#1383" id="1383">1383</a>
+<a href="#1384" id="1384">1384</a>
+<a href="#1385" id="1385">1385</a>
+<a href="#1386" id="1386">1386</a>
+<a href="#1387" id="1387">1387</a>
+<a href="#1388" id="1388">1388</a>
+<a href="#1389" id="1389">1389</a>
+<a href="#1390" id="1390">1390</a>
+<a href="#1391" id="1391">1391</a>
+<a href="#1392" id="1392">1392</a>
+<a href="#1393" id="1393">1393</a>
+<a href="#1394" id="1394">1394</a>
+<a href="#1395" id="1395">1395</a>
+<a href="#1396" id="1396">1396</a>
+<a href="#1397" id="1397">1397</a>
+<a href="#1398" id="1398">1398</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -2318,9 +2336,14 @@
         settings: ConfigGenSettings,
         amount: Amount,
         dir: PathBuf,
+        module_inits: ServerModuleInitRegistry,
     }
 
     <span class="kw">impl </span>TestConfigApi {
+        <span class="kw">pub fn </span>module_inits(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ServerModuleInitRegistry {
+            <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits
+        }
+
         <span class="doccomment">/// Creates a new test API taking up a port, with P2P endpoint on the
         /// next port
         </span><span class="kw">async fn </span>new(
@@ -2337,8 +2360,9 @@
             <span class="kw">let </span>p2p_url = <span class="macro">format!</span>(<span class="string">"fedimint://127.0.0.1:{}"</span>, port + <span class="number">1</span>)
                 .parse()
                 .expect(<span class="string">"parses"</span>);
+            <span class="kw">let </span>module_inits = ServerModuleInitRegistry::from_iter([DummyInit.into()]);
             <span class="kw">let </span><span class="kw-2">mut </span>modules = ServerModuleConfigGenParamsRegistry::default();
-            modules.attach_config_gen_params(<span class="number">0</span>, DummyInit::kind(), DummyGenParams::default());
+            modules.attach_config_gen_params_by_id(<span class="number">0</span>, DummyInit::kind(), DummyGenParams::default());
 
             <span class="kw">let </span>default_params = ConfigGenParamsRequest {
                 meta: Default::default(),
@@ -2378,6 +2402,7 @@
                     settings,
                     amount: Amount::from_sats(port <span class="kw">as </span>u64),
                     dir,
+                    module_inits,
                 },
                 api,
             )
@@ -2461,7 +2486,7 @@
         <span class="doccomment">/// Sets local param to name and unique consensus amount for testing
         </span><span class="kw">async fn </span>set_config_gen_params(<span class="kw-2">&amp;</span><span class="self">self</span>) {
             <span class="kw">let </span><span class="kw-2">mut </span>modules = ServerModuleConfigGenParamsRegistry::default();
-            modules.attach_config_gen_params(
+            modules.attach_config_gen_params_by_id(
                 <span class="number">0</span>,
                 DummyInit::kind(),
                 DummyGenParams {
@@ -2506,7 +2531,7 @@
         <span class="comment">// let mut join_handles = vec![];
         </span><span class="kw">let </span><span class="kw-2">mut </span>apis = <span class="macro">vec!</span>[];
         <span class="kw">let </span><span class="kw-2">mut </span>followers = <span class="macro">vec!</span>[];
-        <span class="kw">let </span>(<span class="kw-2">mut </span>leader, api) = TestConfigApi::new(base_port, <span class="number">0</span>, data_dir.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>(<span class="kw-2">mut </span>test_config, api) = TestConfigApi::new(base_port, <span class="number">0</span>, data_dir.clone()).<span class="kw">await</span>;
 
         apis.push(api);
 
@@ -2517,12 +2542,17 @@
             followers.push(follower);
         }
 
+        <span class="kw">let </span>module_inits = test_config.module_inits().clone();
         <span class="comment">// Run the Fedimint servers and test concurrently
         </span>spawn(<span class="string">"Fedimint server apis"</span>, <span class="kw">async move </span>{
-            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))).<span class="kw">await</span>;
+            join_all(
+                apis.iter_mut()
+                    .map(|fedimint_server| fedimint_server.run(<span class="kw-2">&amp;</span>module_inits, TaskGroup::new())),
+            )
+            .<span class="kw">await</span>;
         });
 
-        leader = validate_leader_setup(leader).<span class="kw">await</span>;
+        test_config = validate_leader_setup(test_config).<span class="kw">await</span>;
 
         <span class="comment">// Setup followers and send connection info
         </span><span class="kw">for </span>follower <span class="kw">in </span><span class="kw-2">&amp;mut </span>followers {
@@ -2535,7 +2565,7 @@
                 .set_password(follower.auth.clone())
                 .<span class="kw">await
                 </span>.unwrap();
-            <span class="kw">let </span>leader_url = <span class="prelude-val">Some</span>(leader.settings.api_url.clone());
+            <span class="kw">let </span>leader_url = <span class="prelude-val">Some</span>(test_config.settings.api_url.clone());
             follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
             follower.name = <span class="macro">format!</span>(<span class="string">"{}_"</span>, follower.name);
             follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
@@ -2543,7 +2573,7 @@
         }
 
         <span class="comment">// Validate we can do a full fedimint setup
-        </span>validate_full_setup(leader, followers).<span class="kw">await</span>;
+        </span>validate_full_setup(test_config, followers).<span class="kw">await</span>;
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
@@ -2558,9 +2588,10 @@
         <span class="comment">// let mut join_handles = vec![];
         </span><span class="kw">let </span><span class="kw-2">mut </span>apis = <span class="macro">vec!</span>[];
         <span class="kw">let </span><span class="kw-2">mut </span>followers = <span class="macro">vec!</span>[];
-        <span class="kw">let </span>(<span class="kw-2">mut </span>leader, api) = TestConfigApi::new(base_port, <span class="number">0</span>, data_dir.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>(<span class="kw-2">mut </span>test_config, fedimint_server) =
+            TestConfigApi::new(base_port, <span class="number">0</span>, data_dir.clone()).<span class="kw">await</span>;
 
-        apis.push(api);
+        apis.push(fedimint_server);
 
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..PEER_NUM {
             <span class="kw">let </span>port = base_port + (i * PORTS_PER_PEER);
@@ -2569,12 +2600,17 @@
             followers.push(follower);
         }
 
+        <span class="kw">let </span>module_inits = test_config.module_inits().clone();
         <span class="comment">// Run the Fedimint servers and test concurrently
         </span>spawn(<span class="string">"Fedimint server apis"</span>, <span class="kw">async move </span>{
-            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))).<span class="kw">await</span>;
+            join_all(
+                apis.iter_mut()
+                    .map(|api| api.run(<span class="kw-2">&amp;</span>module_inits, TaskGroup::new())),
+            )
+            .<span class="kw">await</span>;
         });
 
-        leader = validate_leader_setup(leader).<span class="kw">await</span>;
+        test_config = validate_leader_setup(test_config).<span class="kw">await</span>;
 
         <span class="comment">// Setup followers and send connection info
         </span><span class="kw">for </span>follower <span class="kw">in </span><span class="kw-2">&amp;mut </span>followers {
@@ -2587,20 +2623,20 @@
                 .set_password(follower.auth.clone())
                 .<span class="kw">await
                 </span>.unwrap();
-            <span class="kw">let </span>leader_url = <span class="prelude-val">Some</span>(leader.settings.api_url.clone());
+            <span class="kw">let </span>leader_url = <span class="prelude-val">Some</span>(test_config.settings.api_url.clone());
             follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
             follower.name = <span class="macro">format!</span>(<span class="string">"{}_"</span>, follower.name);
             follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
             follower.set_config_gen_params().<span class="kw">await</span>;
         }
-        leader
+        test_config
             .wait_status(ServerStatus::SharingConfigGenParams)
             .<span class="kw">await</span>;
 
         <span class="comment">// Leader can trigger a setup restart
-        </span>leader
+        </span>test_config
             .client
-            .restart_federation_setup(leader.auth.clone())
+            .restart_federation_setup(test_config.auth.clone())
             .<span class="kw">await
             </span>.unwrap();
 
@@ -2614,14 +2650,14 @@
         }
 
         <span class="comment">// Ensure all servers have restarted
-        </span>leader
+        </span>test_config
             .wait_status_preconfig(ServerStatus::SetupRestarted, <span class="kw-2">&amp;</span>followers)
             .<span class="kw">await</span>;
-        leader
+        test_config
             .wait_status_preconfig(ServerStatus::AwaitingPassword, <span class="kw-2">&amp;</span>followers)
             .<span class="kw">await</span>;
 
-        leader = validate_leader_setup(leader).<span class="kw">await</span>;
+        test_config = validate_leader_setup(test_config).<span class="kw">await</span>;
 
         <span class="comment">// Setup followers and send connection info
         </span><span class="kw">for </span>follower <span class="kw">in </span><span class="kw-2">&amp;mut </span>followers {
@@ -2634,13 +2670,13 @@
                 .set_password(follower.auth.clone())
                 .<span class="kw">await
                 </span>.unwrap();
-            <span class="kw">let </span>leader_url = <span class="prelude-val">Some</span>(leader.settings.api_url.clone());
+            <span class="kw">let </span>leader_url = <span class="prelude-val">Some</span>(test_config.settings.api_url.clone());
             follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
             follower.set_config_gen_params().<span class="kw">await</span>;
         }
 
         <span class="comment">// Validate we can do a full fedimint setup after a restart
-        </span>validate_full_setup(leader, followers).<span class="kw">await</span>;
+        </span>validate_full_setup(test_config, followers).<span class="kw">await</span>;
     }
 
     <span class="comment">// Validate steps when leader initiates fedimint setup

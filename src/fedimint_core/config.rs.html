@@ -1107,6 +1107,7 @@
 <a href="#1105" id="1105">1105</a>
 <a href="#1106" id="1106">1106</a>
 <a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1704,7 +1705,7 @@
 }
 
 <span class="kw">impl </span>ModuleRegistry&lt;ConfigGenModuleParams&gt; {
-    <span class="kw">pub fn </span>attach_config_gen_params&lt;T: ModuleInitParams&gt;(
+    <span class="kw">pub fn </span>attach_config_gen_params_by_id&lt;T: ModuleInitParams&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         id: ModuleInstanceId,
         kind: ModuleKind,
@@ -1715,7 +1716,8 @@
         <span class="self">self</span>.register_module(id, kind, params);
         <span class="self">self
     </span>}
-    <span class="kw">pub fn </span>append_config_gen_params&lt;T: ModuleInitParams&gt;(
+
+    <span class="kw">pub fn </span>attach_config_gen_params&lt;T: ModuleInitParams&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         kind: ModuleKind,
         gen: T,
