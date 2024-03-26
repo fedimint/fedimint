@@ -11,29 +11,37 @@ use fedimint_core::admin_client::ConfigGenParamsRequest;
 use fedimint_core::config::{
     ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::core::ModuleKind;
 use fedimint_core::db::Database;
 use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
 use fedimint_core::module::ServerModuleInit;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::timing;
 use fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
+use fedimint_ln_common::config::{
+    LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
+};
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::TracingSetup;
-use fedimint_meta_server::MetaInit;
+use fedimint_meta_server::{MetaGenParams, MetaInit};
+use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_server::MintInit;
 use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
 use fedimint_server::FedimintServer;
+use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
+use fedimint_wallet_server::common::config::{
+    WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
+};
 use fedimint_wallet_server::WalletInit;
 use futures::FutureExt;
 use tokio::select;
 use tracing::{debug, error, info, warn};
 
+use crate::default_esplora_server;
 use crate::envs::FM_DISABLE_META_MODULE_ENV;
 use crate::fedimintd::metrics::APP_START_TS;
-use crate::{attach_default_module_init_params, attach_unknown_module_init_params};
 
 /// Time we will wait before forcefully shutting down tasks
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
@@ -119,7 +127,7 @@ fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
 /// use fedimint_ln_server::LightningInit;
 /// use fedimint_mint_server::MintInit;
 /// use fedimint_wallet_server::WalletInit;
-/// use fedimintd::fedimintd::Fedimintd;
+/// use fedimintd::Fedimintd;
 ///
 /// // Note: not called `main` to avoid rustdoc executing it
 /// // #[tokio::main]
@@ -127,17 +135,19 @@ fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
 ///     Fedimintd::new(env!("FEDIMINT_BUILD_CODE_VERSION"))?
 ///         // use `.with_default_modules()` to avoid having
 ///         // to import these manually
-///         .with_module(WalletInit)
-///         .with_module(MintInit)
-///         .with_module(LightningInit)
+///         .with_module_kind(WalletInit)
+///         .with_module_kind(MintInit)
+///         .with_module_kind(LightningInit)
 ///         .run()
 ///         .await
 /// }
 /// ```
 pub struct Fedimintd {
-    pub server_gens: ServerModuleInitRegistry,
-    pub server_gen_params: ServerModuleConfigGenParamsRegistry,
-    pub version_hash: String,
+    server_gens: ServerModuleInitRegistry,
+    server_gen_params: ServerModuleConfigGenParamsRegistry,
+    version_hash: String,
+    opts: ServerOpts,
+    bitcoind_rpc: BitcoinRpcConfig,
 }
 
 impl Fedimintd {
@@ -160,59 +170,6 @@ impl Fedimintd {
             .with_label_values(&[version, version_hash])
             .set(fedimint_core::time::duration_since_epoch().as_secs() as i64);
 
-        Ok(Self {
-            server_gens: ServerModuleInitRegistry::new(),
-            server_gen_params: ServerModuleConfigGenParamsRegistry::default(),
-            version_hash: version_hash.to_owned(),
-        })
-    }
-
-    /// Attach a server module to the Fedimintd instance
-    pub fn with_module<T>(mut self, gen: T) -> Self
-    where
-        T: ServerModuleInit + 'static + Send + Sync,
-    {
-        self.server_gens.attach(gen);
-        self
-    }
-
-    /// Attach additional parameters for a server module to Fedimintd
-    pub fn with_extra_module_inits_params<P>(
-        mut self,
-        id: ModuleInstanceId,
-        kind: ModuleKind,
-        params: P,
-    ) -> Self
-    where
-        P: ModuleInitParams,
-    {
-        self.server_gen_params
-            .attach_config_gen_params(id, kind, params);
-        self
-    }
-
-    /// Attach default server modules to Fedimintd instance
-    pub fn with_default_modules(self) -> Self {
-        let s = self
-            .with_module(LightningInit)
-            .with_module(MintInit)
-            .with_module(WalletInit);
-
-        let s = if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
-            s.with_module(MetaInit)
-        } else {
-            s
-        };
-
-        if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
-            s.with_module(UnknownInit)
-        } else {
-            s
-        }
-    }
-
-    /// Block thread and run a Fedimintd server
-    pub async fn run(self) -> ! {
         let opts: ServerOpts = ServerOpts::parse();
         TracingSetup::default()
             .tokio_console_bind(opts.tokio_console_bind)
@@ -220,6 +177,109 @@ impl Fedimintd {
             .init()
             .unwrap();
 
+        let bitcoind_rpc = BitcoinRpcConfig::from_env_vars()?;
+
+        Ok(Self {
+            opts,
+            bitcoind_rpc,
+            server_gens: ServerModuleInitRegistry::new(),
+            server_gen_params: ServerModuleConfigGenParamsRegistry::default(),
+            version_hash: version_hash.to_owned(),
+        })
+    }
+
+    /// Attach a server module kind to the Fedimintd instance
+    ///
+    /// This makes `fedimintd` support additional module types (aka. kinds)
+    pub fn with_module_kind<T>(mut self, gen: T) -> Self
+    where
+        T: ServerModuleInit + 'static + Send + Sync,
+    {
+        self.server_gens.attach(gen);
+        self
+    }
+
+    /// Get the version hash this `fedimintd` will report for diagnostic
+    /// purposes
+    pub fn version_hash(&self) -> &str {
+        &self.version_hash
+    }
+
+    /// Attach additional module instance with parameters
+    ///
+    /// Note: The `kind` needs to be added with [`Self::with_module_kind`] if
+    /// it's not the default one.
+    pub fn with_module_instance<P>(mut self, kind: ModuleKind, params: P) -> Self
+    where
+        P: ModuleInitParams,
+    {
+        self.server_gen_params
+            .attach_config_gen_params(kind, params);
+        self
+    }
+
+    /// Attach default server modules to Fedimintd instance
+    pub fn with_default_modules(self) -> Self {
+        let network = self.opts.network;
+
+        let bitcoind_rpc = self.bitcoind_rpc.clone();
+        let finality_delay = self.opts.finality_delay;
+        let s = self
+            .with_module_kind(LightningInit)
+            .with_module_instance(
+                LightningInit::kind(),
+                LightningGenParams {
+                    local: LightningGenParamsLocal {
+                        bitcoin_rpc: bitcoind_rpc.clone(),
+                    },
+                    consensus: LightningGenParamsConsensus { network },
+                },
+            )
+            .with_module_kind(MintInit)
+            .with_module_instance(
+                MintInit::kind(),
+                MintGenParams {
+                    local: Default::default(),
+                    consensus: MintGenParamsConsensus::new(
+                        2,
+                        fedimint_mint_server::common::config::FeeConsensus::default(),
+                    ),
+                },
+            )
+            .with_module_kind(WalletInit)
+            .with_module_instance(
+                WalletInit::kind(),
+                WalletGenParams {
+                    local: WalletGenParamsLocal {
+                        bitcoin_rpc: bitcoind_rpc.clone(),
+                    },
+                    consensus: WalletGenParamsConsensus {
+                        network,
+                        // TODO this is not very elegant, but I'm planning to get rid of it in a
+                        // next commit anyway
+                        finality_delay,
+                        client_default_bitcoin_rpc: default_esplora_server(network),
+                    },
+                },
+            );
+
+        let s = if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
+            s.with_module_kind(MetaInit)
+                .with_module_instance(MetaInit::kind(), MetaGenParams::default())
+        } else {
+            s
+        };
+
+        if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
+            s.with_module_kind(UnknownInit)
+                .with_module_instance(UnknownInit::kind(), UnknownGenParams::default())
+        } else {
+            s
+        }
+    }
+
+    /// Block thread and run a Fedimintd server
+    pub async fn run(self) -> ! {
         let root_task_group = TaskGroup::new();
         root_task_group.install_kill_handler();
 
@@ -233,8 +293,8 @@ impl Fedimintd {
         root_task_group
             .spawn_local("main", move |_task_handle| async move {
                 match run(
-                    opts,
-                    task_group.clone(),
+                    self.opts,
+                    &task_group,
                     self.server_gens,
                     self.server_gen_params,
                     self.version_hash,
@@ -288,29 +348,18 @@ impl Fedimintd {
 
 async fn run(
     opts: ServerOpts,
-    task_group: TaskGroup,
+    task_group: &TaskGroup,
     module_inits: ServerModuleInitRegistry,
-    mut module_inits_params: ServerModuleConfigGenParamsRegistry,
+    module_inits_params: ServerModuleConfigGenParamsRegistry,
     version_hash: String,
 ) -> anyhow::Result<()> {
-    attach_default_module_init_params(
-        BitcoinRpcConfig::from_env_vars()?,
-        &mut module_inits_params,
-        opts.network,
-        opts.finality_delay,
-    );
-    if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
-        attach_unknown_module_init_params(&mut module_inits_params);
+    if let Some(socket_addr) = opts.bind_metrics_api.as_ref() {
+        task_group.spawn_cancellable("metrics-server", {
+            let task_group = task_group.clone();
+            let socket_addr = *socket_addr;
+            async move { fedimint_metrics::run_api_server(socket_addr, task_group).await }
+        });
     }
-
-    let module_kinds = module_inits_params
-        .iter_modules()
-        .map(|(id, kind, _)| (id, kind));
-    let decoders = module_inits.available_decoders(module_kinds.into_iter())?;
-    let db = Database::new(
-        fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
-        decoders.clone(),
-    );
 
     // TODO: Fedimintd should use the config gen API
     // on each run we want to pass the currently passed password, so we need to
@@ -320,42 +369,28 @@ async fn run(
     };
     let default_params = ConfigGenParamsRequest {
         meta: opts.extra_dkg_meta.clone(),
-        modules: module_inits_params,
+        modules: module_inits_params.clone(),
     };
-    let mut api = FedimintServer {
-        data_dir: opts.data_dir,
-        settings: ConfigGenSettings {
-            download_token_limit: None,
-            p2p_bind: opts.bind_p2p,
-            api_bind: opts.bind_api,
-            p2p_url: opts.p2p_url,
-            api_url: opts.api_url,
-            default_params,
-            max_connections: fedimint_server::config::max_connections(),
-            registry: module_inits,
-        },
-        db,
-        version_hash,
+    // TODO: meh, move, refactor
+    let settings = ConfigGenSettings {
+        download_token_limit: None,
+        p2p_bind: opts.bind_p2p,
+        api_bind: opts.bind_api,
+        p2p_url: opts.p2p_url,
+        api_url: opts.api_url,
+        default_params,
+        max_connections: fedimint_server::config::max_connections(),
+        registry: module_inits.clone(),
     };
-    if let Some(bind_metrics_api) = opts.bind_metrics_api.as_ref() {
-        let (api_result, metrics_api_result) = futures::join!(
-            api.run(task_group.clone()),
-            spawn_metrics_server(bind_metrics_api, task_group)
-        );
-        api_result?;
-        metrics_api_result?;
-    } else {
-        api.run(task_group).await?;
-    }
-    Ok(())
-}
 
-async fn spawn_metrics_server(
-    bind_address: &SocketAddr,
-    mut task_group: TaskGroup,
-) -> anyhow::Result<()> {
-    let rx = fedimint_metrics::run_api_server(bind_address, &mut task_group).await?;
-    info!("Metrics API listening on {bind_address}");
-    rx.await;
+    let db = Database::new(
+        fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
+        Default::default(),
+    );
+
+    FedimintServer::new(opts.data_dir, settings, db, version_hash)
+        .run(&module_inits, task_group.clone())
+        .await?;
+
     Ok(())
 }
