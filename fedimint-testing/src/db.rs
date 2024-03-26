@@ -5,14 +5,14 @@ use std::path::{Path, PathBuf};
 use std::{env, fs, io};
 
 use anyhow::{bail, format_err, Context};
-use fedimint_client::db::{
-    apply_migrations_client, remove_old_and_persist_new_active_states,
-    remove_old_and_persist_new_inactive_states,
-};
+use fedimint_client::db::apply_migrations_client;
 use fedimint_client::module::init::DynClientModuleInit;
 use fedimint_client::module::ClientModule;
-use fedimint_client::sm::{ActiveStateKeyPrefix, InactiveStateKeyPrefix};
-use fedimint_core::core::IntoDynInstance;
+use fedimint_client::sm::{
+    ActiveStateKeyBytes, ActiveStateKeyPrefix, ActiveStateMeta, InactiveStateKeyBytes,
+    InactiveStateKeyPrefix, InactiveStateMeta,
+};
+use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     apply_migrations, apply_migrations_server, Database, DatabaseVersion,
     IDatabaseTransactionOpsCoreTyped, ServerMigrationFn,
@@ -165,16 +165,15 @@ where
 /// namespace. `state_machine_prepare` creates client state machine data that
 /// can be used for testing state machine migrations. This is created in the
 /// global namespace.
-pub async fn snapshot_db_migrations_client<'a, F, S, I, T>(
+pub async fn snapshot_db_migrations_client<'a, F, S, I>(
     snapshot_name: &str,
     data_prepare: F,
     state_machine_prepare: S,
 ) -> anyhow::Result<()>
 where
     F: Fn(Database) -> BoxFuture<'a, ()> + Send + Sync,
-    S: Fn() -> (Vec<T::States>, Vec<T::States>) + Send + Sync,
+    S: Fn() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) + Send + Sync,
     I: CommonModuleInit,
-    T: ClientModule,
 {
     let project_root = get_project_root().unwrap();
     let snapshot_dir = project_root.join("db/migrations").join(snapshot_name);
@@ -188,30 +187,39 @@ where
             data_prepare(isolated_db).await;
 
             let (active_states, inactive_states) = state_machine_prepare();
-            let new_active_states = active_states
-                .into_iter()
-                .map(|state| state.into_dyn(TEST_MODULE_INSTANCE_ID))
-                .collect::<Vec<_>>();
-            let new_inactive_states = inactive_states
-                .into_iter()
-                .map(|state| state.into_dyn(TEST_MODULE_INSTANCE_ID))
-                .collect::<Vec<_>>();
-
             let mut global_dbtx = db.begin_transaction().await;
-            remove_old_and_persist_new_active_states(
-                &mut global_dbtx.to_ref_nc(),
-                new_active_states,
-                Vec::new(),
-                TEST_MODULE_INSTANCE_ID,
-            )
-            .await;
-            remove_old_and_persist_new_inactive_states(
-                &mut global_dbtx.to_ref_nc(),
-                new_inactive_states,
-                Vec::new(),
-                TEST_MODULE_INSTANCE_ID,
-            )
-            .await;
+
+            for state in active_states {
+                global_dbtx
+                    .insert_new_entry(
+                        &ActiveStateKeyBytes {
+                            operation_id: OperationId::new_random(),
+                            module_instance_id: TEST_MODULE_INSTANCE_ID,
+                            state,
+                        },
+                        &ActiveStateMeta {
+                            created_at: fedimint_core::time::now(),
+                        },
+                    )
+                    .await;
+            }
+
+            for state in inactive_states {
+                global_dbtx
+                    .insert_new_entry(
+                        &InactiveStateKeyBytes {
+                            operation_id: OperationId::new_random(),
+                            module_instance_id: TEST_MODULE_INSTANCE_ID,
+                            state,
+                        },
+                        &InactiveStateMeta {
+                            created_at: fedimint_core::time::now(),
+                            exited_at: fedimint_core::time::now(),
+                        },
+                    )
+                    .await;
+            }
+
             global_dbtx.commit_tx().await;
         }
         .boxed()

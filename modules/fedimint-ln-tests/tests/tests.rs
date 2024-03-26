@@ -680,10 +680,7 @@ mod fedimint_migration_tests {
         MetaOverrides, MetaOverridesKey, MetaOverridesPrefix, PaymentResult, PaymentResultKey,
         PaymentResultPrefix,
     };
-    use fedimint_ln_client::receive::{
-        LightningReceiveStateMachine, LightningReceiveStates, LightningReceiveSubmittedOffer,
-        LightningReceiveSubmittedOfferV0,
-    };
+    use fedimint_ln_client::receive::LightningReceiveStates;
     use fedimint_ln_client::{
         LightningClientInit, LightningClientModule, LightningClientStateMachines,
         OutgoingLightningPayment, ReceivingKey,
@@ -711,7 +708,7 @@ mod fedimint_migration_tests {
     use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
         snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
-        validate_migrations_server, BYTE_32, BYTE_33, BYTE_8, STRING_64,
+        validate_migrations_server, BYTE_32, BYTE_33, BYTE_8, STRING_64, TEST_MODULE_INSTANCE_ID,
     };
     use futures::StreamExt;
     use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret, RoutingFees};
@@ -936,12 +933,9 @@ mod fedimint_migration_tests {
         dbtx.commit_tx().await;
     }
 
-    fn create_client_states() -> (
-        Vec<LightningClientStateMachines>,
-        Vec<LightningClientStateMachines>,
-    ) {
+    fn create_client_states() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
         let secp: Secp256k1<All> = Secp256k1::gen_new();
-        let invoice1 = InvoiceBuilder::new(Currency::Regtest)
+        let invoice = InvoiceBuilder::new(Currency::Regtest)
             .amount_milli_satoshis(1000)
             .payment_hash(sha256::Hash::hash(&BYTE_32))
             .description("".to_string())
@@ -950,44 +944,85 @@ mod fedimint_migration_tests {
             .min_final_cltv_expiry_delta(18)
             .expiry_time(Duration::from_secs(86400))
             .build_signed(|m| secp.sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng)))
-            .unwrap();
-        let invoice2 = InvoiceBuilder::new(Currency::Regtest)
-            .amount_milli_satoshis(1000)
-            .payment_hash(sha256::Hash::hash(&BYTE_32))
-            .description("".to_string())
-            .payment_secret(PaymentSecret([0; 32]))
-            .current_timestamp()
-            .min_final_cltv_expiry_delta(18)
-            .expiry_time(Duration::from_secs(86400))
-            .build_signed(|m| secp.sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng)))
-            .unwrap();
+            .expect("Invoice creation failed");
 
         // Create an active state and inactive state that will not be migrated.
         let operation_id = OperationId::new_random();
-        let input_state = LightningClientStateMachines::Receive(LightningReceiveStateMachine {
-            operation_id,
-            state: LightningReceiveStates::SubmittedOffer(LightningReceiveSubmittedOffer {
-                offer_txid: TransactionId::all_zeros(),
-                invoice: invoice1,
-                receiving_key: ReceivingKey::Personal(KeyPair::new_global(&mut OsRng)),
-            }),
-        });
+        let submitted_offer_variant_new = {
+            let mut submitted_offer_variant = Vec::<u8>::new();
+            TransactionId::all_zeros()
+                .consensus_encode(&mut submitted_offer_variant)
+                .expect("TransactionId is encodable");
+            invoice
+                .consensus_encode(&mut submitted_offer_variant)
+                .expect("Invoice is encodable");
+            let receiving_key = ReceivingKey::Personal(KeyPair::new_global(&mut OsRng));
+            receiving_key
+                .consensus_encode(&mut submitted_offer_variant)
+                .expect("ReceivingKey is encodable");
+
+            submitted_offer_variant
+        };
+        let new_receive_bytes =
+            create_receive_state_machine(submitted_offer_variant_new, operation_id, 0);
 
         // Create and active state and inactive state that will be migrated.
-        let operation_id = OperationId::new_random();
-        let state = LightningClientStateMachines::Receive(LightningReceiveStateMachine {
-            operation_id,
-            state: LightningReceiveStates::SubmittedOfferV0(LightningReceiveSubmittedOfferV0 {
-                offer_txid: TransactionId::all_zeros(),
-                invoice: invoice2,
-                payment_keypair: KeyPair::new_global(&mut OsRng),
-            }),
-        });
+        let submitted_offer_variant_old = {
+            let mut submitted_offer_variant = Vec::<u8>::new();
+            TransactionId::all_zeros()
+                .consensus_encode(&mut submitted_offer_variant)
+                .expect("TransactionId is encodable");
+            invoice
+                .consensus_encode(&mut submitted_offer_variant)
+                .expect("Invoice is encodable");
+            let keypair = KeyPair::new_global(&mut OsRng);
+            keypair
+                .consensus_encode(&mut submitted_offer_variant)
+                .expect("Keypair is encodable");
+
+            submitted_offer_variant
+        };
+        let old_receive_bytes =
+            create_receive_state_machine(submitted_offer_variant_old, operation_id, 0);
 
         (
-            vec![state.clone(), input_state.clone()],
-            vec![state, input_state],
+            vec![old_receive_bytes.clone(), new_receive_bytes.clone()],
+            vec![old_receive_bytes, new_receive_bytes],
         )
+    }
+
+    /// Creates a vector of bytes that contains consensus encoded
+    /// `LightningClientStateMachines::Receive` state machine. `sm_state` is
+    /// the u64 representation of the state enum.
+    fn create_receive_state_machine(
+        state: Vec<u8>,
+        operation_id: OperationId,
+        sm_state: u64,
+    ) -> Vec<u8> {
+        let receive_variant = {
+            let mut receive_variant = Vec::<u8>::new();
+            operation_id
+                .consensus_encode(&mut receive_variant)
+                .expect("OperationId is encodable");
+            sm_state
+                .consensus_encode(&mut receive_variant)
+                .expect("u64 is encodable");
+            state
+                .consensus_encode(&mut receive_variant)
+                .expect("State is encodable");
+            receive_variant
+        };
+
+        let mut sm_bytes = Vec::<u8>::new();
+        TEST_MODULE_INSTANCE_ID
+            .consensus_encode(&mut sm_bytes)
+            .expect("u16 is encodable");
+        2u64.consensus_encode(&mut sm_bytes)
+            .expect("u64 is encodable"); // Receive state machine variant
+        receive_variant
+            .consensus_encode(&mut sm_bytes)
+            .expect("receive variant is encodable");
+        sm_bytes
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1141,7 +1176,7 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
-        snapshot_db_migrations_client::<_, _, LightningCommonInit, LightningClientModule>(
+        snapshot_db_migrations_client::<_, _, LightningCommonInit>(
             "lightning-client-v0",
             |db| Box::pin(async move { create_client_db_with_v0_data(db).await }),
             create_client_states,
