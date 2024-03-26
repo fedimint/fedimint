@@ -203,3 +203,6 @@ docs: build-docs
     echo "file://$fallback_index_path"
     $open_cmd "$fallback_index_path" || true
   fi
+
+release-bump-version VERSION="prerelease":
+  cargo workspaces version --exact --no-git-commit --yes --force '*' --pre-id rc {{VERSION}}
