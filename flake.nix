@@ -221,7 +221,6 @@
                   pkgs.cargo-udeps
                   pkgs.cargo-audit
                   pkgs.cargo-deny
-                  pkgs.cargo-workspaces
                   pkgs.parallel
                   pkgs.just
                   pkgs.time
@@ -257,6 +256,9 @@
                   pkgs.sccache
                 ] ++ lib.optionals (!stdenv.isAarch64 && !stdenv.isDarwin) [
                   pkgs.semgrep
+                ] ++ lib.optionals (!stdenv.isDarwin) [
+                  # broken on MacOS?
+                  pkgs.cargo-workspaces
                 ];
 
                 shellHook = ''
