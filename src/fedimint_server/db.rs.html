@@ -301,6 +301,19 @@
 <a href="#299" id="299">299</a>
 <a href="#300" id="300">300</a>
 <a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -402,8 +415,13 @@
     <span class="kw">use </span>std::str::FromStr;
 
     <span class="kw">use </span>anyhow::ensure;
-    <span class="kw">use </span>bitcoin::{secp256k1, KeyPair};
+    <span class="kw">use </span>bitcoin::key::KeyPair;
+    <span class="kw">use </span>bitcoin::secp256k1;
     <span class="kw">use </span>bitcoin_hashes::Hash;
+    <span class="kw">use </span>fedimint_core::bitcoin_migration::{
+        bitcoin29_to_bitcoin30_message, bitcoin29_to_bitcoin30_secp256k1_secret_key,
+        bitcoin30_to_bitcoin29_schnorr_signature, bitcoin30_to_bitcoin29_secp256k1_public_key,
+    };
     <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
     <span class="kw">use </span>fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -423,6 +441,7 @@
     };
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>rand::rngs::OsRng;
+    <span class="kw">use </span>rand::thread_rng;
     <span class="kw">use </span>secp256k1_zkp::Message;
     <span class="kw">use </span>strum::IntoEnumIterator;
     <span class="kw">use </span>tracing::info;
@@ -449,27 +468,34 @@
 
         <span class="kw">let </span>accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(<span class="kw-2">&amp;</span>BYTE_32).unwrap());
 
-        <span class="kw">let </span>(sk, <span class="kw">_</span>) = secp256k1::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
+        <span class="kw">let </span>(sk, <span class="kw">_</span>) = secp256k1_zkp::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
-        <span class="kw">let </span>key_pair = KeyPair::from_secret_key(<span class="kw-2">&amp;</span>secp, <span class="kw-2">&amp;</span>sk);
-        <span class="kw">let </span>schnorr = secp.sign_schnorr(<span class="kw-2">&amp;</span>Message::from_slice(<span class="kw-2">&amp;</span>BYTE_32).unwrap(), <span class="kw-2">&amp;</span>key_pair);
+        <span class="kw">let </span>key_pair =
+            KeyPair::from_secret_key(<span class="kw-2">&amp;</span>secp, <span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_secp256k1_secret_key(sk));
+        <span class="kw">let </span>schnorr = secp.sign_schnorr_with_rng(
+            <span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_message(Message::from_slice(<span class="kw-2">&amp;</span>BYTE_32).unwrap()),
+            <span class="kw-2">&amp;</span>key_pair,
+            <span class="kw-2">&amp;mut </span>thread_rng(),
+        );
         <span class="kw">let </span>transaction = Transaction {
             inputs: <span class="macro">vec!</span>[DynInput::from_typed(
                 <span class="number">0</span>,
                 DummyInput {
                     amount: Amount::ZERO,
-                    account: key_pair.public_key(),
+                    account: bitcoin30_to_bitcoin29_secp256k1_public_key(key_pair.public_key()),
                 },
             )],
             outputs: <span class="macro">vec!</span>[DynOutput::from_typed(
                 <span class="number">0</span>,
                 DummyOutput {
                     amount: Amount::ZERO,
-                    account: key_pair.public_key(),
+                    account: bitcoin30_to_bitcoin29_secp256k1_public_key(key_pair.public_key()),
                 },
             )],
             nonce: [<span class="number">0x42</span>; <span class="number">8</span>],
-            signatures: TransactionSignature::NaiveMultisig(<span class="macro">vec!</span>[schnorr]),
+            signatures: TransactionSignature::NaiveMultisig(<span class="macro">vec!</span>[
+                bitcoin30_to_bitcoin29_schnorr_signature(schnorr),
+            ]),
         };
 
         <span class="kw">let </span>module_ids = transaction

@@ -652,6 +652,9 @@
 <a href="#650" id="650">650</a>
 <a href="#651" id="651">651</a>
 <a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
@@ -661,6 +664,9 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::sha256::{Hash <span class="kw">as </span>Sha256, HashEngine};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_public_key,
+};
 <span class="kw">use </span>fedimint_core::config::{
     DkgError, DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISupportedDkgMessage,
 };
@@ -1170,7 +1176,7 @@
             .send(
                 <span class="kw-2">&amp;</span><span class="self">self</span>.peers,
                 (<span class="self">self</span>.module_instance_id, dkg_key.clone()),
-                DkgPeerMsg::PublicKey(key),
+                DkgPeerMsg::PublicKey(bitcoin30_to_bitcoin29_secp256k1_public_key(key)),
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1182,7 +1188,7 @@
                 .<span class="kw">await</span><span class="question-mark">?
             </span>{
                 (peer, DkgPeerMsg::PublicKey(key)) =&gt; {
-                    peer_peg_in_keys.insert(peer, key);
+                    peer_peg_in_keys.insert(peer, bitcoin29_to_bitcoin30_secp256k1_public_key(key));
                 }
                 (peer, msg) =&gt; {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(

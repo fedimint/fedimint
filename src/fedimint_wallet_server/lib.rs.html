@@ -1790,6 +1790,19 @@
 <a href="#1788" id="1788">1788</a>
 <a href="#1789" id="1789">1789</a>
 <a href="#1790" id="1790">1790</a>
+<a href="#1791" id="1791">1791</a>
+<a href="#1792" id="1792">1792</a>
+<a href="#1793" id="1793">1793</a>
+<a href="#1794" id="1794">1794</a>
+<a href="#1795" id="1795">1795</a>
+<a href="#1796" id="1796">1796</a>
+<a href="#1797" id="1797">1797</a>
+<a href="#1798" id="1798">1798</a>
+<a href="#1799" id="1799">1799</a>
+<a href="#1800" id="1800">1800</a>
+<a href="#1801" id="1801">1801</a>
+<a href="#1802" id="1802">1802</a>
+<a href="#1803" id="1803">1803</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -1815,7 +1828,10 @@
     WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET,
 };
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_script;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_script,
+    bitcoin30_to_bitcoin29_secp256k1_public_key,
+};
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -2102,10 +2118,20 @@
         <span class="kw">let </span>(sk, pk) = secp.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>our_key = CompressedPublicKey { key: pk };
         <span class="kw">let </span>peer_peg_in_keys: BTreeMap&lt;PeerId, CompressedPublicKey&gt; = peers
-            .exchange_pubkeys(<span class="string">"wallet"</span>.to_string(), our_key.key)
+            .exchange_pubkeys(
+                <span class="string">"wallet"</span>.to_string(),
+                bitcoin29_to_bitcoin30_secp256k1_public_key(our_key.key),
+            )
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_iter()
-            .map(|(k, key)| (k, CompressedPublicKey { key }))
+            .map(|(k, key)| {
+                (
+                    k,
+                    CompressedPublicKey {
+                        key: bitcoin30_to_bitcoin29_secp256k1_public_key(key),
+                    },
+                )
+            })
             .collect();
 
         <span class="kw">let </span>wallet_cfg = WalletConfig::new(

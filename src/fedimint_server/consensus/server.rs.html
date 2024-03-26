@@ -837,6 +837,11 @@
 <a href="#835" id="835">835</a>
 <a href="#836" id="836">836</a>
 <a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -845,6 +850,7 @@
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>async_channel::{Receiver, Sender};
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::core::MODULE_INSTANCE_ID_GLOBAL;
 <span class="kw">use </span>fedimint_core::db::{
@@ -1001,7 +1007,11 @@
 
         <span class="kw">let </span>keychain = Keychain::new(
             cfg.local.identity,
-            cfg.consensus.broadcast_public_keys.clone(),
+            cfg.consensus
+                .broadcast_public_keys
+                .iter()
+                .map(|(peer_id, pk)| (<span class="kw-2">*</span>peer_id, bitcoin30_to_bitcoin29_secp256k1_public_key(<span class="kw-2">*</span>pk)))
+                .collect(),
             cfg.private.broadcast_secret_key,
         );
 
