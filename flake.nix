@@ -221,6 +221,7 @@
                   pkgs.cargo-udeps
                   pkgs.cargo-audit
                   pkgs.cargo-deny
+                  pkgs.cargo-workspaces
                   pkgs.parallel
                   pkgs.just
                   pkgs.time
