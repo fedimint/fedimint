@@ -456,7 +456,7 @@ impl Lnd {
         let lnd_rpc_addr = &process_mgr.globals.FM_LND_RPC_ADDR;
         let lnd_macaroon = &process_mgr.globals.FM_LND_MACAROON;
         let lnd_tls_cert = &process_mgr.globals.FM_LND_TLS_CERT;
-        poll("wait for lnd files", None, || async {
+        poll("wait for lnd files", Duration::from_secs(60), || async {
             if fs::try_exists(lnd_tls_cert)
                 .await
                 .context("lnd tls cert")
