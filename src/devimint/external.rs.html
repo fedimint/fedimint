@@ -1283,7 +1283,7 @@
         <span class="kw">let </span>lnd_rpc_addr = <span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_RPC_ADDR;
         <span class="kw">let </span>lnd_macaroon = <span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_MACAROON;
         <span class="kw">let </span>lnd_tls_cert = <span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_TLS_CERT;
-        poll(<span class="string">"wait for lnd files"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+        poll(<span class="string">"wait for lnd files"</span>, Duration::from_secs(<span class="number">60</span>), || <span class="kw">async </span>{
             <span class="kw">if </span>fs::try_exists(lnd_tls_cert)
                 .<span class="kw">await
                 </span>.context(<span class="string">"lnd tls cert"</span>)
