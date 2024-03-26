@@ -99,8 +99,13 @@ mod fedimint_migration_tests {
     use std::str::FromStr;
 
     use anyhow::ensure;
-    use bitcoin::{secp256k1, KeyPair};
+    use bitcoin::key::KeyPair;
+    use bitcoin::secp256k1;
     use bitcoin_hashes::Hash;
+    use fedimint_core::bitcoin_migration::{
+        bitcoin29_to_bitcoin30_message, bitcoin29_to_bitcoin30_secp256k1_secret_key,
+        bitcoin30_to_bitcoin29_schnorr_signature, bitcoin30_to_bitcoin29_secp256k1_public_key,
+    };
     use fedimint_core::core::{DynInput, DynOutput};
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -120,6 +125,7 @@ mod fedimint_migration_tests {
     };
     use futures::StreamExt;
     use rand::rngs::OsRng;
+    use rand::thread_rng;
     use secp256k1_zkp::Message;
     use strum::IntoEnumIterator;
     use tracing::info;
@@ -146,27 +152,34 @@ mod fedimint_migration_tests {
 
         let accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(&BYTE_32).unwrap());
 
-        let (sk, _) = secp256k1::generate_keypair(&mut OsRng);
+        let (sk, _) = secp256k1_zkp::generate_keypair(&mut OsRng);
         let secp = secp256k1::Secp256k1::new();
-        let key_pair = KeyPair::from_secret_key(&secp, &sk);
-        let schnorr = secp.sign_schnorr(&Message::from_slice(&BYTE_32).unwrap(), &key_pair);
+        let key_pair =
+            KeyPair::from_secret_key(&secp, &bitcoin29_to_bitcoin30_secp256k1_secret_key(sk));
+        let schnorr = secp.sign_schnorr_with_rng(
+            &bitcoin29_to_bitcoin30_message(Message::from_slice(&BYTE_32).unwrap()),
+            &key_pair,
+            &mut thread_rng(),
+        );
         let transaction = Transaction {
             inputs: vec![DynInput::from_typed(
                 0,
                 DummyInput {
                     amount: Amount::ZERO,
-                    account: key_pair.public_key(),
+                    account: bitcoin30_to_bitcoin29_secp256k1_public_key(key_pair.public_key()),
                 },
             )],
             outputs: vec![DynOutput::from_typed(
                 0,
                 DummyOutput {
                     amount: Amount::ZERO,
-                    account: key_pair.public_key(),
+                    account: bitcoin30_to_bitcoin29_secp256k1_public_key(key_pair.public_key()),
                 },
             )],
             nonce: [0x42; 8],
-            signatures: TransactionSignature::NaiveMultisig(vec![schnorr]),
+            signatures: TransactionSignature::NaiveMultisig(vec![
+                bitcoin30_to_bitcoin29_schnorr_signature(schnorr),
+            ]),
         };
 
         let module_ids = transaction
