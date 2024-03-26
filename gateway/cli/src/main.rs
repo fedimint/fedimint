@@ -99,7 +99,7 @@ pub enum Commands {
         #[clap(long)]
         network: Option<bitcoin::Network>,
 
-        /// Format <federation id>,<base msat>,<proportional to millionths part>
+        /// Format federation id,base msat,proportional to millionths part
         #[clap(long)]
         per_federation_routing_fees: Option<Vec<PerFederationRoutingFees>>,
     },
@@ -231,7 +231,7 @@ async fn main() -> anyhow::Result<()> {
                     password,
                     num_route_hints,
                     network: network.map(bitcoin30_to_bitcoin29_network),
-                    default_routing_fees: routing_fees,
+                    routing_fees,
                     per_federation_routing_fees,
                 })
                 .await?;

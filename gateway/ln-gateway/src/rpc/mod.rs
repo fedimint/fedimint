@@ -66,8 +66,7 @@ pub struct FederationInfo {
     pub balance_msat: Amount,
     pub config: ClientConfig,
     pub channel_id: Option<u64>,
-    #[serde(with = "serde_option_routing_fees")]
-    pub routing_fees: Option<RoutingFees>,
+    pub routing_fees: Option<FederationRoutingFees>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -90,17 +89,26 @@ pub struct GatewayFedConfig {
     pub federations: BTreeMap<FederationId, JsonClientConfig>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct FederationRoutingFees {
     pub base_msat: u32,
     pub proportional_millionths: u32,
 }
 
 impl From<FederationRoutingFees> for RoutingFees {
-    fn from(val: FederationRoutingFees) -> Self {
+    fn from(value: FederationRoutingFees) -> Self {
         RoutingFees {
-            base_msat: val.base_msat,
-            proportional_millionths: val.proportional_millionths,
+            base_msat: value.base_msat,
+            proportional_millionths: value.proportional_millionths,
+        }
+    }
+}
+
+impl From<RoutingFees> for FederationRoutingFees {
+    fn from(value: RoutingFees) -> Self {
+        FederationRoutingFees {
+            base_msat: value.base_msat,
+            proportional_millionths: value.proportional_millionths,
         }
     }
 }
@@ -121,7 +129,7 @@ impl FromStr for FederationRoutingFees {
 pub struct SetConfigurationPayload {
     pub password: Option<String>,
     pub num_route_hints: Option<u32>,
-    pub default_routing_fees: Option<String>,
+    pub routing_fees: Option<String>,
     pub network: Option<Network>,
     pub per_federation_routing_fees: Option<Vec<(FederationId, FederationRoutingFees)>>,
 }

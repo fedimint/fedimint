@@ -522,7 +522,7 @@ impl Gateway {
                                                 password: None,
                                                 network: Some(lightning_network),
                                                 num_route_hints: None,
-                                                default_routing_fees: None,
+                                                routing_fees: None,
                                                 per_federation_routing_fees: None,
                                             }).await.expect("Failed to set gateway configuration");
                                             continue;
@@ -927,7 +927,7 @@ impl Gateway {
                 balance_msat: client.get_balance().await,
                 config: client.get_config().clone(),
                 channel_id: Some(mint_channel_id),
-                routing_fees: Some(gateway_config.routing_fees),
+                routing_fees: Some(gateway_config.routing_fees.into()),
             };
 
             self.check_federation_network(&federation_info, gateway_config.network)
@@ -1025,7 +1025,7 @@ impl Gateway {
             password,
             network,
             num_route_hints,
-            default_routing_fees,
+            routing_fees,
             per_federation_routing_fees,
         }: SetConfigurationPayload,
     ) -> Result<()> {
@@ -1070,7 +1070,7 @@ impl Gateway {
 
             // Using this routing fee config as a default for all federation that has none
             // routing fees specified.
-            if let Some(fees_str) = default_routing_fees.clone() {
+            if let Some(fees_str) = routing_fees.clone() {
                 let routing_fees = GatewayFee::from_str(fees_str.as_str())?.0;
                 prev_config.routing_fees = routing_fees;
             }
@@ -1490,7 +1490,7 @@ impl Gateway {
         let routing_fees = dbtx
             .get_value(&federation_key)
             .await
-            .map(|config| config.fees);
+            .map(|config| config.fees.into());
 
         FederationInfo {
             federation_id,
