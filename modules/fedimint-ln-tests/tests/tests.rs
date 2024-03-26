@@ -985,9 +985,27 @@ mod fedimint_migration_tests {
         let old_receive_bytes =
             create_receive_state_machine(submitted_offer_variant_old, operation_id, 0);
 
+        let confirmed_offer_variant_old = {
+            let mut confirmed_variant = Vec::<u8>::new();
+            invoice
+                .consensus_encode(&mut confirmed_variant)
+                .expect("Invoice is encodable");
+            let keypair = KeyPair::new_global(&mut OsRng);
+            keypair
+                .consensus_encode(&mut confirmed_variant)
+                .expect("Keypair is encodable");
+            confirmed_variant
+        };
+        let old_confirmed_bytes =
+            create_receive_state_machine(confirmed_offer_variant_old, operation_id, 2);
+
         (
-            vec![old_receive_bytes.clone(), new_receive_bytes.clone()],
-            vec![old_receive_bytes, new_receive_bytes],
+            vec![
+                old_receive_bytes.clone(),
+                new_receive_bytes.clone(),
+                old_confirmed_bytes.clone(),
+            ],
+            vec![old_receive_bytes, new_receive_bytes, old_confirmed_bytes],
         )
     }
 
@@ -1251,11 +1269,13 @@ mod fedimint_migration_tests {
 
                 // Verify that after the state machine migrations, there is two `SubmittedOffer` state and no `SubmittedOfferV0` states.
                 let mut input_count = 0;
+                let mut confirmed_count = 0;
                 for active_state in active_states {
                     if let LightningClientStateMachines::Receive(machine) = active_state {
                         match machine.state {
                             LightningReceiveStates::SubmittedOffer(_) => input_count += 1,
                             LightningReceiveStates::SubmittedOfferV0(_) => panic!("State machine migration failed, active states contain unexpected state"),
+                            LightningReceiveStates::ConfirmedInvoice(_) => confirmed_count += 1,
                             _ => panic!("State machine migration failed, active states contain unexpected state"),
                         }
                     }
@@ -1263,13 +1283,16 @@ mod fedimint_migration_tests {
 
                 // expecting two, one starting in `SubmittedOffer` and one from migrated from `SubmittedOfferV0`
                 ensure!(input_count == 2, "Expecting two `SubmittedOffer` active state, found {input_count}");
+                ensure!(confirmed_count == 1, "Expecting one `ConfirmedInvoice` active state, found {confirmed_count}");
 
                 let mut input_count = 0;
+                let mut confirmed_count = 0;
                 for inactive_state in inactive_states {
                     if let LightningClientStateMachines::Receive(machine) = inactive_state {
                         match machine.state {
                             LightningReceiveStates::SubmittedOffer(_) => input_count += 1,
                             LightningReceiveStates::SubmittedOfferV0(_) => panic!("State machine migration failed, active states contain unexpected state"),
+                            LightningReceiveStates::ConfirmedInvoice(_) => confirmed_count += 1,
                             _ => panic!("State machine migration failed, active states contain unexpected state"),
                         }
                     }
@@ -1277,6 +1300,7 @@ mod fedimint_migration_tests {
 
                 // expecting two, one starting in `SubmittedOffer` and one from migrated from `SubmittedOfferV0`
                 ensure!(input_count == 2, "Expecting two `SubmittedOffer` inactive state, found {input_count}");
+                ensure!(confirmed_count == 1, "Expecting two `ConfirmedInvoice` inactive state, found {confirmed_count}");
 
                 Ok(())
             },
