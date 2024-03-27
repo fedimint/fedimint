@@ -584,7 +584,7 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
-        snapshot_db_migrations_client::<_, _, MintCommonInit, MintClientModule>(
+        snapshot_db_migrations_client::<_, _, MintCommonInit>(
             "mint-client-v0",
             |dbtx| Box::pin(async move { create_client_db_with_v0_data(dbtx).await }),
             || (Vec::new(), Vec::new()),

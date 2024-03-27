@@ -3,7 +3,6 @@ use std::time::SystemTime;
 use bitcoin_hashes::sha256;
 use fedimint_client::sm::DynState;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::DatabaseValue;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{impl_db_lookup, impl_db_record};
@@ -109,7 +108,9 @@ impl_db_lookup!(
     query_prefix = LightningGatewayKeyPrefix
 );
 
-fn get_v1_migrated_state(
+/// Migrates `SubmittedOfferV0` to `SubmittedOffer` and `ConfirmedInvoiceV0` to
+/// `ConfirmedInvoice`
+pub(crate) fn get_v1_migrated_state(
     bytes: &[u8],
     module_instance_id: ModuleInstanceId,
     decoders: &ModuleDecoderRegistry,
@@ -173,52 +174,41 @@ fn get_v1_migrated_state(
     Ok(Some(new.into_dyn(module_instance_id)))
 }
 
-/// DB migration from version 1 to version 2
-pub(crate) async fn migrate_to_v2(
+/// Migrates `SubmittedOffer` with enum prefix 5 back to `SubmittedOffer`
+pub(crate) fn get_v2_migrated_state(
+    bytes: &[u8],
     module_instance_id: ModuleInstanceId,
-    active_states: Vec<(Vec<u8>, OperationId)>,
-    inactive_states: Vec<(Vec<u8>, OperationId)>,
-    decoders: ModuleDecoderRegistry,
-) -> anyhow::Result<Option<(Vec<DynState>, Vec<DynState>)>> {
-    let mut new_active_states = Vec::with_capacity(active_states.len());
-    for (active_state, _) in active_states {
-        let bytes = active_state.as_slice();
-        let state = match get_v1_migrated_state(bytes, module_instance_id, &decoders)? {
-            Some(state) => state,
-            None => {
-                // Try to decode the bytes as a `DynState`
-                let dynstate = DynState::from_bytes(bytes, &decoders)?;
-                let state_machine = dynstate
-                    .as_any()
-                    .downcast_ref::<LightningClientStateMachines>()
-                    .expect("Unexpected DynState supplied to migration function");
-                state_machine.clone().into_dyn(module_instance_id)
-            }
-        };
+    decoders: &ModuleDecoderRegistry,
+) -> anyhow::Result<Option<DynState>> {
+    let mut cursor = std::io::Cursor::new(bytes);
+    let key = fedimint_core::core::ModuleInstanceId::consensus_decode(&mut cursor, decoders)?;
+    debug_assert_eq!(key, module_instance_id, "Unexpected module instance ID");
 
-        new_active_states.push(state);
+    let ln_sm_variant = u16::consensus_decode(&mut cursor, decoders)?;
+
+    // If the state machine is not a receive state machine, return None
+    if ln_sm_variant != 2 {
+        return Ok(None);
     }
 
-    let mut new_inactive_states = Vec::with_capacity(inactive_states.len());
-    for (inactive_state, _) in inactive_states {
-        let bytes = inactive_state.as_slice();
-        let state = match get_v1_migrated_state(bytes, module_instance_id, &decoders)? {
-            Some(state) => state,
-            None => {
-                // Try to decode the bytes as a `DynState`
-                let dynstate = DynState::from_bytes(bytes, &decoders)?;
-                let state_machine = dynstate
-                    .as_any()
-                    .downcast_ref::<LightningClientStateMachines>()
-                    .expect("Unexpected DynState supplied to migration function");
-                state_machine.clone().into_dyn(module_instance_id)
-            }
-        };
-
-        new_inactive_states.push(state);
+    let _ln_sm_len = u16::consensus_decode(&mut cursor, decoders)?;
+    let operation_id = OperationId::consensus_decode(&mut cursor, decoders)?;
+    let receive_sm_variant = u16::consensus_decode(&mut cursor, decoders)?;
+    if receive_sm_variant != 5 {
+        return Ok(None);
     }
 
-    Ok(Some((new_active_states, new_inactive_states)))
+    let _receive_sm_len = u16::consensus_decode(&mut cursor, decoders)?;
+    let old = LightningReceiveSubmittedOffer::consensus_decode(&mut cursor, decoders)?;
+
+    let new_recv = LightningReceiveStateMachine {
+        operation_id,
+        state: LightningReceiveStates::SubmittedOffer(old),
+    };
+
+    Ok(Some(
+        LightningClientStateMachines::Receive(new_recv).into_dyn(module_instance_id),
+    ))
 }
 
 #[cfg(test)]
@@ -226,6 +216,7 @@ mod tests {
     use std::str::FromStr;
 
     use bitcoin_hashes::Hash;
+    use fedimint_client::db::migrate_state;
     use fedimint_client::module::ClientModule;
     use fedimint_core::core::{IntoDynInstance, OperationId};
     use fedimint_core::encoding::Encodable;
@@ -235,10 +226,10 @@ mod tests {
     use rand::thread_rng;
     use secp256k1::KeyPair;
 
-    use crate::db::migrate_to_v2;
+    use crate::db::{get_v1_migrated_state, get_v2_migrated_state};
     use crate::receive::{
         LightningReceiveConfirmedInvoice, LightningReceiveStateMachine, LightningReceiveStates,
-        LightningReceiveSubmittedOffer, LightningReceiveSubmittedOfferV0,
+        LightningReceiveSubmittedOffer,
     };
     use crate::{LightningClientModule, LightningClientStateMachines, ReceivingKey};
 
@@ -254,16 +245,46 @@ mod tests {
         let claim_key = KeyPair::new(secp256k1::SECP256K1, &mut thread_rng());
         let operation_id = OperationId::new_random();
         let txid = TransactionId::from_inner([42; 32]);
-        let old_state = LightningClientStateMachines::Receive(LightningReceiveStateMachine {
-            operation_id,
-            state: LightningReceiveStates::SubmittedOfferV0(LightningReceiveSubmittedOfferV0 {
-                offer_txid: txid,
-                invoice: dummy_invoice.clone(),
-                payment_keypair: claim_key,
-            }),
-        })
-        .into_dyn(instance_id)
-        .consensus_encode_to_vec();
+
+        let submitted_offer_variant_old = {
+            let mut submitted_offer_variant = Vec::<u8>::new();
+            txid.consensus_encode(&mut submitted_offer_variant)
+                .expect("TransactionId is encodable");
+            dummy_invoice
+                .consensus_encode(&mut submitted_offer_variant)
+                .expect("Invoice is encodable");
+            claim_key
+                .consensus_encode(&mut submitted_offer_variant)
+                .expect("Keypair is encodable");
+
+            submitted_offer_variant
+        };
+
+        let receive_variant = {
+            let mut receive_variant = Vec::<u8>::new();
+            operation_id
+                .consensus_encode(&mut receive_variant)
+                .expect("OperationId is encodable");
+            0u64.consensus_encode(&mut receive_variant)
+                .expect("u64 is encodable"); // Submitted Invoice variant
+            submitted_offer_variant_old
+                .consensus_encode(&mut receive_variant)
+                .expect("State is encodable");
+            receive_variant
+        };
+
+        let old_state = {
+            let mut sm_bytes = Vec::<u8>::new();
+            instance_id
+                .consensus_encode(&mut sm_bytes)
+                .expect("u16 is encodable");
+            2u64.consensus_encode(&mut sm_bytes)
+                .expect("u64 is encodable"); // Receive state machine variant
+            receive_variant
+                .consensus_encode(&mut sm_bytes)
+                .expect("receive variant is encodable");
+            sm_bytes
+        };
 
         let old_states = vec![(old_state, operation_id)];
 
@@ -284,10 +305,16 @@ mod tests {
         )]);
 
         let (new_active_states, new_inactive_states) =
-            migrate_to_v2(instance_id, old_states.clone(), old_states, decoders)
-                .await
-                .expect("Migration failed")
-                .expect("Migration produced output");
+            migrate_state::<LightningClientStateMachines>(
+                instance_id,
+                old_states.clone(),
+                old_states,
+                decoders,
+                get_v1_migrated_state,
+            )
+            .await
+            .expect("Migration failed")
+            .expect("Migration produced output");
 
         assert_eq!(new_inactive_states.len(), 1);
         assert_eq!(new_inactive_states[0], new_state);
@@ -348,10 +375,16 @@ mod tests {
         )]);
 
         let (new_active_states, new_inactive_states) =
-            migrate_to_v2(instance_id, old_states.clone(), old_states, decoders)
-                .await
-                .expect("Migration failed")
-                .expect("Migration produced output");
+            migrate_state::<LightningClientStateMachines>(
+                instance_id,
+                old_states.clone(),
+                old_states,
+                decoders,
+                get_v1_migrated_state,
+            )
+            .await
+            .expect("Migration failed")
+            .expect("Migration produced output");
 
         assert_eq!(new_inactive_states.len(), 1);
         assert_eq!(new_inactive_states[0], new_state);
@@ -360,5 +393,95 @@ mod tests {
         assert_eq!(new_active_states[0], new_state);
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_sm_migration_to_v3_submitted() {
+        let instance_id = 0x42;
+
+        let dummy_invoice = Bolt11Invoice::from_str("lntbs1u1pj8308gsp5xhxz908q5usddjjm6mfq6nwc2nu62twwm6za69d32kyx8h49a4hqpp5j5egfqw9kf5e96nk\
+        6htr76a8kggl0xyz3pzgemv887pya4flguzsdp5235xzmntwvsxvmmjypex2en4dejxjmn8yp6xsefqvesh2cm9wsss\
+        cqp2rzjq0ag45qspt2vd47jvj3t5nya5vsn0hlhf5wel8h779npsrspm6eeuqtjuuqqqqgqqyqqqqqqqqqqqqqqqc9q\
+        yysgqddrv0jqhyf3q6z75rt7nrwx0crxme87s8rx2rt8xr9slzu0p3xg3f3f0zmqavtmsnqaj5v0y5mdzszah7thrmg\
+        2we42dvjggjkf44egqheymyw",).expect("Invalid invoice");
+        let claim_key = KeyPair::new(secp256k1::SECP256K1, &mut thread_rng());
+        let operation_id = OperationId::new_random();
+        let txid = TransactionId::from_inner([42; 32]);
+
+        let submitted_offer_variant_deleted = {
+            let mut submitted_offer_variant = Vec::<u8>::new();
+            txid.consensus_encode(&mut submitted_offer_variant)
+                .expect("TransactionId is encodable");
+            dummy_invoice
+                .consensus_encode(&mut submitted_offer_variant)
+                .expect("Invoice is encodable");
+            ReceivingKey::Personal(claim_key)
+                .consensus_encode(&mut submitted_offer_variant)
+                .expect("Keypair is encodable");
+
+            submitted_offer_variant
+        };
+
+        let receive_variant = {
+            let mut receive_variant = Vec::<u8>::new();
+            operation_id
+                .consensus_encode(&mut receive_variant)
+                .expect("OperationId is encodable");
+            5u64.consensus_encode(&mut receive_variant)
+                .expect("u64 is encodable"); // Deleted Submitted Invoice variant
+            submitted_offer_variant_deleted
+                .consensus_encode(&mut receive_variant)
+                .expect("State is encodable");
+            receive_variant
+        };
+
+        let old_state = {
+            let mut sm_bytes = Vec::<u8>::new();
+            instance_id
+                .consensus_encode(&mut sm_bytes)
+                .expect("u16 is encodable");
+            2u64.consensus_encode(&mut sm_bytes)
+                .expect("u64 is encodable"); // Receive state machine variant
+            receive_variant
+                .consensus_encode(&mut sm_bytes)
+                .expect("receive variant is encodable");
+            sm_bytes
+        };
+
+        let old_states = vec![(old_state, operation_id)];
+
+        let new_state = LightningClientStateMachines::Receive(LightningReceiveStateMachine {
+            operation_id,
+            state: LightningReceiveStates::SubmittedOffer(LightningReceiveSubmittedOffer {
+                offer_txid: txid,
+                invoice: dummy_invoice,
+                receiving_key: ReceivingKey::Personal(claim_key),
+            }),
+        })
+        .into_dyn(instance_id);
+
+        let decoders = ModuleDecoderRegistry::new(vec![(
+            instance_id,
+            LightningClientModule::kind(),
+            LightningClientModule::decoder(),
+        )]);
+
+        let (new_active_states, new_inactive_states) =
+            migrate_state::<LightningClientStateMachines>(
+                instance_id,
+                old_states.clone(),
+                old_states,
+                decoders,
+                get_v2_migrated_state,
+            )
+            .await
+            .expect("Migration failed")
+            .expect("Migration produced output");
+
+        assert_eq!(new_inactive_states.len(), 1);
+        assert_eq!(new_inactive_states[0], new_state);
+
+        assert_eq!(new_active_states.len(), 1);
+        assert_eq!(new_active_states[0], new_state);
     }
 }

@@ -148,6 +148,7 @@ mod fedimint_migration_tests {
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
+    use fedimint_core::encoding::Encodable;
     use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::{Amount, BitcoinHash, OutPoint, TransactionId};
     use fedimint_dummy_client::db::{
@@ -163,7 +164,7 @@ mod fedimint_migration_tests {
     use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
         snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
-        validate_migrations_server, BYTE_32,
+        validate_migrations_server, BYTE_32, TEST_MODULE_INSTANCE_ID,
     };
     use futures::StreamExt;
     use rand::rngs::OsRng;
@@ -207,19 +208,66 @@ mod fedimint_migration_tests {
         dbtx.commit_tx().await;
     }
 
-    fn create_client_states() -> (Vec<DummyStateMachine>, Vec<DummyStateMachine>) {
+    fn create_client_states() -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
         // Create an active state and inactive state that will not be migrated.
         let input_operation_id = OperationId::new_random();
-        let txid = TransactionId::from_slice(&BYTE_32).unwrap();
-        let input_state =
-            DummyStateMachine::Input(Amount::from_sats(1000), txid, input_operation_id);
+        let input_state = {
+            let mut input_state = Vec::<u8>::new();
+            Amount::from_sats(1000)
+                .consensus_encode(&mut input_state)
+                .expect("Amount is encodable");
+            TransactionId::from_slice(&BYTE_32)
+                .expect("Couldn't create TransactionId")
+                .consensus_encode(&mut input_state)
+                .expect("TransactionId is encodable");
+            input_operation_id
+                .consensus_encode(&mut input_state)
+                .expect("OperationId is encodable");
+            input_state
+        };
+
+        let input_variant = {
+            let mut input_variant = Vec::<u8>::new();
+            TEST_MODULE_INSTANCE_ID
+                .consensus_encode(&mut input_variant)
+                .expect("u16 is encodable");
+            0u64.consensus_encode(&mut input_variant)
+                .expect("u64 is encodable"); // Input variant
+            input_state
+                .consensus_encode(&mut input_variant)
+                .expect("input state is encodable");
+            input_variant
+        };
 
         // Create and active state and inactive state that will be migrated.
-        let operation_id = OperationId::new_random();
-        let state = DummyStateMachine::Unreachable(operation_id, Amount::from_sats(1000));
+        let unreachable_operation_id = OperationId::new_random();
+        let unreachable_state = {
+            let mut unreachable = Vec::<u8>::new();
+            unreachable_operation_id
+                .consensus_encode(&mut unreachable)
+                .expect("OperationId is encodable");
+            Amount::from_sats(1000)
+                .consensus_encode(&mut unreachable)
+                .expect("Amount is encodable");
+            unreachable
+        };
+
+        let unreachable_variant = {
+            let mut unreachable = Vec::<u8>::new();
+            TEST_MODULE_INSTANCE_ID
+                .consensus_encode(&mut unreachable)
+                .expect("u16 is encodable");
+            5u64.consensus_encode(&mut unreachable)
+                .expect("u64 is encodable"); // Unreachable variant
+            unreachable_state
+                .consensus_encode(&mut unreachable)
+                .expect("unreachable state is encodable");
+            unreachable
+        };
+
         (
-            vec![state.clone(), input_state.clone()],
-            vec![state, input_state],
+            vec![input_variant.clone(), unreachable_variant.clone()],
+            vec![input_variant, unreachable_variant],
         )
     }
 
@@ -278,7 +326,7 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
-        snapshot_db_migrations_client::<_, _, DummyCommonInit, DummyClientModule>(
+        snapshot_db_migrations_client::<_, _, DummyCommonInit>(
             "dummy-client-v0",
             |db| Box::pin(async move { create_client_db_with_v0_data(db).await }),
             create_client_states,

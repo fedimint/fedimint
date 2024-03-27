@@ -10,8 +10,8 @@ mod notifier;
 
 pub use dbtx::ClientSMDatabaseTransaction;
 pub use executor::{
-    ActiveStateKeyPrefix, ActiveStateMeta, Executor, ExecutorBuilder, InactiveStateKeyPrefix,
-    InactiveStateMeta,
+    ActiveStateKeyBytes, ActiveStateKeyPrefix, ActiveStateMeta, Executor, ExecutorBuilder,
+    InactiveStateKeyBytes, InactiveStateKeyPrefix, InactiveStateMeta,
 };
 pub use notifier::{ModuleNotifier, Notifier, NotifierSender};
 pub use state::{Context, DynContext, DynState, IState, OperationState, State, StateTransition};
