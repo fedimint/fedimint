@@ -3,7 +3,6 @@ mod config;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::path::PathBuf;
-use std::time::Duration;
 use std::{env, fs};
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -32,7 +31,7 @@ use tracing::{debug, info};
 use super::external::Bitcoind;
 use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 use super::vars::utf8;
-use crate::util::{poll, poll_with_timeout, FedimintdCmd};
+use crate::util::{poll, FedimintdCmd};
 use crate::{poll_eq, vars};
 
 #[derive(Clone)]
@@ -680,9 +679,8 @@ async fn set_config_gen_params(
 }
 
 async fn wait_server_status(client: &DynGlobalApi, expected_status: ServerStatus) -> Result<()> {
-    poll_with_timeout(
+    poll(
         &format!("waiting-server-status: {expected_status:?}"),
-        Duration::from_secs(60),
         || async {
             let server_status = client
                 .status()

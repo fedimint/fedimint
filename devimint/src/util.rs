@@ -407,7 +407,7 @@ where
     unreachable!();
 }
 
-const DEFAULT_POLL_TIMEOUT: Duration = Duration::from_secs(30);
+const DEFAULT_POLL_TIMEOUT: Duration = Duration::from_secs(60);
 /// Retry until `f` succeeds or default timeout is reached
 ///
 /// - if `f` return Ok(val), this returns with Ok(val).

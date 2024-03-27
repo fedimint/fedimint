@@ -2,7 +2,6 @@ use std::ffi;
 use std::fmt::Write;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
@@ -18,7 +17,7 @@ use tracing::{debug, error, info, trace, warn};
 
 use crate::devfed::DevJitFed;
 use crate::federation::Fedimintd;
-use crate::util::{poll, poll_with_timeout, ProcessManager};
+use crate::util::{poll, ProcessManager};
 use crate::{external_daemons, vars, ExternalDaemons};
 
 fn random_test_dir_suffix() -> String {
@@ -355,7 +354,7 @@ pub async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
         }
         RpcCmd::Wait => {
             let ready_file = common.test_dir().join("ready");
-            poll_with_timeout("ready file", Duration::from_secs(60), || async {
+            poll("ready file", || async {
                 if fs::try_exists(&ready_file)
                     .await
                     .context("ready file")
