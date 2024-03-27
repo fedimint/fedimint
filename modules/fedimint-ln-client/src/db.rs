@@ -3,7 +3,6 @@ use std::time::SystemTime;
 use bitcoin_hashes::sha256;
 use fedimint_client::sm::DynState;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::DatabaseValue;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{impl_db_lookup, impl_db_record};
@@ -13,6 +12,10 @@ use secp256k1::{KeyPair, PublicKey};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
+use crate::pay::{
+    LightningPayCommon, LightningPayRefund, LightningPayRefundV0, LightningPayStateMachine,
+    LightningPayStates,
+};
 use crate::receive::{
     LightningReceiveConfirmedInvoice, LightningReceiveStateMachine, LightningReceiveStates,
     LightningReceiveSubmittedOffer, LightningReceiveSubmittedOfferV0,
@@ -109,7 +112,7 @@ impl_db_lookup!(
     query_prefix = LightningGatewayKeyPrefix
 );
 
-fn get_v1_migrated_state(
+pub(crate) fn get_v1_migrated_state(
     bytes: &[u8],
     module_instance_id: ModuleInstanceId,
     decoders: &ModuleDecoderRegistry,
@@ -173,52 +176,44 @@ fn get_v1_migrated_state(
     Ok(Some(new.into_dyn(module_instance_id)))
 }
 
-/// DB migration from version 1 to version 2
-pub(crate) async fn migrate_to_v2(
+pub(crate) fn get_v2_migrated_state(
+    bytes: &[u8],
     module_instance_id: ModuleInstanceId,
-    active_states: Vec<(Vec<u8>, OperationId)>,
-    inactive_states: Vec<(Vec<u8>, OperationId)>,
-    decoders: ModuleDecoderRegistry,
-) -> anyhow::Result<Option<(Vec<DynState>, Vec<DynState>)>> {
-    let mut new_active_states = Vec::with_capacity(active_states.len());
-    for (active_state, _) in active_states {
-        let bytes = active_state.as_slice();
-        let state = match get_v1_migrated_state(bytes, module_instance_id, &decoders)? {
-            Some(state) => state,
-            None => {
-                // Try to decode the bytes as a `DynState`
-                let dynstate = DynState::from_bytes(bytes, &decoders)?;
-                let state_machine = dynstate
-                    .as_any()
-                    .downcast_ref::<LightningClientStateMachines>()
-                    .expect("Unexpected DynState supplied to migration function");
-                state_machine.clone().into_dyn(module_instance_id)
-            }
-        };
+    decoders: &ModuleDecoderRegistry,
+) -> anyhow::Result<Option<DynState>> {
+    let mut cursor = std::io::Cursor::new(bytes);
+    let key = ModuleInstanceId::consensus_decode(&mut cursor, decoders)?;
+    debug_assert_eq!(key, module_instance_id, "Unexpected module instance ID");
 
-        new_active_states.push(state);
+    let ln_sm_variant = u16::consensus_decode(&mut cursor, decoders)?;
+
+    // If the state machine is not a pay state machine, return None
+    if ln_sm_variant != 1 {
+        return Ok(None);
     }
 
-    let mut new_inactive_states = Vec::with_capacity(inactive_states.len());
-    for (inactive_state, _) in inactive_states {
-        let bytes = inactive_state.as_slice();
-        let state = match get_v1_migrated_state(bytes, module_instance_id, &decoders)? {
-            Some(state) => state,
-            None => {
-                // Try to decode the bytes as a `DynState`
-                let dynstate = DynState::from_bytes(bytes, &decoders)?;
-                let state_machine = dynstate
-                    .as_any()
-                    .downcast_ref::<LightningClientStateMachines>()
-                    .expect("Unexpected DynState supplied to migration function");
-                state_machine.clone().into_dyn(module_instance_id)
-            }
-        };
+    let _ln_sm_len = u16::consensus_decode(&mut cursor, decoders)?;
+    let common = LightningPayCommon::consensus_decode(&mut cursor, decoders)?;
+    let pay_sm_variant = u16::consensus_decode(&mut cursor, decoders)?;
 
-        new_inactive_states.push(state);
+    // if the pay state machine is not `refund` variant, return none
+    if pay_sm_variant != 5 {
+        return Ok(None);
     }
 
-    Ok(Some((new_active_states, new_inactive_states)))
+    let _pay_sm_len = u16::consensus_decode(&mut cursor, decoders)?;
+    let v0 = LightningPayRefundV0::consensus_decode(&mut cursor, decoders)?;
+    let v1 = LightningPayRefund {
+        txid: v0.txid,
+        out_points: v0.out_points,
+        error_reason: "unknown error (database migration)".to_string(),
+    };
+    let new_pay = LightningPayStateMachine {
+        common,
+        state: LightningPayStates::Refund(v1),
+    };
+    let new_sm = LightningClientStateMachines::LightningPay(new_pay);
+    Ok(Some(new_sm.into_dyn(module_instance_id)))
 }
 
 #[cfg(test)]

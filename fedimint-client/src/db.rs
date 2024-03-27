@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use fedimint_core::api::ApiVersionSet;
 use fedimint_core::config::{ClientConfig, FederationId};
-use fedimint_core::core::{ModuleInstanceId, OperationId};
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
     migrate_database_version, Database, DatabaseTransaction, DatabaseValue, DatabaseVersion,
     DatabaseVersionKey, IDatabaseTransactionOpsCoreTyped,
@@ -24,7 +24,7 @@ use crate::sm::executor::{
     ActiveStateKey, ActiveStateKeyBytes, ActiveStateKeyPrefixBytes, InactiveStateKey,
     InactiveStateKeyBytes, InactiveStateKeyPrefixBytes,
 };
-use crate::sm::{ActiveStateMeta, DynState, InactiveStateMeta};
+use crate::sm::{ActiveStateMeta, DynState, InactiveStateMeta, State};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -556,4 +556,59 @@ pub async fn remove_old_and_persist_new_inactive_states(
     for (state, inactive_state) in new_inactive_states {
         dbtx.insert_new_entry(&state, &inactive_state).await;
     }
+}
+
+/// Migrates a particular state by looping over all active and inactive states.
+/// If the `migrate` closure returns `None`, this state was not migrated and
+/// should be added to the new state machine vectors.
+pub async fn migrate_state<S: State + IntoDynInstance<DynType = DynState>>(
+    module_instance_id: ModuleInstanceId,
+    active_states: Vec<(Vec<u8>, OperationId)>,
+    inactive_states: Vec<(Vec<u8>, OperationId)>,
+    decoders: ModuleDecoderRegistry,
+    migrate: fn(
+        &[u8],
+        ModuleInstanceId,
+        &ModuleDecoderRegistry,
+    ) -> anyhow::Result<Option<DynState>>,
+) -> anyhow::Result<Option<(Vec<DynState>, Vec<DynState>)>> {
+    let mut new_active_states = Vec::with_capacity(active_states.len());
+    for (active_state, _) in active_states {
+        let bytes = active_state.as_slice();
+        let state = match migrate(bytes, module_instance_id, &decoders)? {
+            Some(state) => state,
+            None => {
+                // Try to decode the bytes as a `DynState`
+                let dynstate = DynState::from_bytes(bytes, &decoders)?;
+                let state_machine = dynstate
+                    .as_any()
+                    .downcast_ref::<S>()
+                    .expect("Unexpected DynState supplied to migration function");
+                state_machine.clone().into_dyn(module_instance_id)
+            }
+        };
+
+        new_active_states.push(state);
+    }
+
+    let mut new_inactive_states = Vec::with_capacity(inactive_states.len());
+    for (inactive_state, _) in inactive_states {
+        let bytes = inactive_state.as_slice();
+        let state = match migrate(bytes, module_instance_id, &decoders)? {
+            Some(state) => state,
+            None => {
+                // Try to decode the bytes as a `DynState`
+                let dynstate = DynState::from_bytes(bytes, &decoders)?;
+                let state_machine = dynstate
+                    .as_any()
+                    .downcast_ref::<S>()
+                    .expect("Unexpected DynState supplied to migration function");
+                state_machine.clone().into_dyn(module_instance_id)
+            }
+        };
+
+        new_inactive_states.push(state);
+    }
+
+    Ok(Some((new_active_states, new_inactive_states)))
 }

@@ -9,7 +9,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use fedimint_core::time::duration_since_epoch;
+use fedimint_core::time::{duration_since_epoch, now};
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 use fedimint_ln_common::contracts::{ContractId, IdentifiableContract};
@@ -18,6 +18,7 @@ use fedimint_ln_common::{
     LightningClientContext, LightningGateway, LightningInput, LightningOutputOutcome, PrunedInvoice,
 };
 use lightning_invoice::Bolt11Invoice;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, warn};
@@ -25,7 +26,6 @@ use tracing::{debug, error, warn};
 use crate::api::LnFederationApi;
 use crate::{set_payment_result, LightningClientStateMachines, PayType};
 
-const GATEWAY_API_TIMEOUT: Duration = Duration::from_secs(30);
 const RETRY_DELAY: Duration = Duration::from_secs(1);
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -39,23 +39,29 @@ const RETRY_DELAY: Duration = Duration::from_secs(1);
 ///  CreatedOutgoingLnContract -- await transaction failed --> Canceled
 ///  CreatedOutgoingLnContract -- await transaction acceptance --> Funded    
 ///  Funded -- await gateway payment success  --> Success
-///  Funded -- await gateway payment failed --> Refundable
-///  Refundable -- gateway issued refunded --> Refund
-///  Refundable -- transaction timeout --> Refund
-///  Refund -- await transaction acceptance --> Refunded
-///  Refund -- await transaction rejected --> Failure
+///  Funded -- await gateway cancel contract --> Refund
+///  Funded -- await contract timeout --> Refund
 /// ```
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum LightningPayStates {
     CreatedOutgoingLnContract(LightningPayCreatedOutgoingLnContract),
-    Canceled,
+    FundingRejected,
     Funded(LightningPayFunded),
     Success(String),
+    #[deprecated(
+        since = "0.3.0",
+        note = "Pay State Machine skips over this state and will retry payments until cancellation or timeout"
+    )]
     Refundable(LightningPayRefundable),
-    Refund(LightningPayRefund),
+    RefundV0(LightningPayRefundV0),
+    #[deprecated(
+        since = "0.3.0",
+        note = "Pay State Machine does not need to wait for the refund tx to be accepted"
+    )]
     Refunded(Vec<OutPoint>),
     Failure(String),
+    Refund(LightningPayRefund),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -86,17 +92,20 @@ impl State for LightningPayStateMachine {
             LightningPayStates::CreatedOutgoingLnContract(created_outgoing_ln_contract) => {
                 created_outgoing_ln_contract.transitions(context, global_context)
             }
-            LightningPayStates::Canceled => {
+            LightningPayStates::FundingRejected => {
                 vec![]
             }
-            LightningPayStates::Funded(funded) => funded.transitions(self.common.clone()),
+            LightningPayStates::Funded(funded) => {
+                funded.transitions(self.common.clone(), global_context.clone())
+            }
             LightningPayStates::Success(_) => {
                 vec![]
             }
             LightningPayStates::Refundable(refundable) => {
                 refundable.transitions(self.common.clone(), global_context.clone())
             }
-            LightningPayStates::Refund(refund) => refund.transitions(global_context),
+            LightningPayStates::RefundV0(_) => vec![],
+            LightningPayStates::Refund(_) => vec![],
             LightningPayStates::Refunded(_) => {
                 vec![]
             }
@@ -236,7 +245,7 @@ impl LightningPayCreatedOutgoingLnContract {
                 // Failure case: funding transaction is rejected
                 LightningPayStateMachine {
                     common: old_state.common,
-                    state: LightningPayStates::Canceled,
+                    state: LightningPayStates::FundingRejected,
                 }
             }
         }
@@ -247,7 +256,7 @@ impl LightningPayCreatedOutgoingLnContract {
 pub struct LightningPayFunded {
     payload: PayInvoicePayload,
     gateway: LightningGateway,
-    timelock: u32,
+    pub timelock: u32,
 }
 
 #[derive(
@@ -268,49 +277,109 @@ impl LightningPayFunded {
     fn transitions(
         &self,
         common: LightningPayCommon,
+        global_context: DynGlobalClientContext,
     ) -> Vec<StateTransition<LightningPayStateMachine>> {
         let gateway = self.gateway.clone();
         let payload = self.payload.clone();
         let contract_id = self.payload.contract_id;
         let timelock = self.timelock;
         let payment_hash = *common.invoice.payment_hash();
-        vec![StateTransition::new(
-            Self::gateway_pay_invoice(gateway, payload),
-            move |dbtx, result, old_state| {
-                Box::pin(Self::transition_outgoing_contract_execution(
-                    result,
-                    old_state,
-                    contract_id,
-                    timelock,
-                    dbtx,
-                    payment_hash,
-                    common.clone(),
-                ))
-            },
-        )]
+        let success_common = common.clone();
+        let timeout_common = common.clone();
+        let timeout_global_context = global_context.clone();
+        vec![
+            StateTransition::new(
+                Self::gateway_pay_invoice(gateway, payload),
+                move |dbtx, result, old_state| {
+                    Box::pin(Self::transition_outgoing_contract_execution(
+                        result,
+                        old_state,
+                        contract_id,
+                        dbtx,
+                        payment_hash,
+                        success_common.clone(),
+                    ))
+                },
+            ),
+            StateTransition::new(
+                await_contract_cancellable(contract_id, global_context.clone()),
+                move |dbtx, (), old_state| {
+                    Box::pin(try_refund_outgoing_contract(
+                        old_state,
+                        common.clone(),
+                        dbtx,
+                        global_context.clone(),
+                        format!("Gateway cancelled contract: {}", contract_id),
+                    ))
+                },
+            ),
+            StateTransition::new(
+                await_contract_timeout(timeout_global_context.clone(), timelock),
+                move |dbtx, (), old_state| {
+                    Box::pin(try_refund_outgoing_contract(
+                        old_state,
+                        timeout_common.clone(),
+                        dbtx,
+                        timeout_global_context.clone(),
+                        format!("Outgoing contract timed out, BlockHeight: {}", timelock),
+                    ))
+                },
+            ),
+        ]
     }
 
     async fn gateway_pay_invoice(
         gateway: LightningGateway,
         payload: PayInvoicePayload,
     ) -> Result<String, GatewayPayError> {
-        // Abort the payment if we can't reach the gateway within 30 seconds
-        // to prevent unexpected delays for the user.
-        let deadline = fedimint_core::time::now() + GATEWAY_API_TIMEOUT;
+        const GATEWAY_INTERNAL_ERROR_RETRY_INTERVAL: Duration = Duration::from_secs(10);
+        const TIMEOUT_DURATION: Duration = Duration::from_secs(180);
+        let start = now();
+        loop {
+            // We do not want to retry until the block timeout, since it will be unintuitive
+            // for users for their payment to succeed after awhile. We will try
+            // to pay the invoice until `TIMEOUT_DURATION` is hit, at which
+            // point this future will block and the user will be able
+            // to claim their funds once the block timeout is hit, or the gateway cancels
+            // the outgoing payment.
+            let elapsed = now().duration_since(start).unwrap_or_default();
+            if elapsed > TIMEOUT_DURATION {
+                std::future::pending::<()>().await;
+            }
 
-        let mut last_error = None;
-        while fedimint_core::time::now() < deadline {
             match Self::try_gateway_pay_invoice(gateway.clone(), payload.clone()).await {
                 Ok(preimage) => return Ok(preimage),
                 Err(e) => {
-                    warn!("Error while trying to reach gateway: {e}");
-                    last_error = Some(e);
-                    sleep(RETRY_DELAY).await;
+                    match e.clone() {
+                        GatewayPayError::GatewayInternalError {
+                            error_code,
+                            error_message,
+                        } => {
+                            // Retry faster if we could not contact the gateway
+                            if let Some(error_code) = error_code {
+                                if error_code == StatusCode::NOT_FOUND.as_u16() {
+                                    warn!(
+                                        ?RETRY_DELAY,
+                                        "Could not contact gateway: {error_message}"
+                                    );
+                                    sleep(RETRY_DELAY).await;
+                                    continue;
+                                }
+                            }
+                        }
+                        GatewayPayError::OutgoingContractError => {
+                            return Err(e);
+                        }
+                    }
+
+                    warn!(
+                        ?GATEWAY_INTERNAL_ERROR_RETRY_INTERVAL,
+                        "Gateway Internal Error. Could not complete payment. Trying again: {e:?}"
+                    );
+                    sleep(GATEWAY_INTERNAL_ERROR_RETRY_INTERVAL).await;
                 }
             }
         }
-
-        Err(last_error.expect("Error was set"))
     }
 
     async fn try_gateway_pay_invoice(
@@ -359,7 +428,6 @@ impl LightningPayFunded {
         result: Result<String, GatewayPayError>,
         old_state: LightningPayStateMachine,
         contract_id: ContractId,
-        timelock: u32,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         payment_hash: sha256::Hash,
         common: LightningPayCommon,
@@ -381,17 +449,15 @@ impl LightningPayFunded {
             }
             Err(e) => LightningPayStateMachine {
                 common: old_state.common,
-                state: LightningPayStates::Refundable(LightningPayRefundable {
-                    contract_id,
-                    block_timelock: timelock,
-                    error: e,
-                }),
+                state: LightningPayStates::Failure(e.to_string()),
             },
         }
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+// Deprecated: SM skips over this state now and will retry payments until
+// cancellation or timeout
 pub struct LightningPayRefundable {
     contract_id: ContractId,
     pub block_timelock: u32,
@@ -410,159 +476,122 @@ impl LightningPayRefundable {
         let timelock = self.block_timelock;
         vec![
             StateTransition::new(
-                Self::await_contract_cancellable(contract_id, global_context.clone()),
+                await_contract_cancellable(contract_id, global_context.clone()),
                 move |dbtx, (), old_state| {
-                    Box::pin(Self::try_refund_outgoing_contract(
+                    Box::pin(try_refund_outgoing_contract(
                         old_state,
                         common.clone(),
                         dbtx,
                         global_context.clone(),
+                        format!("Refundable: Gateway cancelled contract: {}", contract_id),
                     ))
                 },
             ),
             StateTransition::new(
-                Self::await_contract_timeout(timeout_global_context.clone(), timelock),
+                await_contract_timeout(timeout_global_context.clone(), timelock),
                 move |dbtx, (), old_state| {
-                    Box::pin(Self::try_refund_outgoing_contract(
+                    Box::pin(try_refund_outgoing_contract(
                         old_state,
                         timeout_common.clone(),
                         dbtx,
                         timeout_global_context.clone(),
+                        format!(
+                            "Refundable: Outgoing contract timed out, BlockHeight: {}",
+                            timelock
+                        ),
                     ))
                 },
             ),
         ]
     }
+}
 
-    /// Claims a refund for an expired or cancelled outgoing contract
-    ///
-    /// This can be necessary when the Lightning gateway cannot route the
-    /// payment, is malicious or offline. The function returns the out point
-    /// of the e-cash output generated as change.
-    async fn try_refund_outgoing_contract(
-        old_state: LightningPayStateMachine,
-        common: LightningPayCommon,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        global_context: DynGlobalClientContext,
-    ) -> LightningPayStateMachine {
-        let contract_data = common.contract;
-        let (refund_key, refund_input) = (
-            contract_data.recovery_key,
-            contract_data.contract_account.refund(),
-        );
+/// Claims a refund for an expired or cancelled outgoing contract
+///
+/// This can be necessary when the Lightning gateway cannot route the
+/// payment, is malicious or offline. The function returns the out point
+/// of the e-cash output generated as change.
+async fn try_refund_outgoing_contract(
+    old_state: LightningPayStateMachine,
+    common: LightningPayCommon,
+    dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+    global_context: DynGlobalClientContext,
+    error_reason: String,
+) -> LightningPayStateMachine {
+    let contract_data = common.contract;
+    let (refund_key, refund_input) = (
+        contract_data.recovery_key,
+        contract_data.contract_account.refund(),
+    );
 
-        let refund_client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
-            input: refund_input,
-            keys: vec![refund_key],
-            // The input of the refund tx is managed by this state machine, so no new state machines
-            // need to be created
-            state_machines: Arc::new(|_, _| vec![]),
-        };
+    let refund_client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
+        input: refund_input,
+        keys: vec![refund_key],
+        // The input of the refund tx is managed by this state machine, so no new state machines
+        // need to be created
+        state_machines: Arc::new(|_, _| vec![]),
+    };
 
-        let (txid, out_points) = global_context.claim_input(dbtx, refund_client_input).await;
+    let (txid, out_points) = global_context.claim_input(dbtx, refund_client_input).await;
 
-        LightningPayStateMachine {
-            common: old_state.common,
-            state: LightningPayStates::Refund(LightningPayRefund { txid, out_points }),
-        }
+    LightningPayStateMachine {
+        common: old_state.common,
+        state: LightningPayStates::Refund(LightningPayRefund {
+            txid,
+            out_points,
+            error_reason,
+        }),
     }
+}
 
-    async fn await_contract_cancellable(
-        contract_id: ContractId,
-        global_context: DynGlobalClientContext,
-    ) {
-        loop {
-            // If we fail to get the contract from the federation, we need to keep retrying
-            // until we successfully do.
-            match global_context
-                .module_api()
-                .wait_outgoing_contract_cancelled(contract_id)
-                .await
-            {
-                Ok(_) => return,
-                Err(error) => {
-                    error!("Error waiting for outgoing contract to be cancelled: {error:?}");
-                }
+async fn await_contract_cancellable(
+    contract_id: ContractId,
+    global_context: DynGlobalClientContext,
+) {
+    loop {
+        // If we fail to get the contract from the federation, we need to keep retrying
+        // until we successfully do.
+        match global_context
+            .module_api()
+            .wait_outgoing_contract_cancelled(contract_id)
+            .await
+        {
+            Ok(_) => return,
+            Err(error) => {
+                error!("Error waiting for outgoing contract to be cancelled: {error:?}");
             }
-
-            sleep(RETRY_DELAY).await;
         }
+
+        sleep(RETRY_DELAY).await;
     }
+}
 
-    async fn await_contract_timeout(global_context: DynGlobalClientContext, timelock: u32) {
-        loop {
-            match global_context
-                .module_api()
-                .wait_block_height(timelock as u64)
-                .await
-            {
-                Ok(_) => return,
-                Err(error) => error!("Error waiting for block height: {timelock} {error:?}"),
-            }
-
-            sleep(RETRY_DELAY).await;
+async fn await_contract_timeout(global_context: DynGlobalClientContext, timelock: u32) {
+    loop {
+        match global_context
+            .module_api()
+            .wait_block_height(timelock as u64)
+            .await
+        {
+            Ok(_) => return,
+            Err(error) => error!("Error waiting for block height: {timelock} {error:?}"),
         }
+
+        sleep(RETRY_DELAY).await;
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-pub struct LightningPayRefund {
-    txid: TransactionId,
-    out_points: Vec<OutPoint>,
+pub struct LightningPayRefundV0 {
+    pub txid: TransactionId,
+    pub out_points: Vec<OutPoint>,
 }
 
-impl LightningPayRefund {
-    fn transitions(
-        &self,
-        global_context: &DynGlobalClientContext,
-    ) -> Vec<StateTransition<LightningPayStateMachine>> {
-        let refund_out_points = self.out_points.clone();
-        vec![StateTransition::new(
-            Self::await_refund_success(global_context.clone(), self.txid),
-            move |_dbtx, result, old_state| {
-                let refund_out_points = refund_out_points.clone();
-                Box::pin(Self::transition_refund_success(
-                    result,
-                    old_state,
-                    refund_out_points,
-                ))
-            },
-        )]
-    }
-
-    async fn await_refund_success(
-        global_context: DynGlobalClientContext,
-        refund_txid: TransactionId,
-    ) -> Result<(), String> {
-        // No network calls are done here, we just await other state machines, so no
-        // retry logic is needed
-        global_context.await_tx_accepted(refund_txid).await
-    }
-
-    async fn transition_refund_success(
-        result: Result<(), String>,
-        old_state: LightningPayStateMachine,
-        refund_out_points: Vec<OutPoint>,
-    ) -> LightningPayStateMachine {
-        match result {
-            Ok(_) => {
-                // Refund successful
-                LightningPayStateMachine {
-                    common: old_state.common,
-                    state: LightningPayStates::Refunded(refund_out_points),
-                }
-            }
-            Err(_) => {
-                // Refund failure
-                LightningPayStateMachine {
-                    common: old_state.common,
-                    state: LightningPayStates::Failure(
-                        "Refund Transaction was rejected.".to_string(),
-                    ),
-                }
-            }
-        }
-    }
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct LightningPayRefund {
+    pub txid: TransactionId,
+    pub out_points: Vec<OutPoint>,
+    pub error_reason: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]

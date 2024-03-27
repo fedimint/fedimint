@@ -20,6 +20,7 @@ use fedimint_testing::gateway::{GatewayTest, DEFAULT_GATEWAY_PASSWORD};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use rand::rngs::OsRng;
 use secp256k1::KeyPair;
+use tracing::info;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
@@ -227,7 +228,7 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
                 .into_stream();
 
             assert_eq!(sub.ok().await?, LnPayState::Created);
-            assert_eq!(sub.ok().await?, LnPayState::Funded);
+            assert_matches!(sub.ok().await?, LnPayState::Funded { .. });
             assert_matches!(sub.ok().await?, LnPayState::Success { .. });
         }
         _ => panic!("Expected lightning payment!"),
@@ -249,7 +250,7 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
                 .into_stream();
 
             assert_eq!(sub.ok().await?, LnPayState::Created);
-            assert_eq!(sub.ok().await?, LnPayState::Funded);
+            assert_matches!(sub.ok().await?, LnPayState::Funded { .. });
             assert_matches!(sub.ok().await?, LnPayState::WaitingForRefund { .. });
             assert_matches!(sub.ok().await?, LnPayState::Refunded { .. });
         }
@@ -290,8 +291,11 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
                 .into_stream();
 
             assert_eq!(sub.ok().await?, LnPayState::Created);
-            assert_eq!(sub.ok().await?, LnPayState::Funded);
+            info!("## Created contract for first payment");
+            assert_matches!(sub.ok().await?, LnPayState::Funded { .. });
+            info!("## Funded contract for first payment");
             assert_matches!(sub.ok().await?, LnPayState::Success { .. });
+            info!("## First payment successful");
         }
         _ => panic!("Expected lightning payment!"),
     }
@@ -314,8 +318,11 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
                 .into_stream();
 
             assert_eq!(sub.ok().await?, LnPayState::Created);
-            assert_eq!(sub.ok().await?, LnPayState::Funded);
+            info!("## Created contract for second payment");
+            assert_matches!(sub.ok().await?, LnPayState::Funded { .. });
+            info!("## Funded contract for second payment");
             assert_matches!(sub.ok().await?, LnPayState::Success { .. });
+            info!("## Second payment successful");
         }
         _ => panic!("Expected lightning payment!"),
     }
@@ -660,6 +667,49 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn gateway_cancels_payment() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed().await;
+    let gw = gateway(&fixtures, &fed).await;
+    let client = fed.new_client().await;
+    let dummy_module = client.get_first_module::<DummyClientModule>();
+
+    // Print money for client
+    let (op, outpoint) = dummy_module.print_money(sats(1000)).await?;
+    client.await_primary_module_output(op, outpoint).await?;
+
+    let invoice = Bolt11Invoice::from_str("lnbcrt420n1pje07kcdqqpp5vjadfxk9sxar4030cdh3ws4n9rfc2r6gzsrhrrysnc2ax75zfa7ssp53jaxxultl94h4an04a2rgv76xlgt3pjgy4txnd8h8mg8pdhumtlq9qrsgqcqpjnp4qwljl52cc7vnn76dmaau8qptly6q2uh3rl8d0gdn047wxxerf799yxqyz5vqrzjqt5a8fp65nlccjnyzhtfj82dw20pshv9wxlwt2j0u69snyypgpqvcqqqqqqqqqqqqyqqqqqqqqqqqqqqrcr9yqd332tteyjmz53r7k9a3yr86gmfgwdzxrv05h8mhkf0tpwz6d7j4sqqqwqqqqqgqqyqqqqlgqqqqqqgq2qpwn5ay82j0lrz2vs2adxgaf4efuxzas4cmaed2flngkzvss9qypnqqqqqqqqqqqqqsqqqqqqqqqqqqqq0qtuj76w6vuuxka7wg4ve357r8pdgh0msxpj9f0kqypc4k7g03uyl9v6sceh4hsdrv40pw3z8l4vz8vvz70zy3uyn5xys96c6clw6ksaqq5eax9q").expect("Valid invoice");
+
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = pay_invoice(&client, invoice.clone(), Some(gw.gateway.gateway_id)).await?;
+    match payment_type {
+        PayType::Lightning(operation_id) => {
+            let mut sub = client
+                .get_first_module::<LightningClientModule>()
+                .subscribe_ln_pay(operation_id)
+                .await?
+                .into_stream();
+
+            assert_eq!(sub.ok().await?, LnPayState::Created);
+            info!("## Created contract that cannot be paid");
+            assert_matches!(sub.ok().await?, LnPayState::Funded { .. });
+            info!("## Funded contract that cannot be paid");
+            assert_matches!(sub.ok().await?, LnPayState::WaitingForRefund { .. });
+            info!("## Waiting for refund transaction to be accepted");
+            assert_matches!(sub.ok().await?, LnPayState::Refunded { .. });
+            info!("## Contract was refunded");
+        }
+        _ => panic!("Expected lightning payment!"),
+    }
+
+    drop(gw);
+    Ok(())
+}
+
 #[cfg(test)]
 mod fedimint_migration_tests {
     use std::str::FromStr;
@@ -668,6 +718,7 @@ mod fedimint_migration_tests {
     use anyhow::ensure;
     use bitcoin_hashes::{sha256, Hash};
     use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_core::config::FederationId;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -680,6 +731,9 @@ mod fedimint_migration_tests {
         MetaOverrides, MetaOverridesKey, MetaOverridesPrefix, PaymentResult, PaymentResultKey,
         PaymentResultPrefix,
     };
+    use fedimint_ln_client::pay::{
+        LightningPayCommon, LightningPayRefundV0, LightningPayStateMachine, LightningPayStates,
+    };
     use fedimint_ln_client::receive::{
         LightningReceiveStateMachine, LightningReceiveStates, LightningReceiveSubmittedOffer,
         LightningReceiveSubmittedOfferV0,
@@ -690,6 +744,9 @@ mod fedimint_migration_tests {
     };
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer, OfferId,
+    };
+    use fedimint_ln_common::contracts::outgoing::{
+        OutgoingContract, OutgoingContractAccount, OutgoingContractData,
     };
     use fedimint_ln_common::contracts::{
         outgoing, ContractId, DecryptedPreimage, EncryptedPreimage, FundedContract,
@@ -968,7 +1025,7 @@ mod fedimint_migration_tests {
             operation_id,
             state: LightningReceiveStates::SubmittedOffer(LightningReceiveSubmittedOffer {
                 offer_txid: TransactionId::all_zeros(),
-                invoice: invoice1,
+                invoice: invoice1.clone(),
                 receiving_key: ReceivingKey::Personal(KeyPair::new_global(&mut OsRng)),
             }),
         });
@@ -984,9 +1041,45 @@ mod fedimint_migration_tests {
             }),
         });
 
+        let (sk, pk) = secp256k1::generate_keypair(&mut OsRng);
+        let outgoing_contract = OutgoingContract {
+            hash: sha256::Hash::hash(&BYTE_32),
+            gateway_key: pk,
+            timelock: 1000,
+            user_key: pk,
+            cancelled: false,
+        };
+        let outgoing_account = OutgoingContractAccount {
+            amount: Amount::from_msats(10000),
+            contract: outgoing_contract,
+        };
+        let contract = OutgoingContractData {
+            recovery_key: KeyPair::from_secret_key(&secp, &sk),
+            contract_account: outgoing_account,
+        };
+        let ln_common = LightningPayCommon {
+            operation_id,
+            federation_id: FederationId::dummy(),
+            contract,
+            gateway_fee: Amount::from_msats(1000),
+            preimage_auth: sha256::Hash::hash(&BYTE_32),
+            invoice: invoice1,
+        };
+
+        let refund_state = LightningClientStateMachines::LightningPay(LightningPayStateMachine {
+            common: ln_common,
+            state: LightningPayStates::RefundV0(LightningPayRefundV0 {
+                txid: TransactionId::all_zeros(),
+                out_points: vec![OutPoint {
+                    txid: TransactionId::all_zeros(),
+                    out_idx: 0,
+                }],
+            }),
+        });
+
         (
-            vec![state.clone(), input_state.clone()],
-            vec![state, input_state],
+            vec![state.clone(), input_state.clone(), refund_state.clone()],
+            vec![state, input_state, refund_state],
         )
     }
 
@@ -1216,12 +1309,19 @@ mod fedimint_migration_tests {
 
                 // Verify that after the state machine migrations, there is two `SubmittedOffer` state and no `SubmittedOfferV0` states.
                 let mut input_count = 0;
+                let mut refund_count = 0;
                 for active_state in active_states {
                     if let LightningClientStateMachines::Receive(machine) = active_state {
                         match machine.state {
                             LightningReceiveStates::SubmittedOffer(_) => input_count += 1,
-                            LightningReceiveStates::SubmittedOfferV0(_) => panic!("State machine migration failed, active states contain unexpected state"),
-                            _ => panic!("State machine migration failed, active states contain unexpected state"),
+                            LightningReceiveStates::SubmittedOfferV0(_) => panic!("State machine migration failed, active states still contains SubmittedOfferV0"),
+                            _ => panic!("State machine migration failed, active states contains unexpected state"),
+                        }
+                    } else if let LightningClientStateMachines::LightningPay(machine) = active_state {
+                        match machine.state {
+                            LightningPayStates::Refund(_) => refund_count += 1,
+                            LightningPayStates::RefundV0(_) => panic!("State machine migration failed, active state still contains RefundV0"),
+                            _ => panic!("State machine migration failed, active states contains unexpected state"),
                         }
                     }
                 }
@@ -1229,19 +1329,32 @@ mod fedimint_migration_tests {
                 // expecting two, one starting in `SubmittedOffer` and one from migrated from `SubmittedOfferV0`
                 ensure!(input_count == 2, "Expecting two `SubmittedOffer` active state, found {input_count}");
 
+                // expecting one `Refund` state
+                ensure!(refund_count == 1, "Expecting one `Refund` active state, found {refund_count}");
+
                 let mut input_count = 0;
+                let mut refund_count = 0;
                 for inactive_state in inactive_states {
                     if let LightningClientStateMachines::Receive(machine) = inactive_state {
                         match machine.state {
                             LightningReceiveStates::SubmittedOffer(_) => input_count += 1,
-                            LightningReceiveStates::SubmittedOfferV0(_) => panic!("State machine migration failed, active states contain unexpected state"),
-                            _ => panic!("State machine migration failed, active states contain unexpected state"),
+                            LightningReceiveStates::SubmittedOfferV0(_) => panic!("State machine migration failed, inactive states contains SubmittedOfferV0"),
+                            _ => panic!("State machine migration failed, inactive states contains unexpected state"),
+                        }
+                    } else if let LightningClientStateMachines::LightningPay(machine) = inactive_state {
+                        match machine.state {
+                            LightningPayStates::Refund(_) => refund_count += 1,
+                            LightningPayStates::RefundV0(_) => panic!("State machine migration failed, inactive state still contains RefundV0"),
+                            _ => panic!("State machine migration failed, inactive states contains unexpected state"),
                         }
                     }
                 }
 
                 // expecting two, one starting in `SubmittedOffer` and one from migrated from `SubmittedOfferV0`
                 ensure!(input_count == 2, "Expecting two `SubmittedOffer` inactive state, found {input_count}");
+
+                // expecting one `Refund` state
+                ensure!(refund_count == 1, "Expecting one `Refund` inactive state, found {refund_count}");
 
                 Ok(())
             },

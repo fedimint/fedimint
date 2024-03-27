@@ -173,7 +173,7 @@ async fn pay_valid_invoice(
                 .into_stream();
             assert_eq!(pay_sub.ok().await?, LnPayState::Created);
             let funded = pay_sub.ok().await?;
-            assert_matches!(funded, LnPayState::Funded);
+            assert_matches!(funded, LnPayState::Funded { .. });
 
             let payload = PayInvoicePayload {
                 federation_id: user_client.federation_id(),
@@ -351,7 +351,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                         .into_stream();
                     assert_eq!(pay_sub.ok().await?, LnPayState::Created);
                     let funded = pay_sub.ok().await?;
-                    assert_matches!(funded, LnPayState::Funded);
+                    assert_matches!(funded, LnPayState::Funded { .. });
                     info!("### User client funded contract");
 
                     let payload = PayInvoicePayload {
@@ -498,7 +498,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
                         .into_stream();
                     assert_eq!(pay_sub.ok().await?, LnPayState::Created);
                     let funded = pay_sub.ok().await?;
-                    assert_matches!(funded, LnPayState::Funded);
+                    assert_matches!(funded, LnPayState::Funded { .. });
 
                     let payload = PayInvoicePayload {
                         federation_id: user_client.federation_id(),
@@ -878,7 +878,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                         .into_stream();
                     assert_eq!(pay_sub.ok().await?, LnPayState::Created);
                     let funded = pay_sub.ok().await?;
-                    assert_matches!(funded, LnPayState::Funded);
+                    assert_matches!(funded, LnPayState::Funded { .. });
 
                     let payload = PayInvoicePayload {
                         federation_id: user_client.federation_id(),
@@ -1455,7 +1455,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
                         .into_stream();
                     assert_eq!(pay_sub.ok().await?, LnPayState::Created);
                     let funded = pay_sub.ok().await?;
-                    assert_matches!(funded, LnPayState::Funded);
+                    assert_matches!(funded, LnPayState::Funded { .. });
                     assert_eq!(client1.get_balance().await, deposit_amt - invoice_amt - fee);
                 }
                 _ => panic!("Expected Lightning payment!"),
