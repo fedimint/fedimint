@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::ops::ControlFlow;
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use ln_gateway::rpc::V1_API_ENDPOINT;
@@ -52,7 +51,6 @@ impl Gatewayd {
         };
         poll(
             "waiting for gateway to be ready to respond to rpc",
-            Duration::from_secs(30),
             || async { gatewayd.gateway_id().await.map_err(ControlFlow::Continue) },
         )
         .await?;
@@ -94,7 +92,7 @@ impl Gatewayd {
 
     pub async fn connect_fed(&self, fed: &Federation) -> Result<()> {
         let invite_code = fed.invite_code()?;
-        poll("gateway connect-fed", Duration::from_secs(30), || async {
+        poll("gateway connect-fed", || async {
             cmd!(self, "connect-fed", invite_code.clone())
                 .run()
                 .await
