@@ -19,6 +19,7 @@ name = "tbs"
 path = "src/lib.rs"
 
 [dependencies]
+fedimint-core  = { version = "0.3.0-alpha", path = "../../fedimint-core/" }
 bls12_381 = { version = "0.7.1", features = [ "zeroize", "groups" ] }
 ff = "0.12.1"
 group = "0.12.1"
