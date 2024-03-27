@@ -1437,6 +1437,7 @@
 <a href="#1435" id="1435">1435</a>
 <a href="#1436" id="1436">1436</a>
 <a href="#1437" id="1437">1437</a>
+<a href="#1438" id="1438">1438</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -1446,9 +1447,10 @@
 //! See [`Encodable`] and [`Decodable`] for two main traits.
 
 </span><span class="kw">pub mod </span>as_hex;
+<span class="kw">mod </span>bls12_381;
 <span class="kw">mod </span>btc;
 <span class="kw">mod </span>secp256k1;
-<span class="kw">mod </span>tbs;
+<span class="kw">mod </span>threshold_crypto;
 
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">mod </span>tls;

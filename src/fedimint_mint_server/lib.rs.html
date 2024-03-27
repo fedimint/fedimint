@@ -803,6 +803,11 @@
 <a href="#801" id="801">801</a>
 <a href="#802" id="802">802</a>
 <a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -1425,7 +1430,12 @@
             .values()
             .all(|pk| pk.structural_eq(<span class="kw-2">&amp;</span>cfg.private.tbs_sks)));
 
-        <span class="kw">let </span>ref_pub_key = cfg.private.tbs_sks.to_public();
+        <span class="kw">let </span>ref_pub_key = Tiered::from_iter(
+            cfg.private
+                .tbs_sks
+                .iter()
+                .map(|(amt, key)| (amt, key.to_pub_key_share())),
+        );
 
         <span class="comment">// Find our key index and make sure we know the private key for all our public
         // key shares

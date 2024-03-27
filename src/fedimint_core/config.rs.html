@@ -1121,6 +1121,7 @@
 <span class="kw">use </span>bitcoin_hashes::hex::{format_hex, FromHex};
 <span class="kw">use </span>bitcoin_hashes::sha256::{Hash <span class="kw">as </span>Sha256, HashEngine};
 <span class="kw">use </span>bitcoin_hashes::{hex, sha256};
+<span class="kw">use </span>bls12_381::Scalar;
 <span class="kw">use </span>fedimint_core::api::{FederationApiExt, InviteCode, WsFederationApi};
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{DynRawFallback, Encodable};
@@ -1134,7 +1135,6 @@
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::ser::SerializeMap;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
-<span class="kw">use </span>tbs::{serde_impl, Scalar};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>threshold_crypto::group::{Curve, Group, GroupEncoding};
 <span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective};
@@ -1147,7 +1147,7 @@
     ModuleConsensusVersion,
 };
 <span class="kw">use </span><span class="kw">crate</span>::query::FilterMap;
-<span class="kw">use crate</span>::{maybe_add_send_sync, PeerId};
+<span class="kw">use crate</span>::{bls12_381_serde, maybe_add_send_sync, PeerId};
 
 <span class="comment">// TODO: make configurable
 </span><span class="doccomment">/// This limits the RAM consumption of a AlephBFT Unit to roughly 50kB
@@ -2051,8 +2051,8 @@
     HashedCommit(Sha256),
     Commit(<span class="attr">#[serde(with = <span class="string">"serde_commit"</span>)] </span>Vec&lt;G&gt;),
     Share(
-        <span class="attr">#[serde(with = <span class="string">"serde_impl::scalar"</span>)] </span>Scalar,
-        <span class="attr">#[serde(with = <span class="string">"serde_impl::scalar"</span>)] </span>Scalar,
+        <span class="attr">#[serde(with = <span class="string">"bls12_381_serde::scalar"</span>)] </span>Scalar,
+        <span class="attr">#[serde(with = <span class="string">"bls12_381_serde::scalar"</span>)] </span>Scalar,
     ),
     Extract(<span class="attr">#[serde(with = <span class="string">"serde_commit"</span>)] </span>Vec&lt;G&gt;),
 }
@@ -2103,21 +2103,21 @@
 
 <span class="kw">impl </span>SGroup <span class="kw">for </span>G2Projective {
     <span class="kw">fn </span>serialize2&lt;S: Serializer&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, s: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
-        serde_impl::g2::serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.to_affine(), s)
+        bls12_381_serde::g2::serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.to_affine(), s)
     }
 
     <span class="kw">fn </span>deserialize2&lt;<span class="lifetime">'d</span>, D: Deserializer&lt;<span class="lifetime">'d</span>&gt;&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt; {
-        serde_impl::g2::deserialize(d).map(G2Projective::from)
+        bls12_381_serde::g2::deserialize(d).map(G2Projective::from)
     }
 }
 
 <span class="kw">impl </span>SGroup <span class="kw">for </span>G1Projective {
     <span class="kw">fn </span>serialize2&lt;S: Serializer&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, s: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
-        serde_impl::g1::serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.to_affine(), s)
+        bls12_381_serde::g1::serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.to_affine(), s)
     }
 
     <span class="kw">fn </span>deserialize2&lt;<span class="lifetime">'d</span>, D: Deserializer&lt;<span class="lifetime">'d</span>&gt;&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt; {
-        serde_impl::g1::deserialize(d).map(G1Projective::from)
+        bls12_381_serde::g1::deserialize(d).map(G1Projective::from)
     }
 }
 
