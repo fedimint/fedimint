@@ -17,7 +17,7 @@ use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
 
 use crate::federation::Fedimintd;
-use crate::util::{poll, ProcessManager};
+use crate::util::{poll, poll_with_timeout, ProcessManager};
 use crate::{dev_fed, external_daemons, vars, ExternalDaemons};
 
 fn random_test_dir_suffix() -> String {
@@ -313,7 +313,7 @@ pub async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
     match rpc {
         RpcCmd::Env => {
             let env_file = common.test_dir().join("env");
-            poll("env file", None, || async {
+            poll("env file", || async {
                 if fs::try_exists(&env_file)
                     .await
                     .context("env file")
@@ -331,7 +331,7 @@ pub async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
         }
         RpcCmd::Wait => {
             let ready_file = common.test_dir().join("ready");
-            poll("ready file", Duration::from_secs(60), || async {
+            poll_with_timeout("ready file", Duration::from_secs(60), || async {
                 if fs::try_exists(&ready_file)
                     .await
                     .context("ready file")
@@ -389,7 +389,7 @@ async fn run_ui(process_mgr: &ProcessManager) -> Result<(Vec<Fedimintd>, Externa
             let fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer, &vars).await?;
             let server_addr = &vars.FM_BIND_API;
 
-            poll("waiting for api startup", None, || async {
+            poll("waiting for api startup", || async {
                 TcpStream::connect(server_addr)
                     .await
                     .context("connect to api")

@@ -26,7 +26,7 @@ use tracing::{debug, info};
 
 use crate::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, CommonArgs};
 use crate::federation::{Client, Federation};
-use crate::util::{poll, LoadTestTool, ProcessManager};
+use crate::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
 use crate::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
 pub struct Stats {
@@ -942,7 +942,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let txid: Txid = withdraw_res["txid"].as_str().unwrap().parse().unwrap();
     let fees_sat = withdraw_res["fees_sat"].as_u64().unwrap();
 
-    let tx_hex = poll("Waiting for transaction in mempool", None, || async {
+    let tx_hex = poll("Waiting for transaction in mempool", || async {
         // TODO: distinguish errors from not found
         bitcoind
             .get_raw_transaction(&txid)
@@ -1487,7 +1487,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     )?;
 
     let cln_info: GatewayInfo = serde_json::from_value(cln_value)?;
-    poll(
+    poll_with_timeout(
         "Waiting for CLN Gateway Running state after reboot",
         Duration::from_secs(15),
         || async {
@@ -1507,7 +1507,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     .await?;
 
     let lnd_info: GatewayInfo = serde_json::from_value(lnd_value)?;
-    poll(
+    poll_with_timeout(
         "Waiting for LND Gateway Running state after reboot",
         Duration::from_secs(15),
         || async {
@@ -1539,18 +1539,14 @@ pub async fn do_try_create_and_pay_invoice(
     // Verify that after the lightning node has restarted, the gateway
     // automatically reconnects and can query the lightning node
     // info again.
-    poll(
-        "Waiting for info to succeed after restart",
-        None,
-        || async {
-            let mut info_cmd = cmd!(gw, "info");
-            let lightning_info = info_cmd.out_json().await.map_err(ControlFlow::Continue)?;
-            let gateway_info: GatewayInfo = serde_json::from_value(lightning_info)
-                .context("invalid json")
-                .map_err(ControlFlow::Break)?;
-            poll_eq!(gateway_info.lightning_pub_key.is_some(), true)
-        },
-    )
+    poll("Waiting for info to succeed after restart", || async {
+        let mut info_cmd = cmd!(gw, "info");
+        let lightning_info = info_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+        let gateway_info: GatewayInfo = serde_json::from_value(lightning_info)
+            .context("invalid json")
+            .map_err(ControlFlow::Break)?;
+        poll_eq!(gateway_info.lightning_pub_key.is_some(), true)
+    })
     .await?;
 
     tracing::info!("Creating invoice....");
@@ -1791,7 +1787,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         .expect("withdrawal should contain txid string")
         .parse()
         .expect("txid should be parsable");
-    let tx_hex = poll("Waiting for transaction in mempool", None, || async {
+    let tx_hex = poll("Waiting for transaction in mempool", || async {
         bitcoind
             .get_raw_transaction(&txid)
             .await
@@ -2029,7 +2025,7 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
         .await
         .expect("could not restart fedimintd");
 
-    poll("Peer catches up again", Duration::from_secs(30), || async {
+    poll("Peer catches up again", || async {
         let block_count = cmd!(
             client,
             "dev",
@@ -2207,7 +2203,7 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                                 .spawn_daemon("faucet", cmd!(crate::util::Faucet))
                                 .await?;
 
-                            poll("waiting for faucet startup", None, || async {
+                            poll("waiting for faucet startup", || async {
                                 TcpStream::connect(format!(
                                     "127.0.0.1:{}",
                                     process_mgr.globals.FM_PORT_FAUCET
