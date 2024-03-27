@@ -11,6 +11,10 @@ use bitcoin::Network;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::ClientHandleArc;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_public_key,
+    bitcoin30_to_bitcoin29_sha256_hash,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::task::sleep_in_test;
@@ -444,7 +448,9 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
 
             let tx = TransactionBuilder::new().with_input(client_input.into_dyn(gateway_module.id));
             let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Pay {};
-            let operation_id = OperationId(invoice.payment_hash().into_inner());
+            let operation_id = OperationId(
+                bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()).into_inner(),
+            );
             let (txid, _) = gateway
                 .finalize_and_submit_transaction(
                     operation_id,
@@ -561,7 +567,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
 
         // Run gateway state machine
         let htlc = Htlc {
-            payment_hash: *invoice.payment_hash(),
+            payment_hash: bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()),
             incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             incoming_expiry: u32::MAX,
@@ -652,7 +658,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
 
         // Run gateway state machine
         let htlc = Htlc {
-            payment_hash: *invoice.payment_hash(),
+            payment_hash: bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()),
             incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             incoming_expiry: u32::MAX,
@@ -701,7 +707,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             let preimage = BYTE_33;
             let ln_output = LightningOutput::new_v0_offer(IncomingContractOffer {
                 amount,
-                hash: *invoice.payment_hash(),
+                hash: bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()),
                 encrypted_preimage: EncryptedPreimage::new(
                     PreimageKey(preimage),
                     &user_lightning_module.cfg.threshold_pub_key,
@@ -729,7 +735,9 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                     .expect("Failed to serialize string into json"),
             };
 
-            let operation_id = OperationId(invoice.payment_hash().into_inner());
+            let operation_id = OperationId(
+                bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()).into_inner(),
+            );
             let (txid, _) = user_client
                 .finalize_and_submit_transaction(
                     operation_id,
@@ -747,7 +755,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 
             // Run gateway state machine
             let htlc = Htlc {
-                payment_hash: *invoice.payment_hash(),
+                payment_hash: bitcoin30_to_bitcoin29_sha256_hash(*invoice.payment_hash()),
                 incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
                 outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
                 incoming_expiry: u32::MAX,
@@ -995,7 +1003,8 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
                     );
                     let route_hint_pub_key = route_hint.0.first().unwrap().src_node_id;
                     assert_eq!(
-                        route_hint_pub_key, public_key,
+                        route_hint_pub_key,
+                        bitcoin29_to_bitcoin30_secp256k1_public_key(public_key),
                         "Public key of route hint hop did not match expected public key"
                     );
                 }
@@ -1016,13 +1025,16 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
                         if route_hint.0.len() == 1 {
                             // If there's only one hop, it should contain the gateway's public key
                             let route_hint_pub_key = route_hint.0.first().unwrap().src_node_id;
-                            assert_eq!(route_hint_pub_key, public_key);
+                            assert_eq!(
+                                route_hint_pub_key,
+                                bitcoin29_to_bitcoin30_secp256k1_public_key(public_key)
+                            );
                             num_one_hops += 1;
                         } else {
                             // If there's > 1 hop, it should exist in `all_keys`
                             for hop in route_hint.0 {
                                 assert!(
-                                    all_keys.contains(&hop.src_node_id),
+                                    all_keys.contains(&bitcoin30_to_bitcoin29_secp256k1_public_key(hop.src_node_id)),
                                     "Public key of route hint hop did not match expected public key"
                                 );
                             }
