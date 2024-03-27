@@ -49,6 +49,10 @@ function run_tests() {
     >&2 echo "### Testing against bitcoind for ln-gateway"
 
     cargo nextest run --locked --workspace --all-targets \
+          ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+          ${TEST_ARGS_SERIALIZED} \
+          -E 'package(fedimint-ln-tests-ng)'
+    cargo nextest run --locked --workspace --all-targets \
       ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
       ${TEST_ARGS_SERIALIZED} \
       -E 'package(fedimint-ln-gateway)'

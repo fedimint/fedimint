@@ -45,6 +45,10 @@ fedimint-logging = { version = "0.3.0-alpha", path = "../../fedimint-logging" }
 fedimint-rocksdb = { version = "0.3.0-alpha", path = "../../fedimint-rocksdb" }
 fedimint-ln-client = { version = "0.3.0-alpha", path = "../../modules/fedimint-ln-client" }
 fedimint-ln-common = { version = "0.3.0-alpha", path = "../../modules/fedimint-ln-common" }
+fedimint-ln-client-ng ={ path = "../../modules/fedimint-ln-client-ng" }
+fedimint-ln-common-ng ={ path = "../../modules/fedimint-ln-common-ng" }
+fedimint-ln-server-ng ={ path = "../../modules/fedimint-ln-server-ng" }
+tpe = { package = "fedimint-tpe", version = "0.3.0-alpha", path = "../../crypto/tpe" }
 fedimint-mint-client = { version = "0.3.0-alpha", path = "../../modules/fedimint-mint-client" }
 fedimint-dummy-client = { version = "0.3.0-alpha", path = "../../modules/fedimint-dummy-client" }
 fedimint-wallet-client = { version = "0.3.0-alpha", path = "../../modules/fedimint-wallet-client" }

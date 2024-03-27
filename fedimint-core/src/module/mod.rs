@@ -77,7 +77,7 @@ impl TransactionItemAmount {
 }
 
 /// All requests from client to server contain these fields
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ApiRequest<T> {
     /// Hashed user password if the API requires authentication
     pub auth: Option<ApiAuth>,
@@ -208,6 +208,10 @@ impl<'a> ApiEndpointContext<'a> {
     /// fedimint server
     pub fn has_auth(&self) -> bool {
         self.has_auth
+    }
+
+    pub fn db(&self) -> Database {
+        self.db.clone()
     }
 
     /// Waits for key to be present in database.
