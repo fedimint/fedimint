@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use anyhow::Context;
 pub use bitcoin::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -127,24 +128,25 @@ impl FromStr for GatewayFee {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split(',');
-        let base_msat = parts
-            .next()
-            .ok_or_else(|| anyhow::anyhow!("missing base fee in millisatoshis"))?
-            .parse()?;
-        let proportional_millionths = parts
-            .next()
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "missing liquidity based fee as proportional millionths of routed amount"
-                )
-            })?
-            .parse()?;
-        Ok(GatewayFee(RoutingFees {
-            base_msat,
-            proportional_millionths,
-        }))
+        let routing_fees = parse_routing_fees(s)?;
+        Ok(GatewayFee(routing_fees))
     }
+}
+
+pub fn parse_routing_fees(raw: &str) -> anyhow::Result<RoutingFees> {
+    let mut parts = raw.split(',');
+    let base_msat = parts
+        .next()
+        .context("missing base fee in millisatoshis")?
+        .parse()?;
+    let proportional_millionths = parts
+        .next()
+        .context("missing liquidity based fee as proportional millionths of routed amount")?
+        .parse()?;
+    Ok(RoutingFees {
+        base_msat,
+        proportional_millionths,
+    })
 }
 
 /// Trait for converting a fee type to specific `Amount`,
@@ -171,5 +173,42 @@ impl FeeToAmount for RoutingFees {
 impl FeeToAmount for GatewayFee {
     fn to_amount(&self, payment: &Amount) -> Amount {
         self.0.to_amount(payment)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use lightning_invoice::RoutingFees;
+
+    use super::parse_routing_fees;
+
+    #[test]
+    fn test_routing_fee_parsing() {
+        let test_cases = [
+            ("0,0", Some((0, 0))),
+            ("10,5000", Some((10, 5000))),
+            ("-10,5000", None),
+            ("10,-5000", None),
+            ("0;5000", None),
+            ("xpto", None),
+        ];
+        for (input, expected) in test_cases {
+            match expected {
+                Some((base_msat, proportional_millionths)) => {
+                    let actual = parse_routing_fees(input).expect("parsed routing fees");
+                    assert_eq!(
+                        actual,
+                        RoutingFees {
+                            base_msat,
+                            proportional_millionths
+                        }
+                    );
+                }
+                None => {
+                    let result = parse_routing_fees(input);
+                    assert!(result.is_err());
+                }
+            }
+        }
     }
 }
