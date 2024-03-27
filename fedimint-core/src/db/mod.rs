@@ -1904,17 +1904,20 @@ pub async fn apply_migrations(
     migrations: BTreeMap<DatabaseVersion, ServerMigrationFn>,
     module_instance_id: Option<ModuleInstanceId>,
 ) -> Result<(), anyhow::Error> {
-    {
-        let mut global_dbtx = db.begin_transaction().await;
-        migrate_database_version(
-            &mut global_dbtx.to_ref_nc(),
-            target_db_version,
-            module_instance_id,
-            kind.clone(),
-        )
-        .await?;
-        global_dbtx.commit_tx_result().await?;
-    }
+    // Newly created databases will not have any data since they have just been
+    // instantiated.
+    let mut dbtx = db.begin_transaction_nc().await;
+    let is_new_db = dbtx.raw_find_by_prefix(&[]).await?.next().await.is_none();
+
+    // First write the database version to disk if it does not exist.
+    create_database_version(
+        db,
+        target_db_version,
+        module_instance_id,
+        kind.clone(),
+        is_new_db,
+    )
+    .await?;
 
     let mut global_dbtx = db.begin_transaction().await;
     let module_instance_id_key = module_instance_id_or_global(module_instance_id);
@@ -1934,7 +1937,7 @@ pub async fn apply_migrations(
 
         while current_db_version < target_db_version {
             if let Some(migration) = migrations.get(&current_db_version) {
-                info!(target: LOG_DB, "Migrating module {kind} from {current_db_version} to {target_db_version}");
+                info!(target: LOG_DB, ?kind, ?current_db_version, ?target_db_version, "Migrating module...");
                 if let Some(module_instance_id) = module_instance_id {
                     migration(
                         &mut global_dbtx
@@ -1946,7 +1949,7 @@ pub async fn apply_migrations(
                     migration(&mut global_dbtx.to_ref_nc()).await?;
                 }
             } else {
-                warn!(target: LOG_DB, "Missing server db migration for version {current_db_version}");
+                warn!(target: LOG_DB, ?current_db_version, "Missing server db migration");
             }
 
             current_db_version.increment();
@@ -1964,69 +1967,87 @@ pub async fn apply_migrations(
     };
 
     global_dbtx.commit_tx_result().await?;
-    info!(target: LOG_DB, "{} module db version: {}", kind, db_version);
+    info!(target: LOG_DB, ?kind, ?db_version, "Migration complete");
     Ok(())
 }
 
-/// Migrates the `DatabaseVersion` from inside the module's isolated database
-/// to the global namespace. Database migrations are driven from outside of the
-/// modules so the `DatabaseVersion` should also exist outside the modules.
-/// This also fixes the key prefix conflicts with 0x50.
-pub async fn migrate_database_version(
-    global_dbtx: &mut DatabaseTransaction<'_>,
+/// Creates the `DatabaseVersion` inside the database if it does not exist. If
+/// necessary, this function will migrate the legacy database version to the
+/// expected `DatabaseVersionKey`.
+pub async fn create_database_version(
+    db: &Database,
     target_db_version: DatabaseVersion,
     module_instance_id: Option<ModuleInstanceId>,
     kind: String,
+    is_new_db: bool,
 ) -> Result<(), anyhow::Error> {
     let key_module_instance_id = module_instance_id_or_global(module_instance_id);
 
     // First check if the module has a `DatabaseVersion` written to
-    // `DatabaseVersionKey` If `DatabaseVersion` already exists, there is
+    // `DatabaseVersionKey`. If `DatabaseVersion` already exists, there is
     // nothing to do.
+    let mut global_dbtx = db.begin_transaction().await;
     if global_dbtx
         .get_value(&DatabaseVersionKey(key_module_instance_id))
         .await
         .is_none()
     {
-        // Read and remove the previous `DatabaseVersion`, which is in the module's
-        // isolated namespace (but not for fedimint-server)
+        // If it exists, read and remove the legacy `DatabaseVersion`, which used to be
+        // in the module's isolated namespace (but not for fedimint-server).
+        //
+        // Otherwise, if the previous database contains data and no legacy database
+        // version, use `DatabaseVersion(0)` so that all database migrations are
+        // run. Otherwise, this database can assumed to be new and can use
+        // `target_db_version` to skip the database migrations.
         let current_version_in_module = if let Some(module_instance_id) = module_instance_id {
             remove_current_db_version_if_exists(
                 &mut global_dbtx
                     .to_ref_with_prefix_module_id(module_instance_id)
                     .into_nc(),
+                is_new_db,
+                target_db_version,
             )
             .await
         } else {
-            remove_current_db_version_if_exists(&mut global_dbtx.to_ref().into_nc()).await
+            remove_current_db_version_if_exists(
+                &mut global_dbtx.to_ref().into_nc(),
+                is_new_db,
+                target_db_version,
+            )
+            .await
         };
 
         // Write the previous `DatabaseVersion` to the new `DatabaseVersionKey`
-        info!(target: LOG_DB, "Migrating DatabaseVersionKeyV0 of {kind} to DatabaseVersionKey. Version: {current_version_in_module} Target DB Version: {target_db_version}");
+        info!(target: LOG_DB, ?kind, ?current_version_in_module, ?target_db_version, ?is_new_db, "Creating DatabaseVersionKey...");
         global_dbtx
             .insert_new_entry(
                 &DatabaseVersionKey(key_module_instance_id),
                 &current_version_in_module,
             )
             .await;
+        global_dbtx.commit_tx_result().await?;
     }
 
     Ok(())
 }
 
-/// Removes `DatabaseVersion` from `DatabaseVersionKeyV0` if it exists.
-/// Otherwise return `DatabaseVersion(0)`
+/// Removes `DatabaseVersion` from `DatabaseVersionKeyV0` if it exists and
+/// returns the current database version. If the current version does not
+/// exist, use `target_db_version` if the database is new. Otherwise, return
+/// `DatabaseVersion(0)` to ensure all migrations are run.
 async fn remove_current_db_version_if_exists(
     version_dbtx: &mut DatabaseTransaction<'_>,
+    is_new_db: bool,
+    target_db_version: DatabaseVersion,
 ) -> DatabaseVersion {
     // Remove the previous `DatabaseVersion` in the isolated database. If it doesn't
     // exist, just use the 0 for the version so that all of the migrations are
     // executed.
     let current_version_in_module = version_dbtx.remove_entry(&DatabaseVersionKeyV0).await;
-    if let Some(database_version) = current_version_in_module {
-        database_version
-    } else {
-        DatabaseVersion(0)
+    match current_version_in_module {
+        Some(database_version) => database_version,
+        None if is_new_db => target_db_version,
+        None => DatabaseVersion(0),
     }
 }
 
