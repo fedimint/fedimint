@@ -17,6 +17,7 @@ use crate::keys::CompressedPublicKey;
 use crate::txoproof::{PegInProof, PegInProofError};
 
 pub mod config;
+pub mod envs;
 pub mod keys;
 pub mod tweakable;
 pub mod txoproof;

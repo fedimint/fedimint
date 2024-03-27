@@ -7,7 +7,7 @@ use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use bitcoincore_rpc::{Auth, RpcApi};
 use fedimint_core::encoding::Decodable;
-use fedimint_core::envs::FM_BITCOIND_COOKIE_FILE_VAR_NAME;
+use fedimint_core::envs::FM_BITCOIND_COOKIE_FILE_ENV;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{block_in_place, TaskHandle};
 use fedimint_core::txoproof::TxOutProof;
@@ -149,11 +149,11 @@ pub fn from_url_to_url_auth(url: &SafeUrl) -> anyhow::Result<(String, Auth)> {
         }),
         match (
             !url.username().is_empty(),
-            env::var(FM_BITCOIND_COOKIE_FILE_VAR_NAME),
+            env::var(FM_BITCOIND_COOKIE_FILE_ENV),
         ) {
-            (true, Ok(_)) => bail!(
-                "When {FM_BITCOIND_COOKIE_FILE_VAR_NAME} is set, the url auth part must be empty."
-            ),
+            (true, Ok(_)) => {
+                bail!("When {FM_BITCOIND_COOKIE_FILE_ENV} is set, the url auth part must be empty.")
+            }
             (true, Err(_)) => Auth::UserPass(
                 url.username().to_owned(),
                 url.password()

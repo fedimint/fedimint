@@ -1,3 +1,5 @@
+pub mod envs;
+
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
@@ -47,6 +49,8 @@ use secp256k1::SecretKey;
 use serde::Serialize;
 use tracing::info;
 
+use crate::envs::FM_PASSWORD_ENV;
+
 /// Tool to recover the on-chain wallet of a Fedimint federation
 #[derive(Debug, Parser)]
 #[command(version)]
@@ -60,7 +64,7 @@ struct RecoveryTool {
     #[arg(long = "cfg")]
     config: Option<PathBuf>,
     /// The password that encrypts the configs
-    #[arg(long, env = "FM_PASSWORD", requires = "config")]
+    #[arg(long, env = FM_PASSWORD_ENV, requires = "config")]
     password: String,
     /// Wallet descriptor, can be used instead of --cfg
     #[arg(long)]

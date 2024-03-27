@@ -22,6 +22,9 @@ use tracing::info;
 use crate::btc::mock::FakeBitcoinFactory;
 use crate::btc::real::RealBitcoinTest;
 use crate::btc::BitcoinTest;
+use crate::envs::{
+    FM_PORT_ESPLORA_ENV, FM_TEST_BITCOIND_RPC_ENV, FM_TEST_DIR_ENV, FM_TEST_USE_REAL_DAEMONS_ENV,
+};
 use crate::federation::FederationTest;
 use crate::gateway::GatewayTest;
 use crate::ln::mock::FakeLightningTest;
@@ -64,7 +67,7 @@ impl Fixtures {
         ) = if real_testing {
             let rpc_config = BitcoinRpcConfig::from_env_vars().unwrap();
             let dyn_bitcoin_rpc = create_bitcoind(&rpc_config, task_group.make_handle()).unwrap();
-            let bitcoincore_url = env::var("FM_TEST_BITCOIND_RPC")
+            let bitcoincore_url = env::var(FM_TEST_BITCOIND_RPC_ENV)
                 .expect("Must have bitcoind RPC defined for real tests")
                 .parse()
                 .expect("Invalid bitcoind RPC URL");
@@ -93,7 +96,7 @@ impl Fixtures {
     }
 
     pub fn is_real_test() -> bool {
-        env::var("FM_TEST_USE_REAL_DAEMONS") == Ok("1".to_string())
+        env::var(FM_TEST_USE_REAL_DAEMONS_ENV) == Ok("1".to_string())
     }
 
     // TODO: Auto-assign instance ids after removing legacy id order
@@ -207,7 +210,7 @@ impl Fixtures {
                 kind: "esplora".to_string(),
                 url: SafeUrl::parse(&format!(
                     "http://127.0.0.1:{}/",
-                    env::var("FM_PORT_ESPLORA").unwrap_or(String::from("50002"))
+                    env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
                 ))
                 .expect("Failed to parse default esplora server"),
             },
@@ -229,7 +232,7 @@ impl Fixtures {
 ///
 /// Callers must hold onto the tempdir until it is no longer needed
 pub fn test_dir(pathname: &str) -> (PathBuf, Option<TempDir>) {
-    let (parent, maybe_tmp_dir_guard) = match env::var("FM_TEST_DIR") {
+    let (parent, maybe_tmp_dir_guard) = match env::var(FM_TEST_DIR_ENV) {
         Ok(directory) => (directory, None),
         Err(_) => {
             let random = format!("test-{}", rand::random::<u64>());

@@ -23,6 +23,10 @@ use tonic_lnd::lnrpc::{GetInfoRequest, Invoice as LndInvoice, ListChannelsReques
 use tonic_lnd::{connect, Client as LndClient};
 use tracing::info;
 
+use crate::envs::{
+    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV,
+    FM_PORT_CLN_ENV, FM_PORT_LND_LISTEN_ENV, FM_TEST_DIR_ENV,
+};
 use crate::gateway::LightningNodeType;
 use crate::ln::LightningTest;
 
@@ -83,7 +87,7 @@ impl LightningTest for ClnLightningTest {
     }
 
     fn listening_address(&self) -> String {
-        let cln_listen_port = std::env::var("FM_PORT_CLN").unwrap_or(String::from("9000"));
+        let cln_listen_port = std::env::var(FM_PORT_CLN_ENV).unwrap_or(String::from("9000"));
         format!("127.0.0.1:{}", cln_listen_port)
     }
 
@@ -129,14 +133,14 @@ impl ILnRpcClient for ClnLightningTest {
 
 impl ClnLightningTest {
     pub async fn new() -> ClnLightningTest {
-        let dir = env::var("FM_TEST_DIR").expect("Real tests require FM_TEST_DIR");
+        let dir = env::var(FM_TEST_DIR_ENV).expect("Real tests require FM_TEST_DIR");
         let socket_cln = PathBuf::from(dir).join("cln/regtest/lightning-rpc");
         let rpc_cln = Arc::new(Mutex::new(ClnRpc::new(socket_cln).await.unwrap()));
 
         let initial_balance = Self::channel_balance(rpc_cln.clone()).await;
         let node_pub_key = Self::pubkey(rpc_cln.clone()).await;
 
-        let lnrpc_addr = env::var("FM_GATEWAY_LIGHTNING_ADDR")
+        let lnrpc_addr = env::var(FM_GATEWAY_LIGHTNING_ADDR_ENV)
             .expect("FM_GATEWAY_LIGHTNING_ADDR not set")
             .parse::<SafeUrl>()
             .expect("Invalid FM_GATEWAY_LIGHTNING_ADDR");
@@ -232,7 +236,7 @@ impl LightningTest for LndLightningTest {
     }
 
     fn listening_address(&self) -> String {
-        let lnd_listen_port = std::env::var("FM_PORT_LND_LISTEN").unwrap_or(String::from("9734"));
+        let lnd_listen_port = std::env::var(FM_PORT_LND_LISTEN_ENV).unwrap_or(String::from("9734"));
         format!("127.0.0.1:{}", lnd_listen_port)
     }
 
@@ -288,9 +292,9 @@ impl ILnRpcClient for LndLightningTest {
 impl LndLightningTest {
     pub async fn new() -> LndLightningTest {
         info!(target: LOG_TEST, "Setting up lnd lightning test fixture");
-        let lnd_rpc_addr = env::var("FM_LND_RPC_ADDR").unwrap();
-        let lnd_macaroon = env::var("FM_LND_MACAROON").unwrap();
-        let lnd_tls_cert = env::var("FM_LND_TLS_CERT").unwrap();
+        let lnd_rpc_addr = env::var(FM_LND_RPC_ADDR_ENV).unwrap();
+        let lnd_macaroon = env::var(FM_LND_MACAROON_ENV).unwrap();
+        let lnd_tls_cert = env::var(FM_LND_TLS_CERT_ENV).unwrap();
         let lnd_client = connect(
             lnd_rpc_addr.clone(),
             lnd_tls_cert.clone(),

@@ -6,6 +6,7 @@ use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_logging::LOG_DEVIMINT;
 use tracing::info;
 
+use crate::envs::{FM_GWID_CLN_ENV, FM_GWID_LND_ENV};
 use crate::external::{Bitcoind, Electrs, Esplora, Lightningd, Lnd};
 use crate::federation::{Client, Federation};
 use crate::gatewayd::Gatewayd;
@@ -261,8 +262,8 @@ impl DevJitFed {
             "too many offline nodes ({offline_nodes}) to reach consensus"
         );
 
-        std::env::set_var("FM_GWID_CLN", self.gw_cln().await?.gateway_id().await?);
-        std::env::set_var("FM_GWID_LND", self.gw_lnd().await?.gateway_id().await?);
+        std::env::set_var(FM_GWID_CLN_ENV, self.gw_cln().await?.gateway_id().await?);
+        std::env::set_var(FM_GWID_LND_ENV, self.gw_lnd().await?.gateway_id().await?);
         info!(target: LOG_DEVIMINT, "Setup gateway environment variables");
 
         let _ = self.client_gw_registered().await?;

@@ -17,6 +17,10 @@ use tokio::time::Instant;
 use tracing::{debug, error, info, trace, warn};
 
 use crate::devfed::DevJitFed;
+use crate::envs::{
+    FM_FED_SIZE_ENV, FM_INVITE_CODE_ENV, FM_LINK_TEST_DIR_ENV, FM_OFFLINE_NODES_ENV,
+    FM_TEST_DIR_ENV,
+};
 use crate::federation::Fedimintd;
 use crate::util::{poll, ProcessManager};
 use crate::{external_daemons, vars, ExternalDaemons};
@@ -32,12 +36,12 @@ fn random_test_dir_suffix() -> String {
 
 #[derive(Parser, Clone)]
 pub struct CommonArgs {
-    #[clap(short = 'd', long, env = "FM_TEST_DIR")]
+    #[clap(short = 'd', long, env = FM_TEST_DIR_ENV)]
     pub test_dir: Option<PathBuf>,
-    #[clap(short = 'n', long, env = "FM_FED_SIZE", default_value = "4")]
+    #[clap(short = 'n', long, env = FM_FED_SIZE_ENV, default_value = "4")]
     pub fed_size: usize,
 
-    #[clap(long, env = "FM_LINK_TEST_DIR")]
+    #[clap(long, env = FM_LINK_TEST_DIR_ENV)]
     /// Create a link to the test dir under this path
     pub link_test_dir: Option<PathBuf>,
 
@@ -45,7 +49,7 @@ pub struct CommonArgs {
     pub link_test_dir_suffix: String,
 
     /// Run degraded federation with FM_OFFLINE_NODES shutdown
-    #[clap(long, env = "FM_OFFLINE_NODES", default_value = "0")]
+    #[clap(long, env = FM_OFFLINE_NODES_ENV, default_value = "0")]
     pub offline_nodes: usize,
 }
 
@@ -281,7 +285,8 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                     info!(target: LOG_DEVIMINT,
                         elapsed_ms = %pegin_start_time.elapsed().as_millis(),
                         "Pegins completed");
-                    std::env::set_var("FM_INVITE_CODE", dev_fed.fed().await?.invite_code()?);
+
+                    std::env::set_var(FM_INVITE_CODE_ENV, dev_fed.fed().await?.invite_code()?);
 
                     dev_fed.finalize(&process_mgr).await?;
 
@@ -380,7 +385,7 @@ pub async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
                 let invite = fs::read_to_string(&invite_file).await?;
                 let mut env_string = fs::read_to_string(&env_file).await?;
                 writeln!(env_string, r#"export FM_INVITE_CODE="{invite}""#)?;
-                std::env::set_var("FM_INVITE_CODE", invite);
+                std::env::set_var(FM_INVITE_CODE_ENV, invite);
                 write_overwrite_async(env_file, env_string).await?;
             }
 
