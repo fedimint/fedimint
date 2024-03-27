@@ -152,7 +152,7 @@ impl ClientModuleInit for GatewayClientInit {
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientContext {
-    redeem_key: bitcoin::KeyPair,
+    redeem_key: bitcoin29::KeyPair,
     timelock_delta: u64,
     secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
     pub ln_decoder: Decoder,
