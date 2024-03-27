@@ -78,7 +78,7 @@ jobs:
             !/tmp/nix-build-*/source/
 
   notifications:
-    if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
+    if: always() && github.repository == 'fedimint/fedimint'
     name: "Notifications"
     timeout-minutes: 1
     runs-on: ubuntu-22.04
