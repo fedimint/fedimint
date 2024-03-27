@@ -791,7 +791,7 @@ impl FedimintCli {
                 Ok(CliOutput::UntypedApiOutput { value: response })
             }
             Command::Dev(DevCmd::WaitBlockCount { count: target }) => {
-                task::timeout(Duration::from_secs(30), async move {
+                task::timeout(Duration::from_secs(60), async move {
                     let client = self.client_open(&cli).await?;
                     loop {
                         let wallet = client.get_first_module::<WalletClientModule>();
