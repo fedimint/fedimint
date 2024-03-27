@@ -6,10 +6,10 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use axum_macros::debug_handler;
 use bitcoin::consensus::Encodable;
-use bitcoin_hashes::hex::ToHex;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::pay::PayInvoicePayload;
+use hex::ToHex;
 use serde_json::json;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
@@ -253,7 +253,7 @@ async fn pay_invoice(
     Json(payload): Json<PayInvoicePayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let preimage = gateway.handle_pay_invoice_msg(payload).await?;
-    Ok(Json(json!(preimage.0.to_hex())))
+    Ok(Json(json!(preimage.0.encode_hex::<String>())))
 }
 
 /// Connect a new federation

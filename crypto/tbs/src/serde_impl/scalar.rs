@@ -1,12 +1,12 @@
-use bitcoin_hashes::hex::{FromHex, ToHex};
 use bls12_381::Scalar;
+use hex::{FromHex, ToHex};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serializer};
 
 pub fn serialize<S: Serializer>(x: &Scalar, s: S) -> Result<S::Ok, S::Error> {
     let bytes = x.to_bytes();
     if s.is_human_readable() {
-        s.serialize_str(&bytes.to_hex())
+        s.serialize_str(&bytes.encode_hex::<String>())
     } else {
         s.serialize_bytes(&bytes)
     }
@@ -15,7 +15,7 @@ pub fn serialize<S: Serializer>(x: &Scalar, s: S) -> Result<S::Ok, S::Error> {
 pub fn deserialize<'d, D: Deserializer<'d>>(d: D) -> Result<Scalar, D::Error> {
     let bytes: Vec<u8> = if d.is_human_readable() {
         let deser: String = Deserialize::deserialize(d)?;
-        Vec::<u8>::from_hex(&deser).map_err(serde::de::Error::custom)?
+        Vec::<u8>::from_hex(deser).map_err(serde::de::Error::custom)?
     } else {
         Deserialize::deserialize(d)?
     };

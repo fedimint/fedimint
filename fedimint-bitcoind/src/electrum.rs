@@ -2,13 +2,13 @@ use std::fmt;
 
 use anyhow::anyhow as format_err;
 use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
-use bitcoin_hashes::hex::ToHex;
 use electrum_client::ElectrumApi;
 use electrum_client::Error::Protocol;
 use fedimint_core::task::{block_in_place, TaskHandle};
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
+use hex::ToHex;
 use serde_json::{Map, Value};
 use tracing::{info, warn};
 
@@ -45,7 +45,7 @@ impl fmt::Debug for ElectrumClient {
 impl IBitcoindRpc for ElectrumClient {
     async fn get_network(&self) -> anyhow::Result<Network> {
         let resp = block_in_place(|| self.0.server_features())?;
-        Ok(match resp.genesis_hash.to_hex().as_str() {
+        Ok(match resp.genesis_hash.encode_hex::<String>().as_str() {
             crate::MAINNET_GENESIS_BLOCK_HASH => Network::Bitcoin,
             crate::TESTNET_GENESIS_BLOCK_HASH => Network::Testnet,
             crate::SIGNET_GENESIS_BLOCK_HASH => Network::Signet,
