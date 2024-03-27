@@ -1297,6 +1297,32 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     })
     .await;
 
+    // Verify we can configure gateway to charge fees for specific federation
+    let federation_routing_fees = FederationRoutingFees::from_str("10,10000")?;
+    let set_configuration_payload = SetConfigurationPayload {
+        password: None,
+        num_route_hints: None,
+        routing_fees: None,
+        network: None,
+        per_federation_routing_fees: Some(vec![(fed.id(), federation_routing_fees.clone())]),
+    };
+    verify_gateway_rpc_success("set_configuration", || {
+        new_password_rpc_client.set_configuration(set_configuration_payload.clone())
+    })
+    .await;
+    // Verify info has new per federation routing fees.
+    let new_password_rpc_client = initial_rpc_client.with_password(Some(new_password.clone()));
+    let gw_info =
+        verify_gateway_rpc_success("get_info", || new_password_rpc_client.get_info()).await;
+    assert_eq!(
+        gw_info
+            .federations
+            .iter()
+            .find(|f| f.federation_id == fed.id())
+            .and_then(|f| f.routing_fees.clone()),
+        Some(federation_routing_fees)
+    );
+
     Ok(())
 }
 
@@ -1479,6 +1505,20 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
                 .await
                 .unwrap();
 
+            // setting specific routing fees for fed1
+            let fed_routing_fees = FederationRoutingFees::from_str("10,10000")?;
+            let set_configuration_payload = SetConfigurationPayload {
+                password: None,
+                num_route_hints: None,
+                routing_fees: None,
+                network: None,
+                per_federation_routing_fees: Some(vec![(id1, fed_routing_fees.clone())]),
+            };
+            verify_gateway_rpc_success("set_configuration", || {
+                rpc.set_configuration(set_configuration_payload.clone())
+            })
+            .await;
+
             send_msats_to_gateway(&gateway, id1, 10_000).await;
             send_msats_to_gateway(&gateway, id2, 10_000).await;
 
@@ -1532,6 +1572,10 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
                     let funded = pay_sub.ok().await?;
                     assert_matches!(funded, LnPayState::Funded);
                     assert_eq!(client1.get_balance().await, deposit_amt - invoice_amt - fee);
+                    assert_eq!(
+                        routing_fees_in_msats(&fed_routing_fees, &invoice_amt),
+                        fee.msats
+                    );
                 }
                 _ => panic!("Expected Lightning payment!"),
             }
@@ -1570,11 +1614,20 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
                 pre_balances[0] + (invoice_amt + fee).msats
             );
             assert_eq!(post_balances[1], pre_balances[1] - invoice_amt.msats);
+            assert_eq!(
+                routing_fees_in_msats(&fed_routing_fees, &invoice_amt),
+                fee.msats
+            );
 
             Ok(())
         },
     )
     .await
+}
+
+fn routing_fees_in_msats(routing_fees: &FederationRoutingFees, amount: &Amount) -> u64 {
+    ((amount.msats * routing_fees.proportional_millionths as u64) / 1_000_000)
+        + routing_fees.base_msat as u64
 }
 
 async fn reconnect_federation(rpc: &GatewayRpcClient, fed: &FederationTest) -> anyhow::Result<()> {
