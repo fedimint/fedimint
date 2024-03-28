@@ -8,7 +8,7 @@ pub fn serialize<S: Serializer>(x: &Scalar, s: S) -> Result<S::Ok, S::Error> {
     if s.is_human_readable() {
         s.serialize_str(&bytes.to_hex())
     } else {
-        s.serialize_bytes(&bytes)
+        panic!("Requires non-human readable tbs encoding for scalar!");
     }
 }
 
@@ -17,7 +17,7 @@ pub fn deserialize<'d, D: Deserializer<'d>>(d: D) -> Result<Scalar, D::Error> {
         let deser: String = Deserialize::deserialize(d)?;
         Vec::<u8>::from_hex(&deser).map_err(serde::de::Error::custom)?
     } else {
-        Deserialize::deserialize(d)?
+        panic!("Requires non-human readable tbs encoding for scalar!");
     };
     if bytes.len() != 32 {
         return Err(D::Error::invalid_length(bytes.len(), &"32 bytes"));

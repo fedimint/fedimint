@@ -11,7 +11,7 @@ macro_rules! impl_serde_g {
             if s.is_human_readable() {
                 s.serialize_str(&bytes.to_hex().as_ref())
             } else {
-                s.serialize_bytes(&bytes)
+                panic!("Requires non-human readable tbs encoding for group element!");
             }
         }
 
@@ -20,7 +20,7 @@ macro_rules! impl_serde_g {
                 let deser: String = Deserialize::deserialize(d)?;
                 Vec::<u8>::from_hex(&deser).map_err(serde::de::Error::custom)?
             } else {
-                Deserialize::deserialize(d)?
+                panic!("Requires non-human readable tbs encoding for group element!");
             };
 
             if bytes.len() != $len {
