@@ -2217,6 +2217,7 @@ impl ClientBuilder {
                             notifier.clone(),
                             api.clone(),
                             self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
+                            task_group.clone(),
                         )
                         .await?;
 
