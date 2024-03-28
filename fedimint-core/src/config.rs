@@ -204,23 +204,8 @@ impl ClientConfig {
         let Some(str_value) = self.global.meta.get(key) else {
             return Ok(None);
         };
-        let res = serde_json::from_str(str_value)
-            .map(Some)
-            .context(format!("Decoding meta field '{key}' failed"));
 
-        // In the past we encoded some string fields as "just a string" without quotes,
-        // this code ensures that old meta values still parse since config is hard to
-        // change
-        if res.is_err() && std::any::TypeId::of::<V>() == std::any::TypeId::of::<String>() {
-            let string_ret = Box::new(str_value.clone());
-            let ret: Box<V> = unsafe {
-                // We can transmute a String to V because we know that V==String
-                std::mem::transmute(string_ret)
-            };
-            Ok(Some(*ret))
-        } else {
-            res
-        }
+        parse_meta_value_static(str_value)
     }
 
     /// Create an invite code with the api endpoint of the given peer which can
@@ -1053,6 +1038,30 @@ pub mod serde_binary_human_readable {
         } else {
             Deserialize::deserialize(d)
         }
+    }
+}
+
+/// Tries to parse `str_value` as JSON. In the special case that `V` is `String`
+/// we return the raw `str_value` if JSON parsing fails. This necessary since
+/// the spec wasn't clear enough in the beginning.
+pub fn parse_meta_value_static<V: DeserializeOwned + 'static>(
+    str_value: &str,
+) -> anyhow::Result<V> {
+    let res = serde_json::from_str(str_value)
+        .context(format!("Decoding meta field value '{str_value}' failed"));
+
+    // In the past we encoded some string fields as "just a string" without quotes,
+    // this code ensures that old meta values still parse since config is hard to
+    // change
+    if res.is_err() && std::any::TypeId::of::<V>() == std::any::TypeId::of::<String>() {
+        let string_ret = Box::new(str_value.to_owned());
+        let ret: Box<V> = unsafe {
+            // We can transmute a String to V because we know that V==String
+            std::mem::transmute(string_ret)
+        };
+        Ok(*ret)
+    } else {
+        res
     }
 }
 

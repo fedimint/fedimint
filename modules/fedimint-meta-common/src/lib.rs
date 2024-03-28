@@ -8,7 +8,7 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::plugin_types_trait_impl_common;
-use serde::de::{self, Visitor};
+use serde::de::{self, DeserializeOwned, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
@@ -43,7 +43,7 @@ pub const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::ne
     Serialize,
     Deserialize,
 )]
-pub struct MetaKey(u8);
+pub struct MetaKey(pub u8);
 
 impl fmt::Display for MetaKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -94,7 +94,8 @@ impl MetaValue {
         &self.0
     }
 
-    pub fn to_json(&self) -> anyhow::Result<serde_json::Value> {
+    /// Parses the value as JSON into a given type `T`
+    pub fn json<T: DeserializeOwned>(&self) -> anyhow::Result<T> {
         Ok(serde_json::from_slice(&self.0)?)
     }
 }

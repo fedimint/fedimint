@@ -16,7 +16,7 @@ name = "fedimint_meta_client"
 path = "src/lib.rs"
 
 [features]
-default =[]
+default = []
 cli = ["dep:clap", "dep:serde_json"]
 
 [dependencies]
@@ -32,9 +32,11 @@ futures = { workspace = true }
 erased-serde = { workspace = true }
 rand = { workspace = true }
 secp256k1 = "0.24.2"
-serde = {version = "1.0.149", features = [ "derive" ] }
+serde = { version = "1.0.149", features = ["derive"] }
 strum = { workspace = true }
 strum_macros = { workspace = true }
+tokio = { version = "1.36.0", features = ["sync"] }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
+reqwest = { version = "0.12.2", default-features = false, features = ["json", "rustls-tls", ] }
