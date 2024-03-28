@@ -398,6 +398,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "base16ct"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c7f02d4ea65f2c1853089ffd8d2787bdbc63de2f0d29dedbcf8ccdfa0ccd4cf"
+
+[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1454,6 +1460,7 @@ dependencies = [
  "secp256k1-zkp",
  "serde",
  "serde_json",
+ "serdect",
  "strum",
  "strum_macros",
  "test-log",
@@ -1514,9 +1521,9 @@ name = "fedimint-derive-secret"
 version = "0.3.0-alpha"
 dependencies = [
  "anyhow",
+ "bls12_381",
  "fedimint-core",
  "fedimint-hkdf",
- "fedimint-tbs",
  "ring 0.17.8",
  "secp256k1-zkp",
 ]
@@ -2104,6 +2111,7 @@ version = "0.3.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin_hashes 0.11.0",
+ "bls12_381",
  "fedimint-client",
  "fedimint-core",
  "fedimint-dummy-client",
@@ -2197,6 +2205,7 @@ dependencies = [
  "bitcoin 0.30.2",
  "bitcoin_hashes 0.11.0",
  "bitcoin_hashes 0.12.0",
+ "bls12_381",
  "bytes",
  "fedimint-aead",
  "fedimint-aleph-bft",
@@ -4727,6 +4736,16 @@ dependencies = [
  "form_urlencoded",
  "itoa",
  "ryu",
+ "serde",
+]
+
+[[package]]
+name = "serdect"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a84f14a19e9a014bb9f4512488d9829a68e04ecabffb0f9904cd1ace94598177"
+dependencies = [
+ "base16ct",
  "serde",
 ]
 

@@ -313,6 +313,7 @@ mod fedimint_migration_tests {
 
     use anyhow::ensure;
     use bitcoin_hashes::Hash;
+    use bls12_381::Scalar;
     use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
     use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
     use fedimint_client::module::init::DynClientModuleInit;
@@ -349,7 +350,7 @@ mod fedimint_migration_tests {
     use strum::IntoEnumIterator;
     use tbs::{
         blind_message, sign_blinded_msg, AggregatePublicKey, BlindingKey, Message, PublicKeyShare,
-        Scalar, SecretKeyShare, Signature,
+        SecretKeyShare, Signature,
     };
     use threshold_crypto::{G1Affine, G2Affine};
     use tracing::info;
