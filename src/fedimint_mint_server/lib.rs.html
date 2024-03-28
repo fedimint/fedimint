@@ -784,31 +784,8 @@
 <a href="#782" id="782">782</a>
 <a href="#783" id="783">783</a>
 <a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a>
-<a href="#791" id="791">791</a>
-<a href="#792" id="792">792</a>
-<a href="#793" id="793">793</a>
-<a href="#794" id="794">794</a>
-<a href="#795" id="795">795</a>
-<a href="#796" id="796">796</a>
-<a href="#797" id="797">797</a>
-<a href="#798" id="798">798</a>
-<a href="#799" id="799">799</a>
-<a href="#800" id="800">800</a>
-<a href="#801" id="801">801</a>
-<a href="#802" id="802">802</a>
-<a href="#803" id="803">803</a>
-<a href="#804" id="804">804</a>
-<a href="#805" id="805">805</a>
-<a href="#806" id="806">806</a>
-<a href="#807" id="807">807</a>
-<a href="#808" id="808">808</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
+<span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
@@ -831,8 +808,6 @@
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeersExt,
     OutPoint, PeerId, ServerModule, Tiered, TieredMultiZip,
 };
-<span class="kw">use </span>fedimint_metrics::prometheus::register_histogram_with_registry;
-<span class="kw">use </span>fedimint_metrics::{histogram_opts, lazy_static, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY};
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_mint_common::config::{
     MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate,
@@ -846,6 +821,10 @@
 <span class="kw">use </span>fedimint_server::config::distributedgen::{evaluate_polynomial_g2, scalar, PeerHandleOps};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>itertools::Itertools;
+<span class="kw">use </span>metrics::{
+    MINT_INOUT_FEES_SATS, MINT_INOUT_SATS, MINT_ISSUED_ECASH_FEES_SATS, MINT_ISSUED_ECASH_SATS,
+    MINT_REDEEMED_ECASH_FEES_SATS, MINT_REDEEMED_ECASH_SATS,
+};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>secp256k1_zkp::SECP256K1;
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -863,45 +842,6 @@
     MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix, NonceKey,
     NonceKeyPrefix,
 };
-
-<span class="macro">lazy_static!</span> {
-    <span class="kw">static </span><span class="kw-2">ref </span>MINT_REDEEMED_ECASH_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
-        <span class="macro">histogram_opts!</span>(
-            <span class="string">"mint_redeemed_ecash_sats"</span>,
-            <span class="string">"Value of redeemed e-cash notes in sats"</span>,
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>MINT_REDEEMED_ECASH_FEES_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
-        <span class="macro">histogram_opts!</span>(
-            <span class="string">"mint_redeemed_ecash_fees_sats"</span>,
-            <span class="string">"Value of e-cash fees during reissue in sats"</span>,
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>MINT_ISSUED_ECASH_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
-        <span class="macro">histogram_opts!</span>(
-            <span class="string">"mint_issued_ecash_sats"</span>,
-            <span class="string">"Value of issued e-cash notes in sats"</span>,
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>MINT_ISSUED_ECASH_FEES_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
-        <span class="macro">histogram_opts!</span>(
-            <span class="string">"mint_issued_ecash_fees_sats"</span>,
-            <span class="string">"Value of e-cash fees during issue in sats"</span>,
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-}
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>MintInit;
@@ -1395,6 +1335,12 @@
     fee: Amount,
 ) {
     dbtx.on_commit(<span class="kw">move </span>|| {
+        MINT_INOUT_SATS
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="string">"outgoing"</span>])
+            .observe(amount.sats_f64());
+        MINT_INOUT_FEES_SATS
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="string">"outgoing"</span>])
+            .observe(fee.sats_f64());
         MINT_ISSUED_ECASH_SATS.observe(amount.sats_f64());
         MINT_ISSUED_ECASH_FEES_SATS.observe(fee.sats_f64());
     });
@@ -1406,6 +1352,12 @@
     fee: Amount,
 ) {
     dbtx.on_commit(<span class="kw">move </span>|| {
+        MINT_INOUT_SATS
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="string">"incoming"</span>])
+            .observe(amount.sats_f64());
+        MINT_INOUT_FEES_SATS
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="string">"incoming"</span>])
+            .observe(fee.sats_f64());
         MINT_REDEEMED_ECASH_SATS.observe(amount.sats_f64());
         MINT_REDEEMED_ECASH_FEES_SATS.observe(fee.sats_f64());
     });

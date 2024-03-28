@@ -28,7 +28,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_metrics",["",[],["lib.rs"]]],\
 ["fedimint_mint_client",["",[["backup",[],["recovery.rs"]]],["backup.rs","client_db.rs","input.rs","lib.rs","oob.rs","output.rs"]]],\
 ["fedimint_mint_common",["",[],["common.rs","config.rs","lib.rs"]]],\
-["fedimint_mint_server",["",[],["db.rs","lib.rs"]]],\
+["fedimint_mint_server",["",[],["db.rs","lib.rs","metrics.rs"]]],\
 ["fedimint_portalloc",["",[["data",[],["dto.rs"]]],["data.rs","lib.rs","util.rs"]]],\
 ["fedimint_rocksdb",["",[],["lib.rs"]]],\
 ["fedimint_server",["",[["atomic_broadcast",[],["backup.rs","data_provider.rs","finalization_handler.rs","keychain.rs","mod.rs","network.rs","spawner.rs"]],["config",[],["api.rs","distributedgen.rs","io.rs","mod.rs"]],["consensus",[],["debug_fmt.rs","mod.rs","server.rs"]],["metrics",[],["jsonrpsee.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","peers_reliable.rs","queue.rs"]]],["db.rs","envs.rs","lib.rs","metrics.rs","multiplexed.rs"]]],\
