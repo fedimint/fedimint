@@ -1777,32 +1777,6 @@
 <a href="#1775" id="1775">1775</a>
 <a href="#1776" id="1776">1776</a>
 <a href="#1777" id="1777">1777</a>
-<a href="#1778" id="1778">1778</a>
-<a href="#1779" id="1779">1779</a>
-<a href="#1780" id="1780">1780</a>
-<a href="#1781" id="1781">1781</a>
-<a href="#1782" id="1782">1782</a>
-<a href="#1783" id="1783">1783</a>
-<a href="#1784" id="1784">1784</a>
-<a href="#1785" id="1785">1785</a>
-<a href="#1786" id="1786">1786</a>
-<a href="#1787" id="1787">1787</a>
-<a href="#1788" id="1788">1788</a>
-<a href="#1789" id="1789">1789</a>
-<a href="#1790" id="1790">1790</a>
-<a href="#1791" id="1791">1791</a>
-<a href="#1792" id="1792">1792</a>
-<a href="#1793" id="1793">1793</a>
-<a href="#1794" id="1794">1794</a>
-<a href="#1795" id="1795">1795</a>
-<a href="#1796" id="1796">1796</a>
-<a href="#1797" id="1797">1797</a>
-<a href="#1798" id="1798">1798</a>
-<a href="#1799" id="1799">1799</a>
-<a href="#1800" id="1800">1800</a>
-<a href="#1801" id="1801">1801</a>
-<a href="#1802" id="1802">1802</a>
-<a href="#1803" id="1803">1803</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -1858,12 +1832,6 @@
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeersExt,
     OutPoint, PeerId, ServerModule,
 };
-<span class="kw">use </span>fedimint_metrics::prometheus::{
-    register_histogram_with_registry, register_int_gauge_with_registry, IntGauge,
-};
-<span class="kw">use </span>fedimint_metrics::{
-    histogram_opts, lazy_static, opts, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY,
-};
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
 <span class="kw">pub use </span>fedimint_wallet_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
@@ -1871,6 +1839,10 @@
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
 <span class="kw">use </span>fedimint_wallet_common::{Rbf, WalletInputError, WalletOutputError, WalletOutputV0};
 <span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>metrics::{
+    WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
+    WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
+};
 <span class="kw">use </span>miniscript::{translate_hash_fail, Descriptor, TranslatePk};
 <span class="kw">use </span>miniscript9::psbt::PsbtExt;
 <span class="kw">use </span>rand::rngs::OsRng;
@@ -1886,53 +1858,9 @@
     PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
     UnsignedTransactionPrefixKey,
 };
+<span class="kw">use </span><span class="kw">crate</span>::metrics::WALLET_BLOCK_COUNT;
 
-<span class="macro">lazy_static!</span> {
-    <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGIN_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
-        <span class="macro">histogram_opts!</span>(
-            <span class="string">"wallet_pegin_sats"</span>,
-            <span class="string">"Value of peg-in transactions in sats"</span>,
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGIN_FEES_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
-        <span class="macro">histogram_opts!</span>(
-            <span class="string">"wallet_pegin_fees_sats"</span>,
-            <span class="string">"Value of peg-in fees in sats"</span>,
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGOUT_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
-        <span class="macro">histogram_opts!</span>(
-            <span class="string">"wallet_pegout_sats"</span>,
-            <span class="string">"Value of peg-out transactions in sats"</span>,
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGOUT_FEES_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
-        <span class="macro">histogram_opts!</span>(
-            <span class="string">"wallet_pegout_fees_sats"</span>,
-            <span class="string">"Value of peg-out fees in sats"</span>,
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    <span class="kw">static </span><span class="kw-2">ref </span>WALLET_BLOCK_COUNT: IntGauge = <span class="macro">register_int_gauge_with_registry!</span>(
-        <span class="macro">opts!</span>(
-            <span class="string">"wallet_block_count"</span>,
-            <span class="string">"Blockchain block count as monitored by wallet module"</span>,
-        ),
-        REGISTRY
-    )
-    .unwrap();
-}
+<span class="kw">mod </span>metrics;
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>WalletInit;
@@ -2054,6 +1982,14 @@
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ServerModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;DynServerModule&gt; {
+        <span class="kw">for </span>direction <span class="kw">in </span>[<span class="kw-2">&amp;</span><span class="string">"incoming"</span>, <span class="string">"outgoing"</span>] {
+            WALLET_INOUT_FEES_SATS
+                .with_label_values(<span class="kw-2">&amp;</span>[direction])
+                .get_sample_count();
+            WALLET_INOUT_SATS
+                .with_label_values(<span class="kw-2">&amp;</span>[direction])
+                .get_sample_count();
+        }
         <span class="comment">// Eagerly initialize metrics that trigger infrequently
         </span>WALLET_PEGIN_FEES_SATS.get_sample_count();
         WALLET_PEGIN_SATS.get_sample_count();
@@ -2568,6 +2504,12 @@
     fee: fedimint_core::Amount,
 ) {
     dbtx.on_commit(<span class="kw">move </span>|| {
+        WALLET_INOUT_SATS
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="string">"incoming"</span>])
+            .observe(amount.sats_f64());
+        WALLET_INOUT_FEES_SATS
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="string">"incoming"</span>])
+            .observe(fee.sats_f64());
         WALLET_PEGIN_SATS.observe(amount.sats_f64());
         WALLET_PEGIN_FEES_SATS.observe(fee.sats_f64());
     });
@@ -2579,6 +2521,12 @@
     fee: fedimint_core::Amount,
 ) {
     dbtx.on_commit(<span class="kw">move </span>|| {
+        WALLET_INOUT_SATS
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="string">"outgoing"</span>])
+            .observe(amount.sats_f64());
+        WALLET_INOUT_FEES_SATS
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="string">"outgoing"</span>])
+            .observe(fee.sats_f64());
         WALLET_PEGOUT_SATS.observe(amount.sats_f64());
         WALLET_PEGOUT_FEES_SATS.observe(fee.sats_f64());
     });

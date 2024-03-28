@@ -37,7 +37,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_unknown_server",["",[],["db.rs","lib.rs"]]],\
 ["fedimint_wallet_client",["",[],["api.rs","client_db.rs","deposit.rs","lib.rs","withdraw.rs"]]],\
 ["fedimint_wallet_common",["",[],["config.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]]],\
-["fedimint_wallet_server",["",[],["db.rs","lib.rs"]]],\
+["fedimint_wallet_server",["",[],["db.rs","lib.rs","metrics.rs"]]],\
 ["fedimint_wasm_tests",["",[],["lib.rs"]]],\
 ["fedimintd",["",[["fedimintd",[],["metrics.rs"]]],["envs.rs","fedimintd.rs","lib.rs"]]],\
 ["gateway_cli",["",[],["main.rs"]]],\
