@@ -238,11 +238,15 @@ impl ClientConfig {
     ) -> anyhow::Result<ClientConfig> {
         debug!("Downloading client config from {:?}", invite_code);
 
-        fedimint_core::util::retry(
+        crate::util::retry(
             "Downloading client config",
+            // 0.2, 0.2, 0.4, 0.6, 1.0, 1.6, ...
+            // sum = 21.2
+            fedimint_core::util::FibonacciBackoff::default()
+                .with_min_delay(Duration::from_millis(200))
+                .with_max_delay(Duration::from_secs(5))
+                .with_max_times(10),
             || Self::try_download_client_config(invite_code),
-            Duration::from_millis(500),
-            10,
         )
         .await
         .context("Failed to download client config")
