@@ -1,3 +1,5 @@
+cargo-features = ["codegen-backend"]
+
 [workspace]
 members = [
     "crypto/aead",
@@ -104,31 +106,36 @@ opt-level = 1
 debug = false
 opt-level = 1
 
+[profile.dev]
+codegen-backend = "cranelift"
+
 [profile.dev.package."*"] # external dependencies
 opt-level = 1
 
 # in dev mode optimize crates that are perf-critical (usually just crypto crates)
 [profile.dev.package]
-secp256k1 = { opt-level = 3 }
-secp256k1-zkp = { opt-level = 3 }
-secp256k1-sys = { opt-level = 3 }
-secp256k1-zkp-sys = { opt-level = 3 }
-bitcoin_hashes = { opt-level = 3 }
-ff = { opt-level = 3 }
-group = { opt-level = 3 }
-pairing = { opt-level = 3 }
-rand_core = { opt-level = 3 }
-byteorder = { opt-level = 3 }
-zeroize = { opt-level = 3 }
-bls12_381 = { opt-level = 3 }
-subtle = { opt-level = 3 }
-ring = { opt-level = 3 }
-fedimint-threshold-crypto = { opt-level = 3 }
-aleph-bft-crypto = { opt-level = 3 }
-aleph-bft-rmc = { opt-level = 3 }
-aleph-bft-types = { opt-level = 3 }
+secp256k1 = { opt-level = 2, codegen-backend = "llvm" }
+secp256k1-zkp = { opt-level = 2, codegen-backend = "llvm" }
+secp256k1-sys = { opt-level = 2, codegen-backend = "llvm" }
+secp256k1-zkp-sys = { opt-level = 2, codegen-backend = "llvm" }
+bitcoin_hashes = { opt-level = 2, codegen-backend = "llvm" }
+ff = { opt-level = 2, codegen-backend = "llvm" }
+group = { opt-level = 2, codegen-backend = "llvm" }
+pairing = { opt-level = 2, codegen-backend = "llvm" }
+rand_core = { opt-level = 2, codegen-backend = "llvm" }
+byteorder = { opt-level = 2, codegen-backend = "llvm" }
+zeroize = { opt-level = 2, codegen-backend = "llvm" }
+bls12_381 = { opt-level = 2, codegen-backend = "llvm" }
+subtle = { opt-level = 2, codegen-backend = "llvm" }
+ring = { opt-level = 2, codegen-backend = "llvm" }
+aleph-bft-crypto = { opt-level = 2, codegen-backend = "llvm" }
+aleph-bft-rmc = { opt-level = 2, codegen-backend = "llvm" }
+aleph-bft-types = { opt-level = 2, codegen-backend = "llvm" }
 
 [profile.ci]
+# cranelift doesn't support xcompilation and doesn't generate as optimized code
+# so at least for now, we can not use it in the CI
+codegen-backend = "llvm"
 inherits = "dev"
 debug = "line-tables-only"
 incremental = false

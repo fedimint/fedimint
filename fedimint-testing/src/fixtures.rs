@@ -47,7 +47,7 @@ pub struct Fixtures {
 
 impl Fixtures {
     pub fn new_primary(
-        client: impl IClientModuleInit + MaybeSend + MaybeSync + 'static,
+        client: impl IClientModuleInit + 'static,
         server: impl IServerModuleInit + MaybeSend + MaybeSync + 'static,
         params: impl ModuleInitParams,
     ) -> Self {
@@ -100,7 +100,7 @@ impl Fixtures {
     /// Add a module to the fed
     pub fn with_module(
         mut self,
-        client: impl IClientModuleInit + MaybeSend + MaybeSync + 'static,
+        client: impl IClientModuleInit + 'static,
         server: impl IServerModuleInit + MaybeSend + MaybeSync + 'static,
         params: impl ModuleInitParams,
     ) -> Self {
