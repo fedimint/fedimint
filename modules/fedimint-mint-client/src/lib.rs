@@ -471,7 +471,7 @@ impl ClientModuleInit for MintClientInit {
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         Ok(MintClientModule {
-            federation_id: *args.federation_id(),
+            federation_id: args.federation_id(),
             cfg: args.cfg().clone(),
             secret: args.module_root_secret().clone(),
             secp: Secp256k1::new(),

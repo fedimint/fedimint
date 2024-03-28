@@ -6,7 +6,9 @@ use std::marker;
 use std::sync::Arc;
 
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
-use fedimint_core::config::{ClientModuleConfig, FederationId, ModuleInitRegistry};
+use fedimint_core::config::{
+    ClientModuleConfig, FederationId, GlobalClientConfig, ModuleInitRegistry,
+};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseVersion};
 use fedimint_core::module::{
@@ -30,8 +32,7 @@ pub struct ClientModuleInitArgs<C>
 where
     C: ClientModuleInit,
 {
-    federation_id: FederationId,
-    peer_num: usize,
+    global_cfg: GlobalClientConfig,
     cfg: <<C as ModuleInit>::Common as CommonModuleInit>::ClientConfig,
     db: Database,
     core_api_version: ApiVersion,
@@ -49,12 +50,16 @@ impl<C> ClientModuleInitArgs<C>
 where
     C: ClientModuleInit,
 {
-    pub fn federation_id(&self) -> &FederationId {
-        &self.federation_id
+    pub fn federation_id(&self) -> FederationId {
+        self.global_cfg.calculate_federation_id()
     }
 
     pub fn peer_num(&self) -> usize {
-        self.peer_num
+        self.global_cfg.api_endpoints.len()
+    }
+
+    pub fn legacy_meta_fields(&self) -> &BTreeMap<String, String> {
+        &self.global_cfg.meta
     }
 
     pub fn cfg(&self) -> &<<C as ModuleInit>::Common as CommonModuleInit>::ClientConfig {
@@ -284,8 +289,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
     async fn init(
         &self,
         final_client: FinalClient,
-        federation_id: FederationId,
-        peer_num: usize,
+        global_cfg: GlobalClientConfig,
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
@@ -378,8 +382,7 @@ where
     async fn init(
         &self,
         final_client: FinalClient,
-        federation_id: FederationId,
-        peer_num: usize,
+        global_cfg: GlobalClientConfig,
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
@@ -395,8 +398,7 @@ where
         let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
         Ok(self
             .init(&ClientModuleInitArgs {
-                federation_id,
-                peer_num,
+                global_cfg,
                 cfg: typed_cfg.clone(),
                 db: db.with_prefix_module_id(instance_id),
                 core_api_version,

@@ -2220,8 +2220,7 @@ impl ClientBuilder {
                     let module = module_init
                         .init(
                             final_client.clone(),
-                            fed_id,
-                            config.global.api_endpoints.len(),
+                            config.global.clone(),
                             module_config,
                             db.clone(),
                             module_instance_id,
