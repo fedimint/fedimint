@@ -5,8 +5,7 @@ use cli::cleanup_on_exit;
 use devfed::DevJitFed;
 pub use devfed::{dev_fed, DevFed};
 pub use external::{
-    external_daemons, open_channel, ExternalDaemons, LightningNode, Lightningd,
-    LightningdProcessHandle, Lnd,
+    external_daemons, ExternalDaemons, LightningNode, Lightningd, LightningdProcessHandle, Lnd,
 };
 use futures::Future;
 pub use gatewayd::Gatewayd;

@@ -548,7 +548,7 @@ impl Lnd {
 
 // TODO(tvolk131): Remove this method and instead use
 // `open_channel_between_gateways()` below once 0.4.0 is released
-pub async fn open_channel(
+async fn open_channel(
     process_mgr: &ProcessManager,
     bitcoind: &Bitcoind,
     cln: &Lightningd,
