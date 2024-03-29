@@ -6,6 +6,7 @@ pub mod receive;
 
 use std::collections::BTreeMap;
 use std::iter::once;
+use std::pin::pin;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -55,6 +56,7 @@ use fedimint_ln_common::{
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
     LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
+use futures::future::Either;
 use futures::{FutureExt, StreamExt};
 use incoming::IncomingSmError;
 use lightning_invoice::{
@@ -1027,52 +1029,38 @@ impl LightningClientModule {
         &self,
         apply_meta: bool,
     ) -> anyhow::Result<Vec<LightningGatewayAnnouncement>> {
-        let mut gateways = self.module_api.fetch_gateways().await?;
-
-        if apply_meta && !gateways.is_empty() {
-            let config = self.client_ctx.get_config().clone();
-            let global_meta: BTreeMap<String, String> = config.global.meta.clone();
-            let federation_id = config.global.calculate_federation_id();
-
-            let meta = match config.meta::<String>(META_OVERRIDE_URL_KEY)? {
-                Some(override_src) => {
-                    match self.fetch_meta_overrides(federation_id, override_src).await {
-                        Ok(override_meta) => {
-                            if override_meta.contains_key(META_VETTED_GATEWAYS_KEY) {
-                                override_meta
-                            } else {
-                                global_meta
-                            }
-                        }
-                        Err(e) => {
-                            error!("Error fetching meta overrides: {}", e);
-                            global_meta
-                        }
-                    }
-                }
-                None => {
-                    debug!("No meta override source configured");
-                    global_meta
-                }
-            };
-
-            if meta.is_empty() {
-                debug!("No meta overrides found");
-                return Ok(gateways);
-            }
-
-            debug!("Applying vetted meta field to registered gateways");
-            let vetted = meta.get(META_VETTED_GATEWAYS_KEY).and_then(|vetted| {
-                debug!("Found vetted gateways meta field: {vetted:?}");
-                match serde_json::from_str::<Vec<String>>(vetted) {
-                    Ok(vetted) => Some(vetted),
-                    Err(e) => {
-                        error!("Error parsing vetted gateways meta field: {}", e);
-                        None
-                    }
+        let (mut gateways, vetted_gateways) = {
+            let vetted_gateways_future = pin!(async {
+                if apply_meta {
+                    Ok(None)
+                } else {
+                    self.fetch_vetted_gateways_from_meta().await
                 }
             });
-            match vetted {
+            let gateways_future = pin!(self.module_api.fetch_gateways());
+            // we don't want to wait for vetted gateways if gateway future finishes with
+            // empty gateways.
+            match futures::future::select(gateways_future, vetted_gateways_future).await {
+                Either::Left((gateways, vetted_gateways_future)) => {
+                    // always ok to fail on gateway fetch fail
+                    let gateways = gateways?;
+                    if gateways.is_empty() {
+                        // no need to wait for vetted gateways
+                        return Ok(gateways);
+                    }
+                    (gateways, vetted_gateways_future.await?)
+                }
+                Either::Right((vetted_gateways, gateways_future)) => {
+                    let gateways = gateways_future.await?;
+                    if gateways.is_empty() {
+                        return Ok(gateways);
+                    }
+                    (gateways, vetted_gateways?)
+                }
+            }
+        };
+        if apply_meta {
+            match vetted_gateways {
                 Some(vetted) => {
                     debug!("Found the following vetted gateways: {:?}", vetted);
                     let vetted_gids = vetted
@@ -1092,6 +1080,49 @@ impl LightningClientModule {
         }
 
         Ok(gateways)
+    }
+
+    async fn fetch_vetted_gateways_from_meta(&self) -> Result<Option<Vec<String>>, anyhow::Error> {
+        let config = self.client_ctx.get_config().clone();
+        let global_meta: BTreeMap<String, String> = config.global.meta.clone();
+        let federation_id = config.global.calculate_federation_id();
+        let meta = match config.meta::<String>(META_OVERRIDE_URL_KEY)? {
+            Some(override_src) => {
+                match self.fetch_meta_overrides(federation_id, override_src).await {
+                    Ok(override_meta) => {
+                        if override_meta.contains_key(META_VETTED_GATEWAYS_KEY) {
+                            override_meta
+                        } else {
+                            global_meta
+                        }
+                    }
+                    Err(e) => {
+                        error!("Error fetching meta overrides: {}", e);
+                        global_meta
+                    }
+                }
+            }
+            None => {
+                debug!("No meta override source configured");
+                global_meta
+            }
+        };
+        if meta.is_empty() {
+            debug!("No meta overrides found");
+            return Ok(None);
+        }
+        debug!("Applying vetted meta field to registered gateways");
+        let vetted = meta.get(META_VETTED_GATEWAYS_KEY).and_then(|vetted| {
+            debug!("Found vetted gateways meta field: {vetted:?}");
+            match serde_json::from_str::<Vec<String>>(vetted) {
+                Ok(vetted) => Some(vetted),
+                Err(e) => {
+                    error!("Error parsing vetted gateways meta field: {}", e);
+                    None
+                }
+            }
+        });
+        Ok(vetted)
     }
 
     /// Pays a LN invoice with our available funds using the supplied `gateway`
