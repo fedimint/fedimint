@@ -42,7 +42,7 @@ use tracing::{debug, error, info, warn};
 use crate::default_esplora_server;
 use crate::envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV,
-    FM_BITCOIN_NETWORK_ENV, FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_EXTRA_DKG_META_VAR_ENV,
+    FM_BITCOIN_NETWORK_ENV, FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_EXTRA_DKG_META_ENV,
     FM_FINALITY_DELAY_ENV, FM_P2P_URL_ENV, FM_PASSWORD_ENV, FM_TOKIO_CONSOLE_BIND_ENV,
 };
 use crate::fedimintd::metrics::APP_START_TS;
@@ -92,7 +92,7 @@ pub struct ServerOpts {
 
     /// List of default meta values to use during config generation (format:
     /// `key1=value1,key2=value,...`)
-    #[arg(long, env = FM_EXTRA_DKG_META_VAR_ENV, value_parser = parse_map, default_value="")]
+    #[arg(long, env = FM_EXTRA_DKG_META_ENV, value_parser = parse_map, default_value="")]
     extra_dkg_meta: BTreeMap<String, String>,
 }
 

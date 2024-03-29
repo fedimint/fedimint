@@ -4,7 +4,7 @@
 pub const FM_FAUCET_BIND_ADDR_ENV: &str = "FM_FAUCET_BIND_ADDR";
 
 // Env variable to TODO
-pub const FM_BITCOIN_RPC_URL_ENV: &str = "FM_PASSWORD";
+pub const FM_BITCOIN_RPC_URL_ENV: &str = "FM_BITCOIN_RPC_URL";
 
 // Env variable to TODO
 pub const FM_CLN_SOCKET_ENV: &str = "FM_CLN_SOCKET";

@@ -21,7 +21,7 @@ use fedimint_logging::LOG_DEVIMINT;
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
 use fedimint_wallet_client::config::WalletClientConfig;
-use fedimintd::envs::FM_EXTRA_DKG_META_VAR_ENV;
+use fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 use fs_lock::FileLock;
 use futures::future::join_all;
 use rand::Rng;
@@ -667,11 +667,11 @@ async fn set_config_gen_params(
     // Since we are not actually calling `fedimintd` binary, parse and handle
     // `FM_EXTRA_META_DATA` like it would do.
     let mut extra_meta_data = parse_map(
-        &std::env::var(FM_EXTRA_DKG_META_VAR_ENV)
+        &std::env::var(FM_EXTRA_DKG_META_ENV)
             .ok()
             .unwrap_or_default(),
     )
-    .with_context(|| format!("Failed to parse {FM_EXTRA_DKG_META_VAR_ENV}"))
+    .with_context(|| format!("Failed to parse {FM_EXTRA_DKG_META_ENV}"))
     .expect("Failed");
     let mut meta = BTreeMap::from([("federation_name".to_string(), "testfed".to_string())]);
     meta.append(&mut extra_meta_data);
