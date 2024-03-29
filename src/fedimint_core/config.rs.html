@@ -1108,6 +1108,10 @@
 <a href="#1106" id="1106">1106</a>
 <a href="#1107" id="1107">1107</a>
 <a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1348,11 +1352,15 @@
     ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
         <span class="macro">debug!</span>(<span class="string">"Downloading client config from {:?}"</span>, invite_code);
 
-        fedimint_core::util::retry(
+        <span class="kw">crate</span>::util::retry(
             <span class="string">"Downloading client config"</span>,
+            <span class="comment">// 0.2, 0.2, 0.4, 0.6, 1.0, 1.6, ...
+            // sum = 21.2
+            </span>fedimint_core::util::FibonacciBackoff::default()
+                .with_min_delay(Duration::from_millis(<span class="number">200</span>))
+                .with_max_delay(Duration::from_secs(<span class="number">5</span>))
+                .with_max_times(<span class="number">10</span>),
             || <span class="self">Self</span>::try_download_client_config(invite_code),
-            Duration::from_millis(<span class="number">500</span>),
-            <span class="number">10</span>,
         )
         .<span class="kw">await
         </span>.context(<span class="string">"Failed to download client config"</span>)
