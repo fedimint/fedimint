@@ -66,6 +66,7 @@ use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use thiserror::Error;
+use tokio::sync::Mutex;
 use tracing::error;
 
 use crate::db::PaymentResultPrefix;
@@ -381,7 +382,11 @@ pub struct LightningClientModule {
     module_api: DynModuleApi,
     preimage_auth: KeyPair,
     client_ctx: ClientContext<Self>,
+    gateway_cache_update_mutex: Mutex<Option<LastError>>,
 }
+
+#[derive(Debug, Clone)]
+struct LastError(String);
 
 impl ClientModule for LightningClientModule {
     type Init = LightningClientInit;
@@ -463,6 +468,7 @@ impl LightningClientModule {
                 .to_secp_key(&secp),
             secp,
             client_ctx: args.context(),
+            gateway_cache_update_mutex: Mutex::new(None),
         };
 
         // Only initialize the gateway cache if it is empty
@@ -910,7 +916,20 @@ impl LightningClientModule {
     ///
     /// See also [`Self::update_gateway_cache_continuously`].
     pub async fn update_gateway_cache(&self) -> anyhow::Result<()> {
-        let gateways = self.module_api.fetch_gateways().await?;
+        let Ok(mut guard) = self.gateway_cache_update_mutex.try_lock() else {
+            // wait for other call to finish
+            if let Some(err) = &*self.gateway_cache_update_mutex.lock().await {
+                anyhow::bail!(err.0.clone());
+            }
+            return Ok(());
+        };
+        let gateways = match self.module_api.fetch_gateways().await {
+            Ok(gw) => gw,
+            Err(e) => {
+                *guard = Some(LastError(e.to_string()));
+                return Err(e.into());
+            }
+        };
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
         // Remove all previous gateway entries
