@@ -1112,6 +1112,9 @@
 <a href="#1110" id="1110">1110</a>
 <a href="#1111" id="1111">1111</a>
 <a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1366,7 +1369,10 @@
         </span>.context(<span class="string">"Failed to download client config"</span>)
     }
 
-    <span class="kw">async fn </span>try_download_client_config(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; anyhow::Result&lt;ClientConfig&gt; {
+    <span class="doccomment">/// Tries to download the client config only once.
+    </span><span class="kw">pub async fn </span>try_download_client_config(
+        invite_code: <span class="kw-2">&amp;</span>InviteCode,
+    ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
         <span class="comment">// we have to download the api endpoints first
         </span><span class="kw">let </span>federation_id = invite_code.federation_id();
 
