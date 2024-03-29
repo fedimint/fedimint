@@ -112,6 +112,7 @@ pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_RECOVERY};
 use futures::{Future, Stream, StreamExt};
+use meta::{LegacyMetaSource, MetaService};
 use module::recovery::RecoveryProgress;
 use module::{DynClientModule, FinalClient};
 use rand::thread_rng;
@@ -159,6 +160,9 @@ pub mod secret;
 pub mod sm;
 /// Structs and interfaces to construct Fedimint transactions
 pub mod transaction;
+
+/// Management of meta fields
+pub mod meta;
 
 pub type InstancelessDynClientInput = ClientInput<
     Box<maybe_add_send_sync!(dyn IInput + 'static)>,
@@ -732,6 +736,7 @@ pub struct Client {
     root_secret: DerivableSecret,
     operation_log: OperationLog,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
+    meta_service: Arc<MetaService>,
 
     task_group: TaskGroup,
 
@@ -963,6 +968,11 @@ impl Client {
 
     pub fn operation_log(&self) -> &OperationLog {
         &self.operation_log
+    }
+
+    /// Get the meta manager to read meta fields.
+    pub fn meta_service(&self) -> &Arc<MetaService> {
+        &self.meta_service
     }
 
     /// Adds funding to a transaction or removes over-funding via change.
@@ -1739,17 +1749,20 @@ pub struct ClientBuilder {
     primary_module_instance: Option<ModuleInstanceId>,
     admin_creds: Option<AdminCreds>,
     db: Database,
+    meta_service: Arc<MetaService>,
     stopped: bool,
 }
 
 impl ClientBuilder {
     fn new(db: Database) -> Self {
+        let meta_service = MetaService::new(LegacyMetaSource::default());
         ClientBuilder {
             module_inits: Default::default(),
             primary_module_instance: Default::default(),
             admin_creds: None,
             db,
             stopped: false,
+            meta_service,
         }
     }
 
@@ -1760,8 +1773,11 @@ impl ClientBuilder {
             admin_creds: None,
             db: client.db.clone(),
             stopped: false,
+            // non unique
+            meta_service: client.meta_service.clone(),
         }
     }
+
     /// Replace module generator registry entirely
     pub fn with_module_inits(&mut self, module_inits: ClientModuleInitRegistry) {
         self.module_inits = module_inits;
@@ -1790,6 +1806,10 @@ impl ClientBuilder {
             !was_replaced,
             "Only one primary module can be given to the builder."
         )
+    }
+
+    pub fn with_meta_service(&mut self, meta_service: Arc<MetaService>) {
+        self.meta_service = meta_service;
     }
 
     async fn migrate_database(
@@ -2282,7 +2302,19 @@ impl ClientBuilder {
             task_group,
             operation_log: OperationLog::new(db),
             client_recovery_progress_receiver,
+            meta_service: self.meta_service,
         });
+        client_inner
+            .task_group
+            .spawn_cancellable("MetaService::update_continuously", {
+                let client_inner = client_inner.clone();
+                async move {
+                    client_inner
+                        .meta_service
+                        .update_continuously(&client_inner)
+                        .await
+                }
+            });
 
         let client_arc = ClientHandle::new(client_inner);
 
