@@ -213,9 +213,9 @@ impl ClientConfig {
         // change
         if res.is_err() && std::any::TypeId::of::<V>() == std::any::TypeId::of::<String>() {
             let string_ret = Box::new(str_value.clone());
-            let ret: Box<V> = unsafe {
+            let ret = unsafe {
                 // We can transmute a String to V because we know that V==String
-                std::mem::transmute(string_ret)
+                std::mem::transmute::<Box<String>, Box<V>>(string_ret)
             };
             Ok(Some(*ret))
         } else {
