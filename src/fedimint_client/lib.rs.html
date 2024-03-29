@@ -2406,6 +2406,7 @@
 <a href="#2404" id="2404">2404</a>
 <a href="#2405" id="2405">2405</a>
 <a href="#2406" id="2406">2406</a>
+<a href="#2407" id="2407">2407</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -4643,6 +4644,7 @@
                             notifier.clone(),
                             api.clone(),
                             <span class="self">self</span>.admin_creds.as_ref().map(|cred| cred.auth.clone()),
+                            task_group.clone(),
                         )
                         .<span class="kw">await</span><span class="question-mark">?</span>;
 
