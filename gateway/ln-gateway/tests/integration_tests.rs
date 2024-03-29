@@ -14,7 +14,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::task::sleep_in_test;
-use fedimint_core::util::{retry, NextOrPending};
+use fedimint_core::util::{retry, FibonacciBackoff, NextOrPending};
 use fedimint_core::{msats, sats, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
@@ -1479,6 +1479,10 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
             // its balances on both federations.
             let post_balances = retry(
                 "Gateway balance after swap".to_string(),
+                FibonacciBackoff::default()
+                    .with_min_delay(Duration::from_millis(200))
+                    .with_max_delay(Duration::from_secs(3))
+                    .with_max_times(10),
                 || async {
                     let post_balances = get_balances(&rpc, &[id1, id2]).await;
                     if post_balances[0] == pre_balances[0] || post_balances[1] == pre_balances[1] {
@@ -1486,8 +1490,6 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
                     };
                     Ok(post_balances)
                 },
-                Duration::from_secs(1),
-                15,
             )
             .await?;
             assert_eq!(
