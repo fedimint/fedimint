@@ -43,7 +43,7 @@ use fedimint_meta_common::{
 use futures::StreamExt;
 use rand::{thread_rng, Rng};
 use strum::IntoEnumIterator;
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 
 use crate::db::{
     DbKeyPrefix, MetaConsensusKeyPrefix, MetaDesiredKeyPrefix, MetaSubmissionValue,
@@ -313,6 +313,7 @@ impl ServerModule for Meta {
             }
         }
 
+        trace!(target: LOG_MODULE_META, ?to_submit, "Desired actions");
         to_submit
     }
 
@@ -322,6 +323,8 @@ impl ServerModule for Meta {
         MetaConsensusItem { key, value, salt }: MetaConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
+        debug!(target: LOG_MODULE_META, %peer_id, %key, %value, %salt, "Received a submission");
+
         let new_value = MetaSubmissionValue { value, salt };
         // first of all: any new submission overrides previous submission
         if let Some(prev_value) = Self::get_submission(dbtx, key, peer_id).await {
@@ -455,6 +458,12 @@ impl Meta {
         req: &SubmitRequest,
     ) -> Result<(), ApiError> {
         let salt = thread_rng().gen();
+
+        info!(target: LOG_MODULE_META,
+             key = %req.key,
+             peer_id = %self.our_peer_id,
+             value_len = %req.value.as_slice().len(),
+             "Our own guardian submitted a value");
 
         dbtx.insert_entry(
             &MetaDesiredKey(req.key),
