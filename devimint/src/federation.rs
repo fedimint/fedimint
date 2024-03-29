@@ -3,7 +3,6 @@ mod config;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::path::PathBuf;
-use std::time::Duration;
 use std::{env, fs};
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -345,7 +344,7 @@ impl Federation {
         let pegin_addr = gw.get_pegin_addr(&fed_id).await?;
         self.bitcoind.send_to(pegin_addr, amount).await?;
         self.bitcoind.mine_blocks(21).await?;
-        poll("gateway pegin", None, || async {
+        poll("gateway pegin", || async {
             let gateway_balance = cmd!(gw, "balance", "--federation-id={fed_id}")
                 .out_json()
                 .await
@@ -405,7 +404,7 @@ impl Federation {
             "update-gateway-cache"
         };
 
-        poll("gateways registered", None, || async {
+        poll("gateways registered", || async {
             let num_gateways = cmd!(self.client, command)
                 .out_json()
                 .await
@@ -424,7 +423,7 @@ impl Federation {
     }
 
     pub async fn await_all_peers(&self) -> Result<()> {
-        poll("Waiting for all peers to be online", None, || async {
+        poll("Waiting for all peers to be online", || async {
             cmd!(
                 self.client,
                 "dev",
@@ -505,17 +504,13 @@ pub async fn run_dkg(
 ) -> Result<()> {
     let auth_for = |peer: &PeerId| -> ApiAuth { params[peer].local.api_auth.clone() };
     for (peer_id, client) in &admin_clients {
-        poll(
-            "trying-to-connect-to-peers",
-            Duration::from_secs(30),
-            || async {
-                client
-                    .status()
-                    .await
-                    .context("dkg status")
-                    .map_err(ControlFlow::Continue)
-            },
-        )
+        poll("trying-to-connect-to-peers", || async {
+            client
+                .status()
+                .await
+                .context("dkg status")
+                .map_err(ControlFlow::Continue)
+        })
         .await?;
         debug!("Connected to {peer_id}")
     }
@@ -686,7 +681,6 @@ async fn set_config_gen_params(
 async fn wait_server_status(client: &DynGlobalApi, expected_status: ServerStatus) -> Result<()> {
     poll(
         &format!("waiting-server-status: {expected_status:?}"),
-        Duration::from_secs(60),
         || async {
             let server_status = client
                 .status()

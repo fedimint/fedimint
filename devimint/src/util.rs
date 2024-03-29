@@ -362,23 +362,21 @@ macro_rules! poll_eq {
 // Allow macro to be used within the crate. See https://stackoverflow.com/a/31749071.
 pub(crate) use cmd;
 
-const DEFAULT_POLL_TIMEOUT: Duration = Duration::from_secs(30);
 /// Retry until `f` succeeds or timeout is reached
 ///
 /// - if `f` return Ok(val), this returns with Ok(val).
 /// - if `f` return Err(Control::Break(err)), this returns Err(err)
-/// - if `f` return Err(ControlFlow::Continue(err)), retries untile timeout
+/// - if `f` return Err(ControlFlow::Continue(err)), retries until timeout
 ///   reached
-pub async fn poll<Fut, R>(
+pub async fn poll_with_timeout<Fut, R>(
     name: &str,
-    timeout: impl Into<Option<Duration>>,
+    timeout: Duration,
     f: impl Fn() -> Fut,
 ) -> Result<R>
 where
     Fut: Future<Output = Result<R, ControlFlow<anyhow::Error, anyhow::Error>>>,
 {
     let start = now();
-    let timeout = timeout.into().unwrap_or(DEFAULT_POLL_TIMEOUT);
     for attempt in 0u64.. {
         let attempt_start = now();
         match f().await {
@@ -407,6 +405,20 @@ where
     }
 
     unreachable!();
+}
+
+const DEFAULT_POLL_TIMEOUT: Duration = Duration::from_secs(60);
+/// Retry until `f` succeeds or default timeout is reached
+///
+/// - if `f` return Ok(val), this returns with Ok(val).
+/// - if `f` return Err(Control::Break(err)), this returns Err(err)
+/// - if `f` return Err(ControlFlow::Continue(err)), retries until timeout
+///   reached
+pub async fn poll<Fut, R>(name: &str, f: impl Fn() -> Fut) -> Result<R>
+where
+    Fut: Future<Output = Result<R, ControlFlow<anyhow::Error, anyhow::Error>>>,
+{
+    poll_with_timeout(name, DEFAULT_POLL_TIMEOUT, f).await
 }
 
 // used to add `cmd` method.

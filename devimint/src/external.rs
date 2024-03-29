@@ -25,7 +25,7 @@ use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, Pol
 use tonic_lnd::Client as LndClient;
 use tracing::{debug, info, trace, warn};
 
-use crate::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
+use crate::util::{poll, poll_with_timeout, ClnLightningCli, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
 use crate::{cmd, poll_eq};
 
@@ -121,7 +121,7 @@ impl Bitcoind {
         trace!(target: LOG_DEVIMINT, blocks_num=blocks, %address, "Mining blocks to address complete");
 
         // wait bitciond is ready
-        poll("bitcoind", None, || async {
+        poll("bitcoind", || async {
             let info = client
                 .get_blockchain_info()
                 .context("bitcoind getblockchaininfo")
@@ -142,7 +142,7 @@ impl Bitcoind {
 
     /// Poll until bitcoind rpc responds for basic commands
     pub async fn poll_ready(&self) -> anyhow::Result<()> {
-        poll("btcoind rpc ready", Duration::from_secs(10), || async {
+        poll_with_timeout("btcoind rpc ready", Duration::from_secs(10), || async {
             self.get_block_count()
                 .await
                 .map_err(ControlFlow::Continue::<anyhow::Error, _>)?;
@@ -336,7 +336,7 @@ impl Lightningd {
         let process = Lightningd::start(process_mgr, cln_dir).await?;
 
         let socket_cln = cln_dir.join("regtest/lightning-rpc");
-        poll("lightningd", Duration::from_secs(15), || async {
+        poll_with_timeout("lightningd", Duration::from_secs(15), || async {
             ClnRpc::new(socket_cln.clone())
                 .await
                 .context("connect to lightningd")
@@ -378,7 +378,7 @@ impl Lightningd {
     }
 
     pub async fn await_block_processing(&self) -> Result<()> {
-        poll("lightningd block processing", None, || async {
+        poll("lightningd block processing", || async {
             let btc_height = self
                 .bitcoind
                 .get_blockchain_info()
@@ -429,7 +429,7 @@ impl Lnd {
             process,
         };
         // wait for lnd rpc to be active
-        poll("lnd_startup", Duration::from_secs(15), || async {
+        poll_with_timeout("lnd_startup", Duration::from_secs(15), || async {
             this.pub_key().await.map_err(ControlFlow::Continue)
         })
         .await?;
@@ -456,7 +456,7 @@ impl Lnd {
         let lnd_rpc_addr = &process_mgr.globals.FM_LND_RPC_ADDR;
         let lnd_macaroon = &process_mgr.globals.FM_LND_MACAROON;
         let lnd_tls_cert = &process_mgr.globals.FM_LND_TLS_CERT;
-        poll("wait for lnd files", Duration::from_secs(60), || async {
+        poll("wait for lnd files", || async {
             if fs::try_exists(lnd_tls_cert)
                 .await
                 .context("lnd tls cert")
@@ -475,7 +475,7 @@ impl Lnd {
         })
         .await?;
 
-        let client = poll("lnd_connect", None, || async {
+        let client = poll("lnd_connect", || async {
             tonic_lnd::connect(
                 lnd_rpc_addr.clone(),
                 lnd_tls_cert.clone(),
@@ -515,7 +515,7 @@ impl Lnd {
     }
 
     pub async fn await_block_processing(&self) -> Result<()> {
-        poll("lnd block processing", None, || async {
+        poll("lnd block processing", || async {
             let synced = self
                 .lightning_client_lock()
                 .await
@@ -570,7 +570,7 @@ pub async fn open_channel(
     .await
     .context("connect request")?;
 
-    poll("fund channel", None, || async {
+    poll("fund channel", || async {
         cln.request(cln_rpc::model::requests::FundchannelRequest {
             id: lnd_pubkey
                 .parse()
@@ -595,7 +595,7 @@ pub async fn open_channel(
     })
     .await?;
 
-    poll("list peers", None, || async {
+    poll("list peers", || async {
         let num_peers = cln
             .request(cln_rpc::model::requests::ListpeersRequest {
                 id: Some(
@@ -615,7 +615,7 @@ pub async fn open_channel(
     .await?;
     bitcoind.mine_blocks(10).await?;
 
-    poll("Wait for channel update", None, || async {
+    poll("Wait for channel update", || async {
         let mut lnd_client = lnd.client.lock().await;
         let channels = lnd_client
             .lightning()
