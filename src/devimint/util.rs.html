@@ -848,6 +848,18 @@
 <a href="#846" id="846">846</a>
 <a href="#847" id="847">847</a>
 <a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -1212,23 +1224,21 @@
 <span class="comment">// Allow macro to be used within the crate. See https://stackoverflow.com/a/31749071.
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>cmd;
 
-<span class="kw">const </span>DEFAULT_POLL_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);
 <span class="doccomment">/// Retry until `f` succeeds or timeout is reached
 ///
 /// - if `f` return Ok(val), this returns with Ok(val).
 /// - if `f` return Err(Control::Break(err)), this returns Err(err)
-/// - if `f` return Err(ControlFlow::Continue(err)), retries untile timeout
+/// - if `f` return Err(ControlFlow::Continue(err)), retries until timeout
 ///   reached
-</span><span class="kw">pub async fn </span>poll&lt;Fut, R&gt;(
+</span><span class="kw">pub async fn </span>poll_with_timeout&lt;Fut, R&gt;(
     name: <span class="kw-2">&amp;</span>str,
-    timeout: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;Duration&gt;&gt;,
+    timeout: Duration,
     f: <span class="kw">impl </span>Fn() -&gt; Fut,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt;
 <span class="kw">where
     </span>Fut: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;R, ControlFlow&lt;anyhow::Error, anyhow::Error&gt;&gt;&gt;,
 {
     <span class="kw">let </span>start = now();
-    <span class="kw">let </span>timeout = timeout.into().unwrap_or(DEFAULT_POLL_TIMEOUT);
     <span class="kw">for </span>attempt <span class="kw">in </span><span class="number">0u64</span>.. {
         <span class="kw">let </span>attempt_start = now();
         <span class="kw">match </span>f().<span class="kw">await </span>{
@@ -1258,6 +1268,20 @@
 
     <span class="macro">unreachable!</span>();
 }
+
+<span class="kw">const </span>DEFAULT_POLL_TIMEOUT: Duration = Duration::from_secs(<span class="number">60</span>);
+<span class="doccomment">/// Retry until `f` succeeds or default timeout is reached
+///
+/// - if `f` return Ok(val), this returns with Ok(val).
+/// - if `f` return Err(Control::Break(err)), this returns Err(err)
+/// - if `f` return Err(ControlFlow::Continue(err)), retries until timeout
+///   reached
+</span><span class="kw">pub async fn </span>poll&lt;Fut, R&gt;(name: <span class="kw-2">&amp;</span>str, f: <span class="kw">impl </span>Fn() -&gt; Fut) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt;
+<span class="kw">where
+    </span>Fut: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;R, ControlFlow&lt;anyhow::Error, anyhow::Error&gt;&gt;&gt;,
+{
+    poll_with_timeout(name, DEFAULT_POLL_TIMEOUT, f).<span class="kw">await
+</span>}
 
 <span class="comment">// used to add `cmd` method.
 </span><span class="kw">pub trait </span>ToCmdExt {

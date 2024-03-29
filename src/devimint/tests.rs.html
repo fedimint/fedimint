@@ -2271,10 +2271,6 @@
 <a href="#2269" id="2269">2269</a>
 <a href="#2270" id="2270">2270</a>
 <a href="#2271" id="2271">2271</a>
-<a href="#2272" id="2272">2272</a>
-<a href="#2273" id="2273">2273</a>
-<a href="#2274" id="2274">2274</a>
-<a href="#2275" id="2275">2275</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2302,7 +2298,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, CommonArgs};
 <span class="kw">use </span><span class="kw">crate</span>::federation::{Client, Federation};
-<span class="kw">use </span><span class="kw">crate</span>::util::{poll, LoadTestTool, ProcessManager};
+<span class="kw">use </span><span class="kw">crate</span>::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
 <span class="kw">use crate</span>::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
 <span class="kw">pub struct </span>Stats {
@@ -3218,7 +3214,7 @@
     <span class="kw">let </span>txid: Txid = withdraw_res[<span class="string">"txid"</span>].as_str().unwrap().parse().unwrap();
     <span class="kw">let </span>fees_sat = withdraw_res[<span class="string">"fees_sat"</span>].as_u64().unwrap();
 
-    <span class="kw">let </span>tx_hex = poll(<span class="string">"Waiting for transaction in mempool"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+    <span class="kw">let </span>tx_hex = poll(<span class="string">"Waiting for transaction in mempool"</span>, || <span class="kw">async </span>{
         <span class="comment">// TODO: distinguish errors from not found
         </span>bitcoind
             .get_raw_transaction(<span class="kw-2">&amp;</span>txid)
@@ -3762,7 +3758,7 @@
     )<span class="question-mark">?</span>;
 
     <span class="kw">let </span>cln_info: GatewayInfo = serde_json::from_value(cln_value)<span class="question-mark">?</span>;
-    poll(
+    poll_with_timeout(
         <span class="string">"Waiting for CLN Gateway Running state after reboot"</span>,
         Duration::from_secs(<span class="number">15</span>),
         || <span class="kw">async </span>{
@@ -3782,7 +3778,7 @@
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>lnd_info: GatewayInfo = serde_json::from_value(lnd_value)<span class="question-mark">?</span>;
-    poll(
+    poll_with_timeout(
         <span class="string">"Waiting for LND Gateway Running state after reboot"</span>,
         Duration::from_secs(<span class="number">15</span>),
         || <span class="kw">async </span>{
@@ -3814,18 +3810,14 @@
     <span class="comment">// Verify that after the lightning node has restarted, the gateway
     // automatically reconnects and can query the lightning node
     // info again.
-    </span>poll(
-        <span class="string">"Waiting for info to succeed after restart"</span>,
-        <span class="prelude-val">None</span>,
-        || <span class="kw">async </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>info_cmd = <span class="macro">cmd!</span>(gw, <span class="string">"info"</span>);
-            <span class="kw">let </span>lightning_info = info_cmd.out_json().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-            <span class="kw">let </span>gateway_info: GatewayInfo = serde_json::from_value(lightning_info)
-                .context(<span class="string">"invalid json"</span>)
-                .map_err(ControlFlow::Break)<span class="question-mark">?</span>;
-            <span class="macro">poll_eq!</span>(gateway_info.lightning_pub_key.is_some(), <span class="bool-val">true</span>)
-        },
-    )
+    </span>poll(<span class="string">"Waiting for info to succeed after restart"</span>, || <span class="kw">async </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>info_cmd = <span class="macro">cmd!</span>(gw, <span class="string">"info"</span>);
+        <span class="kw">let </span>lightning_info = info_cmd.out_json().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+        <span class="kw">let </span>gateway_info: GatewayInfo = serde_json::from_value(lightning_info)
+            .context(<span class="string">"invalid json"</span>)
+            .map_err(ControlFlow::Break)<span class="question-mark">?</span>;
+        <span class="macro">poll_eq!</span>(gateway_info.lightning_pub_key.is_some(), <span class="bool-val">true</span>)
+    })
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="macro">tracing::info!</span>(<span class="string">"Creating invoice...."</span>);
@@ -4066,7 +4058,7 @@
         .expect(<span class="string">"withdrawal should contain txid string"</span>)
         .parse()
         .expect(<span class="string">"txid should be parsable"</span>);
-    <span class="kw">let </span>tx_hex = poll(<span class="string">"Waiting for transaction in mempool"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+    <span class="kw">let </span>tx_hex = poll(<span class="string">"Waiting for transaction in mempool"</span>, || <span class="kw">async </span>{
         bitcoind
             .get_raw_transaction(<span class="kw-2">&amp;</span>txid)
             .<span class="kw">await
@@ -4301,7 +4293,7 @@
         .<span class="kw">await
         </span>.expect(<span class="string">"could not restart fedimintd"</span>);
 
-    poll(<span class="string">"Peer catches up again"</span>, Duration::from_secs(<span class="number">30</span>), || <span class="kw">async </span>{
+    poll(<span class="string">"Peer catches up again"</span>, || <span class="kw">async </span>{
         <span class="kw">let </span>block_count = <span class="macro">cmd!</span>(
             client,
             <span class="string">"dev"</span>,
@@ -4479,7 +4471,7 @@
                                 .spawn_daemon(<span class="string">"faucet"</span>, <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::Faucet))
                                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-                            poll(<span class="string">"waiting for faucet startup"</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+                            poll(<span class="string">"waiting for faucet startup"</span>, || <span class="kw">async </span>{
                                 TcpStream::connect(<span class="macro">format!</span>(
                                     <span class="string">"127.0.0.1:{}"</span>,
                                     process_mgr.globals.FM_PORT_FAUCET

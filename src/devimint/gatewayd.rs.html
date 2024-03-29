@@ -114,11 +114,8 @@
 <a href="#112" id="112">112</a>
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>ln_gateway::rpc::V1_API_ENDPOINT;
@@ -170,7 +167,6 @@
         };
         poll(
             <span class="string">"waiting for gateway to be ready to respond to rpc"</span>,
-            Duration::from_secs(<span class="number">30</span>),
             || <span class="kw">async </span>{ gatewayd.gateway_id().<span class="kw">await</span>.map_err(ControlFlow::Continue) },
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -212,7 +208,7 @@
 
     <span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>Federation) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>invite_code = fed.invite_code()<span class="question-mark">?</span>;
-        poll(<span class="string">"gateway connect-fed"</span>, Duration::from_secs(<span class="number">30</span>), || <span class="kw">async </span>{
+        poll(<span class="string">"gateway connect-fed"</span>, || <span class="kw">async </span>{
             <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"connect-fed"</span>, invite_code.clone())
                 .run()
                 .<span class="kw">await
