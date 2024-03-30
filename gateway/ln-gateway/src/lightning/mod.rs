@@ -16,6 +16,9 @@ use thiserror::Error;
 
 use self::cln::{NetworkLnRpcClient, RouteHtlcStream};
 use self::lnd::GatewayLndClient;
+use crate::envs::{
+    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV,
+};
 use crate::gateway_lnrpc::{
     EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse,
@@ -115,20 +118,20 @@ pub enum LightningMode {
     #[clap(name = "lnd")]
     Lnd {
         /// LND RPC address
-        #[arg(long = "lnd-rpc-host", env = "FM_LND_RPC_ADDR")]
+        #[arg(long = "lnd-rpc-host", env = FM_LND_RPC_ADDR_ENV)]
         lnd_rpc_addr: String,
 
         /// LND TLS cert file path
-        #[arg(long = "lnd-tls-cert", env = "FM_LND_TLS_CERT")]
+        #[arg(long = "lnd-tls-cert", env = FM_LND_TLS_CERT_ENV)]
         lnd_tls_cert: String,
 
         /// LND macaroon file path
-        #[arg(long = "lnd-macaroon", env = "FM_LND_MACAROON")]
+        #[arg(long = "lnd-macaroon", env = FM_LND_MACAROON_ENV)]
         lnd_macaroon: String,
     },
     #[clap(name = "cln")]
     Cln {
-        #[arg(long = "cln-extension-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
+        #[arg(long = "cln-extension-addr", env = FM_GATEWAY_LIGHTNING_ADDR_ENV)]
         cln_extension_addr: SafeUrl,
     },
 }

@@ -1,5 +1,6 @@
 mod client;
 mod db_locked;
+pub mod envs;
 mod utils;
 
 use core::fmt;
@@ -49,6 +50,7 @@ use tracing::{debug, error, info};
 use utils::parse_peer_id;
 
 use crate::client::ClientCmd;
+use crate::envs::{FM_CLIENT_DIR_ENV, FM_OUR_ID_ENV, FM_PASSWORD_ENV};
 
 /// Type of output the cli produces
 #[derive(Serialize)]
@@ -183,15 +185,15 @@ impl fmt::Display for CliError {
 #[command(version)]
 struct Opts {
     /// The working directory of the client containing the config and db
-    #[arg(long = "data-dir", env = "FM_CLIENT_DIR")]
+    #[arg(long = "data-dir", env = FM_CLIENT_DIR_ENV)]
     data_dir: Option<PathBuf>,
 
     /// Peer id of the guardian
-    #[arg(env = "FM_OUR_ID", long, value_parser = parse_peer_id)]
+    #[arg(env = FM_OUR_ID_ENV, long, value_parser = parse_peer_id)]
     our_id: Option<PeerId>,
 
     /// Guardian password for authentication
-    #[arg(long, env = "FM_PASSWORD")]
+    #[arg(long, env = FM_PASSWORD_ENV)]
     password: Option<String>,
 
     /// Activate more verbose logging, for full control use the RUST_LOG env
@@ -456,7 +458,7 @@ Examples:
         #[arg(long = "salt-file")]
         salt_file: Option<PathBuf>,
         /// The password that encrypts the configs
-        #[arg(env = "FM_PASSWORD")]
+        #[arg(env = FM_PASSWORD_ENV)]
         password: String,
     },
 
@@ -472,7 +474,7 @@ Examples:
         #[arg(long = "salt-file")]
         salt_file: Option<PathBuf>,
         /// The password that encrypts the configs
-        #[arg(env = "FM_PASSWORD")]
+        #[arg(env = FM_PASSWORD_ENV)]
         password: String,
     },
 

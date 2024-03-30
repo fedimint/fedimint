@@ -20,7 +20,7 @@ use fedimint_logging::LOG_DEVIMINT;
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
 use fedimint_wallet_client::config::WalletClientConfig;
-use fedimintd::FM_EXTRA_DKG_META_VAR;
+use fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 use fs_lock::FileLock;
 use futures::future::join_all;
 use rand::Rng;
@@ -31,6 +31,7 @@ use tracing::{debug, info};
 use super::external::Bitcoind;
 use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 use super::vars::utf8;
+use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{poll, FedimintdCmd};
 use crate::{poll_eq, vars};
 
@@ -53,10 +54,10 @@ pub struct Client {
 
 impl Client {
     fn clients_dir() -> PathBuf {
-        let data_dir: PathBuf = env::var("FM_DATA_DIR")
-            .expect("FM_DATA_DIR not set")
+        let data_dir: PathBuf = env::var(FM_DATA_DIR_ENV)
+            .expect("FM_DATA_DIR_ENV not set")
             .parse()
-            .expect("FM_DATA_DIR invalid");
+            .expect("FM_DATA_DIR_ENV invalid");
         data_dir.join("clients")
     }
 
@@ -258,13 +259,13 @@ impl Federation {
 
     /// Read the invite code from the client data dir
     pub fn invite_code(&self) -> Result<String> {
-        let data_dir: PathBuf = env::var("FM_CLIENT_DIR")?.parse()?;
+        let data_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)?.parse()?;
         let invite_code = fs::read_to_string(data_dir.join("invite-code"))?;
         Ok(invite_code)
     }
 
     pub fn invite_code_for(peer_id: PeerId) -> Result<String> {
-        let data_dir: PathBuf = env::var("FM_CLIENT_DIR")?.parse()?;
+        let data_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)?.parse()?;
         let name = format!("invite-code-{}", peer_id);
         let invite_code = fs::read_to_string(data_dir.join(name))?;
         Ok(invite_code)
@@ -661,11 +662,11 @@ async fn set_config_gen_params(
     // Since we are not actually calling `fedimintd` binary, parse and handle
     // `FM_EXTRA_META_DATA` like it would do.
     let mut extra_meta_data = parse_map(
-        &std::env::var(FM_EXTRA_DKG_META_VAR)
+        &std::env::var(FM_EXTRA_DKG_META_ENV)
             .ok()
             .unwrap_or_default(),
     )
-    .with_context(|| format!("Failed to parse {FM_EXTRA_DKG_META_VAR}"))
+    .with_context(|| format!("Failed to parse {FM_EXTRA_DKG_META_ENV}"))
     .expect("Failed");
     let mut meta = BTreeMap::from([("federation_name".to_string(), "testfed".to_string())]);
     meta.append(&mut extra_meta_data);

@@ -11,6 +11,7 @@ use miniscript::descriptor::{Wpkh, Wsh};
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 
+use crate::envs::FM_PORT_ESPLORA_ENV;
 use crate::keys::CompressedPublicKey;
 use crate::{PegInDescriptor, WalletCommonInit};
 
@@ -31,7 +32,7 @@ impl WalletGenParams {
                     kind: "esplora".to_string(),
                     url: SafeUrl::parse(&format!(
                         "http://127.0.0.1:{}/",
-                        std::env::var("FM_PORT_ESPLORA").unwrap_or(String::from("50002"))
+                        std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
                     ))
                     .expect("Failed to parse default esplora server"),
                 },

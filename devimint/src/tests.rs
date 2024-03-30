@@ -24,6 +24,7 @@ use tokio::time::timeout;
 use tracing::{debug, info};
 
 use crate::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, CommonArgs};
+use crate::envs::{FM_DATA_DIR_ENV, FM_PASSWORD_ENV};
 use crate::federation::{Client, Federation};
 use crate::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
 use crate::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
@@ -352,7 +353,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
 
 pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
-    let data_dir = env::var("FM_DATA_DIR")?;
+    let data_dir = env::var(FM_DATA_DIR_ENV)?;
 
     #[allow(unused_variables)]
     let DevFed {
@@ -378,7 +379,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "--in-file={data_dir}/fedimintd-0/private.encrypt",
         "--out-file={data_dir}/fedimintd-0/config-plaintext.json"
     )
-    .env("FM_PASSWORD", "pass")
+    .env(FM_PASSWORD_ENV, "pass")
     .run()
     .await?;
 
@@ -389,7 +390,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "--in-file={data_dir}/fedimintd-0/config-plaintext.json",
         "--out-file={data_dir}/fedimintd-0/config-2"
     )
-    .env("FM_PASSWORD", "pass-foo")
+    .env(FM_PASSWORD_ENV, "pass-foo")
     .run()
     .await?;
 
@@ -400,7 +401,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "--in-file={data_dir}/fedimintd-0/config-2",
         "--out-file={data_dir}/fedimintd-0/config-plaintext-2.json"
     )
-    .env("FM_PASSWORD", "pass-foo")
+    .env(FM_PASSWORD_ENV, "pass-foo")
     .run()
     .await?;
 
@@ -1053,7 +1054,7 @@ pub async fn finish_hold_invoice_payment(
 
 pub async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
-    let data_dir = env::var("FM_DATA_DIR")?;
+    let data_dir = env::var(FM_DATA_DIR_ENV)?;
     let load_test_temp = PathBuf::from(data_dir).join("load-test-temp");
     dev_fed
         .fed
@@ -1756,7 +1757,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         esplora,
     } = dev_fed;
 
-    let data_dir = env::var("FM_DATA_DIR")?;
+    let data_dir = env::var(FM_DATA_DIR_ENV)?;
     let client = fed.new_joined_client("recoverytool-test-client").await?;
 
     let mut fed_utxos_sats = HashSet::from([12_345_000, 23_456_000, 34_567_000]);
@@ -1825,7 +1826,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         "--db",
         "{data_dir}/fedimintd-0/database"
     )
-    .env("FM_PASSWORD", "pass")
+    .env(FM_PASSWORD_ENV, "pass")
     .out_json()
     .await?;
     let outputs = output.as_array().context("expected an array")?;
@@ -1883,7 +1884,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
             "--db",
             "{data_dir}/fedimintd-0/database"
         )
-        .env("FM_PASSWORD", "pass")
+        .env(FM_PASSWORD_ENV, "pass")
         .out_json()
         .await?;
         let outputs = output.as_array().context("expected an array")?;

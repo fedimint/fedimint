@@ -9,6 +9,10 @@ use axum::Router;
 use clap::Parser;
 use cln_rpc::primitives::{Amount as ClnAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
+use devimint::envs::{
+    FM_BITCOIN_RPC_URL_ENV, FM_CLIENT_DIR_ENV, FM_CLN_SOCKET_ENV, FM_FAUCET_BIND_ADDR_ENV,
+    FM_INVITE_CODE_ENV, FM_PORT_GW_LND_ENV,
+};
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::V1_API_ENDPOINT;
 use tokio::net::TcpListener;
@@ -17,15 +21,15 @@ use tower_http::cors::CorsLayer;
 
 #[derive(clap::Parser)]
 struct Cmd {
-    #[clap(long, env = "FM_FAUCET_BIND_ADDR")]
+    #[clap(long, env = FM_FAUCET_BIND_ADDR_ENV)]
     bind_addr: String,
-    #[clap(long, env = "FM_BITCOIN_RPC_URL")]
+    #[clap(long, env = FM_BITCOIN_RPC_URL_ENV)]
     bitcoind_rpc: String,
-    #[clap(long, env = "FM_CLN_SOCKET")]
+    #[clap(long, env = FM_CLN_SOCKET_ENV)]
     cln_socket: String,
-    #[clap(long, env = "FM_PORT_GW_LND")]
+    #[clap(long, env = FM_PORT_GW_LND_ENV)]
     gw_lnd_port: u16,
-    #[clap(long, env = "FM_INVITE_CODE")]
+    #[clap(long, env = FM_INVITE_CODE_ENV)]
     invite_code: Option<String>,
 }
 
@@ -105,7 +109,7 @@ fn get_invite_code(invite_code: Option<String>) -> anyhow::Result<String> {
     match invite_code {
         Some(s) => Ok(s),
         None => {
-            let data_dir = std::env::var("FM_CLIENT_DIR")?;
+            let data_dir = std::env::var(FM_CLIENT_DIR_ENV)?;
             Ok(std::fs::read_to_string(
                 PathBuf::from(data_dir).join("invite-code"),
             )?)
