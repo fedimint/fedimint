@@ -162,6 +162,10 @@
 <a href="#160" id="160">160</a>
 <a href="#161" id="161">161</a>
 <a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -173,6 +177,10 @@
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>cln_rpc::primitives::{Amount <span class="kw">as </span>ClnAmount, AmountOrAny};
 <span class="kw">use </span>cln_rpc::ClnRpc;
+<span class="kw">use </span>devimint::envs::{
+    FM_BITCOIN_RPC_URL_ENV, FM_CLIENT_DIR_ENV, FM_CLN_SOCKET_ENV, FM_FAUCET_BIND_ADDR_ENV,
+    FM_INVITE_CODE_ENV, FM_PORT_GW_LND_ENV,
+};
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>ln_gateway::rpc::V1_API_ENDPOINT;
 <span class="kw">use </span>tokio::net::TcpListener;
@@ -181,15 +189,15 @@
 
 <span class="attr">#[derive(clap::Parser)]
 </span><span class="kw">struct </span>Cmd {
-    <span class="attr">#[clap(long, env = <span class="string">"FM_FAUCET_BIND_ADDR"</span>)]
+    <span class="attr">#[clap(long, env = FM_FAUCET_BIND_ADDR_ENV)]
     </span>bind_addr: String,
-    <span class="attr">#[clap(long, env = <span class="string">"FM_BITCOIN_RPC_URL"</span>)]
+    <span class="attr">#[clap(long, env = FM_BITCOIN_RPC_URL_ENV)]
     </span>bitcoind_rpc: String,
-    <span class="attr">#[clap(long, env = <span class="string">"FM_CLN_SOCKET"</span>)]
+    <span class="attr">#[clap(long, env = FM_CLN_SOCKET_ENV)]
     </span>cln_socket: String,
-    <span class="attr">#[clap(long, env = <span class="string">"FM_PORT_GW_LND"</span>)]
+    <span class="attr">#[clap(long, env = FM_PORT_GW_LND_ENV)]
     </span>gw_lnd_port: u16,
-    <span class="attr">#[clap(long, env = <span class="string">"FM_INVITE_CODE"</span>)]
+    <span class="attr">#[clap(long, env = FM_INVITE_CODE_ENV)]
     </span>invite_code: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
@@ -269,7 +277,7 @@
     <span class="kw">match </span>invite_code {
         <span class="prelude-val">Some</span>(s) =&gt; <span class="prelude-val">Ok</span>(s),
         <span class="prelude-val">None </span>=&gt; {
-            <span class="kw">let </span>data_dir = std::env::var(<span class="string">"FM_CLIENT_DIR"</span>)<span class="question-mark">?</span>;
+            <span class="kw">let </span>data_dir = std::env::var(FM_CLIENT_DIR_ENV)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(std::fs::read_to_string(
                 PathBuf::from(data_dir).join(<span class="string">"invite-code"</span>),
             )<span class="question-mark">?</span>)

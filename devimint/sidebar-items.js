@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"macro":["cmd","poll_eq"],"mod":["cli","devfed","external","federation","gatewayd","tests","util","vars"]};
+window.SIDEBAR_ITEMS = {"macro":["cmd","poll_eq"],"mod":["cli","devfed","envs","external","federation","gatewayd","tests","util","vars"]};

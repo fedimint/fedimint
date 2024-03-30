@@ -1042,8 +1042,11 @@
 <a href="#1040" id="1040">1040</a>
 <a href="#1041" id="1041">1041</a>
 <a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a>
+<a href="#1044" id="1044">1044</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
+<span class="kw">pub mod </span>envs;
 <span class="kw">mod </span>utils;
 
 <span class="kw">use </span>core::fmt;
@@ -1093,6 +1096,7 @@
 <span class="kw">use </span>utils::parse_peer_id;
 
 <span class="kw">use </span><span class="kw">crate</span>::client::ClientCmd;
+<span class="kw">use </span><span class="kw">crate</span>::envs::{FM_CLIENT_DIR_ENV, FM_OUR_ID_ENV, FM_PASSWORD_ENV};
 
 <span class="doccomment">/// Type of output the cli produces
 </span><span class="attr">#[derive(Serialize)]
@@ -1227,15 +1231,15 @@
 #[command(version)]
 </span><span class="kw">struct </span>Opts {
     <span class="doccomment">/// The working directory of the client containing the config and db
-    </span><span class="attr">#[arg(long = <span class="string">"data-dir"</span>, env = <span class="string">"FM_CLIENT_DIR"</span>)]
+    </span><span class="attr">#[arg(long = <span class="string">"data-dir"</span>, env = FM_CLIENT_DIR_ENV)]
     </span>data_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
 
     <span class="doccomment">/// Peer id of the guardian
-    </span><span class="attr">#[arg(env = <span class="string">"FM_OUR_ID"</span>, long, value_parser = parse_peer_id)]
+    </span><span class="attr">#[arg(env = FM_OUR_ID_ENV, long, value_parser = parse_peer_id)]
     </span>our_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
 
     <span class="doccomment">/// Guardian password for authentication
-    </span><span class="attr">#[arg(long, env = <span class="string">"FM_PASSWORD"</span>)]
+    </span><span class="attr">#[arg(long, env = FM_PASSWORD_ENV)]
     </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
 
     <span class="doccomment">/// Activate more verbose logging, for full control use the RUST_LOG env
@@ -1500,7 +1504,7 @@ Examples:
         </span><span class="attr">#[arg(long = <span class="string">"salt-file"</span>)]
         </span>salt_file: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
         <span class="doccomment">/// The password that encrypts the configs
-        </span><span class="attr">#[arg(env = <span class="string">"FM_PASSWORD"</span>)]
+        </span><span class="attr">#[arg(env = FM_PASSWORD_ENV)]
         </span>password: String,
     },
 
@@ -1516,7 +1520,7 @@ Examples:
         </span><span class="attr">#[arg(long = <span class="string">"salt-file"</span>)]
         </span>salt_file: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
         <span class="doccomment">/// The password that encrypts the configs
-        </span><span class="attr">#[arg(env = <span class="string">"FM_PASSWORD"</span>)]
+        </span><span class="attr">#[arg(env = FM_PASSWORD_ENV)]
         </span>password: String,
     },
 

@@ -301,6 +301,7 @@
 <a href="#299" id="299">299</a>
 <a href="#300" id="300">300</a>
 <a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -309,6 +310,7 @@
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>tracing::info;
 
+<span class="kw">use </span><span class="kw">crate</span>::envs::{FM_GWID_CLN_ENV, FM_GWID_LND_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::external::{Bitcoind, Electrs, Esplora, Lightningd, Lnd};
 <span class="kw">use </span><span class="kw">crate</span>::federation::{Client, Federation};
 <span class="kw">use </span><span class="kw">crate</span>::gatewayd::Gatewayd;
@@ -564,8 +566,8 @@
             <span class="string">"too many offline nodes ({offline_nodes}) to reach consensus"
         </span>);
 
-        std::env::set_var(<span class="string">"FM_GWID_CLN"</span>, <span class="self">self</span>.gw_cln().<span class="kw">await</span><span class="question-mark">?</span>.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>);
-        std::env::set_var(<span class="string">"FM_GWID_LND"</span>, <span class="self">self</span>.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>);
+        std::env::set_var(FM_GWID_CLN_ENV, <span class="self">self</span>.gw_cln().<span class="kw">await</span><span class="question-mark">?</span>.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>);
+        std::env::set_var(FM_GWID_LND_ENV, <span class="self">self</span>.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>);
         <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Setup gateway environment variables"</span>);
 
         <span class="kw">let _ </span>= <span class="self">self</span>.client_gw_registered().<span class="kw">await</span><span class="question-mark">?</span>;

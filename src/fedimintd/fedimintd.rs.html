@@ -396,6 +396,8 @@
 <a href="#394" id="394">394</a>
 <a href="#395" id="395">395</a>
 <a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -438,57 +440,59 @@
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::default_esplora_server;
-<span class="kw">use </span><span class="kw">crate</span>::envs::FM_DISABLE_META_MODULE_ENV;
+<span class="kw">use </span><span class="kw">crate</span>::envs::{
+    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV,
+    FM_BITCOIN_NETWORK_ENV, FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_EXTRA_DKG_META_ENV,
+    FM_FINALITY_DELAY_ENV, FM_P2P_URL_ENV, FM_PASSWORD_ENV, FM_TOKIO_CONSOLE_BIND_ENV,
+};
 <span class="kw">use </span><span class="kw">crate</span>::fedimintd::metrics::APP_START_TS;
 
 <span class="doccomment">/// Time we will wait before forcefully shutting down tasks
 </span><span class="kw">const </span>SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(<span class="number">10</span>);
 
-<span class="kw">pub const </span>FM_EXTRA_DKG_META_VAR: <span class="kw-2">&amp;</span>str = <span class="string">"FM_EXTRA_DKG_META"</span>;
-
 <span class="attr">#[derive(Parser)]
 #[command(version)]
 </span><span class="kw">pub struct </span>ServerOpts {
     <span class="doccomment">/// Path to folder containing federation config files
-    </span><span class="attr">#[arg(long = <span class="string">"data-dir"</span>, env = <span class="string">"FM_DATA_DIR"</span>)]
+    </span><span class="attr">#[arg(long = <span class="string">"data-dir"</span>, env = FM_DATA_DIR_ENV)]
     </span><span class="kw">pub </span>data_dir: PathBuf,
     <span class="doccomment">/// Password to encrypt sensitive config files
     </span><span class="comment">// TODO: should probably never send password to the server directly, rather send the hash via
     // the API
-    </span><span class="attr">#[arg(long, env = <span class="string">"FM_PASSWORD"</span>)]
+    </span><span class="attr">#[arg(long, env = FM_PASSWORD_ENV)]
     </span><span class="kw">pub </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="doccomment">/// Enable tokio console logging
-    </span><span class="attr">#[arg(long, env = <span class="string">"FM_TOKIO_CONSOLE_BIND"</span>)]
+    </span><span class="attr">#[arg(long, env = FM_TOKIO_CONSOLE_BIND_ENV)]
     </span><span class="kw">pub </span>tokio_console_bind: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
     <span class="doccomment">/// Enable telemetry logging
     </span><span class="attr">#[arg(long, default_value = <span class="string">"false"</span>)]
     </span><span class="kw">pub </span>with_telemetry: bool,
 
     <span class="doccomment">/// Address we bind to for federation communication
-    </span><span class="attr">#[arg(long, env = <span class="string">"FM_BIND_P2P"</span>, default_value = <span class="string">"127.0.0.1:8173"</span>)]
+    </span><span class="attr">#[arg(long, env = FM_BIND_P2P_ENV, default_value = <span class="string">"127.0.0.1:8173"</span>)]
     </span>bind_p2p: SocketAddr,
     <span class="doccomment">/// Our external address for communicating with our peers
-    </span><span class="attr">#[arg(long, env = <span class="string">"FM_P2P_URL"</span>, default_value = <span class="string">"fedimint://127.0.0.1:8173"</span>)]
+    </span><span class="attr">#[arg(long, env = FM_P2P_URL_ENV, default_value = <span class="string">"fedimint://127.0.0.1:8173"</span>)]
     </span>p2p_url: SafeUrl,
     <span class="doccomment">/// Address we bind to for exposing the API
-    </span><span class="attr">#[arg(long, env = <span class="string">"FM_BIND_API"</span>, default_value = <span class="string">"127.0.0.1:8174"</span>)]
+    </span><span class="attr">#[arg(long, env = FM_BIND_API_ENV, default_value = <span class="string">"127.0.0.1:8174"</span>)]
     </span>bind_api: SocketAddr,
     <span class="doccomment">/// Our API address for clients to connect to us
-    </span><span class="attr">#[arg(long, env = <span class="string">"FM_API_URL"</span>, default_value = <span class="string">"ws://127.0.0.1:8174"</span>)]
+    </span><span class="attr">#[arg(long, env = FM_API_URL_ENV, default_value = <span class="string">"ws://127.0.0.1:8174"</span>)]
     </span>api_url: SafeUrl,
     <span class="doccomment">/// The bitcoin network that fedimint will be running on
-    </span><span class="attr">#[arg(long, env = <span class="string">"FM_BITCOIN_NETWORK"</span>, default_value = <span class="string">"regtest"</span>)]
+    </span><span class="attr">#[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = <span class="string">"regtest"</span>)]
     </span>network: bitcoin::network::constants::Network,
     <span class="doccomment">/// The bitcoin network that fedimint will be running on
-    </span><span class="attr">#[arg(long, env = <span class="string">"FM_FINALITY_DELAY"</span>, default_value = <span class="string">"10"</span>)]
+    </span><span class="attr">#[arg(long, env = FM_FINALITY_DELAY_ENV, default_value = <span class="string">"10"</span>)]
     </span>finality_delay: u32,
 
-    <span class="attr">#[arg(long, env = <span class="string">"FM_BIND_METRICS_API"</span>)]
+    <span class="attr">#[arg(long, env = FM_BIND_METRICS_API_ENV)]
     </span>bind_metrics_api: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
 
     <span class="doccomment">/// List of default meta values to use during config generation (format:
     /// `key1=value1,key2=value,...`)
-    </span><span class="attr">#[arg(long, env = FM_EXTRA_DKG_META_VAR, value_parser = parse_map, default_value=<span class="string">""</span>)]
+    </span><span class="attr">#[arg(long, env = FM_EXTRA_DKG_META_ENV, value_parser = parse_map, default_value=<span class="string">""</span>)]
     </span>extra_dkg_meta: BTreeMap&lt;String, String&gt;,
 }
 

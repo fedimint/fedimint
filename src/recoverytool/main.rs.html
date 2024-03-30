@@ -519,7 +519,13 @@
 <a href="#517" id="517">517</a>
 <a href="#518" id="518">518</a>
 <a href="#519" id="519">519</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+</pre></div><pre class="rust"><code><span class="kw">pub mod </span>envs;
+
+<span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::hash::Hasher;
@@ -568,6 +574,8 @@
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>tracing::info;
 
+<span class="kw">use </span><span class="kw">crate</span>::envs::FM_PASSWORD_ENV;
+
 <span class="doccomment">/// Tool to recover the on-chain wallet of a Fedimint federation
 </span><span class="attr">#[derive(Debug, Parser)]
 #[command(version)]
@@ -581,7 +589,7 @@
     </span><span class="attr">#[arg(long = <span class="string">"cfg"</span>)]
     </span>config: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
     <span class="doccomment">/// The password that encrypts the configs
-    </span><span class="attr">#[arg(long, env = <span class="string">"FM_PASSWORD"</span>, requires = <span class="string">"config"</span>)]
+    </span><span class="attr">#[arg(long, env = FM_PASSWORD_ENV, requires = <span class="string">"config"</span>)]
     </span>password: String,
     <span class="doccomment">/// Wallet descriptor, can be used instead of --cfg
     </span><span class="attr">#[arg(long)]

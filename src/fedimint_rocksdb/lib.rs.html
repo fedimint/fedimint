@@ -642,8 +642,15 @@
 <a href="#640" id="640">640</a>
 <a href="#641" id="641">641</a>
 <a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
-</span><span class="kw">use </span>std::fmt;
+
+</span><span class="kw">pub mod </span>envs;
+
+<span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 
@@ -657,6 +664,8 @@
 <span class="kw">pub use </span>rocksdb;
 <span class="kw">use </span>rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
 <span class="kw">use </span>tracing::debug;
+
+<span class="kw">use </span><span class="kw">crate</span>::envs::FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV;
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>RocksDb(rocksdb::OptimisticTransactionDB);
@@ -706,13 +715,12 @@
 
 <span class="kw">fn </span>get_default_options() -&gt; anyhow::Result&lt;rocksdb::Options&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>opts = rocksdb::Options::default();
-    <span class="kw">const </span>VAR_NAME: <span class="kw-2">&amp;</span>str = <span class="string">"FM_ROCKSDB_WRITE_BUFFER_SIZE"</span>;
-    <span class="kw">if let </span><span class="prelude-val">Ok</span>(var) = std::env::var(VAR_NAME) {
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(var) = std::env::var(FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV) {
         <span class="macro">debug!</span>(var, <span class="string">"Using custom write buffer size"</span>);
-        <span class="kw">let </span>size: usize =
-            FromStr::from_str(<span class="kw-2">&amp;</span>var).with_context(|| <span class="macro">format!</span>(<span class="string">"Could not parse {VAR_NAME}"</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>size: usize = FromStr::from_str(<span class="kw-2">&amp;</span>var)
+            .with_context(|| <span class="macro">format!</span>(<span class="string">"Could not parse {FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV}"</span>))<span class="question-mark">?</span>;
         <span class="kw">if </span>!is_power_of_two(size) {
-            <span class="macro">bail!</span>(<span class="string">"{} is not a power of 2"</span>, VAR_NAME);
+            <span class="macro">bail!</span>(<span class="string">"{} is not a power of 2"</span>, FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV);
         }
         opts.set_write_buffer_size(size);
     }

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["FM_EXTRA_DKG_META_VAR"],"fn":["default_esplora_server"],"mod":["envs","fedimintd"],"struct":["Fedimintd","ServerOpts"]};
+window.SIDEBAR_ITEMS = {"fn":["default_esplora_server"],"mod":["envs","fedimintd"],"struct":["Fedimintd","ServerOpts"]};

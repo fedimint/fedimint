@@ -108,6 +108,8 @@
 <a href="#106" id="106">106</a>
 <a href="#107" id="107">107</a>
 <a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! A library for cooperative port allocation between multiple processes.
 //!
 //! Fedimint tests in many places need to allocate ranges of unused ports for
@@ -126,6 +128,7 @@
 //! sure a given port is actually free
 
 </span><span class="kw">pub mod </span>data;
+<span class="kw">pub mod </span>envs;
 <span class="kw">pub mod </span>util;
 
 <span class="kw">use </span>std::net::TcpListener;
@@ -137,6 +140,7 @@
 <span class="kw">use </span>tracing::warn;
 
 <span class="kw">use </span><span class="kw">crate</span>::data::DataDir;
+<span class="kw">use </span><span class="kw">crate</span>::envs::FM_PORTALLOC_DATA_DIR_ENV;
 
 <span class="kw">type </span>UnixTimestamp = u64;
 
@@ -145,7 +149,7 @@
 }
 
 <span class="kw">pub fn </span>data_dir() -&gt; anyhow::Result&lt;PathBuf&gt; {
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(env) = std::env::var_os(<span class="string">"FM_PORTALLOC_DATA_DIR"</span>) {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(env) = std::env::var_os(FM_PORTALLOC_DATA_DIR_ENV) {
         <span class="prelude-val">Ok</span>(PathBuf::from(env))
     } <span class="kw">else if let </span><span class="prelude-val">Some</span>(dir) = dirs::cache_dir() {
         <span class="prelude-val">Ok</span>(dir.join(<span class="string">"fm-portalloc"</span>))

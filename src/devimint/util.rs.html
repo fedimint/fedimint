@@ -831,35 +831,6 @@
 <a href="#829" id="829">829</a>
 <a href="#830" id="830">830</a>
 <a href="#831" id="831">831</a>
-<a href="#832" id="832">832</a>
-<a href="#833" id="833">833</a>
-<a href="#834" id="834">834</a>
-<a href="#835" id="835">835</a>
-<a href="#836" id="836">836</a>
-<a href="#837" id="837">837</a>
-<a href="#838" id="838">838</a>
-<a href="#839" id="839">839</a>
-<a href="#840" id="840">840</a>
-<a href="#841" id="841">841</a>
-<a href="#842" id="842">842</a>
-<a href="#843" id="843">843</a>
-<a href="#844" id="844">844</a>
-<a href="#845" id="845">845</a>
-<a href="#846" id="846">846</a>
-<a href="#847" id="847">847</a>
-<a href="#848" id="848">848</a>
-<a href="#849" id="849">849</a>
-<a href="#850" id="850">850</a>
-<a href="#851" id="851">851</a>
-<a href="#852" id="852">852</a>
-<a href="#853" id="853">853</a>
-<a href="#854" id="854">854</a>
-<a href="#855" id="855">855</a>
-<a href="#856" id="856">856</a>
-<a href="#857" id="857">857</a>
-<a href="#858" id="858">858</a>
-<a href="#859" id="859">859</a>
-<a href="#860" id="860">860</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -881,6 +852,19 @@
 <span class="kw">use </span>tokio::process::Child;
 <span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, warn};
+
+<span class="kw">use </span><span class="kw">crate</span>::envs::{
+    FM_BACKWARDS_COMPATIBILITY_TEST_ENV, FM_BITCOIND_BASE_EXECUTABLE_ENV,
+    FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV, FM_BTC_CLIENT_ENV, FM_ELECTRS_BASE_EXECUTABLE_ENV,
+    FM_ESPLORA_BASE_EXECUTABLE_ENV, FM_FAUCET_BASE_EXECUTABLE_ENV,
+    FM_FEDIMINTD_BASE_EXECUTABLE_ENV, FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV,
+    FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE_ENV, FM_GATEWAYD_BASE_EXECUTABLE_ENV,
+    FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV, FM_GWCLI_CLN_ENV, FM_GWCLI_LND_ENV,
+    FM_LIGHTNINGD_BASE_EXECUTABLE_ENV, FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV, FM_LIGHTNING_CLI_ENV,
+    FM_LNCLI_BASE_EXECUTABLE_ENV, FM_LNCLI_ENV, FM_LND_BASE_EXECUTABLE_ENV,
+    FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV, FM_LOGS_DIR_ENV, FM_MINT_CLIENT_ENV,
+    FM_RECOVERYTOOL_BASE_EXECUTABLE_ENV,
+};
 
 <span class="comment">// If a binary doesn't provide a clap version, default to the first stable
 // release (v0.2.1)
@@ -983,7 +967,7 @@
 
     <span class="doccomment">/// Logs to $FM_LOGS_DIR/{name}.{out,err}
     </span><span class="kw">pub async fn </span>spawn_daemon(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str, <span class="kw-2">mut </span>cmd: Command) -&gt; <span class="prelude-ty">Result</span>&lt;ProcessHandle&gt; {
-        <span class="kw">let </span>logs_dir = env::var(<span class="string">"FM_LOGS_DIR"</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>logs_dir = env::var(FM_LOGS_DIR_ENV)<span class="question-mark">?</span>;
         <span class="kw">let </span>path = <span class="macro">format!</span>(<span class="string">"{logs_dir}/{name}.log"</span>);
         <span class="kw">let </span>log = OpenOptions::new()
             .append(<span class="bool-val">true</span>)
@@ -1135,7 +1119,7 @@
 
     <span class="doccomment">/// Run the command logging the output and error
     </span><span class="kw">pub async fn </span>run_with_logging(<span class="kw-2">&amp;mut </span><span class="self">self</span>, name: String) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>logs_dir = env::var(<span class="string">"FM_LOGS_DIR"</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>logs_dir = env::var(FM_LOGS_DIR_ENV)<span class="question-mark">?</span>;
         <span class="kw">let </span>path = <span class="macro">format!</span>(<span class="string">"{logs_dir}/{name}.log"</span>);
         <span class="kw">let </span>log = OpenOptions::new()
             .append(<span class="bool-val">true</span>)
@@ -1320,114 +1304,72 @@
 }
 
 <span class="kw">const </span>GATEWAYD_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"gatewayd"</span>;
-<span class="comment">// To override gatewayd binary set:
-</span><span class="kw">const </span>ENV_FM_GATEWAYD_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAYD_BASE_EXECUTABLE"</span>;
 
 <span class="kw">const </span>FEDIMINTD_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"fedimintd"</span>;
-<span class="comment">// To override fedimintd binary set:
-</span><span class="kw">const </span>ENV_FM_FEDIMINTD_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FEDIMINTD_BASE_EXECUTABLE"</span>;
 
 <span class="kw">const </span>FEDIMINT_CLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"fedimint-cli"</span>;
-<span class="comment">// To override fedimint-cli binary set:
-</span><span class="kw">const </span>ENV_FM_FEDIMINT_CLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FEDIMINT_CLI_BASE_EXECUTABLE"</span>;
-<span class="comment">// To override fedimint-cli default command
-// (like "$FM_FEDIMINT_CLI_BASE_EXECUTABLE --data-dir /tmp/xxx ....")
-// set:
-</span><span class="kw">const </span>ENV_FM_MINT_CLIENT: <span class="kw-2">&amp;</span>str = <span class="string">"FM_MINT_CLIENT"</span>;
 
 <span class="kw">pub fn </span>get_fedimint_cli_path() -&gt; Vec&lt;String&gt; {
     get_command_str_for_alias(
-        <span class="kw-2">&amp;</span>[ENV_FM_FEDIMINT_CLI_BASE_EXECUTABLE],
+        <span class="kw-2">&amp;</span>[FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV],
         <span class="kw-2">&amp;</span>[FEDIMINT_CLI_FALLBACK],
     )
 }
 
 <span class="kw">const </span>GATEWAY_CLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"gateway-cli"</span>;
-<span class="comment">// To override gateway-cli binary set:
-</span><span class="kw">const </span>ENV_FM_GATEWAY_CLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_CLI_BASE_EXECUTABLE"</span>;
 
 <span class="kw">pub fn </span>get_gateway_cli_path() -&gt; Vec&lt;String&gt; {
     get_command_str_for_alias(
-        <span class="kw-2">&amp;</span>[ENV_FM_GATEWAY_CLI_BASE_EXECUTABLE],
+        <span class="kw-2">&amp;</span>[FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV],
         <span class="kw-2">&amp;</span>[GATEWAY_CLI_FALLBACK],
     )
 }
 
 <span class="kw">const </span>LOAD_TEST_TOOL_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"fedimint-load-test-tool"</span>;
-<span class="comment">// To override fedimint-load-test-tool binary set:
-</span><span class="kw">const </span>ENV_FM_LOAD_TEST_TOOL_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LOAD_TEST_TOOL_BASE_EXECUTABLE"</span>;
 
 <span class="kw">const </span>LIGHTNING_CLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"lightning-cli"</span>;
-<span class="comment">// To override lightning-cli binary set:
-</span><span class="kw">const </span>ENV_FM_LIGHTNING_CLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LIGHTNING_CLI_BASE_EXECUTABLE"</span>;
-<span class="comment">// to override lightning-cli default command set:
-</span><span class="kw">const </span>ENV_FM_LIGHTNING_CLI: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LIGHTNING_CLI"</span>;
 
 <span class="kw">pub fn </span>get_lightning_cli_path() -&gt; Vec&lt;String&gt; {
     get_command_str_for_alias(
-        <span class="kw-2">&amp;</span>[ENV_FM_LIGHTNING_CLI_BASE_EXECUTABLE],
+        <span class="kw-2">&amp;</span>[FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV],
         <span class="kw-2">&amp;</span>[LIGHTNING_CLI_FALLBACK],
     )
 }
 
 <span class="kw">const </span>LNCLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"lncli"</span>;
-<span class="comment">// To override lncli binary set:
-</span><span class="kw">const </span>ENV_FM_LNCLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LNCLI_BASE_EXECUTABLE"</span>;
-<span class="comment">// to override lncli default command set:
-</span><span class="kw">const </span>ENV_FM_LNCLI: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LNCLI"</span>;
 
 <span class="kw">pub fn </span>get_lncli_path() -&gt; Vec&lt;String&gt; {
-    get_command_str_for_alias(<span class="kw-2">&amp;</span>[ENV_FM_LNCLI_BASE_EXECUTABLE], <span class="kw-2">&amp;</span>[LNCLI_FALLBACK])
+    get_command_str_for_alias(<span class="kw-2">&amp;</span>[FM_LNCLI_BASE_EXECUTABLE_ENV], <span class="kw-2">&amp;</span>[LNCLI_FALLBACK])
 }
 
 <span class="kw">const </span>BITCOIN_CLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"bitcoin-cli"</span>;
-<span class="comment">// To override bitcoin-cli binary set:
-</span><span class="kw">const </span>ENV_FM_BITCOIN_CLI_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_BITCOIN_CLI_BASE_EXECUTABLE"</span>;
-<span class="comment">// to override bitcoin-cli default command set:
-</span><span class="kw">const </span>ENV_FM_BTC_CLIENT: <span class="kw-2">&amp;</span>str = <span class="string">"FM_BTC_CLIENT"</span>;
 
 <span class="kw">pub fn </span>get_bitcoin_cli_path() -&gt; Vec&lt;String&gt; {
     get_command_str_for_alias(
-        <span class="kw-2">&amp;</span>[ENV_FM_BITCOIN_CLI_BASE_EXECUTABLE],
+        <span class="kw-2">&amp;</span>[FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV],
         <span class="kw-2">&amp;</span>[BITCOIN_CLI_FALLBACK],
     )
 }
 
 <span class="kw">const </span>BITCOIND_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"bitcoind"</span>;
-<span class="comment">// To override bitcoind binary set:
-</span><span class="kw">const </span>ENV_FM_BITCOIND_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_BITCOIND_BASE_EXECUTABLE"</span>;
 
 <span class="kw">const </span>LIGHTNINGD_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"lightningd"</span>;
-<span class="comment">// To override lightningd binary set:
-</span><span class="kw">const </span>ENV_FM_LIGHTNINGD_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LIGHTNINGD_BASE_EXECUTABLE"</span>;
 
 <span class="kw">const </span>LND_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"lnd"</span>;
-<span class="comment">// To override lnd binary set:
-</span><span class="kw">const </span>ENV_FM_LND_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_LND_BASE_EXECUTABLE"</span>;
 
 <span class="kw">const </span>ELECTRS_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"electrs"</span>;
-<span class="comment">// To override electrs binary set:
-</span><span class="kw">const </span>ENV_FM_ELECTRS_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_ELECTRS_BASE_EXECUTABLE"</span>;
 
 <span class="kw">const </span>ESPLORA_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"esplora"</span>;
-<span class="comment">// To override esplora binary set:
-</span><span class="kw">const </span>ENV_FM_ESPLORA_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_ESPLORA_BASE_EXECUTABLE"</span>;
 
 <span class="kw">const </span>RECOVERYTOOL_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"recoverytool"</span>;
-<span class="comment">// To override esplora binary set:
-</span><span class="kw">const </span>ENV_FM_RECOVERYTOOL_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_RECOVERYTOOL_BASE_EXECUTABLE"</span>;
 
 <span class="kw">const </span>FAUCET_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"faucet"</span>;
-<span class="comment">// To override esplora binary set:
-</span><span class="kw">const </span>ENV_FM_FAUCET_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FAUCET_BASE_EXECUTABLE"</span>;
 
 <span class="kw">const </span>FEDIMINT_DBTOOL_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"fedimint-dbtool"</span>;
-<span class="comment">// To override esplora binary set:
-</span><span class="kw">const </span>ENV_FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE"</span>;
 
 <span class="kw">pub fn </span>get_fedimint_dbtool_cli_path() -&gt; Vec&lt;String&gt; {
     get_command_str_for_alias(
-        <span class="kw-2">&amp;</span>[ENV_FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE],
+        <span class="kw-2">&amp;</span>[FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE_ENV],
         <span class="kw-2">&amp;</span>[FEDIMINT_DBTOOL_FALLBACK],
     )
 }
@@ -1445,7 +1387,7 @@
 <span class="kw">impl </span>FedimintdCmd {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[ENV_FM_FEDIMINTD_BASE_EXECUTABLE],
+            <span class="kw-2">&amp;</span>[FM_FEDIMINTD_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[FEDIMINTD_FALLBACK],
         ))
     }
@@ -1467,7 +1409,7 @@
 <span class="kw">impl </span>Gatewayd {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[ENV_FM_GATEWAYD_BASE_EXECUTABLE],
+            <span class="kw-2">&amp;</span>[FM_GATEWAYD_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[GATEWAYD_FALLBACK],
         ))
     }
@@ -1489,7 +1431,7 @@
 <span class="kw">impl </span>FedimintCli {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[ENV_FM_MINT_CLIENT],
+            <span class="kw-2">&amp;</span>[FM_MINT_CLIENT_ENV],
             <span class="kw-2">&amp;</span>get_fedimint_cli_path()
                 .iter()
                 .map(String::as_str)
@@ -1510,7 +1452,7 @@
 <span class="kw">impl </span>LoadTestTool {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[ENV_FM_LOAD_TEST_TOOL_BASE_EXECUTABLE],
+            <span class="kw-2">&amp;</span>[FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[LOAD_TEST_TOOL_FALLBACK],
         ))
     }
@@ -1541,7 +1483,7 @@
 <span class="kw">impl </span>GatewayClnCli {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[<span class="string">"FM_GWCLI_CLN"</span>],
+            <span class="kw-2">&amp;</span>[FM_GWCLI_CLN_ENV],
             <span class="kw-2">&amp;</span>[<span class="string">"gateway-cln"</span>],
         ))
     }
@@ -1551,7 +1493,7 @@
 <span class="kw">impl </span>GatewayLndCli {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[<span class="string">"FM_GWCLI_LND"</span>],
+            <span class="kw-2">&amp;</span>[FM_GWCLI_LND_ENV],
             <span class="kw-2">&amp;</span>[<span class="string">"gateway-lnd"</span>],
         ))
     }
@@ -1561,7 +1503,7 @@
 <span class="kw">impl </span>LnCli {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[ENV_FM_LNCLI],
+            <span class="kw-2">&amp;</span>[FM_LNCLI_ENV],
             <span class="kw-2">&amp;</span>get_lncli_path()
                 .iter()
                 .map(String::as_str)
@@ -1574,7 +1516,7 @@
 <span class="kw">impl </span>ClnLightningCli {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[ENV_FM_LIGHTNING_CLI],
+            <span class="kw-2">&amp;</span>[FM_LIGHTNING_CLI_ENV],
             <span class="kw-2">&amp;</span>get_lightning_cli_path()
                 .iter()
                 .map(String::as_str)
@@ -1587,7 +1529,7 @@
 <span class="kw">impl </span>BitcoinCli {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[ENV_FM_BTC_CLIENT],
+            <span class="kw-2">&amp;</span>[FM_BTC_CLIENT_ENV],
             <span class="kw-2">&amp;</span>get_bitcoin_cli_path()
                 .iter()
                 .map(String::as_str)
@@ -1600,7 +1542,7 @@
 <span class="kw">impl </span>Bitcoind {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[ENV_FM_BITCOIND_BASE_EXECUTABLE],
+            <span class="kw-2">&amp;</span>[FM_BITCOIND_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[BITCOIND_FALLBACK],
         ))
     }
@@ -1610,7 +1552,7 @@
 <span class="kw">impl </span>Lightningd {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[ENV_FM_LIGHTNINGD_BASE_EXECUTABLE],
+            <span class="kw-2">&amp;</span>[FM_LIGHTNINGD_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[LIGHTNINGD_FALLBACK],
         ))
     }
@@ -1620,7 +1562,7 @@
 <span class="kw">impl </span>Lnd {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[ENV_FM_LND_BASE_EXECUTABLE],
+            <span class="kw-2">&amp;</span>[FM_LND_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[LND_FALLBACK],
         ))
     }
@@ -1630,7 +1572,7 @@
 <span class="kw">impl </span>Electrs {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[ENV_FM_ELECTRS_BASE_EXECUTABLE],
+            <span class="kw-2">&amp;</span>[FM_ELECTRS_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[ELECTRS_FALLBACK],
         ))
     }
@@ -1640,7 +1582,7 @@
 <span class="kw">impl </span>Esplora {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[ENV_FM_ESPLORA_BASE_EXECUTABLE],
+            <span class="kw-2">&amp;</span>[FM_ESPLORA_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[ESPLORA_FALLBACK],
         ))
     }
@@ -1650,7 +1592,7 @@
 <span class="kw">impl </span>Recoverytool {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[ENV_FM_RECOVERYTOOL_BASE_EXECUTABLE],
+            <span class="kw-2">&amp;</span>[FM_RECOVERYTOOL_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[RECOVERYTOOL_FALLBACK],
         ))
     }
@@ -1660,7 +1602,7 @@
 <span class="kw">impl </span>Faucet {
     <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[ENV_FM_FAUCET_BASE_EXECUTABLE],
+            <span class="kw-2">&amp;</span>[FM_FAUCET_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[FAUCET_FALLBACK],
         ))
     }
@@ -1688,7 +1630,7 @@
 
 <span class="doccomment">/// Returns true if running backwards-compatibility tests
 </span><span class="kw">pub fn </span>is_backwards_compatibility_test() -&gt; bool {
-    is_env_var_set(<span class="string">"FM_BACKWARDS_COMPATIBILITY_TEST"</span>)
+    is_env_var_set(FM_BACKWARDS_COMPATIBILITY_TEST_ENV)
 }
 
 <span class="doccomment">/// Parses a version string returned from clap

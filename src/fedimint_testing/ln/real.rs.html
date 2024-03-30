@@ -352,6 +352,10 @@
 <a href="#350" id="350">350</a>
 <a href="#351" id="351">351</a>
 <a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -377,6 +381,10 @@
 <span class="kw">use </span>tonic_lnd::{connect, Client <span class="kw">as </span>LndClient};
 <span class="kw">use </span>tracing::info;
 
+<span class="kw">use </span><span class="kw">crate</span>::envs::{
+    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV,
+    FM_PORT_CLN_ENV, FM_PORT_LND_LISTEN_ENV, FM_TEST_DIR_ENV,
+};
 <span class="kw">use </span><span class="kw">crate</span>::gateway::LightningNodeType;
 <span class="kw">use </span><span class="kw">crate</span>::ln::LightningTest;
 
@@ -437,7 +445,7 @@
     </span>}
 
     <span class="kw">fn </span>listening_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-        <span class="kw">let </span>cln_listen_port = std::env::var(<span class="string">"FM_PORT_CLN"</span>).unwrap_or(String::from(<span class="string">"9000"</span>));
+        <span class="kw">let </span>cln_listen_port = std::env::var(FM_PORT_CLN_ENV).unwrap_or(String::from(<span class="string">"9000"</span>));
         <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, cln_listen_port)
     }
 
@@ -483,14 +491,14 @@
 
 <span class="kw">impl </span>ClnLightningTest {
     <span class="kw">pub async fn </span>new() -&gt; ClnLightningTest {
-        <span class="kw">let </span>dir = env::var(<span class="string">"FM_TEST_DIR"</span>).expect(<span class="string">"Real tests require FM_TEST_DIR"</span>);
+        <span class="kw">let </span>dir = env::var(FM_TEST_DIR_ENV).expect(<span class="string">"Real tests require FM_TEST_DIR"</span>);
         <span class="kw">let </span>socket_cln = PathBuf::from(dir).join(<span class="string">"cln/regtest/lightning-rpc"</span>);
         <span class="kw">let </span>rpc_cln = Arc::new(Mutex::new(ClnRpc::new(socket_cln).<span class="kw">await</span>.unwrap()));
 
         <span class="kw">let </span>initial_balance = <span class="self">Self</span>::channel_balance(rpc_cln.clone()).<span class="kw">await</span>;
         <span class="kw">let </span>node_pub_key = <span class="self">Self</span>::pubkey(rpc_cln.clone()).<span class="kw">await</span>;
 
-        <span class="kw">let </span>lnrpc_addr = env::var(<span class="string">"FM_GATEWAY_LIGHTNING_ADDR"</span>)
+        <span class="kw">let </span>lnrpc_addr = env::var(FM_GATEWAY_LIGHTNING_ADDR_ENV)
             .expect(<span class="string">"FM_GATEWAY_LIGHTNING_ADDR not set"</span>)
             .parse::&lt;SafeUrl&gt;()
             .expect(<span class="string">"Invalid FM_GATEWAY_LIGHTNING_ADDR"</span>);
@@ -586,7 +594,7 @@
     </span>}
 
     <span class="kw">fn </span>listening_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-        <span class="kw">let </span>lnd_listen_port = std::env::var(<span class="string">"FM_PORT_LND_LISTEN"</span>).unwrap_or(String::from(<span class="string">"9734"</span>));
+        <span class="kw">let </span>lnd_listen_port = std::env::var(FM_PORT_LND_LISTEN_ENV).unwrap_or(String::from(<span class="string">"9734"</span>));
         <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, lnd_listen_port)
     }
 
@@ -642,9 +650,9 @@
 <span class="kw">impl </span>LndLightningTest {
     <span class="kw">pub async fn </span>new() -&gt; LndLightningTest {
         <span class="macro">info!</span>(target: LOG_TEST, <span class="string">"Setting up lnd lightning test fixture"</span>);
-        <span class="kw">let </span>lnd_rpc_addr = env::var(<span class="string">"FM_LND_RPC_ADDR"</span>).unwrap();
-        <span class="kw">let </span>lnd_macaroon = env::var(<span class="string">"FM_LND_MACAROON"</span>).unwrap();
-        <span class="kw">let </span>lnd_tls_cert = env::var(<span class="string">"FM_LND_TLS_CERT"</span>).unwrap();
+        <span class="kw">let </span>lnd_rpc_addr = env::var(FM_LND_RPC_ADDR_ENV).unwrap();
+        <span class="kw">let </span>lnd_macaroon = env::var(FM_LND_MACAROON_ENV).unwrap();
+        <span class="kw">let </span>lnd_tls_cert = env::var(FM_LND_TLS_CERT_ENV).unwrap();
         <span class="kw">let </span>lnd_client = connect(
             lnd_rpc_addr.clone(),
             lnd_tls_cert.clone(),

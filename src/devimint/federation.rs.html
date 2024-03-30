@@ -702,6 +702,7 @@
 <a href="#700" id="700">700</a>
 <a href="#701" id="701">701</a>
 <a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
@@ -724,7 +725,7 @@
 <span class="kw">use </span>fedimint_server::config::ConfigGenParams;
 <span class="kw">use </span>fedimint_testing::federation::local_config_gen_params;
 <span class="kw">use </span>fedimint_wallet_client::config::WalletClientConfig;
-<span class="kw">use </span>fedimintd::FM_EXTRA_DKG_META_VAR;
+<span class="kw">use </span>fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 <span class="kw">use </span>fs_lock::FileLock;
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>rand::Rng;
@@ -735,6 +736,7 @@
 <span class="kw">use </span><span class="kw">super</span>::external::Bitcoind;
 <span class="kw">use </span><span class="kw">super</span>::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 <span class="kw">use </span><span class="kw">super</span>::vars::utf8;
+<span class="kw">use </span><span class="kw">crate</span>::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, FedimintdCmd};
 <span class="kw">use crate</span>::{poll_eq, vars};
 
@@ -757,10 +759,10 @@
 
 <span class="kw">impl </span>Client {
     <span class="kw">fn </span>clients_dir() -&gt; PathBuf {
-        <span class="kw">let </span>data_dir: PathBuf = env::var(<span class="string">"FM_DATA_DIR"</span>)
-            .expect(<span class="string">"FM_DATA_DIR not set"</span>)
+        <span class="kw">let </span>data_dir: PathBuf = env::var(FM_DATA_DIR_ENV)
+            .expect(<span class="string">"FM_DATA_DIR_ENV not set"</span>)
             .parse()
-            .expect(<span class="string">"FM_DATA_DIR invalid"</span>);
+            .expect(<span class="string">"FM_DATA_DIR_ENV invalid"</span>);
         data_dir.join(<span class="string">"clients"</span>)
     }
 
@@ -962,13 +964,13 @@
 
     <span class="doccomment">/// Read the invite code from the client data dir
     </span><span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>data_dir: PathBuf = env::var(<span class="string">"FM_CLIENT_DIR"</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
+        <span class="kw">let </span>data_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
         <span class="kw">let </span>invite_code = fs::read_to_string(data_dir.join(<span class="string">"invite-code"</span>))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(invite_code)
     }
 
     <span class="kw">pub fn </span>invite_code_for(peer_id: PeerId) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>data_dir: PathBuf = env::var(<span class="string">"FM_CLIENT_DIR"</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
+        <span class="kw">let </span>data_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
         <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"invite-code-{}"</span>, peer_id);
         <span class="kw">let </span>invite_code = fs::read_to_string(data_dir.join(name))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(invite_code)
@@ -1365,11 +1367,11 @@
     <span class="comment">// Since we are not actually calling `fedimintd` binary, parse and handle
     // `FM_EXTRA_META_DATA` like it would do.
     </span><span class="kw">let </span><span class="kw-2">mut </span>extra_meta_data = parse_map(
-        <span class="kw-2">&amp;</span>std::env::var(FM_EXTRA_DKG_META_VAR)
+        <span class="kw-2">&amp;</span>std::env::var(FM_EXTRA_DKG_META_ENV)
             .ok()
             .unwrap_or_default(),
     )
-    .with_context(|| <span class="macro">format!</span>(<span class="string">"Failed to parse {FM_EXTRA_DKG_META_VAR}"</span>))
+    .with_context(|| <span class="macro">format!</span>(<span class="string">"Failed to parse {FM_EXTRA_DKG_META_ENV}"</span>))
     .expect(<span class="string">"Failed"</span>);
     <span class="kw">let </span><span class="kw-2">mut </span>meta = BTreeMap::from([(<span class="string">"federation_name"</span>.to_string(), <span class="string">"testfed"</span>.to_string())]);
     meta.append(<span class="kw-2">&amp;mut </span>extra_meta_data);

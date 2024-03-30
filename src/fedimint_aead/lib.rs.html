@@ -132,7 +132,13 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::fs;
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+</pre></div><pre class="rust"><code><span class="kw">pub mod </span>envs;
+
+<span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::path::PathBuf;
 
@@ -143,6 +149,8 @@
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>ring::aead::Nonce;
 <span class="kw">pub use </span>ring::aead::{Aad, LessSafeKey, UnboundKey, NONCE_LEN};
+
+<span class="kw">use </span><span class="kw">crate</span>::envs::FM_TEST_FAST_WEAK_CRYPTO_ENV;
 
 <span class="doccomment">/// Get a random nonce.
 </span><span class="kw">pub fn </span>get_random_nonce() -&gt; ring::aead::Nonce {
@@ -241,7 +249,7 @@
 /// for testing
 </span><span class="kw">fn </span>argon2() -&gt; Argon2&lt;<span class="lifetime">'static</span>&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>params = argon2::ParamsBuilder::default();
-    <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="string">"1"</span>) = std::env::var(<span class="string">"FM_TEST_FAST_WEAK_CRYPTO"</span>).as_deref() {
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="string">"1"</span>) = std::env::var(FM_TEST_FAST_WEAK_CRYPTO_ENV).as_deref() {
         params.m_cost(Params::MIN_M_COST);
     }
     Argon2::from(params.build().expect(<span class="string">"valid params"</span>))

@@ -429,6 +429,11 @@
 <a href="#427" id="427">427</a>
 <a href="#428" id="428">428</a>
 <a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -447,6 +452,10 @@
 <span class="kw">use </span>tracing::{debug, error, info, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::devfed::DevJitFed;
+<span class="kw">use </span><span class="kw">crate</span>::envs::{
+    FM_FED_SIZE_ENV, FM_INVITE_CODE_ENV, FM_LINK_TEST_DIR_ENV, FM_OFFLINE_NODES_ENV,
+    FM_TEST_DIR_ENV,
+};
 <span class="kw">use </span><span class="kw">crate</span>::federation::Fedimintd;
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, ProcessManager};
 <span class="kw">use crate</span>::{external_daemons, vars, ExternalDaemons};
@@ -462,12 +471,12 @@
 
 <span class="attr">#[derive(Parser, Clone)]
 </span><span class="kw">pub struct </span>CommonArgs {
-    <span class="attr">#[clap(short = <span class="string">'d'</span>, long, env = <span class="string">"FM_TEST_DIR"</span>)]
+    <span class="attr">#[clap(short = <span class="string">'d'</span>, long, env = FM_TEST_DIR_ENV)]
     </span><span class="kw">pub </span>test_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
-    <span class="attr">#[clap(short = <span class="string">'n'</span>, long, env = <span class="string">"FM_FED_SIZE"</span>, default_value = <span class="string">"4"</span>)]
+    <span class="attr">#[clap(short = <span class="string">'n'</span>, long, env = FM_FED_SIZE_ENV, default_value = <span class="string">"4"</span>)]
     </span><span class="kw">pub </span>fed_size: usize,
 
-    <span class="attr">#[clap(long, env = <span class="string">"FM_LINK_TEST_DIR"</span>)]
+    <span class="attr">#[clap(long, env = FM_LINK_TEST_DIR_ENV)]
     </span><span class="doccomment">/// Create a link to the test dir under this path
     </span><span class="kw">pub </span>link_test_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
 
@@ -475,7 +484,7 @@
     </span><span class="kw">pub </span>link_test_dir_suffix: String,
 
     <span class="doccomment">/// Run degraded federation with FM_OFFLINE_NODES shutdown
-    </span><span class="attr">#[clap(long, env = <span class="string">"FM_OFFLINE_NODES"</span>, default_value = <span class="string">"0"</span>)]
+    </span><span class="attr">#[clap(long, env = FM_OFFLINE_NODES_ENV, default_value = <span class="string">"0"</span>)]
     </span><span class="kw">pub </span>offline_nodes: usize,
 }
 
@@ -711,7 +720,8 @@
                     <span class="macro">info!</span>(target: LOG_DEVIMINT,
                         elapsed_ms = %pegin_start_time.elapsed().as_millis(),
                         <span class="string">"Pegins completed"</span>);
-                    std::env::set_var(<span class="string">"FM_INVITE_CODE"</span>, dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.invite_code()<span class="question-mark">?</span>);
+
+                    std::env::set_var(FM_INVITE_CODE_ENV, dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.invite_code()<span class="question-mark">?</span>);
 
                     dev_fed.finalize(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -810,7 +820,7 @@
                 <span class="kw">let </span>invite = fs::read_to_string(<span class="kw-2">&amp;</span>invite_file).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span><span class="kw-2">mut </span>env_string = fs::read_to_string(<span class="kw-2">&amp;</span>env_file).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="macro">writeln!</span>(env_string, <span class="string">r#"export FM_INVITE_CODE="{invite}""#</span>)<span class="question-mark">?</span>;
-                std::env::set_var(<span class="string">"FM_INVITE_CODE"</span>, invite);
+                std::env::set_var(FM_INVITE_CODE_ENV, invite);
                 write_overwrite_async(env_file, env_string).<span class="kw">await</span><span class="question-mark">?</span>;
             }
 

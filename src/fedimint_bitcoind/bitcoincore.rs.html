@@ -176,7 +176,7 @@
 <span class="kw">use </span>bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 <span class="kw">use </span>bitcoincore_rpc::{Auth, RpcApi};
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
-<span class="kw">use </span>fedimint_core::envs::FM_BITCOIND_COOKIE_FILE_VAR_NAME;
+<span class="kw">use </span>fedimint_core::envs::FM_BITCOIND_COOKIE_FILE_ENV;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::{block_in_place, TaskHandle};
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
@@ -318,11 +318,11 @@
         }),
         <span class="kw">match </span>(
             !url.username().is_empty(),
-            env::var(FM_BITCOIND_COOKIE_FILE_VAR_NAME),
+            env::var(FM_BITCOIND_COOKIE_FILE_ENV),
         ) {
-            (<span class="bool-val">true</span>, <span class="prelude-val">Ok</span>(<span class="kw">_</span>)) =&gt; <span class="macro">bail!</span>(
-                <span class="string">"When {FM_BITCOIND_COOKIE_FILE_VAR_NAME} is set, the url auth part must be empty."
-            </span>),
+            (<span class="bool-val">true</span>, <span class="prelude-val">Ok</span>(<span class="kw">_</span>)) =&gt; {
+                <span class="macro">bail!</span>(<span class="string">"When {FM_BITCOIND_COOKIE_FILE_ENV} is set, the url auth part must be empty."</span>)
+            }
             (<span class="bool-val">true</span>, <span class="prelude-val">Err</span>(<span class="kw">_</span>)) =&gt; Auth::UserPass(
                 url.username().to_owned(),
                 url.password()

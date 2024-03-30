@@ -2271,6 +2271,7 @@
 <a href="#2269" id="2269">2269</a>
 <a href="#2270" id="2270">2270</a>
 <a href="#2271" id="2271">2271</a>
+<a href="#2272" id="2272">2272</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2297,6 +2298,7 @@
 <span class="kw">use </span>tracing::{debug, info};
 
 <span class="kw">use </span><span class="kw">crate</span>::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, CommonArgs};
+<span class="kw">use </span><span class="kw">crate</span>::envs::{FM_DATA_DIR_ENV, FM_PASSWORD_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::federation::{Client, Federation};
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
 <span class="kw">use crate</span>::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
@@ -2625,7 +2627,7 @@
 
 <span class="kw">pub async fn </span>cli_tests(dev_fed: DevFed) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>data_dir = env::var(<span class="string">"FM_DATA_DIR"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>data_dir = env::var(FM_DATA_DIR_ENV)<span class="question-mark">?</span>;
 
     <span class="attr">#[allow(unused_variables)]
     </span><span class="kw">let </span>DevFed {
@@ -2651,7 +2653,7 @@
         <span class="string">"--in-file={data_dir}/fedimintd-0/private.encrypt"</span>,
         <span class="string">"--out-file={data_dir}/fedimintd-0/config-plaintext.json"
     </span>)
-    .env(<span class="string">"FM_PASSWORD"</span>, <span class="string">"pass"</span>)
+    .env(FM_PASSWORD_ENV, <span class="string">"pass"</span>)
     .run()
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -2662,7 +2664,7 @@
         <span class="string">"--in-file={data_dir}/fedimintd-0/config-plaintext.json"</span>,
         <span class="string">"--out-file={data_dir}/fedimintd-0/config-2"
     </span>)
-    .env(<span class="string">"FM_PASSWORD"</span>, <span class="string">"pass-foo"</span>)
+    .env(FM_PASSWORD_ENV, <span class="string">"pass-foo"</span>)
     .run()
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -2673,7 +2675,7 @@
         <span class="string">"--in-file={data_dir}/fedimintd-0/config-2"</span>,
         <span class="string">"--out-file={data_dir}/fedimintd-0/config-plaintext-2.json"
     </span>)
-    .env(<span class="string">"FM_PASSWORD"</span>, <span class="string">"pass-foo"</span>)
+    .env(FM_PASSWORD_ENV, <span class="string">"pass-foo"</span>)
     .run()
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -3326,7 +3328,7 @@
 
 <span class="kw">pub async fn </span>cli_load_test_tool_test(dev_fed: DevFed) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>data_dir = env::var(<span class="string">"FM_DATA_DIR"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>data_dir = env::var(FM_DATA_DIR_ENV)<span class="question-mark">?</span>;
     <span class="kw">let </span>load_test_temp = PathBuf::from(data_dir).join(<span class="string">"load-test-temp"</span>);
     dev_fed
         .fed
@@ -4029,7 +4031,7 @@
         esplora,
     } = dev_fed;
 
-    <span class="kw">let </span>data_dir = env::var(<span class="string">"FM_DATA_DIR"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>data_dir = env::var(FM_DATA_DIR_ENV)<span class="question-mark">?</span>;
     <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"recoverytool-test-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span><span class="kw-2">mut </span>fed_utxos_sats = HashSet::from([<span class="number">12_345_000</span>, <span class="number">23_456_000</span>, <span class="number">34_567_000</span>]);
@@ -4098,7 +4100,7 @@
         <span class="string">"--db"</span>,
         <span class="string">"{data_dir}/fedimintd-0/database"
     </span>)
-    .env(<span class="string">"FM_PASSWORD"</span>, <span class="string">"pass"</span>)
+    .env(FM_PASSWORD_ENV, <span class="string">"pass"</span>)
     .out_json()
     .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>outputs = output.as_array().context(<span class="string">"expected an array"</span>)<span class="question-mark">?</span>;
@@ -4156,7 +4158,7 @@
             <span class="string">"--db"</span>,
             <span class="string">"{data_dir}/fedimintd-0/database"
         </span>)
-        .env(<span class="string">"FM_PASSWORD"</span>, <span class="string">"pass"</span>)
+        .env(FM_PASSWORD_ENV, <span class="string">"pass"</span>)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>outputs = output.as_array().context(<span class="string">"expected an array"</span>)<span class="question-mark">?</span>;

@@ -162,6 +162,9 @@
 <a href="#160" id="160">160</a>
 <a href="#161" id="161">161</a>
 <a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>lnd;
 
@@ -180,6 +183,9 @@
 
 <span class="kw">use </span><span class="self">self</span>::cln::{NetworkLnRpcClient, RouteHtlcStream};
 <span class="kw">use </span><span class="self">self</span>::lnd::GatewayLndClient;
+<span class="kw">use </span><span class="kw">crate</span>::envs::{
+    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV,
+};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
     EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse,
@@ -279,20 +285,20 @@
     <span class="attr">#[clap(name = <span class="string">"lnd"</span>)]
     </span>Lnd {
         <span class="doccomment">/// LND RPC address
-        </span><span class="attr">#[arg(long = <span class="string">"lnd-rpc-host"</span>, env = <span class="string">"FM_LND_RPC_ADDR"</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">"lnd-rpc-host"</span>, env = FM_LND_RPC_ADDR_ENV)]
         </span>lnd_rpc_addr: String,
 
         <span class="doccomment">/// LND TLS cert file path
-        </span><span class="attr">#[arg(long = <span class="string">"lnd-tls-cert"</span>, env = <span class="string">"FM_LND_TLS_CERT"</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">"lnd-tls-cert"</span>, env = FM_LND_TLS_CERT_ENV)]
         </span>lnd_tls_cert: String,
 
         <span class="doccomment">/// LND macaroon file path
-        </span><span class="attr">#[arg(long = <span class="string">"lnd-macaroon"</span>, env = <span class="string">"FM_LND_MACAROON"</span>)]
+        </span><span class="attr">#[arg(long = <span class="string">"lnd-macaroon"</span>, env = FM_LND_MACAROON_ENV)]
         </span>lnd_macaroon: String,
     },
     <span class="attr">#[clap(name = <span class="string">"cln"</span>)]
     </span>Cln {
-        <span class="attr">#[arg(long = <span class="string">"cln-extension-addr"</span>, env = <span class="string">"FM_GATEWAY_LIGHTNING_ADDR"</span>)]
+        <span class="attr">#[arg(long = <span class="string">"cln-extension-addr"</span>, env = FM_GATEWAY_LIGHTNING_ADDR_ENV)]
         </span>cln_extension_addr: SafeUrl,
     },
 }

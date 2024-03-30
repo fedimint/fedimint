@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FM_TEST_FAST_WEAK_CRYPTO_ENV"]};

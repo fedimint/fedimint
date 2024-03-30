@@ -28,7 +28,10 @@
 <a href="#26" id="26">26</a>
 <a href="#27" id="27">27</a>
 <a href="#28" id="28">28</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Network;
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+</pre></div><pre class="rust"><code><span class="doccomment">/// Module for creating `fedimintd` binary with custom modules
+</span><span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">pub use </span>fedimintd::<span class="kw-2">*</span>;
@@ -36,6 +39,7 @@
 <span class="kw">mod </span>fedimintd;
 
 <span class="kw">pub mod </span>envs;
+<span class="kw">use </span><span class="kw">crate</span>::envs::FM_PORT_ESPLORA_ENV;
 
 <span class="kw">pub fn </span>default_esplora_server(network: Network) -&gt; BitcoinRpcConfig {
     <span class="kw">let </span>url = <span class="kw">match </span>network {
@@ -45,7 +49,7 @@
             .expect(<span class="string">"Failed to parse default esplora server"</span>),
         Network::Regtest =&gt; SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
             <span class="string">"http://127.0.0.1:{}/"</span>,
-            std::env::var(<span class="string">"FM_PORT_ESPLORA"</span>).unwrap_or(String::from(<span class="string">"50002"</span>))
+            std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from(<span class="string">"50002"</span>))
         ))
         .expect(<span class="string">"Failed to parse default esplora server"</span>),
         Network::Signet =&gt; SafeUrl::parse(<span class="string">"https://mutinynet.com/api/"</span>)
