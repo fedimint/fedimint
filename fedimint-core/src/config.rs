@@ -248,7 +248,10 @@ impl ClientConfig {
         .context("Failed to download client config")
     }
 
-    async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Result<ClientConfig> {
+    /// Tries to download the client config only once.
+    pub async fn try_download_client_config(
+        invite_code: &InviteCode,
+    ) -> anyhow::Result<ClientConfig> {
         // we have to download the api endpoints first
         let federation_id = invite_code.federation_id();
 
