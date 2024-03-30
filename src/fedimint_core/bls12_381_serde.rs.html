@@ -56,110 +56,60 @@
 <a href="#54" id="54">54</a>
 <a href="#55" id="55">55</a>
 <a href="#56" id="56">56</a>
-<a href="#57" id="57">57</a>
-<a href="#58" id="58">58</a>
-<a href="#59" id="59">59</a>
-<a href="#60" id="60">60</a>
-<a href="#61" id="61">61</a>
-<a href="#62" id="62">62</a>
-<a href="#63" id="63">63</a>
-<a href="#64" id="64">64</a>
-<a href="#65" id="65">65</a>
-<a href="#66" id="66">66</a>
-<a href="#67" id="67">67</a>
-<a href="#68" id="68">68</a>
-<a href="#69" id="69">69</a>
-<a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a>
-<a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a>
-<a href="#74" id="74">74</a>
-<a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>scalar {
-    <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
     <span class="kw">use </span>bls12_381::Scalar;
     <span class="kw">use </span>serde::de::Error;
-    <span class="kw">use </span>serde::{Deserialize, Deserializer, Serializer};
+    <span class="kw">use </span>serde::{Deserializer, Serializer};
 
-    <span class="kw">pub fn </span>serialize&lt;S: Serializer&gt;(x: <span class="kw-2">&amp;</span>Scalar, s: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
-        <span class="kw">let </span>bytes = x.to_bytes();
-
-        <span class="kw">if </span>s.is_human_readable() {
-            s.serialize_str(<span class="kw-2">&amp;</span>bytes.to_hex())
-        } <span class="kw">else </span>{
-            s.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
-        }
+    <span class="kw">pub fn </span>serialize&lt;S: Serializer&gt;(scalar: <span class="kw-2">&amp;</span>Scalar, s: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
+        serdect::array::serialize_hex_lower_or_bin(<span class="kw-2">&amp;</span>scalar.to_bytes(), s)
     }
 
     <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">'d</span>, D: Deserializer&lt;<span class="lifetime">'d</span>&gt;&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;Scalar, D::Error&gt; {
-        <span class="kw">let </span>bytes: Vec&lt;u8&gt; = <span class="kw">if </span>d.is_human_readable() {
-            <span class="kw">let </span>deser: String = Deserialize::deserialize(d)<span class="question-mark">?</span>;
-            Vec::&lt;u8&gt;::from_hex(<span class="kw-2">&amp;</span>deser).map_err(serde::de::Error::custom)<span class="question-mark">?
-        </span>} <span class="kw">else </span>{
-            Deserialize::deserialize(d)<span class="question-mark">?
-        </span>};
+        <span class="kw">let </span><span class="kw-2">mut </span>byte_array = [<span class="number">0</span>; <span class="number">32</span>];
 
-        <span class="kw">if </span>bytes.len() != <span class="number">32 </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::invalid_length(bytes.len(), <span class="kw-2">&amp;</span><span class="string">"32 bytes"</span>));
-        }
-
-        <span class="kw">let </span><span class="kw-2">mut </span>byte_array = [<span class="number">0u8</span>; <span class="number">32</span>];
-
-        byte_array.copy_from_slice(<span class="kw-2">&amp;</span>bytes);
+        serdect::array::deserialize_hex_or_bin(<span class="kw-2">&amp;mut </span>byte_array, d)<span class="question-mark">?</span>;
 
         Option::from(Scalar::from_bytes(<span class="kw-2">&amp;</span>byte_array))
-            .ok_or_else(|| Error::custom(<span class="string">"Could not decode compressed G1Affine"</span>))
+            .ok_or_else(|| Error::custom(<span class="string">"Could not decode scalar"</span>))
     }
 }
 
-<span class="macro">macro_rules!</span> impl_serde_g {
-    (<span class="macro-nonterminal">$g</span>:ty, <span class="macro-nonterminal">$len</span>:expr) =&gt; {
-        <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
-        <span class="kw">use </span>serde::de::Error;
-        <span class="kw">use </span>serde::{Deserialize, Deserializer, Serializer};
-
-        <span class="kw">pub fn </span>serialize&lt;S: Serializer&gt;(g: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$g</span>, s: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
-            <span class="kw">let </span>bytes = g.to_compressed();
-            <span class="kw">if </span>s.is_human_readable() {
-                s.serialize_str(<span class="kw-2">&amp;</span>bytes.to_hex().as_ref())
-            } <span class="kw">else </span>{
-                s.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
-            }
-        }
-
-        <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">'d</span>, D: Deserializer&lt;<span class="lifetime">'d</span>&gt;&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="macro-nonterminal">$g</span>, D::Error&gt; {
-            <span class="kw">let </span>bytes: Vec&lt;u8&gt; = <span class="kw">if </span>d.is_human_readable() {
-                <span class="kw">let </span>deser: String = Deserialize::deserialize(d)<span class="question-mark">?</span>;
-                Vec::&lt;u8&gt;::from_hex(<span class="kw-2">&amp;</span>deser).map_err(serde::de::Error::custom)<span class="question-mark">?
-            </span>} <span class="kw">else </span>{
-                Deserialize::deserialize(d)<span class="question-mark">?
-            </span>};
-
-            <span class="kw">if </span>bytes.len() != <span class="macro-nonterminal">$len </span>{
-                <span class="kw">return </span><span class="prelude-val">Err</span>(D::Error::invalid_length(bytes.len(), <span class="kw-2">&amp;</span><span class="string">"48 bytes"</span>));
-            }
-
-            <span class="kw">let </span><span class="kw-2">mut </span>byte_array = [<span class="number">0u8</span>; <span class="macro-nonterminal">$len</span>];
-
-            byte_array.copy_from_slice(<span class="kw-2">&amp;</span>bytes);
-
-            Option::from(&lt;<span class="macro-nonterminal">$g</span>&gt;::from_compressed(<span class="kw-2">&amp;</span>byte_array))
-                .ok_or_else(|| Error::custom(<span class="string">"Could not decode compressed group element"</span>))
-        }
-    };
-}
-
 <span class="kw">pub mod </span>g1 {
-    <span class="macro">impl_serde_g!</span>(bls12_381::G1Affine, <span class="number">48</span>);
+    <span class="kw">use </span>bls12_381::G1Affine;
+    <span class="kw">use </span>serde::de::Error;
+    <span class="kw">use </span>serde::{Deserializer, Serializer};
+
+    <span class="kw">pub fn </span>serialize&lt;S: Serializer&gt;(point: <span class="kw-2">&amp;</span>G1Affine, s: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
+        serdect::array::serialize_hex_lower_or_bin(<span class="kw-2">&amp;</span>point.to_compressed(), s)
+    }
+
+    <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">'d</span>, D: Deserializer&lt;<span class="lifetime">'d</span>&gt;&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;G1Affine, D::Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>byte_array = [<span class="number">0</span>; <span class="number">48</span>];
+
+        serdect::array::deserialize_hex_or_bin(<span class="kw-2">&amp;mut </span>byte_array, d)<span class="question-mark">?</span>;
+
+        Option::from(G1Affine::from_compressed(<span class="kw-2">&amp;</span>byte_array))
+            .ok_or_else(|| Error::custom(<span class="string">"Could not decode compressed group element"</span>))
+    }
 }
 
 <span class="kw">pub mod </span>g2 {
-    <span class="macro">impl_serde_g!</span>(bls12_381::G2Affine, <span class="number">96</span>);
+    <span class="kw">use </span>bls12_381::G2Affine;
+    <span class="kw">use </span>serde::de::Error;
+    <span class="kw">use </span>serde::{Deserializer, Serializer};
+
+    <span class="kw">pub fn </span>serialize&lt;S: Serializer&gt;(point: <span class="kw-2">&amp;</span>G2Affine, s: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
+        serdect::array::serialize_hex_lower_or_bin(<span class="kw-2">&amp;</span>point.to_compressed(), s)
+    }
+
+    <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">'d</span>, D: Deserializer&lt;<span class="lifetime">'d</span>&gt;&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;G2Affine, D::Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>byte_array = [<span class="number">0</span>; <span class="number">96</span>];
+
+        serdect::array::deserialize_hex_or_bin(<span class="kw-2">&amp;mut </span>byte_array, d)<span class="question-mark">?</span>;
+
+        Option::from(G2Affine::from_compressed(<span class="kw-2">&amp;</span>byte_array))
+            .ok_or_else(|| Error::custom(<span class="string">"Could not decode compressed group element"</span>))
+    }
 }
 </code></pre></div></section></main></body></html>

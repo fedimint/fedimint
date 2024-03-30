@@ -664,6 +664,7 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::sha256::{Hash <span class="kw">as </span>Sha256, HashEngine};
+<span class="kw">use </span>bls12_381::Scalar;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
@@ -683,7 +684,6 @@
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>sha3::Digest;
-<span class="kw">use </span>tbs::Scalar;
 <span class="kw">use </span>threshold_crypto::ff::Field;
 <span class="kw">use </span>threshold_crypto::group::Curve;
 <span class="kw">use </span>threshold_crypto::poly::Commitment;

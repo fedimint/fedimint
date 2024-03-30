@@ -180,6 +180,7 @@
 //! * chacha20-poly1305 for symmetric encryption used for backups.
 </span><span class="kw">use </span>std::fmt::Formatter;
 
+<span class="kw">use </span>bls12_381::Scalar;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::BitcoinHash;
@@ -187,7 +188,6 @@
 <span class="kw">use </span>hkdf::{bitcoin_hashes, Hkdf};
 <span class="kw">use </span>ring::aead;
 <span class="kw">use </span>secp256k1_zkp::{KeyPair, Secp256k1, Signing};
-<span class="kw">use </span>tbs::Scalar;
 
 <span class="kw">const </span>CHILD_TAG: <span class="kw-2">&amp;</span>[u8; <span class="number">8</span>] = <span class="string">b"childkey"</span>;
 <span class="kw">const </span>SECP256K1_TAG: <span class="kw-2">&amp;</span>[u8; <span class="number">8</span>] = <span class="string">b"secp256k"</span>;

@@ -46,6 +46,6 @@ var srcIndex = new Map(JSON.parse('[\
 ["hkdf",["",[],["lib.rs"]]],\
 ["ln_gateway",["",[["lightning",[],["cln.rs","lnd.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]],["state_machine",[],["complete.rs","mod.rs","pay.rs"]]],["client.rs","db.rs","envs.rs","lib.rs","types.rs"]]],\
 ["recoverytool",["",[],["envs.rs","main.rs"]]],\
-["tbs",["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["lib.rs"]]]\
+["tbs",["",[],["lib.rs"]]]\
 ]'));
 createSrcSidebar();
