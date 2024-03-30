@@ -72,7 +72,7 @@ impl TimeReporterInner {
                     name = %self.name,
                     duration_ms = duration.as_millis(),
                     threshold_ms = threshold.as_millis(),
-                    "Operation time exeeded threshold"
+                    "Operation time exceeded threshold"
                 );
             }
         }
@@ -107,7 +107,7 @@ impl TimeReporter {
         }
     }
 
-    /// Add a threshold, which will log a warning if exeeded
+    /// Add a threshold, which will log a warning if exceeded
     pub fn threshold(mut self, threshold: time::Duration) -> Self {
         Self {
             inner: self.inner.take().map(|inner| TimeReporterInner {
