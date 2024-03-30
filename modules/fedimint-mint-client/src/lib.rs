@@ -320,11 +320,11 @@ impl FromStr for OOBNotes {
 }
 
 impl Display for OOBNotes {
-    /// Base64 encode a set of e-cash notes for out-of-band spending.
+    /// Base64UrlSafe encode a set of e-cash notes for out-of-band spending.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut bytes = Vec::new();
         Encodable::consensus_encode(self, &mut bytes).expect("encodes correctly");
-        f.write_str(&base64::engine::general_purpose::STANDARD.encode(&bytes))
+        f.write_str(&BASE64_URL_SAFE.encode(&bytes))
     }
 }
 
