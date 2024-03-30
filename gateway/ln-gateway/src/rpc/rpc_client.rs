@@ -11,6 +11,7 @@ use super::{
     DepositAddressPayload, FederationInfo, GatewayFedConfig, GatewayInfo, GetFundingAddressPayload,
     LeaveFedPayload, OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
 };
+use crate::lightning::ChannelInfo;
 
 pub struct GatewayRpcClient {
     /// Base URL to gateway web server
@@ -134,6 +135,14 @@ impl GatewayRpcClient {
             .join("/open_channel")
             .expect("invalid base url");
         self.call_post(url, payload).await
+    }
+
+    pub async fn list_active_channels(&self) -> GatewayRpcResult<Vec<ChannelInfo>> {
+        let url = self
+            .base_url
+            .join("/list_active_channels")
+            .expect("invalid base url");
+        self.call_get(url).await
     }
 
     async fn call<P: Serialize, T: DeserializeOwned>(

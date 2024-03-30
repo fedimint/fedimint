@@ -30,7 +30,7 @@ use tonic_lnd::{connect, Client as LndClient};
 use tracing::{debug, error, info, trace, warn};
 
 use super::cln::RouteHtlcStream;
-use super::{ILnRpcClient, LightningRpcError, MAX_LIGHTNING_RETRIES};
+use super::{ChannelInfo, ILnRpcClient, LightningRpcError, MAX_LIGHTNING_RETRIES};
 use crate::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use crate::gateway_lnrpc::{
@@ -707,6 +707,35 @@ impl ILnRpcClient for GatewayLndClient {
             Ok(_) => Ok(EmptyResponse {}),
             Err(e) => Err(LightningRpcError::FailedToOpenChannel {
                 failure_reason: format!("Failed to open channel {e:?}"),
+            }),
+        }
+    }
+
+    async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {
+        let mut client = self.connect().await?;
+
+        match client
+            .lightning()
+            .list_channels(ListChannelsRequest {
+                active_only: true,
+                inactive_only: false,
+                public_only: false,
+                private_only: false,
+                peer: vec![],
+            })
+            .await
+        {
+            Ok(response) => Ok(response
+                .into_inner()
+                .channels
+                .into_iter()
+                .map(|channel| ChannelInfo {
+                    remote_pubkey: channel.remote_pubkey,
+                    channel_size_sats: channel.capacity.try_into().expect("u64 -> i64"),
+                })
+                .collect()),
+            Err(e) => Err(LightningRpcError::FailedToListActiveChannels {
+                failure_reason: format!("Failed to list active channels {e:?}"),
             }),
         }
     }

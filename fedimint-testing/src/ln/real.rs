@@ -18,7 +18,7 @@ use ln_gateway::gateway_lnrpc::{
 };
 use ln_gateway::lightning::cln::{NetworkLnRpcClient, RouteHtlcStream};
 use ln_gateway::lightning::lnd::GatewayLndClient;
-use ln_gateway::lightning::{ILnRpcClient, LightningRpcError};
+use ln_gateway::lightning::{ChannelInfo, ILnRpcClient, LightningRpcError};
 use tokio::sync::Mutex;
 use tonic_lnd::lnrpc::{GetInfoRequest, Invoice as LndInvoice, ListChannelsRequest};
 use tonic_lnd::{connect, Client as LndClient};
@@ -159,6 +159,10 @@ impl ILnRpcClient for ClnLightningTest {
         self.lnrpc
             .open_channel(pubkey, channel_size_sats, push_amount_sats)
             .await
+    }
+
+    async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {
+        self.lnrpc.list_active_channels().await
     }
 }
 
@@ -347,6 +351,10 @@ impl ILnRpcClient for LndLightningTest {
         self.lnrpc
             .open_channel(pubkey, channel_size_sats, push_amount_sats)
             .await
+    }
+
+    async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {
+        self.lnrpc.list_active_channels().await
     }
 }
 

@@ -51,6 +51,10 @@ pub enum LightningRpcError {
     FailedToGetFundingAddress { failure_reason: String },
     #[error("Failed to connect to peer: {failure_reason}")]
     FailedToConnectToPeer { failure_reason: String },
+    #[error("Failed to list active channels: {failure_reason}")]
+    FailedToListActiveChannels { failure_reason: String },
+    #[error("Failed to wait for chain sync: {failure_reason}")]
+    FailedToWaitForChainSync { failure_reason: String },
 }
 
 /// A trait that the gateway uses to interact with a lightning node. This allows
@@ -141,6 +145,14 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -> Result<EmptyResponse, LightningRpcError>;
+
+    async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChannelInfo {
+    pub remote_pubkey: String,
+    pub channel_size_sats: u64,
 }
 
 #[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]
