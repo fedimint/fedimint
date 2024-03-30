@@ -1599,6 +1599,26 @@
 <a href="#1597" id="1597">1597</a>
 <a href="#1598" id="1598">1598</a>
 <a href="#1599" id="1599">1599</a>
+<a href="#1600" id="1600">1600</a>
+<a href="#1601" id="1601">1601</a>
+<a href="#1602" id="1602">1602</a>
+<a href="#1603" id="1603">1603</a>
+<a href="#1604" id="1604">1604</a>
+<a href="#1605" id="1605">1605</a>
+<a href="#1606" id="1606">1606</a>
+<a href="#1607" id="1607">1607</a>
+<a href="#1608" id="1608">1608</a>
+<a href="#1609" id="1609">1609</a>
+<a href="#1610" id="1610">1610</a>
+<a href="#1611" id="1611">1611</a>
+<a href="#1612" id="1612">1612</a>
+<a href="#1613" id="1613">1613</a>
+<a href="#1614" id="1614">1614</a>
+<a href="#1615" id="1615">1615</a>
+<a href="#1616" id="1616">1616</a>
+<a href="#1617" id="1617">1617</a>
+<a href="#1618" id="1618">1618</a>
+<a href="#1619" id="1619">1619</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1635,6 +1655,10 @@
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
 <span class="kw">use </span>fedimint_core::api::{FederationError, InviteCode};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_address, bitcoin29_to_bitcoin30_amount, bitcoin29_to_bitcoin30_network,
+    bitcoin29_to_bitcoin30_txid, bitcoin30_to_bitcoin29_amount, bitcoin30_to_bitcoin29_network,
+};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -2113,13 +2137,13 @@
                                                 .<span class="kw">await
                                         </span>};
 
-                                        <span class="kw">if </span>gateway_config.network != lightning_network {
+                                        <span class="kw">if </span>gateway_config.network != bitcoin30_to_bitcoin29_network(lightning_network) {
                                             <span class="macro">warn!</span>(<span class="string">"Lightning node does not match previously configured gateway network : ({:?})"</span>, gateway_config.network);
                                             <span class="macro">info!</span>(<span class="string">"Changing gateway network to match lightning node network : ({:?})"</span>, lightning_network);
                                             self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
                                             self_copy.handle_set_configuration_msg(SetConfigurationPayload {
                                                 password: <span class="prelude-val">None</span>,
-                                                network: <span class="prelude-val">Some</span>(lightning_network),
+                                                network: <span class="prelude-val">Some</span>(bitcoin30_to_bitcoin29_network(lightning_network)),
                                                 num_route_hints: <span class="prelude-val">None</span>,
                                                 routing_fees: <span class="prelude-val">None</span>,
                                             }).<span class="kw">await</span>.expect(<span class="string">"Failed to set gateway configuration"</span>);
@@ -2355,7 +2379,7 @@
             .get_first_module::&lt;WalletClientModule&gt;()
             .get_deposit_address(now() + Duration::from_secs(<span class="number">86400 </span>* <span class="number">365</span>), ())
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(address)
+        <span class="prelude-val">Ok</span>(bitcoin29_to_bitcoin30_address(address).assume_checked())
     }
 
     <span class="kw">pub async fn </span>handle_withdraw_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: WithdrawPayload) -&gt; <span class="prelude-ty">Result</span>&lt;Txid&gt; {
@@ -2375,16 +2399,17 @@
                 <span class="kw">let </span>balance =
                     bitcoin::Amount::from_sat(client.value().get_balance().<span class="kw">await</span>.msats / <span class="number">1000</span>);
                 <span class="kw">let </span>fees = wallet_module
-                    .get_withdraw_fees(address.clone(), balance)
+                    .get_withdraw_fees(address.clone(), bitcoin30_to_bitcoin29_amount(balance))
                     .<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>withdraw_amount = balance.checked_sub(fees.amount());
+                <span class="kw">let </span>withdraw_amount =
+                    balance.checked_sub(bitcoin29_to_bitcoin30_amount(fees.amount()));
                 <span class="kw">if </span>withdraw_amount.is_none() {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::InsufficientFunds);
                 }
                 (withdraw_amount.unwrap(), fees)
             }
             BitcoinAmountOrAll::Amount(amount) =&gt; (
-                amount,
+                bitcoin29_to_bitcoin30_amount(amount),
                 wallet_module
                     .get_withdraw_fees(address.clone(), amount)
                     .<span class="kw">await</span><span class="question-mark">?</span>,
@@ -2392,7 +2417,12 @@
         };
 
         <span class="kw">let </span>operation_id = wallet_module
-            .withdraw(address.clone(), amount, fees, ())
+            .withdraw(
+                address.clone(),
+                bitcoin30_to_bitcoin29_amount(amount),
+                fees,
+                (),
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
@@ -2403,7 +2433,7 @@
             <span class="kw">match </span>update {
                 WithdrawState::Succeeded(txid) =&gt; {
                     <span class="macro">info!</span>(<span class="string">"Sent {amount} funds to address {address}"</span>);
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(txid);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(bitcoin29_to_bitcoin30_txid(txid));
                 }
                 WithdrawState::Failed(e) =&gt; {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::UnexpectedState(e));
@@ -2529,8 +2559,11 @@
                 channel_id: <span class="prelude-val">Some</span>(mint_channel_id),
             };
 
-            <span class="self">self</span>.check_federation_network(<span class="kw-2">&amp;</span>federation_info, gateway_config.network)
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">self</span>.check_federation_network(
+                <span class="kw-2">&amp;</span>federation_info,
+                bitcoin29_to_bitcoin30_network(gateway_config.network),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
             client
                 .get_first_module::&lt;GatewayClientModule&gt;()
@@ -2630,7 +2663,12 @@
         <span class="kw">let </span>gw_state = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone();
         <span class="kw">let </span>lightning_network = <span class="kw">match </span>gw_state {
             GatewayState::Running { lightning_context } =&gt; {
-                <span class="kw">if </span>network.is_some() &amp;&amp; network != <span class="prelude-val">Some</span>(lightning_context.lightning_network) {
+                <span class="kw">if </span>network.is_some()
+                    &amp;&amp; network
+                        != <span class="prelude-val">Some</span>(bitcoin30_to_bitcoin29_network(
+                            lightning_context.lightning_network,
+                        ))
+                {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::GatewayConfigurationError(
                         <span class="string">"Cannot change network while connected to a lightning node"</span>.to_string(),
                     ));
@@ -2685,7 +2723,7 @@
 
             GatewayConfiguration {
                 hashed_password,
-                network: lightning_network,
+                network: bitcoin30_to_bitcoin29_network(lightning_network),
                 num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
                 routing_fees: DEFAULT_FEES,
                 password_salt,
@@ -2831,7 +2869,7 @@
         <span class="kw">let </span>hashed_password = hash_password(password.clone(), password_salt);
         <span class="kw">let </span>gateway_config = GatewayConfiguration {
             hashed_password,
-            network,
+            network: bitcoin30_to_bitcoin29_network(network),
             num_route_hints,
             routing_fees: routing_fees.<span class="number">0</span>,
             password_salt,
@@ -3065,12 +3103,14 @@
             })<span class="question-mark">?</span>;
         <span class="kw">let </span>ln_cfg: <span class="kw-2">&amp;</span>LightningClientConfig = cfg.cast()<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>ln_cfg.network != network {
+        <span class="kw">if </span>bitcoin29_to_bitcoin30_network(ln_cfg.network) != network {
             <span class="macro">error!</span>(
                 <span class="string">"Federation {} runs on {} but this gateway supports {}"</span>,
                 info.federation_id, ln_cfg.network, network,
             );
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::UnsupportedNetwork(ln_cfg.network));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::UnsupportedNetwork(
+                bitcoin29_to_bitcoin30_network(ln_cfg.network),
+            ));
         }
 
         <span class="prelude-val">Ok</span>(())

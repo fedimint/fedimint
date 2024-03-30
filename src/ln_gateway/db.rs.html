@@ -291,9 +291,10 @@
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
 <a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
-<span class="kw">use </span>bitcoin::Network;
+<span class="kw">use </span>bitcoin29::Network;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::config::FederationId;
@@ -452,6 +453,7 @@
     <span class="kw">use </span>bitcoin::Network;
     <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
     <span class="kw">use </span>fedimint_core::api::InviteCode;
+    <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_network;
     <span class="kw">use </span>fedimint_core::config::FederationId;
     <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -502,7 +504,7 @@
             password: <span class="string">"EXAMPLE"</span>.to_string(),
             num_route_hints: <span class="number">2</span>,
             routing_fees: DEFAULT_FEES,
-            network: Network::Regtest,
+            network: bitcoin30_to_bitcoin29_network(Network::Regtest),
         };
 
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKeyV0, <span class="kw-2">&amp;</span>gateway_configuration)
