@@ -15,6 +15,7 @@
 //! * chacha20-poly1305 for symmetric encryption used for backups.
 use std::fmt::Formatter;
 
+use bls12_381::Scalar;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::BitcoinHash;
@@ -22,7 +23,6 @@ use hkdf::hashes::Sha512;
 use hkdf::{bitcoin_hashes, Hkdf};
 use ring::aead;
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
-use tbs::Scalar;
 
 const CHILD_TAG: &[u8; 8] = b"childkey";
 const SECP256K1_TAG: &[u8; 8] = b"secp256k";

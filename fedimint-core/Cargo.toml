@@ -22,7 +22,8 @@ futures = { workspace = true }
 backtrace = "0.3.69"
 bincode = { workspace = true }
 bech32 = "0.9.1"
-bls12_381 = { version = "0.7.1", features = [ "zeroize", "groups" ] }
+bls12_381 = "0.7.1"
+serdect = "0.2.0"
 itertools = { workspace = true }
 jsonrpsee-types = { version = "0.22.2" }
 jsonrpsee-core = { version = "0.22.2", features = [ "client" ] }
