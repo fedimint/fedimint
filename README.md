@@ -77,7 +77,7 @@ git clone https://github.com/your-username/fedimint.git
 Then enter the nix developer environment.
 
 ```bash
-nix develop
+nix --extra-experimental-features nix-command --extra-experimental-features flakes develop
 ```
 
 and start a local regtest network with 4 guardians and a lightning gateway.
