@@ -218,7 +218,7 @@
                     name = %<span class="self">self</span>.name,
                     duration_ms = duration.as_millis(),
                     threshold_ms = threshold.as_millis(),
-                    <span class="string">"Operation time exeeded threshold"
+                    <span class="string">"Operation time exceeded threshold"
                 </span>);
             }
         }
@@ -253,7 +253,7 @@
         }
     }
 
-    <span class="doccomment">/// Add a threshold, which will log a warning if exeeded
+    <span class="doccomment">/// Add a threshold, which will log a warning if exceeded
     </span><span class="kw">pub fn </span>threshold(<span class="kw-2">mut </span><span class="self">self</span>, threshold: time::Duration) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             inner: <span class="self">self</span>.inner.take().map(|inner| TimeReporterInner {
