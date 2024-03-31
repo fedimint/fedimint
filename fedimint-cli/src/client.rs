@@ -429,7 +429,7 @@ pub async fn handle_command(
         }
         ClientCmd::UpdateGatewayCache => {
             let lightning_module = client.get_first_module::<LightningClientModule>();
-            lightning_module.update_gateway_cache(true).await?;
+            lightning_module.update_gateway_cache().await?;
             let gateways = lightning_module.list_gateways().await;
             if gateways.is_empty() {
                 return Ok(serde_json::to_value(Vec::<String>::new()).unwrap());

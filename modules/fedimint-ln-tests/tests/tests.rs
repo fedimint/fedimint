@@ -676,10 +676,7 @@ mod fedimint_migration_tests {
     use fedimint_core::module::DynServerModuleInit;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{Amount, OutPoint, PeerId, TransactionId};
-    use fedimint_ln_client::db::{
-        MetaOverrides, MetaOverridesKey, MetaOverridesPrefix, PaymentResult, PaymentResultKey,
-        PaymentResultPrefix,
-    };
+    use fedimint_ln_client::db::{PaymentResult, PaymentResultKey, PaymentResultPrefix};
     use fedimint_ln_client::receive::{
         LightningReceiveStateMachine, LightningReceiveStates, LightningReceiveSubmittedOffer,
         LightningReceiveSubmittedOfferV0,
@@ -920,15 +917,6 @@ mod fedimint_migration_tests {
                     contract_id: sha256::Hash::hash(&BYTE_8).into(),
                     fee: Amount::from_sats(1000),
                 }),
-            },
-        )
-        .await;
-
-        dbtx.insert_new_entry(
-            &MetaOverridesKey,
-            &MetaOverrides {
-                value: "META OVERRIDE".to_string(),
-                fetched_at: fedimint_core::time::now(),
             },
         )
         .await;
@@ -1185,18 +1173,8 @@ mod fedimint_migration_tests {
                             );
                             info!("Validated PaymentResults");
                         }
-                        fedimint_ln_client::db::DbKeyPrefix::MetaOverrides => {
-                            let meta_overrides = dbtx
-                                .find_by_prefix(&MetaOverridesPrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_meta_overrides = meta_overrides.len();
-                            ensure!(
-                                num_meta_overrides > 0,
-                                "validate_migrations was not able to read any MetaOverrides"
-                            );
-                            info!("Validated MetaOverrides");
+                        fedimint_ln_client::db::DbKeyPrefix::MetaOverridesDeprecated => {
+                            // MetaOverrides is never read anywhere
                         }
                         fedimint_ln_client::db::DbKeyPrefix::LightningGateway => {
                             let gateways = dbtx
