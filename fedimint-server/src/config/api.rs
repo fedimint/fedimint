@@ -399,7 +399,7 @@ impl ConfigGenApi {
             state.status = ServerStatus::VerifiedConfigs;
             info!(
                 target: fedimint_logging::LOG_NET_PEER_DKG,
-                "Update config gen status to 'Verfied configs'"
+                "Update config gen status to 'Verified configs'"
             );
         }
 
