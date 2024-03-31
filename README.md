@@ -65,7 +65,7 @@ Fedimint is a Rust project and uses the [Nix package manager](https://nixos.org/
 Fedimint's developer environment and rust build pipeline is managed through Nix flakebox (https://github.com/rustshop/flakebox). To get started, install Nix.
 
 ```bash
-sh <(curl -L https://nixos.org/nix/install) --daemon
+curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
 ```
 
 Then fork and clone the Fedimint repo.
