@@ -1,14 +1,14 @@
 use std::convert::Infallible;
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 
 use fedimint_logging::LOG_TASK;
 use futures::Future;
-use tokio::select;
-use tokio::sync::{self, oneshot};
+use tokio::{select, sync};
 use tracing::trace;
 
-use super::MaybeSend;
+use super::waiter::Waiter;
+use super::{MaybeSend, MaybeSync};
 
 pub type Jit<T> = JitCore<T, Infallible>;
 pub type JitTry<T, E> = JitCore<T, E>;
@@ -53,13 +53,13 @@ where
 pub struct JitCore<T, E> {
     // on last drop it lets the inner task to know it should stop, because we don't care anymore
     _cancel_tx: sync::mpsc::Sender<()>,
-    // since joinhandles, are not portable, we use this to wait for the value
-    // Note: the `std::sync::Mutex` is used intentionally, since contention never actually happens
-    // and we want to avoid cancelation because of it
-    #[allow(clippy::type_complexity)]
-    val_rx:
-        Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Receiver<std::result::Result<T, E>>>>>,
-    val: Arc<sync::OnceCell<T>>,
+    shared: Arc<JitCoreShared<T, E>>,
+}
+
+#[derive(Debug)]
+struct JitCoreShared<T, E> {
+    val: std::sync::OnceLock<Result<T, StdMutex<Option<E>>>>,
+    val_ready: Waiter,
 }
 
 impl<T, E> Clone for JitCore<T, E>
@@ -69,15 +69,14 @@ where
     fn clone(&self) -> Self {
         Self {
             _cancel_tx: self._cancel_tx.clone(),
-            val_rx: self.val_rx.clone(),
-            val: self.val.clone(),
+            shared: self.shared.clone(),
         }
     }
 }
 impl<T, E> JitCore<T, E>
 where
-    T: MaybeSend + 'static,
-    E: MaybeSend + 'static + fmt::Display,
+    T: MaybeSend + MaybeSync + 'static,
+    E: MaybeSend + MaybeSync + 'static + fmt::Display,
 {
     /// Create `JitTry` value, and spawn a future `f` that computes its value
     ///
@@ -88,24 +87,26 @@ where
         Fut: Future<Output = std::result::Result<T, E>> + 'static + MaybeSend,
     {
         let (cancel_tx, mut cancel_rx) = tokio::sync::mpsc::channel(1);
-        let (val_tx, val_rx) = oneshot::channel();
         let type_name = std::any::type_name::<T>();
+        let shared = Arc::new(JitCoreShared {
+            val: std::sync::OnceLock::new(),
+            val_ready: Waiter::new(),
+        });
+        let shared2 = shared.clone();
         super::imp::spawn(
             &format!("JitTry {} value", std::any::type_name::<T>()),
             async move {
                 select! {
+                    biased;
                     _ = cancel_rx.recv() => {
                         trace!(target: LOG_TASK, r#type = %type_name, "JitTry value future canceled");
                     },
                     val = f() => {
-                        match val_tx.send(val) {
-                            Ok(_) => {
-                                trace!(target: LOG_TASK, r#type = %type_name, "JitTry value ready");
-                            },
-                            Err(_) => {
-                                trace!(target: LOG_TASK,  r#type = %type_name, "JitTry value ready, but ignored");
-                            },
-                        };
+                        trace!(target: LOG_TASK, r#type = %type_name, "JitTry value ready");
+                        if shared.val.set(val.map_err(|e| StdMutex::new(Some(e)))).is_err() {
+                            unreachable!("set is only called once");
+                        }
+                        shared.val_ready.done();
                     },
                 }
             },
@@ -114,70 +115,30 @@ where
 
         Self {
             _cancel_tx: cancel_tx,
-            val_rx: Arc::new(Some(val_rx).into()),
-            val: sync::OnceCell::new().into(),
+            shared: shared2,
         }
     }
 
     /// Get the reference to the value, potentially blocking for the
     /// initialization future to complete
-    pub async fn get_try(&self) -> std::result::Result<&T, OneTimeError<E>> {
-        /// Temporarily taken data out of `arc`, that will be put back on drop,
-        /// unless canceled
-        ///
-        /// Used to achieve cancelation safety.
-        struct PutBack<'a, T> {
-            val: Option<T>,
-            arc: &'a Arc<std::sync::Mutex<Option<T>>>,
+    pub async fn get_try(&self) -> Result<&T, OneTimeError<E>> {
+        self.shared.val_ready.wait().await;
+        match self
+            .shared
+            .val
+            .get()
+            .expect("must be initialized before waiter is done")
+        {
+            Ok(val) => Ok(val),
+            Err(err_mutex) => Err(OneTimeError(err_mutex.lock().expect("lock poison").take())),
         }
-
-        impl<'a, T> PutBack<'a, T> {
-            fn take(arc: &'a Arc<std::sync::Mutex<Option<T>>>) -> Self {
-                let val = arc.lock().expect("lock failed").take();
-                Self { val, arc }
-            }
-
-            fn cancel(mut self) {
-                self.val = None;
-            }
-
-            fn get_mut(&mut self) -> Option<&mut T> {
-                self.val.as_mut()
-            }
-        }
-        impl<'a, T> Drop for PutBack<'a, T> {
-            fn drop(&mut self) {
-                let mut lock = self.arc.lock().expect("lock failed");
-                let take = self.val.take();
-
-                *lock = take;
-            }
-        }
-        self.val
-            .get_or_try_init(|| async {
-                let mut recv = PutBack::take(&self.val_rx);
-
-                let val_res = {
-                    let Some(recv) = recv.get_mut() else {
-                        return Err(OneTimeError(None));
-                    };
-                    recv.await.unwrap_or_else(|_| {
-                        panic!("Jit value {} panicked", std::any::type_name::<T>())
-                    })
-                };
-
-                recv.cancel();
-
-                val_res.map_err(|err| OneTimeError(Some(err)))
-            })
-            .await
     }
 }
 impl<T> JitCore<T, Infallible>
 where
-    T: MaybeSend + 'static,
+    T: MaybeSend + MaybeSync + 'static,
 {
-    pub fn new<Fut>(f: impl FnOnce() -> Fut + 'static + MaybeSend) -> Self
+    pub fn new<Fut>(f: impl FnOnce() -> Fut + 'static + MaybeSend + MaybeSync) -> Self
     where
         Fut: Future<Output = T> + 'static + MaybeSend,
         T: 'static,
