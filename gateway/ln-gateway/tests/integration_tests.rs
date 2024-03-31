@@ -283,7 +283,7 @@ async fn test_can_change_routing_fees() -> anyhow::Result<()> {
 
             // Update the gateway cache since the fees have changed
             let ln_module = user_client.get_first_module::<LightningClientModule>();
-            ln_module.update_gateway_cache(true).await?;
+            ln_module.update_gateway_cache().await?;
 
             // Create test invoice
             let invoice_amount = sats(250);
@@ -821,7 +821,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
         proportional_millionths: 0,
     };
     let lightning_module = user_client.get_first_module::<LightningClientModule>();
-    lightning_module.update_gateway_cache(true).await?;
+    lightning_module.update_gateway_cache().await?;
     let gateways = lightning_module.list_gateways().await;
     assert!(!gateways.is_empty());
     assert!(gateways
@@ -840,14 +840,14 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     })
     .await;
 
-    lightning_module.update_gateway_cache(true).await?;
+    lightning_module.update_gateway_cache().await?;
     let gateways = lightning_module.list_gateways().await;
     assert!(gateways.is_empty());
 
     // Reconnect the federation and verify that the gateway has registered.
     gateway_test.connect_fed(&fed).await;
 
-    lightning_module.update_gateway_cache(true).await?;
+    lightning_module.update_gateway_cache().await?;
     let gateways = lightning_module.list_gateways().await;
     assert!(!gateways.is_empty());
     assert!(gateways
