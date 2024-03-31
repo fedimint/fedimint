@@ -61,10 +61,6 @@
 <a href="#59" id="59">59</a>
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
-<a href="#62" id="62">62</a>
-<a href="#63" id="63">63</a>
-<a href="#64" id="64">64</a>
-<a href="#65" id="65">65</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -97,18 +93,14 @@
     ///
     /// * Mocks use hard-coded invoice description to fail the payment
     /// * Real fixtures won't be able to route to randomly generated node pubkey
-    </span><span class="kw">fn </span>unpayable_invoice(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        amount: Amount,
-        expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    ) -&gt; ln_gateway::Result&lt;Bolt11Invoice&gt; {
+    </span><span class="kw">fn </span>unpayable_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount, expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;) -&gt; Bolt11Invoice {
         <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
         <span class="comment">// Generate fake node keypair
         </span><span class="kw">let </span>kp = KeyPair::new(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;mut </span>OsRng);
 
         <span class="comment">// `FakeLightningTest` will fail to pay any invoice with
         // `INVALID_INVOICE_DESCRIPTION` in the description of the invoice.
-        </span><span class="prelude-val">Ok</span>(InvoiceBuilder::new(Currency::Regtest)
+        </span>InvoiceBuilder::new(Currency::Regtest)
             .payee_pub_key(kp.public_key())
             .description(INVALID_INVOICE_DESCRIPTION.to_string())
             .payment_hash(sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">32</span>]))
@@ -120,7 +112,7 @@
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
             .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>SecretKey::from_keypair(<span class="kw-2">&amp;</span>kp)))
-            .unwrap())
+            .expect(<span class="string">"Invoice creation failed"</span>)
     }
 
     <span class="doccomment">/// Is this a LN instance shared with other tests
