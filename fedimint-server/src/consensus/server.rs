@@ -828,10 +828,10 @@ async fn submit_module_consensus_items(
                         .await;
 
                     for item in module_consensus_items {
-                        submission_sender
-                            .send(ConsensusItem::Module(item))
-                            .await
-                            .ok();
+                        if let Err(err) = submission_sender.send(ConsensusItem::Module(item)).await
+                        {
+                            warn!(target: LOG_CONSENSUS, %err, "Failed to submit a consensus item due to lack of channel capacity");
+                        }
                     }
                 }
 
