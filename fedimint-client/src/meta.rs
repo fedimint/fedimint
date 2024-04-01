@@ -1,14 +1,18 @@
 use std::collections::BTreeMap;
+use std::pin::pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{bail, Context as _};
+use async_stream::stream;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::task::waiter::Waiter;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::{retry, FibonacciBackoff};
 use fedimint_core::{apply, async_trait_maybe_send};
 use serde::de::DeserializeOwned;
+use tokio::sync::Notify;
+use tokio_stream::{Stream, StreamExt as _};
 use tracing::{debug, instrument, warn};
 
 use crate::db::{
@@ -53,6 +57,7 @@ pub struct MetaValue<T> {
 // a fancy DST to save one allocation.
 pub struct MetaService<S: ?Sized = dyn MetaSource> {
     initial_fetch_waiter: Waiter,
+    meta_update_notify: Notify,
     source: S,
 }
 
@@ -64,6 +69,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         // implicit cast `Arc<MetaService<S>>` to `Arc<MetaService<dyn MetaSource>>`
         Arc::new(MetaService {
             initial_fetch_waiter: Waiter::new(),
+            meta_update_notify: Notify::new(),
             source,
         })
     }
@@ -110,6 +116,53 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
             .map(|x| x.revision)
     }
 
+    /// Wait until Meta Service is initialized, after this `get_field` will not
+    /// block.
+    pub async fn wait_initialization(&self) {
+        self.initial_fetch_waiter.wait().await
+    }
+
+    /// NOTE: this subscription never ends even after update task is shutdown.
+    /// You should consume this stream in a spawn_cancellable.
+    pub fn subscribe_to_updates(&self) -> impl Stream<Item = ()> + '_ {
+        stream! {
+            let mut notify = pin!(self.meta_update_notify.notified());
+            loop {
+                notify.as_mut().await;
+                notify.set(self.meta_update_notify.notified());
+                // enable waiting for next notification before yield so don't miss
+                // any notifications.
+                notify.as_mut().enable();
+                yield ();
+            }
+        }
+    }
+
+    /// NOTE: this subscription never ends even after update task is shutdown.
+    /// You should consume this stream in a spawn_cancellable.
+    ///
+    /// Stream will yield the first element immediately without blocking.
+    /// The first element will be initial value of the field.
+    ///
+    /// This may yield an outdated initial value if you didn't call
+    /// [`Self::wait_initialization`].
+    pub fn subscribe_to_field<'a, V: DeserializeOwned + 'static>(
+        &'a self,
+        db: &'a Database,
+        name: &'a str,
+    ) -> impl Stream<Item = Option<MetaValue<V>>> + 'a {
+        stream! {
+            let mut update_stream = pin!(self.subscribe_to_updates());
+            loop {
+                let value = self.get_field_from_db(db, name).await;
+                yield value;
+                if update_stream.next().await.is_none() {
+                    break;
+                }
+            }
+        }
+    }
+
     /// Update all source in background.
     ///
     /// Caller should run this method in a task.
@@ -123,7 +176,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
             .await;
         let failed_initial = meta_values.is_err();
         match meta_values {
-            Ok(meta_values) => Self::save_meta_values(client, &meta_values).await,
+            Ok(meta_values) => self.save_meta_values(client, &meta_values).await,
             Err(error) => warn!(%error, "failed to fetch source"),
         };
         self.initial_fetch_waiter.done();
@@ -141,13 +194,13 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
                 .await
             {
                 current_revision = Some(meta_values.revision);
-                Self::save_meta_values(client, &meta_values).await;
+                self.save_meta_values(client, &meta_values).await;
             }
             self.source.wait_for_update().await;
         }
     }
 
-    async fn save_meta_values(client: &Client, meta_values: &MetaValues) {
+    async fn save_meta_values(&self, client: &Client, meta_values: &MetaValues) {
         let mut dbtx = client.db().begin_transaction().await;
         dbtx.remove_by_prefix(&MetaFieldPrefix).await;
         dbtx.insert_entry(
@@ -162,6 +215,8 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
             dbtx.insert_entry(key, value).await;
         }
         dbtx.commit_tx().await;
+        // notify everyone about changes
+        self.meta_update_notify.notify_waiters();
     }
 }
 
