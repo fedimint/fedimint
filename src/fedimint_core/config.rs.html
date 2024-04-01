@@ -1330,9 +1330,9 @@
         // change
         </span><span class="kw">if </span>res.is_err() &amp;&amp; std::any::TypeId::of::&lt;V&gt;() == std::any::TypeId::of::&lt;String&gt;() {
             <span class="kw">let </span>string_ret = Box::new(str_value.clone());
-            <span class="kw">let </span>ret: Box&lt;V&gt; = <span class="kw">unsafe </span>{
+            <span class="kw">let </span>ret = <span class="kw">unsafe </span>{
                 <span class="comment">// We can transmute a String to V because we know that V==String
-                </span>std::mem::transmute(string_ret)
+                </span>std::mem::transmute::&lt;Box&lt;String&gt;, Box&lt;V&gt;&gt;(string_ret)
             };
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="kw-2">*</span>ret))
         } <span class="kw">else </span>{
