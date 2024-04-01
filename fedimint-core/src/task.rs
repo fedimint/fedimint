@@ -2,6 +2,7 @@
 
 /// Just-in-time initialization
 pub mod jit;
+pub mod waiter;
 
 use std::collections::VecDeque;
 use std::future::Future;
