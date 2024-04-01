@@ -7,15 +7,22 @@ use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_overwrite_async;
+use fedimint_logging::LOG_DEVIMINT;
 use rand::distributions::Alphanumeric;
 use rand::Rng as _;
 use tokio::fs;
 use tokio::net::TcpStream;
-use tracing::{debug, error, info, warn};
+use tokio::time::Instant;
+use tracing::{debug, error, info, trace, warn};
 
+use crate::devfed::DevJitFed;
+use crate::envs::{
+    FM_FED_SIZE_ENV, FM_INVITE_CODE_ENV, FM_LINK_TEST_DIR_ENV, FM_OFFLINE_NODES_ENV,
+    FM_TEST_DIR_ENV,
+};
 use crate::federation::Fedimintd;
 use crate::util::{poll, ProcessManager};
-use crate::{dev_fed, external_daemons, vars, ExternalDaemons};
+use crate::{external_daemons, vars, ExternalDaemons};
 
 fn random_test_dir_suffix() -> String {
     rand::thread_rng()
@@ -28,12 +35,12 @@ fn random_test_dir_suffix() -> String {
 
 #[derive(Parser, Clone)]
 pub struct CommonArgs {
-    #[clap(short = 'd', long, env = "FM_TEST_DIR")]
+    #[clap(short = 'd', long, env = FM_TEST_DIR_ENV)]
     pub test_dir: Option<PathBuf>,
-    #[clap(short = 'n', long, env = "FM_FED_SIZE", default_value = "4")]
+    #[clap(short = 'n', long, env = FM_FED_SIZE_ENV, default_value = "4")]
     pub fed_size: usize,
 
-    #[clap(long, env = "FM_LINK_TEST_DIR")]
+    #[clap(long, env = FM_LINK_TEST_DIR_ENV)]
     /// Create a link to the test dir under this path
     pub link_test_dir: Option<PathBuf>,
 
@@ -41,7 +48,7 @@ pub struct CommonArgs {
     pub link_test_dir_suffix: String,
 
     /// Run degraded federation with FM_OFFLINE_NODES shutdown
-    #[clap(long, env = "FM_OFFLINE_NODES", default_value = "0")]
+    #[clap(long, env = FM_OFFLINE_NODES_ENV, default_value = "0")]
     pub offline_nodes: usize,
 }
 
@@ -110,8 +117,11 @@ pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
 
     fedimint_logging::TracingSetup::default()
         .with_file(Some(log_file))
+        // jsonrpsee is expected to fail during startup
+        .with_directive("jsonrpsee-client=off")
         .init()?;
 
+    info!(target: LOG_DEVIMINT, path=%globals.FM_DATA_DIR.display() , "Setting up test dir");
     if let Some(link_test_dir) = arg.link_test_dir.as_ref() {
         update_test_dir_link(link_test_dir, &arg.test_dir()).await?;
     }
@@ -123,7 +133,6 @@ pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
         std::env::set_var(var, value);
     }
     write_overwrite_async(globals.FM_TEST_DIR.join("env"), env_string).await?;
-    info!("Test setup in {:?}", globals.FM_DATA_DIR);
     let process_mgr = ProcessManager::new(globals);
     let task_group = TaskGroup::new();
     task_group.install_kill_handler();
@@ -136,7 +145,7 @@ pub async fn update_test_dir_link(
 ) -> Result<(), anyhow::Error> {
     let make_link = if let Ok(existing) = fs::read_link(link_test_dir).await {
         if existing != test_dir {
-            info!(
+            debug!(
                 old = %existing.display(),
                 new = %test_dir.display(),
                 link = %link_test_dir.display(),
@@ -152,7 +161,7 @@ pub async fn update_test_dir_link(
         true
     };
     if make_link {
-        info!(src = %test_dir.display(), dst = %link_test_dir.display(), "Linking test dir");
+        debug!(src = %test_dir.display(), dst = %link_test_dir.display(), "Linking test dir");
         fs::symlink(&test_dir, link_test_dir).await?;
     }
     Ok(())
@@ -172,15 +181,15 @@ pub async fn cleanup_on_exit<T>(
             Ok(())
         }
         Ok(Ok(v)) => {
-            info!("Main process finished successfully, will wait for shutdown signal");
+            debug!(target: LOG_DEVIMINT, "Main process finished successfully, will wait for shutdown signal");
             task_group.make_handle().make_shutdown_rx().await.await;
-            info!("Received shutdown signal, shutting down");
+            debug!(target: LOG_DEVIMINT, "Received shutdown signal, shutting down");
             drop(v); // execute destructors
             Ok(())
         }
-        Ok(Err(e)) => {
-            warn!("Main process failed with {e:?}, will shutdown");
-            Err(e)
+        Ok(Err(err)) => {
+            warn!(target: LOG_DEVIMINT, %err, "Main process failed, will shutdown");
+            Err(err)
         }
     }
 }
@@ -208,25 +217,86 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
             task_group.make_handle().make_shutdown_rx().await.await;
         }
         Cmd::DevFed { exec } => {
+            trace!(target: LOG_DEVIMINT, "Starting dev fed");
+            let start_time = Instant::now();
             let (process_mgr, task_group) = setup(common_args).await?;
             let main = {
                 let task_group = task_group.clone();
                 async move {
-                    let dev_fed = dev_fed(&process_mgr).await?;
-                    tokio::try_join!(
-                        dev_fed
-                            .fed
-                            .pegin_client(10_000, dev_fed.fed.internal_client()),
-                        dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
-                        dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
+                    let dev_fed = DevJitFed::new(&process_mgr)?;
+
+                    let pegin_start_time = Instant::now();
+                    info!(target: LOG_DEVIMINT, "Peging in client and gateways");
+
+                    let gw_pegin_amount = 20_000;
+                    let client_pegin_amount = 10_000;
+                    let (_, _, _) = tokio::try_join!(
+                        async {
+                            let (address, operation_id) = dev_fed
+                                .client_registered()
+                                .await?
+                                .get_deposit_addr()
+                                .await?;
+                            dev_fed
+                                .bitcoind()
+                                .await?
+                                .send_to(address, client_pegin_amount)
+                                .await?;
+                            dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await?;
+                            dev_fed
+                                .client_registered()
+                                .await?
+                                .await_deposit(&operation_id)
+                                .await
+                        },
+                        async {
+                            let pegin_addr = dev_fed
+                                .gw_cln_registered()
+                                .await?
+                                .get_pegin_addr(
+                                    &dev_fed.fed().await?.calculate_federation_id().await,
+                                )
+                                .await?;
+                            dev_fed
+                                .bitcoind()
+                                .await?
+                                .send_to(pegin_addr, gw_pegin_amount)
+                                .await?;
+                            dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
+                        },
+                        async {
+                            let pegin_addr = dev_fed
+                                .gw_lnd_registered()
+                                .await?
+                                .get_pegin_addr(
+                                    &dev_fed.fed().await?.calculate_federation_id().await,
+                                )
+                                .await?;
+                            dev_fed
+                                .bitcoind()
+                                .await?
+                                .send_to(pegin_addr, gw_pegin_amount)
+                                .await?;
+                            dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
+                        },
                     )?;
-                    std::env::set_var("FM_INVITE_CODE", dev_fed.fed.invite_code()?);
+
+                    info!(target: LOG_DEVIMINT,
+                        elapsed_ms = %pegin_start_time.elapsed().as_millis(),
+                        "Pegins completed");
+
+                    std::env::set_var(FM_INVITE_CODE_ENV, dev_fed.fed().await?.invite_code()?);
+
+                    dev_fed.finalize(&process_mgr).await?;
+
                     let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
 
                     if let Some(exec) = exec {
+                        debug!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed().as_millis(), "Starting exec command");
                         exec_user_command(exec).await?;
                         task_group.shutdown();
                     }
+
                     Ok::<_, anyhow::Error>(daemons)
                 }
             };
@@ -251,7 +321,7 @@ pub async fn exec_user_command(exec: Vec<ffi::OsString>) -> Result<(), anyhow::E
         .join(ffi::OsStr::new(" "))
         .to_string_lossy()
         .to_string();
-    info!(cmd = %cmd_str, "Executing user command");
+    debug!(target: LOG_DEVIMINT, cmd = %cmd_str, "Executing user command");
     if !tokio::process::Command::new(&exec[0])
         .args(&exec[1..])
         .kill_on_drop(true)
@@ -271,7 +341,7 @@ pub async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
     match rpc {
         RpcCmd::Env => {
             let env_file = common.test_dir().join("env");
-            poll("env file", None, || async {
+            poll("env file", || async {
                 if fs::try_exists(&env_file)
                     .await
                     .context("env file")
@@ -289,7 +359,7 @@ pub async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
         }
         RpcCmd::Wait => {
             let ready_file = common.test_dir().join("ready");
-            poll("ready file", 60, || async {
+            poll("ready file", || async {
                 if fs::try_exists(&ready_file)
                     .await
                     .context("ready file")
@@ -314,7 +384,7 @@ pub async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
                 let invite = fs::read_to_string(&invite_file).await?;
                 let mut env_string = fs::read_to_string(&env_file).await?;
                 writeln!(env_string, r#"export FM_INVITE_CODE="{invite}""#)?;
-                std::env::set_var("FM_INVITE_CODE", invite);
+                std::env::set_var(FM_INVITE_CODE_ENV, invite);
                 write_overwrite_async(env_file, env_string).await?;
             }
 
@@ -347,7 +417,7 @@ async fn run_ui(process_mgr: &ProcessManager) -> Result<(Vec<Fedimintd>, Externa
             let fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer, &vars).await?;
             let server_addr = &vars.FM_BIND_API;
 
-            poll("waiting for api startup", None, || async {
+            poll("waiting for api startup", || async {
                 TcpStream::connect(server_addr)
                     .await
                     .context("connect to api")

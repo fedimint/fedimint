@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use ln_gateway::rpc::V1_API_ENDPOINT;
 
 use crate::cmd;
+use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
 use crate::external::LightningNode;
 use crate::federation::Federation;
 use crate::util::{poll, Command, ProcessHandle, ProcessManager};
@@ -28,14 +29,14 @@ impl Gatewayd {
         let addr = format!("http://127.0.0.1:{port}/{V1_API_ENDPOINT}");
         let gateway_env: HashMap<String, String> = HashMap::from_iter([
             (
-                "FM_GATEWAY_DATA_DIR".to_owned(),
+                FM_GATEWAY_DATA_DIR_ENV.to_owned(),
                 format!("{}/{ln_name}", utf8(test_dir)),
             ),
             (
-                "FM_GATEWAY_LISTEN_ADDR".to_owned(),
+                FM_GATEWAY_LISTEN_ADDR_ENV.to_owned(),
                 format!("127.0.0.1:{port}"),
             ),
-            ("FM_GATEWAY_API_ADDR".to_owned(), addr.clone()),
+            (FM_GATEWAY_API_ADDR_ENV.to_owned(), addr.clone()),
         ]);
         let process = process_mgr
             .spawn_daemon(
@@ -44,11 +45,17 @@ impl Gatewayd {
             )
             .await?;
 
-        Ok(Self {
+        let gatewayd = Self {
             ln: Some(ln),
             _process: process,
             addr,
-        })
+        };
+        poll(
+            "waiting for gateway to be ready to respond to rpc",
+            || async { gatewayd.gateway_id().await.map_err(ControlFlow::Continue) },
+        )
+        .await?;
+        Ok(gatewayd)
     }
 
     pub fn set_lightning_node(&mut self, ln_node: LightningNode) {
@@ -86,7 +93,7 @@ impl Gatewayd {
 
     pub async fn connect_fed(&self, fed: &Federation) -> Result<()> {
         let invite_code = fed.invite_code()?;
-        poll("gateway connect-fed", 60, || async {
+        poll("gateway connect-fed", || async {
             cmd!(self, "connect-fed", invite_code.clone())
                 .run()
                 .await
@@ -95,5 +102,14 @@ impl Gatewayd {
         })
         .await?;
         Ok(())
+    }
+
+    pub async fn get_pegin_addr(&self, fed_id: &str) -> Result<String> {
+        Ok(cmd!(self, "address", "--federation-id={fed_id}")
+            .out_json()
+            .await?
+            .as_str()
+            .context("address must be a string")?
+            .to_owned())
     }
 }

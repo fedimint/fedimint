@@ -73,6 +73,25 @@ To use a different shell for `nix develop`, try `nix develop -c zsh`. You can al
 don't want to remember about it. That's the recommended way to use a different shell
 for `nix develop`.
 
+## Cachix binary cache
+
+Fedimint uses a [Cachix](https://www.cachix.org/) binary cache to cache builds.
+To benefit from this cache and avoid building everything from scratch, you must
+ensure that your user is a [trusted user](https://nixos.org/manual/nix/stable/command-ref/conf-file.html#conf-trusted-users).
+You can do this by modifying `/etc/nix/nix.conf`, adding the following line.
+
+```
+trusted-users = the_name_of_your_user
+```
+
+Alternatively, if you do not want to add your user to the list of trusted users, you can
+run the following command, which will add <https://fedimint.cachix.org> and its public key
+to your nix configuration.
+
+```
+nix develop .#bootstrap -c cachix use fedimint
+```
+
 ## Setting up `direnv` or `lorri`
 
 One of the biggest QoL improvements you can do when working with flake-enabled projects

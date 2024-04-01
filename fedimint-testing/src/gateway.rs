@@ -36,7 +36,7 @@ pub const DEFAULT_GATEWAY_PASSWORD: &str = "thereisnosecondbest";
 /// Fixture for creating a gateway
 pub struct GatewayTest {
     /// URL for the RPC
-    versioned_api: SafeUrl,
+    pub versioned_api: SafeUrl,
     /// Handle of the running gateway
     pub gateway: Gateway,
     /// Temporary dir that stores the gateway config
@@ -142,14 +142,12 @@ impl GatewayTest {
         let gateway_run = gateway.clone();
         let root_group = TaskGroup::new();
         let mut tg = root_group.clone();
-        root_group
-            .spawn("Gateway Run", |_handle| async move {
-                gateway_run
-                    .run(&mut tg)
-                    .await
-                    .expect("Failed to start gateway");
-            })
-            .await;
+        root_group.spawn("Gateway Run", |_handle| async move {
+            gateway_run
+                .run(&mut tg)
+                .await
+                .expect("Failed to start gateway");
+        });
 
         // Wait for the gateway web server to be available
         GatewayTest::wait_for_webserver(versioned_api.clone(), cli_password)

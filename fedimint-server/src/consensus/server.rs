@@ -6,6 +6,7 @@ use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
 use async_channel::{Receiver, Sender};
 use fedimint_core::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::MODULE_INSTANCE_ID_GLOBAL;
 use fedimint_core::db::{
@@ -39,7 +40,7 @@ use crate::atomic_broadcast::network::Network;
 use crate::atomic_broadcast::spawner::Spawner;
 use crate::atomic_broadcast::{to_node_index, Keychain, Message};
 use crate::config::ServerConfig;
-use crate::consensus::debug::FmtDbgConsensusItem;
+use crate::consensus::debug_fmt::FmtDbgConsensusItem;
 use crate::consensus::process_transaction_with_dbtx;
 use crate::db::{
     get_global_database_migrations, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey,
@@ -84,7 +85,7 @@ impl ConsensusServer {
         cfg: ServerConfig,
         db: Database,
         module_inits: ServerModuleInitRegistry,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
     ) -> anyhow::Result<(Self, ConsensusApi)> {
         let connector: PeerConnector<Message> =
             TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn();
@@ -109,7 +110,7 @@ impl ConsensusServer {
         module_inits: ServerModuleInitRegistry,
         connector: PeerConnector<Message>,
         delay_calculator: DelayCalculator,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
     ) -> anyhow::Result<(Self, ConsensusApi)> {
         // Check the configs are valid
         cfg.validate_config(&cfg.local.identity, &module_inits)?;
@@ -162,7 +163,11 @@ impl ConsensusServer {
 
         let keychain = Keychain::new(
             cfg.local.identity,
-            cfg.consensus.broadcast_public_keys.clone(),
+            cfg.consensus
+                .broadcast_public_keys
+                .iter()
+                .map(|(peer_id, pk)| (*peer_id, bitcoin30_to_bitcoin29_secp256k1_public_key(*pk)))
+                .collect(),
             cfg.private.broadcast_secret_key,
         );
 
@@ -599,7 +604,7 @@ impl ConsensusServer {
         let peer_id_str = &self.peer_id_str[peer.to_usize()];
         let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item");
         let timing_prom = CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS
-            .with_label_values(&[&peer_id_str])
+            .with_label_values(&[peer_id_str])
             .start_timer();
 
         debug!(%peer, item = ?FmtDbgConsensusItem(&item), "Processing consensus item");
@@ -610,7 +615,7 @@ impl ConsensusServer {
             .insert(peer, session_index);
 
         CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX
-            .with_label_values(&[&self.self_id_str, &peer_id_str])
+            .with_label_values(&[&self.self_id_str, peer_id_str])
             .set(session_index as i64);
 
         let mut dbtx = self.db.begin_transaction().await;
@@ -672,7 +677,7 @@ impl ConsensusServer {
             .expect("Committing consensus epoch failed");
 
         CONSENSUS_ITEMS_PROCESSED_TOTAL
-            .with_label_values(&[&peer_id_str])
+            .with_label_values(&[peer_id_str])
             .inc();
         timing_prom.observe_duration();
 
@@ -803,37 +808,35 @@ pub(crate) async fn get_finished_session_count_static(dbtx: &mut DatabaseTransac
 }
 
 async fn submit_module_consensus_items(
-    task_group: &mut TaskGroup,
+    task_group: &TaskGroup,
     db: Database,
     modules: ServerModuleRegistry,
     submission_sender: Sender<ConsensusItem>,
 ) {
-    task_group
-        .spawn(
-            "submit_module_consensus_items",
-            move |task_handle| async move {
-                while !task_handle.is_shutting_down() {
-                    let mut dbtx = db.begin_transaction_nc().await;
+    task_group.spawn(
+        "submit_module_consensus_items",
+        move |task_handle| async move {
+            while !task_handle.is_shutting_down() {
+                let mut dbtx = db.begin_transaction_nc().await;
 
-                    for (instance_id, _, module) in modules.iter_modules() {
-                        let module_consensus_items = module
-                            .consensus_proposal(
-                                &mut dbtx.to_ref_with_prefix_module_id(instance_id).into_nc(),
-                                instance_id,
-                            )
-                            .await;
+                for (instance_id, _, module) in modules.iter_modules() {
+                    let module_consensus_items = module
+                        .consensus_proposal(
+                            &mut dbtx.to_ref_with_prefix_module_id(instance_id).into_nc(),
+                            instance_id,
+                        )
+                        .await;
 
-                        for item in module_consensus_items {
-                            submission_sender
-                                .send(ConsensusItem::Module(item))
-                                .await
-                                .ok();
-                        }
+                    for item in module_consensus_items {
+                        submission_sender
+                            .send(ConsensusItem::Module(item))
+                            .await
+                            .ok();
                     }
-
-                    sleep(Duration::from_secs(1)).await;
                 }
-            },
-        )
-        .await;
+
+                sleep(Duration::from_secs(1)).await;
+            }
+        },
+    );
 }

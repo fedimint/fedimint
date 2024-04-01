@@ -1,0 +1,128 @@
+on:
+  schedule:
+    - cron:  '30 * * * *' # every hour at `x:30`
+  workflow_dispatch:
+
+name: Hourly check
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  self-care:
+    name: Flake self-check
+    # no one is in the rush for this to funish, so use default (free) Ubuntu instances
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Nix flake inputs
+        uses: DeterminateSystems/flake-checker-action@v5
+        with:
+          fail-mode: true
+          nixpkgs-keys: nixpkgs
+
+  test:
+    if: github.repository == 'fedimint/fedimint'
+    strategy:
+      matrix:
+        host:
+          - linux
+        include:
+          - host: linux
+            # no one is in the rush for this to funish, so use default (free) Ubuntu instances
+            runs-on: ubuntu-latest
+            timeout: 75
+            run-tests: true
+            free-disk-space-ubuntu: true
+
+    name: "Test on ${{ matrix.host }}"
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: ${{ matrix.timeout }}
+
+    steps:
+      - name: Free Disk Space, Ubuntu, part 1
+        if: matrix.free-disk-space-ubuntu
+        run: |
+          docker rmi `docker images -q`
+          sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /etc/sudo apt/sources.list.d
+          sudo apt -y autoremove --purge
+          sudo apt -y autoclean
+          sudo apt clean
+          rm --recursive --force "$AGENT_TOOLSDIRECTORY"
+          df -h
+
+      - name: Free Disk Space, Ubuntu, part 2
+        if: matrix.free-disk-space-ubuntu
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # This might remove tools that are actually needed, if set to "true" but frees about 6 GB
+          tool-cache: false
+          large-packages: true
+          swap-storage: true
+
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v26
+        with:
+          nix_path: nixpkgs=channel:nixos-23.11
+          extra_nix_config: |
+            connect-timeout = 15
+            stalled-download-timeout = 15
+
+      - uses: cachix/cachix-action@v14
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
+
+      - name: Tests (5 times more)
+        run: |
+          set -euo pipefail
+          # first one might do nothing
+          nix build -L .#wasm32-unknown.ci.ciTestAll --keep-failed
+          # but this one will run
+          nix build -L .#wasm32-unknown.ci.ciTestAll --rebuild --keep-failed
+
+      - name: Wasm Tests
+        run: |
+          set -euo pipefail
+          nix build -L .#wasm32-unknown.ci.wasmTest --keep-failed
+          nix build -L .#wasm32-unknown.ci.wasmTest --rebuild --keep-failed
+
+      - name: Prepare failed test build dirs
+        if: always()
+        run:  |
+          set -x
+          # delete source and target artifacts as it is huge and rather useless now
+          sudo rm -Rf /tmp/nix-build-*/source || true
+          # chown so actions/upload-artifact can access it
+          sudo chown -R $USER /tmp/nix-build-* || true
+          # delete unix sockets, as actions/upload-artifact can't handle them
+          find /tmp/nix-build-* -type s -print0 | xargs -0 rm || true
+
+      - name: Upload failed test build dirs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "fedimint-failed-test-logs-${{ github.run_number }}-${{ matrix.host}}"
+          path: |
+            /tmp/nix-build-*/
+            !/tmp/nix-build-*/source/
+
+  notifications:
+    if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
+    name: "Notifications"
+    timeout-minutes: 1
+    runs-on: ubuntu-latest
+    # note: we don't depend on `audit` because it will
+    # be often broken, and we can't fix it immediately
+    needs: [ test ]
+
+    steps:
+    - name: Discord notifications on failure
+      # https://stackoverflow.com/a/74562058/134409
+      if: ${{ always() && contains(needs.*.result, 'failure') }}
+      # https://github.com/marketplace/actions/actions-status-discord
+      uses: sarisia/actions-status-discord@v1
+      with:
+        webhook: ${{ secrets.DISCORD_WEBHOOK }}
+        # current job is a success, but that's not what we're interested in
+        status: failure

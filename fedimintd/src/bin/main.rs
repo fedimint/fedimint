@@ -1,5 +1,5 @@
 use fedimint_core::fedimint_build_code_version_env;
-use fedimintd::fedimintd::Fedimintd;
+use fedimintd::Fedimintd;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -14,7 +14,6 @@ use tracing::error;
 pub mod config;
 
 pub mod common;
-pub mod db;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("mint");
 const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);

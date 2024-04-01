@@ -1,28 +1,23 @@
 use std::hash::Hasher;
 
-use bitcoin::hashes::hex::ToHex;
 use bitcoin::util::psbt::raw::ProprietaryKey;
-use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::{Address, Amount, BlockHash, Network, Script, Transaction, Txid};
+use bitcoin::{Address, Amount, BlockHash, Network, Txid};
 use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::{
-    extensible_associated_module_type, plugin_types_trait_impl_common, Feerate, PeerId,
-};
+use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Feerate};
 use impl_tools::autoimpl;
 use miniscript::Descriptor;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
 
-use crate::db::UTXOKey;
 use crate::keys::CompressedPublicKey;
 use crate::txoproof::{PegInProof, PegInProofError};
 
 pub mod config;
-pub mod db;
+pub mod envs;
 pub mod keys;
 pub mod tweakable;
 pub mod txoproof;
@@ -84,65 +79,6 @@ pub struct SpendableUTXO {
     pub tweak: [u8; 33],
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
-}
-
-/// A peg-out tx that is ready to be broadcast with a tweak for the change UTXO
-#[derive(Clone, Debug, Encodable, Decodable)]
-pub struct PendingTransaction {
-    pub tx: Transaction,
-    pub tweak: [u8; 33],
-    pub change: bitcoin::Amount,
-    pub destination: Script,
-    pub fees: PegOutFees,
-    pub selected_utxos: Vec<(UTXOKey, SpendableUTXO)>,
-    pub peg_out_amount: Amount,
-    pub rbf: Option<Rbf>,
-}
-
-impl Serialize for PendingTransaction {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut bytes = Vec::new();
-        self.consensus_encode(&mut bytes).unwrap();
-
-        if serializer.is_human_readable() {
-            serializer.serialize_str(&bytes.to_hex())
-        } else {
-            serializer.serialize_bytes(&bytes)
-        }
-    }
-}
-
-/// A PSBT that is awaiting enough signatures from the federation to becoming a
-/// `PendingTransaction`
-#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable)]
-pub struct UnsignedTransaction {
-    pub psbt: PartiallySignedTransaction,
-    pub signatures: Vec<(PeerId, PegOutSignatureItem)>,
-    pub change: bitcoin::Amount,
-    pub fees: PegOutFees,
-    pub destination: Script,
-    pub selected_utxos: Vec<(UTXOKey, SpendableUTXO)>,
-    pub peg_out_amount: Amount,
-    pub rbf: Option<Rbf>,
-}
-
-impl Serialize for UnsignedTransaction {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut bytes = Vec::new();
-        self.consensus_encode(&mut bytes).unwrap();
-
-        if serializer.is_human_readable() {
-            serializer.serialize_str(&bytes.to_hex())
-        } else {
-            serializer.serialize_bytes(&bytes)
-        }
-    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]

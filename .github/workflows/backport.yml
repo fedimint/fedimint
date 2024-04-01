@@ -15,8 +15,13 @@ jobs:
       pull-requests: write # so it can create pull requests
     name: Backport pull request
     runs-on: ubuntu-latest
-    # Don't run on closed unmerged pull requests
-    if: github.event.pull_request.merged
+    # Don't run on closed unmerged pull requests or if a non-backport label is added
+    if: |
+      github.event.pull_request.merged &&
+      (
+        github.event.action != 'labeled' ||
+        contains(github.event.label.name, 'backport')
+      )
     # Save the output from the create-pr step so it can be used in downstream jobs
     # https://github.com/korthout/backport-action/blob/e53c7b292aa9985d372c178a89d416ef2176c091/README.md#outputs
     outputs:

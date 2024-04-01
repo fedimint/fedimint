@@ -1,4 +1,6 @@
 #![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
+pub mod envs;
+
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -20,12 +22,14 @@ use fedimint_wallet_server::WalletInit;
 use futures::StreamExt;
 
 use crate::dump::DatabaseDump;
+use crate::envs::{FM_DBTOOL_CONFIG_DIR_ENV, FM_DBTOOL_DATABASE_ENV, FM_PASSWORD_ENV};
 
 mod dump;
 
 #[derive(Debug, Clone, Parser)]
+#[command(version)]
 struct Options {
-    #[clap(long, env = "FM_DBTOOL_DATABASE")]
+    #[clap(long, env = FM_DBTOOL_DATABASE_ENV)]
     database: String,
 
     #[clap(long, hide = true)]
@@ -70,9 +74,9 @@ enum DbCommand {
     /// configuration file. If dumping the client database, the password can
     /// be an arbitrary string.
     Dump {
-        #[clap(long, env = "FM_DBTOOL_CONFIG_DIR")]
+        #[clap(long, env = FM_DBTOOL_CONFIG_DIR_ENV)]
         cfg_dir: PathBuf,
-        #[arg(long, env = "FM_PASSWORD")]
+        #[arg(long, env = FM_PASSWORD_ENV)]
         password: String,
         #[arg(long, required = false)]
         modules: Option<String>,

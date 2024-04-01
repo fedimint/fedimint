@@ -348,7 +348,7 @@ jobs:
     if: github.repository == 'fedimint/fedimint'
     name: "Containers"
     runs-on: buildjet-8vcpu-ubuntu-2004
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -561,6 +561,20 @@ jobs:
         with:
           files: "rpms/**.rpm"
 
+  status:
+    name: Status
+    needs: [lint, shell, build, cross, ccov, containers, pkgs]
+    if: ${{ always() }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check status of all jobs
+        if: >-
+          ${{
+            contains(needs.*.result, 'failure') ||
+            contains(needs.*.result, 'cancelled')
+          }}
+        run: exit 1
+
   notifications:
     if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
     name: "Notifications"
@@ -568,7 +582,7 @@ jobs:
     runs-on: ubuntu-22.04
     # note: we don't depend on `audit` because it will
     # be often broken, and we can't fix it immediately
-    needs: [ build, shell, cross, ccov, containers, pkgs ]
+    needs: [ lint, build, shell, cross, ccov, containers, pkgs ]
 
     steps:
     - name: Discord notifications on failure

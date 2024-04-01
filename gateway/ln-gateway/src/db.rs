@@ -1,18 +1,24 @@
 use std::collections::BTreeMap;
 
-use bitcoin::Network;
+use bitcoin29::Network;
 use bitcoin_hashes::sha256;
 use fedimint_core::api::InviteCode;
 use fedimint_core::config::FederationId;
-use fedimint_core::db::{DatabaseVersion, ServerMigrationFn};
+use fedimint_core::db::{
+    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, ServerMigrationFn,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_ln_common::serde_routing_fees;
+use futures::FutureExt;
 use lightning_invoice::RoutingFees;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
-pub const GATEWAYD_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
+use crate::rpc::rpc_server::hash_password;
+
+pub const GATEWAYD_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -64,16 +70,35 @@ impl_db_record!(
 );
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
-pub struct GatewayConfigurationKey;
+pub struct GatewayConfigurationKeyV0;
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
-pub struct GatewayConfiguration {
+pub struct GatewayConfigurationV0 {
     pub password: String,
     pub num_route_hints: u32,
     #[serde(with = "serde_routing_fees")]
     pub routing_fees: RoutingFees,
     pub network: Network,
 }
+
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+pub struct GatewayConfigurationKey;
+
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+pub struct GatewayConfiguration {
+    pub hashed_password: sha256::Hash,
+    pub num_route_hints: u32,
+    #[serde(with = "serde_routing_fees")]
+    pub routing_fees: RoutingFees,
+    pub network: Network,
+    pub password_salt: [u8; 16],
+}
+
+impl_db_record!(
+    key = GatewayConfigurationKeyV0,
+    value = GatewayConfigurationV0,
+    db_prefix = DbKeyPrefix::GatewayConfiguration,
+);
 
 impl_db_record!(
     key = GatewayConfigurationKey,
@@ -102,7 +127,28 @@ impl_db_lookup!(
 );
 
 pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
-    BTreeMap::new()
+    let mut migrations: BTreeMap<DatabaseVersion, ServerMigrationFn> = BTreeMap::new();
+    migrations.insert(DatabaseVersion(0), move |dbtx| migrate_to_v1(dbtx).boxed());
+    migrations
+}
+
+async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow::Error> {
+    // If there is no old gateway configuration, there is nothing to do.
+    if let Some(old_gateway_config) = dbtx.remove_entry(&GatewayConfigurationKeyV0).await {
+        let password_salt: [u8; 16] = rand::thread_rng().gen();
+        let hashed_password = hash_password(old_gateway_config.password, password_salt);
+        let new_gateway_config = GatewayConfiguration {
+            hashed_password,
+            num_route_hints: old_gateway_config.num_route_hints,
+            routing_fees: old_gateway_config.routing_fees,
+            network: old_gateway_config.network,
+            password_salt,
+        };
+        dbtx.insert_entry(&GatewayConfigurationKey, &new_gateway_config)
+            .await;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -113,6 +159,7 @@ mod fedimint_migration_tests {
     use bitcoin::Network;
     use bitcoin_hashes::{sha256, Hash};
     use fedimint_core::api::InviteCode;
+    use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_network;
     use fedimint_core::config::FederationId;
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -127,8 +174,8 @@ mod fedimint_migration_tests {
     use tracing::info;
 
     use super::{
-        FederationConfig, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey,
-        GatewayPublicKey, PreimageAuthentication,
+        FederationConfig, FederationIdKey, GatewayConfigurationKey, GatewayConfigurationKeyV0,
+        GatewayConfigurationV0, GatewayPublicKey, PreimageAuthentication,
     };
     use crate::db::{
         get_gatewayd_database_migrations, DbKeyPrefix, FederationIdKeyPrefix,
@@ -159,14 +206,14 @@ mod fedimint_migration_tests {
         let key_pair = secp256k1::KeyPair::from_secret_key(&context, &secret);
         dbtx.insert_new_entry(&GatewayPublicKey, &key_pair).await;
 
-        let gateway_configuration = GatewayConfiguration {
+        let gateway_configuration = GatewayConfigurationV0 {
             password: "EXAMPLE".to_string(),
             num_route_hints: 2,
             routing_fees: DEFAULT_FEES,
-            network: Network::Regtest,
+            network: bitcoin30_to_bitcoin29_network(Network::Regtest),
         };
 
-        dbtx.insert_new_entry(&GatewayConfigurationKey, &gateway_configuration)
+        dbtx.insert_new_entry(&GatewayConfigurationKeyV0, &gateway_configuration)
             .await;
 
         let preimage_auth = PreimageAuthentication {

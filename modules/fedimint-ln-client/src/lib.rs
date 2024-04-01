@@ -14,8 +14,10 @@ use anyhow::{bail, ensure, format_err, Context};
 use api::LnFederationApi;
 use async_stream::stream;
 use bitcoin::{KeyPair, Network};
-use bitcoin_hashes::{sha256, Hash};
-use db::{DbKeyPrefix, PaymentResult, PaymentResultKey};
+use bitcoin_hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
+use db::{
+    DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
+};
 use fedimint_client::db::ClientMigrationFn;
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -24,7 +26,7 @@ use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::{FederationId, META_OVERRIDE_URL_KEY, META_VETTED_GATEWAYS_KEY};
@@ -34,8 +36,9 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
+use fedimint_core::task::{self, timeout, MaybeSend, MaybeSync};
 use fedimint_core::time::now;
+use fedimint_core::util::{retry, FibonacciBackoff};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
 };
@@ -48,19 +51,18 @@ use fedimint_ln_common::contracts::{
     Contract, ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract, Preimage,
     PreimageKey,
 };
-use fedimint_ln_common::db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_ln_common::{
     ContractOutput, LightningClientContext, LightningCommonInit, LightningGateway,
-    LightningGatewayAnnouncement, LightningGatewayRegistration, LightningModuleTypes,
-    LightningOutput, LightningOutputV0,
+    LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
+    LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use incoming::IncomingSmError;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
 };
 use rand::{CryptoRng, Rng, RngCore};
-use secp256k1::{PublicKey, ThirtyTwoByteHash};
+use secp256k1::{PublicKey, Scalar, Signing, ThirtyTwoByteHash, Verification};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -76,8 +78,8 @@ use crate::pay::{
     LightningPayStateMachine, LightningPayStates,
 };
 use crate::receive::{
-    LightningReceiveError, LightningReceiveStateMachine, LightningReceiveStates,
-    LightningReceiveSubmittedOffer,
+    get_incoming_contract, LightningReceiveError, LightningReceiveStateMachine,
+    LightningReceiveStates, LightningReceiveSubmittedOffer,
 };
 
 /// Number of blocks until outgoing lightning contracts times out and user
@@ -112,6 +114,27 @@ impl PayType {
             PayType::Lightning(_) => "lightning",
         }
         .into()
+    }
+}
+
+/// Where to receive the payment to, either to ourselves or to another user
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub enum ReceivingKey {
+    /// The keypair used to receive payments for ourselves, we will use this to
+    /// sweep to our own ecash wallet on success
+    Personal(KeyPair),
+    /// A public key of another user, the lightning payment will be locked to
+    /// this key for them to claim on success
+    External(PublicKey),
+}
+
+impl ReceivingKey {
+    /// The public key of the receiving key
+    pub fn public_key(&self) -> PublicKey {
+        match self {
+            ReceivingKey::Personal(keypair) => keypair.public_key(),
+            ReceivingKey::External(public_key) => *public_key,
+        }
     }
 }
 
@@ -210,6 +233,7 @@ pub struct LightningOperationMetaPay {
     pub change: Vec<OutPoint>,
     pub is_internal_payment: bool,
     pub contract_id: ContractId,
+    pub gateway_id: Option<secp256k1::PublicKey>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -225,6 +249,10 @@ pub enum LightningOperationMetaVariant {
     Receive {
         out_point: OutPoint,
         invoice: Bolt11Invoice,
+        gateway_id: Option<secp256k1::PublicKey>,
+    },
+    Claim {
+        out_points: Vec<OutPoint>,
     },
 }
 
@@ -234,7 +262,7 @@ pub struct LightningClientInit;
 #[apply(async_trait_maybe_send!)]
 impl ModuleInit for LightningClientInit {
     type Common = LightningCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(2);
 
     async fn dump_database(
         &self,
@@ -244,10 +272,6 @@ impl ModuleInit for LightningClientInit {
         let mut ln_client_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
             BTreeMap::new();
         let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
-        });
-
-        let filtered_prefixes_common = fedimint_ln_common::db::DbKeyPrefix::iter().filter(|f| {
             prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
         });
 
@@ -276,19 +300,16 @@ impl ModuleInit for LightningClientInit {
                         "Meta Overrides"
                     );
                 }
-            }
-        }
-
-        for table in filtered_prefixes_common {
-            if let fedimint_ln_common::db::DbKeyPrefix::LightningGateway = table {
-                push_db_pair_items!(
-                    dbtx,
-                    LightningGatewayKeyPrefix,
-                    LightningGatewayKey,
-                    LightningGatewayRegistration,
-                    ln_client_items,
-                    "Lightning Gateways"
-                );
+                DbKeyPrefix::LightningGateway => {
+                    push_db_pair_items!(
+                        dbtx,
+                        LightningGatewayKeyPrefix,
+                        LightningGatewayKey,
+                        LightningGatewayRegistration,
+                        ln_client_items,
+                        "Lightning Gateways"
+                    );
+                }
             }
         }
 
@@ -320,10 +341,18 @@ impl ClientModuleInit for LightningClientInit {
         let mut migrations: BTreeMap<DatabaseVersion, ClientMigrationFn> = BTreeMap::new();
         migrations.insert(DatabaseVersion(0), move |dbtx, _, _, _, _| {
             Box::pin(async {
-                dbtx.remove_entry(&crate::db::LightningGatewayKey).await;
+                dbtx.remove_entry(&crate::db::ActiveGatewayKey).await;
                 Ok(None)
             })
         });
+
+        migrations.insert(
+            DatabaseVersion(1),
+            move |_, module_instance_id, active_states, inactive_states, decoders| {
+                db::migrate_to_v2(module_instance_id, active_states, inactive_states, decoders)
+                    .boxed()
+            },
+        );
 
         migrations
     }
@@ -652,15 +681,17 @@ impl LightningClientModule {
         Ok((client_output, contract_id))
     }
 
+    /// Returns a bool indicating if it was an external receive
     async fn await_receive_success(
         &self,
         operation_id: OperationId,
-    ) -> Result<(), LightningReceiveError> {
+    ) -> Result<bool, LightningReceiveError> {
         let mut stream = self.notifier.subscribe(operation_id).await;
         loop {
             match stream.next().await {
                 Some(LightningClientStateMachines::Receive(state)) => match state.state {
-                    LightningReceiveStates::Funded(_) => return Ok(()),
+                    LightningReceiveStates::Funded(_) => return Ok(false),
+                    LightningReceiveStates::Success(outpoints) => return Ok(outpoints.is_empty()), /* if the outpoints are empty, it was an external receive */
                     LightningReceiveStates::Canceled(e) => {
                         return Err(e);
                     }
@@ -739,7 +770,8 @@ impl LightningClientModule {
     async fn create_lightning_receive_output<'a>(
         &'a self,
         amount: Amount,
-        description: String,
+        description: lightning_invoice::Bolt11InvoiceDescription<'a>,
+        receiving_key: ReceivingKey,
         mut rng: impl RngCore + CryptoRng + 'a,
         expiry_time: Option<u64>,
         src_node_id: secp256k1::PublicKey,
@@ -752,8 +784,7 @@ impl LightningClientModule {
         ClientOutput<LightningOutput, LightningClientStateMachines>,
         [u8; 32],
     )> {
-        let payment_keypair = KeyPair::new(&self.secp, &mut rng);
-        let preimage_key: [u8; 33] = payment_keypair.public_key().serialize();
+        let preimage_key: [u8; 33] = receiving_key.public_key().serialize();
         let preimage = sha256::Hash::hash(&preimage_key);
         let payment_hash = sha256::Hash::hash(&preimage);
 
@@ -794,7 +825,7 @@ impl LightningClientModule {
 
         let mut invoice_builder = InvoiceBuilder::new(network.into())
             .amount_milli_satoshis(amount.msats)
-            .description(description)
+            .invoice_description(description)
             .payment_hash(payment_hash)
             .payment_secret(PaymentSecret(rng.gen()))
             .duration_since_epoch(duration_since_epoch)
@@ -821,7 +852,7 @@ impl LightningClientModule {
                     state: LightningReceiveStates::SubmittedOffer(LightningReceiveSubmittedOffer {
                         offer_txid: txid,
                         invoice: sm_invoice.clone(),
-                        payment_keypair,
+                        receiving_key,
                     }),
                 },
             )]
@@ -866,6 +897,8 @@ impl LightningClientModule {
 
     /// Updates the gateway cache by fetching the latest registered gateways
     /// from the federation.
+    ///
+    /// See also [`Self::update_gateway_cache_continuously`].
     pub async fn update_gateway_cache(&self, apply_meta: bool) -> anyhow::Result<()> {
         let gateways = self.fetch_registered_gateways(apply_meta).await?;
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
@@ -884,6 +917,43 @@ impl LightningClientModule {
         dbtx.commit_tx().await;
 
         Ok(())
+    }
+
+    /// Continuously update the gateway cache whenever a gateway expires.
+    ///
+    /// Client integrators are expected to call this function in a spawned task.
+    pub async fn update_gateway_cache_continuously(&self, apply_meta: bool) -> ! {
+        let mut first_time = true;
+
+        const ABOUT_TO_EXPIRE: Duration = Duration::from_secs(30);
+        const EMPTY_GATEWAY_SLEEP: Duration = Duration::from_secs(10 * 60);
+        loop {
+            let gateways = self.list_gateways().await;
+            // TODO: filter gateways by vetted
+            let sleep_time = gateways
+                .into_iter()
+                .map(|x| x.ttl.saturating_sub(ABOUT_TO_EXPIRE))
+                .min()
+                .unwrap_or(if first_time {
+                    // retry immediately first time
+                    Duration::ZERO
+                } else {
+                    EMPTY_GATEWAY_SLEEP
+                });
+            task::sleep(sleep_time).await;
+
+            // should never fail with usize::MAX attempts.
+            let _ = retry(
+                "update_gateway_cache",
+                FibonacciBackoff::default()
+                    .with_min_delay(Duration::from_secs(1))
+                    .with_max_delay(Duration::from_secs(10 * 60))
+                    .with_max_times(usize::MAX),
+                || self.update_gateway_cache(apply_meta),
+            )
+            .await;
+            first_time = false;
+        }
     }
 
     /// Returns all gateways that are currently in the gateway cache.
@@ -1077,6 +1147,7 @@ impl LightningClientModule {
         extra_meta: M,
     ) -> anyhow::Result<OutgoingLightningPayment> {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let maybe_gateway_id = maybe_gateway.as_ref().map(|g| g.gateway_id);
         let prev_payment_result = self
             .get_prev_payment_result(invoice.payment_hash(), &mut dbtx.to_ref_nc())
             .await;
@@ -1185,6 +1256,7 @@ impl LightningClientModule {
                 change,
                 is_internal_payment,
                 contract_id,
+                gateway_id: maybe_gateway_id,
             }),
             extra_meta: extra_meta.clone(),
         };
@@ -1326,15 +1398,161 @@ impl LightningClientModule {
         }))
     }
 
+    /// Scan unspent incoming contracts for a payment hash that matches a
+    /// tweaked keys in the `indices` vector
+    pub async fn scan_receive_for_user_tweaked<M: Serialize + Send + Sync + Clone>(
+        &self,
+        key_pair: KeyPair,
+        indices: Vec<u64>,
+        extra_meta: M,
+    ) -> Vec<OperationId> {
+        let mut claims = Vec::new();
+        for i in indices {
+            let key_pair_tweaked = tweak_user_secret_key(&self.secp, key_pair, i);
+            if let Ok(operation_id) = self
+                .scan_receive_for_user(key_pair_tweaked, extra_meta.clone())
+                .await
+            {
+                claims.push(operation_id);
+            }
+        }
+
+        claims
+    }
+
+    /// Scan unspent incoming contracts for a payment hash that matches a public
+    /// key and claim the incoming contract
+    pub async fn scan_receive_for_user<M: Serialize + Send + Sync>(
+        &self,
+        key_pair: KeyPair,
+        extra_meta: M,
+    ) -> anyhow::Result<OperationId> {
+        let preimage_key: [u8; 33] = key_pair.public_key().serialize();
+        let preimage = sha256::Hash::hash(&preimage_key);
+        let contract_id = ContractId::from_hash(sha256::Hash::hash(&preimage));
+        self.claim_funded_incoming_contract(key_pair, contract_id, extra_meta)
+            .await
+    }
+
+    /// Claim the funded, unspent incoming contract by submitting a transaction
+    /// to the federation and awaiting the primary module's outputs
+    pub async fn claim_funded_incoming_contract<M: Serialize + Send + Sync>(
+        &self,
+        key_pair: KeyPair,
+        contract_id: ContractId,
+        extra_meta: M,
+    ) -> anyhow::Result<OperationId> {
+        let incoming_contract_account = get_incoming_contract(self.module_api.clone(), contract_id)
+            .await?
+            .ok_or(anyhow::anyhow!("No contract account found"))
+            .with_context(|| format!("No contract found for {contract_id:?}"))?;
+
+        let input = incoming_contract_account.claim();
+        let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
+            input,
+            keys: vec![key_pair],
+            state_machines: Arc::new(|_, _| vec![]),
+        };
+
+        let tx =
+            TransactionBuilder::new().with_input(self.client_ctx.make_client_input(client_input));
+        let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
+        let operation_meta_gen = |_, out_points| LightningOperationMeta {
+            variant: LightningOperationMetaVariant::Claim { out_points },
+            extra_meta: extra_meta.clone(),
+        };
+        let operation_id = OperationId::new_random();
+        self.client_ctx
+            .finalize_and_submit_transaction(
+                operation_id,
+                LightningCommonInit::KIND.as_str(),
+                operation_meta_gen,
+                tx,
+            )
+            .await?;
+        Ok(operation_id)
+    }
+
     /// Receive over LN with a new invoice
     pub async fn create_bolt11_invoice<M: Serialize + Send + Sync>(
         &self,
         amount: Amount,
-        description: String,
+        description: lightning_invoice::Bolt11InvoiceDescription<'_>,
         expiry_time: Option<u64>,
         extra_meta: M,
         gateway: Option<LightningGateway>,
     ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+        let receiving_key =
+            ReceivingKey::Personal(KeyPair::new(&self.secp, &mut rand::rngs::OsRng));
+        self.create_bolt11_invoice_internal(
+            amount,
+            description,
+            expiry_time,
+            receiving_key,
+            extra_meta,
+            gateway,
+        )
+        .await
+    }
+
+    /// Receive over LN with a new invoice for another user, tweaking their key
+    /// by the given index
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_bolt11_invoice_for_user_tweaked<M: Serialize + Send + Sync>(
+        &self,
+        amount: Amount,
+        description: lightning_invoice::Bolt11InvoiceDescription<'_>,
+        expiry_time: Option<u64>,
+        user_key: PublicKey,
+        index: u64,
+        extra_meta: M,
+        gateway: Option<LightningGateway>,
+    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+        let tweaked_key = tweak_user_key(&self.secp, user_key, index);
+        self.create_bolt11_invoice_for_user(
+            amount,
+            description,
+            expiry_time,
+            tweaked_key,
+            extra_meta,
+            gateway,
+        )
+        .await
+    }
+
+    /// Receive over LN with a new invoice for another user
+    pub async fn create_bolt11_invoice_for_user<M: Serialize + Send + Sync>(
+        &self,
+        amount: Amount,
+        description: lightning_invoice::Bolt11InvoiceDescription<'_>,
+        expiry_time: Option<u64>,
+        user_key: PublicKey,
+        extra_meta: M,
+        gateway: Option<LightningGateway>,
+    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+        let receiving_key = ReceivingKey::External(user_key);
+        self.create_bolt11_invoice_internal(
+            amount,
+            description,
+            expiry_time,
+            receiving_key,
+            extra_meta,
+            gateway,
+        )
+        .await
+    }
+
+    /// Receive over LN with a new invoice
+    async fn create_bolt11_invoice_internal<M: Serialize + Send + Sync>(
+        &self,
+        amount: Amount,
+        description: lightning_invoice::Bolt11InvoiceDescription<'_>,
+        expiry_time: Option<u64>,
+        receiving_key: ReceivingKey,
+        extra_meta: M,
+        gateway: Option<LightningGateway>,
+    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+        let gateway_id = gateway.as_ref().map(|g| g.gateway_id);
         let (src_node_id, short_channel_id, route_hints) = match gateway {
             Some(current_gateway) => (
                 current_gateway.node_pub_key,
@@ -1352,6 +1570,7 @@ impl LightningClientModule {
             .create_lightning_receive_output(
                 amount,
                 description,
+                receiving_key,
                 rand::rngs::OsRng,
                 expiry_time,
                 src_node_id,
@@ -1366,6 +1585,7 @@ impl LightningClientModule {
             variant: LightningOperationMetaVariant::Receive {
                 out_point: OutPoint { txid, out_idx: 0 },
                 invoice: invoice.clone(),
+                gateway_id,
             },
             extra_meta: extra_meta.clone(),
         };
@@ -1391,13 +1611,40 @@ impl LightningClientModule {
         Ok((operation_id, invoice, preimage))
     }
 
+    pub async fn subscribe_ln_claim(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
+        let operation = self.client_ctx.get_operation(operation_id).await?;
+        let out_points = match operation.meta::<LightningOperationMeta>().variant {
+            LightningOperationMetaVariant::Claim { out_points } => out_points,
+            _ => bail!("Operation is not a lightning claim"),
+        };
+
+        let client_ctx = self.client_ctx.clone();
+
+        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, move || {
+            stream! {
+                yield LnReceiveState::AwaitingFunds;
+
+                if client_ctx.await_primary_module_outputs(operation_id, out_points).await.is_ok() {
+                    yield LnReceiveState::Claimed;
+                } else {
+                    yield LnReceiveState::Canceled { reason: LightningReceiveError::ClaimRejected }
+                }
+            }
+        }))
+    }
+
     pub async fn subscribe_ln_receive(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let (out_point, invoice) = match operation.meta::<LightningOperationMeta>().variant {
-            LightningOperationMetaVariant::Receive { out_point, invoice } => (out_point, invoice),
+            LightningOperationMetaVariant::Receive {
+                out_point, invoice, ..
+            } => (out_point, invoice),
             _ => bail!("Operation is not a lightning payment"),
         };
 
@@ -1423,7 +1670,13 @@ impl LightningClientModule {
                 yield LnReceiveState::WaitingForPayment { invoice: invoice.to_string(), timeout: invoice.expiry_time() };
 
                 match self_ref.await_receive_success(operation_id).await {
-                    Ok(()) => {
+                    Ok(is_external) if is_external => {
+                        // If the payment was external, we can consider it claimed
+                        yield LnReceiveState::Claimed;
+                        return;
+                    }
+                    Ok(_) => {
+
                         yield LnReceiveState::Funded;
 
                         if let Ok(out_points) = self_ref.await_claim_acceptance(operation_id).await {
@@ -1579,4 +1832,39 @@ async fn set_payment_result(
         dbtx.insert_entry(&PaymentResultKey { payment_hash }, &payment_result)
             .await;
     }
+}
+
+/// Tweak a user key with an index, this is used to generate a new key for each
+/// invoice. This is done to not be able to link invoices to the same user.
+pub fn tweak_user_key<Ctx: Verification + Signing>(
+    secp: &Secp256k1<Ctx>,
+    user_key: PublicKey,
+    index: u64,
+) -> PublicKey {
+    let mut hasher = HmacEngine::<sha256::Hash>::new(&user_key.serialize()[..]);
+    hasher.input(&index.to_be_bytes());
+    let tweak = Hmac::from_engine(hasher).into_inner();
+
+    user_key
+        .add_exp_tweak(secp, &Scalar::from_be_bytes(tweak).expect("can't fail"))
+        .expect("tweak is always 32 bytes, other failure modes are negligible")
+}
+
+/// Tweak a secret key with an index, this is used to claim an unspent incoming
+/// contract.
+fn tweak_user_secret_key<Ctx: Verification + Signing>(
+    secp: &Secp256k1<Ctx>,
+    key_pair: KeyPair,
+    index: u64,
+) -> KeyPair {
+    let public_key = key_pair.public_key();
+    let mut hasher = HmacEngine::<sha256::Hash>::new(&public_key.serialize()[..]);
+    hasher.input(&index.to_be_bytes());
+    let tweak = Hmac::from_engine(hasher).into_inner();
+
+    let secret_key = key_pair.secret_key();
+    let sk_tweaked = secret_key
+        .add_tweak(&Scalar::from_be_bytes(tweak).expect("Cant fail"))
+        .expect("Cant fail");
+    KeyPair::from_secret_key(secp, &sk_tweaked)
 }

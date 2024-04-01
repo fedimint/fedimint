@@ -86,6 +86,11 @@ impl<M, State> ModuleRegistry<M, State> {
         self.inner.iter().map(|(id, (kind, m))| (*id, kind, m))
     }
 
+    /// Return an iterator over module ids an kinds
+    pub fn iter_modules_id_kind(&self) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> {
+        self.inner.iter().map(|(id, (kind, _))| (*id, kind))
+    }
+
     /// Return an iterator over all module data
     pub fn iter_modules_mut(
         &mut self,

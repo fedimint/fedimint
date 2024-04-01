@@ -27,15 +27,16 @@ name = "gatewayd-integration-tests"
 path = "tests/integration_tests.rs"
 
 [dependencies]
-anyhow = "1.0.81"
+anyhow = { workspace = true }
 async-stream = "0.3.5"
-async-trait = "0.1.77"
+async-trait = { workspace = true }
 axum = "0.7.4"
 axum-macros = "0.4.1"
 aquamarine = "0.5.0"
-bitcoin = { version = "0.29.2", features = ["serde"] }
-bitcoin_hashes = "0.11.0"
-clap = { version = "4.5.2", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
+bitcoin = "0.30.2"
+bitcoin29 = { package = "bitcoin", version = "0.29.2" }
+bitcoin_hashes = { workspace = true }
+clap = { workspace = true }
 # cln-plugin made semver incompatible change
 cln-plugin = "=0.1.7"
 cln-rpc = { workspace = true }
@@ -48,19 +49,19 @@ fedimint-ln-common = { version = "0.3.0-alpha", path = "../../modules/fedimint-l
 fedimint-mint-client = { version = "0.3.0-alpha", path = "../../modules/fedimint-mint-client" }
 fedimint-dummy-client = { version = "0.3.0-alpha", path = "../../modules/fedimint-dummy-client" }
 fedimint-wallet-client = { version = "0.3.0-alpha", path = "../../modules/fedimint-wallet-client" }
-futures = "0.3.30"
-erased-serde = "0.4"
+futures = { workspace = true }
+erased-serde = { workspace = true }
 lightning-invoice = "0.26.0"
 prost = "0.12.3"
-rand = "0.8"
+rand = { workspace = true }
 reqwest = { version = "0.11.26", features = [ "json", "rustls-tls" ], default-features = false }
 secp256k1 = "0.24.3"
 secp256k1-zkp = { version = "0.7.0", features = [ "serde", "bitcoin_hashes" ] }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.114"
-strum = "0.26"
-strum_macros = "0.26"
-thiserror = "1.0.58"
+serde_json = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+thiserror = { workspace = true }
 tokio = { version = "1.36", features = ["full"] }
 tokio-stream = "0.1.14"
 tonic = { version = "0.11.0", features = ["transport", "tls"] }
@@ -82,7 +83,7 @@ fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 fedimint-testing = { path = "../../fedimint-testing" }
 lightning = "0.0.118"
 threshold_crypto = { workspace = true }
-assert_matches = "1.5.0"
+assert_matches = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { version = "0.3.0-alpha", path = "../../fedimint-build" }

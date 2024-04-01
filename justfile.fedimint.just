@@ -40,7 +40,12 @@ final-check: lint
   just test
 
 check-wasm:
-  nix develop .#crossWasm -c cargo check --target wasm32-unknown-unknown --package fedimint-client
+  #!/usr/bin/env bash
+  env CARGO_BUILD_TARGET_DIR=${CARGO_BUILD_TARGET_DIR:-$(pwd)/target}/pkgs/check-wasm \
+    nix develop .#crossWasm -c \
+      cargo check --target wasm32-unknown-unknown \
+        --package fedimint-client \
+        --package fedimint-wasm-tests
 
 # regenerate server db migration snapshots
 # ex: `just snapshot-server-db-migrations fedimint-server`
@@ -172,3 +177,32 @@ fuzz-target-debug TARGET="" CRASH="" *ARGS="--exit_upon_crash":
   # * TODO: make flakebox set RUSTFLAGS, as hfuzz seems to ignore CARGO_BUILD_<target>_RUSTFLAGS
   # * can't be run with sccache, so just disable here
   env -u RUSTC_WRAPPER CC=clang RUSTFLAGS="--cfg tokio_unstable" cargo hfuzz run-debug {{TARGET}} ${CRASH}
+
+# Build `cargo doc`-generated documentation
+build-docs:
+  ./scripts/dev/build-docs.sh
+
+# Open `cargo doc`-generated documentation
+docs: build-docs
+  #!/usr/bin/env bash
+  if command -v xdg-open 1>/dev/null 2>/dev/null ; then
+    open_cmd="xdg-open"
+  elif command -v open 1>/dev/null 2>/dev/null ; then
+    open_cmd="open"
+  else
+    >&2 echo "Install xdg-open. Falling back to one from nix"
+    open_cmd="nix shell nixpkgs#xdg-utils -c xdg-open"
+  fi
+  source "scripts/_common.sh"
+  main_index_path="${CARGO_BUILD_TARGET_DIR}/doc/index.html"
+  fallback_index_path="${CARGO_BUILD_TARGET_DIR}/doc/fedimint_core/index.html"
+  if [ -e "$main_index_path" ]; then
+    echo "file://$fallback_index_path"
+    $open_cmd "$main_index_path" || true
+  else
+    echo "file://$fallback_index_path"
+    $open_cmd "$fallback_index_path" || true
+  fi
+
+release-bump-version VERSION="prerelease":
+  cargo workspaces version --exact --no-git-commit --yes --force '*' --pre-id rc {{VERSION}}

@@ -74,12 +74,14 @@ impl GatewayClientBuilder {
         client_builder.with_primary_module(self.primary_module);
 
         let client_secret =
-            match Client::load_decodable_client_secret::<[u8; 64]>(client_builder.db()).await {
+            match Client::load_decodable_client_secret::<[u8; 64]>(client_builder.db_no_decoders())
+                .await
+            {
                 Ok(secret) => secret,
                 Err(_) => {
                     info!("Generating secret and writing to client storage");
                     let secret = PlainRootSecretStrategy::random(&mut thread_rng());
-                    Client::store_encodable_client_secret(client_builder.db(), secret)
+                    Client::store_encodable_client_secret(client_builder.db_no_decoders(), secret)
                         .await
                         .map_err(GatewayError::ClientStateMachineError)?;
                     secret
@@ -87,7 +89,7 @@ impl GatewayClientBuilder {
             };
 
         let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
-        if Client::is_initialized(client_builder.db()).await {
+        if Client::is_initialized(client_builder.db_no_decoders()).await {
             client_builder
                 // TODO: make this configurable?
                 .open(root_secret)

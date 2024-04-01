@@ -2,17 +2,31 @@
 
 export REPO_ROOT
 
+if [ -z "${REPO_ROOT:-}" ]; then
+  if command -v git &> /dev/null; then
+    REPO_ROOT="$(git rev-parse --show-toplevel)"
+  else
+    REPO_ROOT="$PWD"
+  fi
 
-if command -v git &> /dev/null; then
-  REPO_ROOT="$(git rev-parse --show-toplevel)"
-else
-  REPO_ROOT="$PWD"
+  PATH="$REPO_ROOT/bin:$PATH"
 fi
 
 
+if [ -z "${CARGO_PROFILE:-}" ]; then
+  export CARGO_PROFILE="dev"
+fi
+
+if [ "$CARGO_PROFILE" = "dev" ]; then
+  export CARGO_PROFILE_DIR="debug"
+else
+  export CARGO_PROFILE_DIR="$CARGO_PROFILE"
+fi
+
+export CARGO_BUILD_TARGET_DIR="${CARGO_BUILD_TARGET_DIR:-"$REPO_ROOT/target"}"
 
 function add_target_dir_to_path() {
-  export PATH="${CARGO_BUILD_TARGET_DIR:-$PWD/target}/${CARGO_PROFILE:-debug}:$PATH"
+  export PATH="${CARGO_BUILD_TARGET_DIR:-$PWD/target}/${CARGO_PROFILE_DIR:-debug}:$PATH"
 }
 
 function build_workspace() {

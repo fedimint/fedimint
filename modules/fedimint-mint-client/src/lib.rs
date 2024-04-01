@@ -22,6 +22,7 @@ use anyhow::{anyhow, bail, ensure, Context as _};
 use async_stream::stream;
 use backup::recovery::MintRecovery;
 use base64::Engine as _;
+use bitcoin_hashes::hex::ToHex;
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
 use client_db::DbKeyPrefix;
 use fedimint_client::module::init::{
@@ -51,6 +52,7 @@ use fedimint_core::{
     TieredMulti, TieredSummary, TransactionId,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
+use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::MintClientConfig;
 pub use fedimint_mint_common::*;
@@ -60,7 +62,7 @@ use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tbs::AggregatePublicKey;
 use thiserror::Error;
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 use crate::backup::EcashBackup;
 use crate::client_db::{
@@ -152,6 +154,44 @@ impl OOBNotes {
                 _ => None,
             })
             .expect("Invariant violated: OOBNotes does not contain any notes")
+    }
+
+    pub fn notes_json(&self) -> Result<serde_json::Value, serde_json::Error> {
+        let mut notes_map = serde_json::Map::new();
+        for notes in self.0.iter() {
+            match notes {
+                OOBNotesData::Notes(notes) => {
+                    let notes_json = serde_json::to_value(notes)?;
+                    notes_map.insert("notes".to_string(), notes_json);
+                }
+                OOBNotesData::FederationIdPrefix(prefix) => {
+                    notes_map.insert(
+                        "federation_id_prefix".to_string(),
+                        serde_json::to_value(prefix.to_string())?,
+                    );
+                }
+                OOBNotesData::Invite {
+                    peer_apis,
+                    federation_id,
+                } => {
+                    let (peer_id, api) = peer_apis
+                        .first()
+                        .cloned()
+                        .expect("Decoding makes sure peer_apis isn't empty");
+                    notes_map.insert(
+                        "invite".to_string(),
+                        serde_json::to_value(InviteCode::new(api, peer_id, *federation_id))?,
+                    );
+                }
+                OOBNotesData::Default { variant, bytes } => {
+                    notes_map.insert(
+                        format!("default_{}", variant),
+                        serde_json::to_value(bytes.to_hex())?,
+                    );
+                }
+            }
+        }
+        Ok(serde_json::Value::Object(notes_map))
     }
 
     pub fn federation_invite(&self) -> Option<InviteCode> {
@@ -589,7 +629,7 @@ impl ClientModule for MintClientModule {
                         bail!("Reissue failed: {e}");
                     }
 
-                    info!("Update: {:?}", update);
+                    debug!(target: LOG_CLIENT_MODULE_MINT, ?update, "Reissue external notes update");
                 }
 
                 Ok(serde_json::to_value(amount).unwrap())

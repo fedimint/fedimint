@@ -80,7 +80,7 @@ impl FederationTest {
         let mut client_builder = Client::builder(db);
         client_builder.with_module_inits(self.client_init.clone());
         client_builder.with_primary_module(self.primary_client);
-        let client_secret = Client::load_or_generate_client_secret(client_builder.db())
+        let client_secret = Client::load_or_generate_client_secret(client_builder.db_no_decoders())
             .await
             .unwrap();
         client_builder
@@ -130,7 +130,7 @@ impl FederationTest {
         let configs = ServerConfig::trusted_dealer_gen(&params, server_init.clone(), version_hash);
         let network = MockNetwork::new();
 
-        let mut task = TaskGroup::new();
+        let task_group = TaskGroup::new();
         for (peer_id, config) in configs.clone() {
             if u16::from(peer_id) >= num_peers - num_offline {
                 continue;
@@ -148,18 +148,17 @@ impl FederationTest {
                 server_init.clone(),
                 connections,
                 DelayCalculator::TEST_DEFAULT,
-                &mut task,
+                &task_group,
             )
             .await
             .expect("Failed to init server");
 
             let api_handle = FedimintServer::spawn_consensus_api(consensus_api, false).await;
 
-            task.spawn("fedimintd", move |handle| async move {
+            task_group.spawn("fedimintd", move |handle| async move {
                 consensus_server.run(handle).await.unwrap();
                 api_handle.stop().await;
-            })
-            .await;
+            });
         }
 
         Self {
@@ -167,7 +166,7 @@ impl FederationTest {
             server_init,
             client_init,
             primary_client,
-            _task: task,
+            _task: task_group,
         }
     }
 }

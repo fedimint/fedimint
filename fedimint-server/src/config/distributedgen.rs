@@ -7,6 +7,10 @@ use anyhow::{ensure, format_err};
 use async_trait::async_trait;
 use bitcoin::secp256k1;
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
+use bls12_381::Scalar;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_public_key,
+};
 use fedimint_core::config::{
     DkgError, DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISupportedDkgMessage,
 };
@@ -23,7 +27,6 @@ use rand_chacha::ChaChaRng;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sha3::Digest;
-use tbs::Scalar;
 use threshold_crypto::ff::Field;
 use threshold_crypto::group::Curve;
 use threshold_crypto::poly::Commitment;
@@ -516,7 +519,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
             .send(
                 &self.peers,
                 (self.module_instance_id, dkg_key.clone()),
-                DkgPeerMsg::PublicKey(key),
+                DkgPeerMsg::PublicKey(bitcoin30_to_bitcoin29_secp256k1_public_key(key)),
             )
             .await?;
 
@@ -528,7 +531,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
                 .await?
             {
                 (peer, DkgPeerMsg::PublicKey(key)) => {
-                    peer_peg_in_keys.insert(peer, key);
+                    peer_peg_in_keys.insert(peer, bitcoin29_to_bitcoin30_secp256k1_public_key(key));
                 }
                 (peer, msg) => {
                     return Err(

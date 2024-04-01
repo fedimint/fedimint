@@ -1,33 +1,30 @@
-use std::net::SocketAddr;
-
+use axum::extract::Request;
+use axum::http::{header, StatusCode};
+use axum::middleware::{self, Next};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use axum_macros::debug_handler;
+use bitcoin::consensus::Encodable;
 use bitcoin_hashes::hex::ToHex;
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use serde_json::json;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
-use tower_http::validate_request::ValidateRequestHeaderLayer;
-use tracing::{error, instrument};
+use tracing::{error, info, instrument};
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, InfoPayload,
     LeaveFedPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
-use crate::db::GatewayConfiguration;
 use crate::rpc::ConfigPayload;
 use crate::{Gateway, GatewayError};
 
-pub async fn run_webserver(
-    config: Option<GatewayConfiguration>,
-    bind_addr: SocketAddr,
-    gateway: Gateway,
-    task_group: &mut TaskGroup,
-) -> anyhow::Result<()> {
-    let v1_routes = v1_routes(config, gateway.clone());
+/// Creates the webserver's routes and spawns the webserver in a separate task.
+pub async fn run_webserver(gateway: Gateway, task_group: &mut TaskGroup) -> anyhow::Result<()> {
+    let v1_routes = v1_routes(gateway.clone());
     let api_v1 = Router::new()
         .nest(&format!("/{V1_API_ENDPOINT}"), v1_routes.clone())
         // Backwards compatibility: Continue supporting gateway APIs without versioning
@@ -35,62 +32,152 @@ pub async fn run_webserver(
 
     let handle = task_group.make_handle();
     let shutdown_rx = handle.make_shutdown_rx().await;
-    let listener = TcpListener::bind(&bind_addr).await?;
+    let listener = TcpListener::bind(&gateway.listen).await?;
     let serve = axum::serve(listener, api_v1.into_make_service());
-    task_group
-        .spawn("Gateway Webserver", move |_| async move {
-            let graceful = serve.with_graceful_shutdown(async {
-                shutdown_rx.await;
-            });
+    task_group.spawn("Gateway Webserver", move |_| async move {
+        let graceful = serve.with_graceful_shutdown(async {
+            shutdown_rx.await;
+        });
 
-            if let Err(e) = graceful.await {
-                error!("Error shutting down gatewayd webserver: {:?}", e);
-            }
-        })
-        .await;
+        if let Err(e) = graceful.await {
+            error!("Error shutting down gatewayd webserver: {:?}", e);
+        } else {
+            info!("Successfully shutdown webserver");
+        }
+    });
 
+    info!("Successfully started webserver");
     Ok(())
 }
 
-fn v1_routes(config: Option<GatewayConfiguration>, gateway: Gateway) -> Router {
-    let (public_routes, admin_routes) = if let Some(gateway_config) = config {
-        // Public routes on gateway webserver
-        let public_routes = Router::new()
-            .route("/pay_invoice", post(pay_invoice))
-            .route("/id", get(get_gateway_id));
+/// Extracts the Bearer token from the Authorization header of the request.
+fn extract_bearer_token(request: &Request) -> Result<String, StatusCode> {
+    let headers = request.headers();
+    let auth_header = headers.get(header::AUTHORIZATION);
+    if let Some(header_value) = auth_header {
+        let auth_str = header_value
+            .to_str()
+            .map_err(|_| StatusCode::UNAUTHORIZED)?;
+        let token = auth_str.trim_start_matches("Bearer ").to_string();
+        return Ok(token);
+    }
 
-        // Authenticated, public routes used for gateway administration
-        let admin_routes = Router::new()
-            // FIXME: deprecated >= 0.3.0
-            .route("/info", post(handle_post_info))
-            .route("/info", get(info))
-            .route("/config", post(configuration))
-            .route("/balance", post(balance))
-            .route("/address", post(address))
-            .route("/withdraw", post(withdraw))
-            .route("/connect-fed", post(connect_fed))
-            .route("/leave-fed", post(leave_fed))
-            .route("/backup", post(backup))
-            .route("/restore", post(restore))
-            .route("/set_configuration", post(set_configuration))
-            .layer(ValidateRequestHeaderLayer::bearer(&gateway_config.password));
-        (public_routes, admin_routes)
-    } else {
-        let public_routes = Router::new()
-            .route("/set_configuration", post(set_configuration))
-            .route("/config", get(configuration))
-            // FIXME: deprecated >= 0.3.0
-            .route("/info", post(handle_post_info))
-            .route("/info", get(info));
-        let admin_routes = Router::new();
-        (public_routes, admin_routes)
-    };
+    Err(StatusCode::UNAUTHORIZED)
+}
+
+/// Middleware to authenticate an incoming request. Routes that are
+/// authenticated with this middleware always require a Bearer token to be
+/// supplied in the Authorization header.
+async fn auth_middleware(
+    Extension(gateway): Extension<Gateway>,
+    request: Request,
+    next: Next,
+) -> Result<impl IntoResponse, StatusCode> {
+    // These routes are not available unless the gateway's configuration is set.
+    let gateway_config = gateway
+        .gateway_config
+        .read()
+        .await
+        .clone()
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let gateway_hashed_password = gateway_config.hashed_password;
+    let password_salt = gateway_config.password_salt;
+    authenticate(gateway_hashed_password, password_salt, request, next).await
+}
+
+/// Middleware to authenticate an incoming request. Routes that are
+/// authenticated with this middleware are un-authenticated if the gateway has
+/// not yet been configured. After the gateway is configured, this middleware
+/// enforces that a Bearer token must be supplied in the Authorization header.
+async fn auth_after_config_middleware(
+    Extension(gateway): Extension<Gateway>,
+    request: Request,
+    next: Next,
+) -> Result<impl IntoResponse, StatusCode> {
+    // If the gateway's config has not been set, allow the request to continue, so
+    // that the gateway can be configured
+    let gateway_config = gateway.gateway_config.read().await.clone();
+    if gateway_config.is_none() {
+        return Ok(next.run(request).await);
+    }
+
+    // Otherwise, validate that the Bearer token matches the gateway's hashed
+    // password
+    let gateway_config = gateway_config.expect("Already validated the gateway config is not none");
+    let gateway_hashed_password = gateway_config.hashed_password;
+    let password_salt = gateway_config.password_salt;
+    authenticate(gateway_hashed_password, password_salt, request, next).await
+}
+
+/// Validate that the Bearer token matches the gateway's hashed password
+async fn authenticate(
+    gateway_hashed_password: sha256::Hash,
+    password_salt: [u8; 16],
+    request: Request,
+    next: Next,
+) -> Result<axum::response::Response, StatusCode> {
+    let token = extract_bearer_token(&request)?;
+    let hashed_password = hash_password(token, password_salt);
+    if gateway_hashed_password == hashed_password {
+        return Ok(next.run(request).await);
+    }
+
+    Err(StatusCode::UNAUTHORIZED)
+}
+
+/// Gateway Webserver Routes. The gateway supports three types of routes
+/// - Always Authenticated: these routes always require a Bearer token. Used by
+///   gateway administrators.
+/// - Authenticated after config: these routes are unauthenticated before
+///   configuring the gateway to allow the user
+/// to set a password. After setting the password, they become authenticated.
+/// - Un-authenticated: anyone can request these routes. Used by fedimint
+///   clients.
+fn v1_routes(gateway: Gateway) -> Router {
+    // Public routes on gateway webserver
+    let public_routes = Router::new()
+        .route("/pay_invoice", post(pay_invoice))
+        .route("/id", get(get_gateway_id));
+
+    // Authenticated, public routes used for gateway administration
+    let always_authenticated_routes = Router::new()
+        .route("/balance", post(balance))
+        .route("/address", post(address))
+        .route("/withdraw", post(withdraw))
+        .route("/connect-fed", post(connect_fed))
+        .route("/leave-fed", post(leave_fed))
+        .route("/backup", post(backup))
+        .route("/restore", post(restore))
+        .layer(middleware::from_fn(auth_middleware));
+
+    // Routes that are un-authenticated before gateway configuration, then become
+    // authenticated after a password has been set.
+    let authenticated_after_config_routes = Router::new()
+        .route("/set_configuration", post(set_configuration))
+        .route("/config", get(configuration))
+        // FIXME: deprecated >= 0.3.0
+        .route("/info", post(handle_post_info))
+        .route("/info", get(info))
+        .layer(middleware::from_fn(auth_after_config_middleware));
 
     Router::new()
         .merge(public_routes)
-        .merge(admin_routes)
+        .merge(always_authenticated_routes)
+        .merge(authenticated_after_config_routes)
         .layer(Extension(gateway))
         .layer(CorsLayer::permissive())
+}
+
+/// Creates a password hash by appending a 4 byte salt to the plaintext
+/// password.
+pub fn hash_password(plaintext_password: String, salt: [u8; 16]) -> sha256::Hash {
+    let mut bytes = Vec::<u8>::new();
+    plaintext_password
+        .consensus_encode(&mut bytes)
+        .expect("Password is encodable");
+    salt.consensus_encode(&mut bytes)
+        .expect("Salt is encodable");
+    sha256::Hash::hash(&bytes)
 }
 
 /// Display high-level information about the Gateway

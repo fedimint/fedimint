@@ -2,14 +2,13 @@ use std::collections::HashSet;
 use std::io::Write;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::time::{Duration, Instant};
 use std::{env, ffi};
 
 use anyhow::{anyhow, bail, Context, Result};
+use bitcoincore_rpc::bitcoin;
 use bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
 use bitcoincore_rpc::bitcoin::Txid;
-use bitcoincore_rpc::{bitcoin, RpcApi};
 use clap::Subcommand;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use fedimint_cli::LnInvoiceResponse;
@@ -25,8 +24,9 @@ use tokio::time::timeout;
 use tracing::{debug, info};
 
 use crate::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, CommonArgs};
+use crate::envs::{FM_DATA_DIR_ENV, FM_PASSWORD_ENV};
 use crate::federation::{Client, Federation};
-use crate::util::{poll, LoadTestTool, ProcessManager};
+use crate::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
 use crate::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
 pub struct Stats {
@@ -118,7 +118,8 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
 
     let client = fed.new_joined_client("latency-tests-client").await?;
     client.use_gateway(&gw_cln).await?;
-    fed.pegin_client(10_000_000, &client).await?;
+    let initial_balance_sats = 100_000_000;
+    fed.pegin_client(initial_balance_sats, &client).await?;
 
     // LN operations take longer, we need less iterations
     let iterations = 20;
@@ -132,8 +133,13 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             // for enough time to catch up a session end
             let iterations = 30;
             let mut reissues = Vec::with_capacity(iterations);
+            let amount_per_iteration_msats =
+                // use a highest 2^-1 amount that fits, to try to use as many notes as possible
+                ((initial_balance_sats * 1000 / iterations as u64).next_power_of_two() >> 1) - 1;
             for _ in 0..iterations {
-                let notes = cmd!(client, "spend", "1000000").out_json().await?["notes"]
+                let notes = cmd!(client, "spend", amount_per_iteration_msats.to_string())
+                    .out_json()
+                    .await?["notes"]
                     .as_str()
                     .context("note must be a string")?
                     .to_owned();
@@ -346,9 +352,8 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
 }
 
 pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
-    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
     log_binary_versions().await?;
-    let data_dir = env::var("FM_DATA_DIR")?;
+    let data_dir = env::var(FM_DATA_DIR_ENV)?;
 
     #[allow(unused_variables)]
     let DevFed {
@@ -374,7 +379,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "--in-file={data_dir}/fedimintd-0/private.encrypt",
         "--out-file={data_dir}/fedimintd-0/config-plaintext.json"
     )
-    .env("FM_PASSWORD", "pass")
+    .env(FM_PASSWORD_ENV, "pass")
     .run()
     .await?;
 
@@ -385,7 +390,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "--in-file={data_dir}/fedimintd-0/config-plaintext.json",
         "--out-file={data_dir}/fedimintd-0/config-2"
     )
-    .env("FM_PASSWORD", "pass-foo")
+    .env(FM_PASSWORD_ENV, "pass-foo")
     .run()
     .await?;
 
@@ -396,7 +401,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "--in-file={data_dir}/fedimintd-0/config-2",
         "--out-file={data_dir}/fedimintd-0/config-plaintext-2.json"
     )
-    .env("FM_PASSWORD", "pass-foo")
+    .env(FM_PASSWORD_ENV, "pass-foo")
     .run()
     .await?;
 
@@ -413,10 +418,29 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     let fed_id = fed.calculate_federation_id().await;
     let invite = fed.invite_code()?;
-    let invite_code = cmd!(client, "dev", "decode-invite-code", invite.clone())
-        .out_json()
-        .await?;
-    anyhow::ensure!(
+
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    let version_req = VersionReq::parse(">=0.3.0-alpha")?;
+
+    let invite_code = if version_req.matches(&fedimint_cli_version) {
+        cmd!(client, "dev", "decode", "invite-code", invite.clone())
+    } else {
+        cmd!(client, "dev", "decode-invite-code", invite.clone())
+    }
+    .out_json()
+    .await?;
+
+    let encode_invite_output = if version_req.matches(&fedimint_cli_version) {
+        cmd!(
+            client,
+            "dev",
+            "encode",
+            "invite-code",
+            format!("--url={}", invite_code["url"].as_str().unwrap()),
+            "--federation_id={fed_id}",
+            "--peer=0"
+        )
+    } else {
         cmd!(
             client,
             "dev",
@@ -425,10 +449,14 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
             "--federation_id={fed_id}",
             "--peer=0"
         )
-        .out_json()
-        .await?["invite_code"]
+    }
+    .out_json()
+    .await?;
+
+    anyhow::ensure!(
+        encode_invite_output["invite_code"]
             .as_str()
-            .unwrap()
+            .expect("invite_code must be a string")
             == invite,
         "failed to decode and encode the client invite code",
     );
@@ -914,7 +942,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let txid: Txid = withdraw_res["txid"].as_str().unwrap().parse().unwrap();
     let fees_sat = withdraw_res["fees_sat"].as_u64().unwrap();
 
-    let tx_hex = poll("Waiting for transaction in mempool", None, || async {
+    let tx_hex = poll("Waiting for transaction in mempool", || async {
         // TODO: distinguish errors from not found
         bitcoind
             .get_raw_transaction(&txid)
@@ -926,7 +954,6 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     .expect("cannot fail, gets stuck");
 
     let tx = bitcoin::Transaction::consensus_decode_hex(&tx_hex, &Default::default()).unwrap();
-    let address = bitcoin::Address::from_str(&address).unwrap();
     assert!(tx
         .output
         .iter()
@@ -1027,7 +1054,7 @@ pub async fn finish_hold_invoice_payment(
 
 pub async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
-    let data_dir = env::var("FM_DATA_DIR")?;
+    let data_dir = env::var(FM_DATA_DIR_ENV)?;
     let load_test_temp = PathBuf::from(data_dir).join("load-test-temp");
     dev_fed
         .fed
@@ -1459,9 +1486,9 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     )?;
 
     let cln_info: GatewayInfo = serde_json::from_value(cln_value)?;
-    poll(
+    poll_with_timeout(
         "Waiting for CLN Gateway Running state after reboot",
-        10,
+        Duration::from_secs(15),
         || async {
             let mut new_cln_cmd = cmd!(new_gw_cln, "info");
             let cln_value = new_cln_cmd.out_json().await.map_err(ControlFlow::Continue)?;
@@ -1479,9 +1506,9 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     .await?;
 
     let lnd_info: GatewayInfo = serde_json::from_value(lnd_value)?;
-    poll(
+    poll_with_timeout(
         "Waiting for LND Gateway Running state after reboot",
-        10,
+        Duration::from_secs(15),
         || async {
             let mut new_lnd_cmd = cmd!(new_gw_lnd, "info");
             let lnd_value = new_lnd_cmd.out_json().await.map_err(ControlFlow::Continue)?;
@@ -1511,18 +1538,14 @@ pub async fn do_try_create_and_pay_invoice(
     // Verify that after the lightning node has restarted, the gateway
     // automatically reconnects and can query the lightning node
     // info again.
-    poll(
-        "Waiting for info to succeed after restart",
-        None,
-        || async {
-            let mut info_cmd = cmd!(gw, "info");
-            let lightning_info = info_cmd.out_json().await.map_err(ControlFlow::Continue)?;
-            let gateway_info: GatewayInfo = serde_json::from_value(lightning_info)
-                .context("invalid json")
-                .map_err(ControlFlow::Break)?;
-            poll_eq!(gateway_info.lightning_pub_key.is_some(), true)
-        },
-    )
+    poll("Waiting for info to succeed after restart", || async {
+        let mut info_cmd = cmd!(gw, "info");
+        let lightning_info = info_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+        let gateway_info: GatewayInfo = serde_json::from_value(lightning_info)
+            .context("invalid json")
+            .map_err(ControlFlow::Break)?;
+        poll_eq!(gateway_info.lightning_pub_key.is_some(), true)
+    })
     .await?;
 
     tracing::info!("Creating invoice....");
@@ -1734,7 +1757,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         esplora,
     } = dev_fed;
 
-    let data_dir = env::var("FM_DATA_DIR")?;
+    let data_dir = env::var(FM_DATA_DIR_ENV)?;
     let client = fed.new_joined_client("recoverytool-test-client").await?;
 
     let mut fed_utxos_sats = HashSet::from([12_345_000, 23_456_000, 34_567_000]);
@@ -1763,7 +1786,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         .expect("withdrawal should contain txid string")
         .parse()
         .expect("txid should be parsable");
-    let tx_hex = poll("Waiting for transaction in mempool", None, || async {
+    let tx_hex = poll("Waiting for transaction in mempool", || async {
         bitcoind
             .get_raw_transaction(&txid)
             .await
@@ -1777,7 +1800,6 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     assert_eq!(tx.input.len(), 1);
     assert_eq!(tx.output.len(), 2);
 
-    let withdrawal_address = bitcoin::Address::from_str(&withdrawal_address)?;
     let change_output = tx
         .output
         .iter()
@@ -1804,7 +1826,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         "--db",
         "{data_dir}/fedimintd-0/database"
     )
-    .env("FM_PASSWORD", "pass")
+    .env(FM_PASSWORD_ENV, "pass")
     .out_json()
     .await?;
     let outputs = output.as_array().context("expected an array")?;
@@ -1835,19 +1857,17 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
             .collect::<Vec<_>>(),
     ))?];
     info!("Getting wallet balances before import");
-    let balances_before = bitcoind.client().get_balances()?;
+    let bitcoin_client = bitcoind.wallet_client().await?;
+    let balances_before = bitcoin_client.get_balances().await?;
     info!("Importing descriptors into bitcoin wallet");
-    let request = bitcoind
-        .client()
+    let request = bitcoin_client
         .get_jsonrpc_client()
         .build_request("importdescriptors", &descriptors_json);
-    let response = bitcoind
-        .client()
-        .get_jsonrpc_client()
-        .send_request(request)?;
+    let response =
+        tokio::task::block_in_place(|| bitcoin_client.get_jsonrpc_client().send_request(request))?;
     response.check_error()?;
     info!("Getting wallet balances after import");
-    let balances_after = bitcoind.client().get_balances()?;
+    let balances_after = bitcoin_client.get_balances().await?;
     let diff = balances_after.mine.immature + balances_after.mine.trusted
         - balances_before.mine.immature
         - balances_before.mine.trusted;
@@ -1864,7 +1884,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
             "--db",
             "{data_dir}/fedimintd-0/database"
         )
-        .env("FM_PASSWORD", "pass")
+        .env(FM_PASSWORD_ENV, "pass")
         .out_json()
         .await?;
         let outputs = output.as_array().context("expected an array")?;
@@ -2001,7 +2021,7 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
         .await
         .expect("could not restart fedimintd");
 
-    poll("Peer catches up again", Some(30), || async {
+    poll("Peer catches up again", || async {
         let block_count = cmd!(
             client,
             "dev",
@@ -2032,6 +2052,7 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
 
 pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
 
     #[allow(unused_variables)]
     let DevFed {
@@ -2096,10 +2117,18 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
         CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
     );
 
-    cmd!(double_spend_client, "reissue", double_spend_notes)
-        .run()
-        .await
-        .expect_err("double spend must fail");
+    // TODO(support:v0.2): remove
+    if VersionReq::parse(">=0.3.0-alpha")?.matches(&fedimint_cli_version) {
+        cmd!(double_spend_client, "reissue", double_spend_notes)
+            .assert_error_contains("The transaction had an invalid input")
+            .await?;
+    } else {
+        // v0.2 clients don't write json errors to stdout, so we can't parse
+        cmd!(double_spend_client, "reissue", double_spend_notes)
+            .run()
+            .await
+            .expect_err("double spend must fail");
+    }
 
     let double_spend_client_post_spend_balance = double_spend_client.balance().await?;
     assert_eq!(
@@ -2170,7 +2199,7 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                                 .spawn_daemon("faucet", cmd!(crate::util::Faucet))
                                 .await?;
 
-                            poll("waiting for faucet startup", None, || async {
+                            poll("waiting for faucet startup", || async {
                                 TcpStream::connect(format!(
                                     "127.0.0.1:{}",
                                     process_mgr.globals.FM_PORT_FAUCET

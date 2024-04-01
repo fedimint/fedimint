@@ -6,8 +6,8 @@
 
 use std::borrow::Cow;
 use std::pin::Pin;
+use std::task;
 use std::task::Poll;
-use std::{self, task};
 
 use fedimint_metrics::prometheus::HistogramTimer;
 use futures::Future;

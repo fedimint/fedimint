@@ -12,7 +12,7 @@ use fedimint_core::db::{Database, DatabaseVersion};
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CommonModuleInit, IDynCommonModuleInit, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, NumPeers};
 use fedimint_derive_secret::DerivableSecret;
 use tokio::sync::watch;
@@ -42,6 +42,7 @@ where
     admin_auth: Option<ApiAuth>,
     module_api: DynModuleApi,
     context: ClientContext<<C as ClientModuleInit>::Module>,
+    task_group: TaskGroup,
 }
 
 impl<C> ClientModuleInitArgs<C>
@@ -107,6 +108,10 @@ where
     /// ready.
     pub fn context(&self) -> ClientContext<<C as ClientModuleInit>::Module> {
         self.context.clone()
+    }
+
+    pub fn task_group(&self) -> &TaskGroup {
+        &self.task_group
     }
 }
 
@@ -290,6 +295,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
         notifier: Notifier,
         api: DynGlobalApi,
         admin_auth: Option<ApiAuth>,
+        task_group: TaskGroup,
     ) -> anyhow::Result<DynClientModule>;
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn>;
@@ -384,6 +390,7 @@ where
         notifier: Notifier,
         api: DynGlobalApi,
         admin_auth: Option<ApiAuth>,
+        task_group: TaskGroup,
     ) -> anyhow::Result<DynClientModule> {
         let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
         Ok(self
@@ -405,6 +412,7 @@ where
                     module_db: db.with_prefix_module_id(instance_id),
                     _marker: marker::PhantomData,
                 },
+                task_group,
             })
             .await?
             .into())

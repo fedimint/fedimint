@@ -1,9 +1,21 @@
+//! Fedimint supports modules to allow extending it's functionality.
+//! Some of the standard functionality is implemented in form of modules as
+//! well.
+//!
+//! The top level server-side types are:
+//!
+//! * [`fedimint_core::module::ModuleInit`]
+//! * [`fedimint_core::module::ServerModule`]
+//!
+//! Top level client-side types are:
+//!
+//! * `ClientModuleInit` (in `fedimint_client`)
+//! * `ClientModule` (in `fedimint_client`)
 pub mod audit;
 pub mod registry;
 
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Formatter};
-use std::io::Read;
 use std::marker::{self, PhantomData};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -488,7 +500,7 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         peer_num: NumPeers,
         cfg: ServerModuleConfig,
         db: Database,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
         our_peer_id: PeerId,
     ) -> anyhow::Result<DynServerModule>;
 
@@ -682,7 +694,7 @@ where
         num_peers: NumPeers,
         cfg: ServerModuleConfig,
         db: Database,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
         our_peer_id: PeerId,
     ) -> anyhow::Result<DynServerModule> {
         <Self as ServerModuleInit>::init(
@@ -913,23 +925,9 @@ impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding<T> {
 
         let total_len = u64::consensus_decode(&mut reader, &ModuleDecoderRegistry::default())?;
 
-        let mut reader = reader.take(total_len);
-
         // No recursive module decoding is supported since we give an empty decoder
         // registry to the decode function
-        let val = decoder.decode(
-            &mut reader,
-            module_instance,
-            &ModuleDecoderRegistry::default(),
-        )?;
-
-        if reader.limit() != 0 {
-            return Err(fedimint_core::encoding::DecodeError::new_custom(
-                anyhow::anyhow!("Dyn type did not consume all bytes during decoding"),
-            ));
-        }
-
-        Ok(val)
+        decoder.decode_complete(&mut reader, total_len, module_instance, &Default::default())
     }
 }
 

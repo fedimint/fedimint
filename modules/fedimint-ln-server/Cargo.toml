@@ -18,13 +18,13 @@ name = "fedimint_ln_server"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.81"
-async-trait = "0.1.77"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
 bincode = "1"
-bitcoin_hashes = "0.11.0"
-erased-serde = "0.4"
-futures = "0.3.30"
-itertools = "0.12.1"
+bitcoin_hashes = { workspace = true }
+erased-serde = { workspace = true }
+futures = { workspace = true }
+itertools = { workspace = true }
 lightning = "0.0.118"
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
 fedimint-bitcoind = { version = "0.3.0-alpha", path = "../../fedimint-bitcoind" }
@@ -33,19 +33,19 @@ fedimint-ln-common = { version = "0.3.0-alpha", path = "../fedimint-ln-common" }
 fedimint-metrics = { version = "0.3.0-alpha", path = "../../fedimint-metrics" }
 secp256k1 = { version="0.24.3", default-features=false }
 serde = {version = "1.0.197", features = [ "derive" ] }
-serde_json = "1.0.114"
-strum = "0.26"
-strum_macros = "0.26"
-thiserror = "1.0.58"
+serde_json = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { version = "1.36", features = ["full"] }
-tracing = "0.1.40"
-rand = "0.8"
+tracing = { workspace = true }
+rand = { workspace = true }
 url = { version = "2.5.0", features = ["serde"] }
 fedimint-server = { version = "0.3.0-alpha", path = "../../fedimint-server" }
 
 [dev-dependencies]
-assert_matches = "1.5.0"
+assert_matches = { workspace = true }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
 tokio = {version = "1.36.0", features = [ "full" ] }
 tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }

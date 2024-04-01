@@ -16,27 +16,27 @@ name = "fedimint_wallet_server"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.81"
+anyhow = { workspace = true }
 async-trait = "0.1"
 bitcoin = { version = "0.29.2", features = [ "rand", "serde"] }
-erased-serde = "0.4"
+erased-serde = { workspace = true }
 fedimint-bitcoind = { version = "0.3.0-alpha", path = "../../fedimint-bitcoind" }
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
 fedimint-metrics = { version = "0.3.0-alpha", path = "../../fedimint-metrics" }
 fedimint-wallet-common = { version = "0.3.0-alpha", path = "../fedimint-wallet-common" }
-futures = "0.3"
+futures = { workspace = true }
 miniscript = { version = "10.0.0", features = [ "compiler", "serde" ] }
 miniscript9 = { package = "miniscript", version = "9.0.2" }
 impl-tools = "0.10.0"
-rand = "0.8"
+rand = { workspace = true }
 secp256k1 = { version = "0.24.3", features = [ "serde" ] }
 serde = { version = "1.0.197", features = [ "derive" ] }
-strum = "0.26"
-strum_macros = "0.26"
-thiserror = "1.0.58"
+strum = { workspace = true }
+strum_macros = { workspace = true }
+thiserror = { workspace = true }
 tokio = { version = "1.36.0", features = ["sync"], optional = true }
-tracing ="0.1.40"
-url = "2.5.0"
+tracing = { workspace = true }
+url = { workspace = true }
 validator = { version = "0.17", features = ["derive"] }
 fedimint-server = { version = "0.3.0-alpha", path = "../../fedimint-server" }
 

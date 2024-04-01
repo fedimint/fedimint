@@ -38,7 +38,7 @@ fn make_client_builder() -> fedimint_client::ClientBuilder {
 async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandleArc> {
     let client_config = ClientConfig::download_from_invite_code(invite_code).await?;
     let mut builder = make_client_builder();
-    let client_secret = load_or_generate_mnemonic(builder.db()).await?;
+    let client_secret = load_or_generate_mnemonic(builder.db_no_decoders()).await?;
     builder.stopped();
     builder
         .join(
@@ -107,6 +107,7 @@ mod tests {
     use fedimint_ln_client::{
         LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
     };
+    use fedimint_ln_common::lightning_invoice::{Bolt11InvoiceDescription, Description};
     use fedimint_ln_common::LightningGateway;
     use fedimint_mint_client::{MintClientModule, ReissueExternalNotesState, SpendOOBState};
     use futures::StreamExt;
@@ -153,8 +154,15 @@ mod tests {
         gateway: LightningGateway,
     ) -> Result<()> {
         let lightning_module = client.get_first_module::<LightningClientModule>();
+        let desc = Description::new("test".to_string())?;
         let (opid, invoice, _) = lightning_module
-            .create_bolt11_invoice(amount, "test".to_string(), None, (), Some(gateway))
+            .create_bolt11_invoice(
+                amount,
+                Bolt11InvoiceDescription::Direct(&desc),
+                None,
+                (),
+                Some(gateway),
+            )
             .await?;
         faucet::pay_invoice(&invoice.to_string()).await?;
 

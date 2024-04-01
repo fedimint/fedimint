@@ -6,7 +6,7 @@ use fedimint_core::PeerId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::cancellable::Cancellable;
+use crate::task::Cancellable;
 
 #[cfg(not(target_family = "wasm"))]
 pub mod fake;

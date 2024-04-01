@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use bitcoin::Network;
-use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
@@ -11,6 +11,7 @@ use miniscript::descriptor::{Wpkh, Wsh};
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 
+use crate::envs::FM_PORT_ESPLORA_ENV;
 use crate::keys::CompressedPublicKey;
 use crate::{PegInDescriptor, WalletCommonInit};
 
@@ -31,7 +32,7 @@ impl WalletGenParams {
                     kind: "esplora".to_string(),
                     url: SafeUrl::parse(&format!(
                         "http://127.0.0.1:{}/",
-                        std::env::var("FM_PORT_ESPLORA").unwrap_or(String::from("50002"))
+                        std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
                     ))
                     .expect("Failed to parse default esplora server"),
                 },

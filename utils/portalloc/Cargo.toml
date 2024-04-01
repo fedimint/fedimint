@@ -16,11 +16,11 @@ name = "fedimint_portalloc"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.81"
+anyhow = { workspace = true }
 fs2 = "0.4.3"
 serde = { version = "1.0.197", features = [ "derive" ] }
 serde_json = { version = "1.0.114", features = ["preserve_order"] }
-tracing = "0.1.40"
-rand = "0.8"
+tracing = { workspace = true }
+rand = { workspace = true }
 dirs = "5.0.1"
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }

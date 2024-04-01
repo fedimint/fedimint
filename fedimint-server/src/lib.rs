@@ -5,15 +5,16 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::net::SocketAddr;
 use std::panic::AssertUnwindSafe;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{anyhow as format_err, Context};
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::HashEngine;
 use bitcoin_hashes::{sha256, Hash};
-use config::io::PLAINTEXT_PASSWORD;
+use config::io::{read_server_config, PLAINTEXT_PASSWORD};
 use config::ServerConfig;
+use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::Encodable;
@@ -72,6 +73,7 @@ pub trait HasApiContext<State> {
 }
 
 /// Main server for running Fedimint consensus and APIs
+#[derive(Debug)]
 pub struct FedimintServer {
     /// Location where configs are stored
     pub data_dir: PathBuf,
@@ -79,28 +81,40 @@ pub struct FedimintServer {
     pub settings: ConfigGenSettings,
     /// Database shared by the API and consensus
     pub db: Database,
-
     /// Version hash
     pub version_hash: String,
 }
 
 impl FedimintServer {
-    /// Starts the `ConfigGenApi` unless configs already exist
-    /// After configs are generated, start `ConsensusApi` and `ConsensusServer`
-    pub async fn run(&mut self, mut task_group: TaskGroup) -> anyhow::Result<()> {
+    pub fn new(
+        data_dir: PathBuf,
+        settings: ConfigGenSettings,
+        db: Database,
+        version_hash: String,
+    ) -> Self {
+        Self {
+            data_dir,
+            settings,
+            db,
+            version_hash,
+        }
+    }
+
+    /// Starts the `ConfigGenApi` with existing configs
+    pub async fn run_cfg(
+        &mut self,
+        cfg: &ServerConfig,
+        task_group: TaskGroup,
+    ) -> anyhow::Result<()> {
         info!(target: LOG_CONSENSUS, "Starting config gen");
 
         initialize_gauge_metrics(&self.db).await;
 
-        let cfg = self
-            .run_config_gen(task_group.make_subgroup().await)
-            .await?;
-
         let (consensus_server, consensus_api) = ConsensusServer::new(
-            cfg,
+            cfg.clone(),
             self.db.clone(),
             self.settings.registry.clone(),
-            &mut task_group,
+            &task_group,
         )
         .await
         .context("Setting up consensus server")?;
@@ -119,12 +133,62 @@ impl FedimintServer {
         Ok(())
     }
 
+    /// Starts server that will run DKG
+    /// After configs are generated, start `ConsensusApi` and `ConsensusServer`
+    pub async fn run_dkg(&mut self, task_group: TaskGroup) -> anyhow::Result<ServerConfig> {
+        info!(target: LOG_CONSENSUS, "Starting config gen");
+
+        initialize_gauge_metrics(&self.db).await;
+
+        self.generate_config(task_group.make_subgroup().await).await
+    }
+
+    pub async fn run(
+        &mut self,
+        module_inits: &ServerModuleInitRegistry,
+        task_group: TaskGroup,
+    ) -> anyhow::Result<()> {
+        let cfg = match FedimintServer::get_config(&self.data_dir).await? {
+            Some(cfg) => cfg,
+            None => self.run_dkg(task_group.clone()).await?,
+        };
+
+        let decoders = module_inits.decoders_strict(
+            cfg.consensus
+                .modules
+                .iter()
+                .map(|(id, config)| (*id, &config.kind)),
+        )?;
+
+        let db = self.db.with_decoders(decoders);
+
+        // Reconstruct yourself, with a DB that has decoders configured
+        let mut s = Self {
+            db,
+            data_dir: self.data_dir.clone(),
+            settings: self.settings.clone(),
+            version_hash: self.version_hash.clone(),
+        };
+
+        s.run_cfg(&cfg, task_group.clone()).await
+    }
+
+    pub async fn get_config(data_dir: &Path) -> anyhow::Result<Option<ServerConfig>> {
+        // Attempt get the config with local password, otherwise start config gen
+        if let Ok(password) = fs::read_to_string(data_dir.join(PLAINTEXT_PASSWORD)) {
+            return Ok(Some(read_server_config(&password, data_dir.to_owned())?));
+        }
+
+        Ok(None)
+    }
+
     /// Generates the `ServerConfig`
     ///
     /// If a local password file exists, will try to read the configs from the
     /// filesystem.  Otherwise, it will start the `ConfigGenApi`.
-    async fn run_config_gen(&self, mut task_group: TaskGroup) -> anyhow::Result<ServerConfig> {
+    async fn generate_config(&self, mut task_group: TaskGroup) -> anyhow::Result<ServerConfig> {
         let (config_generated_tx, mut config_generated_rx) = tokio::sync::mpsc::channel(1);
+
         let config_gen = ConfigGenApi::new(
             self.data_dir.clone(),
             self.settings.clone(),

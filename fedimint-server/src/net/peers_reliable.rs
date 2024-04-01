@@ -12,9 +12,8 @@ use std::time::Duration;
 use anyhow::Context;
 use async_trait::async_trait;
 use fedimint_core::api::PeerConnectionStatus;
-use fedimint_core::cancellable::{Cancellable, Cancelled};
 use fedimint_core::net::peers::IPeerConnections;
-use fedimint_core::task::{sleep_until, TaskGroup, TaskHandle};
+use fedimint_core::task::{sleep_until, Cancellable, Cancelled, TaskGroup, TaskHandle};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_NET_PEER;
@@ -180,11 +179,9 @@ where
             status_query_senders.insert(*peer, status_query_sender);
             connections.insert(*peer, connection);
         }
-        task_group
-            .spawn("listen task", move |handle| {
-                Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
-            })
-            .await;
+        task_group.spawn("listen task", move |handle| {
+            Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
+        });
         (
             ReconnectPeerConnectionsReliable { connections },
             PeerStatusChannels(status_query_senders),
@@ -657,26 +654,24 @@ where
         let (outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::<M>(1024);
         let (incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::<M>(1024);
 
-        task_group
-            .spawn(
-                format!("io-thread-peer-{peer_id}"),
-                move |handle| async move {
-                    Self::run_io_thread(
-                        incoming_sender,
-                        outgoing_receiver,
-                        our_id,
-                        peer_id,
-                        peer_address,
-                        delay_calculator,
-                        connect,
-                        incoming_connections,
-                        status_query_receiver,
-                        &handle,
-                    )
-                    .await
-                },
-            )
-            .await;
+        task_group.spawn(
+            format!("io-thread-peer-{peer_id}"),
+            move |handle| async move {
+                Self::run_io_thread(
+                    incoming_sender,
+                    outgoing_receiver,
+                    our_id,
+                    peer_id,
+                    peer_address,
+                    delay_calculator,
+                    connect,
+                    incoming_connections,
+                    status_query_receiver,
+                    &handle,
+                )
+                .await
+            },
+        );
 
         PeerConnection {
             outgoing: outgoing_sender,

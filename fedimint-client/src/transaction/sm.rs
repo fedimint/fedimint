@@ -56,7 +56,10 @@ pub enum TxSubmissionStates {
     ///
     /// **This state is final**
     Rejected(TransactionId, String),
-    #[deprecated(since = "0.2.2", note = "all errors should be retried")]
+    // Ideally this would be uncommented:
+    // #[deprecated(since = "0.2.2", note = "all errors should be retried")]
+    // but due to some rust bug/limitation it seem impossible to prevent
+    // existing usages from spamming compilation output with warnings.
     NonRetryableError(String),
 }
 
@@ -145,7 +148,7 @@ impl IntoDynInstance for TxSubmissionStates {
 }
 
 pub fn tx_submission_sm_decoder() -> Decoder {
-    let mut decoder_builder = Decoder::builder();
+    let mut decoder_builder = Decoder::builder_system();
     decoder_builder.with_decodable_type::<OperationState<TxSubmissionStates>>();
     decoder_builder.build()
 }

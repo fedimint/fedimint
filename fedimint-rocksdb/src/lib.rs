@@ -1,4 +1,8 @@
 #![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
+
+pub mod envs;
+
+use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -12,6 +16,8 @@ use futures::stream;
 pub use rocksdb;
 use rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
 use tracing::debug;
+
+use crate::envs::FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV;
 
 #[derive(Debug)]
 pub struct RocksDb(rocksdb::OptimisticTransactionDB);
@@ -35,6 +41,18 @@ fn is_power_of_two(num: usize) -> bool {
     num.count_ones() == 1
 }
 
+impl<'a> fmt::Debug for RocksDbReadOnlyTransaction<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("RocksDbTransaction")
+    }
+}
+
+impl<'a> fmt::Debug for RocksDbTransaction<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("RocksDbTransaction")
+    }
+}
+
 #[test]
 fn is_power_of_two_sanity() {
     assert!(!is_power_of_two(0));
@@ -49,13 +67,12 @@ fn is_power_of_two_sanity() {
 
 fn get_default_options() -> anyhow::Result<rocksdb::Options> {
     let mut opts = rocksdb::Options::default();
-    const VAR_NAME: &str = "FM_ROCKSDB_WRITE_BUFFER_SIZE";
-    if let Ok(var) = std::env::var(VAR_NAME) {
+    if let Ok(var) = std::env::var(FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV) {
         debug!(var, "Using custom write buffer size");
-        let size: usize =
-            FromStr::from_str(&var).with_context(|| format!("Could not parse {VAR_NAME}"))?;
+        let size: usize = FromStr::from_str(&var)
+            .with_context(|| format!("Could not parse {FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV}"))?;
         if !is_power_of_two(size) {
-            bail!("{} is not a power of 2", VAR_NAME);
+            bail!("{} is not a power of 2", FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV);
         }
         opts.set_write_buffer_size(size);
     }

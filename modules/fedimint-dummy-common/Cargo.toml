@@ -16,17 +16,17 @@ name = "fedimint_dummy_common"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.81"
-async-trait = "0.1.77"
-bitcoin_hashes = "0.11.0"
-erased-serde = "0.4"
-futures = "0.3"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+bitcoin_hashes = { workspace = true }
+erased-serde = { workspace = true }
+futures = { workspace = true }
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
-rand = "0.8"
+rand = { workspace = true }
 serde = { version = "1.0.197", features = [ "derive" ] }
 secp256k1 = "0.24.3"
-strum = "0.26"
-strum_macros = "0.26"
-thiserror = "1.0.58"
-tracing = "0.1.40"
+strum = { workspace = true }
+strum_macros = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
 threshold_crypto = { workspace = true }

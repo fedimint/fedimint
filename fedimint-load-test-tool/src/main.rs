@@ -25,7 +25,7 @@ use fedimint_ln_client::{LightningClientModule, LnReceiveState};
 use fedimint_ln_common::LightningGateway;
 use fedimint_mint_client::OOBNotes;
 use futures::StreamExt;
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use serde::{Deserialize, Serialize};
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufWriter};
@@ -1025,7 +1025,7 @@ async fn wait_invoice_payment(
         .await?
         .into_stream();
     while let Some(update) = updates.next().await {
-        info!("{prefix} Update: {update:?}");
+        debug!(%prefix, ?update, "Invoice payment update");
         match update {
             LnReceiveState::Claimed => {
                 let elapsed: Duration = pay_invoice_time.elapsed()?;
@@ -1063,8 +1063,15 @@ async fn client_create_invoice(
 ) -> anyhow::Result<(fedimint_core::core::OperationId, Bolt11Invoice)> {
     let create_invoice_time = fedimint_core::time::now();
     let lightning_module = client.get_first_module::<LightningClientModule>();
+    let desc = Description::new("test".to_string())?;
     let (operation_id, invoice, _) = lightning_module
-        .create_bolt11_invoice(invoice_amount, "".into(), None, (), ln_gateway)
+        .create_bolt11_invoice(
+            invoice_amount,
+            Bolt11InvoiceDescription::Direct(&desc),
+            None,
+            (),
+            ln_gateway,
+        )
         .await?;
     let elapsed = create_invoice_time.elapsed()?;
     info!("Created invoice using gateway in {elapsed:?}");

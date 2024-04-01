@@ -10,7 +10,7 @@ use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use fedimint_client::backup::Metadata;
 use fedimint_client::ClientHandleArc;
-use fedimint_core::config::FederationId;
+use fedimint_core::config::{ClientModuleConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::time::now;
@@ -21,13 +21,14 @@ use fedimint_ln_client::{
 };
 use fedimint_ln_common::contracts::ContractId;
 use fedimint_ln_common::LightningGateway;
+use fedimint_logging::LOG_CLIENT;
 use fedimint_mint_client::{
     MintClientModule, OOBNotes, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
 };
 use fedimint_wallet_client::{WalletClientModule, WithdrawState};
 use futures::StreamExt;
 use itertools::Itertools;
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use time::format_description::well_known::iso8601;
@@ -40,6 +41,19 @@ use crate::{metadata_from_clap_cli, LnInvoiceResponse};
 pub enum ModuleSelector {
     Id(ModuleInstanceId),
     Kind(ModuleKind),
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub enum ModuleStatus {
+    Active,
+    UnsupportedByClient,
+}
+
+#[derive(Serialize)]
+struct ModuleInfo {
+    kind: ModuleKind,
+    id: u16,
+    status: ModuleStatus,
 }
 
 impl FromStr for ModuleSelector {
@@ -170,7 +184,7 @@ pub enum ClientCmd {
     #[command(disable_help_flag = true)]
     Module {
         /// Module selector (either module id or module kind)
-        module: ModuleSelector,
+        module: Option<ModuleSelector>,
         #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<ffi::OsString>,
     },
@@ -201,7 +215,7 @@ pub async fn handle_command(
                     bail!("Reissue failed: {e}");
                 }
 
-                info!("Update: {update:?}");
+                debug!(target: LOG_CLIENT, ?update, "Reissue external notes state update");
             }
 
             Ok(serde_json::to_value(amount).unwrap())
@@ -321,8 +335,15 @@ pub async fn handle_command(
             let ln_gateway = get_gateway(&client, gateway_id).await;
 
             let lightning_module = client.get_first_module::<LightningClientModule>();
+            let desc = Description::new(description)?;
             let (operation_id, invoice, _) = lightning_module
-                .create_bolt11_invoice(amount, description, expiry_time, (), ln_gateway)
+                .create_bolt11_invoice(
+                    amount,
+                    Bolt11InvoiceDescription::Direct(&desc),
+                    expiry_time,
+                    (),
+                    ln_gateway,
+                )
                 .await?;
             Ok(serde_json::to_value(LnInvoiceResponse {
                 operation_id,
@@ -347,7 +368,7 @@ pub async fn handle_command(
                     _ => {}
                 }
 
-                info!("Update: {update:?}");
+                debug!(target: LOG_CLIENT, ?update, "Await invoice state update");
             }
 
             Err(anyhow::anyhow!(
@@ -449,7 +470,7 @@ pub async fn handle_command(
                 .into_stream();
 
             while let Some(update) = updates.next().await {
-                info!("Update: {update:?}");
+                debug!(target: LOG_CLIENT, ?update, "Await deposit state update");
             }
 
             Ok(serde_json::to_value(()).unwrap())
@@ -555,7 +576,7 @@ pub async fn handle_command(
                 .into_stream();
 
             while let Some(update) = updates.next().await {
-                info!("Update: {update:?}");
+                debug!(target: LOG_CLIENT, ?update, "Withdraw state update");
 
                 match update {
                     WithdrawState::Succeeded(txid) => {
@@ -576,19 +597,41 @@ pub async fn handle_command(
         ClientCmd::DiscoverVersion => {
             Ok(json!({ "versions": client.discover_common_api_version(None).await? }))
         }
-        ClientCmd::Module { module, args } => {
-            let module_instance_id = match module {
-                ModuleSelector::Id(id) => id,
-                ModuleSelector::Kind(kind) => client
-                    .get_first_instance(&kind)
-                    .context("No module with this kind found")?,
-            };
-            client
-                .get_module_client_dyn(module_instance_id)
-                .context("Module not found")?
-                .handle_cli_command(&args)
-                .await
-        }
+        ClientCmd::Module { module, args } => match module {
+            Some(module) => {
+                let module_instance_id = match module {
+                    ModuleSelector::Id(id) => id,
+                    ModuleSelector::Kind(kind) => client
+                        .get_first_instance(&kind)
+                        .context("No module with this kind found")?,
+                };
+
+                client
+                    .get_module_client_dyn(module_instance_id)
+                    .context("Module not found")?
+                    .handle_cli_command(&args)
+                    .await
+            }
+            None => {
+                let module_list: Vec<ModuleInfo> = client
+                    .get_config()
+                    .modules
+                    .iter()
+                    .map(|(id, ClientModuleConfig { kind, .. })| ModuleInfo {
+                        kind: kind.clone(),
+                        id: *id,
+                        status: if client.has_module(*id) {
+                            ModuleStatus::Active
+                        } else {
+                            ModuleStatus::UnsupportedByClient
+                        },
+                    })
+                    .collect();
+                Ok(json!({
+                    "list": module_list,
+                }))
+            }
+        },
         ClientCmd::Config => {
             let config = client.get_config_json();
             Ok(serde_json::to_value(config).expect("Client config is serializable"))
@@ -692,7 +735,7 @@ async fn wait_for_ln_payment(
                         bail!("FundingFailed: {error}")
                     }
                 }
-                info!("Update: {update:?}");
+                debug!(target: LOG_CLIENT, ?update, "Wait for ln payment state update");
             }
         }
         PayType::Lightning(operation_id) => {
@@ -727,7 +770,7 @@ async fn wait_for_ln_payment(
                         bail!("UnexpectedError: {error_message}")
                     }
                 }
-                info!("Update: {update:?}");
+                debug!(target: LOG_CLIENT, ?update, "Wait for ln payment state update");
             }
         }
     };

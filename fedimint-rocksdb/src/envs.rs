@@ -1,0 +1,2 @@
+// Env variable to TODO
+pub const FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV: &str = "FM_ROCKSDB_WRITE_BUFFER_SIZE";

@@ -241,75 +241,73 @@ impl ConfigGenApi {
 
         let self_clone = self.clone();
         let sub_group = self.task_group.make_subgroup().await;
-        sub_group
-            .spawn("run dkg", move |_handle| async move {
-                // Followers wait for leader to signal readiness for DKG
-                if let Some(client) = leader {
-                    loop {
-                        let status = client.status().await.map_err(|_| {
-                            ApiError::not_found("Unable to connect to the leader".to_string())
-                        })?;
-                        if status.server == ServerStatus::ReadyForConfigGen {
-                            break;
-                        }
-                        sleep(Duration::from_millis(100)).await;
+        sub_group.spawn("run dkg", move |_handle| async move {
+            // Followers wait for leader to signal readiness for DKG
+            if let Some(client) = leader {
+                loop {
+                    let status = client.status().await.map_err(|_| {
+                        ApiError::not_found("Unable to connect to the leader".to_string())
+                    })?;
+                    if status.server == ServerStatus::ReadyForConfigGen {
+                        break;
                     }
-                };
+                    sleep(Duration::from_millis(100)).await;
+                }
+            };
 
-                // Get params and registry
-                let request = self_clone.get_requested_params()?;
-                let response = self_clone.consensus_config_gen_params(&request).await?;
-                let (params, registry) = {
-                    let state: MutexGuard<'_, ConfigGenState> =
-                        self_clone.require_status(ServerStatus::ReadyForConfigGen)?;
-                    let params = state.get_config_gen_params(&request, response.consensus)?;
-                    let registry = state.settings.registry.clone();
-                    (params, registry)
-                };
+            // Get params and registry
+            let request = self_clone.get_requested_params()?;
+            let response = self_clone.consensus_config_gen_params(&request).await?;
+            let (params, registry) = {
+                let state: MutexGuard<'_, ConfigGenState> =
+                    self_clone.require_status(ServerStatus::ReadyForConfigGen)?;
+                let params = state.get_config_gen_params(&request, response.consensus)?;
+                let registry = state.settings.registry.clone();
+                (params, registry)
+            };
 
-                // Run DKG
-                let mut task_group: TaskGroup = self_clone.task_group.make_subgroup().await;
-                let config = ServerConfig::distributed_gen(
-                    &params,
-                    registry,
-                    DelayCalculator::PROD_DEFAULT,
-                    &mut task_group,
-                    self_clone.version_hash.clone(),
-                )
-                .await;
-                task_group
-                    .shutdown_join_all(None)
-                    .await
-                    .expect("shuts down");
+            // Run DKG
+            let mut task_group: TaskGroup = self_clone.task_group.make_subgroup().await;
+            let config = ServerConfig::distributed_gen(
+                &params,
+                registry,
+                DelayCalculator::PROD_DEFAULT,
+                &mut task_group,
+                self_clone.version_hash.clone(),
+            )
+            .await;
+            task_group
+                .shutdown_join_all(None)
+                .await
+                .expect("shuts down");
 
-                {
-                    let mut state = self_clone.state.lock().expect("lock poisoned");
-                    match config {
-                        Ok(config) => {
-                            self_clone.stage_configs(&config, &state)?;
-                            state.status = ServerStatus::VerifyingConfigs;
-                            state.config = Some(config);
-                            info!(
-                                target: fedimint_logging::LOG_NET_PEER_DKG,
-                                "Set config for config gen"
-                            );
-                        }
-                        Err(e) => {
-                            error!(
-                                target: fedimint_logging::LOG_NET_PEER_DKG,
-                                "DKG failed with {:?}", e
-                            );
-                            state.status = ServerStatus::ConfigGenFailed;
-                            info!(
-                                target: fedimint_logging::LOG_NET_PEER_DKG,
-                                "Update config gen status to 'Config gen failed'"
-                            );
-                        }
+            {
+                let mut state = self_clone.state.lock().expect("lock poisoned");
+                match config {
+                    Ok(config) => {
+                        self_clone.stage_configs(&config, &state)?;
+                        state.status = ServerStatus::VerifyingConfigs;
+                        state.config = Some(config);
+                        info!(
+                            target: fedimint_logging::LOG_NET_PEER_DKG,
+                            "Set config for config gen"
+                        );
+                    }
+                    Err(e) => {
+                        error!(
+                            target: fedimint_logging::LOG_NET_PEER_DKG,
+                            "DKG failed with {:?}", e
+                        );
+                        state.status = ServerStatus::ConfigGenFailed;
+                        info!(
+                            target: fedimint_logging::LOG_NET_PEER_DKG,
+                            "Update config gen status to 'Config gen failed'"
+                        );
                     }
                 }
-                self_clone.update_leader().await
-            })
-            .await;
+            }
+            self_clone.update_leader().await
+        });
 
         Ok(())
     }
@@ -401,7 +399,7 @@ impl ConfigGenApi {
             state.status = ServerStatus::VerifiedConfigs;
             info!(
                 target: fedimint_logging::LOG_NET_PEER_DKG,
-                "Update config gen status to 'Verfied configs'"
+                "Update config gen status to 'Verified configs'"
             );
         }
 
@@ -470,21 +468,19 @@ impl ConfigGenApi {
         // The leader will signal this by setting it's status to AwaitingPassword
         let self_clone = self.clone();
         let sub_group = self.task_group.make_subgroup().await;
-        sub_group
-            .spawn("restart", move |_handle| async move {
-                if let Some(client) = leader {
-                    self_clone.await_leader_restart(&client).await?;
-                } else {
-                    self_clone.await_peer_restart().await;
-                }
-                // Progress status to AwaitingPassword
-                {
-                    let mut state = self_clone.state.lock().expect("lock poisoned");
-                    state.reset();
-                }
-                self_clone.update_leader().await
-            })
-            .await;
+        sub_group.spawn("restart", move |_handle| async move {
+            if let Some(client) = leader {
+                self_clone.await_leader_restart(&client).await?;
+            } else {
+                self_clone.await_peer_restart().await;
+            }
+            // Progress status to AwaitingPassword
+            {
+                let mut state = self_clone.state.lock().expect("lock poisoned");
+                state.reset();
+            }
+            self_clone.update_leader().await
+        });
 
         Ok(())
     }
@@ -940,9 +936,14 @@ mod tests {
         settings: ConfigGenSettings,
         amount: Amount,
         dir: PathBuf,
+        module_inits: ServerModuleInitRegistry,
     }
 
     impl TestConfigApi {
+        pub fn module_inits(&self) -> &ServerModuleInitRegistry {
+            &self.module_inits
+        }
+
         /// Creates a new test API taking up a port, with P2P endpoint on the
         /// next port
         async fn new(
@@ -959,8 +960,9 @@ mod tests {
             let p2p_url = format!("fedimint://127.0.0.1:{}", port + 1)
                 .parse()
                 .expect("parses");
+            let module_inits = ServerModuleInitRegistry::from_iter([DummyInit.into()]);
             let mut modules = ServerModuleConfigGenParamsRegistry::default();
-            modules.attach_config_gen_params(0, DummyInit::kind(), DummyGenParams::default());
+            modules.attach_config_gen_params_by_id(0, DummyInit::kind(), DummyGenParams::default());
 
             let default_params = ConfigGenParamsRequest {
                 meta: Default::default(),
@@ -1000,6 +1002,7 @@ mod tests {
                     settings,
                     amount: Amount::from_sats(port as u64),
                     dir,
+                    module_inits,
                 },
                 api,
             )
@@ -1083,7 +1086,7 @@ mod tests {
         /// Sets local param to name and unique consensus amount for testing
         async fn set_config_gen_params(&self) {
             let mut modules = ServerModuleConfigGenParamsRegistry::default();
-            modules.attach_config_gen_params(
+            modules.attach_config_gen_params_by_id(
                 0,
                 DummyInit::kind(),
                 DummyGenParams {
@@ -1128,7 +1131,7 @@ mod tests {
         // let mut join_handles = vec![];
         let mut apis = vec![];
         let mut followers = vec![];
-        let (mut leader, api) = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
+        let (mut test_config, api) = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
 
         apis.push(api);
 
@@ -1139,12 +1142,17 @@ mod tests {
             followers.push(follower);
         }
 
+        let module_inits = test_config.module_inits().clone();
         // Run the Fedimint servers and test concurrently
         spawn("Fedimint server apis", async move {
-            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))).await;
+            join_all(
+                apis.iter_mut()
+                    .map(|fedimint_server| fedimint_server.run(&module_inits, TaskGroup::new())),
+            )
+            .await;
         });
 
-        leader = validate_leader_setup(leader).await;
+        test_config = validate_leader_setup(test_config).await;
 
         // Setup followers and send connection info
         for follower in &mut followers {
@@ -1157,7 +1165,7 @@ mod tests {
                 .set_password(follower.auth.clone())
                 .await
                 .unwrap();
-            let leader_url = Some(leader.settings.api_url.clone());
+            let leader_url = Some(test_config.settings.api_url.clone());
             follower.set_connections(&leader_url).await.unwrap();
             follower.name = format!("{}_", follower.name);
             follower.set_connections(&leader_url).await.unwrap();
@@ -1165,7 +1173,7 @@ mod tests {
         }
 
         // Validate we can do a full fedimint setup
-        validate_full_setup(leader, followers).await;
+        validate_full_setup(test_config, followers).await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1180,9 +1188,10 @@ mod tests {
         // let mut join_handles = vec![];
         let mut apis = vec![];
         let mut followers = vec![];
-        let (mut leader, api) = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
+        let (mut test_config, fedimint_server) =
+            TestConfigApi::new(base_port, 0, data_dir.clone()).await;
 
-        apis.push(api);
+        apis.push(fedimint_server);
 
         for i in 1..PEER_NUM {
             let port = base_port + (i * PORTS_PER_PEER);
@@ -1191,12 +1200,17 @@ mod tests {
             followers.push(follower);
         }
 
+        let module_inits = test_config.module_inits().clone();
         // Run the Fedimint servers and test concurrently
         spawn("Fedimint server apis", async move {
-            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))).await;
+            join_all(
+                apis.iter_mut()
+                    .map(|api| api.run(&module_inits, TaskGroup::new())),
+            )
+            .await;
         });
 
-        leader = validate_leader_setup(leader).await;
+        test_config = validate_leader_setup(test_config).await;
 
         // Setup followers and send connection info
         for follower in &mut followers {
@@ -1209,20 +1223,20 @@ mod tests {
                 .set_password(follower.auth.clone())
                 .await
                 .unwrap();
-            let leader_url = Some(leader.settings.api_url.clone());
+            let leader_url = Some(test_config.settings.api_url.clone());
             follower.set_connections(&leader_url).await.unwrap();
             follower.name = format!("{}_", follower.name);
             follower.set_connections(&leader_url).await.unwrap();
             follower.set_config_gen_params().await;
         }
-        leader
+        test_config
             .wait_status(ServerStatus::SharingConfigGenParams)
             .await;
 
         // Leader can trigger a setup restart
-        leader
+        test_config
             .client
-            .restart_federation_setup(leader.auth.clone())
+            .restart_federation_setup(test_config.auth.clone())
             .await
             .unwrap();
 
@@ -1236,14 +1250,14 @@ mod tests {
         }
 
         // Ensure all servers have restarted
-        leader
+        test_config
             .wait_status_preconfig(ServerStatus::SetupRestarted, &followers)
             .await;
-        leader
+        test_config
             .wait_status_preconfig(ServerStatus::AwaitingPassword, &followers)
             .await;
 
-        leader = validate_leader_setup(leader).await;
+        test_config = validate_leader_setup(test_config).await;
 
         // Setup followers and send connection info
         for follower in &mut followers {
@@ -1256,13 +1270,13 @@ mod tests {
                 .set_password(follower.auth.clone())
                 .await
                 .unwrap();
-            let leader_url = Some(leader.settings.api_url.clone());
+            let leader_url = Some(test_config.settings.api_url.clone());
             follower.set_connections(&leader_url).await.unwrap();
             follower.set_config_gen_params().await;
         }
 
         // Validate we can do a full fedimint setup after a restart
-        validate_full_setup(leader, followers).await;
+        validate_full_setup(test_config, followers).await;
     }
 
     // Validate steps when leader initiates fedimint setup

@@ -14,9 +14,8 @@ use std::time::Duration;
 use anyhow::Context;
 use async_trait::async_trait;
 use fedimint_core::api::PeerConnectionStatus;
-use fedimint_core::cancellable::{Cancellable, Cancelled};
 use fedimint_core::net::peers::IPeerConnections;
-use fedimint_core::task::{sleep_until, TaskGroup, TaskHandle};
+use fedimint_core::task::{sleep_until, Cancellable, Cancelled, TaskGroup, TaskHandle};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_NET_PEER;
@@ -219,7 +218,7 @@ where
         cfg: NetworkConfig,
         delay_calculator: DelayCalculator,
         connect: PeerConnector<T>,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
     ) -> (Self, PeerStatusChannels) {
         let shared_connector: SharedAnyConnector<PeerMessage<T>> = connect.into();
         let mut connection_senders = HashMap::new();
@@ -249,11 +248,9 @@ where
             status_query_senders.insert(*peer, status_query_sender);
             connections.insert(*peer, connection);
         }
-        task_group
-            .spawn("listen task", move |handle| {
-                Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
-            })
-            .await;
+        task_group.spawn("listen task", move |handle| {
+            Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
+        });
         (
             ReconnectPeerConnections {
                 connections,
@@ -646,31 +643,29 @@ where
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
         status_query_receiver: PeerStatusChannelReceiver,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
     ) -> PeerConnection<M> {
         let (outgoing_sender, outgoing_receiver) = async_channel::bounded(1024);
         let (incoming_sender, incoming_receiver) = async_channel::bounded(1024);
 
-        task_group
-            .spawn(
-                format!("io-thread-peer-{peer_id}"),
-                move |handle| async move {
-                    Self::run_io_thread(
-                        incoming_sender,
-                        outgoing_receiver,
-                        our_id,
-                        peer_id,
-                        peer_address,
-                        delay_calculator,
-                        connect,
-                        incoming_connections,
-                        status_query_receiver,
-                        &handle,
-                    )
-                    .await
-                },
-            )
-            .await;
+        task_group.spawn(
+            format!("io-thread-peer-{peer_id}"),
+            move |handle| async move {
+                Self::run_io_thread(
+                    incoming_sender,
+                    outgoing_receiver,
+                    our_id,
+                    peer_id,
+                    peer_address,
+                    delay_calculator,
+                    connect,
+                    incoming_connections,
+                    status_query_receiver,
+                    &handle,
+                )
+                .await
+            },
+        );
 
         PeerConnection {
             outgoing: outgoing_sender,
@@ -770,7 +765,7 @@ mod tests {
 
             let peers_ref = &peers;
             let net_ref = &net;
-            let build_peers = move |bind: &'static str, id: u16, mut task_group: TaskGroup| async move {
+            let build_peers = move |bind: &'static str, id: u16, task_group: TaskGroup| async move {
                 let cfg = NetworkConfig {
                     identity: PeerId::from(id),
                     bind_addr: bind.parse().unwrap(),
@@ -783,7 +778,7 @@ mod tests {
                     cfg,
                     DelayCalculator::TEST_DEFAULT,
                     connect,
-                    &mut task_group,
+                    &task_group,
                 )
                 .await
             };

@@ -5,7 +5,6 @@ pub mod lightning;
 pub mod rpc;
 pub mod state_machine;
 mod types;
-pub mod utils;
 
 pub mod gateway_lnrpc {
     tonic::include_proto!("gateway_lnrpc");
@@ -35,6 +34,10 @@ use db::{
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::api::{FederationError, InviteCode};
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_address, bitcoin29_to_bitcoin30_amount, bitcoin29_to_bitcoin30_network,
+    bitcoin29_to_bitcoin30_txid, bitcoin30_to_bitcoin29_amount, bitcoin30_to_bitcoin29_network,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -66,6 +69,7 @@ use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 use lightning_invoice::RoutingFees;
 use rand::rngs::OsRng;
+use rand::Rng;
 use rpc::{
     FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, SetConfigurationPayload,
     V1_API_ENDPOINT,
@@ -82,7 +86,7 @@ use crate::db::{get_gatewayd_database_migrations, FederationConfig, FederationId
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::lightning::cln::RouteHtlcStream;
 use crate::lightning::GatewayLightningBuilder;
-use crate::rpc::rpc_server::run_webserver;
+use crate::rpc::rpc_server::{hash_password, run_webserver};
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
     WithdrawPayload,
@@ -119,6 +123,7 @@ const DEFAULT_MODULE_KINDS: [(ModuleInstanceId, &ModuleKind); 2] = [
 ];
 
 #[derive(Parser)]
+#[command(version)]
 struct GatewayOpts {
     #[clap(subcommand)]
     mode: LightningMode,
@@ -247,8 +252,8 @@ pub struct Gateway {
     // connection to a lightning node.
     lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
 
-    // CLI or environment parameters that the operator has set.
-    gateway_parameters: GatewayParameters,
+    // The gateway's current configuration
+    pub gateway_config: Arc<RwLock<Option<GatewayConfiguration>>>,
 
     // The current state of the Gateway.
     pub state: Arc<RwLock<GatewayState>>,
@@ -279,12 +284,18 @@ pub struct Gateway {
     // Tracker for short channel ID assignments. When connecting a new federation,
     // this value is incremented and assigned to the federation as the `mint_channel_id`
     max_used_scid: Arc<Mutex<u64>>,
+
+    // The Gateway's API URL.
+    versioned_api: SafeUrl,
+
+    // The socket the gateway listens on.
+    listen: SocketAddr,
 }
 
 impl std::fmt::Debug for Gateway {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Gateway")
-            .field("gateway_parameters", &self.gateway_parameters)
+            .field("gateway_config", &self.gateway_config)
             .field("state", &self.state)
             .field("client_builder", &self.client_builder)
             .field("gateway_db", &self.gateway_db)
@@ -381,10 +392,13 @@ impl Gateway {
         )
         .await?;
 
+        let gateway_config =
+            Self::get_gateway_configuration(gateway_db.clone(), &gateway_parameters).await;
+
         Ok(Self {
             lightning_builder,
             max_used_scid: Arc::new(Mutex::new(INITIAL_SCID)),
-            gateway_parameters,
+            gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
             gateway_id: Self::get_gateway_id(gateway_db.clone()).await,
@@ -392,6 +406,8 @@ impl Gateway {
             clients: Arc::new(RwLock::new(BTreeMap::new())),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
             client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
+            versioned_api: gateway_parameters.versioned_api,
+            listen: gateway_parameters.listen,
         })
     }
 
@@ -457,66 +473,16 @@ impl Gateway {
         self.load_clients().await;
         self.start_gateway(tg).await?;
         // start webserver last to avoid handling requests before fully initialized
-        self.start_webserver(tg).await;
+        run_webserver(self.clone(), tg).await?;
         let handle = tg.make_handle();
         let shutdown_receiver = handle.make_shutdown_rx().await;
         Ok(shutdown_receiver)
     }
 
-    async fn start_webserver(&mut self, task_group: &mut TaskGroup) {
-        let gateway_db = self.gateway_db.clone();
-
-        let gateway = self.clone();
-        let subgroup = task_group.make_subgroup().await;
-        task_group
-            .spawn("Webserver", move |handle| async move {
-                while !handle.is_shutting_down() {
-                    // Re-fetch the configuration because the password has changed.
-                    let gateway_config = gateway.get_gateway_configuration().await;
-                    let mut webserver_group = subgroup.make_subgroup().await;
-                    run_webserver(
-                        gateway_config.clone(),
-                        gateway.gateway_parameters.listen,
-                        gateway.clone(),
-                        &mut webserver_group,
-                    )
-                    .await
-                    .expect("Failed to start webserver");
-                    info!("Successfully started webserver");
-                    let result = handle
-                        .cancel_on_shutdown(async {
-                            wait_for_new_password(&gateway_db, gateway_config).await;
-                            info!("GatewayConfiguration has been updated, restarting webserver...");
-                            if let Err(e) = webserver_group.shutdown_join_all(None).await {
-                                panic!("Error shutting down server: {e:?}");
-                            }
-                        })
-                        .await;
-                    if result.is_err() {
-                        info!("Received shutdown signal, exiting....");
-                        break;
-                    }
-                }
-            })
-            .await;
-
-        let gateway_config = self.get_gateway_configuration().await;
-        if gateway_config.is_none() {
-            self.set_gateway_state(GatewayState::Configuring).await;
-            info!("Waiting for gateway to be configured...");
-            self.gateway_db
-                .wait_key_exists(&GatewayConfigurationKey)
-                .await;
-        }
-    }
-
     async fn start_gateway(&self, task_group: &mut TaskGroup) -> Result<()> {
         let mut self_copy = self.clone();
         let tg = task_group.clone();
-        task_group
-            .spawn(
-                "Subscribe to intercepted HTLCs in stream",
-                move |handle| async move {
+        task_group.spawn("Subscribe to intercepted HTLCs in stream", move |handle| async move {
                     loop {
                         if handle.is_shutting_down() {
                             info!("Gateway HTLC handler loop is shutting down");
@@ -539,19 +505,28 @@ impl Gateway {
 
                                 match fetch_lightning_node_info(ln_client.clone()).await {
                                     Ok((lightning_public_key, lightning_alias, lightning_network)) => {
-                                        if let Some(config) = self_copy.get_gateway_configuration().await {
-                                            if config.network != lightning_network {
-                                                warn!("Lightning node does not match previously configured gateway network : ({:?})", config.network);
-                                                info!("Changing gateway network to match lightning node network : ({:?})", lightning_network);
-                                                self_copy.handle_disconnect(htlc_task_group).await;
-                                                self_copy.handle_set_configuration_msg(SetConfigurationPayload {
-                                                    password: Some(config.password),
-                                                    network: Some(lightning_network),
-                                                    num_route_hints: None,
-                                                    routing_fees: None,
-                                                }).await.expect("Failed to set gateway configuration");
-                                                continue;
-                                            }
+                                        let gateway_config = self_copy.gateway_config.read().await.clone();
+                                        let gateway_config = if let Some(config) = gateway_config {
+                                            config
+                                        } else {
+                                            self_copy.set_gateway_state(GatewayState::Configuring).await;
+                                            info!("Waiting for gateway to be configured...");
+                                            self_copy.gateway_db
+                                                .wait_key_exists(&GatewayConfigurationKey)
+                                                .await
+                                        };
+
+                                        if gateway_config.network != bitcoin30_to_bitcoin29_network(lightning_network) {
+                                            warn!("Lightning node does not match previously configured gateway network : ({:?})", gateway_config.network);
+                                            info!("Changing gateway network to match lightning node network : ({:?})", lightning_network);
+                                            self_copy.handle_disconnect(htlc_task_group).await;
+                                            self_copy.handle_set_configuration_msg(SetConfigurationPayload {
+                                                password: None,
+                                                network: Some(bitcoin30_to_bitcoin29_network(lightning_network)),
+                                                num_route_hints: None,
+                                                routing_fees: None,
+                                            }).await.expect("Failed to set gateway configuration");
+                                            continue;
                                         }
 
                                         info!("Successfully loaded Gateway clients.");
@@ -583,7 +558,7 @@ impl Gateway {
                                 }
                             }
                             Err(e) => {
-                                debug!("Failed to open HTLC stream: {e:?}");
+                                warn!("Failed to open HTLC stream: {e:?}");
                             }
                         }
 
@@ -592,9 +567,7 @@ impl Gateway {
                         warn!("Disconnected from Lightning Node. Waiting 5 seconds and trying again");
                         sleep(Duration::from_secs(5)).await;
                     }
-                },
-            )
-            .await;
+                });
 
         Ok(())
     }
@@ -691,8 +664,10 @@ impl Gateway {
             // `GatewayConfiguration` should always exist in the database when we are in the
             // `Running` state.
             let gateway_config = self
-                .get_gateway_configuration()
+                .gateway_config
+                .read()
                 .await
+                .clone()
                 .expect("Gateway configuration should be set");
             let mut federations = Vec::new();
             let federation_clients = self.clients.read().await.clone().into_iter();
@@ -783,7 +758,7 @@ impl Gateway {
             .get_first_module::<WalletClientModule>()
             .get_deposit_address(now() + Duration::from_secs(86400 * 365), ())
             .await?;
-        Ok(address)
+        Ok(bitcoin29_to_bitcoin30_address(address).assume_checked())
     }
 
     pub async fn handle_withdraw_msg(&self, payload: WithdrawPayload) -> Result<Txid> {
@@ -803,16 +778,17 @@ impl Gateway {
                 let balance =
                     bitcoin::Amount::from_sat(client.value().get_balance().await.msats / 1000);
                 let fees = wallet_module
-                    .get_withdraw_fees(address.clone(), balance)
+                    .get_withdraw_fees(address.clone(), bitcoin30_to_bitcoin29_amount(balance))
                     .await?;
-                let withdraw_amount = balance.checked_sub(fees.amount());
+                let withdraw_amount =
+                    balance.checked_sub(bitcoin29_to_bitcoin30_amount(fees.amount()));
                 if withdraw_amount.is_none() {
                     return Err(GatewayError::InsufficientFunds);
                 }
                 (withdraw_amount.unwrap(), fees)
             }
             BitcoinAmountOrAll::Amount(amount) => (
-                amount,
+                bitcoin29_to_bitcoin30_amount(amount),
                 wallet_module
                     .get_withdraw_fees(address.clone(), amount)
                     .await?,
@@ -820,7 +796,12 @@ impl Gateway {
         };
 
         let operation_id = wallet_module
-            .withdraw(address.clone(), amount, fees, ())
+            .withdraw(
+                address.clone(),
+                bitcoin30_to_bitcoin29_amount(amount),
+                fees,
+                (),
+            )
             .await?;
         let mut updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
@@ -831,7 +812,7 @@ impl Gateway {
             match update {
                 WithdrawState::Succeeded(txid) => {
                     info!("Sent {amount} funds to address {address}");
-                    return Ok(txid);
+                    return Ok(bitcoin29_to_bitcoin30_txid(txid));
                 }
                 WithdrawState::Failed(e) => {
                     return Err(GatewayError::UnexpectedState(e));
@@ -911,8 +892,10 @@ impl Gateway {
             // `GatewayConfiguration` should always exist in the database when we are in the
             // `Running` state.
             let gateway_config = self
-                .get_gateway_configuration()
+                .gateway_config
+                .read()
                 .await
+                .clone()
                 .expect("Gateway configuration should be set");
 
             // The gateway deterministically assigns a channel id (u64) to each federation
@@ -955,8 +938,11 @@ impl Gateway {
                 channel_id: Some(mint_channel_id),
             };
 
-            self.check_federation_network(&federation_info, gateway_config.network)
-                .await?;
+            self.check_federation_network(
+                &federation_info,
+                bitcoin29_to_bitcoin30_network(gateway_config.network),
+            )
+            .await?;
 
             client
                 .get_first_module::<GatewayClientModule>()
@@ -1056,7 +1042,12 @@ impl Gateway {
         let gw_state = self.state.read().await.clone();
         let lightning_network = match gw_state {
             GatewayState::Running { lightning_context } => {
-                if network.is_some() && network != Some(lightning_context.lightning_network) {
+                if network.is_some()
+                    && network
+                        != Some(bitcoin30_to_bitcoin29_network(
+                            lightning_context.lightning_network,
+                        ))
+                {
                     return Err(GatewayError::GatewayConfigurationError(
                         "Cannot change network while connected to a lightning node".to_string(),
                     ));
@@ -1072,9 +1063,11 @@ impl Gateway {
 
         let mut dbtx = self.gateway_db.begin_transaction().await;
 
-        let gateway_config = if let Some(mut prev_config) = self.get_gateway_configuration().await {
+        let prev_gateway_config = self.gateway_config.read().await.clone();
+        let new_gateway_config = if let Some(mut prev_config) = prev_gateway_config {
             if let Some(password) = password {
-                prev_config.password = password;
+                let hashed_password = hash_password(password, prev_config.password_salt);
+                prev_config.hashed_password = hashed_password;
             }
 
             if let Some(network) = network {
@@ -1101,26 +1094,29 @@ impl Gateway {
 
             prev_config
         } else {
-            if password.is_none() {
-                return Err(GatewayError::GatewayConfigurationError(
-                    "The password field is required when initially configuring the gateway"
-                        .to_string(),
-                ));
-            }
+            let password = password.ok_or(GatewayError::GatewayConfigurationError(
+                "The password field is required when initially configuring the gateway".to_string(),
+            ))?;
+            let password_salt: [u8; 16] = rand::thread_rng().gen();
+            let hashed_password = hash_password(password, password_salt);
 
             GatewayConfiguration {
-                password: password.unwrap(),
-                network: lightning_network,
+                hashed_password,
+                network: bitcoin30_to_bitcoin29_network(lightning_network),
                 num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
                 routing_fees: DEFAULT_FEES,
+                password_salt,
             }
         };
 
-        dbtx.insert_entry(&GatewayConfigurationKey, &gateway_config)
+        dbtx.insert_entry(&GatewayConfigurationKey, &new_gateway_config)
             .await;
         dbtx.commit_tx().await;
 
-        self.update_federation_routing_fees(routing_fees, &gateway_config)
+        let mut curr_gateway_config = self.gateway_config.write().await;
+        *curr_gateway_config = Some(new_gateway_config.clone());
+
+        self.update_federation_routing_fees(routing_fees, &new_gateway_config)
             .await?;
         info!("Set GatewayConfiguration successfully.");
 
@@ -1225,31 +1221,37 @@ impl Gateway {
     /// - `GatewayConfiguration` is read from the database.
     /// - All cli or environment variables are set such that we can create a
     ///   `GatewayConfiguration`
-    async fn get_gateway_configuration(&self) -> Option<GatewayConfiguration> {
-        let mut dbtx = self.gateway_db.begin_transaction().await;
+    async fn get_gateway_configuration(
+        gateway_db: Database,
+        gateway_parameters: &GatewayParameters,
+    ) -> Option<GatewayConfiguration> {
+        let mut dbtx = gateway_db.begin_transaction().await;
 
         // Always use the gateway configuration from the database if it exists.
         if let Some(gateway_config) = dbtx.get_value(&GatewayConfigurationKey).await {
             return Some(gateway_config);
         }
 
+        // If the password is not provided, return None
+        let password = gateway_parameters.password.as_ref()?;
+
         // If the DB does not have the gateway configuration, we can construct one from
         // the provided password (required) and the defaults.
-        self.gateway_parameters.password.as_ref()?;
-
         // Use gateway parameters provided by the environment or CLI
-        let num_route_hints = self.gateway_parameters.num_route_hints;
-        let routing_fees = self
-            .gateway_parameters
+        let num_route_hints = gateway_parameters.num_route_hints;
+        let routing_fees = gateway_parameters
             .fees
             .clone()
             .unwrap_or(GatewayFee(DEFAULT_FEES));
-        let network = self.gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
+        let network = gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
+        let password_salt: [u8; 16] = rand::thread_rng().gen();
+        let hashed_password = hash_password(password.clone(), password_salt);
         let gateway_config = GatewayConfiguration {
-            password: self.gateway_parameters.password.clone().unwrap(),
-            network,
+            hashed_password,
+            network: bitcoin30_to_bitcoin29_network(network),
             num_route_hints,
             routing_fees: routing_fees.0,
+            password_salt,
         };
 
         Some(gateway_config)
@@ -1347,50 +1349,37 @@ impl Gateway {
 
     async fn register_clients_timer(&mut self, task_group: &mut TaskGroup) {
         let gateway = self.clone();
-        task_group
-            .spawn("register clients", move |handle| async move {
-                let registration_loop = async {
-                    loop {
-                        let mut registration_result: Option<Result<()>> = None;
-                        if let Some(gateway_config) = gateway.get_gateway_configuration().await {
-                            let gateway_state = gateway.state.read().await.clone();
-                            if let GatewayState::Running { .. } = &gateway_state {
-                                registration_result = Some(Self::register_all_federations(&gateway, &gateway_config).await);
-                            } else {
-                                // We need to retry more often if the gateway is not in the Running state
-                                const NOT_RUNNING_RETRY: Duration = Duration::from_secs(10);
-                                info!("Will not register federation yet because gateway still not in Running state. Current state: {gateway_state:?}. Will keep waiting, next retry in {NOT_RUNNING_RETRY:?}...");
-                                sleep(NOT_RUNNING_RETRY).await;
-                                continue;
-                            }
-                        } else {
-                            warn!("Cannot register clients because gateway configuration is not set.");
-                        }
-
-                        let registration_delay: Duration = if let Some(Err(GatewayError::FederationError(_))) = registration_result {
-                            // Retry to register gateway with federations in 10 seconds since it failed
-                            Duration::from_secs(10)
-                        } else {
-                        // Allow a 15% buffer of the TTL before the re-registering gateway
-                        // with the federations.
-                            GW_ANNOUNCEMENT_TTL.mul_f32(0.85)
-                        };
-
-                        sleep(registration_delay).await;
+        task_group.spawn_cancellable("register clients", async move {
+            loop {
+                let mut registration_result: Option<Result<()>> = None;
+                let gateway_config = gateway.gateway_config.read().await.clone();
+                if let Some(gateway_config) = gateway_config {
+                    let gateway_state = gateway.state.read().await.clone();
+                    if let GatewayState::Running { .. } = &gateway_state {
+                        registration_result = Some(Self::register_all_federations(&gateway, &gateway_config).await);
+                    } else {
+                        // We need to retry more often if the gateway is not in the Running state
+                        const NOT_RUNNING_RETRY: Duration = Duration::from_secs(10);
+                        info!("Will not register federation yet because gateway still not in Running state. Current state: {gateway_state:?}. Will keep waiting, next retry in {NOT_RUNNING_RETRY:?}...");
+                        sleep(NOT_RUNNING_RETRY).await;
+                        continue;
                     }
+                } else {
+                    warn!("Cannot register clients because gateway configuration is not set.");
+                }
+
+                let registration_delay: Duration = if let Some(Err(GatewayError::FederationError(_))) = registration_result {
+                    // Retry to register gateway with federations in 10 seconds since it failed
+                    Duration::from_secs(10)
+                } else {
+                // Allow a 15% buffer of the TTL before the re-registering gateway
+                // with the federations.
+                    GW_ANNOUNCEMENT_TTL.mul_f32(0.85)
                 };
 
-                // The registration loop will sleep for long periods, so we allow shutdown
-                // signals to interrupt waiting for the rest of the loop to finish.
-                //
-                // If the loop is interrupted while in the middle of registering clients,
-                // start_gateway will spawn another task to register clients once a connection
-                // with the LN node is reestablished.
-                if handle.cancel_on_shutdown(registration_loop).await.is_err() {
-                    info!("register clients task received shutdown signal");
-                }
-            })
-            .await;
+                sleep(registration_delay).await;
+            }
+        });
     }
 
     async fn fetch_lightning_route_hints_try(
@@ -1493,12 +1482,14 @@ impl Gateway {
             })?;
         let ln_cfg: &LightningClientConfig = cfg.cast()?;
 
-        if ln_cfg.network != network {
+        if bitcoin29_to_bitcoin30_network(ln_cfg.network) != network {
             error!(
                 "Federation {} runs on {} but this gateway supports {}",
                 info.federation_id, ln_cfg.network, network,
             );
-            return Err(GatewayError::UnsupportedNetwork(ln_cfg.network));
+            return Err(GatewayError::UnsupportedNetwork(
+                bitcoin29_to_bitcoin30_network(ln_cfg.network),
+            ));
         }
 
         Ok(())
@@ -1552,23 +1543,6 @@ pub(crate) async fn fetch_lightning_node_info(
     let network = Network::from_str(network)
         .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid network {network}: {e}")))?;
     Ok((node_pub_key, alias, network))
-}
-
-async fn wait_for_new_password(
-    gateway_db: &Database,
-    gateway_config: Option<GatewayConfiguration>,
-) {
-    gateway_db
-        .wait_key_check(&GatewayConfigurationKey, |v| {
-            v.filter(|cfg| {
-                if let Some(old_config) = gateway_config.clone() {
-                    old_config.password != cfg.clone().password
-                } else {
-                    true
-                }
-            })
-        })
-        .await;
 }
 
 #[derive(Debug, Error)]

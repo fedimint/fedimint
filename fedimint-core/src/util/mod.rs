@@ -12,13 +12,14 @@ use std::str::FromStr;
 use std::{fs, io};
 
 use anyhow::format_err;
+use fedimint_logging::LOG_CORE;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
-use tracing::{debug, Instrument, Span};
+use tracing::{debug, warn, Instrument, Span};
 use url::{Host, ParseError, Url};
 
-use crate::task::MaybeSend;
+use crate::task::{self, MaybeSend};
 use crate::{apply, async_trait_maybe_send, maybe_add_send};
 
 /// Future that is `Send` unless targeting WASM
@@ -307,15 +308,73 @@ pub fn handle_version_hash_command(version_hash: &str) {
     }
 }
 
+pub use backon::{
+    BackoffBuilder, ConstantBuilder as ConstantBackoff, ExponentialBuilder as ExponentialBackoff,
+    FibonacciBuilder as FibonacciBackoff,
+};
+
+/// Run the supplied closure `op_fn` up to `max_attempts` times. Wait for the
+/// supplied `Duration` `interval` between attempts
+///
+/// # Returns
+///
+/// - If the closure runs successfully, the result is immediately returned
+/// - If the closure did not run successfully for `max_attempts` times, the
+///   error of the closure is returned
+pub async fn retry<F, Fut, T>(
+    op_name: impl Into<String>,
+    statergy: impl backon::BackoffBuilder,
+    op_fn: F,
+) -> Result<T, anyhow::Error>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<T, anyhow::Error>>,
+{
+    let mut statergy = statergy.build();
+    let op_name = op_name.into();
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        match op_fn().await {
+            Ok(result) => return Ok(result),
+            Err(error) => {
+                if let Some(interval) = statergy.next() {
+                    // run closure op_fn again
+                    debug!(
+                        target: LOG_CORE,
+                        %error,
+                        %attempts,
+                        interval = interval.as_secs(),
+                        "{} failed, retrying",
+                        op_name,
+                    );
+                    task::sleep(interval).await;
+                } else {
+                    warn!(
+                        target: LOG_CORE,
+                        %error,
+                        %attempts,
+                        "{} failed",
+                        op_name,
+                    );
+                    return Err(error);
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicU8, Ordering};
     use std::time::Duration;
 
+    use anyhow::anyhow;
     use fedimint_core::task::Elapsed;
     use futures::FutureExt;
 
+    use super::*;
     use crate::task::timeout;
-    use crate::util::{NextOrPending, SafeUrl};
 
     #[test]
     fn test_safe_url() {
@@ -376,5 +435,47 @@ mod tests {
             timeout(Duration::from_millis(100), stream.next_or_pending()).await,
             Err(Elapsed)
         ));
+    }
+    #[tokio::test]
+    async fn retry_succeed_with_one_attempt() {
+        let counter = AtomicU8::new(0);
+        let closure = || async {
+            counter.fetch_add(1, Ordering::SeqCst);
+            // always return a success
+            Ok(42)
+        };
+
+        let _ = retry(
+            "Run once",
+            ConstantBackoff::default()
+                .with_delay(Duration::ZERO)
+                .with_max_times(3),
+            closure,
+        )
+        .await;
+
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn retry_fail_with_three_attempts() {
+        let counter = AtomicU8::new(0);
+        let closure = || async {
+            counter.fetch_add(1, Ordering::SeqCst);
+            // always fail
+            Err::<(), anyhow::Error>(anyhow!("42"))
+        };
+
+        let _ = retry(
+            "Run 3 once",
+            ConstantBackoff::default()
+                .with_delay(Duration::ZERO)
+                // retry two error
+                .with_max_times(2),
+            closure,
+        )
+        .await;
+
+        assert_eq!(counter.load(Ordering::SeqCst), 3);
     }
 }

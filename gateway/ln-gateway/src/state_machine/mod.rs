@@ -152,7 +152,7 @@ impl ClientModuleInit for GatewayClientInit {
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientContext {
-    redeem_key: bitcoin::KeyPair,
+    redeem_key: bitcoin29::KeyPair,
     timelock_delta: u64,
     secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
     pub ln_decoder: Decoder,
@@ -253,7 +253,7 @@ impl GatewayClientModule {
                 gateway_redeem_key: self.redeem_key.public_key(),
                 node_pub_key: lightning_context.lightning_public_key,
                 lightning_alias: lightning_context.lightning_alias,
-                api: self.gateway.gateway_parameters.versioned_api.clone(),
+                api: self.gateway.versioned_api.clone(),
                 route_hints,
                 fees,
                 gateway_id: self.gateway.gateway_id,

@@ -1,11 +1,16 @@
 //! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
+//!
+//! This code is based on corresponding `rust-bitcoin` types.
+//!
+//! See [`Encodable`] and [`Decodable`] for two main traits.
 
 pub mod as_hex;
+mod bls12_381;
 mod btc;
 mod secp256k1;
-mod tbs;
+mod threshold_crypto;
 
 #[cfg(not(target_family = "wasm"))]
 mod tls;
@@ -1038,8 +1043,9 @@ where
                 module_instance_id,
                 raw,
             } => match decoders.get(module_instance_id) {
-                Some(decoder) => DynRawFallback::Decoded(decoder.decode(
+                Some(decoder) => DynRawFallback::Decoded(decoder.decode_complete(
                     &mut &raw[..],
+                    raw.len() as u64,
                     module_instance_id,
                     decoders,
                 )?),
@@ -1074,16 +1080,12 @@ where
         Ok(match decoders.get(module_instance_id) {
             Some(decoder) => {
                 let total_len_u64 = u64::consensus_decode_from_finite_reader(reader, decoders)?;
-                let mut reader = reader.take(total_len_u64);
-                let v: T = decoder.decode(&mut reader, module_instance_id, decoders)?;
-
-                if reader.limit() != 0 {
-                    return Err(fedimint_core::encoding::DecodeError::new_custom(
-                        anyhow::anyhow!("Dyn type did not consume all bytes during decoding"),
-                    ));
-                }
-
-                DynRawFallback::Decoded(v)
+                DynRawFallback::Decoded(decoder.decode_complete(
+                    reader,
+                    total_len_u64,
+                    module_instance_id,
+                    decoders,
+                )?)
             }
             None => {
                 // since the decoder is not available, just read the raw data

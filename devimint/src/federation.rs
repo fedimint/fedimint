@@ -1,3 +1,5 @@
+mod config;
+
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::path::PathBuf;
@@ -7,9 +9,9 @@ use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin::Network;
 use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
 use fedimint_core::api::{DynGlobalApi, ServerStatus};
-use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::config::{load_from_file, ClientConfig, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ModuleCommon};
 use fedimint_core::util::SafeUrl;
@@ -18,17 +20,18 @@ use fedimint_logging::LOG_DEVIMINT;
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
 use fedimint_wallet_client::config::WalletClientConfig;
-use fedimintd::attach_default_module_init_params;
-use fedimintd::fedimintd::FM_EXTRA_DKG_META_VAR;
+use fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 use fs_lock::FileLock;
 use futures::future::join_all;
 use rand::Rng;
 use semver::VersionReq;
+use tokio::time::Instant;
 use tracing::{debug, info};
 
 use super::external::Bitcoind;
 use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 use super::vars::utf8;
+use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{poll, FedimintdCmd};
 use crate::{poll_eq, vars};
 
@@ -37,7 +40,7 @@ pub struct Federation {
     // client is only for internal use, use cli commands instead
     pub members: BTreeMap<usize, Fedimintd>,
     pub vars: BTreeMap<usize, vars::Fedimintd>,
-    bitcoind: Bitcoind,
+    pub bitcoind: Bitcoind,
 
     /// Built in [`Client`]
     client: Client,
@@ -51,10 +54,10 @@ pub struct Client {
 
 impl Client {
     fn clients_dir() -> PathBuf {
-        let data_dir: PathBuf = env::var("FM_DATA_DIR")
-            .expect("FM_DATA_DIR not set")
+        let data_dir: PathBuf = env::var(FM_DATA_DIR_ENV)
+            .expect("FM_DATA_DIR_ENV not set")
             .parse()
-            .expect("FM_DATA_DIR invalid");
+            .expect("FM_DATA_DIR_ENV invalid");
         data_dir.join("clients")
     }
 
@@ -155,6 +158,18 @@ impl Client {
         Ok(())
     }
 
+    pub async fn get_deposit_addr(&self) -> Result<(String, String)> {
+        let deposit = cmd!(self, "deposit-address").out_json().await?;
+        Ok((
+            deposit["address"].as_str().unwrap().to_string(),
+            deposit["operation_id"].as_str().unwrap().to_string(),
+        ))
+    }
+
+    pub async fn await_deposit(&self, operation_id: &str) -> Result<()> {
+        cmd!(self, "await-deposit", operation_id).run().await
+    }
+
     pub async fn cmd(&self) -> Command {
         cmd!(
             crate::util::get_fedimint_cli_path(),
@@ -227,7 +242,7 @@ impl Federation {
             .await
             .context("moving invite-code file")?;
         }
-        info!("moved invite-code files to client data directory");
+        debug!("Moved invite-code files to client data directory");
 
         Ok(Self {
             members,
@@ -244,13 +259,13 @@ impl Federation {
 
     /// Read the invite code from the client data dir
     pub fn invite_code(&self) -> Result<String> {
-        let data_dir: PathBuf = env::var("FM_CLIENT_DIR")?.parse()?;
+        let data_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)?.parse()?;
         let invite_code = fs::read_to_string(data_dir.join("invite-code"))?;
         Ok(invite_code)
     }
 
     pub fn invite_code_for(peer_id: PeerId) -> Result<String> {
-        let data_dir: PathBuf = env::var("FM_CLIENT_DIR")?.parse()?;
+        let data_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)?.parse()?;
         let name = format!("invite-code-{}", peer_id);
         let invite_code = fs::read_to_string(data_dir.join(name))?;
         Ok(invite_code)
@@ -314,33 +329,23 @@ impl Federation {
 
     pub async fn pegin_client(&self, amount: u64, client: &Client) -> Result<()> {
         info!(amount, "Pegging-in client funds");
-        let deposit = cmd!(client, "deposit-address").out_json().await?;
-        let deposit_address = deposit["address"].as_str().unwrap();
-        let deposit_operation_id = deposit["operation_id"].as_str().unwrap();
 
-        self.bitcoind
-            .send_to(deposit_address.to_owned(), amount)
-            .await?;
+        let (address, operation_id) = client.get_deposit_addr().await?;
+
+        self.bitcoind.send_to(address, amount).await?;
         self.bitcoind.mine_blocks(21).await?;
 
-        cmd!(client, "await-deposit", deposit_operation_id)
-            .run()
-            .await?;
+        client.await_deposit(&operation_id).await?;
         Ok(())
     }
 
     pub async fn pegin_gateway(&self, amount: u64, gw: &super::gatewayd::Gatewayd) -> Result<()> {
         info!(amount, "Pegging-in gateway funds");
         let fed_id = self.calculate_federation_id().await;
-        let pegin_addr = cmd!(gw, "address", "--federation-id={fed_id}")
-            .out_json()
-            .await?
-            .as_str()
-            .context("address must be a string")?
-            .to_owned();
+        let pegin_addr = gw.get_pegin_addr(&fed_id).await?;
         self.bitcoind.send_to(pegin_addr, amount).await?;
         self.bitcoind.mine_blocks(21).await?;
-        poll("gateway pegin", None, || async {
+        poll("gateway pegin", || async {
             let gateway_balance = cmd!(gw, "balance", "--federation-id={fed_id}")
                 .out_json()
                 .await
@@ -364,7 +369,7 @@ impl Federation {
 
     pub async fn await_block_sync(&self) -> Result<u64> {
         let finality_delay = self.get_finality_delay().await?;
-        let block_count = self.bitcoind.get_block_count()?;
+        let block_count = self.bitcoind.get_block_count().await?;
         let expected = block_count.saturating_sub(finality_delay.into());
         cmd!(self.client, "dev", "wait-block-count", expected)
             .run()
@@ -391,6 +396,8 @@ impl Federation {
     }
 
     pub async fn await_gateways_registered(&self) -> Result<()> {
+        let start_time = Instant::now();
+        debug!(target: LOG_DEVIMINT, "Awaiting LN gateways registration");
         let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
         let command = if VersionReq::parse("<0.3.0-alpha")?.matches(&fedimint_cli_version) {
             "list-gateways"
@@ -398,7 +405,7 @@ impl Federation {
             "update-gateway-cache"
         };
 
-        poll("gateways registered", None, || async {
+        poll("gateways registered", || async {
             let num_gateways = cmd!(self.client, command)
                 .out_json()
                 .await
@@ -410,11 +417,14 @@ impl Federation {
             poll_eq!(num_gateways, 2)
         })
         .await?;
+        debug!(target: LOG_DEVIMINT,
+            elapsed_ms = %start_time.elapsed().as_millis(),
+            "Gateways registered");
         Ok(())
     }
 
     pub async fn await_all_peers(&self) -> Result<()> {
-        poll("Waiting for all peers to be online", None, || async {
+        poll("Waiting for all peers to be online", || async {
             cmd!(
                 self.client,
                 "dev",
@@ -470,7 +480,7 @@ impl Fedimintd {
         peer_id: usize,
         env: &vars::Fedimintd,
     ) -> Result<Self> {
-        info!("fedimintd-{peer_id} started");
+        debug!("Starting fedimintd-{peer_id}");
         let process = process_mgr
             .spawn_daemon(
                 &format!("fedimintd-{peer_id}"),
@@ -495,8 +505,7 @@ pub async fn run_dkg(
 ) -> Result<()> {
     let auth_for = |peer: &PeerId| -> ApiAuth { params[peer].local.api_auth.clone() };
     for (peer_id, client) in &admin_clients {
-        const MAX_RETRIES: usize = 20;
-        poll("trying-to-connect-to-peers", MAX_RETRIES, || async {
+        poll("trying-to-connect-to-peers", || async {
             client
                 .status()
                 .await
@@ -504,7 +513,7 @@ pub async fn run_dkg(
                 .map_err(ControlFlow::Continue)
         })
         .await?;
-        info!("Connected to {peer_id}")
+        debug!("Connected to {peer_id}")
     }
     for (peer_id, client) in &admin_clients {
         assert_eq!(
@@ -557,7 +566,7 @@ pub async fn run_dkg(
         let name = followers_names
             .get(peer_id)
             .context("missing follower name")?;
-        info!("calling set_config_gen_connections for {peer_id} {name}");
+        debug!("calling set_config_gen_connections for {peer_id} {name}");
         client
             .set_config_gen_connections(
                 ConfigGenConnectionsRequest {
@@ -610,7 +619,7 @@ pub async fn run_dkg(
     let dkg_results = admin_clients
         .iter()
         .map(|(peer_id, client)| client.run_dkg(auth_for(peer_id)));
-    info!("Running DKG...");
+    info!(target: LOG_DEVIMINT, "Running DKG");
     let (dkg_results, leader_wait_result) = tokio::join!(
         join_all(dkg_results),
         wait_server_status(leader, ServerStatus::VerifyingConfigs)
@@ -627,15 +636,15 @@ pub async fn run_dkg(
         hashes.insert(client.get_verify_config_hash(auth_for(peer_id)).await?);
     }
     assert_eq!(hashes.len(), 1);
-    info!("DKG successfully complete. Starting consensus...");
+    debug!(target: LOG_DEVIMINT, "DKG ready");
+    info!(target: LOG_DEVIMINT, "Starting consensus");
     for (peer_id, client) in &admin_clients {
         if let Err(e) = client.start_consensus(auth_for(peer_id)).await {
-            tracing::info!("Error calling start_consensus: {e:?}, trying to continue...")
+            tracing::debug!("Error calling start_consensus: {e:?}, trying to continue...")
         }
-
         wait_server_status(client, ServerStatus::ConsensusRunning).await?;
     }
-    info!("Consensus is running");
+    debug!("Consensus is running");
     Ok(())
 }
 
@@ -644,7 +653,7 @@ async fn set_config_gen_params(
     auth: ApiAuth,
     mut server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -> Result<()> {
-    attach_default_module_init_params(
+    self::config::attach_default_module_init_params(
         BitcoinRpcConfig::from_env_vars()?,
         &mut server_gen_params,
         Network::Regtest,
@@ -653,11 +662,11 @@ async fn set_config_gen_params(
     // Since we are not actually calling `fedimintd` binary, parse and handle
     // `FM_EXTRA_META_DATA` like it would do.
     let mut extra_meta_data = parse_map(
-        &std::env::var(FM_EXTRA_DKG_META_VAR)
+        &std::env::var(FM_EXTRA_DKG_META_ENV)
             .ok()
             .unwrap_or_default(),
     )
-    .with_context(|| format!("Failed to parse {FM_EXTRA_DKG_META_VAR}"))
+    .with_context(|| format!("Failed to parse {FM_EXTRA_DKG_META_ENV}"))
     .expect("Failed");
     let mut meta = BTreeMap::from([("federation_name".to_string(), "testfed".to_string())]);
     meta.append(&mut extra_meta_data);
@@ -671,22 +680,24 @@ async fn set_config_gen_params(
 }
 
 async fn wait_server_status(client: &DynGlobalApi, expected_status: ServerStatus) -> Result<()> {
-    const RETRIES: usize = 60;
-    poll("waiting-server-status", RETRIES, || async {
-        let server_status = client
-            .status()
-            .await
-            .context("server status")
-            .map_err(ControlFlow::Continue)?
-            .server;
-        if server_status == expected_status {
-            Ok(())
-        } else {
-            Err(ControlFlow::Continue(anyhow!(
-                "expected status: {expected_status:?} current status: {server_status:?}"
-            )))
-        }
-    })
+    poll(
+        &format!("waiting-server-status: {expected_status:?}"),
+        || async {
+            let server_status = client
+                .status()
+                .await
+                .context("server status")
+                .map_err(ControlFlow::Continue)?
+                .server;
+            if server_status == expected_status {
+                Ok(())
+            } else {
+                Err(ControlFlow::Continue(anyhow!(
+                    "expected status: {expected_status:?} current status: {server_status:?}"
+                )))
+            }
+        },
+    )
     .await?;
     Ok(())
 }

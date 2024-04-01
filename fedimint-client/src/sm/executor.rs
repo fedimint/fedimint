@@ -284,15 +284,15 @@ impl Executor {
             let task_group_shutdown_rx = task_handle.make_shutdown_rx().await;
             select! {
                 _ = task_group_shutdown_rx => {
-                    info!("Shutting down state machine executor runner due to task group shutdown signal");
+                    debug!("Shutting down state machine executor runner due to task group shutdown signal");
                 },
                 shutdown_happened_sender = shutdown_receiver => {
                     match shutdown_happened_sender {
                         Ok(()) => {
-                            info!("Shutting down state machine executor runner due to explicit shutdown signal");
+                            debug!("Shutting down state machine executor runner due to explicit shutdown signal");
                         },
                         Err(_) => {
-                            error!("Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)");
+                            warn!("Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)");
                         }
                     }
                 },
@@ -300,7 +300,7 @@ impl Executor {
                     error!("State machine executor runner exited unexpectedly!");
                 },
             };
-        }).await;
+        });
     }
 
     /// Stops the background task that runs the state machines.
@@ -346,7 +346,7 @@ impl ExecutorInner {
         global_context_gen: ContextGen,
         sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
     ) {
-        info!("Starting state machine executor task");
+        debug!(target: LOG_CLIENT_REACTOR, "Starting state machine executor task");
         if let Err(err) = self
             .run_state_machines_executor_inner(global_context_gen, sm_update_rx)
             .await
@@ -500,7 +500,7 @@ impl ExecutorInner {
                         ExecutorLoopEvent::Triggered(first_completed_result)
                     }));
 
-                    info!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), transitions_num, "Started new active state machine.");
+                    debug!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), transitions_num, "Started new active state machine.");
                 }
                 ExecutorLoopEvent::Triggered(TransitionForActiveState {
                     outcome,
@@ -530,12 +530,12 @@ impl ExecutorInner {
                         let global_context_gen = global_context_gen.clone();
                         Box::pin(
                             async move {
-                                info!(
+                                debug!(
                                     target: LOG_CLIENT_REACTOR,
                                     operation_id = %state.operation_id(),
                                     "Executing state transition",
                                 );
-                                debug!(
+                                trace!(
                                     target: LOG_CLIENT_REACTOR,
                                     operation_id = %state.operation_id(),
                                     ?state,
@@ -637,7 +637,7 @@ impl ExecutorInner {
                         currently_running_sms.remove(&state),
                         "State must have been recorded"
                     );
-                    info!(
+                    debug!(
                         target: LOG_CLIENT_REACTOR,
                         operation_id = %state.operation_id(),
                         outcome_active = outcome.is_active(),

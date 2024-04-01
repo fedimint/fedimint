@@ -1,5 +1,9 @@
 #![cfg_attr(target_family = "wasm", allow(dead_code))]
 
+/// Just-in-time initialization
+pub mod jit;
+pub mod waiter;
+
 use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::{pin, Pin};
@@ -9,18 +13,13 @@ use std::time::{Duration, Instant, SystemTime};
 use anyhow::bail;
 use fedimint_core::time::now;
 use fedimint_logging::{LOG_TASK, LOG_TEST};
-#[cfg(target_family = "wasm")]
-use futures::channel::oneshot;
 use futures::future::{self, Either};
-use futures::lock::Mutex;
 pub use imp::*;
 use thiserror::Error;
-#[cfg(not(target_family = "wasm"))]
-use tokio::sync::oneshot;
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 #[cfg(not(target_family = "wasm"))]
 use tokio::task::{JoinError, JoinHandle};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 #[cfg(target_family = "wasm")]
 type JoinHandle<T> = future::Ready<anyhow::Result<T>>;
@@ -37,7 +36,9 @@ struct TaskGroupInner {
     // It is necessary to keep at least one `Receiver` around,
     // otherwise shutdown writes are lost.
     on_shutdown_rx: watch::Receiver<bool>,
-    join: Mutex<VecDeque<(String, JoinHandle<()>)>>,
+    // using blocking Mutex to avoid `async` in `spawn`
+    // it's OK as we don't ever need to yield
+    join: std::sync::Mutex<VecDeque<(String, JoinHandle<()>)>>,
     // using blocking Mutex to avoid `async` in `shutdown`
     // it's OK as we don't ever need to yield
     subgroups: std::sync::Mutex<Vec<TaskGroup>>,
@@ -49,7 +50,7 @@ impl Default for TaskGroupInner {
         Self {
             on_shutdown_tx,
             on_shutdown_rx,
-            join: Mutex::new(Default::default()),
+            join: std::sync::Mutex::new(Default::default()),
             subgroups: std::sync::Mutex::new(vec![]),
         }
     }
@@ -170,7 +171,7 @@ impl TaskGroup {
     }
 
     #[cfg(not(target_family = "wasm"))]
-    pub async fn spawn<Fut, R>(
+    pub fn spawn<Fut, R>(
         &self,
         name: impl Into<String>,
         f: impl FnOnce(TaskHandle) -> Fut + Send + 'static,
@@ -179,7 +180,7 @@ impl TaskGroup {
         Fut: Future<Output = R> + Send + 'static,
         R: Send + 'static,
     {
-        use tracing::{debug, info_span, Instrument, Span};
+        use tracing::{info_span, Instrument, Span};
 
         let name = name.into();
         // new child span of current span
@@ -203,7 +204,11 @@ impl TaskGroup {
             }
             .instrument(span)
         }) {
-            self.inner.join.lock().await.push_back((name, handle));
+            self.inner
+                .join
+                .lock()
+                .expect("lock poison")
+                .push_back((name, handle));
         }
         guard.completed = true;
 
@@ -229,13 +234,17 @@ impl TaskGroup {
         if let Some(handle) = self::imp::spawn_local(name.as_str(), async move {
             f(handle).await;
         }) {
-            self.inner.join.lock().await.push_back((name, handle));
+            self.inner
+                .join
+                .lock()
+                .expect("lock poison")
+                .push_back((name, handle));
         }
         guard.completed = true;
     }
     // TODO: Send vs lack of Send bound; do something about it
     #[cfg(target_family = "wasm")]
-    pub async fn spawn<Fut, R>(
+    pub fn spawn<Fut, R>(
         &self,
         name: impl Into<String>,
         f: impl FnOnce(TaskHandle) -> Fut + 'static,
@@ -256,11 +265,35 @@ impl TaskGroup {
         if let Some(handle) = self::imp::spawn(name.as_str(), async move {
             let _ = tx.send(f(handle).await);
         }) {
-            self.inner.join.lock().await.push_back((name, handle));
+            self.inner
+                .join
+                .lock()
+                .expect("lock poison")
+                .push_back((name, handle));
         }
         guard.completed = true;
 
         rx
+    }
+
+    /// Spawn a task that will get cancelled automatically on TaskGroup
+    /// shutdown.
+    pub fn spawn_cancellable<R>(
+        &self,
+        name: impl Into<String>,
+        future: impl Future<Output = R> + MaybeSend + 'static,
+    ) -> oneshot::Receiver<Result<R, ShuttingDownError>>
+    where
+        R: MaybeSend + 'static,
+    {
+        self.spawn(name, move |handle| async move {
+            let value = handle.cancel_on_shutdown(future).await;
+            if value.is_err() {
+                // name will part of span
+                debug!("task cancelled on shutdown");
+            }
+            value
+        })
     }
 
     pub async fn join_all(self, timeout: Option<Duration>) -> Result<(), anyhow::Error> {
@@ -287,8 +320,12 @@ impl TaskGroup {
             info!(target: LOG_TASK, "Subgroup finished");
         }
 
-        while let Some((name, join)) = self.inner.join.lock().await.pop_front() {
-            info!(target: LOG_TASK, task=%name, "Waiting for task to finish");
+        // drop lock early
+        while let Some((name, join)) = {
+            let mut lock = self.inner.join.lock().expect("lock poison");
+            lock.pop_front()
+        } {
+            debug!(target: LOG_TASK, task=%name, "Waiting for task to finish");
 
             let timeout = deadline.map(|deadline| {
                 deadline
@@ -313,7 +350,7 @@ impl TaskGroup {
 
             match join_future.await {
                 Ok(Ok(())) => {
-                    info!(target: LOG_TASK, task=%name, "Task finished");
+                    debug!(target: LOG_TASK, task=%name, "Task finished");
                 }
                 Ok(Err(e)) => {
                     error!(target: LOG_TASK, task=%name, error=%e, "Task panicked");
@@ -648,6 +685,15 @@ pub async fn sleep_in_test(comment: impl AsRef<str>, duration: Duration) {
     sleep(duration).await;
 }
 
+/// An error used as a "cancelled" marker in [`Cancellable`].
+#[derive(Error, Debug)]
+#[error("Operation cancelled")]
+pub struct Cancelled;
+
+/// Operation that can potentially get cancelled returning no result (e.g.
+/// program shutdown).
+pub type Cancellable<T> = std::result::Result<T, Cancelled>;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -657,8 +703,7 @@ mod tests {
         let tg = TaskGroup::new();
         tg.spawn("shutdown waiter", |handle| async move {
             handle.make_shutdown_rx().await.await
-        })
-        .await;
+        });
         sleep(Duration::from_millis(10)).await;
         tg.shutdown_join_all(None).await?;
         Ok(())
@@ -670,8 +715,7 @@ mod tests {
         tg.spawn("shutdown waiter", |handle| async move {
             sleep(Duration::from_millis(10)).await;
             handle.make_shutdown_rx().await.await
-        })
-        .await;
+        });
         tg.shutdown_join_all(None).await?;
         Ok(())
     }
@@ -683,8 +727,7 @@ mod tests {
             .await
             .spawn("shutdown waiter", |handle| async move {
                 handle.make_shutdown_rx().await.await
-            })
-            .await;
+            });
         sleep(Duration::from_millis(10)).await;
         tg.shutdown_join_all(None).await?;
         Ok(())
@@ -698,8 +741,7 @@ mod tests {
             .spawn("shutdown waiter", |handle| async move {
                 sleep(Duration::from_millis(10)).await;
                 handle.make_shutdown_rx().await.await
-            })
-            .await;
+            });
         tg.shutdown_join_all(None).await?;
         Ok(())
     }

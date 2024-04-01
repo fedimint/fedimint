@@ -3,9 +3,8 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use async_trait::async_trait;
-use fedimint_core::cancellable::{Cancellable, Cancelled};
 use fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections};
-use fedimint_core::task::spawn;
+use fedimint_core::task::{spawn, Cancellable, Cancelled};
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_NET_PEER;
 use serde::de::DeserializeOwned;
@@ -235,39 +234,35 @@ pub mod test {
             for mux_key in modules.clone() {
                 let conn1 = conn1.clone();
                 let task_handle = task_handle.clone();
-                task_group
-                    .spawn(format!("sender-{mux_key}"), move |_| async move {
-                        for msg_i in 0..NUM_MSGS_PER_MODULE {
-                            // add some random jitter
-                            if OsRng.gen() {
-                                // Note that randomized sleep in sender is larger than
-                                // in receiver, to avoid just running with always full
-                                // queues.
-                                task::sleep(Duration::from_millis(2)).await;
-                            }
-                            if task_handle.is_shutting_down() {
-                                break;
-                            }
-                            conn1.send(&[peer2], mux_key, msg_i).await.unwrap();
+                task_group.spawn(format!("sender-{mux_key}"), move |_| async move {
+                    for msg_i in 0..NUM_MSGS_PER_MODULE {
+                        // add some random jitter
+                        if OsRng.gen() {
+                            // Note that randomized sleep in sender is larger than
+                            // in receiver, to avoid just running with always full
+                            // queues.
+                            task::sleep(Duration::from_millis(2)).await;
                         }
-                    })
-                    .await;
+                        if task_handle.is_shutting_down() {
+                            break;
+                        }
+                        conn1.send(&[peer2], mux_key, msg_i).await.unwrap();
+                    }
+                });
             }
 
             modules.shuffle(&mut thread_rng());
             for mux_key in modules.clone() {
                 let conn2 = conn2.clone();
-                task_group
-                    .spawn(format!("receiver-{mux_key}"), move |_| async move {
-                        for msg_i in 0..NUM_MSGS_PER_MODULE {
-                            // add some random jitter
-                            if OsRng.gen() {
-                                task::sleep(Duration::from_millis(1)).await;
-                            }
-                            assert_eq!(conn2.receive(mux_key).await.unwrap(), (peer1, msg_i));
+                task_group.spawn(format!("receiver-{mux_key}"), move |_| async move {
+                    for msg_i in 0..NUM_MSGS_PER_MODULE {
+                        // add some random jitter
+                        if OsRng.gen() {
+                            task::sleep(Duration::from_millis(1)).await;
                         }
-                    })
-                    .await;
+                        assert_eq!(conn2.receive(mux_key).await.unwrap(), (peer1, msg_i));
+                    }
+                });
             }
 
             task_group.join_all(None).await.expect("no failures");

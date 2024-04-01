@@ -21,4 +21,4 @@ fedimint-core = { version = "0.3.0-alpha", path = "../fedimint-core" }
 lazy_static = "1.4.0"
 prometheus = "0.13.3"
 tokio = "1"
-tracing = "0.1.40"
+tracing = { workspace = true }

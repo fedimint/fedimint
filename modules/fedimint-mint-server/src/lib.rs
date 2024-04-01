@@ -1,3 +1,6 @@
+pub mod db;
+mod metrics;
+
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::bail;
@@ -19,17 +22,10 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeersExt,
     OutPoint, PeerId, ServerModule, Tiered, TieredMultiZip,
 };
-use fedimint_metrics::prometheus::register_histogram_with_registry;
-use fedimint_metrics::{histogram_opts, lazy_static, Histogram, AMOUNTS_BUCKETS_SATS, REGISTRY};
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
     MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate,
     MintGenParams,
-};
-use fedimint_mint_common::db::{
-    DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix, MintAuditItemKey,
-    MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix, NonceKey,
-    NonceKeyPrefix,
 };
 pub use fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 use fedimint_mint_common::{
@@ -39,6 +35,10 @@ use fedimint_mint_common::{
 use fedimint_server::config::distributedgen::{evaluate_polynomial_g2, scalar, PeerHandleOps};
 use futures::StreamExt;
 use itertools::Itertools;
+use metrics::{
+    MINT_INOUT_FEES_SATS, MINT_INOUT_SATS, MINT_ISSUED_ECASH_FEES_SATS, MINT_ISSUED_ECASH_SATS,
+    MINT_REDEEMED_ECASH_FEES_SATS, MINT_REDEEMED_ECASH_SATS,
+};
 use rand::rngs::OsRng;
 use secp256k1_zkp::SECP256K1;
 use strum::IntoEnumIterator;
@@ -51,44 +51,11 @@ use threshold_crypto::group::Curve;
 use threshold_crypto::{G2Projective, Scalar};
 use tracing::{debug, info};
 
-lazy_static! {
-    static ref MINT_REDEEMED_ECASH_SATS: Histogram = register_histogram_with_registry!(
-        histogram_opts!(
-            "mint_redeemed_ecash_sats",
-            "Value of redeemed e-cash notes in sats",
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    static ref MINT_REDEEMED_ECASH_FEES_SATS: Histogram = register_histogram_with_registry!(
-        histogram_opts!(
-            "mint_redeemed_ecash_fees_sats",
-            "Value of e-cash fees during reissue in sats",
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    static ref MINT_ISSUED_ECASH_SATS: Histogram = register_histogram_with_registry!(
-        histogram_opts!(
-            "mint_issued_ecash_sats",
-            "Value of issued e-cash notes in sats",
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-    static ref MINT_ISSUED_ECASH_FEES_SATS: Histogram = register_histogram_with_registry!(
-        histogram_opts!(
-            "mint_issued_ecash_fees_sats",
-            "Value of e-cash fees during issue in sats",
-            AMOUNTS_BUCKETS_SATS.clone()
-        ),
-        REGISTRY
-    )
-    .unwrap();
-}
+use crate::db::{
+    DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix, MintAuditItemKey,
+    MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix, NonceKey,
+    NonceKeyPrefix,
+};
 
 #[derive(Debug, Clone)]
 pub struct MintInit;
@@ -582,6 +549,12 @@ fn calculate_mint_issued_ecash_metrics(
     fee: Amount,
 ) {
     dbtx.on_commit(move || {
+        MINT_INOUT_SATS
+            .with_label_values(&["outgoing"])
+            .observe(amount.sats_f64());
+        MINT_INOUT_FEES_SATS
+            .with_label_values(&["outgoing"])
+            .observe(fee.sats_f64());
         MINT_ISSUED_ECASH_SATS.observe(amount.sats_f64());
         MINT_ISSUED_ECASH_FEES_SATS.observe(fee.sats_f64());
     });
@@ -593,6 +566,12 @@ fn calculate_mint_redeemed_ecash_metrics(
     fee: Amount,
 ) {
     dbtx.on_commit(move || {
+        MINT_INOUT_SATS
+            .with_label_values(&["incoming"])
+            .observe(amount.sats_f64());
+        MINT_INOUT_FEES_SATS
+            .with_label_values(&["incoming"])
+            .observe(fee.sats_f64());
         MINT_REDEEMED_ECASH_SATS.observe(amount.sats_f64());
         MINT_REDEEMED_ECASH_FEES_SATS.observe(fee.sats_f64());
     });
@@ -617,7 +596,12 @@ impl Mint {
             .values()
             .all(|pk| pk.structural_eq(&cfg.private.tbs_sks)));
 
-        let ref_pub_key = cfg.private.tbs_sks.to_public();
+        let ref_pub_key = Tiered::from_iter(
+            cfg.private
+                .tbs_sks
+                .iter()
+                .map(|(amt, key)| (amt, key.to_pub_key_share())),
+        );
 
         // Find our key index and make sure we know the private key for all our public
         // key shares

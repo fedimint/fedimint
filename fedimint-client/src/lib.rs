@@ -181,7 +181,7 @@ pub enum AddStateMachinesError {
 pub enum DiscoverCommonApiVersionMode {
     /// Get the response from only a few peers, or until a timeout
     Fast,
-    /// Try to get a reasponse from all peers, or until a timeout
+    /// Try to get a response from all peers, or until a timeout
     Full,
 }
 
@@ -718,6 +718,16 @@ where
     }
 }
 
+/// Main client type
+///
+/// A handle and API to interacting with a single Federation.
+///
+/// Under the hood managing service tasks, state machines,
+/// database and other resources required.
+///
+/// This type is shared externally and internally, and
+/// [`ClientHandle`] is responsible for external lifecycle management
+/// and resource freeing of the [`Client`].
 pub struct Client {
     config: ClientConfig,
     decoders: ModuleDecoderRegistry,
@@ -753,6 +763,11 @@ impl Client {
 
     pub fn api_clone(&self) -> DynGlobalApi {
         self.api.clone()
+    }
+
+    /// Get the [`TaskGroup`] that is tied to Client's lifetime.
+    pub fn task_group(&self) -> &TaskGroup {
+        &self.task_group
     }
 
     pub async fn get_config_from_db(db: &Database) -> Option<ClientConfig> {
@@ -873,6 +888,10 @@ impl Client {
         instance: ModuleInstanceId,
     ) -> Option<&maybe_add_send_sync!(dyn IClientModule)> {
         Some(self.modules.get(instance)?.as_ref())
+    }
+
+    pub fn has_module(&self, instance: ModuleInstanceId) -> bool {
+        self.modules.get(instance).is_some()
     }
 
     /// Determines if a transaction is underfunded, overfunded or balanced
@@ -1432,31 +1451,19 @@ impl Client {
             let db = db.clone();
             // Separate task group, because we actually don't want to be waiting for this to
             // finish, and it's just best effort.
-            task_group
-                .spawn(
-                    "refresh_common_api_version_static",
-                    |task_handle| async move {
-                        let ok_or_canceled = task_handle
-                            .cancel_on_shutdown(async {
-                                if let Err(e) = Self::refresh_common_api_version_static(
-                                    &config,
-                                    &module_inits,
-                                    &api,
-                                    &db,
-                                    DiscoverCommonApiVersionMode::Full,
-                                )
-                                .await
-                                {
-                                    warn!("Failed to discover common api versions: {e}");
-                                }
-                            })
-                            .await;
-                        if ok_or_canceled.is_err() {
-                            debug!("Refreshing common api task version canceled");
-                        };
-                    },
+            task_group.spawn_cancellable("refresh_common_api_version_static", async move {
+                if let Err(error) = Self::refresh_common_api_version_static(
+                    &config,
+                    &module_inits,
+                    &api,
+                    &db,
+                    DiscoverCommonApiVersionMode::Full,
                 )
-                .await;
+                .await
+                {
+                    warn!(%error, "Failed to discover common api versions");
+                }
+            });
 
             return Ok(v.0);
         }
@@ -1627,8 +1634,7 @@ impl Client {
                     module_recovery_progress_receivers,
                 )
                 .await
-            })
-            .await;
+            });
     }
 
     async fn run_module_recoveries_task(
@@ -1737,16 +1743,20 @@ impl TransactionUpdates {
     }
 }
 
+/// Admin (guardian) identification and authentication
 pub struct AdminCreds {
+    /// Guardian's own `peer_id`
     pub peer_id: PeerId,
+    /// Authentication details
     pub auth: ApiAuth,
 }
 
+/// Used to configure, assemble and build [`Client`]
 pub struct ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
     admin_creds: Option<AdminCreds>,
-    db: Database,
+    db_no_decoders: Database,
     stopped: bool,
 }
 
@@ -1756,7 +1766,7 @@ impl ClientBuilder {
             module_inits: Default::default(),
             primary_module_instance: Default::default(),
             admin_creds: None,
-            db,
+            db_no_decoders: db,
             stopped: false,
         }
     }
@@ -1766,7 +1776,7 @@ impl ClientBuilder {
             module_inits: client.module_inits.clone(),
             primary_module_instance: Some(client.primary_module_instance),
             admin_creds: None,
-            db: client.db.clone(),
+            db_no_decoders: client.db.with_decoders(Default::default()),
             stopped: false,
         }
     }
@@ -1811,7 +1821,7 @@ impl ClientBuilder {
             for (module_id, module_cfg) in client_config.modules {
                 let kind = module_cfg.kind.clone();
                 let Some(init) = self.module_inits.get(&kind) else {
-                    debug!("Detected configuration for unsupported module id: {module_id}, kind: {kind}");
+                    // normal, expected and already logged about when building the client
                     continue;
                 };
 
@@ -1830,12 +1840,12 @@ impl ClientBuilder {
         Ok(())
     }
 
-    pub fn db(&self) -> &Database {
-        &self.db
+    pub fn db_no_decoders(&self) -> &Database {
+        &self.db_no_decoders
     }
 
     pub async fn load_existing_config(&self) -> anyhow::Result<ClientConfig> {
-        let Some(config) = Client::get_config_from_db(&self.db).await else {
+        let Some(config) = Client::get_config_from_db(&self.db_no_decoders).await else {
             bail!("Client database not initialized")
         };
 
@@ -1852,7 +1862,7 @@ impl ClientBuilder {
         config: ClientConfig,
         init_mode: InitMode,
     ) -> anyhow::Result<ClientHandle> {
-        if Client::is_initialized(&self.db).await {
+        if Client::is_initialized(&self.db_no_decoders).await {
             bail!("Client database already initialized")
         }
 
@@ -1860,7 +1870,7 @@ impl ClientBuilder {
         // transaction to avoid half-initialized client state.
         {
             debug!(target: LOG_CLIENT, "Initializing client database");
-            let mut dbtx = self.db.begin_transaction().await;
+            let mut dbtx = self.db_no_decoders.begin_transaction().await;
             // Save config to DB
             dbtx.insert_new_entry(
                 &ClientConfigKey {
@@ -2014,7 +2024,7 @@ impl ClientBuilder {
     }
 
     pub async fn open(self, root_secret: DerivableSecret) -> anyhow::Result<ClientHandle> {
-        let Some(config) = Client::get_config_from_db(&self.db).await else {
+        let Some(config) = Client::get_config_from_db(&self.db_no_decoders).await else {
             bail!("Client database not initialized")
         };
         let stopped = self.stopped;
@@ -2061,7 +2071,7 @@ impl ClientBuilder {
         let decoders = self.decoders(&config);
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
-        let db = self.db.with_decoders(decoders.clone());
+        let db = self.db_no_decoders.with_decoders(decoders.clone());
         let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
             Self::admin_api_from_id(admin_creds.peer_id, &config)?
         } else {
@@ -2225,6 +2235,7 @@ impl ClientBuilder {
                             notifier.clone(),
                             api.clone(),
                             self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
+                            task_group.clone(),
                         )
                         .await?;
 
@@ -2380,7 +2391,7 @@ pub fn client_decoders<'a>(
     let mut modules = BTreeMap::new();
     for (id, kind) in module_kinds {
         let Some(init) = registry.get(kind) else {
-            info!("Detected configuration for unsupported module id: {id}, kind: {kind}");
+            debug!("Detected configuration for unsupported module id: {id}, kind: {kind}");
             continue;
         };
 

@@ -6,26 +6,25 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, format_err, Context};
+use anyhow::{bail, format_err, Context};
 use bitcoin::secp256k1;
 use bitcoin_hashes::hex::{format_hex, FromHex};
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin_hashes::{hex, sha256};
+use bls12_381::Scalar;
 use fedimint_core::api::{FederationApiExt, InviteCode, WsFederationApi};
-use fedimint_core::cancellable::Cancelled;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{DynRawFallback, Encodable};
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::task::sleep;
+use fedimint_core::task::Cancelled;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use fedimint_logging::LOG_CORE;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use tbs::{serde_impl, Scalar};
 use thiserror::Error;
 use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective};
@@ -38,7 +37,7 @@ use crate::module::{
     ModuleConsensusVersion,
 };
 use crate::query::FilterMap;
-use crate::{maybe_add_send_sync, PeerId};
+use crate::{bls12_381_serde, maybe_add_send_sync, PeerId};
 
 // TODO: make configurable
 /// This limits the RAM consumption of a AlephBFT Unit to roughly 50kB
@@ -214,9 +213,9 @@ impl ClientConfig {
         // change
         if res.is_err() && std::any::TypeId::of::<V>() == std::any::TypeId::of::<String>() {
             let string_ret = Box::new(str_value.clone());
-            let ret: Box<V> = unsafe {
+            let ret = unsafe {
                 // We can transmute a String to V because we know that V==String
-                std::mem::transmute(string_ret)
+                std::mem::transmute::<Box<String>, Box<V>>(string_ret)
             };
             Ok(Some(*ret))
         } else {
@@ -239,23 +238,24 @@ impl ClientConfig {
     ) -> anyhow::Result<ClientConfig> {
         debug!("Downloading client config from {:?}", invite_code);
 
-        for _ in 0..10 {
-            match Self::try_download_client_config(invite_code).await {
-                Ok(cfg) => {
-                    return Ok(cfg);
-                }
-                Err(error) => {
-                    debug!("Failed to download client config {:?}", error);
-
-                    sleep(Duration::from_millis(500)).await;
-                }
-            }
-        }
-
-        Err(anyhow!("Failed to download client config"))
+        crate::util::retry(
+            "Downloading client config",
+            // 0.2, 0.2, 0.4, 0.6, 1.0, 1.6, ...
+            // sum = 21.2
+            fedimint_core::util::FibonacciBackoff::default()
+                .with_min_delay(Duration::from_millis(200))
+                .with_max_delay(Duration::from_secs(5))
+                .with_max_times(10),
+            || Self::try_download_client_config(invite_code),
+        )
+        .await
+        .context("Failed to download client config")
     }
 
-    async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Result<ClientConfig> {
+    /// Tries to download the client config only once.
+    pub async fn try_download_client_config(
+        invite_code: &InviteCode,
+    ) -> anyhow::Result<ClientConfig> {
         // we have to download the api endpoints first
         let federation_id = invite_code.federation_id();
 
@@ -350,6 +350,16 @@ impl Display for FederationIdPrefix {
 impl Display for FederationId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         format_hex(&self.0, f)
+    }
+}
+
+impl FromStr for FederationIdPrefix {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(Vec::from_hex(s)?.try_into().map_err(
+            |bytes: Vec<u8>| hex::Error::InvalidLength(4, bytes.len()),
+        )?))
     }
 }
 
@@ -592,7 +602,7 @@ impl<M> ModuleInitRegistry<M> {
 }
 
 impl ModuleRegistry<ConfigGenModuleParams> {
-    pub fn attach_config_gen_params<T: ModuleInitParams>(
+    pub fn attach_config_gen_params_by_id<T: ModuleInitParams>(
         &mut self,
         id: ModuleInstanceId,
         kind: ModuleKind,
@@ -603,7 +613,8 @@ impl ModuleRegistry<ConfigGenModuleParams> {
         self.register_module(id, kind, params);
         self
     }
-    pub fn append_config_gen_params<T: ModuleInitParams>(
+
+    pub fn attach_config_gen_params<T: ModuleInitParams>(
         &mut self,
         kind: ModuleKind,
         gen: T,
@@ -937,8 +948,8 @@ pub enum DkgMessage<G: DkgGroup> {
     HashedCommit(Sha256),
     Commit(#[serde(with = "serde_commit")] Vec<G>),
     Share(
-        #[serde(with = "serde_impl::scalar")] Scalar,
-        #[serde(with = "serde_impl::scalar")] Scalar,
+        #[serde(with = "bls12_381_serde::scalar")] Scalar,
+        #[serde(with = "bls12_381_serde::scalar")] Scalar,
     ),
     Extract(#[serde(with = "serde_commit")] Vec<G>),
 }
@@ -989,21 +1000,21 @@ pub trait SGroup: Sized {
 
 impl SGroup for G2Projective {
     fn serialize2<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        serde_impl::g2::serialize(&self.to_affine(), s)
+        bls12_381_serde::g2::serialize(&self.to_affine(), s)
     }
 
     fn deserialize2<'d, D: Deserializer<'d>>(d: D) -> Result<Self, D::Error> {
-        serde_impl::g2::deserialize(d).map(G2Projective::from)
+        bls12_381_serde::g2::deserialize(d).map(G2Projective::from)
     }
 }
 
 impl SGroup for G1Projective {
     fn serialize2<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        serde_impl::g1::serialize(&self.to_affine(), s)
+        bls12_381_serde::g1::serialize(&self.to_affine(), s)
     }
 
     fn deserialize2<'d, D: Deserializer<'d>>(d: D) -> Result<Self, D::Error> {
-        serde_impl::g1::deserialize(d).map(G1Projective::from)
+        bls12_381_serde::g1::deserialize(d).map(G1Projective::from)
     }
 }
 
