@@ -1830,6 +1830,46 @@
 <a href="#1828" id="1828">1828</a>
 <a href="#1829" id="1829">1829</a>
 <a href="#1830" id="1830">1830</a>
+<a href="#1831" id="1831">1831</a>
+<a href="#1832" id="1832">1832</a>
+<a href="#1833" id="1833">1833</a>
+<a href="#1834" id="1834">1834</a>
+<a href="#1835" id="1835">1835</a>
+<a href="#1836" id="1836">1836</a>
+<a href="#1837" id="1837">1837</a>
+<a href="#1838" id="1838">1838</a>
+<a href="#1839" id="1839">1839</a>
+<a href="#1840" id="1840">1840</a>
+<a href="#1841" id="1841">1841</a>
+<a href="#1842" id="1842">1842</a>
+<a href="#1843" id="1843">1843</a>
+<a href="#1844" id="1844">1844</a>
+<a href="#1845" id="1845">1845</a>
+<a href="#1846" id="1846">1846</a>
+<a href="#1847" id="1847">1847</a>
+<a href="#1848" id="1848">1848</a>
+<a href="#1849" id="1849">1849</a>
+<a href="#1850" id="1850">1850</a>
+<a href="#1851" id="1851">1851</a>
+<a href="#1852" id="1852">1852</a>
+<a href="#1853" id="1853">1853</a>
+<a href="#1854" id="1854">1854</a>
+<a href="#1855" id="1855">1855</a>
+<a href="#1856" id="1856">1856</a>
+<a href="#1857" id="1857">1857</a>
+<a href="#1858" id="1858">1858</a>
+<a href="#1859" id="1859">1859</a>
+<a href="#1860" id="1860">1860</a>
+<a href="#1861" id="1861">1861</a>
+<a href="#1862" id="1862">1862</a>
+<a href="#1863" id="1863">1863</a>
+<a href="#1864" id="1864">1864</a>
+<a href="#1865" id="1865">1865</a>
+<a href="#1866" id="1866">1866</a>
+<a href="#1867" id="1867">1867</a>
+<a href="#1868" id="1868">1868</a>
+<a href="#1869" id="1869">1869</a>
+<a href="#1870" id="1870">1870</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -1868,8 +1908,9 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-<span class="kw">use </span>fedimint_core::task::{timeout, MaybeSend, MaybeSync};
+<span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, timeout, MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::time::now;
+<span class="kw">use </span>fedimint_core::util::{retry, FibonacciBackoff};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
 };
@@ -2728,6 +2769,8 @@
 
     <span class="doccomment">/// Updates the gateway cache by fetching the latest registered gateways
     /// from the federation.
+    ///
+    /// See also [`Self::update_gateway_cache_continuously`].
     </span><span class="kw">pub async fn </span>update_gateway_cache(<span class="kw-2">&amp;</span><span class="self">self</span>, apply_meta: bool) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>gateways = <span class="self">self</span>.fetch_registered_gateways(apply_meta).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
@@ -2746,6 +2789,43 @@
         dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Continuously update the gateway cache whenever a gateway expires.
+    ///
+    /// Client integrators are expected to call this function in a spawned task.
+    </span><span class="kw">pub async fn </span>update_gateway_cache_continuously(<span class="kw-2">&amp;</span><span class="self">self</span>, apply_meta: bool) -&gt; ! {
+        <span class="kw">let </span><span class="kw-2">mut </span>first_time = <span class="bool-val">true</span>;
+
+        <span class="kw">const </span>ABOUT_TO_EXPIRE: Duration = Duration::from_secs(<span class="number">30</span>);
+        <span class="kw">const </span>EMPTY_GATEWAY_SLEEP: Duration = Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>);
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>gateways = <span class="self">self</span>.list_gateways().<span class="kw">await</span>;
+            <span class="comment">// TODO: filter gateways by vetted
+            </span><span class="kw">let </span>sleep_time = gateways
+                .into_iter()
+                .map(|x| x.ttl.saturating_sub(ABOUT_TO_EXPIRE))
+                .min()
+                .unwrap_or(<span class="kw">if </span>first_time {
+                    <span class="comment">// retry immediately first time
+                    </span>Duration::ZERO
+                } <span class="kw">else </span>{
+                    EMPTY_GATEWAY_SLEEP
+                });
+            task::sleep(sleep_time).<span class="kw">await</span>;
+
+            <span class="comment">// should never fail with usize::MAX attempts.
+            </span><span class="kw">let _ </span>= retry(
+                <span class="string">"update_gateway_cache"</span>,
+                FibonacciBackoff::default()
+                    .with_min_delay(Duration::from_secs(<span class="number">1</span>))
+                    .with_max_delay(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>))
+                    .with_max_times(usize::MAX),
+                || <span class="self">self</span>.update_gateway_cache(apply_meta),
+            )
+            .<span class="kw">await</span>;
+            first_time = <span class="bool-val">false</span>;
+        }
     }
 
     <span class="doccomment">/// Returns all gateways that are currently in the gateway cache.
