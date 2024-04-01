@@ -835,7 +835,7 @@ async fn submit_module_consensus_items(
                     }
                 }
 
-                sleep(Duration::from_secs(1)).await;
+                sleep(Duration::from_millis(100)).await;
             }
         },
     );
