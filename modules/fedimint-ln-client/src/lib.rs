@@ -36,8 +36,9 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
+use fedimint_core::task::{self, timeout, MaybeSend, MaybeSync};
 use fedimint_core::time::now;
+use fedimint_core::util::{retry, FibonacciBackoff};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
 };
@@ -896,6 +897,8 @@ impl LightningClientModule {
 
     /// Updates the gateway cache by fetching the latest registered gateways
     /// from the federation.
+    ///
+    /// See also [`Self::update_gateway_cache_continuously`].
     pub async fn update_gateway_cache(&self, apply_meta: bool) -> anyhow::Result<()> {
         let gateways = self.fetch_registered_gateways(apply_meta).await?;
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
@@ -914,6 +917,43 @@ impl LightningClientModule {
         dbtx.commit_tx().await;
 
         Ok(())
+    }
+
+    /// Continuously update the gateway cache whenever a gateway expires.
+    ///
+    /// Client integrators are expected to call this function in a spawned task.
+    pub async fn update_gateway_cache_continuously(&self, apply_meta: bool) -> ! {
+        let mut first_time = true;
+
+        const ABOUT_TO_EXPIRE: Duration = Duration::from_secs(30);
+        const EMPTY_GATEWAY_SLEEP: Duration = Duration::from_secs(10 * 60);
+        loop {
+            let gateways = self.list_gateways().await;
+            // TODO: filter gateways by vetted
+            let sleep_time = gateways
+                .into_iter()
+                .map(|x| x.ttl.saturating_sub(ABOUT_TO_EXPIRE))
+                .min()
+                .unwrap_or(if first_time {
+                    // retry immediately first time
+                    Duration::ZERO
+                } else {
+                    EMPTY_GATEWAY_SLEEP
+                });
+            task::sleep(sleep_time).await;
+
+            // should never fail with usize::MAX attempts.
+            let _ = retry(
+                "update_gateway_cache",
+                FibonacciBackoff::default()
+                    .with_min_delay(Duration::from_secs(1))
+                    .with_max_delay(Duration::from_secs(10 * 60))
+                    .with_max_times(usize::MAX),
+                || self.update_gateway_cache(apply_meta),
+            )
+            .await;
+            first_time = false;
+        }
     }
 
     /// Returns all gateways that are currently in the gateway cache.
