@@ -83,7 +83,7 @@ pub struct ServerOpts {
     /// The bitcoin network that fedimint will be running on
     #[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = "regtest")]
     network: bitcoin::network::constants::Network,
-    /// The bitcoin network that fedimint will be running on
+    /// The number of blocks the federation stays behind the blockchain tip
     #[arg(long, env = FM_FINALITY_DELAY_ENV, default_value = "10")]
     finality_delay: u32,
 
