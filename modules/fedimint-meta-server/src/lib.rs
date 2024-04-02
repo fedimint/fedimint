@@ -218,24 +218,45 @@ impl Meta {
         let mut to_delete: Vec<MetaKey> = vec![];
         let mut to_submit = vec![];
 
-        for (key, MetaDesiredValue { value, salt }) in desired {
-            if Self::get_submission(dbtx, key, self.our_peer_id)
-                .await
-                .as_ref()
+        for (
+            key,
+            MetaDesiredValue {
+                value: desired_value,
+                salt,
+            },
+        ) in desired
+        {
+            let consensus_value = &Self::get_consensus(dbtx, key).await;
+            let consensus_submission_value =
+                Self::get_submission(dbtx, key, self.our_peer_id).await;
+            if consensus_submission_value.as_ref()
                 == Some(&MetaSubmissionValue {
-                    value: value.clone(),
+                    value: desired_value.clone(),
                     salt,
                 })
             {
                 to_delete.push(key);
-            } else if Self::get_consensus(dbtx, key).await.as_ref() == Some(&value) {
-                // When a value is new and equal to current consensus, it should both: be
-                // submitted so it can clear/cancel previous submissions, and
-                // deleted (afterwards).
-                to_delete.push(key);
-                to_submit.push(MetaConsensusItem { key, value, salt });
+            } else if consensus_value.as_ref() == Some(&desired_value) {
+                if consensus_submission_value.is_none() {
+                    // our desired value cleared the submission (as it is equal the consensus)
+                    // so we can stop proposing it
+                    to_delete.push(key);
+                } else {
+                    // we want to submit the same value as the current consensus, usually
+                    // to clear the previous submission that did not became the consensus (we were
+                    // outvoted)
+                    to_submit.push(MetaConsensusItem {
+                        key,
+                        value: desired_value,
+                        salt,
+                    });
+                }
             } else {
-                to_submit.push(MetaConsensusItem { key, value, salt });
+                to_submit.push(MetaConsensusItem {
+                    key,
+                    value: desired_value,
+                    salt,
+                });
             }
         }
 
