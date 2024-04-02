@@ -431,9 +431,6 @@
 <a href="#429" id="429">429</a>
 <a href="#430" id="430">430</a>
 <a href="#431" id="431">431</a>
-<a href="#432" id="432">432</a>
-<a href="#433" id="433">433</a>
-<a href="#434" id="434">434</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -668,11 +665,8 @@
                     <span class="kw">let </span>client_pegin_amount = <span class="number">10_000</span>;
                     <span class="kw">let </span>(<span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
                         <span class="kw">async </span>{
-                            <span class="kw">let </span>(address, operation_id) = dev_fed
-                                .client_registered()
-                                .<span class="kw">await</span><span class="question-mark">?
-                                </span>.get_deposit_addr()
-                                .<span class="kw">await</span><span class="question-mark">?</span>;
+                            <span class="kw">let </span>(address, operation_id) =
+                                dev_fed.internal_client().<span class="kw">await</span><span class="question-mark">?</span>.get_deposit_addr().<span class="kw">await</span><span class="question-mark">?</span>;
                             dev_fed
                                 .bitcoind()
                                 .<span class="kw">await</span><span class="question-mark">?
@@ -680,7 +674,7 @@
                                 .<span class="kw">await</span><span class="question-mark">?</span>;
                             dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                             dev_fed
-                                .client_registered()
+                                .internal_client()
                                 .<span class="kw">await</span><span class="question-mark">?
                                 </span>.await_deposit(<span class="kw-2">&amp;</span>operation_id)
                                 .<span class="kw">await

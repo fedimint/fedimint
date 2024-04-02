@@ -3332,7 +3332,7 @@
     <span class="kw">let </span>load_test_temp = PathBuf::from(data_dir).join(<span class="string">"load-test-temp"</span>);
     dev_fed
         .fed
-        .pegin_client(<span class="number">10_000</span>, dev_fed.fed.internal_client())
+        .pegin_client(<span class="number">10_000</span>, dev_fed.fed.internal_client().<span class="kw">await</span><span class="question-mark">?</span>)
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>invite_code = dev_fed.fed.invite_code()<span class="question-mark">?</span>;
     run_standard_load_test(<span class="kw-2">&amp;</span>load_test_temp, <span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;

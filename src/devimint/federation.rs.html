@@ -703,6 +703,37 @@
 <a href="#701" id="701">701</a>
 <a href="#702" id="702">702</a>
 <a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
@@ -719,6 +750,7 @@
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ModuleCommon};
+<span class="kw">use </span>fedimint_core::task::jit::JitTryAnyhow;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
@@ -747,8 +779,8 @@
     <span class="kw">pub </span>vars: BTreeMap&lt;usize, vars::Fedimintd&gt;,
     <span class="kw">pub </span>bitcoind: Bitcoind,
 
-    <span class="doccomment">/// Built in [`Client`]
-    </span>client: Client,
+    <span class="doccomment">/// Built in [`Client`], already joined
+    </span>client: JitTryAnyhow&lt;Client&gt;,
 }
 
 <span class="doccomment">/// `fedimint-cli` instance (basically path with client state: config + db)
@@ -949,11 +981,21 @@
         }
         <span class="macro">debug!</span>(<span class="string">"Moved invite-code files to client data directory"</span>);
 
+        <span class="kw">let </span>client = JitTryAnyhow::new_try({
+            <span class="kw">move </span>|| <span class="kw">async move </span>{
+                <span class="kw">let </span>client = Client::open_or_create(<span class="string">"default"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>invite_code = <span class="self">Self</span>::invite_code_static()<span class="question-mark">?</span>;
+
+                <span class="macro">cmd!</span>(client, <span class="string">"join-federation"</span>, invite_code).run().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(client)
+            }
+        });
+
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             members,
             vars: peer_to_env_vars_map,
             bitcoind,
-            client: Client::open_or_create(<span class="string">"default"</span>).<span class="kw">await</span><span class="question-mark">?</span>,
+            client,
         })
     }
 
@@ -969,6 +1011,11 @@
         <span class="prelude-val">Ok</span>(invite_code)
     }
 
+    <span class="kw">pub fn </span>invite_code_static() -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+        <span class="kw">let </span>data_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
+        <span class="kw">let </span>invite_code = fs::read_to_string(data_dir.join(<span class="string">"invite-code"</span>))<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(invite_code)
+    }
     <span class="kw">pub fn </span>invite_code_for(peer_id: PeerId) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span>data_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
         <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"invite-code-{}"</span>, peer_id);
@@ -979,13 +1026,16 @@
     <span class="doccomment">/// Built-in, default, internal [`Client`]
     ///
     /// We should be moving away from using it for anything.
-    </span><span class="kw">pub fn </span>internal_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Client {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.client
+    </span><span class="kw">pub async fn </span>internal_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span>Client&gt; {
+        <span class="self">self</span>.client
+            .get_try()
+            .<span class="kw">await
+            </span>.context(<span class="string">"Internal client joining Federation"</span>)
     }
 
     <span class="doccomment">/// Fork the built-in client of `Federation` and give it a name
     </span><span class="kw">pub async fn </span>fork_client(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
-        Client::new_forked(<span class="kw-2">&amp;</span><span class="self">self</span>.client, name).<span class="kw">await
+        Client::new_forked(<span class="self">self</span>.internal_client().<span class="kw">await</span><span class="question-mark">?</span>, name).<span class="kw">await
     </span>}
 
     <span class="doccomment">/// New [`Client`] that already joined `self`
@@ -1076,9 +1126,14 @@
         <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>block_count = <span class="self">self</span>.bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>expected = block_count.saturating_sub(finality_delay.into());
-        <span class="macro">cmd!</span>(<span class="self">self</span>.client, <span class="string">"dev"</span>, <span class="string">"wait-block-count"</span>, expected)
-            .run()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">cmd!</span>(
+            <span class="self">self</span>.internal_client().<span class="kw">await</span><span class="question-mark">?</span>,
+            <span class="string">"dev"</span>,
+            <span class="string">"wait-block-count"</span>,
+            expected
+        )
+        .run()
+        .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(expected)
     }
 
@@ -1111,14 +1166,19 @@
         </span>};
 
         poll(<span class="string">"gateways registered"</span>, || <span class="kw">async </span>{
-            <span class="kw">let </span>num_gateways = <span class="macro">cmd!</span>(<span class="self">self</span>.client, command)
-                .out_json()
-                .<span class="kw">await
-                </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
-                </span>.as_array()
-                .context(<span class="string">"invalid output"</span>)
-                .map_err(ControlFlow::Break)<span class="question-mark">?
-                </span>.len();
+            <span class="kw">let </span>num_gateways = <span class="macro">cmd!</span>(
+                <span class="self">self</span>.internal_client()
+                    .<span class="kw">await
+                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
+                command
+            )
+            .out_json()
+            .<span class="kw">await
+            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
+            </span>.as_array()
+            .context(<span class="string">"invalid output"</span>)
+            .map_err(ControlFlow::Break)<span class="question-mark">?
+            </span>.len();
             <span class="macro">poll_eq!</span>(num_gateways, <span class="number">2</span>)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1131,7 +1191,9 @@
     <span class="kw">pub async fn </span>await_all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         poll(<span class="string">"Waiting for all peers to be online"</span>, || <span class="kw">async </span>{
             <span class="macro">cmd!</span>(
-                <span class="self">self</span>.client,
+                <span class="self">self</span>.internal_client()
+                    .<span class="kw">await
+                    </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
                 <span class="string">"dev"</span>,
                 <span class="string">"api"</span>,
                 <span class="string">"module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count"
