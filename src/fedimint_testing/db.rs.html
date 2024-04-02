@@ -429,6 +429,14 @@
 <a href="#427" id="427">427</a>
 <a href="#428" id="428">428</a>
 <a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs::read_dir;
 <span class="kw">use </span>std::io::ErrorKind;
@@ -436,14 +444,14 @@
 <span class="kw">use </span>std::{env, fs, io};
 
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
-<span class="kw">use </span>fedimint_client::db::{
-    apply_migrations_client, remove_old_and_persist_new_active_states,
-    remove_old_and_persist_new_inactive_states,
-};
+<span class="kw">use </span>fedimint_client::db::apply_migrations_client;
 <span class="kw">use </span>fedimint_client::module::init::DynClientModuleInit;
 <span class="kw">use </span>fedimint_client::module::ClientModule;
-<span class="kw">use </span>fedimint_client::sm::{ActiveStateKeyPrefix, InactiveStateKeyPrefix};
-<span class="kw">use </span>fedimint_core::core::IntoDynInstance;
+<span class="kw">use </span>fedimint_client::sm::{
+    ActiveStateKeyBytes, ActiveStateKeyPrefix, ActiveStateMeta, InactiveStateKeyBytes,
+    InactiveStateKeyPrefix, InactiveStateMeta,
+};
+<span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{
     apply_migrations, apply_migrations_server, Database, DatabaseVersion,
     IDatabaseTransactionOpsCoreTyped, ServerMigrationFn,
@@ -596,16 +604,15 @@
 /// namespace. `state_machine_prepare` creates client state machine data that
 /// can be used for testing state machine migrations. This is created in the
 /// global namespace.
-</span><span class="kw">pub async fn </span>snapshot_db_migrations_client&lt;<span class="lifetime">'a</span>, F, S, I, T&gt;(
+</span><span class="kw">pub async fn </span>snapshot_db_migrations_client&lt;<span class="lifetime">'a</span>, F, S, I&gt;(
     snapshot_name: <span class="kw-2">&amp;</span>str,
     data_prepare: F,
     state_machine_prepare: S,
 ) -&gt; anyhow::Result&lt;()&gt;
 <span class="kw">where
     </span>F: Fn(Database) -&gt; BoxFuture&lt;<span class="lifetime">'a</span>, ()&gt; + Send + Sync,
-    S: Fn() -&gt; (Vec&lt;T::States&gt;, Vec&lt;T::States&gt;) + Send + Sync,
+    S: Fn() -&gt; (Vec&lt;Vec&lt;u8&gt;&gt;, Vec&lt;Vec&lt;u8&gt;&gt;) + Send + Sync,
     I: CommonModuleInit,
-    T: ClientModule,
 {
     <span class="kw">let </span>project_root = get_project_root().unwrap();
     <span class="kw">let </span>snapshot_dir = project_root.join(<span class="string">"db/migrations"</span>).join(snapshot_name);
@@ -619,30 +626,39 @@
             data_prepare(isolated_db).<span class="kw">await</span>;
 
             <span class="kw">let </span>(active_states, inactive_states) = state_machine_prepare();
-            <span class="kw">let </span>new_active_states = active_states
-                .into_iter()
-                .map(|state| state.into_dyn(TEST_MODULE_INSTANCE_ID))
-                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-            <span class="kw">let </span>new_inactive_states = inactive_states
-                .into_iter()
-                .map(|state| state.into_dyn(TEST_MODULE_INSTANCE_ID))
-                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-
             <span class="kw">let </span><span class="kw-2">mut </span>global_dbtx = db.begin_transaction().<span class="kw">await</span>;
-            remove_old_and_persist_new_active_states(
-                <span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc(),
-                new_active_states,
-                Vec::new(),
-                TEST_MODULE_INSTANCE_ID,
-            )
-            .<span class="kw">await</span>;
-            remove_old_and_persist_new_inactive_states(
-                <span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc(),
-                new_inactive_states,
-                Vec::new(),
-                TEST_MODULE_INSTANCE_ID,
-            )
-            .<span class="kw">await</span>;
+
+            <span class="kw">for </span>state <span class="kw">in </span>active_states {
+                global_dbtx
+                    .insert_new_entry(
+                        <span class="kw-2">&amp;</span>ActiveStateKeyBytes {
+                            operation_id: OperationId::new_random(),
+                            module_instance_id: TEST_MODULE_INSTANCE_ID,
+                            state,
+                        },
+                        <span class="kw-2">&amp;</span>ActiveStateMeta {
+                            created_at: fedimint_core::time::now(),
+                        },
+                    )
+                    .<span class="kw">await</span>;
+            }
+
+            <span class="kw">for </span>state <span class="kw">in </span>inactive_states {
+                global_dbtx
+                    .insert_new_entry(
+                        <span class="kw-2">&amp;</span>InactiveStateKeyBytes {
+                            operation_id: OperationId::new_random(),
+                            module_instance_id: TEST_MODULE_INSTANCE_ID,
+                            state,
+                        },
+                        <span class="kw-2">&amp;</span>InactiveStateMeta {
+                            created_at: fedimint_core::time::now(),
+                            exited_at: fedimint_core::time::now(),
+                        },
+                    )
+                    .<span class="kw">await</span>;
+            }
+
             global_dbtx.commit_tx().<span class="kw">await</span>;
         }
         .boxed()
