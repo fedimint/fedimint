@@ -273,7 +273,8 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
                     client,
                     "ln-invoice",
                     "--amount=1000000msat",
-                    "--description=internal-swap-invoice"
+                    "--description=internal-swap-invoice",
+                    "--force-internal"
                 )
                 .out_json()
                 .await?;
@@ -287,7 +288,9 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
                     .to_owned();
 
                 let start_time = Instant::now();
-                cmd!(sender, "ln-pay", invoice).run().await?;
+                cmd!(sender, "ln-pay", invoice, "--force-internal")
+                    .run()
+                    .await?;
                 cmd!(client, "await-invoice", recv_op).run().await?;
                 fm_internal_pay.push(start_time.elapsed());
             }
