@@ -59,7 +59,7 @@ message PayInvoiceRequest {
   // The maximum fee, in millisats, that will be paid as a lightning routing fee
   uint64 max_fee_msat = 3;
 
-  // The hash of the payment, used for private payments (see `ILnRpcClient::pay_private()`)
+  // The hash of the payment
   bytes payment_hash = 4;
 }
 
