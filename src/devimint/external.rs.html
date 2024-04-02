@@ -807,24 +807,6 @@
 <a href="#805" id="805">805</a>
 <a href="#806" id="806">806</a>
 <a href="#807" id="807">807</a>
-<a href="#808" id="808">808</a>
-<a href="#809" id="809">809</a>
-<a href="#810" id="810">810</a>
-<a href="#811" id="811">811</a>
-<a href="#812" id="812">812</a>
-<a href="#813" id="813">813</a>
-<a href="#814" id="814">814</a>
-<a href="#815" id="815">815</a>
-<a href="#816" id="816">816</a>
-<a href="#817" id="817">817</a>
-<a href="#818" id="818">818</a>
-<a href="#819" id="819">819</a>
-<a href="#820" id="820">820</a>
-<a href="#821" id="821">821</a>
-<a href="#822" id="822">822</a>
-<a href="#823" id="823">823</a>
-<a href="#824" id="824">824</a>
-<a href="#825" id="825">825</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -1422,24 +1404,6 @@
     })
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    poll(<span class="string">"list peers"</span>, || <span class="kw">async </span>{
-        <span class="kw">let </span>num_peers = cln
-            .request(cln_rpc::model::requests::ListpeersRequest {
-                id: <span class="prelude-val">Some</span>(
-                    lnd_pubkey
-                        .parse()
-                        .context(<span class="string">"parse lnd pubkey"</span>)
-                        .map_err(ControlFlow::Break)<span class="question-mark">?</span>,
-                ),
-                level: <span class="prelude-val">None</span>,
-            })
-            .<span class="kw">await
-            </span>.map_err(ControlFlow::Break)<span class="question-mark">?
-            </span>.peers
-            .len();
-        <span class="macro">poll_eq!</span>(num_peers, <span class="number">1</span>)
-    })
-    .<span class="kw">await</span><span class="question-mark">?</span>;
     bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
     poll(<span class="string">"Wait for channel update"</span>, || <span class="kw">async </span>{
