@@ -21,7 +21,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 axum = "0.7.4"
 axum-macros = "0.4.1"
-bitcoin = { version = "0.30.2", features = ["serde"] }
+bitcoin = { workspace = true }
 clap = { version = "4.5.2", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
 ln-gateway = { version = "0.3.0-alpha", package = "fedimint-ln-gateway", path= "../ln-gateway" }
 fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
