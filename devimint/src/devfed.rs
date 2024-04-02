@@ -11,7 +11,7 @@ use crate::external::{Bitcoind, Electrs, Esplora, Lightningd, Lnd};
 use crate::federation::{Client, Federation};
 use crate::gatewayd::Gatewayd;
 use crate::util::ProcessManager;
-use crate::{cmd, open_channel, LightningNode};
+use crate::{open_channel, LightningNode};
 
 #[derive(Clone)]
 pub struct DevFed {
@@ -44,7 +44,6 @@ pub struct DevJitFed {
     start_time: std::time::SystemTime,
     gw_cln_registered: JitArc<()>,
     gw_lnd_registered: JitArc<()>,
-    fed_client_joined: JitArc<()>,
     fed_epoch_generated: JitArc<()>,
     channel_opened: JitArc<()>,
 }
@@ -180,16 +179,6 @@ impl DevJitFed {
                 Ok(Arc::new(()))
             }
         });
-        let fed_client_joined = JitTryAnyhow::new_try({
-            let fed = fed.clone();
-            move || async move {
-                let fed = fed.get_try().await?.deref();
-                cmd!(fed.internal_client(), "join-federation", fed.invite_code()?)
-                    .run()
-                    .await?;
-                Ok(Arc::new(()))
-            }
-        });
 
         Ok(DevJitFed {
             bitcoind,
@@ -203,7 +192,6 @@ impl DevJitFed {
             electrs,
             esplora,
             channel_opened,
-            fed_client_joined,
             fed_epoch_generated,
             start_time,
         })
@@ -242,16 +230,15 @@ impl DevJitFed {
         Ok(self.bitcoind.get_try().await?.deref())
     }
 
-    pub async fn client_registered(&self) -> anyhow::Result<Client> {
-        self.fed_client_joined.get_try().await?;
-        Ok(self.fed().await?.internal_client().clone())
+    pub async fn internal_client(&self) -> anyhow::Result<Client> {
+        Ok(self.fed().await?.internal_client().await?.clone())
     }
 
-    pub async fn client_gw_registered(&self) -> anyhow::Result<Client> {
-        self.fed_client_joined.get_try().await?;
-        // Initialize fedimint-cli
+    /// Like [`Self::internal_client`] but will check and wait for a LN gateway
+    /// to be registered
+    pub async fn internal_client_gw_registered(&self) -> anyhow::Result<Client> {
         self.fed().await?.await_gateways_registered().await?;
-        Ok(self.fed().await?.internal_client().clone())
+        Ok(self.fed().await?.internal_client().await?.clone())
     }
 
     pub async fn finalize(&self, process_mgr: &ProcessManager) -> anyhow::Result<()> {
@@ -266,7 +253,7 @@ impl DevJitFed {
         std::env::set_var(FM_GWID_LND_ENV, self.gw_lnd().await?.gateway_id().await?);
         info!(target: LOG_DEVIMINT, "Setup gateway environment variables");
 
-        let _ = self.client_gw_registered().await?;
+        let _ = self.internal_client_gw_registered().await?;
         let _ = self.channel_opened.get_try().await?;
         let _ = self.gw_cln_registered().await?;
         let _ = self.gw_lnd_registered().await?;

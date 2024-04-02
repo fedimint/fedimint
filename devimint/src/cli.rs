@@ -232,11 +232,8 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                     let client_pegin_amount = 10_000;
                     let (_, _, _) = tokio::try_join!(
                         async {
-                            let (address, operation_id) = dev_fed
-                                .client_registered()
-                                .await?
-                                .get_deposit_addr()
-                                .await?;
+                            let (address, operation_id) =
+                                dev_fed.internal_client().await?.get_deposit_addr().await?;
                             dev_fed
                                 .bitcoind()
                                 .await?
@@ -244,7 +241,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 .await?;
                             dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await?;
                             dev_fed
-                                .client_registered()
+                                .internal_client()
                                 .await?
                                 .await_deposit(&operation_id)
                                 .await
