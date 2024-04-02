@@ -14,6 +14,7 @@ use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ModuleCommon};
+use fedimint_core::task::jit::JitTryAnyhow;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_DEVIMINT;
@@ -42,8 +43,8 @@ pub struct Federation {
     pub vars: BTreeMap<usize, vars::Fedimintd>,
     pub bitcoind: Bitcoind,
 
-    /// Built in [`Client`]
-    client: Client,
+    /// Built in [`Client`], already joined
+    client: JitTryAnyhow<Client>,
 }
 
 /// `fedimint-cli` instance (basically path with client state: config + db)
@@ -244,11 +245,21 @@ impl Federation {
         }
         debug!("Moved invite-code files to client data directory");
 
+        let client = JitTryAnyhow::new_try({
+            move || async move {
+                let client = Client::open_or_create("default").await?;
+                let invite_code = Self::invite_code_static()?;
+
+                cmd!(client, "join-federation", invite_code).run().await?;
+                Ok(client)
+            }
+        });
+
         Ok(Self {
             members,
             vars: peer_to_env_vars_map,
             bitcoind,
-            client: Client::open_or_create("default").await?,
+            client,
         })
     }
 
@@ -264,6 +275,11 @@ impl Federation {
         Ok(invite_code)
     }
 
+    pub fn invite_code_static() -> Result<String> {
+        let data_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)?.parse()?;
+        let invite_code = fs::read_to_string(data_dir.join("invite-code"))?;
+        Ok(invite_code)
+    }
     pub fn invite_code_for(peer_id: PeerId) -> Result<String> {
         let data_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)?.parse()?;
         let name = format!("invite-code-{}", peer_id);
@@ -274,13 +290,16 @@ impl Federation {
     /// Built-in, default, internal [`Client`]
     ///
     /// We should be moving away from using it for anything.
-    pub fn internal_client(&self) -> &Client {
-        &self.client
+    pub async fn internal_client(&self) -> Result<&Client> {
+        self.client
+            .get_try()
+            .await
+            .context("Internal client joining Federation")
     }
 
     /// Fork the built-in client of `Federation` and give it a name
     pub async fn fork_client(&self, name: &str) -> Result<Client> {
-        Client::new_forked(&self.client, name).await
+        Client::new_forked(self.internal_client().await?, name).await
     }
 
     /// New [`Client`] that already joined `self`
@@ -371,9 +390,14 @@ impl Federation {
         let finality_delay = self.get_finality_delay().await?;
         let block_count = self.bitcoind.get_block_count().await?;
         let expected = block_count.saturating_sub(finality_delay.into());
-        cmd!(self.client, "dev", "wait-block-count", expected)
-            .run()
-            .await?;
+        cmd!(
+            self.internal_client().await?,
+            "dev",
+            "wait-block-count",
+            expected
+        )
+        .run()
+        .await?;
         Ok(expected)
     }
 
@@ -406,14 +430,19 @@ impl Federation {
         };
 
         poll("gateways registered", || async {
-            let num_gateways = cmd!(self.client, command)
-                .out_json()
-                .await
-                .map_err(ControlFlow::Continue)?
-                .as_array()
-                .context("invalid output")
-                .map_err(ControlFlow::Break)?
-                .len();
+            let num_gateways = cmd!(
+                self.internal_client()
+                    .await
+                    .map_err(ControlFlow::Continue)?,
+                command
+            )
+            .out_json()
+            .await
+            .map_err(ControlFlow::Continue)?
+            .as_array()
+            .context("invalid output")
+            .map_err(ControlFlow::Break)?
+            .len();
             poll_eq!(num_gateways, 2)
         })
         .await?;
@@ -426,7 +455,9 @@ impl Federation {
     pub async fn await_all_peers(&self) -> Result<()> {
         poll("Waiting for all peers to be online", || async {
             cmd!(
-                self.client,
+                self.internal_client()
+                    .await
+                    .map_err(ControlFlow::Continue)?,
                 "dev",
                 "api",
                 "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count"

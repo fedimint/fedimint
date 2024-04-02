@@ -1058,7 +1058,7 @@ pub async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
     let load_test_temp = PathBuf::from(data_dir).join("load-test-temp");
     dev_fed
         .fed
-        .pegin_client(10_000, dev_fed.fed.internal_client())
+        .pegin_client(10_000, dev_fed.fed.internal_client().await?)
         .await?;
     let invite_code = dev_fed.fed.invite_code()?;
     run_standard_load_test(&load_test_temp, &invite_code).await?;
