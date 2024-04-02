@@ -950,7 +950,7 @@ mod fedimint_migration_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
-        snapshot_db_migrations_client::<_, _, WalletCommonInit, WalletClientModule>(
+        snapshot_db_migrations_client::<_, _, WalletCommonInit>(
             "wallet-client-v0",
             |db| Box::pin(async move { create_client_db_with_v0_data(db).await }),
             || (Vec::new(), Vec::new()),

@@ -18,7 +18,7 @@ use bitcoin_hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
 use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
 };
-use fedimint_client::db::ClientMigrationFn;
+use fedimint_client::db::{migrate_state, ClientMigrationFn};
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
@@ -262,7 +262,7 @@ pub struct LightningClientInit;
 #[apply(async_trait_maybe_send!)]
 impl ModuleInit for LightningClientInit {
     type Common = LightningCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(2);
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(3);
 
     async fn dump_database(
         &self,
@@ -349,8 +349,28 @@ impl ClientModuleInit for LightningClientInit {
         migrations.insert(
             DatabaseVersion(1),
             move |_, module_instance_id, active_states, inactive_states, decoders| {
-                db::migrate_to_v2(module_instance_id, active_states, inactive_states, decoders)
-                    .boxed()
+                migrate_state::<LightningClientStateMachines>(
+                    module_instance_id,
+                    active_states,
+                    inactive_states,
+                    decoders,
+                    db::get_v1_migrated_state,
+                )
+                .boxed()
+            },
+        );
+
+        migrations.insert(
+            DatabaseVersion(2),
+            move |_, module_instance_id, active_states, inactive_states, decoders| {
+                migrate_state::<LightningClientStateMachines>(
+                    module_instance_id,
+                    active_states,
+                    inactive_states,
+                    decoders,
+                    db::get_v2_migrated_state,
+                )
+                .boxed()
             },
         );
 
