@@ -371,9 +371,14 @@ impl Federation {
         let finality_delay = self.get_finality_delay().await?;
         let block_count = self.bitcoind.get_block_count().await?;
         let expected = block_count.saturating_sub(finality_delay.into());
-        cmd!(self.client, "dev", "wait-block-count", expected)
-            .run()
-            .await?;
+        poll("await-block-sync", || async {
+            cmd!(self.client, "dev", "wait-block-count", expected)
+                .run()
+                .await
+                .map_err(ControlFlow::Continue)?;
+            Ok(())
+        })
+        .await?;
         Ok(expected)
     }
 
