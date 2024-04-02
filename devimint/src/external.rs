@@ -595,24 +595,6 @@ pub async fn open_channel(
     })
     .await?;
 
-    poll("list peers", || async {
-        let num_peers = cln
-            .request(cln_rpc::model::requests::ListpeersRequest {
-                id: Some(
-                    lnd_pubkey
-                        .parse()
-                        .context("parse lnd pubkey")
-                        .map_err(ControlFlow::Break)?,
-                ),
-                level: None,
-            })
-            .await
-            .map_err(ControlFlow::Break)?
-            .peers
-            .len();
-        poll_eq!(num_peers, 1)
-    })
-    .await?;
     bitcoind.mine_blocks(10).await?;
 
     poll("Wait for channel update", || async {
