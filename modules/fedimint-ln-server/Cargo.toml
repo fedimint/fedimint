@@ -25,7 +25,7 @@ bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
-lightning = "0.0.118"
+lightning = "0.0.121"
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../../fedimint-bitcoind" }
 fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }

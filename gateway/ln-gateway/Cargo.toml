@@ -81,7 +81,7 @@ fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
 fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
 fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 fedimint-testing = { path = "../../fedimint-testing" }
-lightning = "0.0.118"
+lightning = "0.0.121"
 threshold_crypto = { workspace = true }
 assert_matches = { workspace = true }
 

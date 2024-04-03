@@ -519,8 +519,6 @@ checksum = "0694ea59225b0c5f3cb405ff3f670e4828358ed26aec49dc352f730f0cb1a8a3"
 dependencies = [
  "bech32",
  "bitcoin_hashes 0.11.0",
- "core2",
- "hashbrown 0.8.2",
  "secp256k1 0.24.3",
  "serde",
 ]
@@ -534,6 +532,7 @@ dependencies = [
  "bech32",
  "bitcoin-private",
  "bitcoin_hashes 0.12.0",
+ "core2",
  "hex_lit",
  "secp256k1 0.27.0",
  "serde",
@@ -551,7 +550,6 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90064b8dee6815a6470d60bad07bbbaee885c0e12d04177138fa3291a01b7bc4"
 dependencies = [
- "core2",
  "serde",
 ]
 
@@ -562,6 +560,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d7066118b13d4b20b23645932dfb3a81ce7e29f95726c2036fa33cd7b092501"
 dependencies = [
  "bitcoin-private",
+ "core2",
  "serde",
 ]
 
@@ -1462,7 +1461,7 @@ dependencies = [
  "jsonrpsee-types",
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
- "lightning",
+ "lightning 0.0.121",
  "lightning-invoice",
  "lru",
  "macro_rules_attribute",
@@ -1765,7 +1764,7 @@ dependencies = [
  "fedimint-threshold-crypto",
  "futures",
  "itertools 0.12.1",
- "lightning",
+ "lightning 0.0.121",
  "lightning-invoice",
  "rand",
  "secp256k1 0.24.3",
@@ -1818,7 +1817,7 @@ dependencies = [
  "fedimint-unknown-server",
  "fedimint-wallet-client",
  "futures",
- "lightning",
+ "lightning 0.0.121",
  "lightning-invoice",
  "prost",
  "rand",
@@ -1857,7 +1856,7 @@ dependencies = [
  "fedimint-threshold-crypto",
  "futures",
  "itertools 0.12.1",
- "lightning",
+ "lightning 0.0.121",
  "lightning-invoice",
  "rand",
  "secp256k1 0.24.3",
@@ -3008,6 +3007,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex-conservative"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30ed443af458ccb6d81c1e7e661545f94d3176752fb1df2f543b902a1e0f51e2"
+
+[[package]]
 name = "hex_fmt"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3590,6 +3595,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "libm"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
+
+[[package]]
 name = "libredox"
 version = "0.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3634,8 +3645,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d52cec5fa9382154fe9671e8df93095b800c7d77abc66e2a5ef839d672521c5e"
 dependencies = [
  "bitcoin 0.29.2",
+]
+
+[[package]]
+name = "lightning"
+version = "0.0.121"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b0c1f811ae288f86c6767055c55b5f7a721ca1e61bf1897a9ae2ec663e8aba1"
+dependencies = [
+ "bitcoin 0.30.2",
  "core2",
  "hashbrown 0.8.2",
+ "hex-conservative",
+ "libm",
 ]
 
 [[package]]
@@ -3647,7 +3669,7 @@ dependencies = [
  "bech32",
  "bitcoin 0.29.2",
  "bitcoin_hashes 0.11.0",
- "lightning",
+ "lightning 0.0.118",
  "num-traits",
  "secp256k1 0.24.3",
  "serde",
