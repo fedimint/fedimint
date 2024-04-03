@@ -1,6 +1,6 @@
 #!/bin/bash
 # This file downloads the mutinynet docker-compose files for the LN gateway and fedimintd
-# You can download and run it with: curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/download-mutinynet.sh | bash
+# You can download and run it with: curl -sSL https://raw.githubusercontent.com/douglaz/fedimint/docker_0.3.0/docker/download-mutinynet.sh | bash
 
 DOCKER_COMPOSE=docker-compose
 if docker compose version|grep 'Docker Compose' >& /dev/null; then
@@ -63,7 +63,7 @@ replace_external_ip() {
 read -p "Do you want to install fedimintd? [Y/n] " -n 1 -r -a fedimintd_install < /dev/tty
 if [[ ${fedimintd_install[*]} =~ ^[Yy]?$ ]]; then
   mkdir -p $FEDIMINTD_DIR
-  download https://raw.githubusercontent.com/fedimint/fedimint/master/docker/${FEDIMINT_VERSION}/fedimintd-mutinynet/docker-compose.yaml $FEDIMINTD_DIR/docker-compose.yaml
+  download https://raw.githubusercontent.com/douglaz/fedimint/docker_0.3.0/docker/${FEDIMINT_VERSION}/fedimintd-mutinynet/docker-compose.yaml $FEDIMINTD_DIR/docker-compose.yaml
   replace_external_ip $FEDIMINTD_DIR/docker-compose.yaml
 fi
 
@@ -76,7 +76,7 @@ if [[ ${gateway_install[*]} =~ ^[Yy]?$ ]]; then
     gateway_password=$DEFAULT_GATEWAY_PASSWORD
   fi
   mkdir -p $GATEWAY_DIR
-  download https://raw.githubusercontent.com/fedimint/fedimint/master/docker/${FEDIMINT_VERSION}/gateway-mutinynet/docker-compose.yaml $GATEWAY_DIR/docker-compose.yaml
+  download https://raw.githubusercontent.com/douglaz/fedimint/docker_0.3.0/docker/${FEDIMINT_VERSION}/gateway-mutinynet/docker-compose.yaml $GATEWAY_DIR/docker-compose.yaml
   replace_external_ip $GATEWAY_DIR/docker-compose.yaml
   sed -i "s/$DEFAULT_GATEWAY_PASSWORD/$gateway_password/g" $GATEWAY_DIR/docker-compose.yaml
 fi
