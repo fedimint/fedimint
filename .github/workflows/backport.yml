@@ -50,7 +50,7 @@ jobs:
           # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-environment-variable
           SHORT_PR_TITLE=$(
             echo '${{ github.event.pull_request.title }' \
-            | awk '{print (length($0) > 20) ? substr($0, 1, 20) "..." : $0}'
+            | awk '{print (length($0) > 40) ? substr($0, 1, 40) "..." : $0}'
           )
           echo "SHORT_PR_TITLE=$SHORT_PR_TITLE" >> "$GITHUB_ENV"
       - name: Create issue
