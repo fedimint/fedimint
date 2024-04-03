@@ -4,8 +4,9 @@ use fedimint_core::api::ApiVersionSet;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    migrate_database_version, Database, DatabaseTransaction, DatabaseValue, DatabaseVersion,
-    DatabaseVersionKey, IDatabaseTransactionOpsCoreTyped,
+    create_database_version, Database, DatabaseTransaction, DatabaseValue, DatabaseVersion,
+    DatabaseVersionKey, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
+    MODULE_GLOBAL_PREFIX,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -324,24 +325,25 @@ pub async fn apply_migrations_client(
     module_instance_id: ModuleInstanceId,
     decoders: ModuleDecoderRegistry,
 ) -> Result<(), anyhow::Error> {
-    // TODO(support:v0.3):
-    // https://github.com/fedimint/fedimint/issues/3481
-    // Somewhere after 0.3 is no longer supported,
-    // we should have no need to try to migrate the key, as all
-    // clients that ever ran the fixed version, should have it
-    // migrated or created in the new place from the start.
-    {
-        let mut global_dbtx = db.begin_transaction().await;
-        migrate_database_version(
-            &mut global_dbtx.to_ref_nc(),
-            target_db_version,
-            Some(module_instance_id),
-            kind.clone(),
-        )
-        .await?;
+    // Newly created databases will not have any data underneath the
+    // `MODULE_GLOBAL_PREFIX` since they have just been instantiated.
+    let mut dbtx = db.begin_transaction_nc().await;
+    let is_new_db = dbtx
+        .raw_find_by_prefix(&[MODULE_GLOBAL_PREFIX])
+        .await?
+        .next()
+        .await
+        .is_none();
 
-        global_dbtx.commit_tx_result().await?;
-    }
+    // First write the database version to disk if it does not exist.
+    create_database_version(
+        db,
+        target_db_version,
+        Some(module_instance_id),
+        kind.clone(),
+        is_new_db,
+    )
+    .await?;
 
     let mut global_dbtx = db.begin_transaction().await;
     let disk_version = global_dbtx
@@ -353,7 +355,7 @@ pub async fn apply_migrations_client(
         ?target_db_version,
         module_instance_id,
         kind,
-        "Migrating client module database"
+        "Checking for necessary client module db migrations..."
     );
 
     let db_version = if let Some(disk_version) = disk_version {
@@ -377,7 +379,7 @@ pub async fn apply_migrations_client(
 
         while current_db_version < target_db_version {
             let new_states = if let Some(migration) = migrations.get(&current_db_version) {
-                info!(target: LOG_DB, "Migrating module {kind} current: {current_db_version} target: {target_db_version}");
+                info!(target: LOG_DB, ?kind, ?current_db_version, ?target_db_version, "Migrating module...");
 
                 migration(
                     &mut global_dbtx
@@ -390,7 +392,7 @@ pub async fn apply_migrations_client(
                 )
                 .await?
             } else {
-                warn!("Missing client db migration for version {current_db_version}");
+                warn!(?current_db_version, "Missing client db migration");
                 None
             };
 
@@ -435,7 +437,7 @@ pub async fn apply_migrations_client(
     };
 
     global_dbtx.commit_tx_result().await?;
-    info!(target: LOG_DB, "{} module db version: {} migration complete", kind, db_version);
+    info!(target: LOG_DB, ?kind, ?db_version, "Migration complete");
     Ok(())
 }
 
