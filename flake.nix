@@ -249,7 +249,6 @@
                   # Nix
                   pkgs.nixpkgs-fmt
                   pkgs.shellcheck
-                  pkgs.rnix-lsp
                   pkgs.nil
                   pkgs.convco
                   pkgs.nodePackages.bash-language-server
