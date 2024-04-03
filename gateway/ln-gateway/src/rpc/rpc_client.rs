@@ -38,23 +38,35 @@ impl GatewayRpcClient {
     }
 
     pub async fn get_info(&self) -> GatewayRpcResult<GatewayInfo> {
-        let url = self.base_url.join("/info").expect("invalid base url");
+        let url = self
+            .base_url
+            .join(GATEWAY_INFO_ENDPOINT)
+            .expect("invalid base url");
         self.call_get(url).await
     }
 
     // FIXME: deprecated >= 0.3.0
     pub async fn get_info_legacy(&self) -> GatewayRpcResult<GatewayInfo> {
-        let url = self.base_url.join("/info").expect("invalid base url");
+        let url = self
+            .base_url
+            .join(HANDLE_POST_INFO_ENDPOINT)
+            .expect("invalid base url");
         self.call_post(url, ()).await
     }
 
     pub async fn get_config(&self, payload: ConfigPayload) -> GatewayRpcResult<GatewayFedConfig> {
-        let url = self.base_url.join("/config").expect("invalid base url");
+        let url = self
+            .base_url
+            .join(CONFIGURATION_ENDPOINT)
+            .expect("invalid base url");
         self.call_post(url, payload).await
     }
 
     pub async fn get_balance(&self, payload: BalancePayload) -> GatewayRpcResult<Amount> {
-        let url = self.base_url.join("/balance").expect("invalid base url");
+        let url = self
+            .base_url
+            .join(BALANCE_ENDPOINT)
+            .expect("invalid base url");
         self.call_post(url, payload).await
     }
 
@@ -67,7 +79,10 @@ impl GatewayRpcClient {
     }
 
     pub async fn withdraw(&self, payload: WithdrawPayload) -> GatewayRpcResult<TransactionId> {
-        let url = self.base_url.join("/withdraw").expect("invalid base url");
+        let url = self
+            .base_url
+            .join(WITHDRAW_ENDPOINT)
+            .expect("invalid base url");
         self.call_post(url, payload).await
     }
 
@@ -77,7 +92,7 @@ impl GatewayRpcClient {
     ) -> GatewayRpcResult<FederationInfo> {
         let url = self
             .base_url
-            .join("/connect-fed")
+            .join(CONNECT_FED_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
     }
@@ -86,17 +101,26 @@ impl GatewayRpcClient {
         &self,
         payload: LeaveFedPayload,
     ) -> GatewayRpcResult<FederationInfo> {
-        let url = self.base_url.join("/leave-fed").expect("invalid base url");
+        let url = self
+            .base_url
+            .join(LEAVE_FED_ENDPOINT)
+            .expect("invalid base url");
         self.call_post(url, payload).await
     }
 
     pub async fn backup(&self, payload: BackupPayload) -> GatewayRpcResult<()> {
-        let url = self.base_url.join("/backup").expect("invalid base url");
+        let url = self
+            .base_url
+            .join(BACKUP_ENDPOINT)
+            .expect("invalid base url");
         self.call_post(url, payload).await
     }
 
     pub async fn restore(&self, payload: RestorePayload) -> GatewayRpcResult<()> {
-        let url = self.base_url.join("/restore").expect("invalid base url");
+        let url = self
+            .base_url
+            .join(RESTORE_ENDPOINT)
+            .expect("invalid base url");
         self.call_post(url, payload).await
     }
 
@@ -106,7 +130,7 @@ impl GatewayRpcClient {
     ) -> GatewayRpcResult<()> {
         let url = self
             .base_url
-            .join("/set_configuration")
+            .join(SET_CONFIGURATION_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
     }

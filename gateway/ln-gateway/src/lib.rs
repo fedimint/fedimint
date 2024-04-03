@@ -1,5 +1,6 @@
 pub mod client;
 mod db;
+pub mod endpoint_constants;
 pub mod envs;
 pub mod gateway_module_v2;
 pub mod lightning;

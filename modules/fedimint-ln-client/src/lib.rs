@@ -2,6 +2,7 @@ pub mod api;
 #[cfg(feature = "cli")]
 pub mod cli;
 pub mod db;
+pub mod endpoint_constants;
 pub mod incoming;
 pub mod pay;
 pub mod receive;
@@ -77,6 +78,7 @@ use thiserror::Error;
 use tracing::{debug, error, info};
 
 use crate::db::PaymentResultPrefix;
+use crate::endpoint_constants::GET_GATEWAY_ID_ENDPOINT;
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
 };
