@@ -6,7 +6,6 @@ use std::convert::Infallible;
 use std::time::Duration;
 
 use anyhow::{bail, format_err, Context};
-use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -60,6 +59,7 @@ use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{Rbf, WalletInputError, WalletOutputError, WalletOutputV0};
 use futures::StreamExt;
+use hex::ToHex;
 use metrics::{
     WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
     WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
@@ -1615,7 +1615,7 @@ impl Serialize for PendingTransaction {
         self.consensus_encode(&mut bytes).unwrap();
 
         if serializer.is_human_readable() {
-            serializer.serialize_str(&bytes.to_hex())
+            serializer.serialize_str(&bytes.encode_hex::<String>())
         } else {
             serializer.serialize_bytes(&bytes)
         }
@@ -1645,7 +1645,7 @@ impl Serialize for UnsignedTransaction {
         self.consensus_encode(&mut bytes).unwrap();
 
         if serializer.is_human_readable() {
-            serializer.serialize_str(&bytes.to_hex())
+            serializer.serialize_str(&bytes.encode_hex::<String>())
         } else {
             serializer.serialize_bytes(&bytes)
         }

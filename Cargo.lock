@@ -2466,6 +2466,7 @@ dependencies = [
  "fedimint-server",
  "fedimint-wallet-common",
  "futures",
+ "hex",
  "impl-tools",
  "miniscript 10.0.0",
  "miniscript 9.0.2",
