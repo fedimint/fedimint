@@ -110,7 +110,6 @@ pub struct GatewayClientInit {
     pub gateway: Gateway,
 }
 
-#[apply(async_trait_maybe_send!)]
 impl ModuleInit for GatewayClientInit {
     type Common = LightningCommonInit;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);

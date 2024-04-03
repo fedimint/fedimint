@@ -115,7 +115,6 @@ impl WalletClientInit {
     }
 }
 
-#[apply(async_trait_maybe_send!)]
 impl ModuleInit for WalletClientInit {
     type Common = WalletCommonInit;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);

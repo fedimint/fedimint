@@ -316,7 +316,6 @@ async fn get_funds(dbtx: &mut DatabaseTransaction<'_>) -> Amount {
 pub struct DummyClientInit;
 
 // TODO: Boilerplate-code
-#[apply(async_trait_maybe_send!)]
 impl ModuleInit for DummyClientInit {
     type Common = DummyCommonInit;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(2);

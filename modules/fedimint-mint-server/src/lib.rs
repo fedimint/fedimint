@@ -60,7 +60,6 @@ use crate::db::{
 #[derive(Debug, Clone)]
 pub struct MintInit;
 
-#[apply(async_trait_maybe_send!)]
 impl ModuleInit for MintInit {
     type Common = MintCommonInit;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
