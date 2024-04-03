@@ -5,7 +5,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_bip39",["",[],["lib.rs"]]],\
 ["fedimint_bitcoind",["",[],["bitcoincore.rs","electrum.rs","esplora.rs","lib.rs"]]],\
 ["fedimint_build",["",[],["envs.rs","lib.rs"]]],\
-["fedimint_cli",["",[],["main.rs"]]],\
+["fedimint_cli",["",[],["client.rs","db_locked.rs","envs.rs","lib.rs","utils.rs"]]],\
 ["fedimint_client",["",[["module",[["init",[],["recovery.rs"]]],["init.rs","mod.rs","recovery.rs"]],["sm",[],["dbtx.rs","executor.rs","mod.rs","notifier.rs","state.rs","util.rs"]],["transaction",[],["builder.rs","mod.rs","sm.rs"]]],["backup.rs","db.rs","envs.rs","lib.rs","oplog.rs","secret.rs"]]],\
 ["fedimint_core",["",[["core",[],["backup.rs","server.rs"]],["db",[],["mem_impl.rs","mod.rs","notifications.rs"]],["encoding",[],["as_hex.rs","bls12_381.rs","btc.rs","mod.rs","secp256k1.rs","threshold_crypto.rs","tls.rs"]],["hex",[],["mod.rs","serde.rs"]],["module",[],["audit.rs","mod.rs","registry.rs","version.rs"]],["net",[["peers",[],["fake.rs"]]],["mod.rs","peers.rs"]],["task",[],["jit.rs","waiter.rs"]],["util",[],["broadcaststream.rs","mod.rs"]]],["admin_client.rs","api.rs","backup.rs","bitcoin_migration.rs","bls12_381_serde.rs","config.rs","core.rs","endpoint_constants.rs","envs.rs","epoch.rs","fmt_utils.rs","lib.rs","macros.rs","query.rs","session_outcome.rs","task.rs","tiered.rs","tiered_multi.rs","time.rs","timing.rs","transaction.rs","txoproof.rs"]]],\
 ["fedimint_dbtool",["",[],["dump.rs","envs.rs","main.rs"]]],\
