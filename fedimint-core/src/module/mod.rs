@@ -24,6 +24,7 @@ use fedimint_logging::LOG_NET_API;
 use futures::Future;
 use jsonrpsee_core::JsonValue;
 use serde::{Deserialize, Serialize};
+use tokio::sync::watch;
 use tracing::instrument;
 
 // TODO: Make this module public and remove the wildcard `pub use` below
@@ -507,6 +508,7 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         db: Database,
         task_group: &TaskGroup,
         our_peer_id: PeerId,
+        consensus_proposal_trigger: ConsensusProposalTrigger,
     ) -> anyhow::Result<DynServerModule>;
 
     fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()>;
@@ -578,6 +580,26 @@ pub trait CommonModuleInit: Debug + Sized {
     fn decoder() -> Decoder;
 }
 
+/// Can be used to send a notification to consensus server,
+/// to trigger immediate [`Server::consensus_proposal`] call.
+///
+/// Useful for modules to optionally decrease latency of consensus
+/// item handling.
+#[derive(Debug, Clone)]
+pub struct ConsensusProposalTrigger(watch::Sender<u64>);
+
+impl From<watch::Sender<u64>> for ConsensusProposalTrigger {
+    fn from(value: watch::Sender<u64>) -> Self {
+        Self(value)
+    }
+}
+
+impl ConsensusProposalTrigger {
+    pub fn send(&self) {
+        self.0.send_modify(|v| *v = v.wrapping_add(1))
+    }
+}
+
 pub struct ServerModuleInitArgs<S>
 where
     S: ServerModuleInit,
@@ -587,6 +609,7 @@ where
     task_group: TaskGroup,
     our_peer_id: PeerId,
     num_peers: NumPeers,
+    consensus_proposal_trigger: ConsensusProposalTrigger,
     // ClientModuleInitArgs needs a bound because sometimes we need
     // to pass associated-types data, so let's just put it here right away
     _marker: marker::PhantomData<S>,
@@ -614,6 +637,12 @@ where
 
     pub fn our_peer_id(&self) -> PeerId {
         self.our_peer_id
+    }
+
+    /// Get [`ConsensusProposalTrigger`] useful for triggering immediate
+    /// [`ServerModule::consensus_proposal`]
+    pub fn consensus_proposal_trigger(&self) -> &ConsensusProposalTrigger {
+        &self.consensus_proposal_trigger
     }
 }
 /// Module Generation trait with associated types
@@ -701,6 +730,7 @@ where
         db: Database,
         task_group: &TaskGroup,
         our_peer_id: PeerId,
+        consensus_proposal_trigger: ConsensusProposalTrigger,
     ) -> anyhow::Result<DynServerModule> {
         <Self as ServerModuleInit>::init(
             self,
@@ -711,6 +741,7 @@ where
                 task_group: task_group.clone(),
                 our_peer_id,
                 _marker: Default::default(),
+                consensus_proposal_trigger,
             },
         )
         .await

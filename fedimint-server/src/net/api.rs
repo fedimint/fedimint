@@ -91,6 +91,8 @@ pub struct ConsensusApi {
     pub client_cfg: ClientConfig,
     /// For sending API events to consensus such as transactions
     pub submission_sender: async_channel::Sender<ConsensusItem>,
+    /// For triggering consensus proposal round
+    pub consensus_proposal_trigger_tx: tokio::sync::watch::Sender<u64>,
     pub peer_status_channels: PeerStatusChannels,
     pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
     pub consensus_status_cache: ExpiringCache<ApiResult<FederationStatus>>,

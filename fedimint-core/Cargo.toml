@@ -33,7 +33,7 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 hex = { version = "0.4.3", features = ["serde"] }
-tokio = { version = "1.36.0", features = ["sync", "io-util"] }
+tokio = { version = "1.37.0", features = ["sync", "io-util"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 threshold_crypto = { workspace = true }

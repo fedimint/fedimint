@@ -19,9 +19,9 @@ use fedimint_core::db::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiAuth, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount,
+    api_endpoint, ApiAuth, ApiEndpoint, ApiError, ApiVersion, ConsensusProposalTrigger,
+    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
+    ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::{
@@ -130,6 +130,7 @@ impl ServerModuleInit for MetaInit {
             cfg: args.cfg().to_typed()?,
             our_peer_id: args.our_peer_id(),
             num_peers: args.num_peers(),
+            consensus_proposal_trigger: args.consensus_proposal_trigger().clone(),
         }
         .into())
     }
@@ -200,6 +201,7 @@ pub struct Meta {
     pub cfg: MetaConfig,
     pub our_peer_id: PeerId,
     pub num_peers: NumPeers,
+    consensus_proposal_trigger: ConsensusProposalTrigger,
 }
 
 impl Meta {
@@ -467,6 +469,7 @@ impl Meta {
             },
         )
         .await;
+        self.consensus_proposal_trigger.send();
 
         Ok(())
     }

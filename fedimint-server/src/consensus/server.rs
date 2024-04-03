@@ -21,7 +21,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{
     ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry,
 };
-use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
+use fedimint_core::module::{ApiRequestErased, ConsensusProposalTrigger, SerdeModuleEncoding};
 use fedimint_core::query::FilterMap;
 use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
@@ -127,6 +127,9 @@ impl ConsensusServer {
         )
         .await?;
 
+        let (consensus_proposal_trigger_tx, consensus_proposal_trigger_rx) =
+            tokio::sync::watch::channel(0);
+
         for (module_id, module_cfg) in &cfg.consensus.modules {
             let kind = module_cfg.kind.clone();
             let Some(init) = module_inits.get(&kind) else {
@@ -154,6 +157,7 @@ impl ConsensusServer {
                     isolated_db,
                     task_group,
                     cfg.local.identity,
+                    ConsensusProposalTrigger::from(consensus_proposal_trigger_tx.clone()),
                 )
                 .await?;
 
@@ -192,6 +196,7 @@ impl ConsensusServer {
             modules: modules.clone(),
             client_cfg: cfg.consensus.to_client_config(&module_inits)?,
             submission_sender: submission_sender.clone(),
+            consensus_proposal_trigger_tx,
             supported_api_versions: ServerConfig::supported_api_versions_summary(
                 &cfg.consensus.modules,
                 &module_inits,
@@ -206,6 +211,7 @@ impl ConsensusServer {
             db.clone(),
             modules.clone(),
             submission_sender.clone(),
+            consensus_proposal_trigger_rx,
         )
         .await;
 
@@ -815,6 +821,7 @@ async fn submit_module_consensus_items(
     db: Database,
     modules: ServerModuleRegistry,
     submission_sender: Sender<ConsensusItem>,
+    mut consensus_proposal_trigger: watch::Receiver<u64>,
 ) {
     task_group.spawn(
         "submit_module_consensus_items",
@@ -838,7 +845,13 @@ async fn submit_module_consensus_items(
                     }
                 }
 
-                sleep(Duration::from_secs(1)).await;
+                drop(dbtx);
+
+                tokio::select! {
+                    biased;
+                    _ = sleep(Duration::from_secs(1)) => {},
+                    _ = consensus_proposal_trigger.changed() => {}
+                }
             }
         },
     );
