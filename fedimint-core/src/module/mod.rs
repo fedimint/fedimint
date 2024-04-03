@@ -430,7 +430,6 @@ pub trait IDynCommonModuleInit: Debug {
 }
 
 /// Trait implemented by every `*ModuleInit` (server or client side)
-#[apply(async_trait_maybe_send!)]
 pub trait ModuleInit: Debug + Clone + Send + Sync + 'static {
     type Common: CommonModuleInit;
 
@@ -442,11 +441,17 @@ pub trait ModuleInit: Debug + Clone + Send + Sync + 'static {
     /// to move from the previous database version to the current version.
     const DATABASE_VERSION: DatabaseVersion;
 
-    async fn dump_database(
+    fn dump_database(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
-    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
+    ) -> maybe_add_send!(
+        impl Future<
+            Output = Box<
+                dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_,
+            >,
+        >
+    );
 }
 
 #[apply(async_trait_maybe_send!)]

@@ -41,7 +41,6 @@ pub mod db;
 pub struct DummyInit;
 
 // TODO: Boilerplate-code
-#[async_trait]
 impl ModuleInit for DummyInit {
     type Common = DummyCommonInit;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);

@@ -86,7 +86,6 @@ mod metrics;
 #[derive(Debug, Clone)]
 pub struct WalletInit;
 
-#[apply(async_trait_maybe_send!)]
 impl ModuleInit for WalletInit {
     type Common = WalletCommonInit;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);

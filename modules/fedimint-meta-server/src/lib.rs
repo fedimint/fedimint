@@ -55,7 +55,6 @@ use crate::db::{
 pub struct MetaInit;
 
 // TODO: Boilerplate-code
-#[async_trait]
 impl ModuleInit for MetaInit {
     type Common = MetaCommonInit;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);

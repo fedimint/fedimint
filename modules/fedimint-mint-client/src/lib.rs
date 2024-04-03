@@ -403,7 +403,6 @@ pub enum MintOperationMetaVariant {
 #[derive(Debug, Clone)]
 pub struct MintClientInit;
 
-#[apply(async_trait_maybe_send!)]
 impl ModuleInit for MintClientInit {
     type Common = MintCommonInit;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);

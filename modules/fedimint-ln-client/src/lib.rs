@@ -256,7 +256,6 @@ pub enum LightningOperationMetaVariant {
 #[derive(Debug, Clone)]
 pub struct LightningClientInit;
 
-#[apply(async_trait_maybe_send!)]
 impl ModuleInit for LightningClientInit {
     type Common = LightningCommonInit;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(3);

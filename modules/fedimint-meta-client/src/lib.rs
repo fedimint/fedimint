@@ -145,7 +145,6 @@ impl ClientModule for MetaClientModule {
 pub struct MetaClientInit;
 
 // TODO: Boilerplate-code
-#[apply(async_trait_maybe_send!)]
 impl ModuleInit for MetaClientInit {
     type Common = MetaCommonInit;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);

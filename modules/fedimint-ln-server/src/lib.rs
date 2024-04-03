@@ -71,7 +71,6 @@ mod metrics;
 #[derive(Debug, Clone)]
 pub struct LightningInit;
 
-#[apply(async_trait_maybe_send!)]
 impl ModuleInit for LightningInit {
     type Common = LightningCommonInit;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
