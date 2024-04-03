@@ -13,11 +13,11 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::util::BoxFuture;
 use fedimint_core::{impl_db_lookup, impl_db_record};
-use fedimint_logging::LOG_DB;
+use fedimint_logging::LOG_CLIENT_DB;
 use futures::StreamExt;
 use serde::Serialize;
 use strum_macros::EnumIter;
-use tracing::{info, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::backup::{ClientBackup, Metadata};
 use crate::module::recovery::RecoveryProgress;
@@ -355,7 +355,7 @@ pub type ClientMigrationFn =
 pub async fn apply_migrations_client(
     db: &Database,
     kind: String,
-    target_db_version: DatabaseVersion,
+    target_version: DatabaseVersion,
     migrations: BTreeMap<DatabaseVersion, ClientMigrationFn>,
     module_instance_id: ModuleInstanceId,
     decoders: ModuleDecoderRegistry,
@@ -373,7 +373,7 @@ pub async fn apply_migrations_client(
     // First write the database version to disk if it does not exist.
     create_database_version(
         db,
-        target_db_version,
+        target_version,
         Some(module_instance_id),
         kind.clone(),
         is_new_db,
@@ -381,40 +381,54 @@ pub async fn apply_migrations_client(
     .await?;
 
     let mut global_dbtx = db.begin_transaction().await;
-    let disk_version = global_dbtx
+    let current_version = global_dbtx
         .get_value(&DatabaseVersionKey(module_instance_id))
         .await;
 
-    info!(
-        ?disk_version,
-        ?target_db_version,
-        module_instance_id,
-        kind,
-        "Checking for necessary client module db migrations..."
-    );
-
-    let db_version = if let Some(disk_version) = disk_version {
-        let mut current_db_version = disk_version;
-
-        if current_db_version > target_db_version {
-            return Err(anyhow::anyhow!(format!(
-                "On disk database version for module {kind} was higher than the code database version."
-            )));
-        }
-
-        if current_db_version == target_db_version {
+    let db_version = if let Some(mut current_version) = current_version {
+        if current_version == target_version {
+            trace!(
+                target: LOG_CLIENT_DB,
+                %current_version,
+                %target_version,
+                module_instance_id,
+                kind,
+                "Database version up to date"
+            );
             global_dbtx.ignore_uncommitted();
             return Ok(());
         }
 
+        if target_version < current_version {
+            return Err(anyhow::anyhow!(format!(
+                "On disk database version for module {kind} was higher ({}) than the target database version ({}).",
+                current_version,
+                target_version,
+            )));
+        }
+
+        info!(
+            target: LOG_CLIENT_DB,
+            %current_version,
+            %target_version,
+            module_instance_id,
+            kind,
+            "Migrating client module database"
+        );
         let mut active_states =
             get_active_states(&mut global_dbtx.to_ref_nc(), module_instance_id).await;
         let mut inactive_states =
             get_inactive_states(&mut global_dbtx.to_ref_nc(), module_instance_id).await;
 
-        while current_db_version < target_db_version {
-            let new_states = if let Some(migration) = migrations.get(&current_db_version) {
-                info!(target: LOG_DB, ?kind, ?current_db_version, ?target_db_version, "Migrating module...");
+        while current_version < target_version {
+            let new_states = if let Some(migration) = migrations.get(&current_version) {
+                debug!(
+                     target: LOG_CLIENT_DB,
+                     module_instance_id,
+                     %kind,
+                     %current_version,
+                     %target_version,
+                     "Running module db migration");
 
                 migration(
                     &mut global_dbtx
@@ -427,7 +441,9 @@ pub async fn apply_migrations_client(
                 )
                 .await?
             } else {
-                warn!(?current_db_version, "Missing client db migration");
+                warn!(
+                    target: LOG_CLIENT_DB,
+                    ?current_version, "Missing client db migration");
                 None
             };
 
@@ -460,19 +476,21 @@ pub async fn apply_migrations_client(
                     .collect::<Vec<_>>();
             }
 
-            current_db_version.increment();
+            current_version.increment();
             global_dbtx
-                .insert_entry(&DatabaseVersionKey(module_instance_id), &current_db_version)
+                .insert_entry(&DatabaseVersionKey(module_instance_id), &current_version)
                 .await;
         }
 
-        current_db_version
+        current_version
     } else {
-        target_db_version
+        target_version
     };
 
     global_dbtx.commit_tx_result().await?;
-    info!(target: LOG_DB, ?kind, ?db_version, "Migration complete");
+    info!(
+        target: LOG_CLIENT_DB,
+        ?kind, ?db_version, "Migration complete");
     Ok(())
 }
 

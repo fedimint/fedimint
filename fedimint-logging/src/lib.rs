@@ -21,6 +21,7 @@ pub const LOG_TEST: &str = "test";
 pub const LOG_TIMING: &str = "timing";
 pub const LOG_WALLET: &str = "wallet";
 pub const LOG_CLIENT: &str = "client";
+pub const LOG_CLIENT_DB: &str = "client::db";
 pub const LOG_SERVER_MODULE_META: &str = "server::module::meta";
 pub const LOG_CLIENT_REACTOR: &str = "client::reactor";
 pub const LOG_CLIENT_NET_API: &str = "client::net::api";
