@@ -94,6 +94,22 @@ rules:
       - fedimint-server/
       - fedimint-core/
 
+- id: use-client-log-targets
+  languages:
+    - rust
+  message: Log statements in clients should have static target prefixed with `LOG_CLIENT_` (`client::`)
+  patterns:
+    # semgrep struggles with finding boundaries of rust macro invocation when ellipsis (`...`) is used
+    # so matching this one with raw regexes instead
+    - pattern-regex: '(error|warn|info|debug|trace)!\(\s*target: [^;]*?\);'
+    - pattern-not-regex: '(error|warn|info|debug|trace)!\(\s*target: LOG_CLIENT[^;]*?\);'
+  severity: WARNING
+  paths:
+    include:
+      - fedimint-client/
+      - fedimint-cli/
+      - modules/*-client/
+
 - id: ban-wildcard-imports
   languages:
     - rust

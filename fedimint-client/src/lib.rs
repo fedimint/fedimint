@@ -583,7 +583,7 @@ impl ClientHandle {
 
         let db_strong_count = db.strong_count();
         if db_strong_count != 1 {
-            debug!(target:  LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
+            debug!(target: LOG_CLIENT, count = db_strong_count - 1, "External DB references remaining after last handle dropped");
         }
     }
 

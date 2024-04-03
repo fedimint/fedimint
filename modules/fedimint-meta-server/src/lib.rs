@@ -27,7 +27,7 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::{
     push_db_pair_items, NumPeers, NumPeersExt as _, OutPoint, PeerId, ServerModule,
 };
-use fedimint_logging::LOG_SERVER_MODULE_META;
+use fedimint_logging::LOG_MODULE_META;
 use fedimint_meta_common::config::{
     MetaClientConfig, MetaConfig, MetaConfigConsensus, MetaConfigLocal, MetaConfigPrivate,
 };
@@ -281,7 +281,7 @@ impl Meta {
         )
         .await;
 
-        info!(target: LOG_SERVER_MODULE_META, %key, rev = %revision, len = %value_len, "New consensus value");
+        info!(target: LOG_MODULE_META, %key, rev = %revision, len = %value_len, "New consensus value");
 
         for peer_id in matching_submissions {
             dbtx.remove_entry(&MetaSubmissionsKey { key, peer_id })
@@ -325,7 +325,7 @@ impl ServerModule for Meta {
         }
         // then: if the submission is equal to the current consensus, it's ignored
         if Some(&new_value.value) == Self::get_consensus(dbtx, key).await.as_ref() {
-            debug!(target: LOG_SERVER_MODULE_META, %peer_id, %key, "Peer submitted a redundant value");
+            debug!(target: LOG_MODULE_META, %peer_id, %key, "Peer submitted a redundant value");
             return Ok(());
         }
 
@@ -345,7 +345,7 @@ impl ServerModule for Meta {
             .await;
 
         let threshold = self.num_peers.threshold();
-        info!(target: LOG_SERVER_MODULE_META,
+        info!(target: LOG_MODULE_META,
              %peer_id,
              %key,
             value_len = %new_value.value.as_slice().len(),
