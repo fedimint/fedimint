@@ -489,7 +489,7 @@ impl Gateway {
                             break;
                         }
 
-                        let mut htlc_task_group = tg.make_subgroup().await;
+                        let mut htlc_task_group = tg.make_subgroup();
                         let lnrpc_route = self_copy.lightning_builder.build().await;
 
                         debug!("Will try to intercept HTLC stream...");

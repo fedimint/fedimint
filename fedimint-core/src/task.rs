@@ -108,7 +108,7 @@ impl TaskGroup {
     /// The code create a subgroup is responsible for calling
     /// [`Self::join_all`]. If it won't, the parent subgroup **will not**
     /// detect any panics in the tasks spawned by the subgroup.
-    pub async fn make_subgroup(&self) -> TaskGroup {
+    pub fn make_subgroup(&self) -> TaskGroup {
         let new_tg = Self::new();
         self.inner
             .subgroups
@@ -724,7 +724,6 @@ mod tests {
     async fn shutdown_task_subgroup_after() -> anyhow::Result<()> {
         let tg = TaskGroup::new();
         tg.make_subgroup()
-            .await
             .spawn("shutdown waiter", |handle| async move {
                 handle.make_shutdown_rx().await.await
             });
@@ -737,7 +736,6 @@ mod tests {
     async fn shutdown_task_subgroup_before() -> anyhow::Result<()> {
         let tg = TaskGroup::new();
         tg.make_subgroup()
-            .await
             .spawn("shutdown waiter", |handle| async move {
                 sleep(Duration::from_millis(10)).await;
                 handle.make_shutdown_rx().await.await

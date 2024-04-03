@@ -140,7 +140,7 @@ impl FedimintServer {
 
         initialize_gauge_metrics(&self.db).await;
 
-        self.generate_config(task_group.make_subgroup().await).await
+        self.generate_config(task_group.make_subgroup()).await
     }
 
     pub async fn run(
