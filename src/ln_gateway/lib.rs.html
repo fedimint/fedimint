@@ -2110,7 +2110,7 @@
                             <span class="kw">break</span>;
                         }
 
-                        <span class="kw">let </span><span class="kw-2">mut </span>htlc_task_group = tg.make_subgroup().<span class="kw">await</span>;
+                        <span class="kw">let </span><span class="kw-2">mut </span>htlc_task_group = tg.make_subgroup();
                         <span class="kw">let </span>lnrpc_route = self_copy.lightning_builder.build().<span class="kw">await</span>;
 
                         <span class="macro">debug!</span>(<span class="string">"Will try to intercept HTLC stream..."</span>);
