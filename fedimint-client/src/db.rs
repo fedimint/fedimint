@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::time::SystemTime;
 
 use fedimint_core::api::ApiVersionSet;
 use fedimint_core::config::{ClientConfig, FederationId};
@@ -40,6 +41,8 @@ pub enum DbKeyPrefix {
     ClientInitState = 0x31,
     ClientMetadata = 0x32,
     ClientLastBackup = 0x33,
+    ClientMetaField = 0x34,
+    ClientMetaServiceInfo = 0x35,
     /// Arbitrary data of the applications integrating Fedimint client and
     /// wanting to store some Federation-specific data in Fedimint client
     /// database.
@@ -296,6 +299,38 @@ impl_db_record!(
     value = ClientBackup,
     db_prefix = DbKeyPrefix::ClientLastBackup
 );
+
+#[derive(Encodable, Decodable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub struct MetaFieldKey(pub String);
+
+#[derive(Encodable, Decodable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub struct MetaFieldPrefix;
+
+#[derive(Encodable, Decodable, Debug, Clone)]
+pub struct MetaFieldValue(pub String);
+
+#[derive(Encodable, Decodable, Debug)]
+pub struct MetaServiceInfoKey;
+
+#[derive(Encodable, Decodable, Debug)]
+pub struct MetaServiceInfo {
+    pub last_updated: SystemTime,
+    pub revision: u64,
+}
+
+impl_db_record!(
+    key = MetaFieldKey,
+    value = MetaFieldValue,
+    db_prefix = DbKeyPrefix::ClientMetaField
+);
+
+impl_db_record!(
+    key = MetaServiceInfoKey,
+    value = MetaServiceInfo,
+    db_prefix = DbKeyPrefix::ClientMetaServiceInfo
+);
+
+impl_db_lookup!(key = MetaFieldKey, query_prefix = MetaFieldPrefix);
 
 /// `ClientMigrationFn` is a function that modules can implement to "migrate"
 /// the database to the next database version.

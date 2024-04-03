@@ -42,6 +42,7 @@ thiserror = { workspace = true }
 tokio = { version = "1.36.0", features = [ "time", "macros" ] }
 tokio-stream = { version = "0.1.14", features = [ "time", "sync" ] }
 tracing = { workspace = true }
+reqwest = { version = "0.12.2", features = ["json", "rustls-tls"], default-features = false }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 ring = { version = "0.17.8", features = ["wasm32_unknown_unknown_js"] }
