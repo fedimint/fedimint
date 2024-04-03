@@ -51,7 +51,7 @@ fedimint-dummy-client = { version = "=0.4.0-alpha", path = "../../modules/fedimi
 fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-wallet-client" }
 futures = { workspace = true }
 erased-serde = { workspace = true }
-lightning-invoice = "0.26.0"
+lightning-invoice = "0.29.0"
 prost = "0.12.3"
 rand = { workspace = true }
 reqwest = { version = "0.11.26", features = [ "json", "rustls-tls" ], default-features = false }
