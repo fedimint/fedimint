@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-empty-common"
-version = "0.3.0-alpha"
+version = "0.4.0-alpha"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-empty is a empty fedimint module, good template for a new module."
@@ -20,7 +20,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
-fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
+fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
 serde = { version = "1.0.197", features = [ "derive" ] }
 strum = { workspace = true }
 strum_macros = { workspace = true }

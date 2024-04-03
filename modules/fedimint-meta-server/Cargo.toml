@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-meta-server"
-version = "0.3.0-alpha"
+version = "0.4.0-alpha"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-meta is a meta consensus fedimint module."
@@ -21,9 +21,9 @@ async-trait = "0.1.73"
 bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
-fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
-fedimint-logging = { version = "0.3.0-alpha", path = "../../fedimint-logging" }
-fedimint-meta-common = { version = "0.3.0-alpha", path = "../fedimint-meta-common" }
+fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
+fedimint-logging = { version = "=0.4.0-alpha", path = "../../fedimint-logging" }
+fedimint-meta-common = { version = "=0.4.0-alpha", path = "../fedimint-meta-common" }
 rand = { workspace = true }
 serde = { version = "1.0.149", features = [ "derive" ] }
 secp256k1 = "0.24.2"

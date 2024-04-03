@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-ln-server"
-version = "0.3.0-alpha"
+version = "0.4.0-alpha"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-ln is a lightning payment service module."
@@ -27,10 +27,10 @@ futures = { workspace = true }
 itertools = { workspace = true }
 lightning = "0.0.118"
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
-fedimint-bitcoind = { version = "0.3.0-alpha", path = "../../fedimint-bitcoind" }
-fedimint-core = { version = "0.3.0-alpha", path = "../../fedimint-core" }
-fedimint-ln-common = { version = "0.3.0-alpha", path = "../fedimint-ln-common" }
-fedimint-metrics = { version = "0.3.0-alpha", path = "../../fedimint-metrics" }
+fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../../fedimint-bitcoind" }
+fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
+fedimint-ln-common = { version = "=0.4.0-alpha", path = "../fedimint-ln-common" }
+fedimint-metrics = { version = "=0.4.0-alpha", path = "../../fedimint-metrics" }
 secp256k1 = { version="0.24.3", default-features=false }
 serde = {version = "1.0.197", features = [ "derive" ] }
 serde_json = { workspace = true }
@@ -42,7 +42,7 @@ tokio = { version = "1.36", features = ["full"] }
 tracing = { workspace = true }
 rand = { workspace = true }
 url = { version = "2.5.0", features = ["serde"] }
-fedimint-server = { version = "0.3.0-alpha", path = "../../fedimint-server" }
+fedimint-server = { version = "=0.4.0-alpha", path = "../../fedimint-server" }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
