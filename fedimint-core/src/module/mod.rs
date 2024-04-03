@@ -581,7 +581,7 @@ pub trait CommonModuleInit: Debug + Sized {
 }
 
 /// Can be used to send a notification to consensus server,
-/// to trigger immediate [`Server::consensus_proposal`] call.
+/// to trigger immediate [`ServerModule::consensus_proposal`] call.
 ///
 /// Useful for modules to optionally decrease latency of consensus
 /// item handling.
@@ -840,6 +840,27 @@ pub trait ServerModule: Debug + Sized {
     }
 
     /// This module's contribution to the next consensus proposal
+    ///
+    /// This method is polled by the server periodically to gather
+    /// consensus items modules would like included in the consensus.
+    ///
+    /// Note that returning an item does not guarantee its processing,
+    /// and modules should keep proposing the difference between
+    /// the desired state and current consensus view.
+    ///
+    /// Warning: The consensus algorithm will deduplicate and ignore
+    /// previously submitted items. This can lead to weird behavior
+    /// when identically deserialized items can be generated multiple times.
+    /// Use some random-like data to make such requests unique to avoid
+    /// this problem.
+    ///
+    ///
+    /// Modules should be architected to avoid making the consensus
+    /// processing latency a bottleneck, so the rate at which this call
+    /// is made is not guaranteed and relatively infrequent. If a module
+    /// desires immediate processing, it can use [`ConsensusProposalTrigger`]
+    /// that it can obtain via
+    /// [`ServerModuleInitArgs::consensus_proposal_trigger`].
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
