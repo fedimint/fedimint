@@ -761,7 +761,7 @@
 <span class="kw">use </span>fs_lock::FileLock;
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>rand::Rng;
-<span class="kw">use </span>semver::VersionReq;
+<span class="kw">use </span>semver::Version;
 <span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tracing::{debug, info};
 
@@ -881,7 +881,7 @@
     <span class="comment">// TODO(support:v0.2): remove
     </span><span class="kw">pub async fn </span>use_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::gatewayd::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
-        <span class="kw">if </span>VersionReq::parse(<span class="string">"&lt;0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
+        <span class="kw">if </span>fedimint_cli_version &lt; Version::parse(<span class="string">"0.3.0-alpha"</span>)<span class="question-mark">? </span>{
             <span class="kw">let </span>gateway_id = gw.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"switch-gateway"</span>, gateway_id.clone())
                 .run()
@@ -1159,7 +1159,7 @@
         <span class="kw">let </span>start_time = Instant::now();
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Awaiting LN gateways registration"</span>);
         <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
-        <span class="kw">let </span>command = <span class="kw">if </span>VersionReq::parse(<span class="string">"&lt;0.3.0-alpha"</span>)<span class="question-mark">?</span>.matches(<span class="kw-2">&amp;</span>fedimint_cli_version) {
+        <span class="kw">let </span>command = <span class="kw">if </span>fedimint_cli_version &lt; Version::parse(<span class="string">"0.3.0-alpha"</span>)<span class="question-mark">? </span>{
             <span class="string">"list-gateways"
         </span>} <span class="kw">else </span>{
             <span class="string">"update-gateway-cache"
