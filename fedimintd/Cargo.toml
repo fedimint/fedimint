@@ -29,7 +29,7 @@ ring = "0.17.8"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bincode = { workspace = true }
-bitcoin = { workspace = true }
+bitcoin = "0.29.2"
 bytes = "1.5.0"
 clap = { workspace = true }
 futures = { workspace = true }
