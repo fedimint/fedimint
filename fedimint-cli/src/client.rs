@@ -580,7 +580,7 @@ pub async fn handle_command(
                 match update {
                     WithdrawState::Succeeded(txid) => {
                         return Ok(json!({
-                            "txid": format!("{txid}"),
+                            "txid": txid.consensus_encode_to_hex(),
                             "fees_sat": absolute_fees.to_sat(),
                         }));
                     }
