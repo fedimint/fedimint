@@ -647,6 +647,10 @@ impl GatewayLightning for ClnRpcService {
                                         Some(total_msat) => total_msat.msat() / 1000,
                                         None => 0,
                                     },
+                                    short_channel_id: match channel.short_channel_id {
+                                        Some(scid) => scid_to_u64(scid),
+                                        None => return None,
+                                    },
                                 })
                             } else {
                                 None

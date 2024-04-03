@@ -218,6 +218,7 @@ impl ILnRpcClient for NetworkLnRpcClient {
             .map(|channel| ChannelInfo {
                 remote_pubkey: channel.remote_pubkey,
                 channel_size_sats: channel.channel_size_sats,
+                short_channel_id: channel.short_channel_id,
             })
             .collect())
     }

@@ -716,43 +716,16 @@ pub async fn open_channel_between_gateways(
     bitcoind.mine_blocks(10).await?;
 
     poll("Wait for channel update", || async {
-        let mut lnd_client = lnd.client.lock().await;
-        let channels = lnd_client
-            .lightning()
-            .list_channels(ListChannelsRequest {
-                active_only: true,
-                ..Default::default()
-            })
+        let channels = gw_lnd
+            .list_active_channels()
             .await
-            .context("lnd list channels")
-            .map_err(ControlFlow::Break)?
-            .into_inner();
+            .map_err(ControlFlow::Break)?;
 
-        if let Some(channel) = channels
-            .channels
+        if channels
             .iter()
-            .find(|channel| channel.remote_pubkey == cln_pubkey)
+            .any(|channel| channel.remote_pubkey == cln_pubkey)
         {
-            let chan_info = lnd_client
-                .lightning()
-                .get_chan_info(ChanInfoRequest {
-                    chan_id: channel.chan_id,
-                })
-                .await;
-
-            match chan_info {
-                Ok(info) => {
-                    let edge = info.into_inner();
-                    if edge.node1_policy.is_some() {
-                        return Ok(());
-                    } else {
-                        debug!(?edge, "Empty chan info");
-                    }
-                }
-                Err(e) => {
-                    debug!(%e, "Getting chan info failed")
-                }
-            }
+            return Ok(());
         }
 
         Err(ControlFlow::Continue(anyhow!("channel not found")))

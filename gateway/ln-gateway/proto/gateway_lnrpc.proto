@@ -244,6 +244,9 @@ message ListActiveChannelsResponse {
 
     // The capacity of the channel, in sats.
     uint64 channel_size_sats = 2;
+
+    // The SCID of the channel.
+    uint64 short_channel_id = 3;
   }
 
   // All channels on the node that are currently able to send and receive payments.

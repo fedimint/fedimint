@@ -732,6 +732,7 @@ impl ILnRpcClient for GatewayLndClient {
                 .map(|channel| ChannelInfo {
                     remote_pubkey: channel.remote_pubkey,
                     channel_size_sats: channel.capacity.try_into().expect("u64 -> i64"),
+                    short_channel_id: channel.chan_id,
                 })
                 .collect()),
             Err(e) => Err(LightningRpcError::FailedToListActiveChannels {
