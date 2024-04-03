@@ -616,7 +616,43 @@
 <a href="#614" id="614">614</a>
 <a href="#615" id="615">615</a>
 <a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>fedimint_core::api::ApiVersionSet;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
@@ -658,6 +694,8 @@
     </span>ClientInitState = <span class="number">0x31</span>,
     ClientMetadata = <span class="number">0x32</span>,
     ClientLastBackup = <span class="number">0x33</span>,
+    ClientMetaField = <span class="number">0x34</span>,
+    ClientMetaServiceInfo = <span class="number">0x35</span>,
     <span class="doccomment">/// Arbitrary data of the applications integrating Fedimint client and
     /// wanting to store some Federation-specific data in Fedimint client
     /// database.
@@ -914,6 +952,38 @@
     value = ClientBackup,
     db_prefix = DbKeyPrefix::ClientLastBackup
 );
+
+<span class="attr">#[derive(Encodable, Decodable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+</span><span class="kw">pub struct </span>MetaFieldKey(<span class="kw">pub </span>String);
+
+<span class="attr">#[derive(Encodable, Decodable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+</span><span class="kw">pub struct </span>MetaFieldPrefix;
+
+<span class="attr">#[derive(Encodable, Decodable, Debug, Clone)]
+</span><span class="kw">pub struct </span>MetaFieldValue(<span class="kw">pub </span>String);
+
+<span class="attr">#[derive(Encodable, Decodable, Debug)]
+</span><span class="kw">pub struct </span>MetaServiceInfoKey;
+
+<span class="attr">#[derive(Encodable, Decodable, Debug)]
+</span><span class="kw">pub struct </span>MetaServiceInfo {
+    <span class="kw">pub </span>last_updated: SystemTime,
+    <span class="kw">pub </span>revision: u64,
+}
+
+<span class="macro">impl_db_record!</span>(
+    key = MetaFieldKey,
+    value = MetaFieldValue,
+    db_prefix = DbKeyPrefix::ClientMetaField
+);
+
+<span class="macro">impl_db_record!</span>(
+    key = MetaServiceInfoKey,
+    value = MetaServiceInfo,
+    db_prefix = DbKeyPrefix::ClientMetaServiceInfo
+);
+
+<span class="macro">impl_db_lookup!</span>(key = MetaFieldKey, query_prefix = MetaFieldPrefix);
 
 <span class="doccomment">/// `ClientMigrationFn` is a function that modules can implement to "migrate"
 /// the database to the next database version.
