@@ -1135,9 +1135,9 @@ checksum = "11157ac094ffbdde99aa67b23417ebdd801842852b500e395a45a9c0aac03e4a"
 
 [[package]]
 name = "electrum-client"
-version = "0.12.1"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8e1e1e452aef3ee772d19cc6272ef642f22ce0f4a9fb715ffe98010934e2ae1"
+checksum = "4b8debf63f96e20e6d9e94170227b4329806f5fbb87b1f0f10a597fd26f26902"
 dependencies = [
  "bitcoin 0.29.2",
  "byteorder",
