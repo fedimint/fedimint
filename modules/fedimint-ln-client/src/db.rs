@@ -1,6 +1,5 @@
 use bitcoin::hashes::sha256;
-use fedimint_client::sm::DynState;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
+use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{impl_db_lookup, impl_db_record};
@@ -90,36 +89,36 @@ impl_db_lookup!(
 /// `ConfirmedInvoice`
 pub(crate) fn get_v1_migrated_state(
     bytes: &[u8],
-    module_instance_id: ModuleInstanceId,
-    decoders: &ModuleDecoderRegistry,
-) -> anyhow::Result<Option<DynState>> {
+    operation_id: OperationId,
+) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
     #[derive(Debug, Clone, Decodable)]
     pub struct LightningReceiveConfirmedInvoiceV0 {
         invoice: Bolt11Invoice,
         receiving_key: KeyPair,
     }
 
+    let decoders = ModuleDecoderRegistry::default();
     let mut cursor = std::io::Cursor::new(bytes);
-    let key = fedimint_core::core::ModuleInstanceId::consensus_decode(&mut cursor, decoders)?;
-    debug_assert_eq!(key, module_instance_id, "Unexpected module instance ID");
+    let module_instance_id =
+        fedimint_core::core::ModuleInstanceId::consensus_decode(&mut cursor, &decoders)?;
 
-    let ln_sm_variant = u16::consensus_decode(&mut cursor, decoders)?;
+    let ln_sm_variant = u16::consensus_decode(&mut cursor, &decoders)?;
 
     // If the state machine is not a receive state machine, return None
     if ln_sm_variant != 2 {
         return Ok(None);
     }
 
-    let _ln_sm_len = u16::consensus_decode(&mut cursor, decoders)?;
-    let operation_id = OperationId::consensus_decode(&mut cursor, decoders)?;
-    let receive_sm_variant = u16::consensus_decode(&mut cursor, decoders)?;
+    let _ln_sm_len = u16::consensus_decode(&mut cursor, &decoders)?;
+    let _operation_id = OperationId::consensus_decode(&mut cursor, &decoders)?;
+    let receive_sm_variant = u16::consensus_decode(&mut cursor, &decoders)?;
 
     let new = match receive_sm_variant {
         // SubmittedOfferV0
         0 => {
-            let _receive_sm_len = u16::consensus_decode(&mut cursor, decoders)?;
+            let _receive_sm_len = u16::consensus_decode(&mut cursor, &decoders)?;
 
-            let v0 = LightningReceiveSubmittedOfferV0::consensus_decode(&mut cursor, decoders)?;
+            let v0 = LightningReceiveSubmittedOfferV0::consensus_decode(&mut cursor, &decoders)?;
 
             let new_offer = LightningReceiveSubmittedOffer {
                 offer_txid: v0.offer_txid,
@@ -134,9 +133,9 @@ pub(crate) fn get_v1_migrated_state(
         }
         // ConfirmedInvoiceV0
         2 => {
-            let _receive_sm_len = u16::consensus_decode(&mut cursor, decoders)?;
+            let _receive_sm_len = u16::consensus_decode(&mut cursor, &decoders)?;
             let confirmed_old =
-                LightningReceiveConfirmedInvoiceV0::consensus_decode(&mut cursor, decoders)?;
+                LightningReceiveConfirmedInvoiceV0::consensus_decode(&mut cursor, &decoders)?;
             let confirmed_new = LightningReceiveConfirmedInvoice {
                 invoice: confirmed_old.invoice,
                 receiving_key: ReceivingKey::Personal(confirmed_old.receiving_key),
@@ -149,44 +148,44 @@ pub(crate) fn get_v1_migrated_state(
         _ => return Ok(None),
     };
 
-    Ok(Some(new.into_dyn(module_instance_id)))
+    let bytes = (module_instance_id, new).consensus_encode_to_vec();
+    Ok(Some((bytes, operation_id)))
 }
 
 /// Migrates `SubmittedOffer` with enum prefix 5 back to `SubmittedOffer`
 pub(crate) fn get_v2_migrated_state(
     bytes: &[u8],
-    module_instance_id: ModuleInstanceId,
-    decoders: &ModuleDecoderRegistry,
-) -> anyhow::Result<Option<DynState>> {
+    operation_id: OperationId,
+) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
+    let decoders = ModuleDecoderRegistry::default();
     let mut cursor = std::io::Cursor::new(bytes);
-    let key = fedimint_core::core::ModuleInstanceId::consensus_decode(&mut cursor, decoders)?;
-    debug_assert_eq!(key, module_instance_id, "Unexpected module instance ID");
+    let module_instance_id =
+        fedimint_core::core::ModuleInstanceId::consensus_decode(&mut cursor, &decoders)?;
 
-    let ln_sm_variant = u16::consensus_decode(&mut cursor, decoders)?;
+    let ln_sm_variant = u16::consensus_decode(&mut cursor, &decoders)?;
 
     // If the state machine is not a receive state machine, return None
     if ln_sm_variant != 2 {
         return Ok(None);
     }
 
-    let _ln_sm_len = u16::consensus_decode(&mut cursor, decoders)?;
-    let operation_id = OperationId::consensus_decode(&mut cursor, decoders)?;
-    let receive_sm_variant = u16::consensus_decode(&mut cursor, decoders)?;
+    let _ln_sm_len = u16::consensus_decode(&mut cursor, &decoders)?;
+    let _operation_id = OperationId::consensus_decode(&mut cursor, &decoders)?;
+    let receive_sm_variant = u16::consensus_decode(&mut cursor, &decoders)?;
     if receive_sm_variant != 5 {
         return Ok(None);
     }
 
-    let _receive_sm_len = u16::consensus_decode(&mut cursor, decoders)?;
-    let old = LightningReceiveSubmittedOffer::consensus_decode(&mut cursor, decoders)?;
+    let _receive_sm_len = u16::consensus_decode(&mut cursor, &decoders)?;
+    let old = LightningReceiveSubmittedOffer::consensus_decode(&mut cursor, &decoders)?;
 
-    let new_recv = LightningReceiveStateMachine {
+    let new_recv = LightningClientStateMachines::Receive(LightningReceiveStateMachine {
         operation_id,
         state: LightningReceiveStates::SubmittedOffer(old),
-    };
+    });
 
-    Ok(Some(
-        LightningClientStateMachines::Receive(new_recv).into_dyn(module_instance_id),
-    ))
+    let bytes = (module_instance_id, new_recv).consensus_encode_to_vec();
+    Ok(Some((bytes, operation_id)))
 }
 
 #[cfg(test)]
@@ -195,10 +194,8 @@ mod tests {
 
     use bitcoin::hashes::Hash;
     use fedimint_client::db::migrate_state;
-    use fedimint_client::module::ClientModule;
     use fedimint_core::core::{IntoDynInstance, OperationId};
     use fedimint_core::encoding::Encodable;
-    use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::TransactionId;
     use lightning_invoice::Bolt11Invoice;
     use rand::thread_rng;
@@ -209,7 +206,7 @@ mod tests {
         LightningReceiveConfirmedInvoice, LightningReceiveStateMachine, LightningReceiveStates,
         LightningReceiveSubmittedOffer,
     };
-    use crate::{LightningClientModule, LightningClientStateMachines, ReceivingKey};
+    use crate::{LightningClientStateMachines, ReceivingKey};
 
     #[tokio::test]
     async fn test_sm_migration_to_v2_submitted() {
@@ -276,29 +273,23 @@ mod tests {
         })
         .into_dyn(instance_id);
 
-        let decoders = ModuleDecoderRegistry::new(vec![(
-            instance_id,
-            LightningClientModule::kind(),
-            LightningClientModule::decoder(),
-        )]);
-
         let (new_active_states, new_inactive_states) =
-            migrate_state::<LightningClientStateMachines>(
-                instance_id,
-                old_states.clone(),
-                old_states,
-                decoders,
-                get_v1_migrated_state,
-            )
-            .await
-            .expect("Migration failed")
-            .expect("Migration produced output");
+            migrate_state(old_states.clone(), old_states, get_v1_migrated_state)
+                .await
+                .expect("Migration failed")
+                .expect("Migration produced output");
 
         assert_eq!(new_inactive_states.len(), 1);
-        assert_eq!(new_inactive_states[0], new_state);
+        assert_eq!(
+            new_inactive_states[0],
+            (new_state.consensus_encode_to_vec(), operation_id)
+        );
 
         assert_eq!(new_active_states.len(), 1);
-        assert_eq!(new_active_states[0], new_state);
+        assert_eq!(
+            new_active_states[0],
+            (new_state.consensus_encode_to_vec(), operation_id)
+        );
     }
 
     #[tokio::test]
@@ -346,29 +337,23 @@ mod tests {
         })
         .into_dyn(instance_id);
 
-        let decoders = ModuleDecoderRegistry::new(vec![(
-            instance_id,
-            LightningClientModule::kind(),
-            LightningClientModule::decoder(),
-        )]);
-
         let (new_active_states, new_inactive_states) =
-            migrate_state::<LightningClientStateMachines>(
-                instance_id,
-                old_states.clone(),
-                old_states,
-                decoders,
-                get_v1_migrated_state,
-            )
-            .await
-            .expect("Migration failed")
-            .expect("Migration produced output");
+            migrate_state(old_states.clone(), old_states, get_v1_migrated_state)
+                .await
+                .expect("Migration failed")
+                .expect("Migration produced output");
 
         assert_eq!(new_inactive_states.len(), 1);
-        assert_eq!(new_inactive_states[0], new_state);
+        assert_eq!(
+            new_inactive_states[0],
+            (new_state.consensus_encode_to_vec(), operation_id)
+        );
 
         assert_eq!(new_active_states.len(), 1);
-        assert_eq!(new_active_states[0], new_state);
+        assert_eq!(
+            new_active_states[0],
+            (new_state.consensus_encode_to_vec(), operation_id)
+        );
 
         Ok(())
     }
@@ -438,28 +423,22 @@ mod tests {
         })
         .into_dyn(instance_id);
 
-        let decoders = ModuleDecoderRegistry::new(vec![(
-            instance_id,
-            LightningClientModule::kind(),
-            LightningClientModule::decoder(),
-        )]);
-
         let (new_active_states, new_inactive_states) =
-            migrate_state::<LightningClientStateMachines>(
-                instance_id,
-                old_states.clone(),
-                old_states,
-                decoders,
-                get_v2_migrated_state,
-            )
-            .await
-            .expect("Migration failed")
-            .expect("Migration produced output");
+            migrate_state(old_states.clone(), old_states, get_v2_migrated_state)
+                .await
+                .expect("Migration failed")
+                .expect("Migration produced output");
 
         assert_eq!(new_inactive_states.len(), 1);
-        assert_eq!(new_inactive_states[0], new_state);
+        assert_eq!(
+            new_inactive_states[0],
+            (new_state.consensus_encode_to_vec(), operation_id)
+        );
 
         assert_eq!(new_active_states.len(), 1);
-        assert_eq!(new_active_states[0], new_state);
+        assert_eq!(
+            new_active_states[0],
+            (new_state.consensus_encode_to_vec(), operation_id)
+        );
     }
 }

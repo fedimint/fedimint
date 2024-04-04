@@ -337,7 +337,7 @@ impl ClientModuleInit for LightningClientInit {
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
         let mut migrations: BTreeMap<DatabaseVersion, ClientMigrationFn> = BTreeMap::new();
-        migrations.insert(DatabaseVersion(0), move |dbtx, _, _, _, _| {
+        migrations.insert(DatabaseVersion(0), move |dbtx, _, _| {
             Box::pin(async {
                 dbtx.remove_entry(&crate::db::ActiveGatewayKey).await;
                 Ok(None)
@@ -346,29 +346,15 @@ impl ClientModuleInit for LightningClientInit {
 
         migrations.insert(
             DatabaseVersion(1),
-            move |_, module_instance_id, active_states, inactive_states, decoders| {
-                migrate_state::<LightningClientStateMachines>(
-                    module_instance_id,
-                    active_states,
-                    inactive_states,
-                    decoders,
-                    db::get_v1_migrated_state,
-                )
-                .boxed()
+            move |_, active_states, inactive_states| {
+                migrate_state(active_states, inactive_states, db::get_v1_migrated_state).boxed()
             },
         );
 
         migrations.insert(
             DatabaseVersion(2),
-            move |_, module_instance_id, active_states, inactive_states, decoders| {
-                migrate_state::<LightningClientStateMachines>(
-                    module_instance_id,
-                    active_states,
-                    inactive_states,
-                    decoders,
-                    db::get_v2_migrated_state,
-                )
-                .boxed()
+            move |_, active_states, inactive_states| {
+                migrate_state(active_states, inactive_states, db::get_v2_migrated_state).boxed()
             },
         );
 

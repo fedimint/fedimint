@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use anyhow::{anyhow, format_err, Context as _};
 use common::broken_fed_key_pair;
-use db::{migrate_to_v1, migrate_to_v2, DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey};
-use fedimint_client::db::ClientMigrationFn;
+use db::{migrate_to_v1, DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey};
+use fedimint_client::db::{migrate_state, ClientMigrationFn};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
@@ -368,14 +368,14 @@ impl ClientModuleInit for DummyClientInit {
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
         let mut migrations: BTreeMap<DatabaseVersion, ClientMigrationFn> = BTreeMap::new();
-        migrations.insert(DatabaseVersion(0), move |dbtx, _, _, _, _| {
+        migrations.insert(DatabaseVersion(0), move |dbtx, _, _| {
             migrate_to_v1(dbtx).boxed()
         });
 
         migrations.insert(
             DatabaseVersion(1),
-            move |_, module_instance_id, active_states, inactive_states, decoders| {
-                migrate_to_v2(module_instance_id, active_states, inactive_states, decoders).boxed()
+            move |_, active_states, inactive_states| {
+                migrate_state(active_states, inactive_states, db::get_v1_migrated_state).boxed()
             },
         );
 

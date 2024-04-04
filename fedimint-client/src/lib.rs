@@ -1858,11 +1858,7 @@ impl ClientBuilder {
         self.meta_service = meta_service;
     }
 
-    async fn migrate_database(
-        &self,
-        db: &Database,
-        decoders: ModuleDecoderRegistry,
-    ) -> anyhow::Result<()> {
+    async fn migrate_database(&self, db: &Database) -> anyhow::Result<()> {
         // Only apply the client database migrations if the database has been
         // initialized.
         if let Ok(client_config) = self.load_existing_config().await {
@@ -1879,7 +1875,6 @@ impl ClientBuilder {
                     init.database_version(),
                     init.get_database_migrations(),
                     module_id,
-                    decoders.clone(),
                 )
                 .await?;
             }
@@ -2118,7 +2113,7 @@ impl ClientBuilder {
 
         // Migrate the database before interacting with it in case any on-disk data
         // structures have changed.
-        self.migrate_database(&db, decoders.clone()).await?;
+        self.migrate_database(&db).await?;
 
         let init_state = Self::load_init_state(&db).await;
 
