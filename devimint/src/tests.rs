@@ -17,7 +17,6 @@ use fedimint_core::encoding::Decodable;
 use fedimint_core::Amount;
 use fedimint_logging::LOG_DEVIMINT;
 use ln_gateway::rpc::GatewayInfo;
-use semver::Version;
 use serde_json::json;
 use tokio::fs;
 use tokio::net::TcpStream;
@@ -27,6 +26,7 @@ use tracing::{debug, info};
 use crate::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, CommonArgs};
 use crate::federation::{Client, Federation};
 use crate::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
+use crate::version_constants::VERSION_0_3_0_ALPHA;
 use crate::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
 pub struct Stats {
@@ -308,7 +308,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
                 .unwrap();
             let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
             let start_time = Instant::now();
-            if fedimint_cli_version >= Version::parse("0.3.0-alpha")? {
+            if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
                 let restore_client = Client::create("restore").await?;
                 cmd!(
                     restore_client,
@@ -420,9 +420,8 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let invite = fed.invite_code()?;
 
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-    let version_req = Version::parse("0.3.0-alpha")?;
 
-    let invite_code = if fedimint_cli_version >= version_req {
+    let invite_code = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
         cmd!(client, "dev", "decode", "invite-code", invite.clone())
     } else {
         cmd!(client, "dev", "decode-invite-code", invite.clone())
@@ -430,7 +429,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     .out_json()
     .await?;
 
-    let encode_invite_output = if fedimint_cli_version >= version_req {
+    let encode_invite_output = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
         cmd!(
             client,
             "dev",
@@ -542,7 +541,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // The code path is backwards-compatible, however this test will fail if we
     // check against earlier fedimintd versions.
     let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-    if fedimintd_version >= Version::parse("0.3.0-alpha")? {
+    if fedimintd_version >= *VERSION_0_3_0_ALPHA {
         // # Test the correct descriptor is used
         let config = cmd!(client, "config").out_json().await?;
         let guardian_count = config["global"]["api_endpoints"].as_object().unwrap().len();
@@ -647,7 +646,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_str()
         .map(|s| s.to_owned())
         .unwrap();
-    let client_reissue_amt = if fedimint_cli_version >= Version::parse("0.3.0-alpha")? {
+    let client_reissue_amt = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
         cmd!(client, "module", "mint", "reissue", reissue_notes)
     } else {
         cmd!(
@@ -1251,7 +1250,7 @@ pub async fn cli_tests_backup_and_restore(
     // Testing restore in different setups would require multiple clients,
     // which is a larger refactor.
     {
-        let post_balance = if fedimint_cli_version >= Version::parse("0.3.0-alpha")? {
+        let post_balance = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
             let client = Client::create("restore-without-backup").await?;
             let _ = cmd!(
                 client,
@@ -1299,7 +1298,7 @@ pub async fn cli_tests_backup_and_restore(
 
     // with a backup
     {
-        let post_balance = if fedimint_cli_version >= Version::parse("0.3.0-alpha")? {
+        let post_balance = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
             let _ = cmd!(reference_client, "backup",).out_json().await?;
             let client = Client::create("restore-with-backup").await?;
 
@@ -1629,7 +1628,7 @@ async fn ln_pay(
 
     // TODO(support:v0.2): 0.3 removed the active gateway concept and requires a
     // `gateway-id` parameter for lightning sends
-    let value = if fedimint_cli_version < Version::parse("0.3.0-alpha")? {
+    let value = if fedimint_cli_version < *VERSION_0_3_0_ALPHA {
         if finish_in_background {
             cmd!(client, "ln-pay", invoice, "--finish-in-background",)
                 .out_json()
@@ -1670,7 +1669,7 @@ async fn ln_invoice(
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
     // TODO(support:v0.2): 0.3 removed the active gateway concept and requires a
     // `gateway-id` parameter for lightning receives
-    let ln_response_val = if fedimint_cli_version < Version::parse("0.3.0-alpha")? {
+    let ln_response_val = if fedimint_cli_version < *VERSION_0_3_0_ALPHA {
         cmd!(
             client,
             "ln-invoice",
@@ -1920,9 +1919,7 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
     let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
 
     // TODO(support:v0.2): remove
-    if fedimint_cli_version < Version::parse("0.3.0-alpha")?
-        || fedimintd_version < Version::parse("0.3.0-alpha")?
-    {
+    if fedimint_cli_version < *VERSION_0_3_0_ALPHA || fedimintd_version < *VERSION_0_3_0_ALPHA {
         info!("Guardian backups didn't exist pre-0.3.0, so can't be tested, exiting");
         return Ok(());
     }
@@ -2121,7 +2118,7 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
     );
 
     // TODO(support:v0.2): remove
-    if fedimint_cli_version >= Version::parse("0.3.0-alpha")? {
+    if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
         cmd!(double_spend_client, "reissue", double_spend_notes)
             .assert_error_contains("The transaction had an invalid input")
             .await?;

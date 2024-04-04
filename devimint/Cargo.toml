@@ -34,6 +34,7 @@ fedimint-server = { path = "../fedimint-server" }
 fedimint-testing = { path = "../fedimint-testing" }
 futures = "0.3.30"
 hex = "0.4.3"
+lazy_static = "1.4.0"
 ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
 nix = { version = "0.28.0", features = ["signal"] }
 rand = "0.8.5"
