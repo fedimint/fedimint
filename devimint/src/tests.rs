@@ -7,7 +7,6 @@ use std::{env, ffi};
 
 use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin;
-use bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
 use bitcoincore_rpc::bitcoin::Txid;
 use clap::Subcommand;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
@@ -15,6 +14,7 @@ use fedimint_cli::LnInvoiceResponse;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::Amount;
 use fedimint_logging::LOG_DEVIMINT;
+use hex::ToHex;
 use ln_gateway::rpc::GatewayInfo;
 use serde_json::json;
 use tokio::fs;
@@ -246,7 +246,7 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
                     .into_inner()
                     .payments
                     .into_iter()
-                    .find(|p| p.payment_hash == payment.payment_hash.to_hex())
+                    .find(|p| p.payment_hash == payment.payment_hash.encode_hex::<String>())
                     .context("payment not in list")?
                     .status();
                 anyhow::ensure!(
@@ -753,7 +753,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .into_inner()
         .payments
         .into_iter()
-        .find(|p| p.payment_hash == payment.payment_hash.to_hex())
+        .find(|p| p.payment_hash == payment.payment_hash.encode_hex::<String>())
         .context("payment not in list")?
         .status();
     anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
@@ -1046,7 +1046,10 @@ pub async fn finish_hold_invoice_payment(
         .as_str()
         .context("missing preimage")?
         .to_owned();
-    assert_eq!(received_preimage, hold_invoice_preimage.to_hex());
+    assert_eq!(
+        received_preimage,
+        hold_invoice_preimage.encode_hex::<String>()
+    );
     Ok(())
 }
 
@@ -1581,7 +1584,7 @@ pub async fn do_try_create_and_pay_invoice(
                 .into_inner()
                 .payments
                 .into_iter()
-                .find(|p| p.payment_hash == payment.payment_hash.to_hex())
+                .find(|p| p.payment_hash == payment.payment_hash.encode_hex::<String>())
                 .context("payment not in list")?
                 .status();
             anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);

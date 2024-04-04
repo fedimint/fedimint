@@ -84,7 +84,7 @@ impl FromStr for OperationId {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let bytes: [u8; 32] = bitcoin_hashes::hex::FromHex::from_hex(s)?;
+        let bytes: [u8; 32] = hex::FromHex::from_hex(s)?;
         Ok(OperationId(bytes))
     }
 }

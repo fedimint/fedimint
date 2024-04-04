@@ -24,8 +24,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{cmp, mem};
 
 use anyhow::format_err;
-use bitcoin_hashes::hex::{FromHex, ToHex};
 pub use fedimint_derive::{Decodable, Encodable};
+use hex::{FromHex, ToHex};
 use lightning::util::ser::{Readable, Writeable};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -93,7 +93,7 @@ pub trait Encodable {
         // TODO: This double allocation offends real Rustaceans. We should
         // be able to go straight to String, but this use case seems under-served
         // by hex encoding crates.
-        bytes.to_hex()
+        bytes.encode_hex()
     }
 
     /// Encode without storing the encoding, return the size
@@ -1121,6 +1121,7 @@ where
 mod tests {
     use std::fmt::Debug;
     use std::io::Cursor;
+    use std::str::FromStr;
 
     use super::*;
     use crate::db::DatabaseValue;
@@ -1389,7 +1390,7 @@ mod tests {
     #[test]
     fn test_bitcoin_consensus_encoding() {
         // encodings should follow the bitcoin consensus encoding
-        let txid = bitcoin::Txid::from_hex(
+        let txid = bitcoin::Txid::from_str(
             "51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a",
         )
         .unwrap();
@@ -1423,7 +1424,7 @@ mod tests {
                 89, 179, 192, 90, 98, 30, 246, 95, 23, 126, 162, 134, 0, 0, 0, 0,
             ],
         );
-        let blockhash = bitcoin::BlockHash::from_hex(
+        let blockhash = bitcoin::BlockHash::from_str(
             "0000000000000000000065bda8f8a88f2e1e00d9a6887a43d640e52a4c7660f2",
         )
         .unwrap();

@@ -750,8 +750,8 @@ mod serde_tls_cert_map {
     use std::borrow::Cow;
     use std::collections::BTreeMap;
 
-    use bitcoin_hashes::hex::{FromHex, ToHex};
     use fedimint_core::PeerId;
+    use hex::{FromHex, ToHex};
     use serde::de::Error;
     use serde::ser::SerializeMap;
     use serde::{Deserialize, Deserializer, Serializer};
@@ -767,7 +767,7 @@ mod serde_tls_cert_map {
         let mut serializer = serializer.serialize_map(Some(certs.len()))?;
         for (key, value) in certs.iter() {
             serializer.serialize_key(key)?;
-            let hex_str = value.0.to_hex();
+            let hex_str = value.0.encode_hex::<String>();
             serializer.serialize_value(&hex_str)?;
         }
         serializer.end()
@@ -783,7 +783,8 @@ mod serde_tls_cert_map {
         let mut certs = BTreeMap::new();
 
         for (key, value) in map {
-            let cert = rustls::Certificate(Vec::from_hex(&value).map_err(D::Error::custom)?);
+            let cert =
+                rustls::Certificate(Vec::from_hex(value.as_ref()).map_err(D::Error::custom)?);
             certs.insert(key, cert);
         }
         Ok(certs)
@@ -793,7 +794,7 @@ mod serde_tls_cert_map {
 mod serde_tls_key {
     use std::borrow::Cow;
 
-    use bitcoin_hashes::hex::{FromHex, ToHex};
+    use hex::{FromHex, ToHex};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use tokio_rustls::rustls;
 
@@ -801,7 +802,7 @@ mod serde_tls_key {
     where
         S: Serializer,
     {
-        let hex_str = key.0.to_hex();
+        let hex_str = key.0.encode_hex::<String>();
         Serialize::serialize(&hex_str, serializer)
     }
 
@@ -810,7 +811,7 @@ mod serde_tls_key {
         D: Deserializer<'de>,
     {
         let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
-        let bytes = Vec::from_hex(&hex_str).map_err(serde::de::Error::custom)?;
+        let bytes = Vec::from_hex(hex_str.as_ref()).map_err(serde::de::Error::custom)?;
         Ok(rustls::PrivateKey(bytes))
     }
 }

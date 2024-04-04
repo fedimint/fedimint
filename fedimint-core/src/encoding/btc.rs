@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use anyhow::format_err;
 use bitcoin::hashes::Hash as BitcoinHash;
+use hex::{FromHex, ToHex};
 use miniscript::{Descriptor, MiniscriptKey};
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
@@ -36,9 +37,50 @@ impl_encode_decode_bridge!(bitcoin::BlockHash);
 impl_encode_decode_bridge!(bitcoin::OutPoint);
 impl_encode_decode_bridge!(bitcoin::Script);
 impl_encode_decode_bridge!(bitcoin::Transaction);
-impl_encode_decode_bridge!(bitcoin::Txid);
 impl_encode_decode_bridge!(bitcoin::util::merkleblock::PartialMerkleTree);
 impl_encode_decode_bridge!(bitcoin::util::psbt::PartiallySignedTransaction);
+
+impl crate::encoding::Encodable for bitcoin::Txid {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        bitcoin::consensus::Encodable::consensus_encode(self, writer)
+    }
+
+    fn consensus_encode_to_hex(&self) -> String {
+        let mut bytes = vec![];
+        self.consensus_encode(&mut bytes)
+            .expect("encoding to bytes can't fail for io reasons");
+
+        // Just Bitcoin things: transaction hashes are encoded reverse
+        bytes.reverse();
+
+        // TODO: remove double-allocation
+        bytes.encode_hex()
+    }
+}
+impl crate::encoding::Decodable for bitcoin::Txid {
+    fn consensus_decode_from_finite_reader<D: std::io::Read>(
+        d: &mut D,
+        _modules: &::fedimint_core::module::registry::ModuleDecoderRegistry,
+    ) -> Result<Self, crate::encoding::DecodeError> {
+        bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(d)
+            .map_err(crate::encoding::DecodeError::from_err)
+    }
+
+    fn consensus_decode_hex(
+        hex: &str,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let mut bytes = Vec::<u8>::from_hex(hex)
+            .map_err(anyhow::Error::from)
+            .map_err(DecodeError::new_custom)?;
+
+        // Just Bitcoin things: transaction hashes are encoded reverse
+        bytes.reverse();
+
+        let mut reader = std::io::Cursor::new(bytes);
+        Decodable::consensus_decode(&mut reader, modules)
+    }
+}
 
 impl<K> Encodable for miniscript::Descriptor<K>
 where

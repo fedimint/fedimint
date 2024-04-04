@@ -23,8 +23,8 @@ fedimint-core  = { version = "=0.4.0-alpha", path = "../../fedimint-core/" }
 bls12_381 = "0.7.1"
 ff = "0.12.1"
 group = "0.12.1"
+hex = { workspace = true }
 rand = { workspace = true }
 rand_chacha = "0.3.1"
-bitcoin_hashes = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 sha3 = "0.10.8"

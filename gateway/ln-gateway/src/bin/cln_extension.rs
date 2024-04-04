@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
@@ -15,6 +14,7 @@ use cln_rpc::primitives::ShortChannelId;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_core::{fedimint_build_code_version_env, Amount};
+use hex::ToHex;
 use ln_gateway::envs::FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV;
 use ln_gateway::gateway_lnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
@@ -155,8 +155,8 @@ impl ClnRpcService {
                 Err(_) => {
 
                     let listen_val = plugin.option("fm-gateway-listen")
-                        .expect("Gateway CLN extension is missing a listen address configuration. 
-                        You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding 
+                        .expect("Gateway CLN extension is missing a listen address configuration.
+                        You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding
                         a --fm-gateway-listen config option to the CLN plugin.");
                     let listen = listen_val.as_str()
                         .expect("fm-gateway-listen isn't a string");
@@ -447,7 +447,7 @@ impl GatewayLightning for ClnRpcService {
                     let assert_pk: Result<[u8; 32], TryFromSliceError> =
                         preimage.as_slice().try_into();
                     if let Ok(pk) = assert_pk {
-                        serde_json::json!({ "result": "resolve", "payment_key": pk.to_hex() })
+                        serde_json::json!({ "result": "resolve", "payment_key": pk.encode_hex::<String>() })
                     } else {
                         htlc_processing_failure()
                     }

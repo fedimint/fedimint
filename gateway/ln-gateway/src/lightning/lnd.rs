@@ -5,10 +5,10 @@ use std::time::Duration;
 
 use anyhow::ensure;
 use async_trait::async_trait;
-use bitcoin_hashes::hex::ToHex;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::Amount;
 use fedimint_ln_common::PrunedInvoice;
+use hex::ToHex;
 use secp256k1::PublicKey;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -431,7 +431,7 @@ impl ILnRpcClient for GatewayLndClient {
             .await?
         {
             info!("LND payment already exists for invoice {invoice:?}");
-            bitcoin_hashes::hex::FromHex::from_hex(preimage.as_str()).map_err(|error| {
+            hex::FromHex::from_hex(preimage.as_str()).map_err(|error| {
                 LightningRpcError::FailedPayment {
                     failure_reason: format!("Failed to convert preimage {error:?}"),
                 }
@@ -510,14 +510,11 @@ impl ILnRpcClient for GatewayLndClient {
                     }) {
                     Ok(Some(payment)) if payment.status() == PaymentStatus::Succeeded => {
                         info!("LND payment succeeded for invoice {invoice:?}");
-                        break bitcoin_hashes::hex::FromHex::from_hex(
-                            payment.payment_preimage.as_str(),
-                        )
-                        .map_err(|error| {
-                            LightningRpcError::FailedPayment {
+                        break hex::FromHex::from_hex(payment.payment_preimage.as_str()).map_err(
+                            |error| LightningRpcError::FailedPayment {
                                 failure_reason: format!("Failed to convert preimage {error:?}"),
-                            }
-                        })?;
+                            },
+                        )?;
                     }
                     Ok(Some(payment)) if payment.status() == PaymentStatus::InFlight => {
                         debug!("LND payment is inflight");
@@ -641,7 +638,7 @@ fn route_hints_to_lnd(
                 .0
                 .iter()
                 .map(|hop| tonic_lnd::lnrpc::HopHint {
-                    node_id: hop.src_node_id.serialize().to_hex(),
+                    node_id: hop.src_node_id.serialize().encode_hex(),
                     chan_id: hop.short_channel_id,
                     fee_base_msat: hop.base_msat,
                     fee_proportional_millionths: hop.proportional_millionths,
@@ -681,7 +678,7 @@ fn wire_features_to_lnd_feature_vec(features_wire_encoded: &[u8]) -> anyhow::Res
 
 #[cfg(test)]
 mod tests {
-    use bitcoin_hashes::hex::FromHex;
+    use hex::FromHex;
     use lightning::ln::features::Bolt11InvoiceFeatures;
     use lightning::util::ser::{WithoutLength, Writeable};
 

@@ -204,10 +204,10 @@ pub enum PegInProofError {
 mod tests {
     use std::io::Cursor;
 
-    use bitcoin::hashes::hex::FromHex;
     use fedimint_core::encoding::Decodable;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::txoproof::TxOutProof;
+    use hex::FromHex;
 
     #[test_log::test]
     fn test_txoutproof_happy_path() {

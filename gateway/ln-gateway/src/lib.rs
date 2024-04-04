@@ -24,7 +24,6 @@ use std::time::Duration;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Network, Txid};
-use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
 use client::GatewayClientBuilder;
 use db::{
@@ -66,6 +65,7 @@ use fedimint_wallet_client::{
 use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::Action;
 use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
+use hex::ToHex;
 use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 use lightning_invoice::RoutingFees;
 use rand::rngs::OsRng;
@@ -689,7 +689,7 @@ impl Gateway {
                 federations,
                 channels: Some(self.scid_to_federation.read().await.clone()),
                 version_hash: fedimint_build_code_version_env!().to_string(),
-                lightning_pub_key: Some(lightning_context.lightning_public_key.to_hex()),
+                lightning_pub_key: Some(lightning_context.lightning_public_key.to_string()),
                 lightning_alias: Some(lightning_context.lightning_alias.clone()),
                 fees: Some(gateway_config.routing_fees),
                 route_hints,
@@ -1607,7 +1607,7 @@ impl Display for PrettyInterceptHtlcRequest<'_> {
         write!(
             f,
             "InterceptHtlcRequest {{ payment_hash: {}, incoming_amount_msat: {:?}, outgoing_amount_msat: {:?}, incoming_expiry: {:?}, short_channel_id: {:?}, incoming_chan_id: {:?}, htlc_id: {:?} }}",
-            htlc_request.payment_hash.to_hex(),
+            htlc_request.payment_hash.encode_hex::<String>(),
             htlc_request.incoming_amount_msat,
             htlc_request.outgoing_amount_msat,
             htlc_request.incoming_expiry,
