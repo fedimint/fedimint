@@ -137,3 +137,6 @@ pub const FM_GWCLI_CLN_ENV: &str = "FM_GWCLI_CLN";
 
 // Env variable to define command for the LND client
 pub const FM_GWCLI_LND_ENV: &str = "FM_GWCLI_LND";
+
+/// Make `devimint` print stderr of called commands directly on its own stderr
+pub const FM_DEVIMINT_CMD_INHERIT_STDERR_ENV: &str = "FM_DEVIMINT_CMD_INHERIT_STDERR";
