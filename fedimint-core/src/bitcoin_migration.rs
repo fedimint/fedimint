@@ -112,6 +112,68 @@ pub fn bitcoin30_to_bitcoin29_outpoint(outpoint: bitcoin30::OutPoint) -> bitcoin
     }
 }
 
+pub fn bitcoin29_to_bitcoin30_witness(witness: &bitcoin::Witness) -> bitcoin30::Witness {
+    bitcoin30::Witness::from_slice(&witness.to_vec())
+}
+
+pub fn bitcoin30_to_bitcoin29_witness(witness: &bitcoin30::Witness) -> bitcoin::Witness {
+    bitcoin::Witness::from_vec(witness.to_vec())
+}
+
+fn bitcoin30_to_bitcoin29_txin(input: &bitcoin30::TxIn) -> bitcoin::TxIn {
+    bitcoin::TxIn {
+        previous_output: bitcoin30_to_bitcoin29_outpoint(input.previous_output),
+        script_sig: bitcoin30_to_bitcoin29_script(&input.script_sig),
+        sequence: bitcoin::Sequence(input.sequence.0),
+        witness: bitcoin30_to_bitcoin29_witness(&input.witness),
+    }
+}
+
+fn bitcoin30_to_bitcoin29_txout(output: &bitcoin30::TxOut) -> bitcoin::TxOut {
+    bitcoin::TxOut {
+        value: output.value,
+        script_pubkey: bitcoin30_to_bitcoin29_script(&output.script_pubkey),
+    }
+}
+
+pub fn bitcoin30_to_bitcoin29_transaction(
+    transaction: &bitcoin30::Transaction,
+) -> bitcoin::Transaction {
+    bitcoin::Transaction {
+        version: transaction.version,
+        lock_time: match transaction.lock_time {
+            bitcoin30::absolute::LockTime::Blocks(height) => {
+                bitcoin::LockTime::from_height(height.to_consensus_u32())
+                    .expect("Failed to convert bitcoin v30 lock time to bitcoin v29 lock time")
+            }
+            bitcoin30::absolute::LockTime::Seconds(time) => {
+                bitcoin::LockTime::from_time(time.to_consensus_u32())
+                    .expect("Failed to convert bitcoin v30 lock time to bitcoin v29 lock time")
+            }
+        }
+        .into(),
+        input: transaction
+            .input
+            .iter()
+            .map(bitcoin30_to_bitcoin29_txin)
+            .collect(),
+        output: transaction
+            .output
+            .iter()
+            .map(bitcoin30_to_bitcoin29_txout)
+            .collect(),
+    }
+}
+
+pub fn bitcoin29_to_bitcoin30_block_hash(hash: bitcoin::BlockHash) -> bitcoin30::BlockHash {
+    bitcoin30::BlockHash::from_byte_array(hash.into_inner())
+}
+
+pub fn bitcoin30_to_bitcoin29_block_hash(hash: bitcoin30::BlockHash) -> bitcoin::BlockHash {
+    bitcoin::BlockHash::from_slice(&hash[..])
+        .expect("Failed to convert bitcoin v30 block hash to bitcoin v29 block hash")
+}
+
 pub fn bitcoin29_to_bitcoin30_txid(txid: bitcoin::Txid) -> bitcoin30::Txid {
     bitcoin30::Txid::from_byte_array(txid.into_inner())
 }
@@ -119,6 +181,10 @@ pub fn bitcoin29_to_bitcoin30_txid(txid: bitcoin::Txid) -> bitcoin30::Txid {
 pub fn bitcoin30_to_bitcoin29_txid(txid: bitcoin30::Txid) -> bitcoin::Txid {
     bitcoin::Txid::from_slice(&txid[..])
         .expect("Failed to convert bitcoin v30 txid to bitcoin v29 txid")
+}
+
+pub fn bitcoin29_to_bitcoin30_script(script: bitcoin::Script) -> bitcoin30::ScriptBuf {
+    bitcoin30::ScriptBuf::from_bytes(script.into_bytes())
 }
 
 pub fn bitcoin30_to_bitcoin29_script(script: &bitcoin30::ScriptBuf) -> bitcoin::Script {
@@ -157,6 +223,7 @@ pub fn bitcoin29_to_bitcoin30_sha256_hash(
 
 #[cfg(test)]
 mod tests {
+    use bitcoin30::absolute::Height;
     use bitcoin_hashes::hex::FromHex;
     use rand::thread_rng;
 
@@ -165,10 +232,6 @@ mod tests {
     fn bitcoin30_to_bitcoin29_public_key(pk: bitcoin30::PublicKey) -> bitcoin::PublicKey {
         bitcoin::PublicKey::from_slice(&pk.to_bytes())
             .expect("Failed to convert bitcoin v30 public key to bitcoin v29 public key")
-    }
-
-    fn bitcoin29_to_bitcoin30_script(script: bitcoin::Script) -> bitcoin30::ScriptBuf {
-        bitcoin30::ScriptBuf::from_bytes(script.into_bytes())
     }
 
     #[test]
@@ -372,6 +435,76 @@ mod tests {
     }
 
     #[test]
+    fn test_witness_conversions() {
+        let bitcoin29_witness =
+            bitcoin::Witness::from_vec(vec![vec![0x01, 0x02], vec![0x03, 0x04]]);
+        let bitcoin30_witness = bitcoin30::Witness::from_slice(&[&[0x01, 0x02], &[0x03, 0x04]]);
+
+        assert_eq!(
+            bitcoin29_witness,
+            bitcoin30_to_bitcoin29_witness(&bitcoin30_witness)
+        );
+        assert_eq!(
+            bitcoin30_witness,
+            bitcoin29_to_bitcoin30_witness(&bitcoin29_witness)
+        );
+    }
+
+    #[test]
+    fn test_bitcoin30_to_bitcoin29_transaction() {
+        let bitcoin30_tx = bitcoin30::Transaction {
+            version: 1,
+            lock_time: bitcoin30::absolute::LockTime::Blocks(
+                Height::from_consensus(123456).expect("Failed to create bitcoin v30 lock time"),
+            ),
+            input: vec![bitcoin30::TxIn {
+                previous_output: bitcoin30::OutPoint {
+                    txid: bitcoin30::Txid::from_str(
+                        "0123456789012345678901234567890123456789012345678901234567890123",
+                    )
+                    .expect("Failed to parse bitcoin v30 txid"),
+                    vout: 0,
+                },
+                script_sig: bitcoin30::ScriptBuf::from_bytes(vec![0x01, 0x02]),
+                sequence: bitcoin30::Sequence(0),
+                witness: bitcoin30::Witness::from_slice(&[&[0x03, 0x04]]),
+            }],
+            output: vec![bitcoin30::TxOut {
+                value: 123456789,
+                script_pubkey: bitcoin30::ScriptBuf::from_bytes(vec![0x05, 0x06]),
+            }],
+        };
+
+        let bitcoin29_tx = bitcoin30_to_bitcoin29_transaction(&bitcoin30_tx);
+
+        assert_eq!(
+            format!("{}", bitcoin30_tx.txid()),
+            format!("{}", bitcoin29_tx.txid())
+        );
+    }
+
+    #[test]
+    fn test_block_hash_conversions() {
+        let bitcoin29_block_hash = bitcoin::BlockHash::from_hex(
+            "0123456789012345678901234567890123456789012345678901234567890123",
+        )
+        .expect("Failed to parse bitcoin v29 block hash");
+        let bitcoin30_block_hash = bitcoin30::BlockHash::from_str(
+            "0123456789012345678901234567890123456789012345678901234567890123",
+        )
+        .expect("Failed to parse bitcoin v30 block hash");
+
+        assert_eq!(
+            bitcoin29_block_hash,
+            bitcoin30_to_bitcoin29_block_hash(bitcoin30_block_hash)
+        );
+        assert_eq!(
+            bitcoin30_block_hash,
+            bitcoin29_to_bitcoin30_block_hash(bitcoin29_block_hash)
+        );
+    }
+
+    #[test]
     fn test_txid_conversions() {
         let bitcoin29_txid = bitcoin::Txid::from_hex(
             "0123456789012345678901234567890123456789012345678901234567890123",
@@ -403,7 +536,7 @@ mod tests {
         // script.
         assert_eq!(
             bitcoin29_script,
-            bitcoin30_to_bitcoin29_script(&bitcoin30_script.clone())
+            bitcoin30_to_bitcoin29_script(&bitcoin30_script)
         );
         // Assert that bitcoin29->bitcoin30 script is the same as native bitcoin30
         // script.
