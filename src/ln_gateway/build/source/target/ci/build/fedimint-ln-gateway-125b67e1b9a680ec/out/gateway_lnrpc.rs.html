@@ -813,6 +813,10 @@
 <a href="#811" id="811">811</a>
 <a href="#812" id="812">812</a>
 <a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
 </pre></div><pre class="rust"><code><span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>EmptyRequest {}
@@ -841,13 +845,17 @@
 <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>PayInvoiceRequest {
-    <span class="attr">#[prost(string, tag = <span class="string">"1"</span>)]
+    <span class="doccomment">/// Bolt11 invoice
+    </span><span class="attr">#[prost(string, tag = <span class="string">"1"</span>)]
     </span><span class="kw">pub </span>invoice: ::prost::alloc::string::String,
-    <span class="attr">#[prost(uint64, tag = <span class="string">"2"</span>)]
+    <span class="doccomment">/// The maximum delay, in blocks, that the payment route can be locked for
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"2"</span>)]
     </span><span class="kw">pub </span>max_delay: u64,
-    <span class="attr">#[prost(uint64, tag = <span class="string">"3"</span>)]
+    <span class="doccomment">/// The maximum fee, in millisats, that will be paid as a lightning routing fee
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"3"</span>)]
     </span><span class="kw">pub </span>max_fee_msat: u64,
-    <span class="attr">#[prost(bytes = <span class="string">"vec"</span>, tag = <span class="string">"4"</span>)]
+    <span class="doccomment">/// The hash of the payment
+    </span><span class="attr">#[prost(bytes = <span class="string">"vec"</span>, tag = <span class="string">"4"</span>)]
     </span><span class="kw">pub </span>payment_hash: ::prost::alloc::vec::Vec&lt;u8&gt;,
 }
 <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
