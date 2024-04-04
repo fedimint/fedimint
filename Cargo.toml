@@ -31,6 +31,7 @@ members = [
     "modules/fedimint-meta-common",
     "modules/fedimint-meta-client",
     "modules/fedimint-meta-server",
+    "modules/fedimint-meta-tests",
     "modules/fedimint-unknown-common",
     "modules/fedimint-unknown-server",
     "modules/fedimint-dummy-tests",
@@ -86,6 +87,7 @@ strum = "0.26"
 strum_macros = "0.26"
 futures = "0.3.30"
 thiserror = "1.0.58"
+tokio = { version = "1.36.0", features = ["sync", "io-util"] }
 url = "2.5.0"
 erased-serde = "0.4"
 async-trait = "0.1.77"
