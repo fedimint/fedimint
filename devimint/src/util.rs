@@ -22,8 +22,8 @@ use tracing::{debug, warn};
 
 use crate::envs::{
     FM_BACKWARDS_COMPATIBILITY_TEST_ENV, FM_BITCOIND_BASE_EXECUTABLE_ENV,
-    FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV, FM_BTC_CLIENT_ENV, FM_ELECTRS_BASE_EXECUTABLE_ENV,
-    FM_ESPLORA_BASE_EXECUTABLE_ENV, FM_FAUCET_BASE_EXECUTABLE_ENV,
+    FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV, FM_BTC_CLIENT_ENV, FM_DEVIMINT_CMD_INHERIT_STDERR_ENV,
+    FM_ELECTRS_BASE_EXECUTABLE_ENV, FM_ESPLORA_BASE_EXECUTABLE_ENV, FM_FAUCET_BASE_EXECUTABLE_ENV,
     FM_FEDIMINTD_BASE_EXECUTABLE_ENV, FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV,
     FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE_ENV, FM_GATEWAYD_BASE_EXECUTABLE_ENV,
     FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV, FM_GWCLI_CLN_ENV, FM_GWCLI_LND_ENV,
@@ -260,16 +260,21 @@ impl Command {
         let output = self
             .cmd
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(if is_env_var_set(FM_DEVIMINT_CMD_INHERIT_STDERR_ENV) {
+                Stdio::inherit()
+            } else {
+                Stdio::piped()
+            })
             .spawn()?
             .wait_with_output()
             .await?;
 
         if output.status.success() != expect_success {
             bail!(
-                "{}\nstdout:\n{}",
+                "{}\nstdout:\n{}\nstderr:\n{}\n",
                 output.status,
                 String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
             );
         }
         Ok(output)
