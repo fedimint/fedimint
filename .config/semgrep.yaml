@@ -133,3 +133,14 @@ rules:
       - scripts/tests/
   message: "Sleeping in test scripts is discouraged. Sleep in rust using fedimint_core::task::sleep_in_test instead."
   severity: WARNING
+
+- id: ban-version-req-in-devimint
+  languages:
+    - rust
+  pattern: semver::VersionReq::parse
+  paths:
+    include:
+      - devimint/
+  message: "semver::VersionReq doesn't work for comparing prereleases. Compare with semver::Version instead. For context, see https://github.com/fedimint/fedimint/pull/4804"
+  severity: WARNING
+
