@@ -124,10 +124,10 @@ impl TaskGroup {
 
     pub async fn shutdown_join_all(
         self,
-        join_timeout: Option<Duration>,
+        join_timeout: impl Into<Option<Duration>>,
     ) -> Result<(), anyhow::Error> {
         self.shutdown();
-        self.join_all(join_timeout).await
+        self.join_all(join_timeout.into()).await
     }
 
     #[cfg(not(target_family = "wasm"))]
