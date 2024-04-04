@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, result};
 
+use anyhow::format_err;
 use bip39::Mnemonic;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use db_locked::LockedBuilder;
@@ -33,8 +34,8 @@ use fedimint_core::config::{
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
-use fedimint_core::util::{handle_version_hash_command, SafeUrl};
-use fedimint_core::{fedimint_build_code_version_env, task, PeerId, TieredMulti};
+use fedimint_core::util::{handle_version_hash_command, retry, ConstantBackoff, SafeUrl};
+use fedimint_core::{fedimint_build_code_version_env, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{TracingSetup, LOG_CLIENT};
 use fedimint_meta_client::MetaClientInit;
@@ -585,7 +586,7 @@ impl FedimintCli {
             .map_err_cli()
     }
 
-    async fn client_open(&mut self, cli: &Opts) -> CliResult<ClientHandleArc> {
+    async fn client_open(&self, cli: &Opts) -> CliResult<ClientHandleArc> {
         let mut client_builder = self.make_client_builder(cli).await?;
 
         if let Some(our_id) = cli.our_id {
@@ -792,25 +793,30 @@ impl FedimintCli {
 
                 Ok(CliOutput::UntypedApiOutput { value: response })
             }
-            Command::Dev(DevCmd::WaitBlockCount { count: target }) => {
-                task::timeout(Duration::from_secs(60), async move {
+            Command::Dev(DevCmd::WaitBlockCount { count: target }) => retry(
+                "wait_block_count",
+                ConstantBackoff::default()
+                    .with_delay(Duration::from_millis(100))
+                    .with_max_times(usize::MAX),
+                || async {
                     let client = self.client_open(&cli).await?;
-                    loop {
-                        let wallet = client.get_first_module::<WalletClientModule>();
-                        let count = client
-                            .api()
-                            .with_module(wallet.id)
-                            .fetch_consensus_block_count()
-                            .await?;
-                        if count >= target {
-                            break Ok(CliOutput::WaitBlockCount { reached: count });
-                        }
-                        task::sleep(Duration::from_millis(100)).await;
+                    let wallet = client.get_first_module::<WalletClientModule>();
+                    let count = client
+                        .api()
+                        .with_module(wallet.id)
+                        .fetch_consensus_block_count()
+                        .await?;
+                    if count >= target {
+                        Ok(CliOutput::WaitBlockCount { reached: count })
+                    } else {
+                        info!(target: LOG_CLIENT, current=count, target, "Block count not reached");
+                        Err(format_err!("target not reached"))
                     }
-                })
-                .await
-                .map_err_cli_msg("reached timeout")?
-            }
+                },
+            )
+            .await
+            .map_err_cli(),
+
             Command::Dev(DevCmd::WaitComplete) => {
                 let client = self.client_open(&cli).await?;
                 client
@@ -1016,8 +1022,8 @@ fn metadata_from_clap_cli(metadata: Vec<String>) -> Result<BTreeMap<String, Stri
                 .map(ToString::to_string)
                 .collect::<Vec<String>>()[..]
             {
-                [] => Err(anyhow::format_err!("Empty metadata argument not allowed")),
-                [key] => Err(anyhow::format_err!("Metadata {key} is missing a value")),
+                [] => Err(format_err!("Empty metadata argument not allowed")),
+                [key] => Err(format_err!("Metadata {key} is missing a value")),
                 [key, val] => Ok((key.clone(), val.clone())),
                 [..] => unreachable!(),
             }
