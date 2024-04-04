@@ -2,6 +2,7 @@ use std::ffi;
 use std::fmt::Write;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
@@ -33,7 +34,7 @@ fn random_test_dir_suffix() -> String {
         .collect::<String>()
 }
 
-#[derive(Parser, Clone)]
+#[derive(Parser, Clone, Default)]
 pub struct CommonArgs {
     #[clap(short = 'd', long, env = FM_TEST_DIR_ENV)]
     pub test_dir: Option<PathBuf>,
@@ -181,10 +182,13 @@ pub async fn cleanup_on_exit<T>(
             Ok(())
         }
         Ok(Ok(v)) => {
-            debug!(target: LOG_DEVIMINT, "Main process finished successfully, will wait for shutdown signal");
-            task_group.make_handle().make_shutdown_rx().await.await;
-            debug!(target: LOG_DEVIMINT, "Received shutdown signal, shutting down");
-            drop(v); // execute destructors
+            debug!(target: LOG_DEVIMINT, "Main process finished successfully, shutting down task group");
+            task_group
+                .shutdown_join_all(Duration::from_secs(30))
+                .await?;
+
+            // drop v here, not before the shutdown
+            drop(v);
             Ok(())
         }
         Ok(Err(err)) => {
