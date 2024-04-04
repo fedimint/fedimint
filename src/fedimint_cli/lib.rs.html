@@ -1044,6 +1044,12 @@
 <a href="#1042" id="1042">1042</a>
 <a href="#1043" id="1043">1043</a>
 <a href="#1044" id="1044">1044</a>
+<a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
+<a href="#1047" id="1047">1047</a>
+<a href="#1048" id="1048">1048</a>
+<a href="#1049" id="1049">1049</a>
+<a href="#1050" id="1050">1050</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">pub mod </span>envs;
@@ -1060,6 +1066,7 @@
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{fs, result};
 
+<span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>bip39::Mnemonic;
 <span class="kw">use </span>clap::{Args, CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>db_locked::LockedBuilder;
@@ -1079,8 +1086,8 @@
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseValue};
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
-<span class="kw">use </span>fedimint_core::util::{handle_version_hash_command, SafeUrl};
-<span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, task, PeerId, TieredMulti};
+<span class="kw">use </span>fedimint_core::util::{handle_version_hash_command, retry, ConstantBackoff, SafeUrl};
+<span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, PeerId, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::LightningClientInit;
 <span class="kw">use </span>fedimint_logging::{TracingSetup, LOG_CLIENT};
 <span class="kw">use </span>fedimint_meta_client::MetaClientInit;
@@ -1631,7 +1638,7 @@ Examples:
             .map_err_cli()
     }
 
-    <span class="kw">async fn </span>client_open(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cli: <span class="kw-2">&amp;</span>Opts) -&gt; CliResult&lt;ClientHandleArc&gt; {
+    <span class="kw">async fn </span>client_open(<span class="kw-2">&amp;</span><span class="self">self</span>, cli: <span class="kw-2">&amp;</span>Opts) -&gt; CliResult&lt;ClientHandleArc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = <span class="self">self</span>.make_client_builder(cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(our_id) = cli.our_id {
@@ -1838,25 +1845,30 @@ Examples:
 
                 <span class="prelude-val">Ok</span>(CliOutput::UntypedApiOutput { value: response })
             }
-            Command::Dev(DevCmd::WaitBlockCount { count: target }) =&gt; {
-                task::timeout(Duration::from_secs(<span class="number">60</span>), <span class="kw">async move </span>{
+            Command::Dev(DevCmd::WaitBlockCount { count: target }) =&gt; retry(
+                <span class="string">"wait_block_count"</span>,
+                ConstantBackoff::default()
+                    .with_delay(Duration::from_millis(<span class="number">100</span>))
+                    .with_max_times(usize::MAX),
+                || <span class="kw">async </span>{
                     <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">loop </span>{
-                        <span class="kw">let </span>wallet = client.get_first_module::&lt;WalletClientModule&gt;();
-                        <span class="kw">let </span>count = client
-                            .api()
-                            .with_module(wallet.id)
-                            .fetch_consensus_block_count()
-                            .<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if </span>count &gt;= target {
-                            <span class="kw">break </span><span class="prelude-val">Ok</span>(CliOutput::WaitBlockCount { reached: count });
-                        }
-                        task::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+                    <span class="kw">let </span>wallet = client.get_first_module::&lt;WalletClientModule&gt;();
+                    <span class="kw">let </span>count = client
+                        .api()
+                        .with_module(wallet.id)
+                        .fetch_consensus_block_count()
+                        .<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">if </span>count &gt;= target {
+                        <span class="prelude-val">Ok</span>(CliOutput::WaitBlockCount { reached: count })
+                    } <span class="kw">else </span>{
+                        <span class="macro">info!</span>(target: LOG_CLIENT, current=count, target, <span class="string">"Block count not reached"</span>);
+                        <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"target not reached"</span>))
                     }
-                })
-                .<span class="kw">await
-                </span>.map_err_cli_msg(<span class="string">"reached timeout"</span>)<span class="question-mark">?
-            </span>}
+                },
+            )
+            .<span class="kw">await
+            </span>.map_err_cli(),
+
             Command::Dev(DevCmd::WaitComplete) =&gt; {
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
                 client
@@ -2062,8 +2074,8 @@ Examples:
                 .map(ToString::to_string)
                 .collect::&lt;Vec&lt;String&gt;&gt;()[..]
             {
-                [] =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(<span class="string">"Empty metadata argument not allowed"</span>)),
-                [key] =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(<span class="string">"Metadata {key} is missing a value"</span>)),
+                [] =&gt; <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Empty metadata argument not allowed"</span>)),
+                [key] =&gt; <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Metadata {key} is missing a value"</span>)),
                 [key, val] =&gt; <span class="prelude-val">Ok</span>((key.clone(), val.clone())),
                 [..] =&gt; <span class="macro">unreachable!</span>(),
             }
