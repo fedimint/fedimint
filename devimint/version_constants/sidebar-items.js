@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["VERSION_0_3_0_ALPHA"]};

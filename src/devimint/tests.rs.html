@@ -2268,9 +2268,6 @@
 <a href="#2266" id="2266">2266</a>
 <a href="#2267" id="2267">2267</a>
 <a href="#2268" id="2268">2268</a>
-<a href="#2269" id="2269">2269</a>
-<a href="#2270" id="2270">2270</a>
-<a href="#2271" id="2271">2271</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2289,7 +2286,6 @@
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>ln_gateway::rpc::GatewayInfo;
-<span class="kw">use </span>semver::Version;
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tokio::fs;
 <span class="kw">use </span>tokio::net::TcpStream;
@@ -2300,6 +2296,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_DATA_DIR_ENV, FM_PASSWORD_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::federation::{Client, Federation};
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
+<span class="kw">use </span><span class="kw">crate</span>::version_constants::VERSION_0_3_0_ALPHA;
 <span class="kw">use crate</span>::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
 <span class="kw">pub struct </span>Stats {
@@ -2581,7 +2578,7 @@
                 .unwrap();
             <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
             <span class="kw">let </span>start_time = Instant::now();
-            <span class="kw">if </span>fedimint_cli_version &gt;= Version::parse(<span class="string">"0.3.0-alpha"</span>)<span class="question-mark">? </span>{
+            <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
                 <span class="kw">let </span>restore_client = Client::create(<span class="string">"restore"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="macro">cmd!</span>(
                     restore_client,
@@ -2693,9 +2690,8 @@
     <span class="kw">let </span>invite = fed.invite_code()<span class="question-mark">?</span>;
 
     <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
-    <span class="kw">let </span>version_req = Version::parse(<span class="string">"0.3.0-alpha"</span>)<span class="question-mark">?</span>;
 
-    <span class="kw">let </span>invite_code = <span class="kw">if </span>fedimint_cli_version &gt;= version_req {
+    <span class="kw">let </span>invite_code = <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
         <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"decode"</span>, <span class="string">"invite-code"</span>, invite.clone())
     } <span class="kw">else </span>{
         <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"decode-invite-code"</span>, invite.clone())
@@ -2703,7 +2699,7 @@
     .out_json()
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>encode_invite_output = <span class="kw">if </span>fedimint_cli_version &gt;= version_req {
+    <span class="kw">let </span>encode_invite_output = <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
         <span class="macro">cmd!</span>(
             client,
             <span class="string">"dev"</span>,
@@ -2815,7 +2811,7 @@
     // The code path is backwards-compatible, however this test will fail if we
     // check against earlier fedimintd versions.
     </span><span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
-    <span class="kw">if </span>fedimintd_version &gt;= Version::parse(<span class="string">"0.3.0-alpha"</span>)<span class="question-mark">? </span>{
+    <span class="kw">if </span>fedimintd_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
         <span class="comment">// # Test the correct descriptor is used
         </span><span class="kw">let </span>config = <span class="macro">cmd!</span>(client, <span class="string">"config"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>guardian_count = config[<span class="string">"global"</span>][<span class="string">"api_endpoints"</span>].as_object().unwrap().len();
@@ -2920,7 +2916,7 @@
         .as_str()
         .map(|s| s.to_owned())
         .unwrap();
-    <span class="kw">let </span>client_reissue_amt = <span class="kw">if </span>fedimint_cli_version &gt;= Version::parse(<span class="string">"0.3.0-alpha"</span>)<span class="question-mark">? </span>{
+    <span class="kw">let </span>client_reissue_amt = <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
         <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"mint"</span>, <span class="string">"reissue"</span>, reissue_notes)
     } <span class="kw">else </span>{
         <span class="macro">cmd!</span>(
@@ -3523,7 +3519,7 @@
     // Testing restore in different setups would require multiple clients,
     // which is a larger refactor.
     </span>{
-        <span class="kw">let </span>post_balance = <span class="kw">if </span>fedimint_cli_version &gt;= Version::parse(<span class="string">"0.3.0-alpha"</span>)<span class="question-mark">? </span>{
+        <span class="kw">let </span>post_balance = <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
             <span class="kw">let </span>client = Client::create(<span class="string">"restore-without-backup"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let _ </span>= <span class="macro">cmd!</span>(
                 client,
@@ -3571,7 +3567,7 @@
 
     <span class="comment">// with a backup
     </span>{
-        <span class="kw">let </span>post_balance = <span class="kw">if </span>fedimint_cli_version &gt;= Version::parse(<span class="string">"0.3.0-alpha"</span>)<span class="question-mark">? </span>{
+        <span class="kw">let </span>post_balance = <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
             <span class="kw">let _ </span>= <span class="macro">cmd!</span>(reference_client, <span class="string">"backup"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>client = Client::create(<span class="string">"restore-with-backup"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -3901,7 +3897,7 @@
 
     <span class="comment">// TODO(support:v0.2): 0.3 removed the active gateway concept and requires a
     // `gateway-id` parameter for lightning sends
-    </span><span class="kw">let </span>value = <span class="kw">if </span>fedimint_cli_version &lt; Version::parse(<span class="string">"0.3.0-alpha"</span>)<span class="question-mark">? </span>{
+    </span><span class="kw">let </span>value = <span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
         <span class="kw">if </span>finish_in_background {
             <span class="macro">cmd!</span>(client, <span class="string">"ln-pay"</span>, invoice, <span class="string">"--finish-in-background"</span>,)
                 .out_json()
@@ -3942,7 +3938,7 @@
     <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
     <span class="comment">// TODO(support:v0.2): 0.3 removed the active gateway concept and requires a
     // `gateway-id` parameter for lightning receives
-    </span><span class="kw">let </span>ln_response_val = <span class="kw">if </span>fedimint_cli_version &lt; Version::parse(<span class="string">"0.3.0-alpha"</span>)<span class="question-mark">? </span>{
+    </span><span class="kw">let </span>ln_response_val = <span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
         <span class="macro">cmd!</span>(
             client,
             <span class="string">"ln-invoice"</span>,
@@ -4189,9 +4185,7 @@
     <span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
 
     <span class="comment">// TODO(support:v0.2): remove
-    </span><span class="kw">if </span>fedimint_cli_version &lt; Version::parse(<span class="string">"0.3.0-alpha"</span>)<span class="question-mark">?
-        </span>|| fedimintd_version &lt; Version::parse(<span class="string">"0.3.0-alpha"</span>)<span class="question-mark">?
-    </span>{
+    </span><span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_3_0_ALPHA || fedimintd_version &lt; <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
         <span class="macro">info!</span>(<span class="string">"Guardian backups didn't exist pre-0.3.0, so can't be tested, exiting"</span>);
         <span class="kw">return </span><span class="prelude-val">Ok</span>(());
     }
@@ -4390,7 +4384,7 @@
     );
 
     <span class="comment">// TODO(support:v0.2): remove
-    </span><span class="kw">if </span>fedimint_cli_version &gt;= Version::parse(<span class="string">"0.3.0-alpha"</span>)<span class="question-mark">? </span>{
+    </span><span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
         <span class="macro">cmd!</span>(double_spend_client, <span class="string">"reissue"</span>, double_spend_notes)
             .assert_error_contains(<span class="string">"The transaction had an invalid input"</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
