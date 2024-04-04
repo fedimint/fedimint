@@ -431,10 +431,15 @@
 <a href="#429" id="429">429</a>
 <a href="#430" id="430">430</a>
 <a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>clap::{Parser, Subcommand};
@@ -466,7 +471,7 @@
         .collect::&lt;String&gt;()
 }
 
-<span class="attr">#[derive(Parser, Clone)]
+<span class="attr">#[derive(Parser, Clone, Default)]
 </span><span class="kw">pub struct </span>CommonArgs {
     <span class="attr">#[clap(short = <span class="string">'d'</span>, long, env = FM_TEST_DIR_ENV)]
     </span><span class="kw">pub </span>test_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
@@ -614,11 +619,14 @@
             <span class="prelude-val">Ok</span>(())
         }
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(v)) =&gt; {
-            <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Main process finished successfully, will wait for shutdown signal"</span>);
-            task_group.make_handle().make_shutdown_rx().<span class="kw">await</span>.<span class="kw">await</span>;
-            <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Received shutdown signal, shutting down"</span>);
-            drop(v); <span class="comment">// execute destructors
-            </span><span class="prelude-val">Ok</span>(())
+            <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Main process finished successfully, shutting down task group"</span>);
+            task_group
+                .shutdown_join_all(Duration::from_secs(<span class="number">30</span>))
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="comment">// drop v here, not before the shutdown
+            </span>drop(v);
+            <span class="prelude-val">Ok</span>(())
         }
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(err)) =&gt; {
             <span class="macro">warn!</span>(target: LOG_DEVIMINT, %err, <span class="string">"Main process failed, will shutdown"</span>);

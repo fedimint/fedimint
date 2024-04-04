@@ -872,10 +872,10 @@
 
     <span class="kw">pub async fn </span>shutdown_join_all(
         <span class="self">self</span>,
-        join_timeout: <span class="prelude-ty">Option</span>&lt;Duration&gt;,
+        join_timeout: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;Duration&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
         <span class="self">self</span>.shutdown();
-        <span class="self">self</span>.join_all(join_timeout).<span class="kw">await
+        <span class="self">self</span>.join_all(join_timeout.into()).<span class="kw">await
     </span>}
 
     <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
