@@ -139,6 +139,9 @@
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
 </pre></div><pre class="rust"><code><span class="comment">// faucet.rs
 
 // Env variable to TODO
@@ -278,4 +281,7 @@
 
 <span class="comment">// Env variable to define command for the LND client
 </span><span class="kw">pub const </span>FM_GWCLI_LND_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GWCLI_LND"</span>;
+
+<span class="doccomment">/// Make `devimint` print stderr of called commands directly on its own stderr
+</span><span class="kw">pub const </span>FM_DEVIMINT_CMD_INHERIT_STDERR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEVIMINT_CMD_INHERIT_STDERR"</span>;
 </code></pre></div></section></main></body></html>

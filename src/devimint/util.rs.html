@@ -831,6 +831,11 @@
 <a href="#829" id="829">829</a>
 <a href="#830" id="830">830</a>
 <a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -855,8 +860,8 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::envs::{
     FM_BACKWARDS_COMPATIBILITY_TEST_ENV, FM_BITCOIND_BASE_EXECUTABLE_ENV,
-    FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV, FM_BTC_CLIENT_ENV, FM_ELECTRS_BASE_EXECUTABLE_ENV,
-    FM_ESPLORA_BASE_EXECUTABLE_ENV, FM_FAUCET_BASE_EXECUTABLE_ENV,
+    FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV, FM_BTC_CLIENT_ENV, FM_DEVIMINT_CMD_INHERIT_STDERR_ENV,
+    FM_ELECTRS_BASE_EXECUTABLE_ENV, FM_ESPLORA_BASE_EXECUTABLE_ENV, FM_FAUCET_BASE_EXECUTABLE_ENV,
     FM_FEDIMINTD_BASE_EXECUTABLE_ENV, FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV,
     FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE_ENV, FM_GATEWAYD_BASE_EXECUTABLE_ENV,
     FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV, FM_GWCLI_CLN_ENV, FM_GWCLI_LND_ENV,
@@ -1093,16 +1098,21 @@
         <span class="kw">let </span>output = <span class="self">self
             </span>.cmd
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(<span class="kw">if </span>is_env_var_set(FM_DEVIMINT_CMD_INHERIT_STDERR_ENV) {
+                Stdio::inherit()
+            } <span class="kw">else </span>{
+                Stdio::piped()
+            })
             .spawn()<span class="question-mark">?
             </span>.wait_with_output()
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">if </span>output.status.success() != expect_success {
             <span class="macro">bail!</span>(
-                <span class="string">"{}\nstdout:\n{}"</span>,
+                <span class="string">"{}\nstdout:\n{}\nstderr:\n{}\n"</span>,
                 output.status,
                 String::from_utf8_lossy(<span class="kw-2">&amp;</span>output.stdout),
+                String::from_utf8_lossy(<span class="kw-2">&amp;</span>output.stderr),
             );
         }
         <span class="prelude-val">Ok</span>(output)
