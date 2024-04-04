@@ -1073,6 +1073,7 @@ dependencies = [
  "fs-lock",
  "futures",
  "hex",
+ "lazy_static",
  "nix",
  "rand",
  "semver",

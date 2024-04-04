@@ -24,7 +24,6 @@ use fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 use fs_lock::FileLock;
 use futures::future::join_all;
 use rand::Rng;
-use semver::Version;
 use tokio::time::Instant;
 use tracing::{debug, info};
 
@@ -33,6 +32,7 @@ use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{poll, FedimintdCmd};
+use crate::version_constants::VERSION_0_3_0_ALPHA;
 use crate::{poll_eq, vars};
 
 #[derive(Clone)]
@@ -144,7 +144,7 @@ impl Client {
     // TODO(support:v0.2): remove
     pub async fn use_gateway(&self, gw: &super::gatewayd::Gatewayd) -> Result<()> {
         let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-        if fedimint_cli_version < Version::parse("0.3.0-alpha")? {
+        if fedimint_cli_version < *VERSION_0_3_0_ALPHA {
             let gateway_id = gw.gateway_id().await?;
             cmd!(self, "switch-gateway", gateway_id.clone())
                 .run()
@@ -399,7 +399,7 @@ impl Federation {
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, "Awaiting LN gateways registration");
         let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-        let command = if fedimint_cli_version < Version::parse("0.3.0-alpha")? {
+        let command = if fedimint_cli_version < *VERSION_0_3_0_ALPHA {
             "list-gateways"
         } else {
             "update-gateway-cache"
