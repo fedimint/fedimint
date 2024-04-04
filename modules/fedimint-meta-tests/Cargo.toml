@@ -8,6 +8,12 @@ license = "MIT"
 publish = false
 
 
+# workaround: cargo-deny in Nix needs to see at least one
+# artifact here
+[[bin]]
+name = "meta-dummy-test"
+path = "src/bin/meta-dummy-test.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 devimint = { path = "../../devimint" }
