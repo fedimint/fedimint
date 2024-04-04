@@ -651,6 +651,24 @@
 <a href="#649" id="649">649</a>
 <a href="#650" id="650">650</a>
 <a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::SystemTime;
 
@@ -666,11 +684,11 @@
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::util::BoxFuture;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
-<span class="kw">use </span>fedimint_logging::LOG_DB;
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT_DB;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
-<span class="kw">use </span>tracing::{info, warn};
+<span class="kw">use </span>tracing::{debug, info, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::{ClientBackup, Metadata};
 <span class="kw">use </span><span class="kw">crate</span>::module::recovery::RecoveryProgress;
@@ -1008,7 +1026,7 @@
 </span><span class="kw">pub async fn </span>apply_migrations_client(
     db: <span class="kw-2">&amp;</span>Database,
     kind: String,
-    target_db_version: DatabaseVersion,
+    target_version: DatabaseVersion,
     migrations: BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt;,
     module_instance_id: ModuleInstanceId,
     decoders: ModuleDecoderRegistry,
@@ -1026,7 +1044,7 @@
     <span class="comment">// First write the database version to disk if it does not exist.
     </span>create_database_version(
         db,
-        target_db_version,
+        target_version,
         <span class="prelude-val">Some</span>(module_instance_id),
         kind.clone(),
         is_new_db,
@@ -1034,40 +1052,54 @@
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span><span class="kw-2">mut </span>global_dbtx = db.begin_transaction().<span class="kw">await</span>;
-    <span class="kw">let </span>disk_version = global_dbtx
+    <span class="kw">let </span>current_version = global_dbtx
         .get_value(<span class="kw-2">&amp;</span>DatabaseVersionKey(module_instance_id))
         .<span class="kw">await</span>;
 
-    <span class="macro">info!</span>(
-        <span class="question-mark">?</span>disk_version,
-        <span class="question-mark">?</span>target_db_version,
-        module_instance_id,
-        kind,
-        <span class="string">"Checking for necessary client module db migrations..."
-    </span>);
-
-    <span class="kw">let </span>db_version = <span class="kw">if let </span><span class="prelude-val">Some</span>(disk_version) = disk_version {
-        <span class="kw">let </span><span class="kw-2">mut </span>current_db_version = disk_version;
-
-        <span class="kw">if </span>current_db_version &gt; target_db_version {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="macro">format!</span>(
-                <span class="string">"On disk database version for module {kind} was higher than the code database version."
-            </span>)));
-        }
-
-        <span class="kw">if </span>current_db_version == target_db_version {
+    <span class="kw">let </span>db_version = <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>current_version) = current_version {
+        <span class="kw">if </span>current_version == target_version {
+            <span class="macro">trace!</span>(
+                target: LOG_CLIENT_DB,
+                %current_version,
+                %target_version,
+                module_instance_id,
+                kind,
+                <span class="string">"Database version up to date"
+            </span>);
             global_dbtx.ignore_uncommitted();
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
+        <span class="kw">if </span>target_version &lt; current_version {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="macro">format!</span>(
+                <span class="string">"On disk database version for module {kind} was higher ({}) than the target database version ({})."</span>,
+                current_version,
+                target_version,
+            )));
+        }
+
+        <span class="macro">info!</span>(
+            target: LOG_CLIENT_DB,
+            %current_version,
+            %target_version,
+            module_instance_id,
+            kind,
+            <span class="string">"Migrating client module database"
+        </span>);
         <span class="kw">let </span><span class="kw-2">mut </span>active_states =
             get_active_states(<span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc(), module_instance_id).<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>inactive_states =
             get_inactive_states(<span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc(), module_instance_id).<span class="kw">await</span>;
 
-        <span class="kw">while </span>current_db_version &lt; target_db_version {
-            <span class="kw">let </span>new_states = <span class="kw">if let </span><span class="prelude-val">Some</span>(migration) = migrations.get(<span class="kw-2">&amp;</span>current_db_version) {
-                <span class="macro">info!</span>(target: LOG_DB, <span class="question-mark">?</span>kind, <span class="question-mark">?</span>current_db_version, <span class="question-mark">?</span>target_db_version, <span class="string">"Migrating module..."</span>);
+        <span class="kw">while </span>current_version &lt; target_version {
+            <span class="kw">let </span>new_states = <span class="kw">if let </span><span class="prelude-val">Some</span>(migration) = migrations.get(<span class="kw-2">&amp;</span>current_version) {
+                <span class="macro">debug!</span>(
+                     target: LOG_CLIENT_DB,
+                     module_instance_id,
+                     %kind,
+                     %current_version,
+                     %target_version,
+                     <span class="string">"Running module db migration"</span>);
 
                 migration(
                     <span class="kw-2">&amp;mut </span>global_dbtx
@@ -1080,7 +1112,9 @@
                 )
                 .<span class="kw">await</span><span class="question-mark">?
             </span>} <span class="kw">else </span>{
-                <span class="macro">warn!</span>(<span class="question-mark">?</span>current_db_version, <span class="string">"Missing client db migration"</span>);
+                <span class="macro">warn!</span>(
+                    target: LOG_CLIENT_DB,
+                    <span class="question-mark">?</span>current_version, <span class="string">"Missing client db migration"</span>);
                 <span class="prelude-val">None
             </span>};
 
@@ -1113,19 +1147,21 @@
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
             }
 
-            current_db_version.increment();
+            current_version.increment();
             global_dbtx
-                .insert_entry(<span class="kw-2">&amp;</span>DatabaseVersionKey(module_instance_id), <span class="kw-2">&amp;</span>current_db_version)
+                .insert_entry(<span class="kw-2">&amp;</span>DatabaseVersionKey(module_instance_id), <span class="kw-2">&amp;</span>current_version)
                 .<span class="kw">await</span>;
         }
 
-        current_db_version
+        current_version
     } <span class="kw">else </span>{
-        target_db_version
+        target_version
     };
 
     global_dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(target: LOG_DB, <span class="question-mark">?</span>kind, <span class="question-mark">?</span>db_version, <span class="string">"Migration complete"</span>);
+    <span class="macro">info!</span>(
+        target: LOG_CLIENT_DB,
+        <span class="question-mark">?</span>kind, <span class="question-mark">?</span>db_version, <span class="string">"Migration complete"</span>);
     <span class="prelude-val">Ok</span>(())
 }
 
