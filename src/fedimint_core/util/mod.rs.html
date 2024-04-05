@@ -481,6 +481,27 @@
 <a href="#479" id="479">479</a>
 <a href="#480" id="480">480</a>
 <a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
 </pre></div><pre class="rust"><code><span class="doccomment">/// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 </span><span class="kw">pub mod </span>broadcaststream;
 
@@ -796,8 +817,29 @@
     FibonacciBuilder <span class="kw">as </span>FibonacciBackoff,
 };
 
-<span class="doccomment">/// Run the supplied closure `op_fn` up to `max_attempts` times. Wait for the
-/// supplied `Duration` `interval` between attempts
+<span class="doccomment">/// Run the supplied closure `op_fn` until it succeeds. Frequency and number of
+/// retries is determined by the specified strategy.
+///
+/// ```
+/// use std::time::Duration;
+///
+/// use fedimint_core::util::{retry, FibonacciBackoff};
+/// # tokio_test::block_on(async {
+/// retry(
+///     "Gateway balance after swap".to_string(),
+///     FibonacciBackoff::default()
+///         .with_min_delay(Duration::from_millis(200))
+///         .with_max_delay(Duration::from_secs(3))
+///         .with_max_times(10),
+///     || async {
+///         // Fallible network calls …
+///         Ok(())
+///     },
+/// )
+/// .await
+/// .expect("never fails");
+/// # });
+/// ```
 ///
 /// # Returns
 ///
@@ -806,14 +848,14 @@
 ///   error of the closure is returned
 </span><span class="kw">pub async fn </span>retry&lt;F, Fut, T&gt;(
     op_name: <span class="kw">impl </span>Into&lt;String&gt;,
-    statergy: <span class="kw">impl </span>backon::BackoffBuilder,
+    strategy: <span class="kw">impl </span>backon::BackoffBuilder,
     op_fn: F,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;T, anyhow::Error&gt;
 <span class="kw">where
     </span>F: Fn() -&gt; Fut,
     Fut: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T, anyhow::Error&gt;&gt;,
 {
-    <span class="kw">let </span><span class="kw-2">mut </span>statergy = statergy.build();
+    <span class="kw">let </span><span class="kw-2">mut </span>strategy = strategy.build();
     <span class="kw">let </span>op_name = op_name.into();
     <span class="kw">let </span><span class="kw-2">mut </span>attempts = <span class="number">0</span>;
     <span class="kw">loop </span>{
@@ -821,7 +863,7 @@
         <span class="kw">match </span>op_fn().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(result) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(result),
             <span class="prelude-val">Err</span>(error) =&gt; {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(interval) = statergy.next() {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(interval) = strategy.next() {
                     <span class="comment">// run closure op_fn again
                     </span><span class="macro">debug!</span>(
                         target: LOG_CORE,
