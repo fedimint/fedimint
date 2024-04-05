@@ -231,7 +231,7 @@ pub struct LegacyMetaSource {
 #[apply(async_trait_maybe_send!)]
 impl MetaSource for LegacyMetaSource {
     async fn wait_for_update(&self) {
-        fedimint_core::task::sleep(Duration::from_secs(10 * 60)).await
+        fedimint_core::runtime::sleep(Duration::from_secs(10 * 60)).await
     }
 
     async fn fetch(

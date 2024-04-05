@@ -19,6 +19,7 @@ async-recursion = "1.0.5"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
+futures-util = { workspace = true }
 backtrace = "0.3.69"
 bincode = { workspace = true }
 bech32 = "0.9.1"

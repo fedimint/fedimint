@@ -50,7 +50,7 @@ use fedimint_core::db::{
 use fedimint_core::encoding::Encodable;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::CommonModuleInit;
-use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
+use fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::{duration_since_epoch, now};
 use fedimint_core::util::{SafeUrl, Spanned};
 use fedimint_core::{
@@ -87,7 +87,7 @@ use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
 use strum::IntoEnumIterator;
 use thiserror::Error;
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::{Mutex, MutexGuard, RwLock};
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::db::{

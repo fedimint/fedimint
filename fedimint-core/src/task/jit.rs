@@ -90,7 +90,7 @@ where
         let (cancel_tx, mut cancel_rx) = tokio::sync::mpsc::channel(1);
         let (val_tx, val_rx) = oneshot::channel();
         let type_name = std::any::type_name::<T>();
-        super::imp::spawn(
+        crate::runtime::spawn(
             &format!("JitTry {} value", std::any::type_name::<T>()),
             async move {
                 select! {
@@ -109,8 +109,7 @@ where
                     },
                 }
             },
-        )
-        .expect("spawn not fail");
+        );
 
         Self {
             _cancel_tx: cancel_tx,
@@ -200,7 +199,7 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn sanity_jit() {
         let v = Jit::new(|| async {
-            fedimint_core::task::sleep(Duration::from_millis(0)).await;
+            fedimint_core::runtime::sleep(Duration::from_millis(0)).await;
             3
         });
 
@@ -212,7 +211,7 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn sanity_jit_try_ok() {
         let v = JitTryAnyhow::new_try(|| async {
-            fedimint_core::task::sleep(Duration::from_millis(0)).await;
+            fedimint_core::runtime::sleep(Duration::from_millis(0)).await;
             Ok(3)
         });
 
@@ -224,7 +223,7 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn sanity_jit_try_err() {
         let v = JitTry::new_try(|| async {
-            fedimint_core::task::sleep(Duration::from_millis(0)).await;
+            fedimint_core::runtime::sleep(Duration::from_millis(0)).await;
             bail!("BOOM");
             #[allow(unreachable_code)]
             Ok(3)

@@ -286,7 +286,7 @@ where
                                         retry_sleep = retry_sleep
                                             + thread_rng().gen_range(Duration::ZERO..=retry_sleep);
                                     }
-                                    fedimint_core::task::sleep(cmp::min(retry_sleep, MAX_SLEEP))
+                                    fedimint_core::runtime::sleep(cmp::min(retry_sleep, MAX_SLEEP))
                                         .await;
                                 }
                             }

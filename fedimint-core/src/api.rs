@@ -23,7 +23,7 @@ use fedimint_core::endpoint_constants::{
 };
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::SerdeModuleEncoding;
-use fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
+use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, ModuleDecoderRegistry, NumPeersExt,
@@ -40,7 +40,7 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use tokio::sync::OnceCell;
+use tokio::sync::{OnceCell, RwLock, RwLockWriteGuard};
 use tracing::{debug, error, instrument, trace, warn};
 
 use crate::admin_client::{
@@ -65,8 +65,8 @@ use crate::module::{ApiAuth, ApiRequestErased, ApiVersion, SupportedApiVersionsS
 use crate::query::{
     DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
 };
+use crate::runtime;
 use crate::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
-use crate::task;
 use crate::transaction::{SerdeTransaction, Transaction, TransactionError};
 use crate::util::SafeUrl;
 
@@ -283,7 +283,7 @@ pub trait FederationApiExt: IRawFederationApi {
         };
 
         if let Some(timeout) = timeout {
-            match fedimint_core::task::timeout(timeout, request).await {
+            match fedimint_core::runtime::timeout(timeout, request).await {
                 Ok(result) => result,
                 Err(_timeout) => Err(JsonRpcClientError::RequestTimeout),
             }
@@ -318,7 +318,7 @@ pub trait FederationApiExt: IRawFederationApi {
                 };
 
                 let result = if let Some(timeout) = timeout {
-                    match fedimint_core::task::timeout(timeout, request).await {
+                    match fedimint_core::runtime::timeout(timeout, request).await {
                         Ok(result) => result,
                         Err(_timeout) => Err(JsonRpcClientError::RequestTimeout),
                     }
@@ -371,7 +371,7 @@ pub trait FederationApiExt: IRawFederationApi {
                                     async move {
                                         // Note: we need to sleep inside the retrying future,
                                         // so that `futures` is being polled continuously
-                                        task::sleep(Duration::from_millis(delay_ms)).await;
+                                        runtime::sleep(Duration::from_millis(delay_ms)).await;
                                         PeerResponse {
                                             peer: retry_peer,
                                             result: self
@@ -509,7 +509,7 @@ impl DynGlobalApi {
     where
         R: OutputOutcome,
     {
-        fedimint_core::task::timeout(timeout, async move {
+        fedimint_core::runtime::timeout(timeout, async move {
             let outcome: SerdeOutputOutcome = self
                 .inner
                 .request_current_consensus(
@@ -1667,7 +1667,7 @@ mod tests {
                 error!(target: LOG_NET_API, "connect");
                 let id = CONNECTION_COUNT.fetch_add(1, Ordering::SeqCst);
                 // slow down
-                task::sleep(Duration::from_millis(100)).await;
+                runtime::sleep(Duration::from_millis(100)).await;
                 if FAIL.lock().unwrap().contains(&id) {
                     Err(jsonrpsee_core::client::Error::Transport(anyhow!(
                         "intentional error"
