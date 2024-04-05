@@ -9,27 +9,19 @@ use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::{pin, Pin};
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 use anyhow::bail;
 use fedimint_core::time::now;
 use fedimint_logging::{LOG_TASK, LOG_TEST};
 use futures::future::{self, Either};
-pub use imp::*;
-use thiserror::Error;
 use tokio::sync::{oneshot, watch};
-#[cfg(not(target_family = "wasm"))]
-use tokio::task::{JoinError, JoinHandle};
 use tracing::{debug, error, info, warn};
 
-#[cfg(target_family = "wasm")]
-type JoinHandle<T> = future::Ready<anyhow::Result<T>>;
-#[cfg(target_family = "wasm")]
-type JoinError = anyhow::Error;
-
-#[derive(Debug, Error)]
-#[error("deadline has elapsed")]
-pub struct Elapsed;
+use crate::runtime;
+// TODO: stop using `task::*`, and use `runtime::*` in the code
+// lots of churn though
+pub use crate::runtime::*;
 
 #[derive(Debug)]
 struct TaskGroupInner {
@@ -158,7 +150,7 @@ impl TaskGroup {
                 _ = terminate => {},
             }
         }
-        spawn("kill handlers", {
+        runtime::spawn("kill handlers", {
             let task_group = self.clone();
             async move {
                 wait_for_shutdown_signal().await;
@@ -171,15 +163,14 @@ impl TaskGroup {
         });
     }
 
-    #[cfg(not(target_family = "wasm"))]
     pub fn spawn<Fut, R>(
         &self,
         name: impl Into<String>,
-        f: impl FnOnce(TaskHandle) -> Fut + Send + 'static,
+        f: impl FnOnce(TaskHandle) -> Fut + MaybeSend + 'static,
     ) -> oneshot::Receiver<R>
     where
-        Fut: Future<Output = R> + Send + 'static,
-        R: Send + 'static,
+        Fut: Future<Output = R> + MaybeSend + 'static,
+        R: MaybeSend + 'static,
     {
         use tracing::{info_span, Instrument, Span};
 
@@ -194,7 +185,7 @@ impl TaskGroup {
         let handle = self.make_handle();
 
         let (tx, rx) = oneshot::channel();
-        if let Some(handle) = self::imp::spawn(name.as_str(), {
+        let handle = crate::runtime::spawn(&name, {
             let name = name.clone();
             async move {
                 // if receiver is not interested, just drop the message
@@ -204,19 +195,17 @@ impl TaskGroup {
                 let _ = tx.send(r);
             }
             .instrument(span)
-        }) {
-            self.inner
-                .join
-                .lock()
-                .expect("lock poison")
-                .push_back((name, handle));
-        }
+        });
+        self.inner
+            .join
+            .lock()
+            .expect("lock poison")
+            .push_back((name, handle));
         guard.completed = true;
 
         rx
     }
 
-    #[cfg(not(target_family = "wasm"))]
     pub async fn spawn_local<Fut>(
         &self,
         name: impl Into<String>,
@@ -232,49 +221,15 @@ impl TaskGroup {
         };
         let handle = self.make_handle();
 
-        if let Some(handle) = self::imp::spawn_local(name.as_str(), async move {
+        let handle = runtime::spawn_local(name.as_str(), async move {
             f(handle).await;
-        }) {
-            self.inner
-                .join
-                .lock()
-                .expect("lock poison")
-                .push_back((name, handle));
-        }
+        });
+        self.inner
+            .join
+            .lock()
+            .expect("lock poison")
+            .push_back((name, handle));
         guard.completed = true;
-    }
-    // TODO: Send vs lack of Send bound; do something about it
-    #[cfg(target_family = "wasm")]
-    pub fn spawn<Fut, R>(
-        &self,
-        name: impl Into<String>,
-        f: impl FnOnce(TaskHandle) -> Fut + 'static,
-    ) -> oneshot::Receiver<R>
-    where
-        Fut: Future<Output = R> + 'static,
-        R: 'static,
-    {
-        let name = name.into();
-        let mut guard = TaskPanicGuard {
-            name: name.clone(),
-            inner: self.inner.clone(),
-            completed: false,
-        };
-        let handle = self.make_handle();
-
-        let (tx, rx) = oneshot::channel();
-        if let Some(handle) = self::imp::spawn(name.as_str(), async move {
-            let _ = tx.send(f(handle).await);
-        }) {
-            self.inner
-                .join
-                .lock()
-                .expect("lock poison")
-                .push_back((name, handle));
-        }
-        guard.completed = true;
-
-        rx
     }
 
     /// Spawn a task that will get cancelled automatically on TaskGroup
@@ -337,14 +292,14 @@ impl TaskGroup {
             #[cfg(not(target_family = "wasm"))]
             let join_future: Pin<Box<dyn Future<Output = _> + Send>> =
                 if let Some(timeout) = timeout {
-                    Box::pin(self::timeout(timeout, join))
+                    Box::pin(runtime::timeout(timeout, join))
                 } else {
                     Box::pin(async move { Ok(join.await) })
                 };
 
             #[cfg(target_family = "wasm")]
             let join_future: Pin<Box<dyn Future<Output = _>>> = if let Some(timeout) = timeout {
-                Box::pin(self::timeout(timeout, join))
+                Box::pin(runtime::timeout(timeout, join))
             } else {
                 Box::pin(async move { Ok(join.await) })
             };
@@ -357,7 +312,7 @@ impl TaskGroup {
                     error!(target: LOG_TASK, task=%name, error=%e, "Task panicked");
                     errors.push(e);
                 }
-                Err(Elapsed) => {
+                Err(_) => {
                     warn!(
                         target: LOG_TASK, task=%name,
                         "Timeout waiting for task to shut down"
@@ -450,116 +405,6 @@ impl Future for TaskShutdownToken {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         self.0.as_mut().poll(cx)
-    }
-}
-
-#[cfg(not(target_family = "wasm"))]
-mod imp {
-    pub use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-
-    use super::*;
-
-    pub fn spawn<F, V: Send + 'static>(name: &str, future: F) -> Option<JoinHandle<V>>
-    where
-        F: Future<Output = V> + Send + 'static,
-    {
-        Some(
-            tokio::task::Builder::new()
-                .name(name)
-                .spawn(future)
-                .expect("spawn failed"),
-        )
-    }
-
-    pub(crate) fn spawn_local<F>(name: &str, future: F) -> Option<JoinHandle<()>>
-    where
-        F: Future<Output = ()> + 'static,
-    {
-        Some(
-            tokio::task::Builder::new()
-                .name(name)
-                .spawn_local(future)
-                .expect("spawn failed"),
-        )
-    }
-
-    pub fn block_in_place<F, R>(f: F) -> R
-    where
-        F: FnOnce() -> R,
-    {
-        tokio::task::block_in_place(f)
-    }
-
-    pub async fn sleep(duration: Duration) {
-        // nosemgrep: ban-tokio-sleep
-        tokio::time::sleep(duration).await
-    }
-
-    pub async fn sleep_until(deadline: Instant) {
-        tokio::time::sleep_until(deadline.into()).await
-    }
-
-    pub async fn timeout<T>(duration: Duration, future: T) -> Result<T::Output, Elapsed>
-    where
-        T: Future,
-    {
-        tokio::time::timeout(duration, future)
-            .await
-            .map_err(|_| Elapsed)
-    }
-}
-
-#[cfg(target_family = "wasm")]
-mod imp {
-    pub use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-    use futures::FutureExt;
-
-    use super::*;
-
-    pub fn spawn<F>(_name: &str, future: F) -> Option<JoinHandle<()>>
-    where
-        // No Send needed on wasm
-        F: Future<Output = ()> + 'static,
-    {
-        wasm_bindgen_futures::spawn_local(future);
-        None
-    }
-
-    pub(crate) fn spawn_local<F>(_name: &str, future: F) -> Option<JoinHandle<()>>
-    where
-        // No Send needed on wasm
-        F: Future<Output = ()> + 'static,
-    {
-        self::spawn(_name, future)
-    }
-
-    pub fn block_in_place<F, R>(f: F) -> R
-    where
-        F: FnOnce() -> R,
-    {
-        // no such hint on wasm
-        f()
-    }
-
-    pub async fn sleep(duration: Duration) {
-        gloo_timers::future::sleep(duration.min(Duration::from_millis(i32::MAX as _))).await
-    }
-
-    pub async fn sleep_until(deadline: Instant) {
-        // nosemgrep: ban-system-time-now
-        // nosemgrep: ban-instant-now
-        sleep(deadline.saturating_duration_since(Instant::now())).await
-    }
-
-    pub async fn timeout<T>(duration: Duration, future: T) -> Result<T::Output, Elapsed>
-    where
-        T: Future,
-    {
-        futures::pin_mut!(future);
-        futures::select_biased! {
-            value = future.fuse() => Ok(value),
-            _ = sleep(duration).fuse() => Err(Elapsed),
-        }
     }
 }
 

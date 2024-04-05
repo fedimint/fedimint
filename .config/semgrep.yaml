@@ -61,14 +61,14 @@ rules:
 - id: ban-tokio-spawn
   languages:
     - rust
-  message: "`tokio::spawn` won't set task name by default. use `fedimint_core::task::spawn` instead"
+  message: "`tokio::spawn` won't set task name by default. use `fedimint_core::runtime::spawn` instead"
   pattern: tokio::spawn
   severity: WARNING
 
 - id: ban-tokio-sleep
   languages:
     - rust
-  message: "`tokio::time::sleep` doesn't work in WASM. Use `fedimint_core::task::sleep` instead."
+  message: "`tokio::time::sleep` doesn't work in WASM. Use `fedimint_core::runtime::sleep` instead."
   pattern: tokio::time::sleep
   severity: WARNING
 
@@ -108,6 +108,7 @@ rules:
     - pattern-either:
       - pattern: sleep(...)
       - pattern: fedimint_core::task::sleep(...)
+      - pattern: fedimint_core::runtime::sleep(...)
   paths:
     include:
       - fedimint-testing/
@@ -120,7 +121,7 @@ rules:
       - gateway/ln-gateway/tests/
       - fedimint-client/src/backup/tests.rs
       - devimint/src/tests.rs
-  message: "Direct use of fedimint_core::task::sleep in tests is discouraged. Use fedimint_core::task::sleep_in_test instead."
+  message: "Direct use of fedimint_core::runtime::sleep in tests is discouraged. Use fedimint_core::task::sleep_in_test instead."
   severity: WARNING
 
 - id: ban-sleep-in-test-scripts

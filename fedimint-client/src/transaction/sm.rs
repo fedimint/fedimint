@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::task::sleep;
+use fedimint_core::runtime::sleep;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::TransactionId;
 use fedimint_logging::LOG_CLIENT_NET_API;

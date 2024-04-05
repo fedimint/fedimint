@@ -908,7 +908,8 @@ mod tests {
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::IRawDatabaseExt;
     use fedimint_core::module::ApiAuth;
-    use fedimint_core::task::{sleep, spawn, TaskGroup};
+    use fedimint_core::runtime::spawn;
+    use fedimint_core::task::{sleep, TaskGroup};
     use fedimint_core::util::SafeUrl;
     use fedimint_core::Amount;
     use fedimint_dummy_common::config::{

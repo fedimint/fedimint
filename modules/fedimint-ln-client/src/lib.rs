@@ -36,10 +36,10 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-use fedimint_core::task::{self, timeout, MaybeSend, MaybeSync};
+use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 use fedimint_core::util::{retry, FibonacciBackoff};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
+    apply, async_trait_maybe_send, push_db_pair_items, runtime, Amount, OutPoint, TransactionId,
 };
 use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
@@ -930,7 +930,7 @@ impl LightningClientModule {
                 } else {
                     EMPTY_GATEWAY_SLEEP
                 });
-            task::sleep(sleep_time).await;
+            runtime::sleep(sleep_time).await;
 
             // should never fail with usize::MAX attempts.
             let _ = retry(

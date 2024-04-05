@@ -366,7 +366,7 @@ where
             Some(msg_res) = connected.connection.next() => {
                 self.receive_message(connected, msg_res).await
             },
-            _ = sleep_until(connected.next_ping.into()) => {
+            _ = sleep_until(connected.next_ping) => {
                 self.send_ping(connected).await
             },
             _ = task_handle.make_shutdown_rx().await => {

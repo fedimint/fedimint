@@ -1598,7 +1598,7 @@ impl Client {
             if self.executor.get_active_states().await.is_empty() {
                 break;
             }
-            fedimint_core::task::sleep(Duration::from_millis(100)).await;
+            fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
         }
         Ok(())
     }

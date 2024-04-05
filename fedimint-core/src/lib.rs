@@ -44,6 +44,9 @@ pub mod macros;
 pub mod module;
 pub mod net;
 pub mod query;
+/// Runtime (wasm32 vs native) differences handling
+pub mod runtime;
+/// Task handling, including wasm safe logic
 pub mod task;
 pub mod tiered;
 pub mod tiered_multi;

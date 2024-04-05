@@ -22,15 +22,16 @@ use fedimint_core::module::registry::{
 };
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
 use fedimint_core::query::FilterMap;
+use fedimint_core::runtime::spawn;
 use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
 };
-use fedimint_core::task::{sleep, spawn, RwLock, TaskGroup, TaskHandle};
+use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_core::timing::TimeReporter;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{timing, NumPeers, PeerId};
 use futures::StreamExt;
-use tokio::sync::watch;
+use tokio::sync::{watch, RwLock};
 use tracing::{debug, info, warn};
 
 use crate::atomic_broadcast::data_provider::{DataProvider, UnitData};
@@ -412,8 +413,7 @@ impl ConsensusServer {
                 Spawner::new(),
                 aleph_bft_types::Terminator::create_root(terminator_receiver, "Terminator"),
             ),
-        )
-        .expect("some handle on non-wasm");
+        );
 
         // this is the minimum number of batches data that will be ordered before we
         // reach the exponential_slowdown_offset since at least f + 1 batches are

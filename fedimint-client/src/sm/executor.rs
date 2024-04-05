@@ -1175,7 +1175,8 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::task::{self, TaskGroup};
+    use fedimint_core::runtime;
+    use fedimint_core::task::TaskGroup;
     use tokio::sync::broadcast::Sender;
     use tracing::{info, trace};
 
@@ -1350,9 +1351,9 @@ mod tests {
         );
 
         // TODO build await fn+timeout or allow manual driving of executor
-        task::sleep(Duration::from_secs(1)).await;
+        runtime::sleep(Duration::from_secs(1)).await;
         sender.send(0).unwrap();
-        task::sleep(Duration::from_secs(2)).await;
+        runtime::sleep(Duration::from_secs(2)).await;
 
         assert!(
             executor
