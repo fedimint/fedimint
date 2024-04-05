@@ -117,7 +117,9 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn build_client() -> Result<()> {
-        let _client = client(&faucet::invite_code().await?.parse()?).await?;
+        let client = client(&faucet::invite_code().await?.parse()?).await?;
+        format!("{client:?}");
+
         Ok(())
     }
 

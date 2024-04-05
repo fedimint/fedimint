@@ -413,7 +413,7 @@ where
 // TODO: impl `Debug` for `Client` and derive here
 impl Debug for Client {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Client")
+        write!(f, "Client {:?}", self.executor)
     }
 }
 
