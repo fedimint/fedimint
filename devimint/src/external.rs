@@ -95,7 +95,7 @@ impl Bitcoind {
         debug!("Setting up bitcoind");
         // create RPC wallet
         for attempt in 0.. {
-            match client.create_wallet("", None, None, None, None) {
+            match tokio::task::block_in_place(|| client.create_wallet("", None, None, None, None)) {
                 Ok(_) => {
                     break;
                 }
@@ -113,17 +113,18 @@ impl Bitcoind {
 
         // mine blocks
         let blocks = 101;
-        let address = client.get_new_address(None, None)?;
+        let address = tokio::task::block_in_place(|| client.get_new_address(None, None))?;
         debug!(target: LOG_DEVIMINT, blocks_num=blocks, %address, "Mining blocks to address");
-        client
-            .generate_to_address(blocks, &address)
-            .context("Failed to generate blocks")?;
+        tokio::task::block_in_place(|| {
+            client
+                .generate_to_address(blocks, &address)
+                .context("Failed to generate blocks")
+        })?;
         trace!(target: LOG_DEVIMINT, blocks_num=blocks, %address, "Mining blocks to address complete");
 
         // wait bitciond is ready
         poll("bitcoind", || async {
-            let info = client
-                .get_blockchain_info()
+            let info = tokio::task::block_in_place(|| client.get_blockchain_info())
                 .context("bitcoind getblockchaininfo")
                 .map_err(ControlFlow::Continue)?;
             if info.blocks > 100 {
@@ -215,7 +216,7 @@ impl Bitcoind {
     }
 
     pub async fn get_raw_transaction(&self, txid: &bitcoin::Txid) -> Result<String> {
-        let tx = self.client.get_raw_transaction(txid, None)?;
+        let tx = tokio::task::block_in_place(|| self.client.get_raw_transaction(txid, None))?;
         let bytes = tx.consensus_encode_to_vec();
         Ok(bytes.encode_hex())
     }
