@@ -842,6 +842,9 @@
 <a href="#840" id="840">840</a>
 <a href="#841" id="841">841</a>
 <a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -875,6 +878,7 @@
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{timing, NumPeers, PeerId};
 <span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tracing::{debug, info, warn};
 
@@ -1222,7 +1226,9 @@
             <span class="kw">let </span>delay = <span class="kw">if </span>round_index == <span class="number">0 </span>{
                 <span class="number">0.0
             </span>} <span class="kw">else </span>{
-                round_delay * BASE.powf(round_index.saturating_sub(exp_slowdown_offset) <span class="kw">as </span>f64)
+                round_delay
+                    * BASE.powf(round_index.saturating_sub(exp_slowdown_offset) <span class="kw">as </span>f64)
+                    * rand::thread_rng().gen_range(<span class="number">0.5</span>..=<span class="number">1.5</span>)
             };
 
             Duration::from_millis(delay.round() <span class="kw">as </span>u64)
