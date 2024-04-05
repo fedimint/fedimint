@@ -3024,7 +3024,7 @@
 
         <span class="kw">let </span>db_strong_count = db.strong_count();
         <span class="kw">if </span>db_strong_count != <span class="number">1 </span>{
-            <span class="macro">debug!</span>(target:  LOG_CLIENT, count = db_strong_count - <span class="number">1</span>, <span class="string">"External DB references remaining after last handle dropped"</span>);
+            <span class="macro">debug!</span>(target: LOG_CLIENT, count = db_strong_count - <span class="number">1</span>, <span class="string">"External DB references remaining after last handle dropped"</span>);
         }
     }
 

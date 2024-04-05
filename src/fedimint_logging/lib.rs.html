@@ -174,15 +174,37 @@
 <a href="#172" id="172">172</a>
 <a href="#173" id="173">173</a>
 <a href="#174" id="174">174</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::fs::File;
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+</pre></div><pre class="rust"><code><span class="doccomment">//! Constants for categorizing the logging type
+//!
+//! To help stabilize logging targets, avoid typos and improve consistency,
+//! it's preferable for logging statements use static target constants,
+//! that we define in this module.
+//!
+//! Core + server side components should use global namespace,
+//! while client should generally be prefixed with `client::`.
+//! This makes it easier to filter interesting calls when
+//! running e.g. `devimint`, that will run both server and client
+//! side.
+
+</span><span class="kw">use </span>std::fs::File;
 <span class="kw">use </span>std::{env, io};
 
 <span class="kw">use </span>tracing_subscriber::layer::SubscriberExt;
 <span class="kw">use </span>tracing_subscriber::util::SubscriberInitExt;
 <span class="kw">use </span>tracing_subscriber::{EnvFilter, Layer};
 
-<span class="doccomment">/// Constants for categorizing the logging type
-</span><span class="kw">pub const </span>LOG_BLOCKCHAIN: <span class="kw-2">&amp;</span>str = <span class="string">"net::blockchain"</span>;
+<span class="kw">pub const </span>LOG_BLOCKCHAIN: <span class="kw-2">&amp;</span>str = <span class="string">"net::blockchain"</span>;
 <span class="kw">pub const </span>LOG_CONSENSUS: <span class="kw-2">&amp;</span>str = <span class="string">"consensus"</span>;
 <span class="kw">pub const </span>LOG_CORE: <span class="kw-2">&amp;</span>str = <span class="string">"core"</span>;
 <span class="kw">pub const </span>LOG_DB: <span class="kw-2">&amp;</span>str = <span class="string">"db"</span>;
@@ -198,7 +220,7 @@
 <span class="kw">pub const </span>LOG_WALLET: <span class="kw-2">&amp;</span>str = <span class="string">"wallet"</span>;
 <span class="kw">pub const </span>LOG_CLIENT: <span class="kw-2">&amp;</span>str = <span class="string">"client"</span>;
 <span class="kw">pub const </span>LOG_CLIENT_DB: <span class="kw-2">&amp;</span>str = <span class="string">"client::db"</span>;
-<span class="kw">pub const </span>LOG_SERVER_MODULE_META: <span class="kw-2">&amp;</span>str = <span class="string">"server::module::meta"</span>;
+<span class="kw">pub const </span>LOG_MODULE_META: <span class="kw-2">&amp;</span>str = <span class="string">"module::meta"</span>;
 <span class="kw">pub const </span>LOG_CLIENT_REACTOR: <span class="kw-2">&amp;</span>str = <span class="string">"client::reactor"</span>;
 <span class="kw">pub const </span>LOG_CLIENT_NET_API: <span class="kw-2">&amp;</span>str = <span class="string">"client::net::api"</span>;
 <span class="kw">pub const </span>LOG_CLIENT_BACKUP: <span class="kw-2">&amp;</span>str = <span class="string">"client::backup"</span>;

@@ -537,7 +537,7 @@
 <span class="kw">use </span>fedimint_core::{
     push_db_pair_items, NumPeers, NumPeersExt <span class="kw">as _</span>, OutPoint, PeerId, ServerModule,
 };
-<span class="kw">use </span>fedimint_logging::LOG_SERVER_MODULE_META;
+<span class="kw">use </span>fedimint_logging::LOG_MODULE_META;
 <span class="kw">use </span>fedimint_meta_common::config::{
     MetaClientConfig, MetaConfig, MetaConfigConsensus, MetaConfigLocal, MetaConfigPrivate,
 };
@@ -791,7 +791,7 @@
         )
         .<span class="kw">await</span>;
 
-        <span class="macro">info!</span>(target: LOG_SERVER_MODULE_META, %key, rev = %revision, len = %value_len, <span class="string">"New consensus value"</span>);
+        <span class="macro">info!</span>(target: LOG_MODULE_META, %key, rev = %revision, len = %value_len, <span class="string">"New consensus value"</span>);
 
         <span class="kw">for </span>peer_id <span class="kw">in </span>matching_submissions {
             dbtx.remove_entry(<span class="kw-2">&amp;</span>MetaSubmissionsKey { key, peer_id })
@@ -835,7 +835,7 @@
         }
         <span class="comment">// then: if the submission is equal to the current consensus, it's ignored
         </span><span class="kw">if </span><span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>new_value.value) == <span class="self">Self</span>::get_consensus(dbtx, key).<span class="kw">await</span>.as_ref() {
-            <span class="macro">debug!</span>(target: LOG_SERVER_MODULE_META, %peer_id, %key, <span class="string">"Peer submitted a redundant value"</span>);
+            <span class="macro">debug!</span>(target: LOG_MODULE_META, %peer_id, %key, <span class="string">"Peer submitted a redundant value"</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
@@ -855,7 +855,7 @@
             .<span class="kw">await</span>;
 
         <span class="kw">let </span>threshold = <span class="self">self</span>.num_peers.threshold();
-        <span class="macro">info!</span>(target: LOG_SERVER_MODULE_META,
+        <span class="macro">info!</span>(target: LOG_MODULE_META,
              %peer_id,
              %key,
             value_len = %new_value.value.as_slice().len(),
