@@ -72,6 +72,13 @@ rules:
   pattern: tokio::time::sleep
   severity: WARNING
 
+- id: ban-futures-block-on
+  languages:
+    - rust
+  message: Use `tokio::runtime::Handle::current.block_on()` instead.
+  pattern: futures::executor::block_on
+  severity: WARNING
+
 - id: ban-raw-url
   languages:
     - rust
