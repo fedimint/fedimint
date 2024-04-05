@@ -2104,91 +2104,91 @@
         <span class="kw">let </span><span class="kw-2">mut </span>self_copy = <span class="self">self</span>.clone();
         <span class="kw">let </span>tg = task_group.clone();
         task_group.spawn(<span class="string">"Subscribe to intercepted HTLCs in stream"</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
-                    <span class="kw">loop </span>{
-                        <span class="kw">if </span>handle.is_shutting_down() {
-                            <span class="macro">info!</span>(<span class="string">"Gateway HTLC handler loop is shutting down"</span>);
-                            <span class="kw">break</span>;
-                        }
+            <span class="kw">loop </span>{
+                <span class="kw">if </span>handle.is_shutting_down() {
+                    <span class="macro">info!</span>(<span class="string">"Gateway HTLC handler loop is shutting down"</span>);
+                    <span class="kw">break</span>;
+                }
 
-                        <span class="kw">let </span><span class="kw-2">mut </span>htlc_task_group = tg.make_subgroup();
-                        <span class="kw">let </span>lnrpc_route = self_copy.lightning_builder.build().<span class="kw">await</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>htlc_task_group = tg.make_subgroup();
+                <span class="kw">let </span>lnrpc_route = self_copy.lightning_builder.build().<span class="kw">await</span>;
 
-                        <span class="macro">debug!</span>(<span class="string">"Will try to intercept HTLC stream..."</span>);
-                        <span class="comment">// Re-create the HTLC stream if the connection breaks
-                        </span><span class="kw">match </span>lnrpc_route
-                            .route_htlcs(<span class="kw-2">&amp;mut </span>htlc_task_group)
-                            .<span class="kw">await
-                        </span>{
-                            <span class="prelude-val">Ok</span>((stream, ln_client)) =&gt; {
-                                <span class="comment">// Successful calls to route_htlcs establish a connection
-                                </span>self_copy.set_gateway_state(GatewayState::Connected).<span class="kw">await</span>;
-                                <span class="macro">info!</span>(<span class="string">"Established HTLC stream"</span>);
+                <span class="macro">debug!</span>(<span class="string">"Will try to intercept HTLC stream..."</span>);
+                <span class="comment">// Re-create the HTLC stream if the connection breaks
+                </span><span class="kw">match </span>lnrpc_route
+                    .route_htlcs(<span class="kw-2">&amp;mut </span>htlc_task_group)
+                    .<span class="kw">await
+                </span>{
+                    <span class="prelude-val">Ok</span>((stream, ln_client)) =&gt; {
+                        <span class="comment">// Successful calls to route_htlcs establish a connection
+                        </span>self_copy.set_gateway_state(GatewayState::Connected).<span class="kw">await</span>;
+                        <span class="macro">info!</span>(<span class="string">"Established HTLC stream"</span>);
 
-                                <span class="kw">match </span>fetch_lightning_node_info(ln_client.clone()).<span class="kw">await </span>{
-                                    <span class="prelude-val">Ok</span>((lightning_public_key, lightning_alias, lightning_network)) =&gt; {
-                                        <span class="kw">let </span>gateway_config = self_copy.gateway_config.read().<span class="kw">await</span>.clone();
-                                        <span class="kw">let </span>gateway_config = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = gateway_config {
-                                            config
-                                        } <span class="kw">else </span>{
-                                            self_copy.set_gateway_state(GatewayState::Configuring).<span class="kw">await</span>;
-                                            <span class="macro">info!</span>(<span class="string">"Waiting for gateway to be configured..."</span>);
-                                            self_copy.gateway_db
-                                                .wait_key_exists(<span class="kw-2">&amp;</span>GatewayConfigurationKey)
-                                                .<span class="kw">await
-                                        </span>};
+                        <span class="kw">match </span>fetch_lightning_node_info(ln_client.clone()).<span class="kw">await </span>{
+                            <span class="prelude-val">Ok</span>((lightning_public_key, lightning_alias, lightning_network)) =&gt; {
+                                <span class="kw">let </span>gateway_config = self_copy.gateway_config.read().<span class="kw">await</span>.clone();
+                                <span class="kw">let </span>gateway_config = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = gateway_config {
+                                    config
+                                } <span class="kw">else </span>{
+                                    self_copy.set_gateway_state(GatewayState::Configuring).<span class="kw">await</span>;
+                                    <span class="macro">info!</span>(<span class="string">"Waiting for gateway to be configured..."</span>);
+                                    self_copy.gateway_db
+                                        .wait_key_exists(<span class="kw-2">&amp;</span>GatewayConfigurationKey)
+                                        .<span class="kw">await
+                                </span>};
 
-                                        <span class="kw">if </span>gateway_config.network != bitcoin30_to_bitcoin29_network(lightning_network) {
-                                            <span class="macro">warn!</span>(<span class="string">"Lightning node does not match previously configured gateway network : ({:?})"</span>, gateway_config.network);
-                                            <span class="macro">info!</span>(<span class="string">"Changing gateway network to match lightning node network : ({:?})"</span>, lightning_network);
-                                            self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
-                                            self_copy.handle_set_configuration_msg(SetConfigurationPayload {
-                                                password: <span class="prelude-val">None</span>,
-                                                network: <span class="prelude-val">Some</span>(bitcoin30_to_bitcoin29_network(lightning_network)),
-                                                num_route_hints: <span class="prelude-val">None</span>,
-                                                routing_fees: <span class="prelude-val">None</span>,
-                                            }).<span class="kw">await</span>.expect(<span class="string">"Failed to set gateway configuration"</span>);
-                                            <span class="kw">continue</span>;
-                                        }
+                                <span class="kw">if </span>gateway_config.network != bitcoin30_to_bitcoin29_network(lightning_network) {
+                                    <span class="macro">warn!</span>(<span class="string">"Lightning node does not match previously configured gateway network : ({:?})"</span>, gateway_config.network);
+                                    <span class="macro">info!</span>(<span class="string">"Changing gateway network to match lightning node network : ({:?})"</span>, lightning_network);
+                                    self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
+                                    self_copy.handle_set_configuration_msg(SetConfigurationPayload {
+                                        password: <span class="prelude-val">None</span>,
+                                        network: <span class="prelude-val">Some</span>(bitcoin30_to_bitcoin29_network(lightning_network)),
+                                        num_route_hints: <span class="prelude-val">None</span>,
+                                        routing_fees: <span class="prelude-val">None</span>,
+                                    }).<span class="kw">await</span>.expect(<span class="string">"Failed to set gateway configuration"</span>);
+                                    <span class="kw">continue</span>;
+                                }
 
-                                        <span class="macro">info!</span>(<span class="string">"Successfully loaded Gateway clients."</span>);
-                                        <span class="kw">let </span>lightning_context = LightningContext {
-                                            lnrpc: ln_client,
-                                            lightning_public_key,
-                                            lightning_alias,
-                                            lightning_network,
-                                        };
-                                        self_copy.set_gateway_state(GatewayState::Running {
-                                            lightning_context
-                                        }).<span class="kw">await</span>;
+                                <span class="macro">info!</span>(<span class="string">"Successfully loaded Gateway clients."</span>);
+                                <span class="kw">let </span>lightning_context = LightningContext {
+                                    lnrpc: ln_client,
+                                    lightning_public_key,
+                                    lightning_alias,
+                                    lightning_network,
+                                };
+                                self_copy.set_gateway_state(GatewayState::Running {
+                                    lightning_context
+                                }).<span class="kw">await</span>;
 
-                                        <span class="comment">// Blocks until the connection to the lightning node breaks or we receive the shutdown signal
-                                        </span><span class="kw">match </span>handle.cancel_on_shutdown(self_copy.handle_htlc_stream(stream, handle.clone())).<span class="kw">await </span>{
-                                            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                                                <span class="macro">warn!</span>(<span class="string">"HTLC Stream Lightning connection broken. Gateway is disconnected"</span>);
-                                            },
-                                            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                                                <span class="macro">info!</span>(<span class="string">"Received shutdown signal"</span>);
-                                                self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
-                                                <span class="kw">break</span>;
-                                            }
-                                        }
-                                    }
-                                    <span class="prelude-val">Err</span>(e) =&gt; {
-                                        <span class="macro">warn!</span>(<span class="string">"Failed to retrieve Lightning info: {e:?}"</span>);
+                                <span class="comment">// Blocks until the connection to the lightning node breaks or we receive the shutdown signal
+                                </span><span class="kw">match </span>handle.cancel_on_shutdown(self_copy.handle_htlc_stream(stream, handle.clone())).<span class="kw">await </span>{
+                                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                                        <span class="macro">warn!</span>(<span class="string">"HTLC Stream Lightning connection broken. Gateway is disconnected"</span>);
+                                    },
+                                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                                        <span class="macro">info!</span>(<span class="string">"Received shutdown signal"</span>);
+                                        self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
+                                        <span class="kw">break</span>;
                                     }
                                 }
                             }
                             <span class="prelude-val">Err</span>(e) =&gt; {
-                                <span class="macro">warn!</span>(<span class="string">"Failed to open HTLC stream: {e:?}"</span>);
+                                <span class="macro">warn!</span>(<span class="string">"Failed to retrieve Lightning info: {e:?}"</span>);
                             }
                         }
-
-                        self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
-
-                        <span class="macro">warn!</span>(<span class="string">"Disconnected from Lightning Node. Waiting 5 seconds and trying again"</span>);
-                        sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
                     }
-                });
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="macro">warn!</span>(<span class="string">"Failed to open HTLC stream: {e:?}"</span>);
+                    }
+                }
+
+                self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
+
+                <span class="macro">warn!</span>(<span class="string">"Disconnected from Lightning Node. Waiting 5 seconds and trying again"</span>);
+                sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
+            }
+        });
 
         <span class="prelude-val">Ok</span>(())
     }
