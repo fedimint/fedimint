@@ -1,3 +1,15 @@
+//! Constants for categorizing the logging type
+//!
+//! To help stabilize logging targets, avoid typos and improve consistency,
+//! it's preferable for logging statements use static target constants,
+//! that we define in this module.
+//!
+//! Core + server side components should use global namespace,
+//! while client should generally be prefixed with `client::`.
+//! This makes it easier to filter interesting calls when
+//! running e.g. `devimint`, that will run both server and client
+//! side.
+
 use std::fs::File;
 use std::{env, io};
 
@@ -5,7 +17,6 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer};
 
-/// Constants for categorizing the logging type
 pub const LOG_BLOCKCHAIN: &str = "net::blockchain";
 pub const LOG_CONSENSUS: &str = "consensus";
 pub const LOG_CORE: &str = "core";
@@ -22,7 +33,7 @@ pub const LOG_TIMING: &str = "timing";
 pub const LOG_WALLET: &str = "wallet";
 pub const LOG_CLIENT: &str = "client";
 pub const LOG_CLIENT_DB: &str = "client::db";
-pub const LOG_SERVER_MODULE_META: &str = "server::module::meta";
+pub const LOG_MODULE_META: &str = "module::meta";
 pub const LOG_CLIENT_REACTOR: &str = "client::reactor";
 pub const LOG_CLIENT_NET_API: &str = "client::net::api";
 pub const LOG_CLIENT_BACKUP: &str = "client::backup";
