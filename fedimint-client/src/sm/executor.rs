@@ -736,7 +736,7 @@ impl ExecutorInner {
 
 impl Debug for ExecutorInner {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let (active, inactive) = futures::executor::block_on(async {
+        let (active, inactive) = tokio::runtime::Handle::current().block_on(async {
             let active_states = self.get_active_states().await;
             let inactive_states = self.get_inactive_states().await;
             (active_states, inactive_states)

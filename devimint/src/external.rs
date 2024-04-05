@@ -15,7 +15,6 @@ use fedimint_core::task::{block_in_place, sleep};
 use fedimint_core::util::write_overwrite_async;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::gateway::LightningNodeType;
-use futures::executor::block_on;
 use hex::ToHex;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
@@ -306,7 +305,7 @@ impl Drop for LightningdProcessHandle {
         // cln don't like to be killed and may leave running processes. So let's
         // terminate it in a controlled way
         block_in_place(move || {
-            block_on(async move {
+            tokio::runtime::Handle::current().block_on(async move {
                 if let Err(e) = self.terminate().await {
                     warn!(target: LOG_DEVIMINT, "failed to terminate lightningd: {e:?}");
                 }
