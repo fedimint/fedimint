@@ -1,5 +1,6 @@
 /// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 pub mod broadcaststream;
+pub mod update_merge;
 
 use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter};
