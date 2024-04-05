@@ -77,8 +77,8 @@ use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::rngs::OsRng;
 use rand::Rng;
 use rpc::{
-    ConnectToPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
+    CloseChannelsWithPeerPayload, ConnectToPeerPayload, FederationInfo, GatewayFedConfig,
+    GatewayInfo, LeaveFedPayload, OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
 };
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
@@ -1298,6 +1298,17 @@ impl Gateway {
             .open_channel(pubkey, channel_size_sats, push_amount_sats)
             .await?;
         Ok(())
+    }
+
+    /// Instructs the Gateway's Lightning node to close all channels with a peer
+    /// specified by `pubkey`, and returns the number of channels closed.
+    pub async fn handle_close_channels_with_peer_msg(
+        &self,
+        CloseChannelsWithPeerPayload { pubkey }: CloseChannelsWithPeerPayload,
+    ) -> Result<u32> {
+        let context = self.get_lightning_context().await?;
+        let closed_channel_count = context.lnrpc.close_channels_with_peer(pubkey).await?;
+        Ok(closed_channel_count)
     }
 
     /// Returns a list of Lightning network channels from the Gateway's

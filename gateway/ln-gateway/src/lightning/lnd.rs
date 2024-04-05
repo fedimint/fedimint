@@ -18,8 +18,8 @@ use tonic_lnd::invoicesrpc::AddHoldInvoiceRequest;
 use tonic_lnd::lnrpc::failure::FailureCode;
 use tonic_lnd::lnrpc::payment::PaymentStatus;
 use tonic_lnd::lnrpc::{
-    ChanInfoRequest, ConnectPeerRequest, GetInfoRequest, LightningAddress, ListChannelsRequest,
-    OpenChannelRequest,
+    ChanInfoRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest, GetInfoRequest,
+    LightningAddress, ListChannelsRequest, OpenChannelRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -662,7 +662,7 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn connect_to_peer(
         &self,
-        pubkey: secp256k1::PublicKey,
+        pubkey: PublicKey,
         host: String,
     ) -> Result<EmptyResponse, LightningRpcError> {
         let mut client = self.connect().await?;
@@ -709,7 +709,7 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn open_channel(
         &self,
-        pubkey: secp256k1::PublicKey,
+        pubkey: PublicKey,
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -> Result<EmptyResponse, LightningRpcError> {
@@ -730,6 +730,57 @@ impl ILnRpcClient for GatewayLndClient {
                 failure_reason: format!("Failed to open channel {e:?}"),
             }),
         }
+    }
+
+    async fn close_channels_with_peer(&self, pubkey: PublicKey) -> Result<u32, LightningRpcError> {
+        let mut client = self.connect().await?;
+
+        let channels_with_peer = client
+            .lightning()
+            .list_channels(ListChannelsRequest {
+                active_only: false,
+                inactive_only: false,
+                public_only: false,
+                private_only: false,
+                peer: pubkey.serialize().to_vec(),
+            })
+            .await
+            .map_err(|e| LightningRpcError::FailedToCloseChannelsWithPeer {
+                failure_reason: format!("Failed to list channels {e:?}"),
+            })?
+            .into_inner()
+            .channels;
+
+        for channel in &channels_with_peer {
+            let channel_point =
+                bitcoin::OutPoint::from_str(&channel.channel_point).map_err(|e| {
+                    LightningRpcError::FailedToCloseChannelsWithPeer {
+                        failure_reason: format!("Failed to parse channel point {e:?}"),
+                    }
+                })?;
+
+            client
+                .lightning()
+                .close_channel(CloseChannelRequest {
+                    channel_point: Some(ChannelPoint {
+                        funding_txid: Some(
+                            tonic_lnd::lnrpc::channel_point::FundingTxid::FundingTxidBytes(
+                                <bitcoin::Txid as AsRef<[u8]>>::as_ref(&channel_point.txid)
+                                    .as_ref()
+                                    .to_vec(),
+                            ),
+                        ),
+                        output_index: channel_point.vout,
+                    }),
+                    ..Default::default()
+                })
+                .await
+                .map_err(|e| LightningRpcError::FailedToCloseChannelsWithPeer {
+                    failure_reason: format!("Failed to close channel {e:?}"),
+                })?;
+        }
+
+        Ok(channels_with_peer.len() as u32)
     }
 
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {

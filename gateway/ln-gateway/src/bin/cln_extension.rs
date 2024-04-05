@@ -11,6 +11,7 @@ use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
+use cln_rpc::model::responses::ListpeerchannelsChannels;
 use cln_rpc::primitives::ShortChannelId;
 use fedimint_core::secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use fedimint_core::task::TaskGroup;
@@ -27,7 +28,8 @@ use ln_gateway::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHo
 use ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use ln_gateway::gateway_lnrpc::list_active_channels_response::ChannelInfo;
 use ln_gateway::gateway_lnrpc::{
-    ConnectToPeerRequest, CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse,
+    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectToPeerRequest,
+    CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse,
     GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest,
     PayInvoiceRequest, PayInvoiceResponse,
@@ -701,6 +703,73 @@ impl GatewayLightning for ClnRpcService {
             })?;
 
         Ok(tonic::Response::new(EmptyResponse {}))
+    }
+
+    async fn close_channels_with_peer(
+        &self,
+        request: tonic::Request<CloseChannelsWithPeerRequest>,
+    ) -> Result<tonic::Response<CloseChannelsWithPeerResponse>, Status> {
+        let request_inner = request.into_inner();
+
+        let peer_id = PublicKey::from_slice(&request_inner.pubkey).map_err(|e| {
+            Status::invalid_argument(format!("Unable to parse request pubkey: {e}"))
+        })?;
+
+        let channels_with_peer: Vec<ListpeerchannelsChannels> = self
+            .rpc_client()
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+            .call(cln_rpc::Request::ListPeerChannels(
+                model::requests::ListpeerchannelsRequest { id: Some(peer_id) },
+            ))
+            .await
+            .map(|response| match response {
+                cln_rpc::Response::ListPeerChannels(
+                    model::responses::ListpeerchannelsResponse { channels },
+                ) => Ok(channels
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|channel| {
+                        channel.state
+                            == Some(
+                                model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL,
+                            )
+                    })
+                    .collect()),
+                _ => Err(ClnExtensionError::RpcWrongResponse),
+            })
+            .map_err(|e| {
+                error!("cln listchannels rpc returned error {:?}", e);
+                tonic::Status::internal(e.to_string())
+            })?
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        for channel_id in channels_with_peer
+            .iter()
+            .filter_map(|channel| channel.channel_id)
+        {
+            self.rpc_client()
+                .await
+                .map_err(|e| Status::internal(e.to_string()))?
+                .call(cln_rpc::Request::Close(model::requests::CloseRequest {
+                    id: channel_id.to_string(),
+                    unilateraltimeout: None,
+                    destination: None,
+                    fee_negotiation_step: None,
+                    wrong_funding: None,
+                    force_lease_closed: None,
+                    feerange: None,
+                }))
+                .await
+                .map_err(|e| {
+                    error!("cln fundchannel rpc returned error {:?}", e);
+                    tonic::Status::internal(e.to_string())
+                })?;
+        }
+
+        Ok(tonic::Response::new(CloseChannelsWithPeerResponse {
+            num_channels_closed: channels_with_peer.len() as u32,
+        }))
     }
 
     async fn list_active_channels(

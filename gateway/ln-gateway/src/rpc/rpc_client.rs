@@ -3,10 +3,11 @@ use bitcoin::Address;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, TransactionId};
 use fedimint_ln_common::gateway_endpoint_constants::{
-    BACKUP_ENDPOINT, BALANCE_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
-    CONNECT_TO_PEER_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
-    GET_FUNDING_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
+    BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
+    CONNECT_FED_ENDPOINT, CONNECT_TO_PEER_ENDPOINT, GATEWAY_INFO_ENDPOINT,
+    GATEWAY_INFO_POST_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_ACTIVE_CHANNELS_ENDPOINT, OPEN_CHANNEL_ENDPOINT, RESTORE_ENDPOINT,
+    SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
@@ -14,9 +15,10 @@ use serde::Serialize;
 use thiserror::Error;
 
 use super::{
-    BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, ConnectToPeerPayload,
-    DepositAddressPayload, FederationInfo, GatewayFedConfig, GatewayInfo, GetFundingAddressPayload,
-    LeaveFedPayload, OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
+    ConnectToPeerPayload, DepositAddressPayload, FederationInfo, GatewayFedConfig, GatewayInfo,
+    GetFundingAddressPayload, LeaveFedPayload, OpenChannelPayload, RestorePayload,
+    SetConfigurationPayload, WithdrawPayload,
 };
 use crate::lightning::ChannelInfo;
 
@@ -164,6 +166,17 @@ impl GatewayRpcClient {
         let url = self
             .base_url
             .join(OPEN_CHANNEL_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, payload).await
+    }
+
+    pub async fn close_channels_with_peer(
+        &self,
+        payload: CloseChannelsWithPeerPayload,
+    ) -> GatewayRpcResult<u32> {
+        let url = self
+            .base_url
+            .join(CLOSE_CHANNELS_WITH_PEER_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
     }

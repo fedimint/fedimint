@@ -10,9 +10,10 @@ use fedimint_core::{fedimint_build_code_version_env, BitcoinAmountOrAll};
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
-    BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, ConnectToPeerPayload,
-    DepositAddressPayload, FederationRoutingFees, GetFundingAddressPayload, LeaveFedPayload,
-    OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
+    BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
+    ConnectToPeerPayload, DepositAddressPayload, FederationRoutingFees, GetFundingAddressPayload,
+    LeaveFedPayload, OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    V1_API_ENDPOINT,
 };
 use serde::Serialize;
 
@@ -139,6 +140,13 @@ pub enum LightningCommands {
         /// The amount to push to the other side of the channel
         #[clap(long)]
         push_amount_sats: Option<u64>,
+    },
+    /// Close all channels with a peer, claiming the funds to the lightning
+    /// node's on-chain wallet
+    CloseChannelsWithPeer {
+        // The public key of the node to close channels with
+        #[clap(long)]
+        pubkey: bitcoin::secp256k1::PublicKey,
     },
     /// List active channels
     ListActiveChannels,
@@ -315,6 +323,12 @@ async fn main() -> anyhow::Result<()> {
                         push_amount_sats: push_amount_sats.unwrap_or(0),
                     })
                     .await?;
+            }
+            LightningCommands::CloseChannelsWithPeer { pubkey } => {
+                let num_channels_closed = client()
+                    .close_channels_with_peer(CloseChannelsWithPeerPayload { pubkey })
+                    .await?;
+                println!("Closed {num_channels_closed} channel(s)");
             }
             LightningCommands::ListActiveChannels => {
                 let response = client().list_active_channels().await?;

@@ -14,10 +14,10 @@ use tracing::info;
 use super::{ChannelInfo, ILnRpcClient, LightningRpcError};
 use crate::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gateway_lnrpc::{
-    ConnectToPeerRequest, CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelRequest, PayInvoiceRequest,
-    PayInvoiceResponse,
+    CloseChannelsWithPeerRequest, ConnectToPeerRequest, CreateInvoiceRequest,
+    CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetFundingAddressResponse,
+    GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, OpenChannelRequest, PayInvoiceRequest, PayInvoiceResponse,
 };
 use crate::lightning::MAX_LIGHTNING_RETRIES;
 pub type HtlcResult = std::result::Result<InterceptHtlcRequest, tonic::Status>;
@@ -202,6 +202,22 @@ impl ILnRpcClient for NetworkLnRpcClient {
                 failure_reason: status.message().to_string(),
             })?;
         Ok(res.into_inner())
+    }
+
+    async fn close_channels_with_peer(
+        &self,
+        pubkey: secp256k1::PublicKey,
+    ) -> Result<u32, LightningRpcError> {
+        let mut client = self.connect().await?;
+        let res = client
+            .close_channels_with_peer(CloseChannelsWithPeerRequest {
+                pubkey: pubkey.serialize().to_vec(),
+            })
+            .await
+            .map_err(|status| LightningRpcError::FailedToCloseChannelsWithPeer {
+                failure_reason: status.message().to_string(),
+            })?;
+        Ok(res.into_inner().num_channels_closed)
     }
 
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {

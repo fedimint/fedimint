@@ -226,6 +226,13 @@ impl ILnRpcClient for FakeLightningTest {
         unimplemented!("FakeLightningTest does not support opening channels")
     }
 
+    async fn close_channels_with_peer(
+        &self,
+        _pubkey: bitcoin::secp256k1::PublicKey,
+    ) -> Result<u32, LightningRpcError> {
+        unimplemented!("FakeLightningTest does not support closing channels by peer")
+    }
+
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {
         unimplemented!("FakeLightningTest does not support listing active channels")
     }

@@ -45,6 +45,8 @@ pub enum LightningRpcError {
     FailedToCompleteHtlc { failure_reason: String },
     #[error("Failed to open channel: {failure_reason}")]
     FailedToOpenChannel { failure_reason: String },
+    #[error("Failed to close channel: {failure_reason}")]
+    FailedToCloseChannelsWithPeer { failure_reason: String },
     #[error("Failed to get Invoice: {failure_reason}")]
     FailedToGetInvoice { failure_reason: String },
     #[error("Failed to get funding address: {failure_reason}")]
@@ -145,6 +147,13 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -> Result<EmptyResponse, LightningRpcError>;
+
+    /// Close all channels with a peer lightning node from the gateway's
+    /// lightning node, returning the number of channels closed.
+    async fn close_channels_with_peer(
+        &self,
+        pubkey: secp256k1::PublicKey,
+    ) -> Result<u32, LightningRpcError>;
 
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
 }
