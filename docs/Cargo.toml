@@ -1,0 +1,13 @@
+[package]
+name = "fedimint-docs"
+edition = "2021"
+authors = ["The Fedimint Developers"]
+version = "0.3.0-alpha"
+publish = false
+license = "MIT"
+readme = "../README.md"
+repository = "https://github.com/fedimint/fedimint"
+
+[lib]
+name = "fedimint_docs"
+path = "lib.rs"
