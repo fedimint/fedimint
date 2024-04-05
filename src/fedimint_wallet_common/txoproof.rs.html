@@ -453,10 +453,10 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::io::Cursor;
 
-    <span class="kw">use </span>bitcoin::hashes::hex::FromHex;
     <span class="kw">use </span>fedimint_core::encoding::Decodable;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
+    <span class="kw">use </span>hex::FromHex;
 
     <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_txoutproof_happy_path() {

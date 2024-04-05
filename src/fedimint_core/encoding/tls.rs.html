@@ -14,14 +14,14 @@
 <a href="#12" id="12">12</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 
-<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
+<span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>tokio_rustls::rustls;
 
 <span class="kw">use </span><span class="kw">crate</span>::encoding::Encodable;
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>rustls::Certificate {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.to_hex().consensus_encode(writer)
+        <span class="self">self</span>.<span class="number">0</span>.encode_hex::&lt;String&gt;().consensus_encode(writer)
     }
 }
 </code></pre></div></section></main></body></html>

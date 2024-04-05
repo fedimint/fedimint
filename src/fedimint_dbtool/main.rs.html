@@ -205,13 +205,16 @@
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
 <a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">pub mod </span>envs;
 
 <span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>bytes::Bytes;
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInitRegistry, DynClientModuleInit};
@@ -227,6 +230,7 @@
 <span class="kw">use </span>fedimint_wallet_client::WalletClientInit;
 <span class="kw">use </span>fedimint_wallet_server::WalletInit;
 <span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>hex::ToHex;
 
 <span class="kw">use </span><span class="kw">crate</span>::dump::DatabaseDump;
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_DBTOOL_CONFIG_DIR_ENV, FM_DBTOOL_DATABASE_ENV, FM_PASSWORD_ENV};
@@ -293,12 +297,16 @@
 }
 
 <span class="kw">fn </span>hex_parser(hex: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Bytes&gt; {
-    <span class="kw">let </span>bytes: Vec&lt;u8&gt; = bitcoin_hashes::hex::FromHex::from_hex(hex)<span class="question-mark">?</span>;
+    <span class="kw">let </span>bytes: Vec&lt;u8&gt; = hex::FromHex::from_hex(hex)<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(bytes.into())
 }
 
 <span class="kw">fn </span>print_kv(key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) {
-    <span class="macro">println!</span>(<span class="string">"{} {}"</span>, key.to_hex(), value.to_hex());
+    <span class="macro">println!</span>(
+        <span class="string">"{} {}"</span>,
+        key.encode_hex::&lt;String&gt;(),
+        value.encode_hex::&lt;String&gt;()
+    );
 }
 
 <span class="attr">#[tokio::main]

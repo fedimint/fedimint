@@ -814,7 +814,6 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::{Address, BlockHash};
 <span class="kw">use </span>bitcoincore_rpc::bitcoincore_rpc_json::{GetBalancesResult, GetBlockchainInfoResult};
 <span class="kw">use </span>bitcoincore_rpc::{bitcoin, RpcApi};
@@ -826,6 +825,7 @@
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>fedimint_testing::gateway::LightningNodeType;
 <span class="kw">use </span>futures::executor::block_on;
+<span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>tokio::fs;
 <span class="kw">use </span>tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 <span class="kw">use </span>tokio::time::Instant;
@@ -1020,13 +1020,13 @@
 
     <span class="kw">pub async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span>proof = <span class="self">self</span>.get_tx_out_proof(<span class="kw-2">&amp;</span>[<span class="kw-2">*</span>txid], <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(proof.to_hex())
+        <span class="prelude-val">Ok</span>(proof.encode_hex())
     }
 
     <span class="kw">pub async fn </span>get_raw_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span>tx = <span class="self">self</span>.client.get_raw_transaction(txid, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>bytes = tx.consensus_encode_to_vec();
-        <span class="prelude-val">Ok</span>(bytes.to_hex())
+        <span class="prelude-val">Ok</span>(bytes.encode_hex())
     }
 
     <span class="kw">pub async fn </span>get_new_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Address&gt; {

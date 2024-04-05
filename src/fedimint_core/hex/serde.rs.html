@@ -55,7 +55,7 @@
 <a href="#53" id="53">53</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 
-<span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
+<span class="kw">use </span>hex::{FromHex, ToHex};
 <span class="kw">use </span>serde::de::Error;
 <span class="kw">use </span>serde::{Deserialize, Serializer};
 
@@ -64,7 +64,7 @@
 <span class="kw">where
     </span>S: Serializer,
 {
-    <span class="kw">let </span>hex: String = data.to_hex();
+    <span class="kw">let </span>hex: String = data.encode_hex();
     serializer.serialize_str(<span class="kw-2">&amp;</span>hex)
 }
 

@@ -184,13 +184,13 @@
 
 <span class="kw">use </span>anyhow::anyhow <span class="kw">as </span>format_err;
 <span class="kw">use </span>bitcoin::{BlockHash, Network, Script, Transaction, Txid};
-<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>electrum_client::ElectrumApi;
 <span class="kw">use </span>electrum_client::Error::Protocol;
 <span class="kw">use </span>fedimint_core::task::{block_in_place, TaskHandle};
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Feerate};
+<span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>serde_json::{Map, Value};
 <span class="kw">use </span>tracing::{info, warn};
 
@@ -227,7 +227,7 @@
 </span><span class="kw">impl </span>IBitcoindRpc <span class="kw">for </span>ElectrumClient {
     <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Network&gt; {
         <span class="kw">let </span>resp = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.server_features())<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(<span class="kw">match </span>resp.genesis_hash.to_hex().as_str() {
+        <span class="prelude-val">Ok</span>(<span class="kw">match </span>resp.genesis_hash.encode_hex::&lt;String&gt;().as_str() {
             <span class="kw">crate</span>::MAINNET_GENESIS_BLOCK_HASH =&gt; Network::Bitcoin,
             <span class="kw">crate</span>::TESTNET_GENESIS_BLOCK_HASH =&gt; Network::Testnet,
             <span class="kw">crate</span>::SIGNET_GENESIS_BLOCK_HASH =&gt; Network::Signet,

@@ -1645,7 +1645,6 @@
 <span class="kw">use </span>axum::http::StatusCode;
 <span class="kw">use </span>axum::response::{IntoResponse, Response};
 <span class="kw">use </span>bitcoin::{Address, Network, Txid};
-<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>client::GatewayClientBuilder;
 <span class="kw">use </span>db::{
@@ -1687,6 +1686,7 @@
 <span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>gateway_lnrpc::intercept_htlc_response::Action;
 <span class="kw">use </span>gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
+<span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>rand::rngs::OsRng;
@@ -2310,7 +2310,7 @@
                 federations,
                 channels: <span class="prelude-val">Some</span>(<span class="self">self</span>.scid_to_federation.read().<span class="kw">await</span>.clone()),
                 version_hash: <span class="macro">fedimint_build_code_version_env!</span>().to_string(),
-                lightning_pub_key: <span class="prelude-val">Some</span>(lightning_context.lightning_public_key.to_hex()),
+                lightning_pub_key: <span class="prelude-val">Some</span>(lightning_context.lightning_public_key.to_string()),
                 lightning_alias: <span class="prelude-val">Some</span>(lightning_context.lightning_alias.clone()),
                 fees: <span class="prelude-val">Some</span>(gateway_config.routing_fees),
                 route_hints,
@@ -3228,7 +3228,7 @@
         <span class="macro">write!</span>(
             f,
             <span class="string">"InterceptHtlcRequest {{ payment_hash: {}, incoming_amount_msat: {:?}, outgoing_amount_msat: {:?}, incoming_expiry: {:?}, short_channel_id: {:?}, incoming_chan_id: {:?}, htlc_id: {:?} }}"</span>,
-            htlc_request.payment_hash.to_hex(),
+            htlc_request.payment_hash.encode_hex::&lt;String&gt;(),
             htlc_request.incoming_amount_msat,
             htlc_request.outgoing_amount_msat,
             htlc_request.incoming_expiry,

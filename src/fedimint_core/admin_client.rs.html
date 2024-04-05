@@ -174,7 +174,7 @@
 <span class="kw">mod </span>serde_tls_cert {
     <span class="kw">use </span>std::borrow::Cow;
 
-    <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
+    <span class="kw">use </span>hex::{FromHex, ToHex};
     <span class="kw">use </span>serde::de::Error;
     <span class="kw">use </span>serde::{Deserialize, Deserializer, Serializer};
 
@@ -184,7 +184,7 @@
     <span class="kw">where
         </span>S: Serializer,
     {
-        <span class="kw">let </span>hex_str = certs.<span class="number">0</span>.to_hex();
+        <span class="kw">let </span>hex_str = certs.<span class="number">0</span>.encode_hex::&lt;String&gt;();
         serializer.serialize_str(<span class="kw-2">&amp;</span>hex_str)
     }
 
@@ -194,7 +194,7 @@
     {
         <span class="kw">let </span>value: Cow&lt;str&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(RustlsCertificate(
-            Vec::from_hex(<span class="kw-2">&amp;</span>value).map_err(D::Error::custom)<span class="question-mark">?</span>,
+            Vec::from_hex(value.as_ref()).map_err(D::Error::custom)<span class="question-mark">?</span>,
         ))
     }
 }

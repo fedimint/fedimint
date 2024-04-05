@@ -649,7 +649,6 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::anyhow;
-<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>cln_plugin::{options, Builder, Plugin};
 <span class="kw">use </span>cln_rpc::model;
@@ -657,6 +656,7 @@
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, Amount};
+<span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>ln_gateway::envs::FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV;
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
@@ -797,8 +797,8 @@
                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
 
                     <span class="kw">let </span>listen_val = plugin.option(<span class="string">"fm-gateway-listen"</span>)
-                        .expect(<span class="string">"Gateway CLN extension is missing a listen address configuration. 
-                        You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding 
+                        .expect(<span class="string">"Gateway CLN extension is missing a listen address configuration.
+                        You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding
                         a --fm-gateway-listen config option to the CLN plugin."</span>);
                     <span class="kw">let </span>listen = listen_val.as_str()
                         .expect(<span class="string">"fm-gateway-listen isn't a string"</span>);
@@ -1089,7 +1089,7 @@
                     <span class="kw">let </span>assert_pk: <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], TryFromSliceError&gt; =
                         preimage.as_slice().try_into();
                     <span class="kw">if let </span><span class="prelude-val">Ok</span>(pk) = assert_pk {
-                        <span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"resolve"</span>, <span class="string">"payment_key"</span>: pk.to_hex() })
+                        <span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"resolve"</span>, <span class="string">"payment_key"</span>: pk.encode_hex::&lt;String&gt;() })
                     } <span class="kw">else </span>{
                         htlc_processing_failure()
                     }

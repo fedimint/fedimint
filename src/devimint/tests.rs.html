@@ -2268,6 +2268,9 @@
 <a href="#2266" id="2266">2266</a>
 <a href="#2267" id="2267">2267</a>
 <a href="#2268" id="2268">2268</a>
+<a href="#2269" id="2269">2269</a>
+<a href="#2270" id="2270">2270</a>
+<a href="#2271" id="2271">2271</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2277,7 +2280,6 @@
 
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoincore_rpc::bitcoin;
-<span class="kw">use </span>bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::Txid;
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>cln_rpc::primitives::{Amount <span class="kw">as </span>ClnRpcAmount, AmountOrAny};
@@ -2285,6 +2287,7 @@
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
+<span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>ln_gateway::rpc::GatewayInfo;
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tokio::fs;
@@ -2516,7 +2519,7 @@
                     </span>.into_inner()
                     .payments
                     .into_iter()
-                    .find(|p| p.payment_hash == payment.payment_hash.to_hex())
+                    .find(|p| p.payment_hash == payment.payment_hash.encode_hex::&lt;String&gt;())
                     .context(<span class="string">"payment not in list"</span>)<span class="question-mark">?
                     </span>.status();
                 <span class="macro">anyhow::ensure!</span>(
@@ -3023,7 +3026,7 @@
         </span>.into_inner()
         .payments
         .into_iter()
-        .find(|p| p.payment_hash == payment.payment_hash.to_hex())
+        .find(|p| p.payment_hash == payment.payment_hash.encode_hex::&lt;String&gt;())
         .context(<span class="string">"payment not in list"</span>)<span class="question-mark">?
         </span>.status();
     <span class="macro">anyhow::ensure!</span>(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
@@ -3316,7 +3319,10 @@
         .as_str()
         .context(<span class="string">"missing preimage"</span>)<span class="question-mark">?
         </span>.to_owned();
-    <span class="macro">assert_eq!</span>(received_preimage, hold_invoice_preimage.to_hex());
+    <span class="macro">assert_eq!</span>(
+        received_preimage,
+        hold_invoice_preimage.encode_hex::&lt;String&gt;()
+    );
     <span class="prelude-val">Ok</span>(())
 }
 
@@ -3851,7 +3857,7 @@
                 </span>.into_inner()
                 .payments
                 .into_iter()
-                .find(|p| p.payment_hash == payment.payment_hash.to_hex())
+                .find(|p| p.payment_hash == payment.payment_hash.encode_hex::&lt;String&gt;())
                 .context(<span class="string">"payment not in list"</span>)<span class="question-mark">?
                 </span>.status();
             <span class="macro">anyhow::ensure!</span>(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);

@@ -1784,7 +1784,6 @@
 </span><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
-<span class="kw">use </span>bitcoin::hashes::hex::ToHex;
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, HashEngine, Hmac, HmacEngine};
 <span class="kw">use </span>bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
 <span class="kw">use </span>bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -1838,6 +1837,7 @@
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
 <span class="kw">use </span>fedimint_wallet_common::{Rbf, WalletInputError, WalletOutputError, WalletOutputV0};
 <span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>metrics::{
     WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
     WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
@@ -3393,7 +3393,7 @@
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes).unwrap();
 
         <span class="kw">if </span>serializer.is_human_readable() {
-            serializer.serialize_str(<span class="kw-2">&amp;</span>bytes.to_hex())
+            serializer.serialize_str(<span class="kw-2">&amp;</span>bytes.encode_hex::&lt;String&gt;())
         } <span class="kw">else </span>{
             serializer.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
         }
@@ -3423,7 +3423,7 @@
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes).unwrap();
 
         <span class="kw">if </span>serializer.is_human_readable() {
-            serializer.serialize_str(<span class="kw-2">&amp;</span>bytes.to_hex())
+            serializer.serialize_str(<span class="kw-2">&amp;</span>bytes.encode_hex::&lt;String&gt;())
         } <span class="kw">else </span>{
             serializer.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
         }

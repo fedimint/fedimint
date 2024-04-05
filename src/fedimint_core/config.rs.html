@@ -1125,7 +1125,6 @@
 
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin::secp256k1;
-<span class="kw">use </span>bitcoin_hashes::hex::{format_hex, FromHex};
 <span class="kw">use </span>bitcoin_hashes::sha256::{Hash <span class="kw">as </span>Sha256, HashEngine};
 <span class="kw">use </span>bitcoin_hashes::{hex, sha256};
 <span class="kw">use </span>bls12_381::Scalar;
@@ -1139,6 +1138,7 @@
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 <span class="kw">use </span>fedimint_logging::LOG_CORE;
+<span class="kw">use </span>hex::{format_hex, FromHex};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::ser::SerializeMap;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -2155,7 +2155,7 @@
 <span class="kw">pub mod </span>serde_binary_human_readable {
     <span class="kw">use </span>std::borrow::Cow;
 
-    <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
+    <span class="kw">use </span>hex::{FromHex, ToHex};
     <span class="kw">use </span>serde::de::DeserializeOwned;
     <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -2163,7 +2163,7 @@
         <span class="kw">if </span>s.is_human_readable() {
             <span class="kw">let </span>bytes =
                 bincode::serialize(x).map_err(|e| serde::ser::Error::custom(<span class="macro">format!</span>(<span class="string">"{e:?}"</span>)))<span class="question-mark">?</span>;
-            s.serialize_str(<span class="kw-2">&amp;</span>bytes.to_hex())
+            s.serialize_str(<span class="kw-2">&amp;</span>bytes.encode_hex::&lt;String&gt;())
         } <span class="kw">else </span>{
             Serialize::serialize(x, s)
         }
@@ -2172,7 +2172,7 @@
     <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">'d</span>, T: DeserializeOwned, D: Deserializer&lt;<span class="lifetime">'d</span>&gt;&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;T, D::Error&gt; {
         <span class="kw">if </span>d.is_human_readable() {
             <span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(d)<span class="question-mark">?</span>;
-            <span class="kw">let </span>bytes = Vec::from_hex(<span class="kw-2">&amp;</span>hex_str).map_err(serde::de::Error::custom)<span class="question-mark">?</span>;
+            <span class="kw">let </span>bytes = Vec::from_hex(hex_str.as_ref()).map_err(serde::de::Error::custom)<span class="question-mark">?</span>;
             bincode::deserialize(<span class="kw-2">&amp;</span>bytes).map_err(|e| serde::de::Error::custom(<span class="macro">format!</span>(<span class="string">"{e:?}"</span>)))
         } <span class="kw">else </span>{
             Deserialize::deserialize(d)

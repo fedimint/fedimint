@@ -1438,6 +1438,7 @@
 <a href="#1436" id="1436">1436</a>
 <a href="#1437" id="1437">1437</a>
 <a href="#1438" id="1438">1438</a>
+<a href="#1439" id="1439">1439</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -1464,8 +1465,8 @@
 <span class="kw">use </span>std::{cmp, mem};
 
 <span class="kw">use </span>anyhow::format_err;
-<span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
 <span class="kw">pub use </span>fedimint_derive::{Decodable, Encodable};
+<span class="kw">use </span>hex::{FromHex, ToHex};
 <span class="kw">use </span>lightning::util::ser::{Readable, Writeable};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
@@ -1533,7 +1534,7 @@
         <span class="comment">// TODO: This double allocation offends real Rustaceans. We should
         // be able to go straight to String, but this use case seems under-served
         // by hex encoding crates.
-        </span>bytes.to_hex()
+        </span>bytes.encode_hex()
     }
 
     <span class="doccomment">/// Encode without storing the encoding, return the size
@@ -2561,6 +2562,7 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::fmt::Debug;
     <span class="kw">use </span>std::io::Cursor;
+    <span class="kw">use </span>std::str::FromStr;
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
     <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseValue;
@@ -2829,7 +2831,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_bitcoin_consensus_encoding() {
         <span class="comment">// encodings should follow the bitcoin consensus encoding
-        </span><span class="kw">let </span>txid = bitcoin::Txid::from_hex(
+        </span><span class="kw">let </span>txid = bitcoin::Txid::from_str(
             <span class="string">"51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a"</span>,
         )
         .unwrap();
@@ -2863,7 +2865,7 @@
                 <span class="number">89</span>, <span class="number">179</span>, <span class="number">192</span>, <span class="number">90</span>, <span class="number">98</span>, <span class="number">30</span>, <span class="number">246</span>, <span class="number">95</span>, <span class="number">23</span>, <span class="number">126</span>, <span class="number">162</span>, <span class="number">134</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>,
             ],
         );
-        <span class="kw">let </span>blockhash = bitcoin::BlockHash::from_hex(
+        <span class="kw">let </span>blockhash = bitcoin::BlockHash::from_str(
             <span class="string">"0000000000000000000065bda8f8a88f2e1e00d9a6887a43d640e52a4c7660f2"</span>,
         )
         .unwrap();

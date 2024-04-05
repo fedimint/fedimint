@@ -816,6 +816,7 @@
 <a href="#814" id="814">814</a>
 <a href="#815" id="815">815</a>
 <a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1568,8 +1569,8 @@
     <span class="kw">use </span>std::borrow::Cow;
     <span class="kw">use </span>std::collections::BTreeMap;
 
-    <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
     <span class="kw">use </span>fedimint_core::PeerId;
+    <span class="kw">use </span>hex::{FromHex, ToHex};
     <span class="kw">use </span>serde::de::Error;
     <span class="kw">use </span>serde::ser::SerializeMap;
     <span class="kw">use </span>serde::{Deserialize, Deserializer, Serializer};
@@ -1585,7 +1586,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>serializer = serializer.serialize_map(<span class="prelude-val">Some</span>(certs.len()))<span class="question-mark">?</span>;
         <span class="kw">for </span>(key, value) <span class="kw">in </span>certs.iter() {
             serializer.serialize_key(key)<span class="question-mark">?</span>;
-            <span class="kw">let </span>hex_str = value.<span class="number">0</span>.to_hex();
+            <span class="kw">let </span>hex_str = value.<span class="number">0</span>.encode_hex::&lt;String&gt;();
             serializer.serialize_value(<span class="kw-2">&amp;</span>hex_str)<span class="question-mark">?</span>;
         }
         serializer.end()
@@ -1601,7 +1602,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>certs = BTreeMap::new();
 
         <span class="kw">for </span>(key, value) <span class="kw">in </span>map {
-            <span class="kw">let </span>cert = rustls::Certificate(Vec::from_hex(<span class="kw-2">&amp;</span>value).map_err(D::Error::custom)<span class="question-mark">?</span>);
+            <span class="kw">let </span>cert =
+                rustls::Certificate(Vec::from_hex(value.as_ref()).map_err(D::Error::custom)<span class="question-mark">?</span>);
             certs.insert(key, cert);
         }
         <span class="prelude-val">Ok</span>(certs)
@@ -1611,7 +1613,7 @@
 <span class="kw">mod </span>serde_tls_key {
     <span class="kw">use </span>std::borrow::Cow;
 
-    <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
+    <span class="kw">use </span>hex::{FromHex, ToHex};
     <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
     <span class="kw">use </span>tokio_rustls::rustls;
 
@@ -1619,7 +1621,7 @@
     <span class="kw">where
         </span>S: Serializer,
     {
-        <span class="kw">let </span>hex_str = key.<span class="number">0</span>.to_hex();
+        <span class="kw">let </span>hex_str = key.<span class="number">0</span>.encode_hex::&lt;String&gt;();
         Serialize::serialize(<span class="kw-2">&amp;</span>hex_str, serializer)
     }
 
@@ -1628,7 +1630,7 @@
         </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
     {
         <span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
-        <span class="kw">let </span>bytes = Vec::from_hex(<span class="kw-2">&amp;</span>hex_str).map_err(serde::de::Error::custom)<span class="question-mark">?</span>;
+        <span class="kw">let </span>bytes = Vec::from_hex(hex_str.as_ref()).map_err(serde::de::Error::custom)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(rustls::PrivateKey(bytes))
     }
 }

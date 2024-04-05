@@ -137,7 +137,7 @@
 
 <span class="kw">use </span>bitcoin::util::merkleblock::PartialMerkleTree;
 <span class="kw">use </span>bitcoin::{BlockHash, BlockHeader, Txid};
-<span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
+<span class="kw">use </span>hex::{FromHex, ToHex};
 <span class="kw">use </span>serde::de::Error;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -216,7 +216,7 @@
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes).unwrap();
 
         <span class="kw">if </span>serializer.is_human_readable() {
-            serializer.serialize_str(<span class="kw-2">&amp;</span>bytes.to_hex())
+            serializer.serialize_str(<span class="kw-2">&amp;</span>bytes.encode_hex::&lt;String&gt;())
         } <span class="kw">else </span>{
             serializer.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
         }
@@ -231,7 +231,7 @@
         <span class="kw">let </span>empty_module_registry = ModuleDecoderRegistry::default();
         <span class="kw">if </span>deserializer.is_human_readable() {
             <span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
-            <span class="kw">let </span>bytes = Vec::from_hex(<span class="kw-2">&amp;</span>hex_str).map_err(D::Error::custom)<span class="question-mark">?</span>;
+            <span class="kw">let </span>bytes = Vec::from_hex(hex_str.as_ref()).map_err(D::Error::custom)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(
                 TxOutProof::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(bytes), <span class="kw-2">&amp;</span>empty_module_registry)
                     .map_err(D::Error::custom)<span class="question-mark">?</span>,

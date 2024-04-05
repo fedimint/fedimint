@@ -306,11 +306,15 @@
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug};
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>futures::{stream, StreamExt};
+<span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>imbl::OrdMap;
 <span class="kw">use </span>macro_rules_attribute::apply;
 
@@ -384,7 +388,11 @@
         <span class="kw">let </span>data = <span class="self">self</span>.data.read().<span class="kw">await</span>;
         <span class="kw">let </span>data_iter = data.iter();
         <span class="kw">for </span>(key, value) <span class="kw">in </span>data_iter {
-            <span class="macro">println!</span>(<span class="string">"{}: {}"</span>, key.to_hex(), value.to_hex());
+            <span class="macro">println!</span>(
+                <span class="string">"{}: {}"</span>,
+                key.encode_hex::&lt;String&gt;(),
+                value.encode_hex::&lt;String&gt;()
+            );
         }
     }
 }

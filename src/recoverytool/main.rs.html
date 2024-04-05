@@ -522,7 +522,6 @@
 <a href="#520" id="520">520</a>
 <a href="#521" id="521">521</a>
 <a href="#522" id="522">522</a>
-<a href="#523" id="523">523</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>envs;
 
 <span class="kw">use </span>std::cmp::Ordering;
@@ -532,7 +531,6 @@
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
 <span class="kw">use </span>anyhow::anyhow;
-<span class="kw">use </span>bitcoin::hashes::hex::FromHex;
 <span class="kw">use </span>bitcoin::network::constants::Network;
 <span class="kw">use </span>bitcoin::OutPoint;
 <span class="kw">use </span>clap::{ArgGroup, Parser, Subcommand};
@@ -569,6 +567,7 @@
 <span class="kw">use </span>fedimint_wallet_server::db::{UTXOKey, UTXOPrefixKey};
 <span class="kw">use </span>fedimint_wallet_server::{nonce_from_idx, Wallet};
 <span class="kw">use </span>futures::stream::StreamExt;
+<span class="kw">use </span>hex::FromHex;
 <span class="kw">use </span>miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
 <span class="kw">use </span>secp256k1::SecretKey;
 <span class="kw">use </span>serde::Serialize;
@@ -1035,8 +1034,7 @@
 </span><span class="kw">fn </span>parses_valid_length_tweaks() {
     <span class="kw">use </span>hex::ToHex;
 
-    <span class="kw">let </span>bad_length_tweak: [u8; <span class="number">32</span>] = rand::random::&lt;[u8; <span class="number">32</span>]&gt;();
-    <span class="kw">let </span>bad_length_tweak_hex = bad_length_tweak.encode_hex::&lt;String&gt;();
+    <span class="kw">let </span>bad_length_tweak_hex = rand::random::&lt;[u8; <span class="number">32</span>]&gt;().encode_hex::&lt;String&gt;();
     <span class="comment">// rand::random only supports random byte arrays up to 32 bytes
     </span><span class="kw">let </span>good_length_tweak: [u8; <span class="number">33</span>] = core::array::from_fn(|<span class="kw">_</span>| rand::random::&lt;u8&gt;());
     <span class="kw">let </span>good_length_tweak_hex = good_length_tweak.encode_hex::&lt;String&gt;();

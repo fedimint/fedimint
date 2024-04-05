@@ -321,10 +321,10 @@
 <span class="kw">use </span>axum::{Extension, Json, Router};
 <span class="kw">use </span>axum_macros::debug_handler;
 <span class="kw">use </span>bitcoin::consensus::Encodable;
-<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
+<span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tokio::net::TcpListener;
 <span class="kw">use </span>tower_http::cors::CorsLayer;
@@ -568,7 +568,7 @@
     Json(payload): Json&lt;PayInvoicePayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>preimage = gateway.handle_pay_invoice_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(preimage.<span class="number">0</span>.to_hex())))
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(preimage.<span class="number">0</span>.encode_hex::&lt;String&gt;())))
 }
 
 <span class="doccomment">/// Connect a new federation
