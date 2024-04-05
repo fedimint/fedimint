@@ -807,6 +807,7 @@
 <a href="#805" id="805">805</a>
 <a href="#806" id="806">806</a>
 <a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -904,7 +905,7 @@
         <span class="macro">debug!</span>(<span class="string">"Setting up bitcoind"</span>);
         <span class="comment">// create RPC wallet
         </span><span class="kw">for </span>attempt <span class="kw">in </span><span class="number">0</span>.. {
-            <span class="kw">match </span>client.create_wallet(<span class="string">""</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>) {
+            <span class="kw">match </span>tokio::task::block_in_place(|| client.create_wallet(<span class="string">""</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>)) {
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
                     <span class="kw">break</span>;
                 }
@@ -922,17 +923,18 @@
 
         <span class="comment">// mine blocks
         </span><span class="kw">let </span>blocks = <span class="number">101</span>;
-        <span class="kw">let </span>address = client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>address = tokio::task::block_in_place(|| client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>))<span class="question-mark">?</span>;
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, blocks_num=blocks, %address, <span class="string">"Mining blocks to address"</span>);
-        client
-            .generate_to_address(blocks, <span class="kw-2">&amp;</span>address)
-            .context(<span class="string">"Failed to generate blocks"</span>)<span class="question-mark">?</span>;
+        tokio::task::block_in_place(|| {
+            client
+                .generate_to_address(blocks, <span class="kw-2">&amp;</span>address)
+                .context(<span class="string">"Failed to generate blocks"</span>)
+        })<span class="question-mark">?</span>;
         <span class="macro">trace!</span>(target: LOG_DEVIMINT, blocks_num=blocks, %address, <span class="string">"Mining blocks to address complete"</span>);
 
         <span class="comment">// wait bitciond is ready
         </span>poll(<span class="string">"bitcoind"</span>, || <span class="kw">async </span>{
-            <span class="kw">let </span>info = client
-                .get_blockchain_info()
+            <span class="kw">let </span>info = tokio::task::block_in_place(|| client.get_blockchain_info())
                 .context(<span class="string">"bitcoind getblockchaininfo"</span>)
                 .map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
             <span class="kw">if </span>info.blocks &gt; <span class="number">100 </span>{
@@ -1024,7 +1026,7 @@
     }
 
     <span class="kw">pub async fn </span>get_raw_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>tx = <span class="self">self</span>.client.get_raw_transaction(txid, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>tx = tokio::task::block_in_place(|| <span class="self">self</span>.client.get_raw_transaction(txid, <span class="prelude-val">None</span>))<span class="question-mark">?</span>;
         <span class="kw">let </span>bytes = tx.consensus_encode_to_vec();
         <span class="prelude-val">Ok</span>(bytes.encode_hex())
     }
