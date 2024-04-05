@@ -31,6 +31,7 @@ use fedimint_core::timing::TimeReporter;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{timing, NumPeers, PeerId};
 use futures::StreamExt;
+use rand::Rng;
 use tokio::sync::watch;
 use tracing::{debug, info, warn};
 
@@ -378,7 +379,9 @@ impl ConsensusServer {
             let delay = if round_index == 0 {
                 0.0
             } else {
-                round_delay * BASE.powf(round_index.saturating_sub(exp_slowdown_offset) as f64)
+                round_delay
+                    * BASE.powf(round_index.saturating_sub(exp_slowdown_offset) as f64)
+                    * rand::thread_rng().gen_range(0.5..=1.5)
             };
 
             Duration::from_millis(delay.round() as u64)
