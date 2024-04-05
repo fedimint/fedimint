@@ -2102,7 +2102,7 @@
 
 <span class="kw">impl </span>Debug <span class="kw">for </span>ExecutorInner {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="kw">let </span>(active, inactive) = futures::executor::block_on(<span class="kw">async </span>{
+        <span class="kw">let </span>(active, inactive) = tokio::runtime::Handle::current().block_on(<span class="kw">async </span>{
             <span class="kw">let </span>active_states = <span class="self">self</span>.get_active_states().<span class="kw">await</span>;
             <span class="kw">let </span>inactive_states = <span class="self">self</span>.get_inactive_states().<span class="kw">await</span>;
             (active_states, inactive_states)

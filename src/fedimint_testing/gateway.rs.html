@@ -270,7 +270,6 @@
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
@@ -287,7 +286,6 @@
 <span class="kw">use </span>fedimint_core::task::{block_in_place, sleep_in_test, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_logging::LOG_TEST;
-<span class="kw">use </span>futures::executor::block_on;
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>ln_gateway::client::GatewayClientBuilder;
 <span class="kw">use </span>ln_gateway::lightning::{ILnRpcClient, LightningBuilder};
@@ -495,7 +493,7 @@
 <span class="kw">impl </span>Drop <span class="kw">for </span>GatewayTest {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         block_in_place(<span class="kw">move </span>|| {
-            block_on(<span class="kw">async move </span>{
+            tokio::runtime::Handle::current().block_on(<span class="kw">async move </span>{
                 <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.task_group.clone().shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await </span>{
                     <span class="macro">warn!</span>(<span class="string">"Got error shutting down GatewayTest: {e:?}"</span>)
                 }

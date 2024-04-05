@@ -835,7 +835,6 @@
 <a href="#833" id="833">833</a>
 <a href="#834" id="834">834</a>
 <a href="#835" id="835">835</a>
-<a href="#836" id="836">836</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -850,7 +849,6 @@
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, block_in_place};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
-<span class="kw">use </span>futures::executor::block_on;
 <span class="kw">use </span>semver::Version;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>tokio::fs::OpenOptions;
@@ -946,7 +944,7 @@
         };
         <span class="kw">let </span>name = <span class="self">self</span>.name.clone();
         block_in_place(<span class="kw">move </span>|| {
-            block_on(<span class="kw">async move </span>{
+            tokio::runtime::Handle::current().block_on(<span class="kw">async move </span>{
                 <span class="macro">debug!</span>(
                     target: LOG_DEVIMINT,
                     <span class="string">"sending SIGKILL to {name} and waiting for it to exit"
