@@ -483,91 +483,91 @@ impl Gateway {
         let mut self_copy = self.clone();
         let tg = task_group.clone();
         task_group.spawn("Subscribe to intercepted HTLCs in stream", move |handle| async move {
-                    loop {
-                        if handle.is_shutting_down() {
-                            info!("Gateway HTLC handler loop is shutting down");
-                            break;
-                        }
+            loop {
+                if handle.is_shutting_down() {
+                    info!("Gateway HTLC handler loop is shutting down");
+                    break;
+                }
 
-                        let mut htlc_task_group = tg.make_subgroup();
-                        let lnrpc_route = self_copy.lightning_builder.build().await;
+                let mut htlc_task_group = tg.make_subgroup();
+                let lnrpc_route = self_copy.lightning_builder.build().await;
 
-                        debug!("Will try to intercept HTLC stream...");
-                        // Re-create the HTLC stream if the connection breaks
-                        match lnrpc_route
-                            .route_htlcs(&mut htlc_task_group)
-                            .await
-                        {
-                            Ok((stream, ln_client)) => {
-                                // Successful calls to route_htlcs establish a connection
-                                self_copy.set_gateway_state(GatewayState::Connected).await;
-                                info!("Established HTLC stream");
+                debug!("Will try to intercept HTLC stream...");
+                // Re-create the HTLC stream if the connection breaks
+                match lnrpc_route
+                    .route_htlcs(&mut htlc_task_group)
+                    .await
+                {
+                    Ok((stream, ln_client)) => {
+                        // Successful calls to route_htlcs establish a connection
+                        self_copy.set_gateway_state(GatewayState::Connected).await;
+                        info!("Established HTLC stream");
 
-                                match fetch_lightning_node_info(ln_client.clone()).await {
-                                    Ok((lightning_public_key, lightning_alias, lightning_network)) => {
-                                        let gateway_config = self_copy.gateway_config.read().await.clone();
-                                        let gateway_config = if let Some(config) = gateway_config {
-                                            config
-                                        } else {
-                                            self_copy.set_gateway_state(GatewayState::Configuring).await;
-                                            info!("Waiting for gateway to be configured...");
-                                            self_copy.gateway_db
-                                                .wait_key_exists(&GatewayConfigurationKey)
-                                                .await
-                                        };
+                        match fetch_lightning_node_info(ln_client.clone()).await {
+                            Ok((lightning_public_key, lightning_alias, lightning_network)) => {
+                                let gateway_config = self_copy.gateway_config.read().await.clone();
+                                let gateway_config = if let Some(config) = gateway_config {
+                                    config
+                                } else {
+                                    self_copy.set_gateway_state(GatewayState::Configuring).await;
+                                    info!("Waiting for gateway to be configured...");
+                                    self_copy.gateway_db
+                                        .wait_key_exists(&GatewayConfigurationKey)
+                                        .await
+                                };
 
-                                        if gateway_config.network != bitcoin30_to_bitcoin29_network(lightning_network) {
-                                            warn!("Lightning node does not match previously configured gateway network : ({:?})", gateway_config.network);
-                                            info!("Changing gateway network to match lightning node network : ({:?})", lightning_network);
-                                            self_copy.handle_disconnect(htlc_task_group).await;
-                                            self_copy.handle_set_configuration_msg(SetConfigurationPayload {
-                                                password: None,
-                                                network: Some(bitcoin30_to_bitcoin29_network(lightning_network)),
-                                                num_route_hints: None,
-                                                routing_fees: None,
-                                            }).await.expect("Failed to set gateway configuration");
-                                            continue;
-                                        }
+                                if gateway_config.network != bitcoin30_to_bitcoin29_network(lightning_network) {
+                                    warn!("Lightning node does not match previously configured gateway network : ({:?})", gateway_config.network);
+                                    info!("Changing gateway network to match lightning node network : ({:?})", lightning_network);
+                                    self_copy.handle_disconnect(htlc_task_group).await;
+                                    self_copy.handle_set_configuration_msg(SetConfigurationPayload {
+                                        password: None,
+                                        network: Some(bitcoin30_to_bitcoin29_network(lightning_network)),
+                                        num_route_hints: None,
+                                        routing_fees: None,
+                                    }).await.expect("Failed to set gateway configuration");
+                                    continue;
+                                }
 
-                                        info!("Successfully loaded Gateway clients.");
-                                        let lightning_context = LightningContext {
-                                            lnrpc: ln_client,
-                                            lightning_public_key,
-                                            lightning_alias,
-                                            lightning_network,
-                                        };
-                                        self_copy.set_gateway_state(GatewayState::Running {
-                                            lightning_context
-                                        }).await;
+                                info!("Successfully loaded Gateway clients.");
+                                let lightning_context = LightningContext {
+                                    lnrpc: ln_client,
+                                    lightning_public_key,
+                                    lightning_alias,
+                                    lightning_network,
+                                };
+                                self_copy.set_gateway_state(GatewayState::Running {
+                                    lightning_context
+                                }).await;
 
-                                        // Blocks until the connection to the lightning node breaks or we receive the shutdown signal
-                                        match handle.cancel_on_shutdown(self_copy.handle_htlc_stream(stream, handle.clone())).await {
-                                            Ok(_) => {
-                                                warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
-                                            },
-                                            Err(_) => {
-                                                info!("Received shutdown signal");
-                                                self_copy.handle_disconnect(htlc_task_group).await;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        warn!("Failed to retrieve Lightning info: {e:?}");
+                                // Blocks until the connection to the lightning node breaks or we receive the shutdown signal
+                                match handle.cancel_on_shutdown(self_copy.handle_htlc_stream(stream, handle.clone())).await {
+                                    Ok(_) => {
+                                        warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
+                                    },
+                                    Err(_) => {
+                                        info!("Received shutdown signal");
+                                        self_copy.handle_disconnect(htlc_task_group).await;
+                                        break;
                                     }
                                 }
                             }
                             Err(e) => {
-                                warn!("Failed to open HTLC stream: {e:?}");
+                                warn!("Failed to retrieve Lightning info: {e:?}");
                             }
                         }
-
-                        self_copy.handle_disconnect(htlc_task_group).await;
-
-                        warn!("Disconnected from Lightning Node. Waiting 5 seconds and trying again");
-                        sleep(Duration::from_secs(5)).await;
                     }
-                });
+                    Err(e) => {
+                        warn!("Failed to open HTLC stream: {e:?}");
+                    }
+                }
+
+                self_copy.handle_disconnect(htlc_task_group).await;
+
+                warn!("Disconnected from Lightning Node. Waiting 5 seconds and trying again");
+                sleep(Duration::from_secs(5)).await;
+            }
+        });
 
         Ok(())
     }
