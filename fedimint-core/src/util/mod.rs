@@ -313,8 +313,29 @@ pub use backon::{
     FibonacciBuilder as FibonacciBackoff,
 };
 
-/// Run the supplied closure `op_fn` up to `max_attempts` times. Wait for the
-/// supplied `Duration` `interval` between attempts
+/// Run the supplied closure `op_fn` until it succeeds. Frequency and number of
+/// retries is determined by the specified strategy.
+///
+/// ```
+/// use std::time::Duration;
+///
+/// use fedimint_core::util::{retry, FibonacciBackoff};
+/// # tokio_test::block_on(async {
+/// retry(
+///     "Gateway balance after swap".to_string(),
+///     FibonacciBackoff::default()
+///         .with_min_delay(Duration::from_millis(200))
+///         .with_max_delay(Duration::from_secs(3))
+///         .with_max_times(10),
+///     || async {
+///         // Fallible network calls …
+///         Ok(())
+///     },
+/// )
+/// .await
+/// .expect("never fails");
+/// # });
+/// ```
 ///
 /// # Returns
 ///
@@ -323,14 +344,14 @@ pub use backon::{
 ///   error of the closure is returned
 pub async fn retry<F, Fut, T>(
     op_name: impl Into<String>,
-    statergy: impl backon::BackoffBuilder,
+    strategy: impl backon::BackoffBuilder,
     op_fn: F,
 ) -> Result<T, anyhow::Error>
 where
     F: Fn() -> Fut,
     Fut: Future<Output = Result<T, anyhow::Error>>,
 {
-    let mut statergy = statergy.build();
+    let mut strategy = strategy.build();
     let op_name = op_name.into();
     let mut attempts = 0;
     loop {
@@ -338,7 +359,7 @@ where
         match op_fn().await {
             Ok(result) => return Ok(result),
             Err(error) => {
-                if let Some(interval) = statergy.next() {
+                if let Some(interval) = strategy.next() {
                     // run closure op_fn again
                     debug!(
                         target: LOG_CORE,
