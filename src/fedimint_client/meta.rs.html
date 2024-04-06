@@ -286,17 +286,76 @@
 <a href="#284" id="284">284</a>
 <a href="#285" id="285">285</a>
 <a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::pin::pin;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>anyhow::{bail, Context <span class="kw">as _</span>};
+<span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::task::waiter::Waiter;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::{retry, FibonacciBackoff};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
 <span class="kw">use </span>serde::de::DeserializeOwned;
+<span class="kw">use </span>tokio::sync::Notify;
+<span class="kw">use </span>tokio_stream::{Stream, StreamExt <span class="kw">as _</span>};
 <span class="kw">use </span>tracing::{debug, instrument, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{
@@ -341,6 +400,7 @@
 </span><span class="comment">// a fancy DST to save one allocation.
 </span><span class="kw">pub struct </span>MetaService&lt;S: <span class="question-mark">?</span>Sized = <span class="kw">dyn </span>MetaSource&gt; {
     initial_fetch_waiter: Waiter,
+    meta_update_notify: Notify,
     source: S,
 }
 
@@ -352,6 +412,7 @@
         <span class="comment">// implicit cast `Arc&lt;MetaService&lt;S&gt;&gt;` to `Arc&lt;MetaService&lt;dyn MetaSource&gt;&gt;`
         </span>Arc::new(MetaService {
             initial_fetch_waiter: Waiter::new(),
+            meta_update_notify: Notify::new(),
             source,
         })
     }
@@ -398,6 +459,53 @@
             </span>.map(|x| x.revision)
     }
 
+    <span class="doccomment">/// Wait until Meta Service is initialized, after this `get_field` will not
+    /// block.
+    </span><span class="kw">pub async fn </span>wait_initialization(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="self">self</span>.initial_fetch_waiter.wait().<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// NOTE: this subscription never ends even after update task is shutdown.
+    /// You should consume this stream in a spawn_cancellable.
+    </span><span class="kw">pub fn </span>subscribe_to_updates(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Stream&lt;Item = ()&gt; + <span class="lifetime">'_ </span>{
+        <span class="macro">stream!</span> {
+            <span class="kw">let </span><span class="kw-2">mut </span>notify = <span class="macro">pin!</span>(<span class="self">self</span>.meta_update_notify.notified());
+            <span class="kw">loop </span>{
+                notify.as_mut().<span class="kw">await</span>;
+                notify.set(<span class="self">self</span>.meta_update_notify.notified());
+                <span class="comment">// enable waiting for next notification before yield so don't miss
+                // any notifications.
+                </span>notify.as_mut().enable();
+                <span class="kw">yield </span>();
+            }
+        }
+    }
+
+    <span class="doccomment">/// NOTE: this subscription never ends even after update task is shutdown.
+    /// You should consume this stream in a spawn_cancellable.
+    ///
+    /// Stream will yield the first element immediately without blocking.
+    /// The first element will be initial value of the field.
+    ///
+    /// This may yield an outdated initial value if you didn't call
+    /// [`Self::wait_initialization`].
+    </span><span class="kw">pub fn </span>subscribe_to_field&lt;<span class="lifetime">'a</span>, V: DeserializeOwned + <span class="lifetime">'static</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+        db: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Database,
+        name: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
+    ) -&gt; <span class="kw">impl </span>Stream&lt;Item = <span class="prelude-ty">Option</span>&lt;MetaValue&lt;V&gt;&gt;&gt; + <span class="lifetime">'a </span>{
+        <span class="macro">stream!</span> {
+            <span class="kw">let </span><span class="kw-2">mut </span>update_stream = <span class="macro">pin!</span>(<span class="self">self</span>.subscribe_to_updates());
+            <span class="kw">loop </span>{
+                <span class="kw">let </span>value = <span class="self">self</span>.get_field_from_db(db, name).<span class="kw">await</span>;
+                <span class="kw">yield </span>value;
+                <span class="kw">if </span>update_stream.next().<span class="kw">await</span>.is_none() {
+                    <span class="kw">break</span>;
+                }
+            }
+        }
+    }
+
     <span class="doccomment">/// Update all source in background.
     ///
     /// Caller should run this method in a task.
@@ -411,7 +519,7 @@
             .<span class="kw">await</span>;
         <span class="kw">let </span>failed_initial = meta_values.is_err();
         <span class="kw">match </span>meta_values {
-            <span class="prelude-val">Ok</span>(meta_values) =&gt; <span class="self">Self</span>::save_meta_values(client, <span class="kw-2">&amp;</span>meta_values).<span class="kw">await</span>,
+            <span class="prelude-val">Ok</span>(meta_values) =&gt; <span class="self">self</span>.save_meta_values(client, <span class="kw-2">&amp;</span>meta_values).<span class="kw">await</span>,
             <span class="prelude-val">Err</span>(error) =&gt; <span class="macro">warn!</span>(%error, <span class="string">"failed to fetch source"</span>),
         };
         <span class="self">self</span>.initial_fetch_waiter.done();
@@ -429,13 +537,13 @@
                 .<span class="kw">await
             </span>{
                 current_revision = <span class="prelude-val">Some</span>(meta_values.revision);
-                <span class="self">Self</span>::save_meta_values(client, <span class="kw-2">&amp;</span>meta_values).<span class="kw">await</span>;
+                <span class="self">self</span>.save_meta_values(client, <span class="kw-2">&amp;</span>meta_values).<span class="kw">await</span>;
             }
             <span class="self">self</span>.source.wait_for_update().<span class="kw">await</span>;
         }
     }
 
-    <span class="kw">async fn </span>save_meta_values(client: <span class="kw-2">&amp;</span>Client, meta_values: <span class="kw-2">&amp;</span>MetaValues) {
+    <span class="kw">async fn </span>save_meta_values(<span class="kw-2">&amp;</span><span class="self">self</span>, client: <span class="kw-2">&amp;</span>Client, meta_values: <span class="kw-2">&amp;</span>MetaValues) {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.db().begin_transaction().<span class="kw">await</span>;
         dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>MetaFieldPrefix).<span class="kw">await</span>;
         dbtx.insert_entry(
@@ -450,6 +558,8 @@
             dbtx.insert_entry(key, value).<span class="kw">await</span>;
         }
         dbtx.commit_tx().<span class="kw">await</span>;
+        <span class="comment">// notify everyone about changes
+        </span><span class="self">self</span>.meta_update_notify.notify_waiters();
     }
 }
 
