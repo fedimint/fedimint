@@ -16,6 +16,9 @@
   <a href="https://github.com/fedimint/fedimint/discussions">
     <img src="https://img.shields.io/badge/commmunity-discussion-blue" alt="github discussion">
   </a>
+  <a href="https://docs.fedimint.org">
+    <img src="https://img.shields.io/static/v1?label=Docs&message=master&color=007ec6&logo=GitBook&logoColor=ffffff" alt="docs built from master">
+  </a>
   <img alt="Lines of code" src="https://img.shields.io/tokei/lines/github/fedimint/fedimint">
 </p>
 
