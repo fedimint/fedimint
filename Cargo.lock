@@ -1544,6 +1544,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-docs"
+version = "0.3.0-alpha"
+
+[[package]]
 name = "fedimint-dummy-client"
 version = "0.4.0-alpha"
 dependencies = [

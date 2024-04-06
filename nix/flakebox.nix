@@ -51,10 +51,10 @@ let
   filterWorkspaceDepsBuildFiles = src: filterSrcWithRegexes filterWorkspaceDepsBuildFilesRegex src;
 
   # Filter only files relevant to building the workspace
-  filterWorkspaceBuildFiles = src: filterSrcWithRegexes (filterWorkspaceDepsBuildFilesRegex ++ [ ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" "devimint/src/cfg/.*" ]) src;
+  filterWorkspaceBuildFiles = src: filterSrcWithRegexes (filterWorkspaceDepsBuildFilesRegex ++ [ ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" "devimint/src/cfg/.*" "docs/.*\.md" ]) src;
 
   # Like `filterWorkspaceFiles` but with `./scripts/` included
-  filterWorkspaceTestFiles = src: filterSrcWithRegexes (filterWorkspaceDepsBuildFilesRegex ++ [ ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" "devimint/src/cfg/.*" "scripts/.*" ]) src;
+  filterWorkspaceTestFiles = src: filterSrcWithRegexes (filterWorkspaceDepsBuildFilesRegex ++ [ ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" "devimint/src/cfg/.*" "scripts/.*" "docs/.*\.md" ]) src;
 
   filterWorkspaceAuditFiles = src: filterSrcWithRegexes (filterWorkspaceDepsBuildFilesRegex ++ [ "deny.toml" ]) src;
 
@@ -295,8 +295,6 @@ rec {
 
   workspaceCargoUdeps = craneLib.mkCargoDerivation {
     pname = "fedimint-udeps";
-    # no need for inheriting any artifacts, as we are using it as a one-off, and only care
-    # about the docs
     cargoArtifacts = workspaceCargoUdepsDeps;
     nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.cargo-udeps ];
     buildPhaseCargoCommand = "cargo udeps --workspace --all-targets --profile $CARGO_PROFILE";
