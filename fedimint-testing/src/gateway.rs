@@ -7,6 +7,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::ClientHandleArc;
+use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
@@ -89,7 +90,7 @@ impl GatewayTest {
     }
 
     pub fn get_gateway_id(&self) -> secp256k1::PublicKey {
-        self.gateway.gateway_id
+        bitcoin29_to_bitcoin30_secp256k1_public_key(self.gateway.gateway_id)
     }
 
     pub(crate) async fn new(

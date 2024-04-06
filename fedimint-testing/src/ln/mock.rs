@@ -6,6 +6,10 @@ use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::KeyPair;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_secp256k1_secret_key,
+    bitcoin30_to_bitcoin29_secp256k1_secret_key,
+};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
 use fedimint_core::Amount;
@@ -46,8 +50,12 @@ impl FakeLightningTest {
         let (_, receiver) = mpsc::channel::<HtlcResult>(10);
 
         FakeLightningTest {
-            gateway_node_sec_key: SecretKey::from_keypair(&kp),
-            gateway_node_pub_key: PublicKey::from_keypair(&kp),
+            gateway_node_sec_key: bitcoin29_to_bitcoin30_secp256k1_secret_key(
+                SecretKey::from_keypair(&kp),
+            ),
+            gateway_node_pub_key: bitcoin29_to_bitcoin30_secp256k1_public_key(
+                PublicKey::from_keypair(&kp),
+            ),
             amount_sent,
             receiver,
         }
@@ -79,7 +87,12 @@ impl LightningTest for FakeLightningTest {
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
-            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
+            .build_signed(|m| {
+                ctx.sign_ecdsa_recoverable(
+                    m,
+                    &bitcoin30_to_bitcoin29_secp256k1_secret_key(self.gateway_node_sec_key),
+                )
+            })
             .unwrap())
     }
 
@@ -180,7 +193,12 @@ impl ILnRpcClient for FakeLightningTest {
             .payment_secret(PaymentSecret([0; 32]))
             .amount_milli_satoshis(create_invoice_request.amount_msat)
             .expiry_time(Duration::from_secs(create_invoice_request.expiry as u64))
-            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
+            .build_signed(|m| {
+                ctx.sign_ecdsa_recoverable(
+                    m,
+                    &bitcoin30_to_bitcoin29_secp256k1_secret_key(self.gateway_node_sec_key),
+                )
+            })
             .unwrap();
 
         Ok(CreateInvoiceResponse {
