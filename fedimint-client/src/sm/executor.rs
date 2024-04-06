@@ -736,24 +736,7 @@ impl ExecutorInner {
 
 impl Debug for ExecutorInner {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        #[cfg(not(target_family = "wasm"))]
-        let (active, inactive) = fedimint_core::runtime::block_in_place(move || {
-            fedimint_core::runtime::block_on(async {
-                let active_states = self.get_active_states().await;
-                let inactive_states = self.get_inactive_states().await;
-
-                (active_states, inactive_states)
-            })
-        });
-
-        writeln!(f, "ExecutorInner {{")?;
-        #[cfg(not(target_family = "wasm"))]
-        writeln!(f, "    active_states: {active:?}")?;
-        #[cfg(not(target_family = "wasm"))]
-        writeln!(f, "    inactive_states: {inactive:?}")?;
-        writeln!(f, "}}")?;
-
-        Ok(())
+        writeln!(f, "ExecutorInner {{}}")
     }
 }
 
