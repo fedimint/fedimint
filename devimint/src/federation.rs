@@ -14,6 +14,7 @@ use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ModuleCommon};
+use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::jit::JitTryAnyhow;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
@@ -81,7 +82,7 @@ impl Client {
 
     /// Create a [`Client`] that starts with a fresh state.
     pub async fn create(name: &str) -> Result<Client> {
-        tokio::task::block_in_place(|| {
+        block_in_place(|| {
             let _lock = Self::client_name_lock(name);
             for i in 0u64.. {
                 let client = Self {
@@ -99,7 +100,7 @@ impl Client {
 
     /// Open or create a [`Client`] that starts with a fresh state.
     pub async fn open_or_create(name: &str) -> Result<Client> {
-        tokio::task::block_in_place(|| {
+        block_in_place(|| {
             let _lock = Self::client_name_lock(name);
             let client = Self {
                 name: format!("{name}-0"),

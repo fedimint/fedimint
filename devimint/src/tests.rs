@@ -12,6 +12,7 @@ use clap::Subcommand;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use fedimint_cli::LnInvoiceResponse;
 use fedimint_core::encoding::Decodable;
+use fedimint_core::task::block_in_place;
 use fedimint_core::Amount;
 use fedimint_logging::LOG_DEVIMINT;
 use hex::ToHex;
@@ -1888,8 +1889,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     let request = bitcoin_client
         .get_jsonrpc_client()
         .build_request("importdescriptors", &descriptors_json);
-    let response =
-        tokio::task::block_in_place(|| bitcoin_client.get_jsonrpc_client().send_request(request))?;
+    let response = block_in_place(|| bitcoin_client.get_jsonrpc_client().send_request(request))?;
     response.check_error()?;
     info!("Getting wallet balances after import");
     let balances_after = bitcoin_client.get_balances().await?;

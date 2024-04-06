@@ -43,11 +43,21 @@ mod r#impl {
             .expect("spawn failed")
     }
 
+    // note: this call does not exist on wasm and you need to handle it
+    // conditionally at the call site of packages that compile on wasm
     pub fn block_in_place<F, R>(f: F) -> R
     where
         F: FnOnce() -> R,
     {
+        // nosemgrep: ban-raw-block-in-place
         tokio::task::block_in_place(f)
+    }
+
+    // note: this call does not exist on wasm and you need to handle it
+    // conditionally at the call site of packages that compile on wasm
+    pub fn block_on<F: Future>(future: F) -> F::Output {
+        // nosemgrep: ban-raw-block-on
+        tokio::runtime::Handle::current().block_on(future)
     }
 
     pub async fn sleep(duration: Duration) {
@@ -131,14 +141,6 @@ mod r#impl {
         F: Future<Output = ()> + 'static,
     {
         spawn(name, future)
-    }
-
-    pub fn block_in_place<F, R>(f: F) -> R
-    where
-        F: FnOnce() -> R,
-    {
-        // no such hint on wasm
-        f()
     }
 
     pub async fn sleep(duration: Duration) {

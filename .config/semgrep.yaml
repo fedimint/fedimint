@@ -72,11 +72,22 @@ rules:
   pattern: tokio::time::sleep
   severity: WARNING
 
-- id: ban-futures-block-on
+- id: ban-raw-block-on
   languages:
     - rust
-  message: Use `tokio::runtime::Handle::current.block_on()` instead.
-  pattern: futures::executor::block_on
+  message: Use `fedimint_core::runtime::block_on()` instead.
+  pattern-either:
+    - pattern: futures::executor::block_on
+    - pattern: tokio::runtime::Handle::block_on
+    - pattern: tokio::runtime::Handle::current
+  severity: WARNING
+
+- id: ban-raw-block-in-place
+  languages:
+    - rust
+  message: Use `fedimint_core::runtime::block_in_place()` instead.
+  pattern-either:
+    - pattern: tokio::task::block_in_place
   severity: WARNING
 
 - id: ban-raw-url
