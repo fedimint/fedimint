@@ -11,6 +11,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_dbtool",["",[],["dump.rs","envs.rs","main.rs"]]],\
 ["fedimint_derive",["",[],["lib.rs"]]],\
 ["fedimint_derive_secret",["",[],["lib.rs"]]],\
+["fedimint_docs",["",[],["lib.rs"]]],\
 ["fedimint_dummy_client",["",[],["api.rs","db.rs","lib.rs","states.rs"]]],\
 ["fedimint_dummy_common",["",[],["config.rs","lib.rs"]]],\
 ["fedimint_dummy_server",["",[],["db.rs","lib.rs"]]],\

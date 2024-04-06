@@ -1,0 +1,73 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Fedimint Architecture"><title>fedimint_docs::architecture - Rust</title><script> if (window.location.protocol !== "file:") document.write(`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2">`)</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-e935ef01ae1c1829.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_docs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (805813650 2024-03-31)" data-channel="nightly" data-search-js="search-42d8da7a6b9792c2.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-12cf3b4f4f9dc36d.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../fedimint_docs/index.html">fedimint_docs</a><span class="version">0.3.0-alpha</span></h2></div><h2 class="location"><a href="#">Module architecture</a></h2><div class="sidebar-elems"><h2><a href="../index.html">In crate fedimint_docs</a></h2></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_docs/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">fedimint_docs</a>::<wbr><a class="mod" href="#">architecture</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../../src/fedimint_docs/lib.rs.html#1">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="fedimint-architecture"><a class="doc-anchor" href="#fedimint-architecture">§</a>Fedimint Architecture</h2>
+<p>Fedimint is a general framework for building federated financial applications.</p>
+<p>The current implementation allows users to make private and low-cost payments through a federated blinded mint that issues <a href="https://en.wikipedia.org/wiki/Ecash">e-cash</a>.
+All e-cash is backed by bitcoin with deposits and withdrawals that can occur on-chain or via Lightning.</p>
+<h3 id="crate-organization"><a class="doc-anchor" href="#crate-organization">§</a>Crate organization</h3>
+<p>The <a href="#Federation-Nodes">Fedimint federation</a> consists of nodes that are primarily built from the following crates:</p>
+<ul>
+<li><code>fedimint</code> - the main consensus code for processing transactions and REST API</li>
+<li><code>fedimint-derive</code> - helper macros for serialization</li>
+<li><code>crypto/tbs</code> - helper cryptography library for threshold blind signatures</li>
+</ul>
+<p><a href="#Modules">Modules</a> can be added to the <code>FedimintConsensus</code> to allow for new types of transactions and federated actions:</p>
+<ul>
+<li>
+<p><code>modules/fedimint-wallet</code> - an on-chain bitcoin wallet</p>
+</li>
+<li>
+<p><code>modules/fedimint-mint</code> - a blinded mint that issues e-cash</p>
+</li>
+<li>
+<p><code>modules/fedimint-ln</code> - a Lightning payment service</p>
+</li>
+<li>
+<p><code>fedimint-core</code> - common code used by both client and server</p>
+</li>
+</ul>
+<p>The <a href="#User-Client">user client</a>:</p>
+<ul>
+<li><code>fedimint-client</code> - provides a library for sending transactions to the federation</li>
+<li><code>fedimint-cli</code> - cli wrapper around the client library</li>
+</ul>
+<p>The <a href="#LN-Gateway">LN gateway</a>:</p>
+<ul>
+<li><code>gateway/ln-gateway</code> - allows a Lightning node operator to receive or pay Lightning invoices on behalf of users</li>
+<li><code>gateway/cli</code> - provides cli access and control of a running gatewayd instance</li>
+</ul>
+<h3 id="federation-nodes"><a class="doc-anchor" href="#federation-nodes">§</a>Federation Nodes</h3>
+<p>Each of the nodes spawns three long-running tasks in parallel: an API task, an <a href="https://docs.rs/aleph-bft/latest/aleph_bft/">AlephBFT protocol</a> task, and a Fedimint consensus task.</p>
+<p>The API task in <code>net:api:run_server</code> allows clients to submit a <code>Transaction</code> and retrieve its <code>TransactionStatus</code>.
+Transactions are validated by the <code>FedimintConsensus</code> logic before being stored as proposals in the database.
+The proposed list of <code>ConsensusItem</code>s includes all possible consensus state changes, such as mint transactions or updates to the agreed-upon block height.</p>
+<p>The AlephBFT protocol task handles communication between federation nodes, combining different <code>ConsensusItem</code> proposals from each node into an identical <code>ConsensusOutcome</code> during an epoch.
+So long as enough nodes can communicate, epochs will be continually generated, and every node will share the same sequence of <code>ConsensusOutcome</code> data.</p>
+<p>The <code>FedimintConsensus</code> task processes each <code>ConsensusOutcome</code> by validating the proposals, updating the database, and performing any necessary actions.
+For instance, the consensus thread may receive a peg-out proposal, validate the PSBT signature and transaction balances, then sign and submit the transaction to the Bitcoin network.</p>
+<h3 id="modules"><a class="doc-anchor" href="#modules">§</a>Modules</h3>
+<p>There currently are three <code>FederationModule</code>s used in <code>FedimintConsensus</code> that exist in the <a href="#Crate-organization">crates</a> previously described:</p>
+<ul>
+<li><a href="wallet_module.md">Wallet module</a> - handles bitcoin on-chain <code>PegInProof</code> inputs and <code>PegOut</code> outputs</li>
+<li><code>Mint</code> module - verifies <code>Note</code> input signatures and issues <code>BlindNote</code> outputs of different denominations</li>
+<li><code>LightningModule</code> - creates <code>ContractInput</code> inputs and <code>ContractOrOfferOutput</code> outputs representing a payment sent or received by a gateway on behalf of a user</li>
+</ul>
+<p>Any module can contribute inputs and outputs in the same <code>Transaction</code>.
+For instance, if users wish to convert on-chain bitcoin to Fedimint notes they can create a transaction with <code>PegInProof</code> inputs from <code>modules/fedimint-wallet</code>  and <code>BlindNote</code> outputs from <code>modules/fedimint-mint</code>.</p>
+<p>In the future other modules can be added, for instance to enable smart contracts or even a federated marketplace.
+Existing <code>ConsensusItem</code> representations are documented in the <a href="database.md">database schema</a>.</p>
+<p>A diagram of the module transaction processing:</p>
+<p><img src="./architecture.svg" alt="Control and data flow in Fedimint" /></p>
+<h3 id="user-client"><a class="doc-anchor" href="#user-client">§</a>User Client</h3>
+<p>The <code>UserClient</code> communicates with federation members via an asynchronous REST API.
+Clients are expected to communicate with as many members as necessary to overcome malicious federation nodes.
+Requests are delegated to an underlying <code>LnClient</code>, <code>MintClient</code>, or <code>WalletClient</code> depending on what <code>FederationModule</code> the client needs to perform an action.</p>
+<p>A submitted <code>Transaction</code> often requires multiple epochs to become spendable, usually because they require signatures from a quorum of federation members.
+Clients query for the <code>TransactionStatus</code> by unique <code>OutPoint</code> that includes the <code>TransactionId</code>.</p>
+<p>After enough epochs have passed, the <code>TransactionStatus</code> resolves either to an <code>Error</code> message or the <code>OutputOutcome</code> indicating how the inputs were spent and possibly returning data to the user such as blind-signed notes.</p>
+<h3 id="ln-gateway"><a class="doc-anchor" href="#ln-gateway">§</a>LN Gateway</h3>
+<p>The <code>LnGateway</code> communicates with a local Lightning node in order to provide an API that can pay invoices.
+The gateway uses a <code>GatewayClient</code> to communicate with the federation, which delegates to the same underlying <code>LnClient</code> or <code>MintClient</code> used by the <code>UserClient</code>.</p>
+<p>When a user submits a pay invoice request, the gateway uses the <code>GatewayClient</code> to confirm the user has locked funds into a valid <code>ContractAccount</code>.
+The gateway then pays the LN invoice and provides the preimage to the federation as proof the payment succeeded, at which point the federation will release the funds to the gateway.</p>
+<p>Read <a href="./gateway.md">more about the lightning gateway</a></p>
+</div></details></section></div></main></body></html>
