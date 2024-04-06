@@ -21,6 +21,5 @@ coverage:
     patch:
       default:
         target: 0 # we don't require any specific coverage for each PR
- - name: Update Nix Flake Lock
-   uses: DeterminateSystems/update-flake-lock@v21
+
             
