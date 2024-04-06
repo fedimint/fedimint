@@ -1711,6 +1711,13 @@
 <a href="#1709" id="1709">1709</a>
 <a href="#1710" id="1710">1710</a>
 <a href="#1711" id="1711">1711</a>
+<a href="#1712" id="1712">1712</a>
+<a href="#1713" id="1713">1713</a>
+<a href="#1714" id="1714">1714</a>
+<a href="#1715" id="1715">1715</a>
+<a href="#1716" id="1716">1716</a>
+<a href="#1717" id="1717">1717</a>
+<a href="#1718" id="1718">1718</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -1750,6 +1757,7 @@
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, timeout, MaybeSend, MaybeSync};
+<span class="kw">use </span>fedimint_core::util::update_merge::UpdateMerge;
 <span class="kw">use </span>fedimint_core::util::{retry, FibonacciBackoff};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
@@ -2093,6 +2101,7 @@
     module_api: DynModuleApi,
     preimage_auth: KeyPair,
     client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
+    update_gateway_cache_merge: UpdateMerge,
 }
 
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>LightningClientModule {
@@ -2175,6 +2184,7 @@
                 .to_secp_key(<span class="kw-2">&amp;</span>secp),
             secp,
             client_ctx: args.context(),
+            update_gateway_cache_merge: UpdateMerge::default(),
         };
 
         <span class="comment">// Only initialize the gateway cache if it is empty
@@ -2622,24 +2632,28 @@
     ///
     /// See also [`Self::update_gateway_cache_continuously`].
     </span><span class="kw">pub async fn </span>update_gateway_cache(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>gateways = <span class="self">self</span>.module_api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
+        <span class="self">self</span>.update_gateway_cache_merge
+            .merge(<span class="kw">async </span>{
+                <span class="kw">let </span>gateways = <span class="self">self</span>.module_api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
 
-        <span class="comment">// Remove all previous gateway entries
-        </span>dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix).<span class="kw">await</span>;
+                <span class="comment">// Remove all previous gateway entries
+                </span>dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix).<span class="kw">await</span>;
 
-        <span class="kw">for </span>gw <span class="kw">in </span>gateways.iter() {
-            dbtx.insert_entry(
-                <span class="kw-2">&amp;</span>LightningGatewayKey(gw.info.gateway_id),
-                <span class="kw-2">&amp;</span>gw.clone().anchor(),
-            )
-            .<span class="kw">await</span>;
-        }
+                <span class="kw">for </span>gw <span class="kw">in </span>gateways.iter() {
+                    dbtx.insert_entry(
+                        <span class="kw-2">&amp;</span>LightningGatewayKey(gw.info.gateway_id),
+                        <span class="kw-2">&amp;</span>gw.clone().anchor(),
+                    )
+                    .<span class="kw">await</span>;
+                }
 
-        dbtx.commit_tx().<span class="kw">await</span>;
+                dbtx.commit_tx().<span class="kw">await</span>;
 
-        <span class="prelude-val">Ok</span>(())
-    }
+                <span class="prelude-val">Ok</span>(())
+            })
+            .<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Continuously update the gateway cache whenever a gateway expires.
     ///
