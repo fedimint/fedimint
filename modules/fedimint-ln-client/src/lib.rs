@@ -37,6 +37,7 @@ use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
 use fedimint_core::task::{self, timeout, MaybeSend, MaybeSync};
+use fedimint_core::util::update_merge::UpdateMerge;
 use fedimint_core::util::{retry, FibonacciBackoff};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
@@ -380,6 +381,7 @@ pub struct LightningClientModule {
     module_api: DynModuleApi,
     preimage_auth: KeyPair,
     client_ctx: ClientContext<Self>,
+    update_gateway_cache_merge: UpdateMerge,
 }
 
 impl ClientModule for LightningClientModule {
@@ -462,6 +464,7 @@ impl LightningClientModule {
                 .to_secp_key(&secp),
             secp,
             client_ctx: args.context(),
+            update_gateway_cache_merge: UpdateMerge::default(),
         };
 
         // Only initialize the gateway cache if it is empty
@@ -909,23 +912,27 @@ impl LightningClientModule {
     ///
     /// See also [`Self::update_gateway_cache_continuously`].
     pub async fn update_gateway_cache(&self) -> anyhow::Result<()> {
-        let gateways = self.module_api.fetch_gateways().await?;
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        self.update_gateway_cache_merge
+            .merge(async {
+                let gateways = self.module_api.fetch_gateways().await?;
+                let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
-        // Remove all previous gateway entries
-        dbtx.remove_by_prefix(&LightningGatewayKeyPrefix).await;
+                // Remove all previous gateway entries
+                dbtx.remove_by_prefix(&LightningGatewayKeyPrefix).await;
 
-        for gw in gateways.iter() {
-            dbtx.insert_entry(
-                &LightningGatewayKey(gw.info.gateway_id),
-                &gw.clone().anchor(),
-            )
-            .await;
-        }
+                for gw in gateways.iter() {
+                    dbtx.insert_entry(
+                        &LightningGatewayKey(gw.info.gateway_id),
+                        &gw.clone().anchor(),
+                    )
+                    .await;
+                }
 
-        dbtx.commit_tx().await;
+                dbtx.commit_tx().await;
 
-        Ok(())
+                Ok(())
+            })
+            .await
     }
 
     /// Continuously update the gateway cache whenever a gateway expires.
