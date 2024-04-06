@@ -56,7 +56,7 @@ use fedimint_ln_common::{
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
     LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
-use futures::{FutureExt, StreamExt};
+use futures::{Future, FutureExt, StreamExt};
 use incoming::IncomingSmError;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
@@ -918,16 +918,23 @@ impl LightningClientModule {
 
     /// Continuously update the gateway cache whenever a gateway expires.
     ///
+    /// The gateways returned by `gateway_filters` are checked for expiry.
     /// Client integrators are expected to call this function in a spawned task.
-    pub async fn update_gateway_cache_continuously(&self) -> ! {
+    pub async fn update_gateway_cache_continuously<Fut>(
+        &self,
+        gateways_filter: impl Fn(Vec<LightningGatewayAnnouncement>) -> Fut,
+    ) -> !
+    where
+        Fut: Future<Output = Vec<LightningGatewayAnnouncement>>,
+    {
         let mut first_time = true;
 
         const ABOUT_TO_EXPIRE: Duration = Duration::from_secs(30);
         const EMPTY_GATEWAY_SLEEP: Duration = Duration::from_secs(10 * 60);
         loop {
             let gateways = self.list_gateways().await;
-            // TODO: filter gateways by vetted
-            let sleep_time = gateways
+            let sleep_time = gateways_filter(gateways)
+                .await
                 .into_iter()
                 .map(|x| x.ttl.saturating_sub(ABOUT_TO_EXPIRE))
                 .min()
