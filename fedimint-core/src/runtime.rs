@@ -98,7 +98,7 @@ mod r#impl {
     }
 
     impl<T> JoinHandle<T> {
-        pub fn abort(mut self) {
+        pub fn abort(&mut self) {
             drop(self.handle.take());
         }
     }
