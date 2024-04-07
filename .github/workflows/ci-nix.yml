@@ -34,7 +34,9 @@ jobs:
         with:
           fail-mode: true
           nixpkgs-keys: nixpkgs
-
+      - name: Update Nix Flake Lock
+        uses: DeterminateSystems/update-flake-lock@v21
+            
   lint:
     name: "Lint"
     runs-on: ubuntu-22.04
