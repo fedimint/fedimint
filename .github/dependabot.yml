@@ -9,6 +9,4 @@ updates:
   directory: "/"
   schedule:
     interval: daily
-- name: Update Nix Flake Lock
-  uses: DeterminateSystems/update-flake-lock@v21
-            
+
