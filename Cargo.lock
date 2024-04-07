@@ -2842,6 +2842,7 @@ dependencies = [
  "assert_matches",
  "async-trait",
  "bitcoin 0.29.2",
+ "bitcoin 0.30.2",
  "erased-serde",
  "fedimint-bitcoind",
  "fedimint-client",

@@ -3,12 +3,12 @@ use std::time::Duration;
 use anyhow::{bail, Context};
 use assert_matches::assert_matches;
 use bitcoin::secp256k1::rand::rngs::OsRng;
-use bitcoin::secp256k1::Secp256k1;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address,
+    bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_amount,
+    bitcoin30_to_bitcoin29_network,
 };
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
@@ -29,6 +29,7 @@ use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::{PegOutFees, Rbf};
 use fedimint_wallet_server::WalletInit;
 use futures::stream::StreamExt;
+use secp256k1::Secp256k1;
 use tracing::info;
 
 fn fixtures() -> Fixtures {
@@ -61,7 +62,10 @@ async fn peg_in<'a>(
     let (op, address) = wallet_module.get_deposit_address(valid_until, ()).await?;
     info!(?address, "Peg-in address generated");
     let (_proof, tx) = bitcoin
-        .send_and_mine_block(&address, bsats(PEG_IN_AMOUNT_SATS))
+        .send_and_mine_block(
+            &address,
+            bitcoin30_to_bitcoin29_amount(bsats(PEG_IN_AMOUNT_SATS)),
+        )
         .await;
     let height = dyn_bitcoin_rpc
         .get_tx_block_height(&tx.txid())
@@ -126,7 +130,9 @@ async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
         await_consensus_to_catch_up(&client, current_block_count - finality_delay).await?;
     info!("Current consensus block count is {current_consensus_block_count}");
     let address = bitcoin.get_new_address().await;
-    let (proof, tx) = bitcoin.send_and_mine_block(&address, bsats(1000)).await;
+    let (proof, tx) = bitcoin
+        .send_and_mine_block(&address, bitcoin30_to_bitcoin29_amount(bsats(1000)))
+        .await;
     current_block_count += 1; // we mined one block above
     assert_eq!(
         dyn_bitcoin_rpc.get_block_count().await?,
@@ -166,7 +172,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     info!("Peg-in finished for test on_chain_peg_in_and_peg_out_happy_case");
     // Peg-out test, requires block to recognize change UTXOs
     let address = bitcoin.get_new_address().await;
-    let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
+    let peg_out = bitcoin30_to_bitcoin29_amount(bsats(PEG_OUT_AMOUNT_SATS));
     let wallet_module = client.get_first_module::<WalletClientModule>();
     let fees = wallet_module
         .get_withdraw_fees(address.clone(), peg_out)
@@ -226,7 +232,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
     info!("Peg-in finished for test peg_out_fail_refund");
     // Peg-out test, requires block to recognize change UTXOs
     let address = bitcoin.get_new_address().await;
-    let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
+    let peg_out = bitcoin30_to_bitcoin29_amount(bsats(PEG_OUT_AMOUNT_SATS));
 
     // Set invalid fees
     let fees = PegOutFees {
@@ -275,7 +281,7 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
 
     info!("Peg-in finished for test peg_outs_support_rbf");
     let address = bitcoin.get_new_address().await;
-    let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
+    let peg_out = bitcoin30_to_bitcoin29_amount(bsats(PEG_OUT_AMOUNT_SATS));
     let wallet_module = client.get_first_module::<WalletClientModule>();
     let fees = wallet_module
         .get_withdraw_fees(address.clone(), peg_out)
@@ -360,10 +366,18 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     let peg_out1 = PEG_OUT_AMOUNT_SATS;
     let wallet_module = client.get_first_module::<WalletClientModule>();
     let fees1 = wallet_module
-        .get_withdraw_fees(address.clone(), bsats(peg_out1))
+        .get_withdraw_fees(
+            address.clone(),
+            bitcoin30_to_bitcoin29_amount(bsats(peg_out1)),
+        )
         .await?;
     let op = wallet_module
-        .withdraw(address.clone(), bsats(peg_out1), fees1, ())
+        .withdraw(
+            address.clone(),
+            bitcoin30_to_bitcoin29_amount(bsats(peg_out1)),
+            fees1,
+            (),
+        )
         .await?;
     let balance_after_peg_out =
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees1.amount().to_sat());
@@ -386,7 +400,10 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     let address = bitcoin.get_new_address().await;
     let peg_out2 = PEG_OUT_AMOUNT_SATS;
     let fees2 = wallet_module
-        .get_withdraw_fees(address.clone(), bsats(peg_out2))
+        .get_withdraw_fees(
+            address.clone(),
+            bitcoin30_to_bitcoin29_amount(bsats(peg_out2)),
+        )
         .await;
     // Must fail because change UTXOs are still being confirmed
     assert!(fees2.is_err());
@@ -396,10 +413,18 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     await_consensus_to_catch_up(&client, current_block + 1).await?;
     // Now change UTXOs are available and we can peg-out again
     let fees2 = wallet_module
-        .get_withdraw_fees(address.clone(), bsats(peg_out2))
+        .get_withdraw_fees(
+            address.clone(),
+            bitcoin30_to_bitcoin29_amount(bsats(peg_out2)),
+        )
         .await?;
     let op = wallet_module
-        .withdraw(address.clone(), bsats(peg_out2), fees2, ())
+        .withdraw(
+            address.clone(),
+            bitcoin30_to_bitcoin29_amount(bsats(peg_out2)),
+            fees2,
+            (),
+        )
         .await?;
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
@@ -477,7 +502,10 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
 
     // Send peg-in transaction
     let (proof, transaction) = bitcoin
-        .send_and_mine_block(&peg_in_address, bsats(PEG_IN_AMOUNT_SATS))
+        .send_and_mine_block(
+            &peg_in_address,
+            bitcoin30_to_bitcoin29_amount(bsats(PEG_IN_AMOUNT_SATS)),
+        )
         .await;
     let output_index = transaction
         .output
@@ -576,7 +604,7 @@ fn build_wallet_server_configs(
                 bitcoin_rpc: bitcoin_rpc.clone(),
             },
             consensus: fedimint_wallet_common::config::WalletGenParamsConsensus {
-                network: bitcoin::Network::Regtest,
+                network: bitcoin30_to_bitcoin29_network(bitcoin::Network::Regtest),
                 finality_delay: 10,
                 client_default_bitcoin_rpc: bitcoin_rpc.clone(),
             },
@@ -597,12 +625,19 @@ fn build_wallet_server_configs(
 #[cfg(test)]
 mod fedimint_migration_tests {
     use anyhow::ensure;
-    use bitcoin::psbt::{Input, PartiallySignedTransaction};
+    use bitcoin::absolute::LockTime;
+    use bitcoin::hashes::Hash;
     use bitcoin::{
-        Amount, BlockHash, PackedLockTime, Script, Sequence, Transaction, TxIn, TxOut, Txid,
-        WPubkeyHash,
+        Amount, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, WPubkeyHash,
     };
+    use bitcoin29::psbt::{Input, PartiallySignedTransaction};
     use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_core::bitcoin_migration::{
+        bitcoin29_to_bitcoin30_outpoint, bitcoin30_to_bitcoin29_amount,
+        bitcoin30_to_bitcoin29_block_hash, bitcoin30_to_bitcoin29_outpoint,
+        bitcoin30_to_bitcoin29_script, bitcoin30_to_bitcoin29_transaction,
+        bitcoin30_to_bitcoin29_txid,
+    };
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
@@ -647,16 +682,21 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
             .await;
 
-        dbtx.insert_new_entry(&BlockHashKey(BlockHash::from_slice(&BYTE_32).unwrap()), &())
-            .await;
+        dbtx.insert_new_entry(
+            &BlockHashKey(bitcoin30_to_bitcoin29_block_hash(
+                BlockHash::from_byte_array(BYTE_32),
+            )),
+            &(),
+        )
+        .await;
 
-        let utxo = UTXOKey(bitcoin::OutPoint {
-            txid: Txid::from_slice(&BYTE_32).unwrap(),
+        let utxo = UTXOKey(bitcoin30_to_bitcoin29_outpoint(bitcoin::OutPoint {
+            txid: Txid::from_byte_array(BYTE_32),
             vout: 0,
-        });
+        }));
         let spendable_utxo = SpendableUTXO {
             tweak: BYTE_33,
-            amount: Amount::from_sat(10000),
+            amount: bitcoin30_to_bitcoin29_amount(Amount::from_sat(10000)),
         };
 
         dbtx.insert_new_entry(&utxo, &spendable_utxo).await;
@@ -672,11 +712,12 @@ mod fedimint_migration_tests {
         )
         .await;
 
-        let unsigned_transaction_key = UnsignedTransactionKey(Txid::from_slice(&BYTE_32).unwrap());
+        let unsigned_transaction_key =
+            UnsignedTransactionKey(bitcoin30_to_bitcoin29_txid(Txid::from_byte_array(BYTE_32)));
 
         let selected_utxos: Vec<(UTXOKey, SpendableUTXO)> = vec![(utxo.clone(), spendable_utxo)];
 
-        let destination = Script::new_v0_p2wpkh(&WPubkeyHash::from_slice(&BYTE_20).unwrap());
+        let destination = ScriptBuf::new_v0_p2wpkh(&WPubkeyHash::from_slice(&BYTE_20).unwrap());
         let output: Vec<TxOut> = vec![TxOut {
             value: 10000,
             script_pubkey: destination.clone(),
@@ -684,9 +725,9 @@ mod fedimint_migration_tests {
 
         let transaction = Transaction {
             version: 2,
-            lock_time: PackedLockTime::ZERO,
+            lock_time: LockTime::ZERO,
             input: vec![TxIn {
-                previous_output: utxo.0,
+                previous_output: bitcoin29_to_bitcoin30_outpoint(utxo.0),
                 script_sig: Default::default(),
                 sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
                 witness: bitcoin::Witness::new(),
@@ -696,14 +737,14 @@ mod fedimint_migration_tests {
 
         let inputs = vec![Input {
             non_witness_utxo: None,
-            witness_utxo: Some(TxOut {
+            witness_utxo: Some(bitcoin29::TxOut {
                 value: 10000,
-                script_pubkey: destination.clone(),
+                script_pubkey: bitcoin30_to_bitcoin29_script(&destination),
             }),
             partial_sigs: Default::default(),
             sighash_type: None,
             redeem_script: None,
-            witness_script: Some(destination.clone()),
+            witness_script: Some(bitcoin30_to_bitcoin29_script(&destination)),
             bip32_derivation: Default::default(),
             final_script_sig: None,
             final_script_witness: None,
@@ -722,7 +763,7 @@ mod fedimint_migration_tests {
         }];
 
         let psbt = PartiallySignedTransaction {
-            unsigned_tx: transaction.clone(),
+            unsigned_tx: bitcoin30_to_bitcoin29_transaction(&transaction),
             version: 0,
             xpub: Default::default(),
             proprietary: Default::default(),
@@ -734,39 +775,40 @@ mod fedimint_migration_tests {
         let unsigned_transaction = UnsignedTransaction {
             psbt,
             signatures: vec![],
-            change: Amount::from_sat(0),
+            change: bitcoin30_to_bitcoin29_amount(Amount::from_sat(0)),
             fees: PegOutFees {
                 fee_rate: Feerate { sats_per_kvb: 1000 },
                 total_weight: 40000,
             },
-            destination: destination.clone(),
+            destination: bitcoin30_to_bitcoin29_script(&destination),
             selected_utxos: selected_utxos.clone(),
-            peg_out_amount: Amount::from_sat(10000),
+            peg_out_amount: bitcoin30_to_bitcoin29_amount(Amount::from_sat(10000)),
             rbf: None,
         };
 
         dbtx.insert_new_entry(&unsigned_transaction_key, &unsigned_transaction)
             .await;
 
-        let pending_transaction_key = PendingTransactionKey(Txid::from_slice(&BYTE_32).unwrap());
+        let pending_transaction_key =
+            PendingTransactionKey(bitcoin30_to_bitcoin29_txid(Txid::from_byte_array(BYTE_32)));
 
         let pending_tx = PendingTransaction {
-            tx: transaction,
+            tx: bitcoin30_to_bitcoin29_transaction(&transaction),
             tweak: BYTE_33,
-            change: Amount::from_sat(0),
-            destination,
+            change: bitcoin30_to_bitcoin29_amount(Amount::from_sat(0)),
+            destination: bitcoin30_to_bitcoin29_script(&destination),
             fees: PegOutFees {
                 fee_rate: Feerate { sats_per_kvb: 1000 },
                 total_weight: 40000,
             },
             selected_utxos: selected_utxos.clone(),
-            peg_out_amount: Amount::from_sat(10000),
+            peg_out_amount: bitcoin30_to_bitcoin29_amount(Amount::from_sat(10000)),
             rbf: Some(Rbf {
                 fees: PegOutFees {
                     fee_rate: Feerate { sats_per_kvb: 1000 },
                     total_weight: 40000,
                 },
-                txid: Txid::from_slice(&BYTE_32).unwrap(),
+                txid: bitcoin30_to_bitcoin29_txid(Txid::from_byte_array(BYTE_32)),
             }),
         };
         dbtx.insert_new_entry(&pending_transaction_key, &pending_tx)
@@ -776,7 +818,7 @@ mod fedimint_migration_tests {
         let secp = secp256k1::Secp256k1::new();
         let signature = secp.sign_ecdsa(&Message::from_slice(&BYTE_32).unwrap(), &sk);
         dbtx.insert_new_entry(
-            &PegOutTxSignatureCI(Txid::from_slice(&BYTE_32).unwrap()),
+            &PegOutTxSignatureCI(bitcoin30_to_bitcoin29_txid(Txid::from_byte_array(BYTE_32))),
             &vec![signature],
         )
         .await;
@@ -788,7 +830,9 @@ mod fedimint_migration_tests {
 
         dbtx.insert_new_entry(
             &peg_out_bitcoin_tx,
-            &WalletOutputOutcome::new_v0(Txid::from_slice(&BYTE_32).unwrap()),
+            &WalletOutputOutcome::new_v0(bitcoin30_to_bitcoin29_txid(
+                Txid::from_slice(&BYTE_32).unwrap(),
+            )),
         )
         .await;
 
