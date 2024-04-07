@@ -21,5 +21,3 @@ coverage:
     patch:
       default:
         target: 0 # we don't require any specific coverage for each PR
-
-            
