@@ -14,6 +14,7 @@ use common::{
 use devimint::cmd;
 use devimint::util::{GatewayClnCli, GatewayLndCli};
 use fedimint_client::ClientHandleArc;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
@@ -619,7 +620,9 @@ async fn get_lightning_gateway(
 ) -> Option<LightningGateway> {
     let gateway_id = parse_gateway_id(gateway_id.or(None)?.as_str()).expect("Invalid gateway id");
     let ln_module = client.get_first_module::<LightningClientModule>();
-    ln_module.select_gateway(&gateway_id).await
+    ln_module
+        .select_gateway(&bitcoin30_to_bitcoin29_secp256k1_public_key(gateway_id))
+        .await
 }
 
 #[allow(clippy::too_many_arguments)]
