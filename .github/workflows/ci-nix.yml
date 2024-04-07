@@ -34,9 +34,19 @@ jobs:
         with:
           fail-mode: true
           nixpkgs-keys: nixpkgs
-      - name: Update Nix Flake Lock
-        uses: DeterminateSystems/update-flake-lock@v21
-            
+          
+  lockfile:
+    name: Update-flake-lock
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update flake.lock
+        uses: DeterminateSystems/update-flake-lock@main
+        with:
+          pr-title: "Update flake.lock" # Title of PR to be created
+          pr-labels: |                  # Labels to be set on the PR
+            dependencies
+            automated
   lint:
     name: "Lint"
     runs-on: ubuntu-22.04
