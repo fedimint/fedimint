@@ -27,7 +27,7 @@ fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
 rand = { workspace = true }
 secp256k1 = "0.24.3"
 secp256k1-zkp = "0.7.0"
-serde = { version = "1.0.197", features = [ "derive" ] }
+serde = "1.0.197"
 strum = { workspace = true }
 strum_macros = { workspace = true }
 tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../../crypto/tbs" }
@@ -37,4 +37,4 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }
-tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
+tracing-subscriber = "0.3.18"
