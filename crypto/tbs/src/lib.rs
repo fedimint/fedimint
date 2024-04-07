@@ -10,6 +10,7 @@ use fedimint_core::bls12_381_serde;
 use fedimint_core::encoding::{Decodable, Encodable};
 use ff::Field;
 use group::{Curve, Group};
+use hex::encode;
 use rand::rngs::OsRng;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -41,7 +42,7 @@ pub struct AggregatePublicKey(#[serde(with = "bls12_381_serde::g2")] pub G2Affin
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct Message(#[serde(with = "bls12_381_serde::g1")] pub G1Affine);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct BlindingKey(#[serde(with = "bls12_381_serde::scalar")] pub Scalar);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
@@ -84,6 +85,30 @@ impl BlindingKey {
     pub fn random() -> BlindingKey {
         // TODO: fix rand incompatibities
         BlindingKey(Scalar::random(OsRng))
+    }
+
+    fn fingerprint(&self) -> [u8; 32] {
+        let mut hash_engine = sha3::Sha3_256::new();
+        hash_engine.update(HASH_TAG);
+        hash_engine.update(self.0.to_bytes());
+        let result = hash_engine.finalize();
+        result.into()
+    }
+}
+
+impl ::core::fmt::Debug for BlindingKey {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        let fingerprint = self.fingerprint();
+        let fingerprint_hex = encode(&fingerprint[..]);
+        write!(f, "BlindingKey(0x{fingerprint_hex})")
+    }
+}
+
+impl ::core::fmt::Display for BlindingKey {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        let fingerprint = self.fingerprint();
+        let fingerprint_hex = encode(&fingerprint[..]);
+        write!(f, "0x{fingerprint_hex}")
     }
 }
 
@@ -271,5 +296,52 @@ mod tests {
         let sig = unblind_signature(bkey, bsig);
 
         assert!(verify(msg, sig, pk));
+    }
+
+    #[test]
+    fn test_blindingkey_fingerprint_multiple_calls_same_result() {
+        let bkey = BlindingKey::random();
+        let bkey_fingerprint = bkey.fingerprint();
+
+        assert_eq!(bkey.fingerprint(), bkey_fingerprint);
+        assert_eq!(bkey.fingerprint(), bkey_fingerprint);
+    }
+
+    #[test]
+    fn test_blindingkey_fingerprint_ne_scalar() {
+        let bkey = BlindingKey::random();
+        assert_ne!(bkey.fingerprint(), bkey.0.to_bytes());
+    }
+
+    #[test]
+    fn test_blindingkey_debug() {
+        let bkey = BlindingKey::random();
+        let bkey_debug = format!("{bkey:?}");
+
+        let prefix = bkey_debug.chars().take(11).collect::<String>();
+        assert_eq!(prefix, "BlindingKey");
+
+        // BlindingKey ( 0x 64hex-chars )
+        assert_eq!(bkey_debug.len(), 11 + 1 + 2 + 64 + 1);
+
+        let bkey_scalar = bkey.0;
+
+        // #[derive(Debug)] would return BlindingKey(0xScalarHex)
+        assert_ne!(bkey_debug, format!("BlindingKey({bkey_scalar:?})"));
+    }
+
+    #[test]
+    fn test_blindingkey_display() {
+        let bkey = BlindingKey::random();
+        let bkey_display = format!("{bkey}");
+
+        let prefix = bkey_display.chars().take(2).collect::<String>();
+        assert_eq!(prefix, "0x");
+
+        // 0x 64hex-chars
+        assert_eq!(bkey_display.len(), 2 + 64);
+
+        let bkey_scalar = bkey.0;
+        assert_ne!(bkey_display, format!("{bkey_scalar}"));
     }
 }
