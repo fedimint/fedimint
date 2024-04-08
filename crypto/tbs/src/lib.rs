@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use sha3::Digest;
 
 const HASH_TAG: &[u8] = b"TBS_BLS12-381_";
+const FINGERPRINT_TAG: &[u8] = b"FM_KFP22_";
 
 fn hash_bytes_to_g1(data: &[u8]) -> G1Projective {
     let mut hash_engine = sha3::Sha3_256::new();
@@ -89,7 +90,7 @@ impl BlindingKey {
 
     fn fingerprint(&self) -> [u8; 32] {
         let mut hash_engine = sha3::Sha3_256::new();
-        hash_engine.update(HASH_TAG);
+        hash_engine.update(FINGERPRINT_TAG);
         hash_engine.update(self.0.to_bytes());
         let result = hash_engine.finalize();
         result.into()
@@ -100,7 +101,7 @@ impl ::core::fmt::Debug for BlindingKey {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         let fingerprint = self.fingerprint();
         let fingerprint_hex = encode(&fingerprint[..]);
-        write!(f, "BlindingKey(0x{fingerprint_hex})")
+        write!(f, "BlindingKey({fingerprint_hex})")
     }
 }
 
@@ -108,7 +109,7 @@ impl ::core::fmt::Display for BlindingKey {
     fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
         let fingerprint = self.fingerprint();
         let fingerprint_hex = encode(&fingerprint[..]);
-        write!(f, "0x{fingerprint_hex}")
+        write!(f, "{fingerprint_hex}")
     }
 }
 
