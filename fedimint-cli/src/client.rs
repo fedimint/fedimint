@@ -774,8 +774,7 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
 }
 
 /// Returns a gateway to be used for a lightning operation. If `force_internal`
-/// is true and no `gateway_id` is specified, the function will assume an
-/// internal operation and return `None`.
+/// is true and no `gateway_id` is specified, no gateway will be selected.
 async fn get_gateway(
     client: &ClientHandleArc,
     gateway_id: Option<secp256k1::PublicKey>,
@@ -783,14 +782,21 @@ async fn get_gateway(
 ) -> anyhow::Result<Option<LightningGateway>> {
     let lightning_module = client.get_first_module::<LightningClientModule>();
     match gateway_id {
-        Some(gateway_id) => Ok(lightning_module.select_gateway(&gateway_id).await),
+        Some(gateway_id) => {
+            if let Some(gw) = lightning_module.select_gateway(&gateway_id).await {
+                Ok(Some(gw))
+            } else {
+                // Refresh the gateway cache in case the target gateway was registered since the
+                // last update.
+                lightning_module.update_gateway_cache().await?;
+                Ok(lightning_module.select_gateway(&gateway_id).await)
+            }
+        }
         None if !force_internal => {
-            let gw = lightning_module
-                .list_gateways()
-                .await
-                .into_iter()
-                .choose(&mut OsRng)
-                .map(|gw| gw.info);
+            // Refresh the gateway cache to find a random gateway to select from.
+            lightning_module.update_gateway_cache().await?;
+            let gateways = lightning_module.list_gateways().await;
+            let gw = gateways.into_iter().choose(&mut OsRng).map(|gw| gw.info);
             if let Some(gw) = gw {
                 let gw_id = gw.gateway_id;
                 info!(%gw_id, "Using random gateway");
