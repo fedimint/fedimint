@@ -205,4 +205,4 @@ docs: build-docs
   fi
 
 release-bump-version VERSION="prerelease":
-  cargo workspaces version --exact --no-git-commit --yes --force '*' --pre-id rc {{VERSION}}
+  cargo workspaces version --all --exact --no-git-commit --yes --force '*' --pre-id rc {{VERSION}}
