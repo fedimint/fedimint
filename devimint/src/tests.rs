@@ -26,7 +26,7 @@ use crate::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, Co
 use crate::envs::{FM_DATA_DIR_ENV, FM_PASSWORD_ENV};
 use crate::federation::{Client, Federation};
 use crate::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
-use crate::version_constants::VERSION_0_3_0_ALPHA;
+use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA};
 use crate::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
 pub struct Stats {
@@ -268,15 +268,32 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
             let mut fm_internal_pay = Vec::with_capacity(iterations);
             let sender = fed.new_joined_client("internal-swap-sender").await?;
             fed.pegin_client(10_000_000, &sender).await?;
+            // TODO(support:v0.2): 0.3 removed the active gateway concept and requires an
+            // explicit gateway or `force-internal`
+            let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+            let default_internal = fedimint_cli_version <= *VERSION_0_3_0;
             for _ in 0..iterations {
-                let recv = cmd!(
-                    client,
-                    "ln-invoice",
-                    "--amount=1000000msat",
-                    "--description=internal-swap-invoice"
-                )
-                .out_json()
-                .await?;
+                let recv = if default_internal {
+                    cmd!(
+                        client,
+                        "ln-invoice",
+                        "--amount=1000000msat",
+                        "--description=internal-swap-invoice"
+                    )
+                    .out_json()
+                    .await?
+                } else {
+                    cmd!(
+                        client,
+                        "ln-invoice",
+                        "--amount=1000000msat",
+                        "--description=internal-swap-invoice",
+                        "--force-internal"
+                    )
+                    .out_json()
+                    .await?
+                };
+
                 let invoice = recv["invoice"]
                     .as_str()
                     .context("invoice must be string")?
@@ -287,7 +304,14 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
                     .to_owned();
 
                 let start_time = Instant::now();
-                cmd!(sender, "ln-pay", invoice).run().await?;
+                if default_internal {
+                    cmd!(sender, "ln-pay", invoice).run().await?;
+                } else {
+                    cmd!(sender, "ln-pay", invoice, "--force-internal")
+                        .run()
+                        .await?;
+                }
+
                 cmd!(client, "await-invoice", recv_op).run().await?;
                 fm_internal_pay.push(start_time.elapsed());
             }

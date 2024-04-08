@@ -3,7 +3,7 @@ use std::ffi;
 use std::str::FromStr;
 use std::time::{Duration, UNIX_EPOCH};
 
-use anyhow::{bail, Context};
+use anyhow::{anyhow, bail, Context};
 use bip39::Mnemonic;
 use bitcoin::{secp256k1, Network};
 use clap::Subcommand;
@@ -28,6 +28,8 @@ use fedimint_wallet_client::{WalletClientModule, WithdrawState};
 use futures::StreamExt;
 use itertools::Itertools;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
+use rand::rngs::OsRng;
+use rand::seq::IteratorRandom;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use time::format_description::well_known::iso8601;
@@ -111,6 +113,8 @@ pub enum ClientCmd {
         expiry_time: Option<u64>,
         #[clap(long)]
         gateway_id: Option<secp256k1::PublicKey>,
+        #[clap(long, default_value = "false")]
+        force_internal: bool,
     },
     /// Wait for incoming invoice to be paid
     AwaitInvoice { operation_id: OperationId },
@@ -129,6 +133,8 @@ pub enum ClientCmd {
         finish_in_background: bool,
         #[clap(long)]
         gateway_id: Option<secp256k1::PublicKey>,
+        #[clap(long, default_value = "false")]
+        force_internal: bool,
     },
     /// Wait for a lightning payment to complete
     AwaitLnPay { operation_id: OperationId },
@@ -330,8 +336,9 @@ pub async fn handle_command(
             description,
             expiry_time,
             gateway_id,
+            force_internal,
         } => {
-            let ln_gateway = get_gateway(&client, gateway_id).await;
+            let ln_gateway = get_gateway(&client, gateway_id, force_internal).await?;
 
             let lightning_module = client.get_first_module::<LightningClientModule>();
             let desc = Description::new(description)?;
@@ -380,10 +387,11 @@ pub async fn handle_command(
             finish_in_background,
             lnurl_comment,
             gateway_id,
+            force_internal,
         } => {
             let bolt11 = get_invoice(&payment_info, amount, lnurl_comment).await?;
             info!("Paying invoice: {bolt11}");
-            let ln_gateway = get_gateway(&client, gateway_id).await;
+            let ln_gateway = get_gateway(&client, gateway_id, force_internal).await?;
 
             let lightning_module = client.get_first_module::<LightningClientModule>();
             let OutgoingLightningPayment {
@@ -799,13 +807,42 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
     .unwrap())
 }
 
+/// Returns a gateway to be used for a lightning operation. If `force_internal`
+/// is true and no `gateway_id` is specified, no gateway will be selected.
 async fn get_gateway(
     client: &ClientHandleArc,
     gateway_id: Option<secp256k1::PublicKey>,
-) -> Option<LightningGateway> {
+    force_internal: bool,
+) -> anyhow::Result<Option<LightningGateway>> {
     let lightning_module = client.get_first_module::<LightningClientModule>();
-    let gateway_id = gateway_id.or(None)?;
-    lightning_module.select_gateway(&gateway_id).await
+    match gateway_id {
+        Some(gateway_id) => {
+            if let Some(gw) = lightning_module.select_gateway(&gateway_id).await {
+                Ok(Some(gw))
+            } else {
+                // Refresh the gateway cache in case the target gateway was registered since the
+                // last update.
+                lightning_module.update_gateway_cache().await?;
+                Ok(lightning_module.select_gateway(&gateway_id).await)
+            }
+        }
+        None if !force_internal => {
+            // Refresh the gateway cache to find a random gateway to select from.
+            lightning_module.update_gateway_cache().await?;
+            let gateways = lightning_module.list_gateways().await;
+            let gw = gateways.into_iter().choose(&mut OsRng).map(|gw| gw.info);
+            if let Some(gw) = gw {
+                let gw_id = gw.gateway_id;
+                info!(%gw_id, "Using random gateway");
+                Ok(Some(gw))
+            } else {
+                Err(anyhow!(
+                    "No gateways exist in gateway cache and `force_internal` is false"
+                ))
+            }
+        }
+        None => Ok(None),
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
