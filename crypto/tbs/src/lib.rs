@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use sha3::Digest;
 
 const HASH_TAG: &[u8] = b"TBS_BLS12-381_";
-const FINGERPRINT_TAG: &[u8] = b"FM_KFP22_";
+const FINGERPRINT_TAG: &[u8] = b"TBS_KFP24_";
 
 fn hash_bytes_to_g1(data: &[u8]) -> G1Projective {
     let mut hash_engine = sha3::Sha3_256::new();
