@@ -56,7 +56,7 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 pub struct ServerOpts {
     /// Path to folder containing federation config files
     #[arg(long = "data-dir", env = FM_DATA_DIR_ENV)]
-    pub data_dir: PathBuf,
+    pub data_dir: Option<PathBuf>,
     /// Password to encrypt sensitive config files
     // TODO: should probably never send password to the server directly, rather send the hash via
     // the API
@@ -441,6 +441,8 @@ async fn run(
         });
     }
 
+    let data_dir = opts.data_dir.context("data-dir option is not present")?;
+
     // TODO: Fedimintd should use the config gen API
     // on each run we want to pass the currently passed password, so we need to
     // overwrite
@@ -464,11 +466,11 @@ async fn run(
     };
 
     let db = Database::new(
-        fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
+        fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))?,
         Default::default(),
     );
 
-    FedimintServer::new(opts.data_dir, settings, db, version_hash)
+    FedimintServer::new(data_dir, settings, db, version_hash)
         .run(&module_inits, task_group.clone())
         .await?;
 
