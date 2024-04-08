@@ -2,10 +2,12 @@ pub mod rpc_client;
 pub mod rpc_server;
 
 use std::collections::BTreeMap;
+use std::str::FromStr;
 
 use bitcoin29::{Address, Network};
 use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
+use fedimint_ln_common::config::parse_routing_fees;
 use fedimint_ln_common::{route_hints, serde_option_routing_fees};
 use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
@@ -64,6 +66,7 @@ pub struct FederationInfo {
     pub balance_msat: Amount,
     pub config: ClientConfig,
     pub channel_id: Option<u64>,
+    pub routing_fees: Option<FederationRoutingFees>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -86,10 +89,47 @@ pub struct GatewayFedConfig {
     pub federations: BTreeMap<FederationId, JsonClientConfig>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct FederationRoutingFees {
+    pub base_msat: u32,
+    pub proportional_millionths: u32,
+}
+
+impl From<FederationRoutingFees> for RoutingFees {
+    fn from(value: FederationRoutingFees) -> Self {
+        RoutingFees {
+            base_msat: value.base_msat,
+            proportional_millionths: value.proportional_millionths,
+        }
+    }
+}
+
+impl From<RoutingFees> for FederationRoutingFees {
+    fn from(value: RoutingFees) -> Self {
+        FederationRoutingFees {
+            base_msat: value.base_msat,
+            proportional_millionths: value.proportional_millionths,
+        }
+    }
+}
+
+impl FromStr for FederationRoutingFees {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let routing_fees = parse_routing_fees(s)?;
+        Ok(FederationRoutingFees {
+            base_msat: routing_fees.base_msat,
+            proportional_millionths: routing_fees.proportional_millionths,
+        })
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SetConfigurationPayload {
     pub password: Option<String>,
     pub num_route_hints: Option<u32>,
     pub routing_fees: Option<String>,
     pub network: Option<Network>,
+    pub per_federation_routing_fees: Option<Vec<(FederationId, FederationRoutingFees)>>,
 }

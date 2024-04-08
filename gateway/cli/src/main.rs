@@ -1,3 +1,4 @@
+use anyhow::bail;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
 use clap::{CommandFactory, Parser, Subcommand};
@@ -11,7 +12,8 @@ use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
-    LeaveFedPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
+    FederationRoutingFees, LeaveFedPayload, RestorePayload, SetConfigurationPayload,
+    WithdrawPayload, V1_API_ENDPOINT,
 };
 use serde::Serialize;
 
@@ -90,12 +92,46 @@ pub enum Commands {
         #[clap(long)]
         num_route_hints: Option<u32>,
 
+        /// Default routing fee for all new federations. Setting it won't affect
+        /// existing federations
         #[clap(long)]
         routing_fees: Option<String>,
 
         #[clap(long)]
         network: Option<bitcoin::Network>,
+
+        /// Format federation id,base msat,proportional to millionths part. Any
+        /// other federations not given here will keep their current fees.
+        #[clap(long)]
+        per_federation_routing_fees: Option<Vec<PerFederationRoutingFees>>,
     },
+}
+
+#[derive(Clone)]
+pub struct PerFederationRoutingFees {
+    pub federation_id: FederationId,
+    pub routing_fees: FederationRoutingFees,
+}
+
+impl std::str::FromStr for PerFederationRoutingFees {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Some((federation_id, rounting_fees)) = s.split_once(',') {
+            Ok(PerFederationRoutingFees {
+                federation_id: federation_id.parse()?,
+                routing_fees: rounting_fees.parse()?,
+            })
+        } else {
+            bail!("Wrong format, please provide: <federation id>,<base msat>,<proportional to millionths part>");
+        }
+    }
+}
+
+impl From<PerFederationRoutingFees> for (FederationId, FederationRoutingFees) {
+    fn from(val: PerFederationRoutingFees) -> Self {
+        (val.federation_id, val.routing_fees)
+    }
 }
 
 #[tokio::main]
@@ -188,13 +224,17 @@ async fn main() -> anyhow::Result<()> {
             num_route_hints,
             routing_fees,
             network,
+            per_federation_routing_fees,
         } => {
+            let per_federation_routing_fees = per_federation_routing_fees
+                .map(|input| input.into_iter().map(Into::into).collect());
             client()
                 .set_configuration(SetConfigurationPayload {
                     password,
                     num_route_hints,
-                    routing_fees,
                     network: network.map(bitcoin30_to_bitcoin29_network),
+                    routing_fees,
+                    per_federation_routing_fees,
                 })
                 .await?;
         }
