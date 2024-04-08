@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::{ffi, marker, ops};
 
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use fedimint_core::api::{DynGlobalApi, InviteCode};
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{
@@ -26,7 +26,7 @@ use self::init::ClientModuleInit;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use crate::{oplog, AddStateMachinesResult, ClientStrong, ClientWeak, TransactionUpdates};
+use crate::{oplog, AddStateMachinesResult, Client, ClientStrong, ClientWeak, TransactionUpdates};
 
 pub mod init;
 pub mod recovery;
@@ -451,6 +451,42 @@ where
 
     pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
         self.client.get().get_internal_payment_markers()
+    }
+
+    /// This method starts n state machines with given operation id without a
+    /// corresponding transaction
+    pub async fn manual_operation_start(
+        &self,
+        operation_id: OperationId,
+        op_type: &str,
+        operation_meta: impl serde::Serialize + Debug,
+        sms: Vec<DynState>,
+    ) -> anyhow::Result<()> {
+        let db = self.client.get().db().clone();
+        let mut dbtx = db.begin_transaction().await;
+
+        if Client::operation_exists_dbtx(&mut dbtx.to_ref_nc(), operation_id).await {
+            bail!("Operation with id {operation_id} already exists");
+        }
+
+        self.client
+            .get()
+            .operation_log
+            .add_operation_log_entry(&mut dbtx.to_ref_nc(), operation_id, op_type, operation_meta)
+            .await;
+
+        self.client
+            .get()
+            .executor
+            .add_state_machines_dbtx(&mut dbtx.to_ref_nc(), sms)
+            .await
+            .expect("State machine is valid");
+
+        dbtx.commit_tx_result()
+            .await
+            .map_err(|_| anyhow!("Operation with id {operation_id} already exists"))?;
+
+        Ok(())
     }
 }
 

@@ -20,8 +20,8 @@ use crate::envs::{
     FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV,
 };
 use crate::gateway_lnrpc::{
-    EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
-    PayInvoiceRequest, PayInvoiceResponse,
+    CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetNodeInfoResponse,
+    GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
@@ -111,6 +111,11 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         &self,
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError>;
+
+    async fn create_invoice(
+        &self,
+        create_invoice_request: CreateInvoiceRequest,
+    ) -> Result<CreateInvoiceResponse, LightningRpcError>;
 }
 
 #[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]

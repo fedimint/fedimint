@@ -12,8 +12,8 @@ use fedimint_core::Amount;
 use fedimint_logging::LOG_TEST;
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::gateway_lnrpc::{
-    EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
-    PayInvoiceRequest, PayInvoiceResponse,
+    CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetNodeInfoResponse,
+    GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 use ln_gateway::lightning::cln::{NetworkLnRpcClient, RouteHtlcStream};
 use ln_gateway::lightning::lnd::GatewayLndClient;
@@ -128,6 +128,13 @@ impl ILnRpcClient for ClnLightningTest {
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError> {
         self.lnrpc.complete_htlc(htlc).await
+    }
+
+    async fn create_invoice(
+        &self,
+        create_invoice_request: CreateInvoiceRequest,
+    ) -> Result<CreateInvoiceResponse, LightningRpcError> {
+        self.lnrpc.create_invoice(create_invoice_request).await
     }
 }
 
@@ -286,6 +293,13 @@ impl ILnRpcClient for LndLightningTest {
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError> {
         self.lnrpc.complete_htlc(htlc).await
+    }
+
+    async fn create_invoice(
+        &self,
+        create_invoice_request: CreateInvoiceRequest,
+    ) -> Result<CreateInvoiceResponse, LightningRpcError> {
+        self.lnrpc.create_invoice(create_invoice_request).await
     }
 }
 

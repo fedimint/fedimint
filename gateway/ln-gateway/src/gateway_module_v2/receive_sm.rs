@@ -1,0 +1,256 @@
+use std::collections::BTreeMap;
+use std::future::pending;
+use std::sync::Arc;
+use std::time::Duration;
+
+use anyhow::{anyhow, bail};
+use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+use fedimint_client::transaction::ClientInput;
+use fedimint_client::DynGlobalClientContext;
+use fedimint_core::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
+use fedimint_core::core::{Decoder, OperationId};
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
+use fedimint_core::module::ApiRequestErased;
+use fedimint_core::query::FilterMapThreshold;
+use fedimint_core::task::sleep;
+use fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
+use fedimint_lnv2_client::LightningClientStateMachines;
+use fedimint_lnv2_common::contracts::IncomingContract;
+use fedimint_lnv2_common::{LightningInput, LightningOutputOutcome, Witness};
+use secp256k1::KeyPair;
+use tpe::{aggregate_decryption_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
+use tracing::trace;
+
+use crate::gateway_module_v2::GatewayClientContextV2;
+
+const RETRY_DELAY: Duration = Duration::from_secs(1);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct ReceiveStateMachine {
+    pub common: ReceiveSMCommon,
+    pub state: ReceiveSMState,
+}
+
+impl ReceiveStateMachine {
+    pub fn update(&self, state: ReceiveSMState) -> Self {
+        Self {
+            common: self.common.clone(),
+            state,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct ReceiveSMCommon {
+    pub operation_id: OperationId,
+    pub contract: IncomingContract,
+    pub out_point: OutPoint,
+    pub refund_keypair: KeyPair,
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub enum ReceiveSMState {
+    Funding,
+    Rejected(String),
+    Success([u8; 32]),
+    Failure,
+    Refunding(Vec<OutPoint>),
+}
+
+#[cfg_attr(doc, aquamarine::aquamarine)]
+/// State machine that handles the relay of an incoming Lightning payment.
+///
+/// ```mermaid
+/// graph LR
+/// classDef virtual fill:#fff,stroke-dasharray: 5 5
+///
+///     Funding -- funding transaction is rejected --> Rejected
+///     Funding -- aggregated decryption key is invalid --> Failure
+///     Funding -- decrypted preimage is valid --> Success
+///     Funding -- decrypted preimage is invalid --> Refunding
+/// ```
+impl State for ReceiveStateMachine {
+    type ModuleContext = GatewayClientContextV2;
+
+    fn transitions(
+        &self,
+        context: &Self::ModuleContext,
+        global_context: &DynGlobalClientContext,
+    ) -> Vec<StateTransition<Self>> {
+        let gc = global_context.clone();
+        let tpe_agg_pk = context.tpe_agg_pk;
+
+        match &self.state {
+            ReceiveSMState::Funding => {
+                vec![
+                    StateTransition::new(
+                        Self::await_funding_rejected(
+                            global_context.clone(),
+                            self.common.out_point.txid,
+                        ),
+                        move |_, error, old_state| {
+                            Box::pin(Self::transition_funding_rejected(error, old_state))
+                        },
+                    ),
+                    StateTransition::new(
+                        Self::await_outcome_ready(
+                            global_context.clone(),
+                            context.decoder.clone(),
+                            context.tpe_pks.clone(),
+                            self.common.out_point,
+                            self.common.contract.clone(),
+                        ),
+                        move |dbtx, output_outcomes, old_state| {
+                            Box::pin(Self::transition_outcome_ready(
+                                dbtx,
+                                output_outcomes,
+                                old_state,
+                                gc.clone(),
+                                tpe_agg_pk,
+                            ))
+                        },
+                    ),
+                ]
+            }
+            ReceiveSMState::Success(..) => {
+                vec![]
+            }
+            ReceiveSMState::Rejected(..) => {
+                vec![]
+            }
+            ReceiveSMState::Refunding(..) => {
+                vec![]
+            }
+            ReceiveSMState::Failure => {
+                vec![]
+            }
+        }
+    }
+
+    fn operation_id(&self) -> OperationId {
+        self.common.operation_id
+    }
+}
+
+impl ReceiveStateMachine {
+    async fn await_funding_rejected(
+        global_context: DynGlobalClientContext,
+        txid: TransactionId,
+    ) -> String {
+        match global_context.await_tx_accepted(txid).await {
+            Ok(()) => pending::<String>().await,
+            Err(error) => error,
+        }
+    }
+
+    async fn transition_funding_rejected(
+        error: String,
+        old_state: ReceiveStateMachine,
+    ) -> ReceiveStateMachine {
+        old_state.update(ReceiveSMState::Rejected(error))
+    }
+
+    async fn await_outcome_ready(
+        global_context: DynGlobalClientContext,
+        module_decoder: Decoder,
+        tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
+        out_point: OutPoint,
+        decryption_contract: IncomingContract,
+    ) -> BTreeMap<PeerId, DecryptionKeyShare> {
+        let verify_decryption_share = move |peer, outcome: SerdeOutputOutcome| {
+            let outcome = deserialize_outcome::<LightningOutputOutcome>(outcome, &module_decoder)?;
+
+            match outcome {
+                LightningOutputOutcome::Incoming(share) => {
+                    if !decryption_contract.verify_decryption_share(
+                        tpe_pks.get(&peer).ok_or(anyhow!("Unknown peer pk"))?,
+                        &share,
+                    ) {
+                        bail!("Invalid decryption share");
+                    }
+
+                    Ok(share)
+                }
+                LightningOutputOutcome::Outgoing => {
+                    bail!("Unexpected outcome variant");
+                }
+            }
+        };
+
+        loop {
+            match global_context
+                .api()
+                .request_with_strategy(
+                    FilterMapThreshold::new(
+                        verify_decryption_share.clone(),
+                        global_context.api().all_peers().total(),
+                    ),
+                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                    ApiRequestErased::new(out_point),
+                )
+                .await
+            {
+                Ok(outcome) => return outcome,
+                Err(error) => {
+                    trace!(
+                        "Awaiting outcome to become ready failed, retrying in {}s: {error}",
+                        RETRY_DELAY.as_secs()
+                    );
+
+                    sleep(RETRY_DELAY).await;
+                }
+            };
+        }
+    }
+
+    async fn transition_outcome_ready(
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        decryption_shares: BTreeMap<PeerId, DecryptionKeyShare>,
+        old_state: ReceiveStateMachine,
+        global_context: DynGlobalClientContext,
+        tpe_agg_pk: AggregatePublicKey,
+    ) -> ReceiveStateMachine {
+        let decryption_shares = decryption_shares
+            .into_iter()
+            .map(|(peer, share)| (peer.to_usize() as u64 + 1, share))
+            .collect();
+
+        let agg_decryption_key = aggregate_decryption_shares(&decryption_shares);
+
+        if !old_state
+            .common
+            .contract
+            .verify_agg_decryption_key(&tpe_agg_pk, &agg_decryption_key)
+        {
+            // This implies that the lightning client config's public keys are inconsistent
+            return old_state.update(ReceiveSMState::Failure);
+        }
+
+        if let Some(preimage) = old_state
+            .common
+            .contract
+            .decrypt_preimage(&agg_decryption_key)
+        {
+            return old_state.update(ReceiveSMState::Success(preimage));
+        }
+
+        let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
+            input: LightningInput {
+                amount: old_state.common.contract.commitment.amount,
+                witness: Witness::Incoming(
+                    old_state.common.contract.contract_id(),
+                    agg_decryption_key,
+                ),
+            },
+            keys: vec![old_state.common.refund_keypair],
+            // The input of the refund tx is managed by this state machine
+            state_machines: Arc::new(|_, _| vec![]),
+        };
+
+        let outpoints = global_context.claim_input(dbtx, client_input).await.1;
+
+        old_state.update(ReceiveSMState::Refunding(outpoints))
+    }
+}

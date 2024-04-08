@@ -7,10 +7,12 @@ use axum::{Extension, Json, Router};
 use axum_macros::debug_handler;
 use bitcoin::consensus::Encodable;
 use bitcoin_hashes::{sha256, Hash};
+use fedimint_core::config::FederationId;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::pay::PayInvoicePayload;
+use fedimint_lnv2_client::{CreateInvoicePayload, SendPaymentPayload};
 use hex::ToHex;
-use serde_json::json;
+use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info, instrument};
@@ -137,7 +139,11 @@ fn v1_routes(gateway: Gateway) -> Router {
     // Public routes on gateway webserver
     let public_routes = Router::new()
         .route("/pay_invoice", post(pay_invoice))
-        .route("/id", get(get_gateway_id));
+        .route("/id", get(get_gateway_id))
+        // These routes are for next generation lightning
+        .route("/payment_info", post(payment_info_v2))
+        .route("/send_payment", post(send_payment_v2))
+        .route("/create_invoice", post(create_invoice_v2));
 
     // Authenticated, public routes used for gateway administration
     let always_authenticated_routes = Router::new()
@@ -310,4 +316,31 @@ async fn get_gateway_id(
     Extension(gateway): Extension<Gateway>,
 ) -> Result<impl IntoResponse, GatewayError> {
     Ok(Json(json!(gateway.gateway_id)))
+}
+
+async fn payment_info_v2(
+    Extension(gateway): Extension<Gateway>,
+    Json(federation_id): Json<FederationId>,
+) -> Json<Value> {
+    Json(json!(gateway.payment_info_v2(&federation_id).await))
+}
+
+async fn send_payment_v2(
+    Extension(gateway): Extension<Gateway>,
+    Json(payload): Json<SendPaymentPayload>,
+) -> Json<Value> {
+    Json(json!(gateway
+        .send_payment_v2(payload)
+        .await
+        .map_err(|e| e.to_string())))
+}
+
+async fn create_invoice_v2(
+    Extension(gateway): Extension<Gateway>,
+    Json(payload): Json<CreateInvoicePayload>,
+) -> Json<Value> {
+    Json(json!(gateway
+        .create_invoice_v2(payload)
+        .await
+        .map_err(|e| e.to_string())))
 }

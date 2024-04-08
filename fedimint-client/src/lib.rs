@@ -1082,7 +1082,7 @@ impl Client {
                     let tx_builder = tx_builder.clone();
                     let operation_meta = operation_meta.clone();
                     Box::pin(async move {
-                        if Client::operation_exists(dbtx, operation_id).await {
+                        if Client::operation_exists_dbtx(dbtx, operation_id).await {
                             bail!("There already exists an operation with id {operation_id:?}")
                         }
 
@@ -1166,7 +1166,13 @@ impl Client {
             .await
     }
 
-    async fn operation_exists(
+    pub async fn operation_exists(&self, operation_id: OperationId) -> bool {
+        let mut dbtx = self.db().begin_transaction_nc().await;
+
+        Client::operation_exists_dbtx(&mut dbtx, operation_id).await
+    }
+
+    pub async fn operation_exists_dbtx(
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
     ) -> bool {

@@ -28,6 +28,8 @@ service GatewayLightning {
   rpc RouteHtlcs(EmptyRequest) returns (stream InterceptHtlcRequest) {}
 
   rpc CompleteHtlc(InterceptHtlcResponse) returns (EmptyResponse) {}
+
+  rpc CreateInvoice(CreateInvoiceRequest) returns (CreateInvoiceResponse) {}
 }
 
 message EmptyRequest {}
@@ -175,4 +177,18 @@ message GetRouteHintsResponse {
 
   // The route hints to the associated lightning node
   repeated RouteHint route_hints = 1;
+}
+
+message CreateInvoiceRequest {
+  bytes payment_hash = 1;
+
+  uint64 amount_msat = 2;
+
+  uint32 expiry = 3;
+
+  string description = 4;
+}
+
+message CreateInvoiceResponse {
+  string invoice = 1;
 }

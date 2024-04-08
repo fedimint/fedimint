@@ -171,10 +171,17 @@ impl Fixtures {
             cli_password,
             ln,
             decoders,
-            ClientModuleInitRegistry::from_iter(clients.filter(|client| {
-                // Remove LN module because the gateway adds one
-                client.to_dyn_common().module_kind() != ModuleKind::from_static_str("ln")
-            })),
+            ClientModuleInitRegistry::from_iter(
+                clients
+                    .filter(|client| {
+                        // Remove LN module because the gateway adds one
+                        client.to_dyn_common().module_kind() != ModuleKind::from_static_str("ln")
+                    })
+                    .filter(|client| {
+                        // Remove LN NG module because the gateway adds one
+                        client.to_dyn_common().module_kind() != ModuleKind::from_static_str("lnv2")
+                    }),
+            ),
             num_route_hints,
         )
         .await
