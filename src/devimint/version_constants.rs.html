@@ -7,11 +7,13 @@
 <a href="#5" id="5">5</a>
 <a href="#6" id="6">6</a>
 <a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>semver::Version;
 
 <span class="macro">lazy_static!</span> {
     <span class="kw">pub static </span><span class="kw-2">ref </span>VERSION_0_3_0_ALPHA: Version =
         Version::parse(<span class="string">"0.3.0-alpha"</span>).expect(<span class="string">"version is parsable"</span>);
+    <span class="kw">pub static </span><span class="kw-2">ref </span>VERSION_0_3_0: Version = Version::parse(<span class="string">"0.3.0"</span>).expect(<span class="string">"version is parsable"</span>);
 }
 </code></pre></div></section></main></body></html>
