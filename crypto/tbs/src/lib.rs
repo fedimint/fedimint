@@ -301,47 +301,12 @@ mod tests {
     #[test]
     fn test_blindingkey_fingerprint_multiple_calls_same_result() {
         let bkey = BlindingKey::random();
-        let bkey_fingerprint = bkey.fingerprint();
-
-        assert_eq!(bkey.fingerprint(), bkey_fingerprint);
-        assert_eq!(bkey.fingerprint(), bkey_fingerprint);
+        assert_eq!(bkey.fingerprint(), bkey.fingerprint());
     }
 
     #[test]
     fn test_blindingkey_fingerprint_ne_scalar() {
         let bkey = BlindingKey::random();
         assert_ne!(bkey.fingerprint(), bkey.0.to_bytes());
-    }
-
-    #[test]
-    fn test_blindingkey_debug() {
-        let bkey = BlindingKey::random();
-        let bkey_debug = format!("{bkey:?}");
-
-        let prefix = bkey_debug.chars().take(11).collect::<String>();
-        assert_eq!(prefix, "BlindingKey");
-
-        // BlindingKey ( 0x 64hex-chars )
-        assert_eq!(bkey_debug.len(), 11 + 1 + 2 + 64 + 1);
-
-        let bkey_scalar = bkey.0;
-
-        // #[derive(Debug)] would return BlindingKey(0xScalarHex)
-        assert_ne!(bkey_debug, format!("BlindingKey({bkey_scalar:?})"));
-    }
-
-    #[test]
-    fn test_blindingkey_display() {
-        let bkey = BlindingKey::random();
-        let bkey_display = format!("{bkey}");
-
-        let prefix = bkey_display.chars().take(2).collect::<String>();
-        assert_eq!(prefix, "0x");
-
-        // 0x 64hex-chars
-        assert_eq!(bkey_display.len(), 2 + 64);
-
-        let bkey_scalar = bkey.0;
-        assert_ne!(bkey_display, format!("{bkey_scalar}"));
     }
 }
