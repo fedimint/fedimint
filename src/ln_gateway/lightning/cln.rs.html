@@ -142,6 +142,21 @@
 <a href="#140" id="140">140</a>
 <a href="#141" id="141">141</a>
 <a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -157,8 +172,9 @@
 <span class="kw">use super</span>::{ILnRpcClient, LightningRpcError};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
-    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetNodeInfoResponse,
+    GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest, InterceptHtlcResponse,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 <span class="kw">use </span><span class="kw">crate</span>::lightning::MAX_LIGHTNING_RETRIES;
 <span class="kw">pub type </span>HtlcResult = std::result::Result&lt;InterceptHtlcRequest, tonic::Status&gt;;
@@ -281,6 +297,20 @@
                 failure_reason: status.message().to_string(),
             }
         })<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(res.into_inner())
+    }
+
+    <span class="kw">async fn </span>create_invoice(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        create_invoice_request: CreateInvoiceRequest,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CreateInvoiceResponse, LightningRpcError&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>res = client
+            .create_invoice(create_invoice_request)
+            .<span class="kw">await
+            </span>.map_err(|status| LightningRpcError::FailedToGetInvoice {
+                failure_reason: status.message().to_string(),
+            })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(res.into_inner())
     }
 }

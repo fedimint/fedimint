@@ -247,6 +247,13 @@
 <a href="#245" id="245">245</a>
 <a href="#246" id="246">246</a>
 <a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -420,10 +427,17 @@
             cli_password,
             ln,
             decoders,
-            ClientModuleInitRegistry::from_iter(clients.filter(|client| {
-                <span class="comment">// Remove LN module because the gateway adds one
-                </span>client.to_dyn_common().module_kind() != ModuleKind::from_static_str(<span class="string">"ln"</span>)
-            })),
+            ClientModuleInitRegistry::from_iter(
+                clients
+                    .filter(|client| {
+                        <span class="comment">// Remove LN module because the gateway adds one
+                        </span>client.to_dyn_common().module_kind() != ModuleKind::from_static_str(<span class="string">"ln"</span>)
+                    })
+                    .filter(|client| {
+                        <span class="comment">// Remove LN NG module because the gateway adds one
+                        </span>client.to_dyn_common().module_kind() != ModuleKind::from_static_str(<span class="string">"lnv2"</span>)
+                    }),
+            ),
             num_route_hints,
         )
         .<span class="kw">await

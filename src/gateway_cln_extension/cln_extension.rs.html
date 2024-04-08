@@ -640,6 +640,16 @@
 <a href="#638" id="638">638</a>
 <a href="#639" id="639">639</a>
 <a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -664,8 +674,9 @@
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::{
-    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetNodeInfoResponse,
+    GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest, InterceptHtlcResponse,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1137,6 +1148,15 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(Status::internal(<span class="string">"No interceptor reference found for htlc"</span>));
         }
         <span class="prelude-val">Ok</span>(tonic::Response::new(EmptyResponse {}))
+    }
+
+    <span class="kw">async fn </span>create_invoice(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _create_invoice_request: tonic::Request&lt;CreateInvoiceRequest&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;CreateInvoiceResponse&gt;, Status&gt; {
+        <span class="prelude-val">Err</span>(Status::internal(
+            <span class="string">"Invoice creation is not implemented for CLN"</span>,
+        ))
     }
 }
 

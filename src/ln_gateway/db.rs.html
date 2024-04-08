@@ -292,6 +292,18 @@
 <a href="#290" id="290">290</a>
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin29::Network;
@@ -304,6 +316,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
 <span class="kw">use </span>fedimint_ln_common::serde_routing_fees;
+<span class="kw">use </span>fedimint_lnv2_client::CreateInvoicePayload;
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>rand::Rng;
@@ -321,6 +334,7 @@
     GatewayPublicKey = <span class="number">0x06</span>,
     GatewayConfiguration = <span class="number">0x07</span>,
     PreimageAuthentication = <span class="number">0x08</span>,
+    CreateInvoicePayload = <span class="number">0x09</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -444,6 +458,15 @@
 
     <span class="prelude-val">Ok</span>(())
 }
+
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>CreateInvoicePayloadKey(<span class="kw">pub </span>[u8; <span class="number">32</span>]);
+
+<span class="macro">impl_db_record!</span>(
+    key = CreateInvoicePayloadKey,
+    value = CreateInvoicePayload,
+    db_prefix = DbKeyPrefix::CreateInvoicePayload,
+);
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>fedimint_migration_tests {
@@ -572,6 +595,7 @@
                             <span class="macro">ensure!</span>(gateway_configuration.is_some(), <span class="string">"validate_migrations was not able to read GatewayConfiguration"</span>);
                             <span class="macro">info!</span>(<span class="string">"Validated GatewayConfiguration"</span>);
                         }
+                        DbKeyPrefix::CreateInvoicePayload =&gt; {}
                     }
                 }
                 <span class="prelude-val">Ok</span>(())

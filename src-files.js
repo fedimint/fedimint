@@ -21,6 +21,9 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_ln_client",["",[],["api.rs","db.rs","incoming.rs","lib.rs","pay.rs","receive.rs"]]],\
 ["fedimint_ln_common",["",[["contracts",[],["incoming.rs","mod.rs","outgoing.rs"]]],["config.rs","lib.rs"]]],\
 ["fedimint_ln_server",["",[],["db.rs","lib.rs","metrics.rs"]]],\
+["fedimint_lnv2_client",["",[],["api.rs","lib.rs","receive_sm.rs","send_sm.rs"]]],\
+["fedimint_lnv2_common",["",[],["config.rs","contracts.rs","lib.rs"]]],\
+["fedimint_lnv2_server",["",[],["db.rs","lib.rs"]]],\
 ["fedimint_load_test_tool",["",[],["common.rs","main.rs"]]],\
 ["fedimint_logging",["",[],["lib.rs"]]],\
 ["fedimint_meta_client",["",[],["api.rs","cli.rs","db.rs","lib.rs","states.rs"]]],\
@@ -45,8 +48,9 @@ var srcIndex = new Map(JSON.parse('[\
 ["gateway_cln_extension",["",[],["cln_extension.rs"]]],\
 ["gatewayd",["",[],["gatewayd.rs"]]],\
 ["hkdf",["",[],["lib.rs"]]],\
-["ln_gateway",["",[["lightning",[],["cln.rs","lnd.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]],["state_machine",[],["complete.rs","mod.rs","pay.rs"]]],["client.rs","db.rs","envs.rs","lib.rs","types.rs"]]],\
+["ln_gateway",["",[["gateway_module_v2",[],["mod.rs","receive_sm.rs","send_sm.rs"]],["lightning",[],["cln.rs","lnd.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]],["state_machine",[],["complete.rs","mod.rs","pay.rs"]]],["client.rs","db.rs","envs.rs","lib.rs","types.rs"]]],\
 ["recoverytool",["",[],["envs.rs","main.rs"]]],\
-["tbs",["",[],["lib.rs"]]]\
+["tbs",["",[],["lib.rs"]]],\
+["tpe",["",[],["lib.rs"]]]\
 ]'));
 createSrcSidebar();

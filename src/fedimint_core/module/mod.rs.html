@@ -976,6 +976,10 @@
 <a href="#974" id="974">974</a>
 <a href="#975" id="975">975</a>
 <a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint supports modules to allow extending it's functionality.
 //! Some of the standard functionality is implemented in form of modules as
 //! well.
@@ -1055,7 +1059,7 @@
 }
 
 <span class="doccomment">/// All requests from client to server contain these fields
-</span><span class="attr">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>ApiRequest&lt;T&gt; {
     <span class="doccomment">/// Hashed user password if the API requires authentication
     </span><span class="kw">pub </span>auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
@@ -1186,6 +1190,10 @@
     /// fedimint server
     </span><span class="kw">pub fn </span>has_auth(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="self">self</span>.has_auth
+    }
+
+    <span class="kw">pub fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Database {
+        <span class="self">self</span>.db.clone()
     }
 
     <span class="doccomment">/// Waits for key to be present in database.

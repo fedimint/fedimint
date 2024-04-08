@@ -2439,6 +2439,12 @@
 <a href="#2437" id="2437">2437</a>
 <a href="#2438" id="2438">2438</a>
 <a href="#2439" id="2439">2439</a>
+<a href="#2440" id="2440">2440</a>
+<a href="#2441" id="2441">2441</a>
+<a href="#2442" id="2442">2442</a>
+<a href="#2443" id="2443">2443</a>
+<a href="#2444" id="2444">2444</a>
+<a href="#2445" id="2445">2445</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3523,7 +3529,7 @@
                     <span class="kw">let </span>tx_builder = tx_builder.clone();
                     <span class="kw">let </span>operation_meta = operation_meta.clone();
                     Box::pin(<span class="kw">async move </span>{
-                        <span class="kw">if </span>Client::operation_exists(dbtx, operation_id).<span class="kw">await </span>{
+                        <span class="kw">if </span>Client::operation_exists_dbtx(dbtx, operation_id).<span class="kw">await </span>{
                             <span class="macro">bail!</span>(<span class="string">"There already exists an operation with id {operation_id:?}"</span>)
                         }
 
@@ -3607,7 +3613,13 @@
             .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>operation_exists(
+    <span class="kw">pub async fn </span>operation_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db().begin_transaction_nc().<span class="kw">await</span>;
+
+        Client::operation_exists_dbtx(<span class="kw-2">&amp;mut </span>dbtx, operation_id).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>operation_exists_dbtx(
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         operation_id: OperationId,
     ) -&gt; bool {

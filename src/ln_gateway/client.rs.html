@@ -129,6 +129,9 @@
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
@@ -148,6 +151,7 @@
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
+<span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientInitV2;
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientInit;
 <span class="kw">use crate</span>::{Gateway, GatewayError, <span class="prelude-ty">Result</span>};
 
@@ -187,11 +191,13 @@
         <span class="kw">let </span>federation_id = invite_code.federation_id();
 
         <span class="kw">let </span><span class="kw-2">mut </span>registry = <span class="self">self</span>.registry.clone();
+
         registry.attach(GatewayClientInit {
             timelock_delta,
             mint_channel_id,
-            gateway,
+            gateway: gateway.clone(),
         });
+        registry.attach(GatewayClientInitV2 { gateway });
 
         <span class="kw">let </span>db_path = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">"{federation_id}.db"</span>));
 
