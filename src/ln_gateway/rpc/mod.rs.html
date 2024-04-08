@@ -95,14 +95,56 @@
 <a href="#93" id="93">93</a>
 <a href="#94" id="94">94</a>
 <a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
 <span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>bitcoin29::{Address, Network};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>fedimint_ln_common::config::parse_routing_fees;
 <span class="kw">use </span>fedimint_ln_common::{route_hints, serde_option_routing_fees};
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -161,6 +203,7 @@
     <span class="kw">pub </span>balance_msat: Amount,
     <span class="kw">pub </span>config: ClientConfig,
     <span class="kw">pub </span>channel_id: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    <span class="kw">pub </span>routing_fees: <span class="prelude-ty">Option</span>&lt;FederationRoutingFees&gt;,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -183,11 +226,48 @@
     <span class="kw">pub </span>federations: BTreeMap&lt;FederationId, JsonClientConfig&gt;,
 }
 
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+</span><span class="kw">pub struct </span>FederationRoutingFees {
+    <span class="kw">pub </span>base_msat: u32,
+    <span class="kw">pub </span>proportional_millionths: u32,
+}
+
+<span class="kw">impl </span>From&lt;FederationRoutingFees&gt; <span class="kw">for </span>RoutingFees {
+    <span class="kw">fn </span>from(value: FederationRoutingFees) -&gt; <span class="self">Self </span>{
+        RoutingFees {
+            base_msat: value.base_msat,
+            proportional_millionths: value.proportional_millionths,
+        }
+    }
+}
+
+<span class="kw">impl </span>From&lt;RoutingFees&gt; <span class="kw">for </span>FederationRoutingFees {
+    <span class="kw">fn </span>from(value: RoutingFees) -&gt; <span class="self">Self </span>{
+        FederationRoutingFees {
+            base_msat: value.base_msat,
+            proportional_millionths: value.proportional_millionths,
+        }
+    }
+}
+
+<span class="kw">impl </span>FromStr <span class="kw">for </span>FederationRoutingFees {
+    <span class="kw">type </span><span class="prelude-val">Err </span>= anyhow::Error;
+
+    <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
+        <span class="kw">let </span>routing_fees = parse_routing_fees(s)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(FederationRoutingFees {
+            base_msat: routing_fees.base_msat,
+            proportional_millionths: routing_fees.proportional_millionths,
+        })
+    }
+}
+
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>SetConfigurationPayload {
     <span class="kw">pub </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>num_route_hints: <span class="prelude-ty">Option</span>&lt;u32&gt;,
     <span class="kw">pub </span>routing_fees: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>network: <span class="prelude-ty">Option</span>&lt;Network&gt;,
+    <span class="kw">pub </span>per_federation_routing_fees: <span class="prelude-ty">Option</span>&lt;Vec&lt;(FederationId, FederationRoutingFees)&gt;&gt;,
 }
 </code></pre></div></section></main></body></html>
