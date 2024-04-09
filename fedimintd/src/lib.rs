@@ -22,6 +22,7 @@ pub fn default_esplora_server(network: Network) -> BitcoinRpcConfig {
         .expect("Failed to parse default esplora server"),
         Network::Signet => SafeUrl::parse("https://mutinynet.com/api/")
             .expect("Failed to parse default esplora server"),
+        _ => panic!("Failed to parse default esplora server"),
     };
     BitcoinRpcConfig {
         kind: "esplora".to_string(),
