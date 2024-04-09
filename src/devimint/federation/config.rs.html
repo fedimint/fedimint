@@ -69,7 +69,11 @@
 <a href="#67" id="67">67</a>
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_network;
 <span class="kw">use </span>fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 <span class="kw">use </span>fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
 <span class="kw">use </span>fedimint_core::module::ServerModuleInit <span class="kw">as _</span>;
@@ -124,7 +128,9 @@
                     <span class="comment">// TODO this is not very elegant, but I'm planning to get rid of it in a next
                     // commit anyway
                     </span>finality_delay,
-                    client_default_bitcoin_rpc: default_esplora_server(network),
+                    client_default_bitcoin_rpc: default_esplora_server(
+                        bitcoin29_to_bitcoin30_network(network),
+                    ),
                 },
             },
         );

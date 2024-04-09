@@ -30,6 +30,7 @@
 <a href="#28" id="28">28</a>
 <a href="#29" id="29">29</a>
 <a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
 </pre></div><pre class="rust"><code><span class="doccomment">/// Module for creating `fedimintd` binary with custom modules
 </span><span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
@@ -54,6 +55,7 @@
         .expect(<span class="string">"Failed to parse default esplora server"</span>),
         Network::Signet =&gt; SafeUrl::parse(<span class="string">"https://mutinynet.com/api/"</span>)
             .expect(<span class="string">"Failed to parse default esplora server"</span>),
+        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Failed to parse default esplora server"</span>),
     };
     BitcoinRpcConfig {
         kind: <span class="string">"esplora"</span>.to_string(),
