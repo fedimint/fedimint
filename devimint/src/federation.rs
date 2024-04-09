@@ -639,7 +639,7 @@ pub async fn run_cli_dkg(
             .set_password(auth_for(peer_id), endpoint)
             .await?;
     }
-    let (leader_id, leader_endpoint) = endpoints.iter().next().context("missing peer")?;
+    let (leader_id, leader_endpoint) = endpoints.first_key_value().context("missing peer")?;
     let followers = endpoints
         .iter()
         .filter(|(id, _)| *id != leader_id)
