@@ -43,7 +43,7 @@ download() {
   curl -sSL $url -o $path
 }
 
-FEDIMINT_VERSION="0.2.1"
+FEDIMINT_VERSION="0.3.0"
 
 GATEWAY_DIR=gateway
 FEDIMINTD_DIR=fedimintd
