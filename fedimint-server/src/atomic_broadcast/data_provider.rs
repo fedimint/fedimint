@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 
-use bitcoin_hashes_12::sha256;
 use fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::ConsensusItem;
-use fedimint_core::session_outcome::{consensus_hash_sha256, SchnorrSignature};
+use fedimint_core::session_outcome::SchnorrSignature;
+use fedimint_core::TransactionId;
 use tokio::sync::watch;
 
 use crate::LOG_CONSENSUS;
@@ -31,7 +31,7 @@ impl UnitData {
 pub struct DataProvider {
     mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
     signature_receiver: watch::Receiver<Option<SchnorrSignature>>,
-    submitted_items: BTreeSet<sha256::Hash>,
+    submitted_transactions: BTreeSet<TransactionId>,
     leftover_item: Option<ConsensusItem>,
 }
 
@@ -43,7 +43,7 @@ impl DataProvider {
         Self {
             mempool_item_receiver,
             signature_receiver,
-            submitted_items: BTreeSet::new(),
+            submitted_transactions: BTreeSet::new(),
             leftover_item: None,
         }
     }
@@ -75,8 +75,10 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
         // if the channel is empty we want to return the batch immediately in order to
         // not delay the creation of our next unit, even if the batch is empty
         while let Ok(item) = self.mempool_item_receiver.try_recv() {
-            if !self.submitted_items.insert(consensus_hash_sha256(&item)) {
-                continue;
+            if let ConsensusItem::Transaction(transaction) = &item {
+                if !self.submitted_transactions.insert(transaction.tx_hash()) {
+                    continue;
+                }
             }
 
             let n_bytes_item = item.consensus_encode_to_vec().len();
