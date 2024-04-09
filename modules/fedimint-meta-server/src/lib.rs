@@ -203,44 +203,6 @@ pub struct Meta {
 }
 
 impl Meta {
-    /// Check the difference between what's desired to be submitted and what's
-    /// already submitted or consensus value.
-    ///
-    /// Returns:
-    /// `(items_to_submit, desired_keys_to_delete)`
-    async fn desired_submitted_diff(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
-    ) -> (Vec<MetaConsensusItem>, Vec<MetaKey>) {
-        let desired: Vec<_> = Self::get_desired(dbtx).await;
-
-        let mut to_delete: Vec<MetaKey> = vec![];
-        let mut to_submit = vec![];
-
-        for (key, MetaDesiredValue { value, salt }) in desired {
-            if Self::get_submission(dbtx, key, self.our_peer_id)
-                .await
-                .as_ref()
-                == Some(&MetaSubmissionValue {
-                    value: value.clone(),
-                    salt,
-                })
-            {
-                to_delete.push(key);
-            } else if Self::get_consensus(dbtx, key).await.as_ref() == Some(&value) {
-                // When a value is new and equal to current consensus, it should both: be
-                // submitted so it can clear/cancel previous submissions, and
-                // deleted (afterwards).
-                to_delete.push(key);
-                to_submit.push(MetaConsensusItem { key, value, salt });
-            } else {
-                to_submit.push(MetaConsensusItem { key, value, salt });
-            }
-        }
-
-        (to_submit, to_delete)
-    }
-
     async fn get_desired(dbtx: &mut DatabaseTransaction<'_>) -> Vec<(MetaKey, MetaDesiredValue)> {
         dbtx.find_by_prefix(&MetaDesiredKeyPrefix)
             .await
@@ -297,15 +259,60 @@ impl ServerModule for Meta {
     type Common = MetaModuleTypes;
     type Init = MetaInit;
 
+    /// Check the difference between what's desired vs submitted and consensus.
+    ///
+    /// Returns:
+    /// Items to submit as our proposal.
     async fn consensus_proposal(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<MetaConsensusItem> {
-        let (to_submit, _to_delete) = self.desired_submitted_diff(dbtx).await;
+        let desired: Vec<_> = Self::get_desired(dbtx).await;
 
-        // Note: regrettably we can't delete any desired keys here, as it could lead to
-        // write-write db conflicts. So we just let the request handler do the
-        // cleaning.
+        let mut to_submit = vec![];
+
+        for (
+            key,
+            MetaDesiredValue {
+                value: desired_value,
+                salt,
+            },
+        ) in desired
+        {
+            let consensus_value = &Self::get_consensus(dbtx, key).await;
+            let consensus_submission_value =
+                Self::get_submission(dbtx, key, self.our_peer_id).await;
+            if consensus_submission_value.as_ref()
+                == Some(&MetaSubmissionValue {
+                    value: desired_value.clone(),
+                    salt,
+                })
+            {
+                // our submission is already registered, nothing to do
+            } else if consensus_value.as_ref() == Some(&desired_value) {
+                if consensus_submission_value.is_none() {
+                    // our desired value is equal to consensus and cleared our
+                    // submission (as it is equal the
+                    // consensus) so we don't need to propose it
+                } else {
+                    // we want to submit the same value as the current consensus, usually
+                    // to clear the previous submission that did not became the consensus (we were
+                    // outvoted)
+                    to_submit.push(MetaConsensusItem {
+                        key,
+                        value: desired_value,
+                        salt,
+                    });
+                }
+            } else {
+                to_submit.push(MetaConsensusItem {
+                    key,
+                    value: desired_value,
+                    salt,
+                });
+            }
+        }
+
         to_submit
     }
 
@@ -448,16 +455,6 @@ impl Meta {
         req: &SubmitRequest,
     ) -> Result<(), ApiError> {
         let salt = thread_rng().gen();
-
-        // Since this is the only place in the code that touches "desired" keys, we
-        // clean old keys here as well.
-        // Note: clean-up previously desired values before inserting the new one. This
-        // way if new value is already redundant (already submitted or equal to
-        // consensus one), it will still get a chance to get submitted.
-        let (_to_submit, to_delete) = self.desired_submitted_diff(&mut dbtx.to_ref_nc()).await;
-        for key in to_delete {
-            dbtx.remove_entry(&MetaDesiredKey(key)).await;
-        }
 
         dbtx.insert_entry(
             &MetaDesiredKey(req.key),
