@@ -307,7 +307,7 @@ where
     T: ClientModuleInit + 'static + MaybeSend + Sync,
 {
     fn decoder(&self) -> Decoder {
-        T::Module::decoder()
+        <<T as ClientModuleInit>::Module as ClientModule>::decoder()
     }
 
     fn module_kind(&self) -> ModuleKind {
