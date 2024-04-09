@@ -6,13 +6,11 @@ use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{KeyPair, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint};
 use fedimint_lnv2_client::LightningClientStateMachines;
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, OutgoingWitness, Witness};
 use lightning_invoice::Bolt11Invoice;
-use tracing::error;
 
 use crate::gateway_lnrpc::PayInvoiceRequest;
 use crate::gateway_module_v2::GatewayClientContextV2;
@@ -47,7 +45,7 @@ pub struct SendSMCommon {
 pub enum SendSMState {
     Sending,
     Claiming(Claiming),
-    Cancelled,
+    Cancelled(String),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -98,7 +96,7 @@ impl State for SendStateMachine {
             SendSMState::Claiming(..) => {
                 vec![]
             }
-            SendSMState::Cancelled => {
+            SendSMState::Cancelled(..) => {
                 vec![]
             }
         }
@@ -115,39 +113,29 @@ impl SendStateMachine {
         max_delay: u64,
         max_fee_msat: u64,
         invoice: Bolt11Invoice,
-    ) -> Result<[u8; 32], ()> {
-        let lightning_context = loop {
-            match context.gateway.get_lightning_context().await {
-                Ok(lightning_context) => break lightning_context,
-                Err(_) => {
-                    sleep(std::time::Duration::from_secs(1)).await;
-                }
-            }
-        };
+    ) -> Result<[u8; 32], String> {
+        let lightning_context = context
+            .gateway
+            .get_lightning_context()
+            .await
+            .map_err(|e| e.to_string())?;
 
         if lightning_context.lightning_public_key == invoice.recover_payee_pub_key() {
             let invoice_msats = invoice
                 .amount_milli_satoshis()
                 .expect("We checked this previously");
 
-            return match context
+            return context
                 .gateway
                 .receive_v2(
                     invoice.payment_hash().into_inner(),
                     Amount::from_msats(invoice_msats),
                 )
                 .await
-            {
-                Ok(preimage) => Ok(preimage),
-                Err(e) => {
-                    error!("Failed to route internal payment {:?}", e);
-
-                    Err(())
-                }
-            };
+                .map_err(|e| e.to_string());
         }
 
-        match lightning_context
+        lightning_context
             .lnrpc
             .pay(PayInvoiceRequest {
                 invoice: invoice.to_string(),
@@ -156,21 +144,21 @@ impl SendStateMachine {
                 payment_hash: invoice.payment_hash().to_vec(),
             })
             .await
-        {
-            Ok(response) => Ok(response
-                .preimage
-                .as_slice()
-                .try_into()
-                .expect("Preimage is 32 bytes")),
-            Err(..) => Err(()),
-        }
+            .map(|response| {
+                response
+                    .preimage
+                    .as_slice()
+                    .try_into()
+                    .expect("Preimage is 32 bytes")
+            })
+            .map_err(|e| e.to_string())
     }
 
     async fn transition_send_payment(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         old_state: SendStateMachine,
         global_context: DynGlobalClientContext,
-        result: Result<[u8; 32], ()>,
+        result: Result<[u8; 32], String>,
     ) -> SendStateMachine {
         match result {
             Ok(preimage) => {
@@ -193,7 +181,7 @@ impl SendStateMachine {
                     outpoints,
                 }))
             }
-            Err(()) => old_state.update(SendSMState::Cancelled),
+            Err(e) => old_state.update(SendSMState::Cancelled(e)),
         }
     }
 }
