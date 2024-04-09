@@ -1435,10 +1435,6 @@
 <a href="#1433" id="1433">1433</a>
 <a href="#1434" id="1434">1434</a>
 <a href="#1435" id="1435">1435</a>
-<a href="#1436" id="1436">1436</a>
-<a href="#1437" id="1437">1437</a>
-<a href="#1438" id="1438">1438</a>
-<a href="#1439" id="1439">1439</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -2284,7 +2280,7 @@
 
 <span class="kw">impl</span>&lt;K, V&gt; Decodable <span class="kw">for </span>BTreeMap&lt;K, V&gt;
 <span class="kw">where
-    </span>K: Decodable + Ord + Clone,
+    </span>K: Decodable + Ord,
     V: Decodable,
 {
     <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
@@ -2292,18 +2288,16 @@
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>res = BTreeMap::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>prev_key = <span class="prelude-val">None</span>;
         <span class="kw">let </span>len = u64::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
         <span class="kw">for _ in </span><span class="number">0</span>..len {
             <span class="kw">let </span>k = K::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
-            <span class="kw">if </span>prev_key
-                .as_ref()
-                .map(|prev_key| <span class="kw-2">&amp;</span>k &lt;= prev_key)
+            <span class="kw">if </span>res
+                .last_key_value()
+                .map(|(prev_key, _v)| k &lt;= <span class="kw-2">*</span>prev_key)
                 .unwrap_or_default()
             {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::from_str(<span class="string">"Non-canonical encoding"</span>));
             }
-            prev_key = <span class="prelude-val">Some</span>(k.clone());
             <span class="kw">let </span>v = V::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
             <span class="kw">if </span>res.insert(k, v).is_some() {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError(<span class="macro">format_err!</span>(<span class="string">"Duplicate key"</span>)));
@@ -2329,7 +2323,7 @@
 
 <span class="kw">impl</span>&lt;K&gt; Decodable <span class="kw">for </span>BTreeSet&lt;K&gt;
 <span class="kw">where
-    </span>K: Decodable + Ord + Clone,
+    </span>K: Decodable + Ord,
 {
     <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
@@ -2337,17 +2331,15 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>res = BTreeSet::new();
         <span class="kw">let </span>len = u64::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>prev_key = <span class="prelude-val">None</span>;
         <span class="kw">for _ in </span><span class="number">0</span>..len {
             <span class="kw">let </span>k = K::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
-            <span class="kw">if </span>prev_key
-                .as_ref()
-                .map(|prev_key| <span class="kw-2">&amp;</span>k &lt;= prev_key)
+            <span class="kw">if </span>res
+                .last()
+                .map(|prev_key| k &lt;= <span class="kw-2">*</span>prev_key)
                 .unwrap_or_default()
             {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::from_str(<span class="string">"Non-canonical encoding"</span>));
             }
-            prev_key = <span class="prelude-val">Some</span>(k.clone());
             <span class="kw">if </span>!res.insert(k) {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError(<span class="macro">format_err!</span>(<span class="string">"Duplicate key"</span>)));
             }
