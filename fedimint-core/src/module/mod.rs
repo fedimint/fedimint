@@ -804,23 +804,43 @@ pub trait ServerModule: Debug + Sized {
     }
 
     /// Returns a decoder for the following associated types of this module:
+    /// * `ClientConfig`
     /// * `Input`
     /// * `Output`
     /// * `OutputOutcome`
     /// * `ConsensusItem`
+    /// * `InputError`
+    /// * `OutputError`
     fn decoder() -> Decoder {
         Self::Common::decoder_builder().build()
     }
 
-    /// This module's contribution to the next consensus proposal
+    /// This module's contribution to the next consensus proposal. This method
+    /// is only guaranteed to be called once every few seconds. Consensus items
+    /// are not meant to be latency critical; do not create them as
+    /// a response to a processed transaction. Only use consensus items to
+    /// establish consensus on a value that is required to verify
+    /// transactions, like unix time, block heights and feerates, and model all
+    /// other state changes trough transactions. The intention for this method
+    /// is to always return all available consensus items even if they are
+    /// redundant while process_consensus_item returns an error for the
+    /// redundant proposals.
+    ///
+    /// If you think you actually do require latency critical consensus items or
+    /// have trouble designing your module in order to avoid them please contact
+    /// the Fedimint developers.
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<<Self::Common as ModuleCommon>::ConsensusItem>;
 
     /// This function is called once for every consensus item. The function
-    /// returns an error if and only if the consensus item does not change
-    /// our state and therefore may be safely discarded by the atomic broadcast.
+    /// should return Ok if and only if the consensus item changes
+    /// the system state. *Therefore this method should return an error in case
+    /// of merely redundant consensus items such that they will be purged from
+    /// the history of the federation.* This enables consensus_proposal to
+    /// return all available consensus item without wasting disk
+    /// space with redundant consensus items.
     async fn process_consensus_item<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
