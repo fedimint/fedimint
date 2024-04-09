@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 use std::ops::ControlFlow;
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use ln_gateway::rpc::V1_API_ENDPOINT;
+use tracing::info;
 
 use crate::cmd;
 use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
@@ -63,7 +65,7 @@ impl Gatewayd {
     }
 
     pub async fn stop_lightning_node(&mut self) -> Result<()> {
-        tracing::info!("Stopping lightning node");
+        info!("Stopping lightning node");
         match self.ln.take() {
             Some(LightningNode::Lnd(lnd)) => lnd.terminate().await,
             Some(LightningNode::Cln(cln)) => cln.terminate().await,
@@ -71,6 +73,27 @@ impl Gatewayd {
                 "Cannot stop an already stopped Lightning Node"
             )),
         }
+    }
+
+    /// Restarts the gateway using the provided `bin_path`, which is useful for
+    /// testing upgrades.
+    pub async fn restart_with_bin(
+        &mut self,
+        process_mgr: &ProcessManager,
+        bin_path: &PathBuf,
+    ) -> Result<()> {
+        self._process.terminate().await?;
+        std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", bin_path);
+        let ln = self
+            .ln
+            .as_ref()
+            .expect("gateway already had an associated ln node")
+            .clone();
+        let new_gw = Self::new(process_mgr, ln).await?;
+        self._process = new_gw._process;
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+        info!("upgraded gatewayd to version: {}", gatewayd_version);
+        Ok(())
     }
 
     pub async fn cmd(&self) -> Command {
