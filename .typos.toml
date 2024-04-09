@@ -12,4 +12,5 @@ extend-exclude = [
   "db/**",
   "hfuzz_target/**",
   "hfuzz_workspace/**",
+  "releases/**",
 ]
