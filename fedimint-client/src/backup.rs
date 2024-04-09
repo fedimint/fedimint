@@ -142,13 +142,17 @@ impl ClientBackup {
                     let size_previous = last_module_backup.consensus_encode_to_len();
                     warn!(
                         size,
-                        size_previous, limit, "Module backup too large, will use previous version"
+                        limit,
+                        %module_id,
+                        size_previous,
+                        "Module backup too large, will use previous version"
                     );
                     modules.insert(module_id, last_module_backup.clone());
                 } else {
                     warn!(
                         size,
                         limit,
+                        %module_id,
                         "Module backup too large, no previous version available to fall-back to"
                     );
                 }
