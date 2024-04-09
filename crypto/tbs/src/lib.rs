@@ -10,6 +10,7 @@ use fedimint_core::bls12_381_serde;
 use fedimint_core::encoding::{Decodable, Encodable};
 use ff::Field;
 use group::{Curve, Group};
+use hex::encode;
 use rand::rngs::OsRng;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -17,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use sha3::Digest;
 
 const HASH_TAG: &[u8] = b"TBS_BLS12-381_";
+const FINGERPRINT_TAG: &[u8] = b"TBS_KFP24_";
 
 fn hash_bytes_to_g1(data: &[u8]) -> G1Projective {
     let mut hash_engine = sha3::Sha3_256::new();
@@ -41,7 +43,7 @@ pub struct AggregatePublicKey(#[serde(with = "bls12_381_serde::g2")] pub G2Affin
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct Message(#[serde(with = "bls12_381_serde::g1")] pub G1Affine);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct BlindingKey(#[serde(with = "bls12_381_serde::scalar")] pub Scalar);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
@@ -84,6 +86,30 @@ impl BlindingKey {
     pub fn random() -> BlindingKey {
         // TODO: fix rand incompatibities
         BlindingKey(Scalar::random(OsRng))
+    }
+
+    fn fingerprint(&self) -> [u8; 32] {
+        let mut hash_engine = sha3::Sha3_256::new();
+        hash_engine.update(FINGERPRINT_TAG);
+        hash_engine.update(self.0.to_bytes());
+        let result = hash_engine.finalize();
+        result.into()
+    }
+}
+
+impl ::core::fmt::Debug for BlindingKey {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        let fingerprint = self.fingerprint();
+        let fingerprint_hex = encode(&fingerprint[..]);
+        write!(f, "BlindingKey({fingerprint_hex})")
+    }
+}
+
+impl ::core::fmt::Display for BlindingKey {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        let fingerprint = self.fingerprint();
+        let fingerprint_hex = encode(&fingerprint[..]);
+        write!(f, "{fingerprint_hex}")
     }
 }
 
@@ -271,5 +297,17 @@ mod tests {
         let sig = unblind_signature(bkey, bsig);
 
         assert!(verify(msg, sig, pk));
+    }
+
+    #[test]
+    fn test_blindingkey_fingerprint_multiple_calls_same_result() {
+        let bkey = BlindingKey::random();
+        assert_eq!(bkey.fingerprint(), bkey.fingerprint());
+    }
+
+    #[test]
+    fn test_blindingkey_fingerprint_ne_scalar() {
+        let bkey = BlindingKey::random();
+        assert_ne!(bkey.fingerprint(), bkey.0.to_bytes());
     }
 }
