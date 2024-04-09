@@ -224,7 +224,7 @@ impl ClientModule for LightningClientModule {
     ) -> Option<TransactionItemAmount> {
         Some(TransactionItemAmount {
             amount: input.amount,
-            fee: self.cfg.fee_consensus.contract_input,
+            fee: self.cfg.fee_consensus.input,
         })
     }
 
@@ -234,7 +234,7 @@ impl ClientModule for LightningClientModule {
     ) -> Option<TransactionItemAmount> {
         Some(TransactionItemAmount {
             amount: output.amount(),
-            fee: self.cfg.fee_consensus.contract_output,
+            fee: self.cfg.fee_consensus.output,
         })
     }
 }
