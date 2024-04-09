@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::time::Duration;
-use std::{env, fs};
+use std::{env, fs, iter};
 
 use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin::Network;
@@ -701,11 +701,11 @@ pub async fn run_cli_dkg(
         .into_iter()
         .map(|peer| peer.name)
         .collect::<HashSet<_>>();
-    let all_names = {
-        let mut names = followers_names.values().cloned().collect::<HashSet<_>>();
-        names.insert(leader_name);
-        names
-    };
+    let all_names = followers_names
+        .values()
+        .cloned()
+        .chain(iter::once(leader_name))
+        .collect::<HashSet<_>>();
     assert_eq!(found_names, all_names);
 
     debug!(target: LOG_DEVIMINT, "Waiting for SharingConfigGenParams");
@@ -965,15 +965,17 @@ async fn cli_set_config_gen_params(
     );
     // Since we are not actually calling `fedimintd` binary, parse and handle
     // `FM_EXTRA_META_DATA` like it would do.
-    let mut extra_meta_data = parse_map(
+    let extra_meta_data = parse_map(
         &std::env::var(FM_EXTRA_DKG_META_ENV)
             .ok()
             .unwrap_or_default(),
     )
     .with_context(|| format!("Failed to parse {FM_EXTRA_DKG_META_ENV}"))
     .expect("Failed");
-    let mut meta = BTreeMap::from([("federation_name".to_string(), "testfed".to_string())]);
-    meta.append(&mut extra_meta_data);
+    let meta: BTreeMap<String, String> =
+        iter::once(("federation_name".to_string(), "testfed".to_string()))
+            .chain(extra_meta_data)
+            .collect();
 
     crate::util::FedimintCli
         .set_config_gen_params(auth, endpoint, meta, server_gen_params)
