@@ -19,9 +19,9 @@ use fedimint_logging::LOG_DEVIMINT;
 use ln_gateway::rpc::GatewayInfo;
 use semver::VersionReq;
 use serde_json::json;
-use tokio::fs;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
+use tokio::{fs, try_join};
 use tracing::{debug, info};
 
 use crate::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, CommonArgs};
@@ -98,7 +98,11 @@ pub async fn log_binary_versions() -> Result<()> {
     Ok(())
 }
 
-pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
+pub async fn latency_tests(
+    dev_fed: DevFed,
+    r#type: LatencyTest,
+    upgrade_clients: Option<&UpgradeClients>,
+) -> Result<()> {
     log_binary_versions().await?;
 
     #[allow(unused_variables)]
@@ -116,7 +120,17 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
     let max_p90_factor = 5.0;
     let p90_median_factor = 7;
 
-    let client = fed.new_joined_client("latency-tests-client").await?;
+    let client = match upgrade_clients {
+        Some(c) => match r#type {
+            LatencyTest::Reissue => c.reissue_client.clone(),
+            LatencyTest::LnSend => c.ln_send_client.clone(),
+            LatencyTest::LnReceive => c.ln_receive_client.clone(),
+            LatencyTest::FmPay => c.fm_pay_client.clone(),
+            LatencyTest::Restore => bail!("no reusable upgrade client for restore"),
+        },
+        None => fed.new_joined_client("latency-tests-client").await?,
+    };
+
     client.use_gateway(&gw_cln).await?;
     let initial_balance_sats = 100_000_000;
     fed.pegin_client(initial_balance_sats, &client).await?;
@@ -348,6 +362,164 @@ pub async fn latency_tests(dev_fed: DevFed, r#type: LatencyTest) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Clients reused for upgrade tests
+pub struct UpgradeClients {
+    reissue_client: Client,
+    ln_send_client: Client,
+    ln_receive_client: Client,
+    fm_pay_client: Client,
+}
+
+async fn stress_test_fed(dev_fed: &DevFed, clients: Option<&UpgradeClients>) -> anyhow::Result<()> {
+    use futures::FutureExt;
+
+    // skip restore test for client upgrades, since restoring a client doesn't
+    // require a persistent data dir
+    let restore_test = if clients.is_some() {
+        futures::future::ok(()).right_future()
+    } else {
+        latency_tests(dev_fed.clone(), LatencyTest::Restore, clients).left_future()
+    };
+
+    try_join!(
+        latency_tests(dev_fed.clone(), LatencyTest::Reissue, clients),
+        latency_tests(dev_fed.clone(), LatencyTest::LnSend, clients),
+        latency_tests(dev_fed.clone(), LatencyTest::LnReceive, clients),
+        latency_tests(dev_fed.clone(), LatencyTest::FmPay, clients),
+        restore_test,
+    )?;
+    Ok(())
+}
+
+pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) -> Result<()> {
+    match binary {
+        UpgradeTest::Fedimintd { paths } => {
+            if let Some(oldest_fedimintd) = paths.first() {
+                std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", oldest_fedimintd);
+            } else {
+                bail!("Must provide at least 1 binary path");
+            }
+
+            let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+            info!(
+                "running first stress test for fedimintd version: {}",
+                fedimintd_version
+            );
+
+            let mut dev_fed = dev_fed(process_mgr).await?;
+            let client = dev_fed.fed.new_joined_client("test-client").await?;
+            try_join!(stress_test_fed(&dev_fed, None), wait_session(&client))?;
+
+            for path in paths.iter().skip(1) {
+                dev_fed
+                    .fed
+                    .restart_all_staggered_with_bin(process_mgr, path)
+                    .await?;
+
+                // stress test with all peers online
+                try_join!(stress_test_fed(&dev_fed, None), wait_session(&client))?;
+
+                // ensure a degraded federation with the last peer online works, since the last
+                // peer is the last to restart
+                dev_fed.fed.terminate_server(1).await?;
+                try_join!(stress_test_fed(&dev_fed, None), wait_session(&client))?;
+
+                let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+                info!(
+                    "### fedimintd passed stress test for version {}",
+                    fedimintd_version
+                );
+            }
+            info!("## fedimintd upgraded all binaries successfully")
+        }
+        UpgradeTest::FedimintCli { paths } => {
+            let set_fedimint_cli_path = |path: &PathBuf| {
+                std::env::set_var("FM_FEDIMINT_CLI_BASE_EXECUTABLE", path);
+                let fm_mint_client: String = format!(
+                    "{fedimint_cli} --data-dir {datadir}",
+                    fedimint_cli = crate::util::get_fedimint_cli_path().join(" "),
+                    datadir = crate::vars::utf8(&process_mgr.globals.FM_CLIENT_DIR)
+                );
+                std::env::set_var("FM_MINT_CLIENT", fm_mint_client);
+            };
+
+            if let Some(oldest_fedimint_cli) = paths.first() {
+                set_fedimint_cli_path(oldest_fedimint_cli);
+            } else {
+                bail!("Must provide at least 1 binary path");
+            }
+
+            let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+            info!(
+                "running first stress test for fedimint-cli version: {}",
+                fedimint_cli_version
+            );
+
+            let dev_fed = dev_fed(process_mgr).await?;
+
+            let wait_session_client = dev_fed.fed.new_joined_client("wait-session-client").await?;
+            let reusable_upgrade_clients = UpgradeClients {
+                reissue_client: dev_fed.fed.new_joined_client("reissue-client").await?,
+                ln_send_client: dev_fed.fed.new_joined_client("ln-send-client").await?,
+                ln_receive_client: dev_fed.fed.new_joined_client("ln-receive-client").await?,
+                fm_pay_client: dev_fed.fed.new_joined_client("fm-pay-client").await?,
+            };
+
+            try_join!(
+                stress_test_fed(&dev_fed, Some(&reusable_upgrade_clients)),
+                wait_session(&wait_session_client)
+            )?;
+
+            for path in paths.iter().skip(1) {
+                set_fedimint_cli_path(path);
+                let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+                info!("upgraded fedimint-cli to version: {}", fedimint_cli_version);
+                try_join!(
+                    stress_test_fed(&dev_fed, Some(&reusable_upgrade_clients)),
+                    wait_session(&wait_session_client)
+                )?;
+                info!(
+                    "### fedimint-cli passed stress test for version {}",
+                    fedimint_cli_version
+                );
+            }
+            info!("## fedimint-cli upgraded all binaries successfully")
+        }
+        UpgradeTest::Gatewayd { paths } => {
+            if let Some(oldest_gatewayd) = paths.first() {
+                std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", oldest_gatewayd);
+            } else {
+                bail!("Must provide at least 1 binary path");
+            }
+
+            let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+            info!(
+                "running first stress test for gatewayd version: {}",
+                gatewayd_version
+            );
+
+            let mut dev_fed = dev_fed(process_mgr).await?;
+            let client = dev_fed.fed.new_joined_client("test-client").await?;
+            try_join!(stress_test_fed(&dev_fed, None), wait_session(&client))?;
+
+            for path in paths.iter().skip(1) {
+                try_join!(
+                    dev_fed.gw_cln.restart_with_bin(process_mgr, path),
+                    dev_fed.gw_lnd.restart_with_bin(process_mgr, path),
+                )?;
+                try_join!(stress_test_fed(&dev_fed, None), wait_session(&client))?;
+                let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+                info!(
+                    "### gatewayd passed stress test for version {}",
+                    gatewayd_version
+                );
+            }
+            info!("## gatewayd upgraded all binaries successfully")
+        }
+    }
     Ok(())
 }
 
@@ -807,7 +979,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         })
         .await?
         .bolt11;
-    tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
+    try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
     ln_pay(&client, invoice.clone(), lnd_gw_id.clone(), false).await?;
     let fed_id = fed.calculate_federation_id().await;
 
@@ -1452,7 +1624,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     // Query current gateway infos
     let mut cln_cmd = cmd!(gw_cln, "info");
     let mut lnd_cmd = cmd!(gw_lnd, "info");
-    let (cln_value, lnd_value) = tokio::try_join!(cln_cmd.out_json(), lnd_cmd.out_json())?;
+    let (cln_value, lnd_value) = try_join!(cln_cmd.out_json(), lnd_cmd.out_json())?;
 
     // Drop references to cln and lnd gateways so the test can kill them
     let cln_gateway_id = gw_cln.gateway_id().await?;
@@ -1481,7 +1653,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
 
     // Reboot gateways with the same Lightning node instances
     info!("Rebooting gateways...");
-    let (new_gw_cln, new_gw_lnd) = tokio::try_join!(
+    let (new_gw_cln, new_gw_lnd) = try_join!(
         Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
         Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone()))
     )?;
@@ -2153,6 +2325,22 @@ pub enum LatencyTest {
 }
 
 #[derive(Subcommand)]
+pub enum UpgradeTest {
+    Fedimintd {
+        #[arg(long, trailing_var_arg = true, num_args=1..)]
+        paths: Vec<PathBuf>,
+    },
+    FedimintCli {
+        #[arg(long, trailing_var_arg = true, num_args=1..)]
+        paths: Vec<PathBuf>,
+    },
+    Gatewayd {
+        #[arg(long, trailing_var_arg = true, num_args=1..)]
+        paths: Vec<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
 pub enum TestCmd {
     /// `devfed` then checks the average latency of reissuing ecash, LN receive,
     /// and LN send
@@ -2185,8 +2373,10 @@ pub enum TestCmd {
     GuardianBackup,
     /// `devfed` then tests that spent ecash cannot be double spent
     CannotReplayTransaction,
-    UpgradeTest {
-        old_fedimintd: PathBuf,
+    /// Test upgrade paths for a given binary
+    UpgradeTests {
+        #[clap(subcommand)]
+        binary: UpgradeTest,
     },
 }
 
@@ -2219,17 +2409,6 @@ async fn wait_session(client: &federation::Client) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn stress_test_fed(dev_fed: &DevFed) -> anyhow::Result<()> {
-    tokio::try_join!(
-        latency_tests(dev_fed.clone(), LatencyTest::Reissue),
-        latency_tests(dev_fed.clone(), LatencyTest::LnSend),
-        latency_tests(dev_fed.clone(), LatencyTest::LnReceive),
-        latency_tests(dev_fed.clone(), LatencyTest::FmPay),
-        latency_tests(dev_fed.clone(), LatencyTest::Restore),
-    )?;
-    Ok(())
-}
-
 pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()> {
     match cmd {
         TestCmd::WasmTestSetup { exec } => {
@@ -2238,7 +2417,7 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                 let task_group = task_group.clone();
                 async move {
                     let dev_fed = dev_fed(&process_mgr).await?;
-                    let (_, _, faucet) = tokio::try_join!(
+                    let (_, _, faucet) = try_join!(
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
                         async {
@@ -2272,7 +2451,7 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
         TestCmd::LatencyTests { r#type } => {
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
-            latency_tests(dev_fed, r#type).await?;
+            latency_tests(dev_fed, r#type, None).await?;
         }
         TestCmd::ReconnectTest => {
             let (process_mgr, _) = setup(common_args).await?;
@@ -2314,39 +2493,9 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let dev_fed = dev_fed(&process_mgr).await?;
             cannot_replay_tx_test(dev_fed).await?;
         }
-        TestCmd::UpgradeTest { old_fedimintd } => {
+        TestCmd::UpgradeTests { binary } => {
             let (process_mgr, _) = setup(common_args).await?;
-            std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", old_fedimintd);
-            let mut dev_fed = dev_fed(&process_mgr).await?;
-            let client = dev_fed.fed.new_joined_client("test-client").await?;
-
-            tokio::try_join!(stress_test_fed(&dev_fed), wait_session(&client))?;
-
-            info!("shutting down servers");
-            dev_fed.fed.terminate_server(3).await?;
-            // kill 3rd peer early
-            tokio::time::sleep(Duration::from_secs(30)).await;
-            dev_fed.fed.terminate_server(0).await?;
-            dev_fed.fed.terminate_server(1).await?;
-            dev_fed.fed.terminate_server(2).await?;
-            info!("restarting servers");
-            // upgrade to fedimintd from PATH
-            std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", "fedimintd");
-            dev_fed.fed.start_server(&process_mgr, 2).await?;
-            dev_fed.fed.start_server(&process_mgr, 1).await?;
-            dev_fed.fed.start_server(&process_mgr, 0).await?;
-            // restart 3rd peer later
-            tokio::time::sleep(Duration::from_secs(30)).await;
-            dev_fed.fed.start_server(&process_mgr, 3).await?;
-            info!("restarted waiting");
-            tokio::time::sleep(Duration::from_secs(10)).await;
-            info!("restarted waited");
-
-            stress_test_fed(&dev_fed).await?;
-            wait_session(&client).await?;
-            // kill 1 to check if 3 is working well
-            dev_fed.fed.terminate_server(1).await?;
-            tokio::try_join!(stress_test_fed(&dev_fed), wait_session(&client))?;
+            upgrade_tests(&process_mgr, binary).await?;
         }
     }
     Ok(())
