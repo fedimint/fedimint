@@ -1301,7 +1301,7 @@
                     <span class="prelude-val">Err</span>(e) =&gt; <span class="self">self</span>.disconnect_err(e, <span class="number">0</span>),
                 }
             },
-            <span class="kw">_ </span>= sleep_until(connected.next_ping.into()) =&gt; {
+            <span class="kw">_ </span>= sleep_until(connected.next_ping) =&gt; {
                 <span class="macro">trace!</span>(target: LOG_NET_PEER, our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, <span class="string">"Sending ping"</span>);
                 <span class="self">self</span>.send_message_connected(connected, PeerMessage::Ping)
                     .<span class="kw">await

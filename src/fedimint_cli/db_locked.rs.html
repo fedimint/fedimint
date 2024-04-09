@@ -76,10 +76,12 @@
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>fedimint_core::db::IRawDatabase;
+<span class="kw">use </span>fedimint_core::task::block_in_place;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT;
 <span class="kw">use </span>tracing::{debug, info};
@@ -105,7 +107,7 @@
 <span class="kw">impl </span>LockedBuilder {
     <span class="doccomment">/// Create a [`Self`] by acquiring a lock file
     </span><span class="kw">pub async fn </span>new(lock_path: <span class="kw-2">&amp;</span>Path) -&gt; anyhow::Result&lt;LockedBuilder&gt; {
-        tokio::task::block_in_place(|| {
+        block_in_place(|| {
             <span class="kw">let </span>file = std::fs::OpenOptions::new()
                 .write(<span class="bool-val">true</span>)
                 .create(<span class="bool-val">true</span>)

@@ -820,7 +820,7 @@
 <span class="kw">use </span>cln_rpc::ClnRpc;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::task::jit::{JitTry, JitTryAnyhow};
-<span class="kw">use </span>fedimint_core::task::{block_in_place, sleep};
+<span class="kw">use </span>fedimint_core::task::{block_in_place, block_on, sleep};
 <span class="kw">use </span>fedimint_core::util::write_overwrite_async;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>fedimint_testing::gateway::LightningNodeType;
@@ -1114,7 +1114,7 @@
         <span class="comment">// cln don't like to be killed and may leave running processes. So let's
         // terminate it in a controlled way
         </span>block_in_place(<span class="kw">move </span>|| {
-            tokio::runtime::Handle::current().block_on(<span class="kw">async move </span>{
+            block_on(<span class="kw">async move </span>{
                 <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.terminate().<span class="kw">await </span>{
                     <span class="macro">warn!</span>(target: LOG_DEVIMINT, <span class="string">"failed to terminate lightningd: {e:?}"</span>);
                 }

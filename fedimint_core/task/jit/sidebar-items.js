@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["JitCore","OneTimeError"],"type":["Jit","JitTry","JitTryAnyhow"]};
+window.SIDEBAR_ITEMS = {"struct":["JitCore","JitInner","OneTimeError"],"type":["Jit","JitTry","JitTryAnyhow"]};

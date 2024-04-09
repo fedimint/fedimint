@@ -1968,7 +1968,7 @@
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
-<span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
+<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 <span class="kw">use </span>fedimint_core::time::{duration_since_epoch, now};
 <span class="kw">use </span>fedimint_core::util::{SafeUrl, Spanned};
 <span class="kw">use </span>fedimint_core::{
@@ -2005,7 +2005,7 @@
 <span class="kw">use </span>state_machine::GatewayClientModule;
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tokio::sync::{Mutex, MutexGuard};
+<span class="kw">use </span>tokio::sync::{Mutex, MutexGuard, RwLock};
 <span class="kw">use </span>tracing::{debug, error, info, info_span, warn, Instrument};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{

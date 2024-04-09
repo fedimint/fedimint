@@ -1811,7 +1811,7 @@
 };
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
-<span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
+<span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, ModuleDecoderRegistry, NumPeersExt,
@@ -1828,7 +1828,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tokio::sync::OnceCell;
+<span class="kw">use </span>tokio::sync::{OnceCell, RwLock, RwLockWriteGuard};
 <span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::admin_client::{
@@ -1853,8 +1853,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::query::{
     DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
 };
+<span class="kw">use </span><span class="kw">crate</span>::runtime;
 <span class="kw">use </span><span class="kw">crate</span>::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
-<span class="kw">use </span><span class="kw">crate</span>::task;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction, TransactionError};
 <span class="kw">use </span><span class="kw">crate</span>::util::SafeUrl;
 
@@ -2071,7 +2071,7 @@
         </span>};
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(timeout) = timeout {
-            <span class="kw">match </span>fedimint_core::task::timeout(timeout, request).<span class="kw">await </span>{
+            <span class="kw">match </span>fedimint_core::runtime::timeout(timeout, request).<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(result) =&gt; result,
                 <span class="prelude-val">Err</span>(_timeout) =&gt; <span class="prelude-val">Err</span>(JsonRpcClientError::RequestTimeout),
             }
@@ -2106,7 +2106,7 @@
                 };
 
                 <span class="kw">let </span>result = <span class="kw">if let </span><span class="prelude-val">Some</span>(timeout) = timeout {
-                    <span class="kw">match </span>fedimint_core::task::timeout(timeout, request).<span class="kw">await </span>{
+                    <span class="kw">match </span>fedimint_core::runtime::timeout(timeout, request).<span class="kw">await </span>{
                         <span class="prelude-val">Ok</span>(result) =&gt; result,
                         <span class="prelude-val">Err</span>(_timeout) =&gt; <span class="prelude-val">Err</span>(JsonRpcClientError::RequestTimeout),
                     }
@@ -2159,7 +2159,7 @@
                                     <span class="kw">async move </span>{
                                         <span class="comment">// Note: we need to sleep inside the retrying future,
                                         // so that `futures` is being polled continuously
-                                        </span>task::sleep(Duration::from_millis(delay_ms)).<span class="kw">await</span>;
+                                        </span>runtime::sleep(Duration::from_millis(delay_ms)).<span class="kw">await</span>;
                                         PeerResponse {
                                             peer: retry_peer,
                                             result: <span class="self">self
@@ -2297,7 +2297,7 @@
     <span class="kw">where
         </span>R: OutputOutcome,
     {
-        fedimint_core::task::timeout(timeout, <span class="kw">async move </span>{
+        fedimint_core::runtime::timeout(timeout, <span class="kw">async move </span>{
             <span class="kw">let </span>outcome: SerdeOutputOutcome = <span class="self">self
                 </span>.inner
                 .request_current_consensus(
@@ -3455,7 +3455,7 @@
                 <span class="macro">error!</span>(target: LOG_NET_API, <span class="string">"connect"</span>);
                 <span class="kw">let </span>id = CONNECTION_COUNT.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
                 <span class="comment">// slow down
-                </span>task::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+                </span>runtime::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
                 <span class="kw">if </span>FAIL.lock().unwrap().contains(<span class="kw-2">&amp;</span>id) {
                     <span class="prelude-val">Err</span>(jsonrpsee_core::client::Error::Transport(<span class="macro">anyhow!</span>(
                         <span class="string">"intentional error"

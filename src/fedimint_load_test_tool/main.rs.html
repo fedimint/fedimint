@@ -1355,7 +1355,6 @@
 <a href="#1353" id="1353">1353</a>
 <a href="#1354" id="1354">1354</a>
 <a href="#1355" id="1355">1355</a>
-<a href="#1356" id="1356">1356</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -1376,7 +1375,7 @@
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
-<span class="kw">use </span>fedimint_core::task::spawn;
+<span class="kw">use </span>fedimint_core::runtime::spawn;
 <span class="kw">use </span>fedimint_core::util::{BoxFuture, SafeUrl};
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_ln_client::{LightningClientModule, LnReceiveState};
@@ -1652,8 +1651,7 @@
     <span class="kw">let </span>summary_handle = spawn(<span class="string">"handle metrics summary"</span>, {
         <span class="kw">let </span>opts = opts.clone();
         <span class="kw">async move </span>{ handle_metrics_summary(opts, event_receiver).<span class="kw">await </span>}
-    })
-    .expect(<span class="string">"some handle on non-wasm"</span>);
+    });
     <span class="kw">let </span>futures = <span class="kw">match </span>opts.command.clone() {
         Command::TestConnect {
             invite_code,

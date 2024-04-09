@@ -1398,6 +1398,7 @@
 <a href="#1396" id="1396">1396</a>
 <a href="#1397" id="1397">1397</a>
 <a href="#1398" id="1398">1398</a>
+<a href="#1399" id="1399">1399</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -2308,7 +2309,8 @@
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::IRawDatabaseExt;
     <span class="kw">use </span>fedimint_core::module::ApiAuth;
-    <span class="kw">use </span>fedimint_core::task::{sleep, spawn, TaskGroup};
+    <span class="kw">use </span>fedimint_core::runtime::spawn;
+    <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
     <span class="kw">use </span>fedimint_core::util::SafeUrl;
     <span class="kw">use </span>fedimint_core::Amount;
     <span class="kw">use </span>fedimint_dummy_common::config::{

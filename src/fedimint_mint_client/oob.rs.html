@@ -206,7 +206,7 @@
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::{task, Amount, TransactionId};
+<span class="kw">use </span>fedimint_core::{runtime, Amount, TransactionId};
 <span class="kw">use </span>fedimint_mint_common::MintInput;
 
 <span class="kw">use </span><span class="kw">crate</span>::input::{
@@ -341,7 +341,7 @@
 
 <span class="kw">async fn </span>await_timeout_cancel(deadline: SystemTime) {
     <span class="kw">if let </span><span class="prelude-val">Ok</span>(time_until_deadline) = deadline.duration_since(fedimint_core::time::now()) {
-        task::sleep(time_until_deadline).<span class="kw">await</span>;
+        runtime::sleep(time_until_deadline).<span class="kw">await</span>;
     }
 }
 

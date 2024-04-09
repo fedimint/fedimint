@@ -525,8 +525,8 @@
 <span class="kw">use </span>tracing::{debug, warn, Instrument, Span};
 <span class="kw">use </span>url::{Host, ParseError, Url};
 
-<span class="kw">use </span><span class="kw">crate</span>::task::{<span class="self">self</span>, MaybeSend};
-<span class="kw">use crate</span>::{apply, async_trait_maybe_send, maybe_add_send};
+<span class="kw">use </span><span class="kw">crate</span>::task::MaybeSend;
+<span class="kw">use crate</span>::{apply, async_trait_maybe_send, maybe_add_send, runtime};
 
 <span class="doccomment">/// Future that is `Send` unless targeting WASM
 </span><span class="kw">pub type </span>BoxFuture&lt;<span class="lifetime">'a</span>, T&gt; = Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Future&lt;Output = T&gt; + <span class="lifetime">'a</span>)&gt;&gt;;
@@ -875,7 +875,7 @@
                         <span class="string">"{} failed, retrying"</span>,
                         op_name,
                     );
-                    task::sleep(interval).<span class="kw">await</span>;
+                    runtime::sleep(interval).<span class="kw">await</span>;
                 } <span class="kw">else </span>{
                     <span class="macro">warn!</span>(
                         target: LOG_CORE,
@@ -897,11 +897,11 @@
     <span class="kw">use </span>std::time::Duration;
 
     <span class="kw">use </span>anyhow::anyhow;
-    <span class="kw">use </span>fedimint_core::task::Elapsed;
+    <span class="kw">use </span>fedimint_core::runtime::Elapsed;
     <span class="kw">use </span>futures::FutureExt;
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
-    <span class="kw">use </span><span class="kw">crate</span>::task::timeout;
+    <span class="kw">use </span><span class="kw">crate</span>::runtime::timeout;
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_safe_url() {

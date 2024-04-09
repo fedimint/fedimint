@@ -188,64 +188,13 @@
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
 <a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
-<a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a>
-<a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a>
-<a href="#201" id="201">201</a>
-<a href="#202" id="202">202</a>
-<a href="#203" id="203">203</a>
-<a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a>
-<a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a>
-<a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
-<a href="#227" id="227">227</a>
-<a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>fedimint_logging::LOG_TASK;
+<span class="kw">use </span>fedimint_core::runtime::JoinHandle;
 <span class="kw">use </span>futures::Future;
-<span class="kw">use </span>tokio::select;
-<span class="kw">use </span>tokio::sync::{<span class="self">self</span>, oneshot};
-<span class="kw">use </span>tracing::trace;
+<span class="kw">use </span>tokio::sync;
 
 <span class="kw">use </span><span class="kw">super</span>::MaybeSend;
 
@@ -290,15 +239,13 @@
 <span class="doccomment">/// A value that initializes eagerly in parallel in a falliable way
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>JitCore&lt;T, E&gt; {
-    <span class="comment">// on last drop it lets the inner task to know it should stop, because we don't care anymore
-    </span>_cancel_tx: sync::mpsc::Sender&lt;()&gt;,
-    <span class="comment">// since joinhandles, are not portable, we use this to wait for the value
-    // Note: the `std::sync::Mutex` is used intentionally, since contention never actually happens
-    // and we want to avoid cancelation because of it
-    </span><span class="attr">#[allow(clippy::type_complexity)]
-    </span>val_rx:
-        Arc&lt;std::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;tokio::sync::oneshot::Receiver&lt;std::result::Result&lt;T, E&gt;&gt;&gt;&gt;&gt;,
-    val: Arc&lt;sync::OnceCell&lt;T&gt;&gt;,
+    inner: Arc&lt;JitInner&lt;T, E&gt;&gt;,
+}
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>JitInner&lt;T, E&gt; {
+    handle: sync::Mutex&lt;JoinHandle&lt;<span class="prelude-ty">Result</span>&lt;T, E&gt;&gt;&gt;,
+    val: sync::OnceCell&lt;<span class="prelude-ty">Result</span>&lt;T, ()&gt;&gt;,
 }
 
 <span class="kw">impl</span>&lt;T, E&gt; Clone <span class="kw">for </span>JitCore&lt;T, E&gt;
@@ -307,10 +254,13 @@
 {
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            _cancel_tx: <span class="self">self</span>._cancel_tx.clone(),
-            val_rx: <span class="self">self</span>.val_rx.clone(),
-            val: <span class="self">self</span>.val.clone(),
+            inner: <span class="self">self</span>.inner.clone(),
         }
+    }
+}
+<span class="kw">impl</span>&lt;T, E&gt; Drop <span class="kw">for </span>JitInner&lt;T, E&gt; {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.handle.get_mut().abort();
     }
 }
 <span class="kw">impl</span>&lt;T, E&gt; JitCore&lt;T, E&gt;
@@ -326,91 +276,43 @@
     </span><span class="kw">where
         </span>Fut: Future&lt;Output = std::result::Result&lt;T, E&gt;&gt; + <span class="lifetime">'static </span>+ MaybeSend,
     {
-        <span class="kw">let </span>(cancel_tx, <span class="kw-2">mut </span>cancel_rx) = tokio::sync::mpsc::channel(<span class="number">1</span>);
-        <span class="kw">let </span>(val_tx, val_rx) = oneshot::channel();
-        <span class="kw">let </span>type_name = std::any::type_name::&lt;T&gt;();
-        <span class="kw">super</span>::imp::spawn(
+        <span class="kw">let </span>handle = <span class="kw">crate</span>::runtime::spawn(
             <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"JitTry {} value"</span>, std::any::type_name::&lt;T&gt;()),
-            <span class="kw">async move </span>{
-                <span class="macro">select!</span> {
-                    <span class="kw">_ </span>= cancel_rx.recv() =&gt; {
-                        <span class="macro">trace!</span>(target: LOG_TASK, r#type = %type_name, <span class="string">"JitTry value future canceled"</span>);
-                    },
-                    val = f() =&gt; {
-                        <span class="kw">match </span>val_tx.send(val) {
-                            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                                <span class="macro">trace!</span>(target: LOG_TASK, r#type = %type_name, <span class="string">"JitTry value ready"</span>);
-                            },
-                            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                                <span class="macro">trace!</span>(target: LOG_TASK,  r#type = %type_name, <span class="string">"JitTry value ready, but ignored"</span>);
-                            },
-                        };
-                    },
-                }
-            },
-        )
-        .expect(<span class="string">"spawn not fail"</span>);
+            <span class="kw">async move </span>{ f().<span class="kw">await </span>},
+        );
 
         <span class="self">Self </span>{
-            _cancel_tx: cancel_tx,
-            val_rx: Arc::new(<span class="prelude-val">Some</span>(val_rx).into()),
-            val: sync::OnceCell::new().into(),
+            inner: JitInner {
+                handle: handle.into(),
+                val: sync::OnceCell::new(),
+            }
+            .into(),
         }
     }
 
     <span class="doccomment">/// Get the reference to the value, potentially blocking for the
     /// initialization future to complete
-    </span><span class="kw">pub async fn </span>get_try(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; std::result::Result&lt;<span class="kw-2">&amp;</span>T, OneTimeError&lt;E&gt;&gt; {
-        <span class="doccomment">/// Temporarily taken data out of `arc`, that will be put back on drop,
-        /// unless canceled
-        ///
-        /// Used to achieve cancelation safety.
-        </span><span class="kw">struct </span>PutBack&lt;<span class="lifetime">'a</span>, T&gt; {
-            val: <span class="prelude-ty">Option</span>&lt;T&gt;,
-            arc: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Arc&lt;std::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;T&gt;&gt;&gt;,
-        }
-
-        <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T&gt; PutBack&lt;<span class="lifetime">'a</span>, T&gt; {
-            <span class="kw">fn </span>take(arc: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Arc&lt;std::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;T&gt;&gt;&gt;) -&gt; <span class="self">Self </span>{
-                <span class="kw">let </span>val = arc.lock().expect(<span class="string">"lock failed"</span>).take();
-                <span class="self">Self </span>{ val, arc }
-            }
-
-            <span class="kw">fn </span>cancel(<span class="kw-2">mut </span><span class="self">self</span>) {
-                <span class="self">self</span>.val = <span class="prelude-val">None</span>;
-            }
-
-            <span class="kw">fn </span>get_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;mut </span>T&gt; {
-                <span class="self">self</span>.val.as_mut()
-            }
-        }
-        <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T&gt; Drop <span class="kw">for </span>PutBack&lt;<span class="lifetime">'a</span>, T&gt; {
-            <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-                <span class="kw">let </span><span class="kw-2">mut </span>lock = <span class="self">self</span>.arc.lock().expect(<span class="string">"lock failed"</span>);
-                <span class="kw">let </span>take = <span class="self">self</span>.val.take();
-
-                <span class="kw-2">*</span>lock = take;
-            }
-        }
-        <span class="self">self</span>.val
-            .get_or_try_init(|| <span class="kw">async </span>{
-                <span class="kw">let </span><span class="kw-2">mut </span>recv = PutBack::take(<span class="kw-2">&amp;</span><span class="self">self</span>.val_rx);
-
-                <span class="kw">let </span>val_res = {
-                    <span class="kw">let </span><span class="prelude-val">Some</span>(recv) = recv.get_mut() <span class="kw">else </span>{
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(OneTimeError(<span class="prelude-val">None</span>));
-                    };
-                    recv.<span class="kw">await</span>.unwrap_or_else(|<span class="kw">_</span>| {
-                        <span class="macro">panic!</span>(<span class="string">"Jit value {} panicked"</span>, std::any::type_name::&lt;T&gt;())
-                    })
-                };
-
-                recv.cancel();
-
-                val_res.map_err(|err| OneTimeError(<span class="prelude-val">Some</span>(err)))
+    </span><span class="kw">pub async fn </span>get_try(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span>T, OneTimeError&lt;E&gt;&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>init_error = <span class="prelude-val">None</span>;
+        <span class="kw">let </span>value = <span class="self">self
+            </span>.inner
+            .val
+            .get_or_init(|| <span class="kw">async </span>{
+                <span class="kw">let </span>handle: <span class="kw-2">&amp;mut </span><span class="kw">_ </span>= <span class="kw-2">&amp;mut *</span><span class="self">self</span>.inner.handle.lock().<span class="kw">await</span>;
+                handle
+                    .<span class="kw">await
+                    </span>.unwrap_or_else(|<span class="kw">_</span>| <span class="macro">panic!</span>(<span class="string">"Jit value {} panicked"</span>, std::any::type_name::&lt;T&gt;()))
+                    .map_err(|err| {
+                        init_error = <span class="prelude-val">Some</span>(err);
+                        <span class="comment">// return ()
+                    </span>})
             })
-            .<span class="kw">await
-    </span>}
+            .<span class="kw">await</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(err) = init_error {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(OneTimeError(<span class="prelude-val">Some</span>(err)));
+        }
+        value.as_ref().map_err(|<span class="kw">_</span>| OneTimeError(<span class="prelude-val">None</span>))
+    }
 }
 <span class="kw">impl</span>&lt;T&gt; JitCore&lt;T, Infallible&gt;
 <span class="kw">where
@@ -439,7 +341,7 @@
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>sanity_jit() {
         <span class="kw">let </span>v = Jit::new(|| <span class="kw">async </span>{
-            fedimint_core::task::sleep(Duration::from_millis(<span class="number">0</span>)).<span class="kw">await</span>;
+            fedimint_core::runtime::sleep(Duration::from_millis(<span class="number">0</span>)).<span class="kw">await</span>;
             <span class="number">3
         </span>});
 
@@ -451,7 +353,7 @@
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>sanity_jit_try_ok() {
         <span class="kw">let </span>v = JitTryAnyhow::new_try(|| <span class="kw">async </span>{
-            fedimint_core::task::sleep(Duration::from_millis(<span class="number">0</span>)).<span class="kw">await</span>;
+            fedimint_core::runtime::sleep(Duration::from_millis(<span class="number">0</span>)).<span class="kw">await</span>;
             <span class="prelude-val">Ok</span>(<span class="number">3</span>)
         });
 
@@ -463,7 +365,7 @@
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>sanity_jit_try_err() {
         <span class="kw">let </span>v = JitTry::new_try(|| <span class="kw">async </span>{
-            fedimint_core::task::sleep(Duration::from_millis(<span class="number">0</span>)).<span class="kw">await</span>;
+            fedimint_core::runtime::sleep(Duration::from_millis(<span class="number">0</span>)).<span class="kw">await</span>;
             <span class="macro">bail!</span>(<span class="string">"BOOM"</span>);
             <span class="attr">#[allow(unreachable_code)]
             </span><span class="prelude-val">Ok</span>(<span class="number">3</span>)

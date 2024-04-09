@@ -870,16 +870,17 @@
 };
 <span class="kw">use </span>fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
 <span class="kw">use </span>fedimint_core::query::FilterMap;
+<span class="kw">use </span>fedimint_core::runtime::spawn;
 <span class="kw">use </span>fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
 };
-<span class="kw">use </span>fedimint_core::task::{sleep, spawn, RwLock, TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::timing::TimeReporter;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{timing, NumPeers, PeerId};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::Rng;
-<span class="kw">use </span>tokio::sync::watch;
+<span class="kw">use </span>tokio::sync::{watch, RwLock};
 <span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::data_provider::{DataProvider, UnitData};
@@ -1267,8 +1268,7 @@
                 Spawner::new(),
                 aleph_bft_types::Terminator::create_root(terminator_receiver, <span class="string">"Terminator"</span>),
             ),
-        )
-        .expect(<span class="string">"some handle on non-wasm"</span>);
+        );
 
         <span class="comment">// this is the minimum number of batches data that will be ordered before we
         // reach the exponential_slowdown_offset since at least f + 1 batches are

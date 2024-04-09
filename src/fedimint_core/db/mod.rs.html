@@ -3003,7 +3003,6 @@
 <a href="#3001" id="3001">3001</a>
 <a href="#3002" id="3002">3002</a>
 <a href="#3003" id="3003">3003</a>
-<a href="#3004" id="3004">3004</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -3487,7 +3486,7 @@
                         delay_ms = %delay,
                         <span class="string">"Database commit failed in an autocommit block - retrying"
                     </span>);
-                    <span class="kw">crate</span>::task::sleep(Duration::from_millis(delay)).<span class="kw">await</span>;
+                    <span class="kw">crate</span>::runtime::sleep(Duration::from_millis(delay)).<span class="kw">await</span>;
                 }
             }
         }
@@ -5088,7 +5087,7 @@
     <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
     <span class="kw">pub async fn </span>future_returns_shortly&lt;F: Future&gt;(fut: F) -&gt; <span class="prelude-ty">Option</span>&lt;F::Output&gt; {
-        <span class="kw">crate</span>::task::timeout(Duration::from_millis(<span class="number">10</span>), fut)
+        <span class="kw">crate</span>::runtime::timeout(Duration::from_millis(<span class="number">10</span>), fut)
             .<span class="kw">await
             </span>.ok()
     }
@@ -5863,7 +5862,7 @@
 
     <span class="kw">use </span><span class="kw">super</span>::mem_impl::MemDatabase;
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
-    <span class="kw">use </span><span class="kw">crate</span>::task::spawn;
+    <span class="kw">use </span><span class="kw">crate</span>::runtime::spawn;
 
     <span class="kw">async fn </span>waiter(db: <span class="kw-2">&amp;</span>Database, key: TestKey) -&gt; tokio::task::JoinHandle&lt;TestVal&gt; {
         <span class="kw">let </span>db = db.clone();
@@ -5872,8 +5871,7 @@
             <span class="kw">let </span>sub = db.wait_key_exists(<span class="kw-2">&amp;</span>key);
             tx.send(()).unwrap();
             sub.<span class="kw">await
-        </span>})
-        .expect(<span class="string">"some handle on non-wasm"</span>);
+        </span>});
         rx.<span class="kw">await</span>.unwrap();
         join_handle
     }

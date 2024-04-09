@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["block_in_place","sleep","sleep_until","spawn","spawn_local","timeout"],"struct":["RwLock","RwLockReadGuard","RwLockWriteGuard"]};

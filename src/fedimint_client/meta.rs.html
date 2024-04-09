@@ -574,7 +574,7 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>MetaSource <span class="kw">for </span>LegacyMetaSource {
     <span class="kw">async fn </span>wait_for_update(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        fedimint_core::task::sleep(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>)).<span class="kw">await
+        fedimint_core::runtime::sleep(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>)).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch(

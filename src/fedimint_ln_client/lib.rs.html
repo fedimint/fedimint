@@ -1763,11 +1763,11 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-<span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, timeout, MaybeSend, MaybeSync};
+<span class="kw">use </span>fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::update_merge::UpdateMerge;
 <span class="kw">use </span>fedimint_core::util::{retry, FibonacciBackoff};
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
+    apply, async_trait_maybe_send, push_db_pair_items, runtime, Amount, OutPoint, TransactionId,
 };
 <span class="kw">use </span>fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
@@ -2690,7 +2690,7 @@
                 } <span class="kw">else </span>{
                     EMPTY_GATEWAY_SLEEP
                 });
-            task::sleep(sleep_time).<span class="kw">await</span>;
+            runtime::sleep(sleep_time).<span class="kw">await</span>;
 
             <span class="comment">// should never fail with usize::MAX attempts.
             </span><span class="kw">let _ </span>= retry(

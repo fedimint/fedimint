@@ -1211,7 +1211,7 @@
             <span class="prelude-val">Some</span>(msg_res) = connected.connection.next() =&gt; {
                 <span class="self">self</span>.receive_message(connected, msg_res).<span class="kw">await
             </span>},
-            <span class="kw">_ </span>= sleep_until(connected.next_ping.into()) =&gt; {
+            <span class="kw">_ </span>= sleep_until(connected.next_ping) =&gt; {
                 <span class="self">self</span>.send_ping(connected).<span class="kw">await
             </span>},
             <span class="kw">_ </span>= task_handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {

@@ -734,6 +734,7 @@
 <a href="#732" id="732">732</a>
 <a href="#733" id="733">733</a>
 <a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
@@ -750,6 +751,7 @@
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ModuleCommon};
+<span class="kw">use </span>fedimint_core::runtime::block_in_place;
 <span class="kw">use </span>fedimint_core::task::jit::JitTryAnyhow;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::PeerId;
@@ -817,7 +819,7 @@
 
     <span class="doccomment">/// Create a [`Client`] that starts with a fresh state.
     </span><span class="kw">pub async fn </span>create(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
-        tokio::task::block_in_place(|| {
+        block_in_place(|| {
             <span class="kw">let </span>_lock = <span class="self">Self</span>::client_name_lock(name);
             <span class="kw">for </span>i <span class="kw">in </span><span class="number">0u64</span>.. {
                 <span class="kw">let </span>client = <span class="self">Self </span>{
@@ -835,7 +837,7 @@
 
     <span class="doccomment">/// Open or create a [`Client`] that starts with a fresh state.
     </span><span class="kw">pub async fn </span>open_or_create(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
-        tokio::task::block_in_place(|| {
+        block_in_place(|| {
             <span class="kw">let </span>_lock = <span class="self">Self</span>::client_name_lock(name);
             <span class="kw">let </span>client = <span class="self">Self </span>{
                 name: <span class="macro">format!</span>(<span class="string">"{name}-0"</span>),

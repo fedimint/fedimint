@@ -807,7 +807,7 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        fedimint_core::task::block_in_place(|| {
+        fedimint_core::runtime::block_in_place(|| {
             <span class="kw">let </span>val = <span class="self">self</span>.<span class="number">0</span>.get(key).unwrap();
             <span class="self">self</span>.<span class="number">0</span>.put(key, value)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(val)
@@ -815,11 +815,11 @@
     }
 
     <span class="kw">async fn </span>raw_get_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        fedimint_core::task::block_in_place(|| <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.snapshot().get(key)<span class="question-mark">?</span>))
+        fedimint_core::runtime::block_in_place(|| <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.snapshot().get(key)<span class="question-mark">?</span>))
     }
 
     <span class="kw">async fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        fedimint_core::task::block_in_place(|| {
+        fedimint_core::runtime::block_in_place(|| {
             <span class="kw">let </span>val = <span class="self">self</span>.<span class="number">0</span>.get(key).unwrap();
             <span class="self">self</span>.<span class="number">0</span>.delete(key)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(val)
@@ -835,14 +835,14 @@
             I::Item: Send,
         {
             stream::unfold(iter, |<span class="kw-2">mut </span>iter| <span class="kw">async move </span>{
-                tokio::task::block_in_place(<span class="kw">move </span>|| {
+                fedimint_core::runtime::block_in_place(<span class="kw">move </span>|| {
                     <span class="kw">let </span>item = iter.next();
                     item.map(<span class="kw">move </span>|item| (item, iter))
                 })
             })
         }
 
-        <span class="prelude-val">Ok</span>(fedimint_core::task::block_in_place(|| {
+        <span class="prelude-val">Ok</span>(fedimint_core::runtime::block_in_place(|| {
             <span class="kw">let </span>prefix = key_prefix.to_vec();
             <span class="kw">let </span><span class="kw-2">mut </span>options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
@@ -861,7 +861,7 @@
     }
 
     <span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; anyhow::Result&lt;()&gt; {
-        fedimint_core::task::block_in_place(|| {
+        fedimint_core::runtime::block_in_place(|| {
             <span class="comment">// Note: delete_range is not supported in Transactions :/
             </span><span class="kw">let </span><span class="kw-2">mut </span>options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(key_prefix.to_owned()));
@@ -901,7 +901,7 @@
         } <span class="kw">else </span>{
             rocksdb::IteratorMode::End
         };
-        <span class="prelude-val">Ok</span>(fedimint_core::task::block_in_place(|| {
+        <span class="prelude-val">Ok</span>(fedimint_core::runtime::block_in_place(|| {
             <span class="kw">let </span><span class="kw-2">mut </span>options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
             <span class="kw">let </span>iter = <span class="self">self</span>.<span class="number">0</span>.snapshot().iterator_opt(iterator_mode, options);
@@ -919,13 +919,13 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IDatabaseTransactionOps <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">async fn </span>rollback_tx_to_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="prelude-val">Ok</span>(fedimint_core::task::block_in_place(|| {
+        <span class="prelude-val">Ok</span>(fedimint_core::runtime::block_in_place(|| {
             <span class="self">self</span>.<span class="number">0</span>.rollback_to_savepoint()
         })<span class="question-mark">?</span>)
     }
 
     <span class="kw">async fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        fedimint_core::task::block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.set_savepoint());
+        fedimint_core::runtime::block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.set_savepoint());
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -934,7 +934,7 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IRawDatabaseTransaction <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">async fn </span>commit_tx(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        fedimint_core::task::block_in_place(|| {
+        fedimint_core::runtime::block_in_place(|| {
             <span class="self">self</span>.<span class="number">0</span>.commit()<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(())
         })
@@ -948,7 +948,7 @@
     }
 
     <span class="kw">async fn </span>raw_get_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        fedimint_core::task::block_in_place(|| <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.get(key)<span class="question-mark">?</span>))
+        fedimint_core::runtime::block_in_place(|| <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.get(key)<span class="question-mark">?</span>))
     }
 
     <span class="kw">async fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
@@ -956,7 +956,7 @@
     }
 
     <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">'_</span>&gt;&gt; {
-        <span class="prelude-val">Ok</span>(fedimint_core::task::block_in_place(|| {
+        <span class="prelude-val">Ok</span>(fedimint_core::runtime::block_in_place(|| {
             <span class="kw">let </span>prefix = key_prefix.to_vec();
             <span class="kw">let </span>rocksdb_iter = <span class="self">self
                 </span>.<span class="number">0
@@ -987,7 +987,7 @@
         } <span class="kw">else </span>{
             rocksdb::IteratorMode::End
         };
-        <span class="prelude-val">Ok</span>(fedimint_core::task::block_in_place(|| {
+        <span class="prelude-val">Ok</span>(fedimint_core::runtime::block_in_place(|| {
             <span class="kw">let </span><span class="kw-2">mut </span>options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
             <span class="kw">let </span>iter = <span class="self">self</span>.<span class="number">0</span>.snapshot().iterator_opt(iterator_mode, options);

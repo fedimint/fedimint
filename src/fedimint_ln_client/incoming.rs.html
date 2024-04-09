@@ -381,7 +381,7 @@
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::task::sleep;
+<span class="kw">use </span>fedimint_core::runtime::sleep;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, Preimage};
@@ -550,7 +550,7 @@
                 }
             }
             <span class="comment">// give some time for other things to run
-            </span>fedimint_core::task::sleep(Duration::from_secs(sleep)).<span class="kw">await</span>;
+            </span>fedimint_core::runtime::sleep(Duration::from_secs(sleep)).<span class="kw">await</span>;
         }
 
         <span class="macro">unreachable!</span>(<span class="string">"there is too many u64s to ever get here"</span>)

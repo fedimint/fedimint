@@ -2445,6 +2445,8 @@
 <a href="#2443" id="2443">2443</a>
 <a href="#2444" id="2444">2444</a>
 <a href="#2445" id="2445">2445</a>
+<a href="#2446" id="2446">2446</a>
+<a href="#2447" id="2447">2447</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2553,7 +2555,8 @@
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
-    maybe_add_send, maybe_add_send_sync, Amount, NumPeers, OutPoint, PeerId, TransactionId,
+    maybe_add_send, maybe_add_send_sync, runtime, Amount, NumPeers, OutPoint, PeerId,
+    TransactionId,
 };
 <span class="kw">pub use </span>fedimint_derive_secret <span class="kw">as </span>derivable_secret;
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
@@ -3118,6 +3121,7 @@
         </span><span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
         </span><span class="kw">let </span>can_block = <span class="bool-val">false</span>;
         <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+        </span><span class="comment">// nosemgrep: ban-raw-block-on
         </span><span class="kw">let </span>can_block = RuntimeHandle::current().runtime_flavor() != RuntimeFlavor::CurrentThread;
         <span class="kw">if </span>!can_block {
             <span class="kw">let </span>inner = <span class="self">self</span>.inner.take().expect(<span class="string">"Must have inner client set"</span>);
@@ -3132,8 +3136,8 @@
 
         <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Shutting down the Client on last handle drop"</span>);
         <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-        </span>tokio::task::block_in_place(|| {
-            RuntimeHandle::current().block_on(<span class="self">self</span>.shutdown_inner());
+        </span>runtime::block_in_place(|| {
+            runtime::block_on(<span class="self">self</span>.shutdown_inner());
         });
     }
 }
@@ -4065,7 +4069,7 @@
             <span class="kw">if </span><span class="self">self</span>.executor.get_active_states().<span class="kw">await</span>.is_empty() {
                 <span class="kw">break</span>;
             }
-            fedimint_core::task::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+            fedimint_core::runtime::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
         }
         <span class="prelude-val">Ok</span>(())
     }

@@ -292,7 +292,7 @@
 <span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::task::sleep_in_test;
+<span class="kw">use </span>fedimint_core::task::{block_in_place, sleep_in_test};
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{task, Amount};
@@ -470,7 +470,7 @@
 </span><span class="kw">impl </span>BitcoinTest <span class="kw">for </span>RealBitcoinTest {
     <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send + Sync&gt; {
         <span class="macro">trace!</span>(<span class="string">"Trying to acquire global bitcoin lock"</span>);
-        <span class="kw">let </span>_guard = tokio::task::block_in_place(|| {
+        <span class="kw">let </span>_guard = block_in_place(|| {
             <span class="kw">let </span>lock_file_path = std::env::temp_dir().join(<span class="string">"fm-test-bitcoind-lock"</span>);
             fs_lock::FileLock::new_exclusive(
                 std::fs::OpenOptions::new()

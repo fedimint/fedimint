@@ -60,7 +60,7 @@
 
 <span class="kw">impl </span>aleph_bft::SpawnHandle <span class="kw">for </span>Spawner {
     <span class="kw">fn </span>spawn(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str, task: <span class="kw">impl </span>futures::Future&lt;Output = ()&gt; + Send + <span class="lifetime">'static</span>) {
-        fedimint_core::task::spawn(name, task);
+        fedimint_core::runtime::spawn(name, task);
     }
 
     <span class="kw">fn </span>spawn_essential(
@@ -70,7 +70,7 @@
     ) -&gt; aleph_bft::TaskHandle {
         <span class="kw">let </span>(res_tx, res_rx) = futures::channel::oneshot::channel();
 
-        fedimint_core::task::spawn(name, <span class="kw">async move </span>{
+        fedimint_core::runtime::spawn(name, <span class="kw">async move </span>{
             task.<span class="kw">await</span>;
             <span class="kw">if let </span><span class="prelude-val">Err</span>(_err) = res_tx.send(()) {
                 <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">"Unable to send essential spawned task completion. Are we shutting down?"</span>);

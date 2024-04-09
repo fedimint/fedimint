@@ -214,7 +214,7 @@
         <span class="macro">assert!</span>(!waiter.is_done());
         <span class="macro">tokio::join!</span>(
             <span class="kw">async </span>{
-                fedimint_core::task::sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
+                fedimint_core::runtime::sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
                 waiter.done();
             },
             waiter.wait(),

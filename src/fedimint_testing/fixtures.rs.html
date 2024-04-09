@@ -254,6 +254,7 @@
 <a href="#252" id="252">252</a>
 <a href="#253" id="253">253</a>
 <a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -269,6 +270,7 @@
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
+<span class="kw">use </span>fedimint_core::runtime::block_in_place;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_logging::{TracingSetup, LOG_TEST};
@@ -397,7 +399,7 @@
         FederationTest::new(
             num_peers,
             num_offline,
-            tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(num_peers * <span class="number">2</span>))
+            block_in_place(|| fedimint_portalloc::port_alloc(num_peers * <span class="number">2</span>))
                 .expect(<span class="string">"Failed to allocate a port range"</span>),
             <span class="self">self</span>.params.clone(),
             ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone()),
@@ -422,7 +424,7 @@
         <span class="kw">let </span>clients = <span class="self">self</span>.clients.clone().into_iter();
 
         GatewayTest::new(
-            tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(<span class="number">1</span>))
+            block_in_place(|| fedimint_portalloc::port_alloc(<span class="number">1</span>))
                 .expect(<span class="string">"Failed to allocate a port range"</span>),
             cli_password,
             ln,

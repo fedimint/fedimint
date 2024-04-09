@@ -846,7 +846,7 @@
 
 <span class="kw">use </span>anyhow::{anyhow, bail, format_err, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>fedimint_core::envs::is_env_var_set;
-<span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, block_in_place};
+<span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, block_in_place, block_on};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>semver::Version;
@@ -944,7 +944,7 @@
         };
         <span class="kw">let </span>name = <span class="self">self</span>.name.clone();
         block_in_place(<span class="kw">move </span>|| {
-            tokio::runtime::Handle::current().block_on(<span class="kw">async move </span>{
+            block_on(<span class="kw">async move </span>{
                 <span class="macro">debug!</span>(
                     target: LOG_DEVIMINT,
                     <span class="string">"sending SIGKILL to {name} and waiting for it to exit"

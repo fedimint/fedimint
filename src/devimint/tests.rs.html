@@ -2309,6 +2309,7 @@
 <span class="kw">use </span>cln_rpc::primitives::{Amount <span class="kw">as </span>ClnRpcAmount, AmountOrAny};
 <span class="kw">use </span>fedimint_cli::LnInvoiceResponse;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
+<span class="kw">use </span>fedimint_core::task::block_in_place;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>hex::ToHex;
@@ -4185,8 +4186,7 @@
     <span class="kw">let </span>request = bitcoin_client
         .get_jsonrpc_client()
         .build_request(<span class="string">"importdescriptors"</span>, <span class="kw-2">&amp;</span>descriptors_json);
-    <span class="kw">let </span>response =
-        tokio::task::block_in_place(|| bitcoin_client.get_jsonrpc_client().send_request(request))<span class="question-mark">?</span>;
+    <span class="kw">let </span>response = block_in_place(|| bitcoin_client.get_jsonrpc_client().send_request(request))<span class="question-mark">?</span>;
     response.check_error()<span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">"Getting wallet balances after import"</span>);
     <span class="kw">let </span>balances_after = bitcoin_client.get_balances().<span class="kw">await</span><span class="question-mark">?</span>;
