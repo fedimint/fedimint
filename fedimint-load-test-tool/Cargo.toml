@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-load-test-tool"
-version = "0.3.0-alpha"
+version = "0.4.0-alpha"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-load-test-tool is a tool to load test the fedimint server and gateway."
@@ -16,7 +16,7 @@ anyhow = { workspace = true }
 base64 = "0.22.0"
 bitcoin = "0.29.2"
 clap = { workspace = true }
-devimint = { version = "0.3.0-alpha", path = "../devimint" }
+devimint = { version = "=0.4.0-alpha", path = "../devimint" }
 fedimint-client = { version = "=0.4.0-alpha", path = "../fedimint-client" }
 fedimint-core = { version = "=0.4.0-alpha", path = "../fedimint-core" }
 fedimint-ln-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-client" }
