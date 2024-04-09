@@ -18,7 +18,7 @@ use fedimint_core::api::InviteCode;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::task::spawn;
+use fedimint_core::runtime::spawn;
 use fedimint_core::util::{BoxFuture, SafeUrl};
 use fedimint_core::Amount;
 use fedimint_ln_client::{LightningClientModule, LnReceiveState};
@@ -294,8 +294,7 @@ async fn main() -> anyhow::Result<()> {
     let summary_handle = spawn("handle metrics summary", {
         let opts = opts.clone();
         async move { handle_metrics_summary(opts, event_receiver).await }
-    })
-    .expect("some handle on non-wasm");
+    });
     let futures = match opts.command.clone() {
         Command::TestConnect {
             invite_code,

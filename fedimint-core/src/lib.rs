@@ -77,6 +77,8 @@ pub mod module;
 pub mod net;
 /// Client query system
 pub mod query;
+/// Runtime (wasm32 vs native) differences handling
+pub mod runtime;
 /// Task handling, including wasm safe logic
 pub mod task;
 /// Types handling per-denomination values

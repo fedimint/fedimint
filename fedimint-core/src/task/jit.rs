@@ -2,11 +2,9 @@ use std::convert::Infallible;
 use std::fmt;
 use std::sync::Arc;
 
-use fedimint_logging::LOG_TASK;
+use fedimint_core::runtime::JoinHandle;
 use futures::Future;
-use tokio::select;
-use tokio::sync::{self, oneshot};
-use tracing::trace;
+use tokio::sync;
 
 use super::MaybeSend;
 
@@ -51,15 +49,13 @@ where
 /// A value that initializes eagerly in parallel in a falliable way
 #[derive(Debug)]
 pub struct JitCore<T, E> {
-    // on last drop it lets the inner task to know it should stop, because we don't care anymore
-    _cancel_tx: sync::mpsc::Sender<()>,
-    // since joinhandles, are not portable, we use this to wait for the value
-    // Note: the `std::sync::Mutex` is used intentionally, since contention never actually happens
-    // and we want to avoid cancelation because of it
-    #[allow(clippy::type_complexity)]
-    val_rx:
-        Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Receiver<std::result::Result<T, E>>>>>,
-    val: Arc<sync::OnceCell<T>>,
+    inner: Arc<JitInner<T, E>>,
+}
+
+#[derive(Debug)]
+struct JitInner<T, E> {
+    handle: sync::Mutex<JoinHandle<Result<T, E>>>,
+    val: sync::OnceCell<Result<T, ()>>,
 }
 
 impl<T, E> Clone for JitCore<T, E>
@@ -68,10 +64,13 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            _cancel_tx: self._cancel_tx.clone(),
-            val_rx: self.val_rx.clone(),
-            val: self.val.clone(),
+            inner: self.inner.clone(),
         }
+    }
+}
+impl<T, E> Drop for JitInner<T, E> {
+    fn drop(&mut self) {
+        self.handle.get_mut().abort();
     }
 }
 impl<T, E> JitCore<T, E>
@@ -87,90 +86,42 @@ where
     where
         Fut: Future<Output = std::result::Result<T, E>> + 'static + MaybeSend,
     {
-        let (cancel_tx, mut cancel_rx) = tokio::sync::mpsc::channel(1);
-        let (val_tx, val_rx) = oneshot::channel();
-        let type_name = std::any::type_name::<T>();
-        super::imp::spawn(
+        let handle = crate::runtime::spawn(
             &format!("JitTry {} value", std::any::type_name::<T>()),
-            async move {
-                select! {
-                    _ = cancel_rx.recv() => {
-                        trace!(target: LOG_TASK, r#type = %type_name, "JitTry value future canceled");
-                    },
-                    val = f() => {
-                        match val_tx.send(val) {
-                            Ok(_) => {
-                                trace!(target: LOG_TASK, r#type = %type_name, "JitTry value ready");
-                            },
-                            Err(_) => {
-                                trace!(target: LOG_TASK,  r#type = %type_name, "JitTry value ready, but ignored");
-                            },
-                        };
-                    },
-                }
-            },
-        )
-        .expect("spawn not fail");
+            async move { f().await },
+        );
 
         Self {
-            _cancel_tx: cancel_tx,
-            val_rx: Arc::new(Some(val_rx).into()),
-            val: sync::OnceCell::new().into(),
+            inner: JitInner {
+                handle: handle.into(),
+                val: sync::OnceCell::new(),
+            }
+            .into(),
         }
     }
 
     /// Get the reference to the value, potentially blocking for the
     /// initialization future to complete
-    pub async fn get_try(&self) -> std::result::Result<&T, OneTimeError<E>> {
-        /// Temporarily taken data out of `arc`, that will be put back on drop,
-        /// unless canceled
-        ///
-        /// Used to achieve cancelation safety.
-        struct PutBack<'a, T> {
-            val: Option<T>,
-            arc: &'a Arc<std::sync::Mutex<Option<T>>>,
-        }
-
-        impl<'a, T> PutBack<'a, T> {
-            fn take(arc: &'a Arc<std::sync::Mutex<Option<T>>>) -> Self {
-                let val = arc.lock().expect("lock failed").take();
-                Self { val, arc }
-            }
-
-            fn cancel(mut self) {
-                self.val = None;
-            }
-
-            fn get_mut(&mut self) -> Option<&mut T> {
-                self.val.as_mut()
-            }
-        }
-        impl<'a, T> Drop for PutBack<'a, T> {
-            fn drop(&mut self) {
-                let mut lock = self.arc.lock().expect("lock failed");
-                let take = self.val.take();
-
-                *lock = take;
-            }
-        }
-        self.val
-            .get_or_try_init(|| async {
-                let mut recv = PutBack::take(&self.val_rx);
-
-                let val_res = {
-                    let Some(recv) = recv.get_mut() else {
-                        return Err(OneTimeError(None));
-                    };
-                    recv.await.unwrap_or_else(|_| {
-                        panic!("Jit value {} panicked", std::any::type_name::<T>())
+    pub async fn get_try(&self) -> Result<&T, OneTimeError<E>> {
+        let mut init_error = None;
+        let value = self
+            .inner
+            .val
+            .get_or_init(|| async {
+                let handle: &mut _ = &mut *self.inner.handle.lock().await;
+                handle
+                    .await
+                    .unwrap_or_else(|_| panic!("Jit value {} panicked", std::any::type_name::<T>()))
+                    .map_err(|err| {
+                        init_error = Some(err);
+                        // return ()
                     })
-                };
-
-                recv.cancel();
-
-                val_res.map_err(|err| OneTimeError(Some(err)))
             })
-            .await
+            .await;
+        if let Some(err) = init_error {
+            return Err(OneTimeError(Some(err)));
+        }
+        value.as_ref().map_err(|_| OneTimeError(None))
     }
 }
 impl<T> JitCore<T, Infallible>
@@ -200,7 +151,7 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn sanity_jit() {
         let v = Jit::new(|| async {
-            fedimint_core::task::sleep(Duration::from_millis(0)).await;
+            fedimint_core::runtime::sleep(Duration::from_millis(0)).await;
             3
         });
 
@@ -212,7 +163,7 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn sanity_jit_try_ok() {
         let v = JitTryAnyhow::new_try(|| async {
-            fedimint_core::task::sleep(Duration::from_millis(0)).await;
+            fedimint_core::runtime::sleep(Duration::from_millis(0)).await;
             Ok(3)
         });
 
@@ -224,7 +175,7 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn sanity_jit_try_err() {
         let v = JitTry::new_try(|| async {
-            fedimint_core::task::sleep(Duration::from_millis(0)).await;
+            fedimint_core::runtime::sleep(Duration::from_millis(0)).await;
             bail!("BOOM");
             #[allow(unreachable_code)]
             Ok(3)

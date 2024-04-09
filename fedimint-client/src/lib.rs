@@ -106,7 +106,8 @@ use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
-    maybe_add_send, maybe_add_send_sync, Amount, NumPeers, OutPoint, PeerId, TransactionId,
+    maybe_add_send, maybe_add_send_sync, runtime, Amount, NumPeers, OutPoint, PeerId,
+    TransactionId,
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
@@ -671,6 +672,7 @@ impl Drop for ClientHandle {
         #[cfg(target_family = "wasm")]
         let can_block = false;
         #[cfg(not(target_family = "wasm"))]
+        // nosemgrep: ban-raw-block-on
         let can_block = RuntimeHandle::current().runtime_flavor() != RuntimeFlavor::CurrentThread;
         if !can_block {
             let inner = self.inner.take().expect("Must have inner client set");
@@ -685,8 +687,8 @@ impl Drop for ClientHandle {
 
         debug!(target: LOG_CLIENT, "Shutting down the Client on last handle drop");
         #[cfg(not(target_family = "wasm"))]
-        tokio::task::block_in_place(|| {
-            RuntimeHandle::current().block_on(self.shutdown_inner());
+        runtime::block_in_place(|| {
+            runtime::block_on(self.shutdown_inner());
         });
     }
 }
@@ -1618,7 +1620,7 @@ impl Client {
             if self.executor.get_active_states().await.is_empty() {
                 break;
             }
-            fedimint_core::task::sleep(Duration::from_millis(100)).await;
+            fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
         }
         Ok(())
     }

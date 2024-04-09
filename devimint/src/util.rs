@@ -9,7 +9,7 @@ use std::{env, unreachable};
 
 use anyhow::{anyhow, bail, format_err, Context, Result};
 use fedimint_core::envs::is_env_var_set;
-use fedimint_core::task::{self, block_in_place};
+use fedimint_core::task::{self, block_in_place, block_on};
 use fedimint_core::time::now;
 use fedimint_logging::LOG_DEVIMINT;
 use semver::Version;
@@ -107,7 +107,7 @@ impl Drop for ProcessHandleInner {
         };
         let name = self.name.clone();
         block_in_place(move || {
-            tokio::runtime::Handle::current().block_on(async move {
+            block_on(async move {
                 debug!(
                     target: LOG_DEVIMINT,
                     "sending SIGKILL to {name} and waiting for it to exit"

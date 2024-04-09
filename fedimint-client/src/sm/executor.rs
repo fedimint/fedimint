@@ -736,17 +736,7 @@ impl ExecutorInner {
 
 impl Debug for ExecutorInner {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let (active, inactive) = tokio::runtime::Handle::current().block_on(async {
-            let active_states = self.get_active_states().await;
-            let inactive_states = self.get_inactive_states().await;
-            (active_states, inactive_states)
-        });
-        writeln!(f, "ExecutorInner {{")?;
-        writeln!(f, "    active_states: {active:?}")?;
-        writeln!(f, "    inactive_states: {inactive:?}")?;
-        writeln!(f, "}}")?;
-
-        Ok(())
+        writeln!(f, "ExecutorInner {{}}")
     }
 }
 
@@ -1175,7 +1165,8 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::task::{self, TaskGroup};
+    use fedimint_core::runtime;
+    use fedimint_core::task::TaskGroup;
     use tokio::sync::broadcast::Sender;
     use tracing::{info, trace};
 
@@ -1350,9 +1341,9 @@ mod tests {
         );
 
         // TODO build await fn+timeout or allow manual driving of executor
-        task::sleep(Duration::from_secs(1)).await;
+        runtime::sleep(Duration::from_secs(1)).await;
         sender.send(0).unwrap();
-        task::sleep(Duration::from_secs(2)).await;
+        runtime::sleep(Duration::from_secs(2)).await;
 
         assert!(
             executor

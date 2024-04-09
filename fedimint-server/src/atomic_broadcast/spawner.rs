@@ -18,7 +18,7 @@ impl Default for Spawner {
 
 impl aleph_bft::SpawnHandle for Spawner {
     fn spawn(&self, name: &str, task: impl futures::Future<Output = ()> + Send + 'static) {
-        fedimint_core::task::spawn(name, task);
+        fedimint_core::runtime::spawn(name, task);
     }
 
     fn spawn_essential(
@@ -28,7 +28,7 @@ impl aleph_bft::SpawnHandle for Spawner {
     ) -> aleph_bft::TaskHandle {
         let (res_tx, res_rx) = futures::channel::oneshot::channel();
 
-        fedimint_core::task::spawn(name, async move {
+        fedimint_core::runtime::spawn(name, async move {
             task.await;
             if let Err(_err) = res_tx.send(()) {
                 warn!(target: LOG_CONSENSUS, "Unable to send essential spawned task completion. Are we shutting down?");

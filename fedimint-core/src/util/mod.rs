@@ -20,8 +20,8 @@ use tokio::io::AsyncWriteExt;
 use tracing::{debug, warn, Instrument, Span};
 use url::{Host, ParseError, Url};
 
-use crate::task::{self, MaybeSend};
-use crate::{apply, async_trait_maybe_send, maybe_add_send};
+use crate::task::MaybeSend;
+use crate::{apply, async_trait_maybe_send, maybe_add_send, runtime};
 
 /// Future that is `Send` unless targeting WASM
 pub type BoxFuture<'a, T> = Pin<Box<maybe_add_send!(dyn Future<Output = T> + 'a)>>;
@@ -370,7 +370,7 @@ where
                         "{} failed, retrying",
                         op_name,
                     );
-                    task::sleep(interval).await;
+                    runtime::sleep(interval).await;
                 } else {
                     warn!(
                         target: LOG_CORE,
@@ -392,11 +392,11 @@ mod tests {
     use std::time::Duration;
 
     use anyhow::anyhow;
-    use fedimint_core::task::Elapsed;
+    use fedimint_core::runtime::Elapsed;
     use futures::FutureExt;
 
     use super::*;
-    use crate::task::timeout;
+    use crate::runtime::timeout;
 
     #[test]
     fn test_safe_url() {

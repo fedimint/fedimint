@@ -100,7 +100,7 @@ mod tests {
         assert!(!waiter.is_done());
         tokio::join!(
             async {
-                fedimint_core::task::sleep(Duration::from_millis(10)).await;
+                fedimint_core::runtime::sleep(Duration::from_millis(10)).await;
                 waiter.done();
             },
             waiter.wait(),
