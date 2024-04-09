@@ -275,6 +275,44 @@
 <a href="#273" id="273">273</a>
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Threshold Blind Signatures
 //!
 //! This library implements an ad-hoc threshold blind signature scheme based on
@@ -287,6 +325,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>ff::Field;
 <span class="kw">use </span>group::{Curve, Group};
+<span class="kw">use </span>hex::encode;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::SeedableRng;
 <span class="kw">use </span>rand_chacha::ChaChaRng;
@@ -294,6 +333,7 @@
 <span class="kw">use </span>sha3::Digest;
 
 <span class="kw">const </span>HASH_TAG: <span class="kw-2">&amp;</span>[u8] = <span class="string">b"TBS_BLS12-381_"</span>;
+<span class="kw">const </span>FINGERPRINT_TAG: <span class="kw-2">&amp;</span>[u8] = <span class="string">b"TBS_KFP24_"</span>;
 
 <span class="kw">fn </span>hash_bytes_to_g1(data: <span class="kw-2">&amp;</span>[u8]) -&gt; G1Projective {
     <span class="kw">let </span><span class="kw-2">mut </span>hash_engine = sha3::Sha3_256::new();
@@ -318,7 +358,7 @@
 <span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>Message(<span class="attr">#[serde(with = <span class="string">"bls12_381_serde::g1"</span>)] </span><span class="kw">pub </span>G1Affine);
 
-<span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+<span class="attr">#[derive(Copy, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>BlindingKey(<span class="attr">#[serde(with = <span class="string">"bls12_381_serde::scalar"</span>)] </span><span class="kw">pub </span>Scalar);
 
 <span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
@@ -361,6 +401,30 @@
     <span class="kw">pub fn </span>random() -&gt; BlindingKey {
         <span class="comment">// TODO: fix rand incompatibities
         </span>BlindingKey(Scalar::random(OsRng))
+    }
+
+    <span class="kw">fn </span>fingerprint(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; [u8; <span class="number">32</span>] {
+        <span class="kw">let </span><span class="kw-2">mut </span>hash_engine = sha3::Sha3_256::new();
+        hash_engine.update(FINGERPRINT_TAG);
+        hash_engine.update(<span class="self">self</span>.<span class="number">0</span>.to_bytes());
+        <span class="kw">let </span>result = hash_engine.finalize();
+        result.into()
+    }
+}
+
+<span class="kw">impl </span>::core::fmt::Debug <span class="kw">for </span>BlindingKey {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>::core::fmt::Formatter) -&gt; ::core::fmt::Result {
+        <span class="kw">let </span>fingerprint = <span class="self">self</span>.fingerprint();
+        <span class="kw">let </span>fingerprint_hex = encode(<span class="kw-2">&amp;</span>fingerprint[..]);
+        <span class="macro">write!</span>(f, <span class="string">"BlindingKey({fingerprint_hex})"</span>)
+    }
+}
+
+<span class="kw">impl </span>::core::fmt::Display <span class="kw">for </span>BlindingKey {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>::core::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; ::core::fmt::Result {
+        <span class="kw">let </span>fingerprint = <span class="self">self</span>.fingerprint();
+        <span class="kw">let </span>fingerprint_hex = encode(<span class="kw-2">&amp;</span>fingerprint[..]);
+        <span class="macro">write!</span>(f, <span class="string">"{fingerprint_hex}"</span>)
     }
 }
 
@@ -548,6 +612,18 @@
         <span class="kw">let </span>sig = unblind_signature(bkey, bsig);
 
         <span class="macro">assert!</span>(verify(msg, sig, pk));
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_blindingkey_fingerprint_multiple_calls_same_result() {
+        <span class="kw">let </span>bkey = BlindingKey::random();
+        <span class="macro">assert_eq!</span>(bkey.fingerprint(), bkey.fingerprint());
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_blindingkey_fingerprint_ne_scalar() {
+        <span class="kw">let </span>bkey = BlindingKey::random();
+        <span class="macro">assert_ne!</span>(bkey.fingerprint(), bkey.<span class="number">0</span>.to_bytes());
     }
 }
 </code></pre></div></section></main></body></html>
