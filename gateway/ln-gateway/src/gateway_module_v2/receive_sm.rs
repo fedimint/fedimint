@@ -20,7 +20,7 @@ use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::{LightningInput, LightningOutputOutcome, Witness};
 use secp256k1::KeyPair;
 use tpe::{aggregate_decryption_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
-use tracing::trace;
+use tracing::{error, trace};
 
 use crate::gateway_module_v2::GatewayClientContextV2;
 
@@ -224,7 +224,8 @@ impl ReceiveStateMachine {
             .contract
             .verify_agg_decryption_key(&tpe_agg_pk, &agg_decryption_key)
         {
-            // This implies that the lightning client config's public keys are inconsistent
+            error!("Failed to obtain decryption key. Client config's public keys are inconsistent");
+
             return old_state.update(ReceiveSMState::Failure);
         }
 
