@@ -27,7 +27,7 @@ bls12_381 = "0.7.1"
 serdect = "0.2.0"
 itertools = { workspace = true }
 jsonrpsee-types = { version = "0.22.2" }
-jsonrpsee-core = { version = "0.22.2", features = ["client"] }
+jsonrpsee-core = { version = "0.22.4", features = ["client"] }
 lru = "0.12.3"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = { workspace = true }
