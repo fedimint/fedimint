@@ -505,9 +505,6 @@
 <a href="#503" id="503">503</a>
 <a href="#504" id="504">504</a>
 <a href="#505" id="505">505</a>
-<a href="#506" id="506">506</a>
-<a href="#507" id="507">507</a>
-<a href="#508" id="508">508</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -713,44 +710,6 @@
 }
 
 <span class="kw">impl </span>Meta {
-    <span class="doccomment">/// Check the difference between what's desired to be submitted and what's
-    /// already submitted or consensus value.
-    ///
-    /// Returns:
-    /// `(items_to_submit, desired_keys_to_delete)`
-    </span><span class="kw">async fn </span>desired_submitted_diff(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, NonCommittable&gt;,
-    ) -&gt; (Vec&lt;MetaConsensusItem&gt;, Vec&lt;MetaKey&gt;) {
-        <span class="kw">let </span>desired: Vec&lt;<span class="kw">_</span>&gt; = <span class="self">Self</span>::get_desired(dbtx).<span class="kw">await</span>;
-
-        <span class="kw">let </span><span class="kw-2">mut </span>to_delete: Vec&lt;MetaKey&gt; = <span class="macro">vec!</span>[];
-        <span class="kw">let </span><span class="kw-2">mut </span>to_submit = <span class="macro">vec!</span>[];
-
-        <span class="kw">for </span>(key, MetaDesiredValue { value, salt }) <span class="kw">in </span>desired {
-            <span class="kw">if </span><span class="self">Self</span>::get_submission(dbtx, key, <span class="self">self</span>.our_peer_id)
-                .<span class="kw">await
-                </span>.as_ref()
-                == <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>MetaSubmissionValue {
-                    value: value.clone(),
-                    salt,
-                })
-            {
-                to_delete.push(key);
-            } <span class="kw">else if </span><span class="self">Self</span>::get_consensus(dbtx, key).<span class="kw">await</span>.as_ref() == <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>value) {
-                <span class="comment">// When a value is new and equal to current consensus, it should both: be
-                // submitted so it can clear/cancel previous submissions, and
-                // deleted (afterwards).
-                </span>to_delete.push(key);
-                to_submit.push(MetaConsensusItem { key, value, salt });
-            } <span class="kw">else </span>{
-                to_submit.push(MetaConsensusItem { key, value, salt });
-            }
-        }
-
-        (to_submit, to_delete)
-    }
-
     <span class="kw">async fn </span>get_desired(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; Vec&lt;(MetaKey, MetaDesiredValue)&gt; {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>MetaDesiredKeyPrefix)
             .<span class="kw">await
@@ -807,16 +766,61 @@
     </span><span class="kw">type </span>Common = MetaModuleTypes;
     <span class="kw">type </span>Init = MetaInit;
 
-    <span class="kw">async fn </span>consensus_proposal(
+    <span class="doccomment">/// Check the difference between what's desired vs submitted and consensus.
+    ///
+    /// Returns:
+    /// Items to submit as our proposal.
+    </span><span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     ) -&gt; Vec&lt;MetaConsensusItem&gt; {
-        <span class="kw">let </span>(to_submit, _to_delete) = <span class="self">self</span>.desired_submitted_diff(dbtx).<span class="kw">await</span>;
+        <span class="kw">let </span>desired: Vec&lt;<span class="kw">_</span>&gt; = <span class="self">Self</span>::get_desired(dbtx).<span class="kw">await</span>;
 
-        <span class="comment">// Note: regrettably we can't delete any desired keys here, as it could lead to
-        // write-write db conflicts. So we just let the request handler do the
-        // cleaning.
-        </span>to_submit
+        <span class="kw">let </span><span class="kw-2">mut </span>to_submit = <span class="macro">vec!</span>[];
+
+        <span class="kw">for </span>(
+            key,
+            MetaDesiredValue {
+                value: desired_value,
+                salt,
+            },
+        ) <span class="kw">in </span>desired
+        {
+            <span class="kw">let </span>consensus_value = <span class="kw-2">&amp;</span><span class="self">Self</span>::get_consensus(dbtx, key).<span class="kw">await</span>;
+            <span class="kw">let </span>consensus_submission_value =
+                <span class="self">Self</span>::get_submission(dbtx, key, <span class="self">self</span>.our_peer_id).<span class="kw">await</span>;
+            <span class="kw">if </span>consensus_submission_value.as_ref()
+                == <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>MetaSubmissionValue {
+                    value: desired_value.clone(),
+                    salt,
+                })
+            {
+                <span class="comment">// our submission is already registered, nothing to do
+            </span>} <span class="kw">else if </span>consensus_value.as_ref() == <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>desired_value) {
+                <span class="kw">if </span>consensus_submission_value.is_none() {
+                    <span class="comment">// our desired value is equal to consensus and cleared our
+                    // submission (as it is equal the
+                    // consensus) so we don't need to propose it
+                </span>} <span class="kw">else </span>{
+                    <span class="comment">// we want to submit the same value as the current consensus, usually
+                    // to clear the previous submission that did not became the consensus (we were
+                    // outvoted)
+                    </span>to_submit.push(MetaConsensusItem {
+                        key,
+                        value: desired_value,
+                        salt,
+                    });
+                }
+            } <span class="kw">else </span>{
+                to_submit.push(MetaConsensusItem {
+                    key,
+                    value: desired_value,
+                    salt,
+                });
+            }
+        }
+
+        to_submit
     }
 
     <span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>&gt;(
@@ -958,16 +962,6 @@
         req: <span class="kw-2">&amp;</span>SubmitRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {
         <span class="kw">let </span>salt = thread_rng().gen();
-
-        <span class="comment">// Since this is the only place in the code that touches "desired" keys, we
-        // clean old keys here as well.
-        // Note: clean-up previously desired values before inserting the new one. This
-        // way if new value is already redundant (already submitted or equal to
-        // consensus one), it will still get a chance to get submitted.
-        </span><span class="kw">let </span>(_to_submit, to_delete) = <span class="self">self</span>.desired_submitted_diff(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc()).<span class="kw">await</span>;
-        <span class="kw">for </span>key <span class="kw">in </span>to_delete {
-            dbtx.remove_entry(<span class="kw-2">&amp;</span>MetaDesiredKey(key)).<span class="kw">await</span>;
-        }
 
         dbtx.insert_entry(
             <span class="kw-2">&amp;</span>MetaDesiredKey(req.key),
