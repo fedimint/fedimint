@@ -8,7 +8,9 @@ use fedimint_core::{sats, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
-use fedimint_lnv2_client::{LightningClientInit, LightningClientModule, ReceiveState, SendState};
+use fedimint_lnv2_client::{
+    LightningClientInit, LightningClientModule, ReceiveState, SendPaymentError, SendState,
+};
 use fedimint_lnv2_common::config::LightningGenParams;
 use fedimint_lnv2_server::LightningInit;
 use fedimint_testing::federation::FederationTest;
@@ -62,7 +64,7 @@ async fn print_liquidity(gateway: &GatewayTest, federation_id: FederationId) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn pay_external_invoice() -> anyhow::Result<()> {
+async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     // TODO: remove this
     if Fixtures::is_real_test() {
         return Ok(());
@@ -91,20 +93,40 @@ async fn pay_external_invoice() -> anyhow::Result<()> {
         .await
         .expect("Could not select gateway");
 
-    let op = client
+    let operation_id = client
         .get_first_module::<LightningClientModule>()
-        .send(gateway.api, invoice)
+        .send(gateway.api.clone(), invoice.clone())
         .await?;
+
+    let send_result = client
+        .get_first_module::<LightningClientModule>()
+        .send(gateway.api.clone(), invoice.clone())
+        .await;
+
+    assert_eq!(
+        Err(SendPaymentError::PendingPreviousPayment(operation_id)),
+        send_result
+    );
 
     let mut sub = client
         .get_first_module::<LightningClientModule>()
-        .subscribe_send(op)
+        .subscribe_send(operation_id)
         .await?
         .into_stream();
 
     assert_eq!(sub.ok().await?, SendState::Funding);
     assert_eq!(sub.ok().await?, SendState::Funded);
     assert!(std::matches!(sub.ok().await?, SendState::Success(..)));
+
+    let send_result = client
+        .get_first_module::<LightningClientModule>()
+        .send(gateway.api, invoice)
+        .await;
+
+    assert_eq!(
+        Err(SendPaymentError::SuccessfulPreviousPayment(operation_id)),
+        send_result
+    );
 
     Ok(())
 }

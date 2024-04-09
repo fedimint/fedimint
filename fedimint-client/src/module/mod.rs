@@ -409,6 +409,10 @@ where
         self.client.get().has_active_states(op_id).await
     }
 
+    pub async fn operation_exists(&self, op_id: OperationId) -> bool {
+        self.client.get().operation_exists(op_id).await
+    }
+
     pub async fn get_own_active_states(&self) -> Vec<(M::States, ActiveStateMeta)> {
         self.client
             .get()

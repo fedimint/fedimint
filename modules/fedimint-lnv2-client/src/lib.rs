@@ -291,6 +291,8 @@ impl LightningClientModule {
         payment_fee: PaymentFee,
         expiration_delta: u64,
     ) -> Result<OperationId, SendPaymentError> {
+        let operation_id = self.get_next_operation_id(&invoice).await?;
+
         let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(self.keypair.public_key());
 
         let refund_keypair = SecretKey::from_slice(&ephemeral_tweak)
@@ -335,8 +337,6 @@ impl LightningClientModule {
             invoice_hash: invoice.consensus_hash(),
         };
 
-        let operation_id = OperationId(contract.consensus_hash::<sha256::Hash>().into_inner());
-
         let contract_clone = contract.clone();
         let gateway_api_clone = gateway_api.clone();
         let invoice_clone = invoice.clone();
@@ -378,6 +378,39 @@ impl LightningClientModule {
             .map_err(|e| SendPaymentError::FinalizationError(e.to_string()))?;
 
         Ok(operation_id)
+    }
+
+    async fn get_next_operation_id(
+        &self,
+        invoice: &Bolt11Invoice,
+    ) -> Result<OperationId, SendPaymentError> {
+        for payment_attempt in 0..u64::MAX {
+            let operation_id = OperationId::from_encodable((invoice.clone(), payment_attempt));
+
+            if !self.client_ctx.operation_exists(operation_id).await {
+                return Ok(operation_id);
+            }
+
+            if self.client_ctx.has_active_states(operation_id).await {
+                return Err(SendPaymentError::PendingPreviousPayment(operation_id));
+            }
+
+            let mut stream = self
+                .subscribe_send(operation_id)
+                .await
+                .expect("operation_id exists")
+                .into_stream();
+
+            // This will not block since we checked for active states and there were none,
+            // so by definition a final state has to have been assumed already.
+            while let Some(state) = stream.next().await {
+                if let SendState::Success(..) = state {
+                    return Err(SendPaymentError::SuccessfulPreviousPayment(operation_id));
+                }
+            }
+        }
+
+        panic!("We could not find an unused operation id for sending a lightning payment");
     }
 
     pub async fn subscribe_send(
@@ -608,7 +641,7 @@ impl LightningClientModule {
         &self,
         contract: IncomingContract,
     ) -> Option<OperationId> {
-        let operation_id = OperationId(contract.consensus_hash::<sha256::Hash>().into_inner());
+        let operation_id = OperationId::from_encodable(contract.clone());
 
         let (claim_keypair, agg_decryption_key) = self.recover_contract_keys(&contract).await?;
 
@@ -725,6 +758,10 @@ pub enum GatewayError {
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum SendPaymentError {
+    #[error("A previous payment for the same invoice is still pending: {0}")]
+    PendingPreviousPayment(OperationId),
+    #[error("A previous payment for the same invoice was successful: {0}")]
+    SuccessfulPreviousPayment(OperationId),
     #[error("Gateway error: {0}")]
     GatewayError(GatewayError),
     #[error("The gateway does not support our federation")]
