@@ -2,6 +2,11 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, TransactionId};
+use fedimint_ln_common::gateway_endpoint_constants::{
+    BACKUP_ENDPOINT, BALANCE_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
+    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, LEAVE_FED_ENDPOINT, RESTORE_ENDPOINT,
+    SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
+};
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -49,7 +54,7 @@ impl GatewayRpcClient {
     pub async fn get_info_legacy(&self) -> GatewayRpcResult<GatewayInfo> {
         let url = self
             .base_url
-            .join(HANDLE_POST_INFO_ENDPOINT)
+            .join(GATEWAY_INFO_POST_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, ()).await
     }

@@ -11,7 +11,8 @@ extern crate core;
 
 pub mod config;
 pub mod contracts;
-pub mod endpoint_constants;
+pub mod federation_endpoint_constants;
+pub mod gateway_endpoint_constants;
 
 use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind, Read, Write};

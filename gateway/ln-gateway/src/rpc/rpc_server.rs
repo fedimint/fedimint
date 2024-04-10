@@ -10,6 +10,13 @@ use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::config::FederationId;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::pay::PayInvoicePayload;
+use fedimint_ln_common::gateway_endpoint_constants::{
+    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CONFIGURATION_ENDPOINT,
+    CONNECT_FED_ENDPOINT, CREATE_INVOICE_V2_ENDPOINT, GATEWAY_INFO_ENDPOINT,
+    GATEWAY_INFO_POST_ENDPOINT, GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT,
+    PAYMENT_INFO_V2_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT, SEND_PAYMENT_V2_ENDPOINT,
+    SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
+};
 use fedimint_lnv2_client::{CreateInvoicePayload, SendPaymentPayload};
 use hex::ToHex;
 use serde_json::{json, Value};
@@ -21,12 +28,6 @@ use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, ConnectToPeerPayload, DepositAddressPayload,
     GetFundingAddressPayload, InfoPayload, LeaveFedPayload, OpenChannelPayload, RestorePayload,
     SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
-};
-use crate::endpoint_constants::{
-    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CONFIGURATION_ENDPOINT,
-    CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GET_GATEWAY_ID_ENDPOINT,
-    HANDLE_POST_INFO_ENDPOINT, LEAVE_FED_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT,
-    SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use crate::rpc::ConfigPayload;
 use crate::{Gateway, GatewayError};
@@ -148,9 +149,9 @@ fn v1_routes(gateway: Gateway) -> Router {
         .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
         .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
         // These routes are for next generation lightning
-        .route("/payment_info", post(payment_info_v2))
-        .route("/send_payment", post(send_payment_v2))
-        .route("/create_invoice", post(create_invoice_v2));
+        .route(PAYMENT_INFO_V2_ENDPOINT, post(payment_info_v2))
+        .route(SEND_PAYMENT_V2_ENDPOINT, post(send_payment_v2))
+        .route(CREATE_INVOICE_V2_ENDPOINT, post(create_invoice_v2));
 
     // Authenticated, public routes used for gateway administration
     let always_authenticated_routes = Router::new()
@@ -173,7 +174,7 @@ fn v1_routes(gateway: Gateway) -> Router {
         .route(SET_CONFIGURATION_ENDPOINT, post(set_configuration))
         .route(CONFIGURATION_ENDPOINT, get(configuration))
         // FIXME: deprecated >= 0.3.0
-        .route(HANDLE_POST_INFO_ENDPOINT, post(handle_post_info))
+        .route(GATEWAY_INFO_POST_ENDPOINT, post(handle_post_info))
         .route(GATEWAY_INFO_ENDPOINT, get(info))
         .layer(middleware::from_fn(auth_after_config_middleware));
 

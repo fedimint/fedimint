@@ -37,7 +37,7 @@ use fedimint_ln_common::contracts::{
     EncryptedPreimage, FundedContract, IdentifiableContract, Preimage, PreimageDecryptionShare,
     PreimageKey,
 };
-use fedimint_ln_common::endpoint_constants::{
+use fedimint_ln_common::federation_endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
     GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
