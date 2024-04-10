@@ -423,19 +423,12 @@ impl Federation {
     pub async fn await_gateways_registered(&self) -> Result<()> {
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, "Awaiting LN gateways registration");
-        let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-        let command = if fedimint_cli_version < *VERSION_0_3_0_ALPHA {
-            "list-gateways"
-        } else {
-            "update-gateway-cache"
-        };
-
         poll("gateways registered", || async {
             let num_gateways = cmd!(
                 self.internal_client()
                     .await
                     .map_err(ControlFlow::Continue)?,
-                command
+                "list-gateways"
             )
             .out_json()
             .await
