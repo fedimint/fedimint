@@ -1,0 +1,123 @@
+# Best used if called by 'tls-download-mutinynet.sh' script
+# fedimint.my-super-host.com should be replaced by a domain controlled by you and all DNS below should redirect to the IP of your server.
+# Domains:
+# - fedimint.my-super-host.com
+# - fedimintd.fedimint.my-super-host.com
+# - guardian-ui.fedimint.my-super-host.com
+# - gatewayd.fedimint.my-super-host.com
+# - gateway-ui.fedimint.my-super-host.com
+
+version: "3.3"
+
+services:
+  traefik:
+    image: "traefik:v2.10"
+    container_name: "traefik"
+    command:
+      #- "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "443:443"
+    volumes:
+      - "letsencrypt_data:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  fedimintd:
+    image: fedimint/fedimintd:v0.3.0
+    volumes:
+      - fedimintd_data:/data
+    ports:
+      - "0.0.0.0:8173:8173"
+    environment:
+      # Starts out using esplora but should move to dedicated bitcoin core
+      - FM_BITCOIN_RPC_KIND=esplora
+      - FM_BITCOIN_RPC_URL=https://mutiny.mempool.space/api/
+      - FM_BITCOIN_NETWORK=bitcoin
+      - FM_BIND_P2P=0.0.0.0:8173
+      - FM_P2P_URL=fedimint://fedimint.my-super-host.com:8173
+      - FM_BIND_API=0.0.0.0:80
+      - FM_API_URL=wss://fedimintd.fedimint.my-super-host.com
+    restart: always
+    platform: linux/amd64
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.fedimintd.loadbalancer.server.port=80"
+      - "traefik.http.routers.fedimintd.rule=Host(`fedimintd.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.fedimintd.entrypoints=websecure"
+      - "traefik.http.routers.fedimintd.tls.certresolver=myresolver"
+
+  guardian-ui:
+    image: fedimintui/guardian-ui:0.3.0
+    environment:
+      - PORT=80
+      - REACT_APP_FM_CONFIG_API=wss://fedimintd.fedimint.my-super-host.com
+    depends_on:
+      - fedimintd
+    restart: always
+    platform: linux/amd64
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.guardian-ui.loadbalancer.server.port=80"
+      - "traefik.http.routers.guardian-ui.rule=Host(`guardian-ui.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.guardian-ui.entrypoints=websecure"
+      - "traefik.http.routers.guardian-ui.tls.certresolver=myresolver"
+
+  ### START_OF_GATEWAY ###
+  gatewayd:
+    image: fedimint/gatewayd:v0.3.0
+    command: gatewayd lnd
+    environment:
+      # Path to folder containing gateway config and data files
+      - FM_GATEWAY_DATA_DIR=/gateway_data
+      # Gateway webserver listen address
+      - FM_GATEWAY_LISTEN_ADDR=0.0.0.0:80
+      # Public URL from which the webserver API is reachable
+      - FM_GATEWAY_API_ADDR=https://gatewayd.fedimint.my-super-host.com
+      # Gateway webserver authentication password
+      - FM_GATEWAY_PASSWORD=thereisnosecondbest
+      # Configured gateway routing fees Format: <base_msat>,<proportional_millionths>
+      - FM_GATEWAY_FEES=1000,10000
+      # LND RPC address
+      - FM_LND_RPC_ADDR=lnd_gprc_url
+      # LND TLS cert file path
+      - FM_LND_TLS_CERT=/lnd_data/tls.cert
+      # LND macaroon file path
+      - FM_LND_MACAROON=/lnd_data/admin.macaroon
+    volumes:
+      - gateway_datadir:/gateway_data
+      - ~/.lnd:/lnd_data:ro
+    restart: always
+    platform: linux/amd64
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.gatewayd.loadbalancer.server.port=80"
+      - "traefik.http.routers.gatewayd.rule=Host(`gatewayd.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.gatewayd.entrypoints=websecure"
+      - "traefik.http.routers.gatewayd.tls.certresolver=myresolver"
+
+  gateway-ui:
+    image: fedimintui/gateway-ui:0.3.0
+    environment:
+      - PORT=80
+      - REACT_APP_FM_GATEWAY_API=https://gatewayd.fedimint.my-super-host.com
+    depends_on:
+      - gatewayd
+    restart: always
+    platform: linux/amd64
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.gateway-ui.loadbalancer.server.port=80"
+      - "traefik.http.routers.gateway-ui.rule=Host(`gateway-ui.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.gateway-ui.entrypoints=websecure"
+      - "traefik.http.routers.gateway-ui.tls.certresolver=myresolver"
+  ### END_OF_GATEWAY ###
+
+volumes:
+  letsencrypt_data:
+  fedimintd_data:
+  gateway_datadir:

@@ -4,7 +4,7 @@
 # Important: This version uses TLS certificates, so you must have a domain under your control that you can change the DNS records for
 # You can download this script and run it with: curl -sSL https://raw.githubusercontent.com/tonygiorgio/fedimint/mainnet-deploy/docker/tls-download-mainnet.sh | bash
 
-FEDIMINT_VERSION="0.2.2"
+FEDIMINT_VERSION="0.3.0"
 
 DOCKER_COMPOSE_FILE=https://raw.githubusercontent.com/tonygiorgio/fedimint/mainnet-deploy/docker/${FEDIMINT_VERSION}/full-tls-mainnet/docker-compose.yaml
 
