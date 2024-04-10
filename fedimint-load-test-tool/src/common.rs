@@ -14,7 +14,7 @@ use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
-use fedimint_core::{Amount, OutPoint, TieredSummary};
+use fedimint_core::{Amount, OutPoint, TieredCounts};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LnPayState, OutgoingLightningPayment,
 };
@@ -329,10 +329,10 @@ pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Erro
     secp256k1::PublicKey::from_str(s)
 }
 
-pub async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<TieredSummary> {
+pub async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<TieredCounts> {
     let mint_client = client.get_first_module::<MintClientModule>();
     let summary = mint_client
-        .get_wallet_summary(
+        .get_notes_tier_counts(
             &mut client
                 .db()
                 .begin_transaction_nc()

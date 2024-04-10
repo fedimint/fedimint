@@ -17,7 +17,7 @@ use fedimint_core::config::{ClientModuleConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::time::now;
-use fedimint_core::{Amount, BitcoinAmountOrAll, TieredMulti, TieredSummary};
+use fedimint_core::{Amount, BitcoinAmountOrAll, TieredCounts, TieredMulti};
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_ln_client::{
     LightningClientModule, LnReceiveState, OutgoingLightningPayment, PayType,
@@ -672,7 +672,7 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
     let mint_client = client.get_first_module::<MintClientModule>();
     let wallet_client = client.get_first_module::<WalletClientModule>();
     let summary = mint_client
-        .get_wallet_summary(
+        .get_notes_tier_counts(
             &mut client
                 .db()
                 .begin_transaction_nc()
@@ -699,5 +699,5 @@ pub struct InfoResponse {
     meta: BTreeMap<String, String>,
     total_amount_msat: Amount,
     total_num_notes: usize,
-    denominations_msat: TieredSummary,
+    denominations_msat: TieredCounts,
 }

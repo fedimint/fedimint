@@ -1,4 +1,4 @@
-use std::cmp::min;
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 
@@ -21,7 +21,7 @@ pub struct TieredMulti<T>(BTreeMap<Amount, Vec<T>>);
 impl<T> TieredMulti<T> {
     /// Returns a new `TieredMulti` with the given `BTreeMap` map
     pub fn new(map: BTreeMap<Amount, Vec<T>>) -> Self {
-        TieredMulti(map)
+        TieredMulti(map.into_iter().filter(|(_, v)| !v.is_empty()).collect())
     }
 
     /// Returns the total value of all notes in msat as `Amount`
@@ -50,14 +50,15 @@ impl<T> TieredMulti<T> {
     }
 
     /// Returns the summary of number of items in each tier
-    pub fn summary(&self) -> TieredSummary {
-        TieredSummary(Tiered::from_iter(
+    pub fn summary(&self) -> TieredCounts {
+        TieredCounts(Tiered::from_iter(
             self.iter().map(|(amount, values)| (*amount, values.len())),
         ))
     }
 
     /// Verifies whether all vectors in all tiers are empty
     pub fn is_empty(&self) -> bool {
+        self.assert_invariants();
         self.count_items() == 0
     }
 
@@ -130,13 +131,18 @@ impl<T> TieredMulti<T> {
 
     /// Returns an `Option` with a reference to the vector of the given `Amount`
     pub fn get(&self, amt: Amount) -> Option<&Vec<T>> {
+        self.assert_invariants();
         self.0.get(&amt)
     }
 
-    // TODO: Get rid of it. It might be used to break useful invariants (like making
-    // sure there are no empty `Vec`s after removal)
-    pub fn get_mut(&mut self, amt: Amount) -> Option<&mut Vec<T>> {
-        self.0.get_mut(&amt)
+    pub fn push(&mut self, amt: Amount, val: T) {
+        self.0.entry(amt).or_default().push(val)
+    }
+
+    fn assert_invariants(&self) {
+        // Just for compactness and determinism, we don't want entries with 0 items
+        #[cfg(debug_assertions)]
+        self.iter().for_each(|(_, v)| debug_assert!(!v.is_empty()))
     }
 }
 
@@ -144,6 +150,7 @@ impl<C> FromIterator<(Amount, C)> for TieredMulti<C> {
     fn from_iter<T: IntoIterator<Item = (Amount, C)>>(iter: T) -> Self {
         let mut res = TieredMulti::default();
         res.extend(iter);
+        res.assert_invariants();
         res
     }
 }
@@ -258,56 +265,28 @@ where
 }
 
 #[derive(Debug, PartialEq, Default, Serialize, Deserialize, Clone)]
-pub struct TieredSummary(Tiered<usize>);
+pub struct TieredCounts(Tiered<usize>);
 
-impl TieredSummary {
-    /// Determines the denominations to use when representing an amount
-    ///
-    /// Algorithm tries to leave the user with a target number of
-    /// `denomination_sets` starting at the lowest denomination.  `self`
-    /// gives the denominations that the user already has.
-    pub fn represent_amount<K>(
-        amount: Amount,
-        current_denominations: &TieredSummary,
-        tiers: &Tiered<K>,
-        denomination_sets: u16,
-    ) -> TieredSummary {
-        let mut remaining_amount = amount;
-        let mut denominations = TieredSummary::default();
-
-        // try to hit the target `denomination_sets`
-        for tier in tiers.tiers() {
-            let notes = current_denominations
-                .0
-                .get(*tier)
-                .copied()
-                .unwrap_or_default();
-            let missing_notes = (denomination_sets as u64).saturating_sub(notes as u64);
-            let possible_notes = remaining_amount / *tier;
-
-            let add_notes = min(possible_notes, missing_notes);
-            denominations.inc(*tier, add_notes as usize);
-            remaining_amount -= *tier * add_notes;
+impl TieredCounts {
+    pub fn inc(&mut self, tier: Amount, n: usize) {
+        if 0 < n {
+            *self.0.get_mut_or_default(tier) += n;
         }
-
-        // if there is a remaining amount, add denominations with a greedy algorithm
-        for tier in tiers.tiers().rev() {
-            let res = remaining_amount / *tier;
-            remaining_amount %= *tier;
-            denominations.inc(*tier, res as usize);
-        }
-
-        let represented: u64 = denominations
-            .0
-            .iter()
-            .map(|(k, v)| k.msats * (*v as u64))
-            .sum();
-        assert_eq!(represented, amount.msats);
-        denominations
     }
 
-    pub fn inc(&mut self, tier: Amount, n: usize) {
-        *self.0.get_mut_or_default(tier) += n;
+    pub fn dec(&mut self, tier: Amount) {
+        match self.0.entry(tier) {
+            Entry::Vacant(_) => panic!("Trying to decrement an empty tier"),
+            Entry::Occupied(mut c) => {
+                assert!(*c.get() != 0);
+                if *c.get() == 1 {
+                    c.remove_entry();
+                } else {
+                    *c.get_mut() -= 1;
+                }
+            }
+        }
+        self.assert_invariants();
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (Amount, usize)> + '_ {
@@ -325,11 +304,26 @@ impl TieredSummary {
     pub fn count_tiers(&self) -> usize {
         self.0.count_tiers()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.count_items() == 0
+    }
+
+    pub fn get(&self, tier: Amount) -> usize {
+        self.assert_invariants();
+        self.0.get(tier).copied().unwrap_or_default()
+    }
+
+    fn assert_invariants(&self) {
+        // Just for compactness and determinism, we don't want entries with 0 count
+        #[cfg(debug_assertions)]
+        self.iter().for_each(|(_, count)| debug_assert!(0 < count))
+    }
 }
 
-impl FromIterator<(Amount, usize)> for TieredSummary {
+impl FromIterator<(Amount, usize)> for TieredCounts {
     fn from_iter<I: IntoIterator<Item = (Amount, usize)>>(iter: I) -> Self {
-        TieredSummary(iter.into_iter().collect())
+        TieredCounts(iter.into_iter().filter(|(_, count)| *count != 0).collect())
     }
 }
 
@@ -340,10 +334,13 @@ mod test {
 
     #[test]
     fn summary_works() {
-        let notes = notes(vec![
-            (Amount::from_sats(1), 1),
-            (Amount::from_sats(2), 3),
-            (Amount::from_sats(3), 2),
+        let notes = TieredMulti::from_iter(vec![
+            (Amount::from_sats(1), ()),
+            (Amount::from_sats(2), ()),
+            (Amount::from_sats(3), ()),
+            (Amount::from_sats(3), ()),
+            (Amount::from_sats(2), ()),
+            (Amount::from_sats(2), ()),
         ]);
         let summary = notes.summary();
         assert_eq!(
@@ -357,56 +354,5 @@ mod test {
         assert_eq!(summary.total_amount(), notes.total_amount());
         assert_eq!(summary.count_items(), notes.count_items());
         assert_eq!(summary.count_tiers(), notes.count_tiers());
-    }
-
-    #[test]
-    fn represent_amount_targets_denomination_sets() {
-        let starting = notes(vec![
-            (Amount::from_sats(1), 1),
-            (Amount::from_sats(2), 3),
-            (Amount::from_sats(3), 2),
-        ])
-        .summary();
-        let tiers = tiers(vec![1, 2, 3, 4]);
-
-        // target 3 tiers will fill out the 1 and 3 denominations
-        assert_eq!(
-            TieredSummary::represent_amount(Amount::from_sats(6), &starting, &tiers, 3),
-            denominations(vec![
-                (Amount::from_sats(1), 3),
-                (Amount::from_sats(2), 0),
-                (Amount::from_sats(3), 1),
-                (Amount::from_sats(4), 0)
-            ])
-        );
-
-        // target 2 tiers will fill out the 1 and 4 denominations
-        assert_eq!(
-            TieredSummary::represent_amount(Amount::from_sats(6), &starting, &tiers, 2),
-            denominations(vec![
-                (Amount::from_sats(1), 2),
-                (Amount::from_sats(2), 0),
-                (Amount::from_sats(3), 0),
-                (Amount::from_sats(4), 1)
-            ])
-        );
-    }
-
-    fn notes(notes: Vec<(Amount, usize)>) -> TieredMulti<usize> {
-        notes
-            .into_iter()
-            .flat_map(|(amount, number)| vec![(amount, 0usize); number])
-            .collect()
-    }
-
-    fn tiers(tiers: Vec<u64>) -> Tiered<()> {
-        tiers
-            .into_iter()
-            .map(|tier| (Amount::from_sats(tier), ()))
-            .collect()
-    }
-
-    fn denominations(denominations: Vec<(Amount, usize)>) -> TieredSummary {
-        TieredSummary::from_iter(denominations)
     }
 }
