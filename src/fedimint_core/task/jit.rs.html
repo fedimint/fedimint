@@ -188,6 +188,11 @@
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
 <a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::sync::Arc;
@@ -207,7 +212,10 @@
 /// Newtype over `Option&lt;E&gt;` that allows better user (error conversion mostly)
 /// experience
 </span><span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>OneTimeError&lt;E&gt;(<span class="prelude-ty">Option</span>&lt;E&gt;);
+</span><span class="kw">pub enum </span>OneTimeError&lt;E&gt; {
+    Original(E),
+    Copy(anyhow::Error),
+}
 
 <span class="kw">impl</span>&lt;E&gt; std::error::Error <span class="kw">for </span>OneTimeError&lt;E&gt;
 <span class="kw">where
@@ -228,10 +236,9 @@
     </span>E: fmt::Display,
 {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(e) = <span class="self">self</span>.<span class="number">0</span>.as_ref() {
-            fmt::Display::fmt(<span class="kw-2">&amp;</span>e, f)
-        } <span class="kw">else </span>{
-            f.write_str(<span class="string">"Error: (missing, it was returned before)"</span>)
+        <span class="kw">match </span><span class="self">self </span>{
+            OneTimeError::Original(o) =&gt; o.fmt(f),
+            OneTimeError::Copy(c) =&gt; c.fmt(f),
         }
     }
 }
@@ -245,7 +252,7 @@
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">struct </span>JitInner&lt;T, E&gt; {
     handle: sync::Mutex&lt;JoinHandle&lt;<span class="prelude-ty">Result</span>&lt;T, E&gt;&gt;&gt;,
-    val: sync::OnceCell&lt;<span class="prelude-ty">Result</span>&lt;T, ()&gt;&gt;,
+    val: sync::OnceCell&lt;<span class="prelude-ty">Result</span>&lt;T, String&gt;&gt;,
 }
 
 <span class="kw">impl</span>&lt;T, E&gt; Clone <span class="kw">for </span>JitCore&lt;T, E&gt;
@@ -303,15 +310,18 @@
                     .<span class="kw">await
                     </span>.unwrap_or_else(|<span class="kw">_</span>| <span class="macro">panic!</span>(<span class="string">"Jit value {} panicked"</span>, std::any::type_name::&lt;T&gt;()))
                     .map_err(|err| {
+                        <span class="kw">let </span>err_str = err.to_string();
                         init_error = <span class="prelude-val">Some</span>(err);
-                        <span class="comment">// return ()
-                    </span>})
+                        err_str
+                    })
             })
             .<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(err) = init_error {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(OneTimeError(<span class="prelude-val">Some</span>(err)));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(OneTimeError::Original(err));
         }
-        value.as_ref().map_err(|<span class="kw">_</span>| OneTimeError(<span class="prelude-val">None</span>))
+        value
+            .as_ref()
+            .map_err(|err_str| OneTimeError::Copy(anyhow::Error::msg(err_str.to_owned())))
     }
 }
 <span class="kw">impl</span>&lt;T&gt; JitCore&lt;T, Infallible&gt;
