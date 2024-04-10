@@ -103,7 +103,7 @@ async fn await_created_btc_transaction_submitted(
     tweak: KeyPair,
 ) -> (bitcoin::Transaction, u32) {
     let script = bitcoin30_to_bitcoin29_script(
-        context
+        &context
             .wallet_descriptor
             .tweak(&tweak.public_key(), &context.secp)
             .script_pubkey(),

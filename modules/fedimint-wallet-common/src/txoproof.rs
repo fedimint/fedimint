@@ -67,7 +67,7 @@ impl PegInProof {
         untweaked_pegin_descriptor: &Descriptor<CompressedPublicKey>,
     ) -> Result<(), PegInProofError> {
         let script = bitcoin30_to_bitcoin29_script(
-            untweaked_pegin_descriptor
+            &untweaked_pegin_descriptor
                 .tweak(&self.tweak_contract_key, secp)
                 .script_pubkey(),
         );

@@ -121,7 +121,7 @@ pub fn bitcoin30_to_bitcoin29_txid(txid: bitcoin30::Txid) -> bitcoin::Txid {
         .expect("Failed to convert bitcoin v30 txid to bitcoin v29 txid")
 }
 
-pub fn bitcoin30_to_bitcoin29_script(script: bitcoin30::ScriptBuf) -> bitcoin::Script {
+pub fn bitcoin30_to_bitcoin29_script(script: &bitcoin30::ScriptBuf) -> bitcoin::Script {
     script.to_bytes().into()
 }
 
@@ -403,7 +403,7 @@ mod tests {
         // script.
         assert_eq!(
             bitcoin29_script,
-            bitcoin30_to_bitcoin29_script(bitcoin30_script.clone())
+            bitcoin30_to_bitcoin29_script(&bitcoin30_script.clone())
         );
         // Assert that bitcoin29->bitcoin30 script is the same as native bitcoin30
         // script.
