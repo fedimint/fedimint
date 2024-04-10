@@ -115,11 +115,36 @@
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
+<span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>ln_gateway::rpc::V1_API_ENDPOINT;
+<span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">crate</span>::cmd;
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
@@ -180,7 +205,7 @@
     }
 
     <span class="kw">pub async fn </span>stop_lightning_node(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">tracing::info!</span>(<span class="string">"Stopping lightning node"</span>);
+        <span class="macro">info!</span>(<span class="string">"Stopping lightning node"</span>);
         <span class="kw">match </span><span class="self">self</span>.ln.take() {
             <span class="prelude-val">Some</span>(LightningNode::Lnd(lnd)) =&gt; lnd.terminate().<span class="kw">await</span>,
             <span class="prelude-val">Some</span>(LightningNode::Cln(cln)) =&gt; cln.terminate().<span class="kw">await</span>,
@@ -188,6 +213,27 @@
                 <span class="string">"Cannot stop an already stopped Lightning Node"
             </span>)),
         }
+    }
+
+    <span class="doccomment">/// Restarts the gateway using the provided `bin_path`, which is useful for
+    /// testing upgrades.
+    </span><span class="kw">pub async fn </span>restart_with_bin(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
+        bin_path: <span class="kw-2">&amp;</span>PathBuf,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>._process.terminate().<span class="kw">await</span><span class="question-mark">?</span>;
+        std::env::set_var(<span class="string">"FM_GATEWAYD_BASE_EXECUTABLE"</span>, bin_path);
+        <span class="kw">let </span>ln = <span class="self">self
+            </span>.ln
+            .as_ref()
+            .expect(<span class="string">"gateway already had an associated ln node"</span>)
+            .clone();
+        <span class="kw">let </span>new_gw = <span class="self">Self</span>::new(process_mgr, ln).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>._process = new_gw._process;
+        <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+        <span class="macro">info!</span>(<span class="string">"upgraded gatewayd to version: {}"</span>, gatewayd_version);
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub async fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
