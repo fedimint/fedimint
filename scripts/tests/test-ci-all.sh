@@ -89,6 +89,11 @@ function latency_test_restore() {
 }
 export -f latency_test_restore
 
+function meta_module() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/meta-module-test.sh
+}
+export -f meta_module
+
 function guardian_backup() {
   # guardian-backup-test runs a degraded federation, so we need to override FM_OFFLINE_NODES
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/guardian-backup.sh
@@ -208,6 +213,7 @@ tests_to_run_in_parallel+=(
   "load_test_tool_test"
   "recoverytool_tests"
   "guardian_backup"
+  "meta_module"
   "cannot_replay_tx"
 )
 done

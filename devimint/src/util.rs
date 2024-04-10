@@ -425,6 +425,7 @@ where
 }
 
 const DEFAULT_POLL_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// Retry until `f` succeeds or default timeout is reached
 ///
 /// - if `f` return Ok(val), this returns with Ok(val).
@@ -436,6 +437,39 @@ where
     Fut: Future<Output = Result<R, ControlFlow<anyhow::Error, anyhow::Error>>>,
 {
     poll_with_timeout(name, DEFAULT_POLL_TIMEOUT, f).await
+}
+
+pub async fn poll_simple<Fut, R>(name: &str, f: impl Fn() -> Fut) -> Result<R>
+where
+    Fut: Future<Output = Result<R, anyhow::Error>>,
+{
+    let start = now();
+    let timeout = DEFAULT_POLL_TIMEOUT;
+    for attempt in 0u64.. {
+        let attempt_start = now();
+        match f().await {
+            Ok(value) => return Ok(value),
+            Err(err)
+                if attempt_start
+                    .duration_since(start)
+                    .expect("time goes forward")
+                    < timeout =>
+            {
+                debug!(target: LOG_DEVIMINT, %attempt, %err, "Polling {name} failed, will retry...");
+                task::sleep(Duration::from_millis((attempt * 10).min(1000))).await;
+            }
+            Err(err) => {
+                return Err(err).with_context(|| {
+                    format!(
+                        "Polling {name} failed after {attempt} retries (timeout: {}s)",
+                        timeout.as_secs()
+                    )
+                });
+            }
+        }
+    }
+
+    unreachable!();
 }
 
 // used to add `cmd` method.

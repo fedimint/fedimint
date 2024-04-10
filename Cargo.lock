@@ -2169,6 +2169,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-meta-tests"
+version = "0.3.0-alpha"
+dependencies = [
+ "anyhow",
+ "devimint",
+ "fedimint-core",
+ "semver",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-metrics"
 version = "0.4.0-alpha"
 dependencies = [

@@ -636,7 +636,9 @@ pub async fn run_dkg(
         .filter(|(id, _)| *id != leader_id)
         .collect::<BTreeMap<_, _>>();
 
-    let leader_name = "leader".to_string();
+    // Note: names prefixed by peerid, as DKG sort peers by submitted name
+    // by default.
+    let leader_name = format!("{}-leader", leader_id);
     leader
         .set_config_gen_connections(
             ConfigGenConnectionsRequest {
@@ -662,7 +664,7 @@ pub async fn run_dkg(
                     .take(5)
                     .map(char::from)
                     .collect::<String>();
-                format!("random-{random_string}{peer_id}")
+                format!("{peer_id}-random-{random_string}{peer_id}")
             })
         })
         .collect::<BTreeMap<_, _>>();

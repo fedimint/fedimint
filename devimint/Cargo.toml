@@ -38,7 +38,7 @@ lazy_static = "1.4.0"
 ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
 nix = { version = "0.28.0", features = ["signal"] }
 rand = { workspace = true }
-semver = "1.0.22"
+semver = { workspace = true }
 serde_json = { workspace = true }
 tokio = { version = "1.36.0", features = ["full", "tracing"] }
 tonic_lnd = { workspace = true }
