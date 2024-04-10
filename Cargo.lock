@@ -1496,7 +1496,7 @@ dependencies = [
  "test-log",
  "thiserror",
  "tokio",
- "tokio-rustls 0.23.4",
+ "tokio-rustls 0.25.0",
  "tokio-test",
  "tracing",
  "tracing-subscriber",
@@ -2421,7 +2421,7 @@ dependencies = [
  "test-log",
  "thiserror",
  "tokio",
- "tokio-rustls 0.23.4",
+ "tokio-rustls 0.25.0",
  "tokio-stream",
  "tokio-util",
  "tower",
@@ -2475,7 +2475,7 @@ dependencies = [
  "serde",
  "tempfile",
  "tokio",
- "tokio-rustls 0.23.4",
+ "tokio-rustls 0.25.0",
  "tokio-stream",
  "tracing",
  "url",
@@ -2760,7 +2760,7 @@ dependencies = [
  "sha3",
  "thiserror",
  "tokio",
- "tokio-rustls 0.23.4",
+ "tokio-rustls 0.25.0",
  "tokio-util",
  "tower",
  "tracing",
@@ -5418,17 +5418,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.52",
-]
-
-[[package]]
-name = "tokio-rustls"
-version = "0.23.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c43ee83903113e03984cb9e5cebe6c04a5116269e900e3ddba8f068a62adda59"
-dependencies = [
- "rustls 0.20.9",
- "tokio",
- "webpki",
 ]
 
 [[package]]
