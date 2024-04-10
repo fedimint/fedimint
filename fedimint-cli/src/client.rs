@@ -139,9 +139,11 @@ pub enum ClientCmd {
     /// Wait for a lightning payment to complete
     AwaitLnPay { operation_id: OperationId },
     /// List registered gateways
-    ListGateways,
-    /// Re-downloads the registered gateways from the federation
-    UpdateGatewayCache,
+    ListGateways {
+        /// Don't fetch the registered gateways from the federation
+        #[clap(long, default_value = "false")]
+        no_update: bool,
+    },
     /// Generate a new deposit address, funds sent to it can later be claimed
     DepositAddress {
         /// How long the client should watch the address for incoming
@@ -438,18 +440,11 @@ pub async fn handle_command(
                     .context("expected a response")?,
             )
         }
-        ClientCmd::ListGateways => {
+        ClientCmd::ListGateways { no_update } => {
             let lightning_module = client.get_first_module::<LightningClientModule>();
-            let gateways = lightning_module.list_gateways().await;
-            if gateways.is_empty() {
-                return Ok(serde_json::to_value(Vec::<String>::new()).unwrap());
+            if !no_update {
+                lightning_module.update_gateway_cache().await?;
             }
-
-            Ok(json!(&gateways))
-        }
-        ClientCmd::UpdateGatewayCache => {
-            let lightning_module = client.get_first_module::<LightningClientModule>();
-            lightning_module.update_gateway_cache().await?;
             let gateways = lightning_module.list_gateways().await;
             if gateways.is_empty() {
                 return Ok(serde_json::to_value(Vec::<String>::new()).unwrap());
