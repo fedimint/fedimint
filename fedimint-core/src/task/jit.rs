@@ -17,7 +17,10 @@ pub type JitTryAnyhow<T> = JitCore<T, anyhow::Error>;
 /// Newtype over `Option<E>` that allows better user (error conversion mostly)
 /// experience
 #[derive(Debug)]
-pub struct OneTimeError<E>(Option<E>);
+pub enum OneTimeError<E> {
+    Original(E),
+    Copy(anyhow::Error),
+}
 
 impl<E> std::error::Error for OneTimeError<E>
 where
@@ -38,10 +41,9 @@ where
     E: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(e) = self.0.as_ref() {
-            fmt::Display::fmt(&e, f)
-        } else {
-            f.write_str("Error: (missing, it was returned before)")
+        match self {
+            OneTimeError::Original(o) => o.fmt(f),
+            OneTimeError::Copy(c) => c.fmt(f),
         }
     }
 }
@@ -55,7 +57,7 @@ pub struct JitCore<T, E> {
 #[derive(Debug)]
 struct JitInner<T, E> {
     handle: sync::Mutex<JoinHandle<Result<T, E>>>,
-    val: sync::OnceCell<Result<T, ()>>,
+    val: sync::OnceCell<Result<T, String>>,
 }
 
 impl<T, E> Clone for JitCore<T, E>
@@ -113,15 +115,18 @@ where
                     .await
                     .unwrap_or_else(|_| panic!("Jit value {} panicked", std::any::type_name::<T>()))
                     .map_err(|err| {
+                        let err_str = err.to_string();
                         init_error = Some(err);
-                        // return ()
+                        err_str
                     })
             })
             .await;
         if let Some(err) = init_error {
-            return Err(OneTimeError(Some(err)));
+            return Err(OneTimeError::Original(err));
         }
-        value.as_ref().map_err(|_| OneTimeError(None))
+        value
+            .as_ref()
+            .map_err(|err_str| OneTimeError::Copy(anyhow::Error::msg(err_str.to_owned())))
     }
 }
 impl<T> JitCore<T, Infallible>
