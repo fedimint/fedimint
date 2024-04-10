@@ -223,7 +223,8 @@ impl Federation {
         if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
             run_cli_dkg(params, endpoints).await?;
         } else {
-            // TODO: remove this after we drop support for v0.2.x
+            // TODO(support:v0.2): old fedimint-cli can't do DKG commands. keep this old DKG
+            // setup while fedimint-cli <= v0.2.x is supported
             run_client_dkg(admin_clients, params).await?;
         }
 
