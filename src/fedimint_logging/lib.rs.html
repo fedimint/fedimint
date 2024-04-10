@@ -204,30 +204,30 @@
 <span class="kw">use </span>tracing_subscriber::util::SubscriberInitExt;
 <span class="kw">use </span>tracing_subscriber::{EnvFilter, Layer};
 
-<span class="kw">pub const </span>LOG_BLOCKCHAIN: <span class="kw-2">&amp;</span>str = <span class="string">"net::blockchain"</span>;
-<span class="kw">pub const </span>LOG_CONSENSUS: <span class="kw-2">&amp;</span>str = <span class="string">"consensus"</span>;
-<span class="kw">pub const </span>LOG_CORE: <span class="kw-2">&amp;</span>str = <span class="string">"core"</span>;
-<span class="kw">pub const </span>LOG_DB: <span class="kw-2">&amp;</span>str = <span class="string">"db"</span>;
-<span class="kw">pub const </span>LOG_DEVIMINT: <span class="kw-2">&amp;</span>str = <span class="string">"devimint"</span>;
-<span class="kw">pub const </span>LOG_ECASH_RECOVERY: <span class="kw-2">&amp;</span>str = <span class="string">"ecash-recovery"</span>;
-<span class="kw">pub const </span>LOG_NET_API: <span class="kw-2">&amp;</span>str = <span class="string">"net::api"</span>;
-<span class="kw">pub const </span>LOG_NET_PEER_DKG: <span class="kw-2">&amp;</span>str = <span class="string">"net::peer::dkg"</span>;
-<span class="kw">pub const </span>LOG_NET_PEER: <span class="kw-2">&amp;</span>str = <span class="string">"net::peer"</span>;
-<span class="kw">pub const </span>LOG_NET: <span class="kw-2">&amp;</span>str = <span class="string">"net"</span>;
-<span class="kw">pub const </span>LOG_TASK: <span class="kw-2">&amp;</span>str = <span class="string">"task"</span>;
-<span class="kw">pub const </span>LOG_TEST: <span class="kw-2">&amp;</span>str = <span class="string">"test"</span>;
+<span class="kw">pub const </span>LOG_BLOCKCHAIN: <span class="kw-2">&amp;</span>str = <span class="string">"fm::net::blockchain"</span>;
+<span class="kw">pub const </span>LOG_CONSENSUS: <span class="kw-2">&amp;</span>str = <span class="string">"fm::consensus"</span>;
+<span class="kw">pub const </span>LOG_CORE: <span class="kw-2">&amp;</span>str = <span class="string">"fm::core"</span>;
+<span class="kw">pub const </span>LOG_DB: <span class="kw-2">&amp;</span>str = <span class="string">"fm::db"</span>;
+<span class="kw">pub const </span>LOG_DEVIMINT: <span class="kw-2">&amp;</span>str = <span class="string">"fm::devimint"</span>;
+<span class="kw">pub const </span>LOG_ECASH_RECOVERY: <span class="kw-2">&amp;</span>str = <span class="string">"fm::ecash-recovery"</span>;
+<span class="kw">pub const </span>LOG_NET_API: <span class="kw-2">&amp;</span>str = <span class="string">"fm::net::api"</span>;
+<span class="kw">pub const </span>LOG_NET_PEER_DKG: <span class="kw-2">&amp;</span>str = <span class="string">"fm::net::peer::dkg"</span>;
+<span class="kw">pub const </span>LOG_NET_PEER: <span class="kw-2">&amp;</span>str = <span class="string">"fm::net::peer"</span>;
+<span class="kw">pub const </span>LOG_NET: <span class="kw-2">&amp;</span>str = <span class="string">"fm::net"</span>;
+<span class="kw">pub const </span>LOG_TASK: <span class="kw-2">&amp;</span>str = <span class="string">"fm::task"</span>;
+<span class="kw">pub const </span>LOG_TEST: <span class="kw-2">&amp;</span>str = <span class="string">"fm::test"</span>;
 <span class="kw">pub const </span>LOG_TIMING: <span class="kw-2">&amp;</span>str = <span class="string">"timing"</span>;
-<span class="kw">pub const </span>LOG_WALLET: <span class="kw-2">&amp;</span>str = <span class="string">"wallet"</span>;
-<span class="kw">pub const </span>LOG_CLIENT: <span class="kw-2">&amp;</span>str = <span class="string">"client"</span>;
-<span class="kw">pub const </span>LOG_CLIENT_DB: <span class="kw-2">&amp;</span>str = <span class="string">"client::db"</span>;
-<span class="kw">pub const </span>LOG_MODULE_META: <span class="kw-2">&amp;</span>str = <span class="string">"module::meta"</span>;
-<span class="kw">pub const </span>LOG_CLIENT_REACTOR: <span class="kw-2">&amp;</span>str = <span class="string">"client::reactor"</span>;
-<span class="kw">pub const </span>LOG_CLIENT_NET_API: <span class="kw-2">&amp;</span>str = <span class="string">"client::net::api"</span>;
-<span class="kw">pub const </span>LOG_CLIENT_BACKUP: <span class="kw-2">&amp;</span>str = <span class="string">"client::backup"</span>;
-<span class="kw">pub const </span>LOG_CLIENT_RECOVERY: <span class="kw-2">&amp;</span>str = <span class="string">"client::recovery"</span>;
-<span class="kw">pub const </span>LOG_CLIENT_RECOVERY_MINT: <span class="kw-2">&amp;</span>str = <span class="string">"client::recovery::mint"</span>;
-<span class="kw">pub const </span>LOG_CLIENT_MODULE_META: <span class="kw-2">&amp;</span>str = <span class="string">"client::module::meta"</span>;
-<span class="kw">pub const </span>LOG_CLIENT_MODULE_MINT: <span class="kw-2">&amp;</span>str = <span class="string">"client::module::mint"</span>;
+<span class="kw">pub const </span>LOG_WALLET: <span class="kw-2">&amp;</span>str = <span class="string">"fm::wallet"</span>;
+<span class="kw">pub const </span>LOG_CLIENT: <span class="kw-2">&amp;</span>str = <span class="string">"fm::client"</span>;
+<span class="kw">pub const </span>LOG_CLIENT_DB: <span class="kw-2">&amp;</span>str = <span class="string">"fm::client::db"</span>;
+<span class="kw">pub const </span>LOG_MODULE_META: <span class="kw-2">&amp;</span>str = <span class="string">"fm::module::meta"</span>;
+<span class="kw">pub const </span>LOG_CLIENT_REACTOR: <span class="kw-2">&amp;</span>str = <span class="string">"fm::client::reactor"</span>;
+<span class="kw">pub const </span>LOG_CLIENT_NET_API: <span class="kw-2">&amp;</span>str = <span class="string">"fm::client::net::api"</span>;
+<span class="kw">pub const </span>LOG_CLIENT_BACKUP: <span class="kw-2">&amp;</span>str = <span class="string">"fm::client::backup"</span>;
+<span class="kw">pub const </span>LOG_CLIENT_RECOVERY: <span class="kw-2">&amp;</span>str = <span class="string">"fm::client::recovery"</span>;
+<span class="kw">pub const </span>LOG_CLIENT_RECOVERY_MINT: <span class="kw-2">&amp;</span>str = <span class="string">"fm::client::recovery::mint"</span>;
+<span class="kw">pub const </span>LOG_CLIENT_MODULE_META: <span class="kw-2">&amp;</span>str = <span class="string">"fm::client::module::meta"</span>;
+<span class="kw">pub const </span>LOG_CLIENT_MODULE_MINT: <span class="kw-2">&amp;</span>str = <span class="string">"fm::client::module::mint"</span>;
 
 <span class="doccomment">/// Consolidates the setup of server tracing into a helper
 </span><span class="attr">#[derive(Default)]
