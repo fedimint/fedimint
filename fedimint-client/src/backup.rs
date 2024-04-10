@@ -2,7 +2,7 @@ use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Error, Read, Write};
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use bitcoin::secp256k1;
 use fedimint_core::api::DynGlobalApi;
 use fedimint_core::core::backup::{
@@ -191,11 +191,12 @@ impl Decodable for ClientBackup {
         r: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> std::result::Result<Self, DecodeError> {
-        let session_count = u64::consensus_decode(r, modules)?;
-        let metadata = Metadata::consensus_decode(r, modules)?;
+        let session_count = u64::consensus_decode(r, modules).context("session_count")?;
+        let metadata = Metadata::consensus_decode(r, modules).context("metadata")?;
         let module_backups =
-            BTreeMap::<ModuleInstanceId, DynModuleBackup>::consensus_decode(r, modules)?;
-        let _padding = Vec::<u8>::consensus_decode(r, modules)?;
+            BTreeMap::<ModuleInstanceId, DynModuleBackup>::consensus_decode(r, modules)
+                .context("module_backups")?;
+        let _padding = Vec::<u8>::consensus_decode(r, modules).context("padding")?;
 
         Ok(Self {
             session_count,

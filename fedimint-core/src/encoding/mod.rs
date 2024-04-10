@@ -23,7 +23,7 @@ use std::io::{self, Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{cmp, mem};
 
-use anyhow::format_err;
+use anyhow::{format_err, Context};
 pub use fedimint_derive::{Decodable, Encodable};
 use hex::{FromHex, ToHex};
 use lightning::util::ser::{Readable, Writeable};
@@ -234,6 +234,12 @@ impl DecodeError {
     }
 }
 
+impl From<anyhow::Error> for DecodeError {
+    fn from(e: anyhow::Error) -> Self {
+        DecodeError(e)
+    }
+}
+
 pub use lightning::util::ser::BigSize;
 
 impl Encodable for BigSize {
@@ -291,7 +297,7 @@ macro_rules! impl_encode_decode_num_as_bigsize {
                 _modules: &ModuleDecoderRegistry,
             ) -> Result<Self, crate::encoding::DecodeError> {
                 let varint = BigSize::consensus_decode(d, &Default::default())
-                    .map_err(crate::encoding::DecodeError::from_err)?;
+                    .context(concat!("VarInt inside ", stringify!($num_type)))?;
                 <$num_type>::try_from(varint.0).map_err(crate::encoding::DecodeError::from_err)
             }
         }
