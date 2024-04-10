@@ -9,7 +9,7 @@ mod oob;
 /// State machines for mint outputs
 pub mod output;
 
-use std::cmp::Ordering;
+use std::cmp::{min, Ordering};
 use std::collections::BTreeMap;
 use std::ffi;
 use std::fmt::{Display, Formatter};
@@ -49,7 +49,7 @@ use fedimint_core::module::{
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
-    TieredMulti, TieredSummary, TransactionId,
+    TieredCounts, TieredMulti, TransactionId,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
@@ -693,7 +693,7 @@ impl ClientModule for MintClientModule {
     }
 
     async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_>) -> Amount {
-        self.get_wallet_summary(dbtx).await.total_amount()
+        self.get_notes_tier_counts(dbtx).await.total_amount()
     }
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
@@ -746,14 +746,39 @@ pub enum ReissueExternalNotesError {
 
 impl MintClientModule {
     /// Returns the number of held e-cash notes per denomination
-    pub async fn get_wallet_summary(&self, dbtx: &mut DatabaseTransaction<'_>) -> TieredSummary {
+    pub async fn get_notes_tier_counts(&self, dbtx: &mut DatabaseTransaction<'_>) -> TieredCounts {
         dbtx.find_by_prefix(&NoteKeyPrefix)
             .await
             .fold(
-                TieredSummary::default(),
+                TieredCounts::default(),
                 |mut acc, (key, _note)| async move {
                     acc.inc(key.amount, 1);
                     acc
+                },
+            )
+            .await
+    }
+
+    /// Pick [`SpendableNote`]s by given counts, when available
+    ///
+    /// Return the notes picked, and counts of notes that were not available.
+    pub async fn get_available_notes_by_tier_counts(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        counts: TieredCounts,
+    ) -> (TieredMulti<SpendableNote>, TieredCounts) {
+        dbtx.find_by_prefix(&NoteKeyPrefix)
+            .await
+            .fold(
+                (TieredMulti::<SpendableNote>::default(), counts),
+                |(mut notes, mut counts), (key, note)| async move {
+                    let amount = key.amount;
+                    if 0 < counts.get(amount) {
+                        counts.dec(amount);
+                        notes.push(amount, note);
+                    }
+
+                    (notes, counts)
                 },
             )
             .await
@@ -775,9 +800,9 @@ impl MintClientModule {
             "zero-amount outputs are not supported"
         );
 
-        let denominations = TieredSummary::represent_amount(
+        let denominations = represent_amount(
             exact_amount,
-            &self.get_wallet_summary(dbtx).await,
+            &self.get_notes_tier_counts(dbtx).await,
             &self.cfg.tbs_pks,
             notes_per_denomination,
         );
@@ -814,6 +839,20 @@ impl MintClientModule {
         }
 
         outputs
+    }
+
+    /// Returns the number of held e-cash notes per denomination
+    pub async fn get_wallet_summary(&self, dbtx: &mut DatabaseTransaction<'_>) -> TieredCounts {
+        dbtx.find_by_prefix(&NoteKeyPrefix)
+            .await
+            .fold(
+                TieredCounts::default(),
+                |mut acc, (key, _note)| async move {
+                    acc.inc(key.amount, 1);
+                    acc
+                },
+            )
+            .await
     }
 
     /// Wait for the e-cash notes to be retrieved. If this is not possible
@@ -865,10 +904,13 @@ impl MintClientModule {
             "zero-amount inputs are not supported"
         );
 
+        let (mut consolidated_inputs, consolidated_amount) =
+            self.consolidate_notes(dbtx, operation_id).await?;
+
         let selected_notes = Self::select_notes(
             dbtx,
             &SelectNotesWithAtleastAmount,
-            min_amount,
+            min_amount.saturating_sub(consolidated_amount),
             self.cfg.fee_consensus.note_spend_abs,
         )
         .await?;
@@ -881,8 +923,90 @@ impl MintClientModule {
             .await;
         }
 
-        self.create_input_from_notes(operation_id, selected_notes)
-            .await
+        let mut inputs = self
+            .create_input_from_notes(operation_id, selected_notes)
+            .await?;
+
+        inputs.append(&mut consolidated_inputs);
+
+        Ok(inputs)
+    }
+
+    /// Provisional implementation of note consolidation
+    ///
+    /// When a certain denomination crosses the threshold of notes allowed,
+    /// spend some chunk of them as inputs.
+    ///
+    /// Return notes and the sume of their amount.
+    pub async fn consolidate_notes(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> anyhow::Result<(Vec<ClientInput<MintInput, MintClientStateMachines>>, Amount)> {
+        /// At how many notes of the same denomination should we try to
+        /// consolidate
+        const MAX_NOTES_PER_TIER_TRIGGER: usize = 8;
+        /// Number of notes per tier to leave after threshold was crossed
+        const MIN_NOTES_PER_TIER: usize = 4;
+        // it's fine, it's just documentation
+        #[allow(clippy::assertions_on_constants)]
+        {
+            assert!(MIN_NOTES_PER_TIER <= MAX_NOTES_PER_TIER_TRIGGER);
+        }
+        /// Maximum number of notes to consolidate per one tx,
+        /// to limit the size of a transaction produced.
+        const MAX_NOTES_TO_CONSOLIDATE_IN_TX: usize = 20;
+
+        let counts = self.get_notes_tier_counts(dbtx).await;
+
+        let should_consolidate = counts
+            .iter()
+            .any(|(_, count)| MAX_NOTES_PER_TIER_TRIGGER < count);
+
+        if !should_consolidate {
+            return Ok((vec![], Amount::ZERO));
+        }
+
+        let mut max_count = MAX_NOTES_TO_CONSOLIDATE_IN_TX;
+
+        let excessive_counts: TieredCounts = counts
+            .iter()
+            .map(|(amount, count)| {
+                let take = (count.saturating_sub(MIN_NOTES_PER_TIER)).min(max_count);
+
+                max_count -= take;
+                (amount, take)
+            })
+            .collect();
+
+        let (selected_notes, unavailable) = self
+            .get_available_notes_by_tier_counts(dbtx, excessive_counts)
+            .await;
+
+        debug_assert!(
+            unavailable.is_empty(),
+            "Can't have unavailable notes on a subset of all notes: {unavailable:?}"
+        );
+
+        if !selected_notes.is_empty() {
+            debug!(target: LOG_CLIENT_MODULE_MINT, note_num=selected_notes.count_items(), denominations_msats=?selected_notes.iter_items().map(|(amount, _)| amount.msats).collect::<Vec<_>>(), "Will consolidate excessive notes");
+        }
+
+        let mut sum = Amount::ZERO;
+        let mut selected_notes_decoded = vec![];
+        for (amount, note) in selected_notes.iter_items() {
+            Self::delete_spendable_note(dbtx, amount, note).await;
+            selected_notes_decoded.push((amount, *note));
+            sum += amount;
+        }
+        Ok((
+            self.create_input_from_notes(
+                operation_id,
+                TieredMulti::from_iter(selected_notes_decoded.into_iter()),
+            )
+            .await?,
+            sum,
+        ))
     }
 
     /// Create a mint input from external, potentially untrusted notes
@@ -1436,6 +1560,18 @@ impl MintClientModule {
 
         Ok(operation)
     }
+
+    async fn delete_spendable_note(
+        dbtx: &mut DatabaseTransaction<'_>,
+        amount: Amount,
+        note: &SpendableNote,
+    ) {
+        dbtx.remove_entry(&NoteKey {
+            amount,
+            nonce: note.nonce(),
+        })
+        .await;
+    }
 }
 
 pub fn spendable_notes_to_operation_id(
@@ -1788,6 +1924,46 @@ impl sha256t::Tag for OOBReissueTag {
     }
 }
 
+/// Determines the denominations to use when representing an amount
+///
+/// Algorithm tries to leave the user with a target number of
+/// `denomination_sets` starting at the lowest denomination.  `self`
+/// gives the denominations that the user already has.
+pub fn represent_amount<K>(
+    amount: Amount,
+    current_denominations: &TieredCounts,
+    tiers: &Tiered<K>,
+    denomination_sets: u16,
+) -> TieredCounts {
+    let mut remaining_amount = amount;
+    let mut denominations = TieredCounts::default();
+
+    // try to hit the target `denomination_sets`
+    for tier in tiers.tiers() {
+        let notes = current_denominations.get(*tier);
+        let missing_notes = (denomination_sets as u64).saturating_sub(notes as u64);
+        let possible_notes = remaining_amount / *tier;
+
+        let add_notes = min(possible_notes, missing_notes);
+        denominations.inc(*tier, add_notes as usize);
+        remaining_amount -= *tier * add_notes;
+    }
+
+    // if there is a remaining amount, add denominations with a greedy algorithm
+    for tier in tiers.tiers().rev() {
+        let res = remaining_amount / *tier;
+        remaining_amount %= *tier;
+        denominations.inc(*tier, res as usize);
+    }
+
+    let represented: u64 = denominations
+        .iter()
+        .map(|(k, v)| k.msats * (v as u64))
+        .sum();
+    assert_eq!(represented, amount.msats);
+    denominations
+}
+
 #[cfg(test)]
 mod tests {
     use std::fmt::Display;
@@ -1798,21 +1974,55 @@ mod tests {
     use fedimint_core::config::FederationId;
     use fedimint_core::encoding::Decodable;
     use fedimint_core::{
-        Amount, OutPoint, PeerId, Tiered, TieredMulti, TieredSummary, TransactionId,
+        Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId,
     };
     use itertools::Itertools;
     use serde_json::json;
 
     use crate::{
-        select_notes_from_stream, MintOperationMetaVariant, OOBNotes, OOBNotesData, SpendableNote,
+        represent_amount, select_notes_from_stream, MintOperationMetaVariant, OOBNotes,
+        OOBNotesData, SpendableNote,
     };
+
+    #[test]
+    fn represent_amount_targets_denomination_sets() {
+        fn tiers(tiers: Vec<u64>) -> Tiered<()> {
+            tiers
+                .into_iter()
+                .map(|tier| (Amount::from_sats(tier), ()))
+                .collect()
+        }
+
+        fn denominations(denominations: Vec<(Amount, usize)>) -> TieredCounts {
+            TieredCounts::from_iter(denominations)
+        }
+
+        let starting = notes(vec![
+            (Amount::from_sats(1), 1),
+            (Amount::from_sats(2), 3),
+            (Amount::from_sats(3), 2),
+        ])
+        .summary();
+        let tiers = tiers(vec![1, 2, 3, 4]);
+
+        // target 3 tiers will fill out the 1 and 3 denominations
+        assert_eq!(
+            represent_amount(Amount::from_sats(6), &starting, &tiers, 3),
+            denominations(vec![(Amount::from_sats(1), 3), (Amount::from_sats(3), 1),])
+        );
+
+        // target 2 tiers will fill out the 1 and 4 denominations
+        assert_eq!(
+            represent_amount(Amount::from_sats(6), &starting, &tiers, 2),
+            denominations(vec![(Amount::from_sats(1), 2), (Amount::from_sats(4), 1)])
+        );
+    }
 
     #[test_log::test(tokio::test)]
     async fn select_notes_avg_test() {
         let max_amount = Amount::from_sats(1000000);
         let tiers = Tiered::gen_denominations(2, max_amount);
-        let tiered =
-            TieredSummary::represent_amount::<()>(max_amount, &Default::default(), &tiers, 3);
+        let tiered = represent_amount::<()>(max_amount, &Default::default(), &tiers, 3);
 
         let mut total_notes = 0;
         for multiplier in 1..100 {
