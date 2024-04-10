@@ -14,6 +14,7 @@ use fedimint_core::config::{load_from_file, ClientConfig, ServerModuleConfigGenP
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ModuleCommon};
+use fedimint_core::runtime::block_in_place;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_DEVIMINT;
@@ -24,7 +25,6 @@ use fedimintd::FM_EXTRA_DKG_META_VAR;
 use fs_lock::FileLock;
 use futures::future::join_all;
 use rand::Rng;
-use semver::VersionReq;
 use tokio::time::Instant;
 use tracing::{debug, info};
 
@@ -32,6 +32,7 @@ use super::external::Bitcoind;
 use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 use super::vars::utf8;
 use crate::util::{poll, FedimintdCmd};
+use crate::version_constants::VERSION_0_3_0_ALPHA;
 use crate::{poll_eq, vars};
 
 #[derive(Clone)]
@@ -79,7 +80,7 @@ impl Client {
 
     /// Create a [`Client`] that starts with a fresh state.
     pub async fn create(name: &str) -> Result<Client> {
-        tokio::task::block_in_place(|| {
+        block_in_place(|| {
             let _lock = Self::client_name_lock(name);
             for i in 0u64.. {
                 let client = Self {
@@ -97,7 +98,7 @@ impl Client {
 
     /// Open or create a [`Client`] that starts with a fresh state.
     pub async fn open_or_create(name: &str) -> Result<Client> {
-        tokio::task::block_in_place(|| {
+        block_in_place(|| {
             let _lock = Self::client_name_lock(name);
             let client = Self {
                 name: format!("{name}-0"),
@@ -143,7 +144,7 @@ impl Client {
     // TODO(support:v0.2): remove
     pub async fn use_gateway(&self, gw: &super::gatewayd::Gatewayd) -> Result<()> {
         let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-        if VersionReq::parse("<0.3.0-alpha")?.matches(&fedimint_cli_version) {
+        if fedimint_cli_version < *VERSION_0_3_0_ALPHA {
             let gateway_id = gw.gateway_id().await?;
             cmd!(self, "switch-gateway", gateway_id.clone())
                 .run()
@@ -398,7 +399,7 @@ impl Federation {
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, "Awaiting LN gateways registration");
         let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-        let command = if VersionReq::parse("<0.3.0-alpha")?.matches(&fedimint_cli_version) {
+        let command = if fedimint_cli_version < *VERSION_0_3_0_ALPHA {
             "list-gateways"
         } else {
             "update-gateway-cache"

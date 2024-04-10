@@ -14,7 +14,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::task::sleep_in_test;
-use fedimint_core::util::{retry, NextOrPending};
+use fedimint_core::util::{retry, FibonacciBackoff, NextOrPending};
 use fedimint_core::{msats, sats, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
@@ -267,7 +267,7 @@ async fn test_can_change_routing_fees() -> anyhow::Result<()> {
 
             // Update the gateway cache since the fees have changed
             let ln_module = user_client.get_first_module::<LightningClientModule>();
-            ln_module.update_gateway_cache(true).await?;
+            ln_module.update_gateway_cache().await?;
 
             // Create test invoice
             let invoice_amount = sats(250);
@@ -805,7 +805,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
         proportional_millionths: 0,
     };
     let lightning_module = user_client.get_first_module::<LightningClientModule>();
-    lightning_module.update_gateway_cache(true).await?;
+    lightning_module.update_gateway_cache().await?;
     let gateways = lightning_module.list_gateways().await;
     assert!(!gateways.is_empty());
     assert!(gateways
@@ -824,14 +824,14 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     })
     .await;
 
-    lightning_module.update_gateway_cache(true).await?;
+    lightning_module.update_gateway_cache().await?;
     let gateways = lightning_module.list_gateways().await;
     assert!(gateways.is_empty());
 
     // Reconnect the federation and verify that the gateway has registered.
     gateway_test.connect_fed(&fed).await;
 
-    lightning_module.update_gateway_cache(true).await?;
+    lightning_module.update_gateway_cache().await?;
     let gateways = lightning_module.list_gateways().await;
     assert!(!gateways.is_empty());
     assert!(gateways
@@ -1156,12 +1156,14 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     let rpc_client = rpc_client.with_password(Some(new_password.clone()));
     let gw_info = retry(
         "Get info after restart".to_string(),
+        FibonacciBackoff::default()
+            .with_min_delay(Duration::from_millis(200))
+            .with_max_delay(Duration::from_secs(3))
+            .with_max_times(20),
         || async {
             let info = rpc_client.get_info().await?;
             Ok(info)
         },
-        Duration::from_secs(1),
-        30,
     )
     .await?;
 
@@ -1465,6 +1467,10 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
             // its balances on both federations.
             let post_balances = retry(
                 "Gateway balance after swap".to_string(),
+                FibonacciBackoff::default()
+                    .with_min_delay(Duration::from_millis(200))
+                    .with_max_delay(Duration::from_secs(3))
+                    .with_max_times(10),
                 || async {
                     let post_balances = get_balances(&rpc, &[id1, id2]).await;
                     if post_balances[0] == pre_balances[0] || post_balances[1] == pre_balances[1] {
@@ -1472,8 +1478,6 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
                     };
                     Ok(post_balances)
                 },
-                Duration::from_secs(1),
-                15,
             )
             .await?;
             assert_eq!(

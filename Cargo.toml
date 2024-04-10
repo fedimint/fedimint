@@ -55,7 +55,7 @@ resolver = "2"
 
 [workspace.package]
 name = "fedimint"
-version = "0.3.0-rc.3"
+version = "0.3.1-rc.0"
 
 [workspace.metadata]
 name = "fedimint"
@@ -76,6 +76,7 @@ tonic_lnd = { version = "0.2.0", package="fedimint-tonic-lnd", features = ["ligh
 cln-rpc = { package = "fedimint-cln-rpc", version = "0.4.0" }
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
 serde_json = "1.0.91"
+futures-util = "0.3.30"
 
 # Workaround: https://github.com/rust-lang/cargo/issues/12457 which causes
 #             https://github.com/ipetkov/crane/issues/370

@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-core"
-version = "0.3.0-rc.3"
+version = "0.3.1-rc.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-core provides common code used by both client and server."
@@ -19,6 +19,7 @@ async-recursion = "1.0.5"
 anyhow = "1.0.81"
 async-trait = "0.1.77"
 futures = "0.3.30"
+futures-util = { workspace = true }
 backtrace = "0.3.69"
 bincode = "1.3.3"
 bech32 = "0.9.1"
@@ -32,7 +33,7 @@ strum = "0.26"
 strum_macros = "0.26"
 hex = { version = "0.4.3", features = [ "serde"] }
 sha3 = "0.10.8"
-tbs = { package = "fedimint-tbs", version = "=0.3.0-rc.3", path = "../crypto/tbs" }
+tbs = { package = "fedimint-tbs", version = "=0.3.1-rc.0", path = "../crypto/tbs" }
 tokio = { version = "1.36.0", features = ["sync", "io-util"] }
 thiserror = "1.0.58"
 tracing ="0.1.40"
@@ -44,8 +45,8 @@ bitcoin_hashes = { version = "0.11", features = ["serde"] }
 erased-serde = "0.4"
 lightning = "0.0.118"
 lightning-invoice = "0.26.0"
-fedimint-derive = { version = "=0.3.0-rc.3", path = "../fedimint-derive" }
-fedimint-logging = { version = "=0.3.0-rc.3", path = "../fedimint-logging" }
+fedimint-derive = { version = "=0.3.1-rc.0", path = "../fedimint-derive" }
+fedimint-logging = { version = "=0.3.1-rc.0", path = "../fedimint-logging" }
 rand = "0.8.5"
 miniscript = { version = "10.0.0", features = [ "compiler", "serde" ] }
 secp256k1-zkp = { version = "0.7.0", features = [ "use-serde", "bitcoin_hashes", "global-context" ] }
@@ -53,6 +54,7 @@ macro_rules_attribute = "0.2.0"
 bitvec = "1.0.1"
 parity-scale-codec = { version = "3.6.9", features = ["derive"] }
 imbl = "2.0.3"
+backon = "=0.4.3" # don't upgrade unless really needed
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = { version = "0.22.2", features = ["webpki-tls"], default-features = false }

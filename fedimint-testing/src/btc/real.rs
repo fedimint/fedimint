@@ -9,7 +9,7 @@ use bitcoincore_rpc::{Client, RpcApi};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::sleep_in_test;
+use fedimint_core::task::{block_in_place, sleep_in_test};
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{task, Amount};
@@ -187,7 +187,7 @@ pub struct RealBitcoinTestLocked {
 impl BitcoinTest for RealBitcoinTest {
     async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send + Sync> {
         trace!("Trying to acquire global bitcoin lock");
-        let _guard = tokio::task::block_in_place(|| {
+        let _guard = block_in_place(|| {
             let lock_file_path = std::env::temp_dir().join("fm-test-bitcoind-lock");
             fs_lock::FileLock::new_exclusive(
                 std::fs::OpenOptions::new()

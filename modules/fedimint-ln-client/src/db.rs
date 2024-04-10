@@ -1,5 +1,3 @@
-use std::time::SystemTime;
-
 use bitcoin_hashes::sha256;
 use fedimint_client::sm::DynState;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
@@ -25,7 +23,7 @@ pub enum DbKeyPrefix {
     // Deprecated
     ActiveGateway = 0x28,
     PaymentResult = 0x29,
-    MetaOverrides = 0x30,
+    MetaOverridesDeprecated = 0x30,
     LightningGateway = 0x45,
 }
 
@@ -72,26 +70,6 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = PaymentResultKey, query_prefix = PaymentResultPrefix);
-
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct MetaOverridesKey;
-
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct MetaOverridesPrefix;
-
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct MetaOverrides {
-    pub value: String,
-    pub fetched_at: SystemTime,
-}
-
-impl_db_record!(
-    key = MetaOverridesKey,
-    value = MetaOverrides,
-    db_prefix = DbKeyPrefix::MetaOverrides,
-);
-
-impl_db_lookup!(key = MetaOverridesKey, query_prefix = MetaOverridesPrefix);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct LightningGatewayKey(pub PublicKey);

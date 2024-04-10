@@ -142,7 +142,7 @@ impl IRawDatabase for RocksDbReadOnly {
 #[async_trait]
 impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
-        fedimint_core::task::block_in_place(|| {
+        fedimint_core::runtime::block_in_place(|| {
             let val = self.0.get(key).unwrap();
             self.0.put(key, value)?;
             Ok(val)
@@ -150,11 +150,11 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        fedimint_core::task::block_in_place(|| Ok(self.0.snapshot().get(key)?))
+        fedimint_core::runtime::block_in_place(|| Ok(self.0.snapshot().get(key)?))
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        fedimint_core::task::block_in_place(|| {
+        fedimint_core::runtime::block_in_place(|| {
             let val = self.0.get(key).unwrap();
             self.0.delete(key)?;
             Ok(val)
@@ -170,14 +170,14 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
             I::Item: Send,
         {
             stream::unfold(iter, |mut iter| async move {
-                tokio::task::block_in_place(move || {
+                fedimint_core::runtime::block_in_place(move || {
                     let item = iter.next();
                     item.map(move |item| (item, iter))
                 })
             })
         }
 
-        Ok(fedimint_core::task::block_in_place(|| {
+        Ok(fedimint_core::runtime::block_in_place(|| {
             let prefix = key_prefix.to_vec();
             let mut options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
@@ -196,7 +196,7 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> anyhow::Result<()> {
-        fedimint_core::task::block_in_place(|| {
+        fedimint_core::runtime::block_in_place(|| {
             // Note: delete_range is not supported in Transactions :/
             let mut options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(key_prefix.to_owned()));
@@ -236,7 +236,7 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
         } else {
             rocksdb::IteratorMode::End
         };
-        Ok(fedimint_core::task::block_in_place(|| {
+        Ok(fedimint_core::runtime::block_in_place(|| {
             let mut options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
             let iter = self.0.snapshot().iterator_opt(iterator_mode, options);
@@ -254,13 +254,13 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
 #[async_trait]
 impl<'a> IDatabaseTransactionOps for RocksDbTransaction<'a> {
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
-        Ok(fedimint_core::task::block_in_place(|| {
+        Ok(fedimint_core::runtime::block_in_place(|| {
             self.0.rollback_to_savepoint()
         })?)
     }
 
     async fn set_tx_savepoint(&mut self) -> Result<()> {
-        fedimint_core::task::block_in_place(|| self.0.set_savepoint());
+        fedimint_core::runtime::block_in_place(|| self.0.set_savepoint());
 
         Ok(())
     }
@@ -269,7 +269,7 @@ impl<'a> IDatabaseTransactionOps for RocksDbTransaction<'a> {
 #[async_trait]
 impl<'a> IRawDatabaseTransaction for RocksDbTransaction<'a> {
     async fn commit_tx(self) -> Result<()> {
-        fedimint_core::task::block_in_place(|| {
+        fedimint_core::runtime::block_in_place(|| {
             self.0.commit()?;
             Ok(())
         })
@@ -283,7 +283,7 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'a> {
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        fedimint_core::task::block_in_place(|| Ok(self.0.get(key)?))
+        fedimint_core::runtime::block_in_place(|| Ok(self.0.get(key)?))
     }
 
     async fn raw_remove_entry(&mut self, _key: &[u8]) -> Result<Option<Vec<u8>>> {
@@ -291,7 +291,7 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'a> {
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
-        Ok(fedimint_core::task::block_in_place(|| {
+        Ok(fedimint_core::runtime::block_in_place(|| {
             let prefix = key_prefix.to_vec();
             let rocksdb_iter = self
                 .0
@@ -322,7 +322,7 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'a> {
         } else {
             rocksdb::IteratorMode::End
         };
-        Ok(fedimint_core::task::block_in_place(|| {
+        Ok(fedimint_core::runtime::block_in_place(|| {
             let mut options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
             let iter = self.0.snapshot().iterator_opt(iterator_mode, options);

@@ -106,8 +106,9 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     let mut spend_tasks = vec![];
     for num_spend in 0..NUM_PAR {
         let task_client1 = client1.clone();
-        spend_tasks.push(
-            fedimint_core::task::spawn(&format!("spend_ecash_{num_spend}"), async move {
+        spend_tasks.push(fedimint_core::runtime::spawn(
+            &format!("spend_ecash_{num_spend}"),
+            async move {
                 info!("Starting spend {num_spend}");
                 let client1_mint = task_client1.get_first_module::<MintClientModule>();
                 let (op, notes) = client1_mint
@@ -121,9 +122,8 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
                     .into_stream();
                 assert_eq!(sub1.ok().await.unwrap(), SpendOOBState::Created);
                 notes
-            })
-            .expect("Returns a handle if not run in WASM"),
-        );
+            },
+        ));
     }
 
     let note_bags = futures::stream::iter(spend_tasks)
@@ -141,8 +141,9 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     let mut reissue_tasks = vec![];
     for (num_reissue, notes) in note_bags.into_iter().enumerate() {
         let task_client2 = client2.clone();
-        reissue_tasks.push(
-            fedimint_core::task::spawn(&format!("reissue_ecash_{num_reissue}"), async move {
+        reissue_tasks.push(fedimint_core::runtime::spawn(
+            &format!("reissue_ecash_{num_reissue}"),
+            async move {
                 info!("Starting reissue {num_reissue}");
                 let client2_mint = task_client2.get_first_module::<MintClientModule>();
                 let op = client2_mint
@@ -160,9 +161,8 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
                 info!("Reissuance {num_reissue} accepted");
                 assert_eq!(sub2.ok().await.unwrap(), ReissueExternalNotesState::Done);
                 info!("Reissuance {num_reissue} finished");
-            })
-            .expect("Returns a handle if not run in WASM"),
-        );
+            },
+        ));
     }
 
     for task in reissue_tasks {

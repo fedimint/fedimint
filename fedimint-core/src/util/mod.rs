@@ -1,5 +1,6 @@
 /// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 pub mod broadcaststream;
+pub mod update_merge;
 
 use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter};
@@ -9,7 +10,6 @@ use std::io::Write;
 use std::path::Path;
 use std::pin::Pin;
 use std::str::FromStr;
-use std::time::Duration;
 use std::{fs, io};
 
 use anyhow::format_err;
@@ -20,8 +20,8 @@ use tokio::io::AsyncWriteExt;
 use tracing::{debug, warn, Instrument, Span};
 use url::{Host, ParseError, Url};
 
-use crate::task::{self, MaybeSend};
-use crate::{apply, async_trait_maybe_send, maybe_add_send};
+use crate::task::MaybeSend;
+use crate::{apply, async_trait_maybe_send, maybe_add_send, runtime};
 
 /// Future that is `Send` unless targeting WASM
 pub type BoxFuture<'a, T> = Pin<Box<maybe_add_send!(dyn Future<Output = T> + 'a)>>;
@@ -309,6 +309,11 @@ pub fn handle_version_hash_command(version_hash: &str) {
     }
 }
 
+pub use backon::{
+    BackoffBuilder, ConstantBuilder as ConstantBackoff, ExponentialBuilder as ExponentialBackoff,
+    FibonacciBuilder as FibonacciBackoff,
+};
+
 /// Run the supplied closure `op_fn` up to `max_attempts` times. Wait for the
 /// supplied `Duration` `interval` between attempts
 ///
@@ -319,42 +324,42 @@ pub fn handle_version_hash_command(version_hash: &str) {
 ///   error of the closure is returned
 pub async fn retry<F, Fut, T>(
     op_name: impl Into<String>,
+    statergy: impl backon::BackoffBuilder,
     op_fn: F,
-    interval: Duration,
-    max_attempts: u32,
 ) -> Result<T, anyhow::Error>
 where
     F: Fn() -> Fut,
     Fut: Future<Output = Result<T, anyhow::Error>>,
 {
+    let mut statergy = statergy.build();
     let op_name = op_name.into();
-    assert_ne!(max_attempts, 0, "max_attempts must be greater than 0");
     let mut attempts = 0;
     loop {
         attempts += 1;
         match op_fn().await {
             Ok(result) => return Ok(result),
-            Err(error) if attempts < max_attempts => {
-                // run closure op_fn again
-                debug!(
-                    target: LOG_CORE,
-                    %error,
-                    %attempts,
-                    interval = interval.as_secs(),
-                    "{} failed, retrying",
-                    op_name,
-                );
-                task::sleep(interval).await;
-            }
             Err(error) => {
-                warn!(
-                    target: LOG_CORE,
-                    %error,
-                    %attempts,
-                    "{} failed",
-                    op_name,
-                );
-                return Err(error);
+                if let Some(interval) = statergy.next() {
+                    // run closure op_fn again
+                    debug!(
+                        target: LOG_CORE,
+                        %error,
+                        %attempts,
+                        interval = interval.as_secs(),
+                        "{} failed, retrying",
+                        op_name,
+                    );
+                    runtime::sleep(interval).await;
+                } else {
+                    warn!(
+                        target: LOG_CORE,
+                        %error,
+                        %attempts,
+                        "{} failed",
+                        op_name,
+                    );
+                    return Err(error);
+                }
             }
         }
     }
@@ -366,12 +371,11 @@ mod tests {
     use std::time::Duration;
 
     use anyhow::anyhow;
-    use fedimint_core::task::Elapsed;
+    use fedimint_core::runtime::Elapsed;
     use futures::FutureExt;
 
-    use super::retry;
-    use crate::task::timeout;
-    use crate::util::{NextOrPending, SafeUrl};
+    use super::*;
+    use crate::runtime::timeout;
 
     #[test]
     fn test_safe_url() {
@@ -442,7 +446,14 @@ mod tests {
             Ok(42)
         };
 
-        let _ = retry("Run once".to_string(), closure, Duration::ZERO, 3).await;
+        let _ = retry(
+            "Run once",
+            ConstantBackoff::default()
+                .with_delay(Duration::ZERO)
+                .with_max_times(3),
+            closure,
+        )
+        .await;
 
         assert_eq!(counter.load(Ordering::SeqCst), 1);
     }
@@ -456,7 +467,15 @@ mod tests {
             Err::<(), anyhow::Error>(anyhow!("42"))
         };
 
-        let _ = retry("Run 3 times".to_string(), closure, Duration::ZERO, 3).await;
+        let _ = retry(
+            "Run 3 once",
+            ConstantBackoff::default()
+                .with_delay(Duration::ZERO)
+                // retry two error
+                .with_max_times(2),
+            closure,
+        )
+        .await;
 
         assert_eq!(counter.load(Ordering::SeqCst), 3);
     }

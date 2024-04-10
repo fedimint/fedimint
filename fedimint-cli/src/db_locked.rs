@@ -2,6 +2,7 @@ use std::path::Path;
 
 use anyhow::Context;
 use fedimint_core::db::IRawDatabase;
+use fedimint_core::task::block_in_place;
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT;
 use tracing::{debug, info};
@@ -27,7 +28,7 @@ pub struct LockedBuilder {
 impl LockedBuilder {
     /// Create a [`Self`] by acquiring a lock file
     pub async fn new(lock_path: &Path) -> anyhow::Result<LockedBuilder> {
-        tokio::task::block_in_place(|| {
+        block_in_place(|| {
             let file = std::fs::OpenOptions::new()
                 .write(true)
                 .create(true)

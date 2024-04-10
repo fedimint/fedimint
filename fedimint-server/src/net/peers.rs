@@ -470,7 +470,7 @@ where
                     Err(e) => self.disconnect_err(e, 0),
                 }
             },
-            _ = sleep_until(connected.next_ping.into()) => {
+            _ = sleep_until(connected.next_ping) => {
                 trace!(target: LOG_NET_PEER, our_id = ?self.our_id, peer = ?self.peer_id, "Sending ping");
                 self.send_message_connected(connected, PeerMessage::Ping)
                     .await

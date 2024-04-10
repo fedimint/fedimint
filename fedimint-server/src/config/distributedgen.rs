@@ -15,7 +15,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::PeerHandle;
 use fedimint_core::net::peers::MuxPeerConnections;
-use fedimint_core::task::spawn;
+use fedimint_core::runtime::spawn;
 use fedimint_core::{BitcoinHash, NumPeersExt, PeerId};
 use rand::rngs::OsRng;
 use rand::{RngCore, SeedableRng};

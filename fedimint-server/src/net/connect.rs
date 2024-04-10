@@ -256,7 +256,8 @@ pub mod mock {
     use std::time::Duration;
 
     use anyhow::{anyhow, Error};
-    use fedimint_core::task::{sleep, spawn};
+    use fedimint_core::runtime::spawn;
+    use fedimint_core::task::sleep;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{task, PeerId};
     use futures::{pin_mut, FutureExt, SinkExt, Stream, StreamExt};
@@ -726,8 +727,7 @@ pub mod mock {
         let mut listener = Connector::<u64>::listen(&conn_a, bind_addr).await.unwrap();
         let conn_a_fut = spawn("listener next await", async move {
             listener.next().await.unwrap().unwrap()
-        })
-        .expect("some handle on non-wasm");
+        });
 
         let (auth_peer_b, mut conn_b) = Connector::<u64>::connect_framed(&conn_b, url, peer_a)
             .await
@@ -803,8 +803,7 @@ pub mod mock {
             .unwrap();
         let conn_a_fut = spawn("listener next await", async move {
             listener.next().await.unwrap().unwrap()
-        })
-        .expect("some handle on non-wasm");
+        });
 
         let (auth_peer_b, mut conn_b) = Connector::<Vec<u8>>::connect_framed(&conn_b, url, peer_a)
             .await
@@ -834,7 +833,7 @@ pub mod mock {
 mod tests {
     use std::net::SocketAddr;
 
-    use fedimint_core::task::spawn;
+    use fedimint_core::runtime::spawn;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::PeerId;
     use futures::{SinkExt, StreamExt};
@@ -891,8 +890,7 @@ mod tests {
             assert_eq!(received, 42);
             conn.send(21).await.unwrap();
             assert!(conn.next().await.unwrap().is_err());
-        })
-        .expect("some handle on non-wasm");
+        });
 
         let (peer_of_a, mut client_a): (_, AnyFramedTransport<u64>) = connectors[2]
             .connect_framed(url.clone(), PeerId::from(0))
@@ -929,8 +927,7 @@ mod tests {
                     conn_res.err().unwrap().to_string().as_str(),
                     "invalid peer certificate signature"
                 );
-            })
-            .expect("some handle on non-wasm");
+            });
 
             let err_anytime = async {
                 let (_peer, mut conn): (_, AnyFramedTransport<u64>) = malicious_wrong_key
@@ -964,8 +961,7 @@ mod tests {
                     conn_res.err().unwrap().to_string().as_str(),
                     "received fatal alert: BadCertificate"
                 );
-            })
-            .expect("some handle on non-wasm");
+            });
 
             let err_anytime = async {
                 let (_peer, mut conn): (_, AnyFramedTransport<u64>) =
@@ -1001,8 +997,7 @@ mod tests {
                     conn_res.err().unwrap().to_string().as_str(),
                     "received fatal alert: BadCertificate"
                 );
-            })
-            .expect("some handle on non-wasm");
+            });
 
             let err_anytime = async {
                 let (_peer, mut conn): (_, AnyFramedTransport<u64>) =

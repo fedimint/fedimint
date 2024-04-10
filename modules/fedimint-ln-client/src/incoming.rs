@@ -16,7 +16,7 @@ use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::task::sleep;
+use fedimint_core::runtime::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
@@ -185,7 +185,7 @@ impl FundingOfferState {
                 }
             }
             // give some time for other things to run
-            fedimint_core::task::sleep(Duration::from_secs(sleep)).await;
+            fedimint_core::runtime::sleep(Duration::from_secs(sleep)).await;
         }
 
         unreachable!("there is too many u64s to ever get here")

@@ -480,7 +480,7 @@ impl Database {
                         delay_ms = %delay,
                         "Database commit failed in an autocommit block - retrying"
                     );
-                    crate::task::sleep(Duration::from_millis(delay)).await;
+                    crate::runtime::sleep(Duration::from_millis(delay)).await;
                 }
             }
         }
@@ -2019,7 +2019,7 @@ mod test_utils {
     use crate::module::registry::ModuleDecoderRegistry;
 
     pub async fn future_returns_shortly<F: Future>(fut: F) -> Option<F::Output> {
-        crate::task::timeout(Duration::from_millis(10), fut)
+        crate::runtime::timeout(Duration::from_millis(10), fut)
             .await
             .ok()
     }
@@ -2798,7 +2798,7 @@ mod tests {
 
     use super::mem_impl::MemDatabase;
     use super::*;
-    use crate::task::spawn;
+    use crate::runtime::spawn;
 
     async fn waiter(db: &Database, key: TestKey) -> tokio::task::JoinHandle<TestVal> {
         let db = db.clone();
@@ -2807,8 +2807,7 @@ mod tests {
             let sub = db.wait_key_exists(&key);
             tx.send(()).unwrap();
             sub.await
-        })
-        .expect("some handle on non-wasm");
+        });
         rx.await.unwrap();
         join_handle
     }

@@ -1,6 +1,6 @@
 [package]
 name = "devimint"
-version = "0.3.0-rc.2"
+version = "0.3.1-rc.0"
 edition = "2021"
 license = "MIT"
 publish = false
@@ -34,6 +34,7 @@ fedimint-server = { path = "../fedimint-server" }
 fedimint-testing = { path = "../fedimint-testing" }
 futures = "0.3.30"
 hex = "0.4.3"
+lazy_static = "1.4.0"
 ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
 nix = { version = "0.28.0", features = ["signal"] }
 rand = "0.8.5"
@@ -50,4 +51,4 @@ fedimint-portalloc = { path = "../utils/portalloc" }
 fs-lock = "0.1.3"
 
 [build-dependencies]
-fedimint-build = { version = "=0.3.0-rc.3", path = "../fedimint-build" }
+fedimint-build = { version = "=0.3.1-rc.0", path = "../fedimint-build" }

@@ -13,6 +13,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
+use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::{TracingSetup, LOG_TEST};
@@ -138,7 +139,7 @@ impl Fixtures {
         FederationTest::new(
             num_peers,
             num_offline,
-            tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(num_peers * 2))
+            block_in_place(|| fedimint_portalloc::port_alloc(num_peers * 2))
                 .expect("Failed to allocate a port range"),
             self.params.clone(),
             ServerModuleInitRegistry::from(self.servers.clone()),
@@ -163,7 +164,7 @@ impl Fixtures {
         let clients = self.clients.clone().into_iter();
 
         GatewayTest::new(
-            tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(1))
+            block_in_place(|| fedimint_portalloc::port_alloc(1))
                 .expect("Failed to allocate a port range"),
             cli_password,
             ln,

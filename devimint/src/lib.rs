@@ -13,3 +13,4 @@ pub mod gatewayd;
 pub mod tests;
 pub mod util;
 pub mod vars;
+pub mod version_constants;
