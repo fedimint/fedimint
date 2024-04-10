@@ -807,6 +807,8 @@
 <a href="#805" id="805">805</a>
 <a href="#806" id="806">806</a>
 <a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
@@ -1445,7 +1447,9 @@
         .filter(|(id, <span class="kw">_</span>)| <span class="kw-2">*</span>id != leader_id)
         .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
-    <span class="kw">let </span>leader_name = <span class="string">"leader"</span>.to_string();
+    <span class="comment">// Note: names prefixed by peerid, as DKG sort peers by submitted name
+    // by default.
+    </span><span class="kw">let </span>leader_name = <span class="macro">format!</span>(<span class="string">"{}-leader"</span>, leader_id);
     leader
         .set_config_gen_connections(
             ConfigGenConnectionsRequest {
@@ -1471,7 +1475,7 @@
                     .take(<span class="number">5</span>)
                     .map(char::from)
                     .collect::&lt;String&gt;();
-                <span class="macro">format!</span>(<span class="string">"random-{random_string}{peer_id}"</span>)
+                <span class="macro">format!</span>(<span class="string">"{peer_id}-random-{random_string}{peer_id}"</span>)
             })
         })
         .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
