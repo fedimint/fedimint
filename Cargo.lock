@@ -2642,6 +2642,7 @@ dependencies = [
  "erased-serde",
  "fedimint-bitcoind",
  "fedimint-core",
+ "fedimint-logging",
  "fedimint-metrics",
  "fedimint-server",
  "fedimint-wallet-common",

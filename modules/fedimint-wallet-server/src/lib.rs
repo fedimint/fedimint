@@ -48,10 +48,12 @@ use fedimint_core::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::sleep;
 use fedimint_core::task::{TaskGroup, TaskHandle};
+use fedimint_core::time::now;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeersExt,
     OutPoint, PeerId, ServerModule,
 };
+use fedimint_logging::LOG_MODULE_WALLET;
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
@@ -70,7 +72,8 @@ use rand::rngs::OsRng;
 use secp256k1::{Message, Scalar};
 use serde::Serialize;
 use strum::IntoEnumIterator;
-use tracing::{debug, error, info, instrument, trace, warn};
+use tokio::sync::watch;
+use tracing::{debug, info, instrument, trace, warn};
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
@@ -382,22 +385,7 @@ impl ServerModule for Wallet {
             items.push(WalletConsensusItem::BlockCount(block_count_vote));
         }
 
-        // If there's an error getting the fee rate from the node we default to the most
-        // recent fee rate vote. Using an alternative fee rate may cause unwanted
-        // jitter.
-        let fee_rate_proposal = match self.get_fee_rate_opt().await {
-            Ok(fee_rate_opt) => fee_rate_opt.unwrap_or(self.cfg.consensus.default_fee),
-            Err(err) => {
-                error!(
-                    "Error while calling get_free_rate_opt, using most recent fee rate vote: {:?}",
-                    err
-                );
-
-                dbtx.get_value(&FeeRateVoteKey(self.our_peer_id))
-                    .await
-                    .unwrap_or(self.cfg.consensus.default_fee)
-            }
-        };
+        let fee_rate_proposal = self.get_fee_rate_opt();
 
         items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
 
@@ -760,6 +748,10 @@ pub struct Wallet {
     /// The result of last successful get_block_count
     block_count_local: std::sync::Mutex<Option<u32>>,
     our_peer_id: PeerId,
+    /// Block count updated periodically by a background task
+    block_count_rx: watch::Receiver<Option<u32>>,
+    /// Fee rate updated periodically by a background task
+    fee_rate_rx: watch::Receiver<Feerate>,
 }
 
 impl Wallet {
@@ -780,11 +772,10 @@ impl Wallet {
         task_group: &mut TaskGroup,
         our_peer_id: PeerId,
     ) -> Result<Wallet, WalletCreationError> {
-        let broadcaster_bitcoind_rpc = bitcoind.clone();
-        let broadcaster_db = db.clone();
-        task_group.spawn("broadcast pending", |handle| async move {
-            run_broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc, &handle).await;
-        });
+        Self::spawn_broadcast_pending_task(task_group, &bitcoind, db);
+
+        let (block_count_rx, fee_rate_rx) =
+            Self::spawn_bitcoin_update_task(&cfg, task_group, &bitcoind);
 
         let bitcoind_rpc = bitcoind;
 
@@ -805,22 +796,9 @@ impl Wallet {
             block_count_local: Default::default(),
             btc_rpc: bitcoind_rpc,
             our_peer_id,
+            block_count_rx,
+            fee_rate_rx,
         };
-
-        match wallet.get_block_count().await {
-            Ok(height) => info!(height, "Connected to bitcoind"),
-            Err(err) => warn!("Bitcoin node is not ready or configured properly. Modules relying on it may not function correctly: {:?}", err),
-        }
-
-        match wallet.get_fee_rate_opt().await {
-            Ok(feerate) => {
-                match feerate {
-                    Some(fr) => info!(feerate = fr.sats_per_kvb, "Bitcoind feerate available"),
-                    None => info!(feerate = 0, "Bitcoind feerate not available. Using defaults."),
-                }
-            },
-            Err(err) => warn!("Bitcoin fee estimation failed. Please configure your nodes to enable fee estimation: {:?}", err),
-        }
 
         Ok(wallet)
     }
@@ -927,25 +905,14 @@ impl Wallet {
         })
     }
 
-    /// Wrapper around `self.btc_rpc` that keeps track of the last successful
-    /// result
     async fn get_block_count(&self) -> anyhow::Result<u32> {
-        let res = self
-            .btc_rpc
-            .get_block_count()
-            .await
-            .and_then(|count| Ok(u32::try_from(count)?));
-
-        match res {
-            Ok(count) => *self.block_count_local.lock().expect("Failed to lock") = Some(count),
-            Err(ref err) => error!("Error while calling get_block_count: {:?}", err),
-        }
-
-        res
+        self.block_count_rx
+            .borrow()
+            .ok_or_else(|| format_err!("Block count not available yet"))
     }
 
-    pub async fn get_fee_rate_opt(&self) -> anyhow::Result<Option<Feerate>> {
-        self.btc_rpc.get_fee_rate(CONFIRMATION_TARGET).await
+    pub fn get_fee_rate_opt(&self) -> Feerate {
+        *self.fee_rate_rx.borrow()
     }
 
     pub async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<u32> {
@@ -1205,6 +1172,85 @@ impl Wallet {
             secret_key: &self.cfg.private.peg_in_key,
             secp: &self.secp,
         }
+    }
+
+    fn spawn_broadcast_pending_task(
+        task_group: &mut TaskGroup,
+        bitcoind: &DynBitcoindRpc,
+        db: Database,
+    ) {
+        task_group.spawn("broadcast pending", {
+            let bitcoind = bitcoind.clone();
+            let db = db.clone();
+            |handle| async move {
+                run_broadcast_pending_tx(db, bitcoind, &handle).await;
+            }
+        });
+    }
+
+    fn spawn_bitcoin_update_task(
+        cfg: &WalletConfig,
+        task_group: &mut TaskGroup,
+        bitcoind: &DynBitcoindRpc,
+    ) -> (watch::Receiver<Option<u32>>, watch::Receiver<Feerate>) {
+        let (block_count_tx, block_count_rx) = watch::channel(None);
+        let (fee_rate_tx, fee_rate_rx) = watch::channel(cfg.consensus.default_fee);
+
+        task_group.spawn_cancellable("wallet module: background update", {
+            let bitcoind = bitcoind.clone();
+            async move {
+                debug!(target: LOG_MODULE_WALLET, "Updating bitcoin block count");
+
+                let update_block_count = || async {
+                    let res = bitcoind
+                        .get_block_count()
+                        .await
+                        .and_then(|count| Ok(u32::try_from(count)?));
+
+                    match res {
+                        Ok(c) => {
+                            let _ = block_count_tx.send(Some(c));
+                        },
+                        Err(err) => {
+                            warn!(target: LOG_MODULE_WALLET, %err, "Unable to get block count from the node");
+                        }
+                    }
+                };
+
+                let update_fee_rate = || async {
+                    debug!(target: LOG_MODULE_WALLET, "Updating bitcoin fee rate");
+
+                    let res = bitcoind
+                       .get_fee_rate(CONFIRMATION_TARGET).await;
+
+                    match res {
+                        Ok(Some(r)) => {
+                            let _ = fee_rate_tx.send(r);
+                        }
+                        Ok(None) => {
+                            debug!(target: LOG_MODULE_WALLET, "Bitcoin node did not return a fee rate");
+                        }
+                        Err(err) => {
+                            warn!(target: LOG_MODULE_WALLET, %err, "Unable to get fee rate from the node");
+                        }
+                    }
+                };
+
+                let desired_frequency = Duration::from_secs(1);
+                loop {
+                    let start = now();
+                    update_block_count().await;
+                    update_fee_rate().await;
+                    let duration = now().duration_since(start).unwrap_or_default();
+                    if Duration::from_secs(10) < duration {
+                        warn!(target: LOG_MODULE_WALLET, duration_secs=duration.as_secs(), "Updating from bitcoind slow");
+                    }
+                    let remaining = desired_frequency.saturating_sub(duration);
+                    sleep(remaining).await;
+                }
+            }
+        });
+        (block_count_rx, fee_rate_rx)
     }
 }
 
