@@ -3,6 +3,7 @@ mod config;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::path::PathBuf;
+use std::time::Duration;
 use std::{env, fs};
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -326,6 +327,77 @@ impl Federation {
             bail!("fedimintd-{peer_id} does not exist");
         };
         fedimintd.terminate().await?;
+        Ok(())
+    }
+
+    /// Starts all peers not currently running.
+    pub async fn start_all_servers(&mut self, process_mgr: &ProcessManager) -> Result<()> {
+        info!("starting all servers");
+        let fed_size = process_mgr.globals.FM_FED_SIZE;
+        for peer_id in 0..fed_size {
+            if self.members.contains_key(&peer_id) {
+                continue;
+            }
+            self.start_server(process_mgr, peer_id).await?
+        }
+        self.await_all_peers().await?;
+        Ok(())
+    }
+
+    /// Terminates all running peers.
+    pub async fn terminate_all_servers(&mut self) -> Result<()> {
+        info!("terminating all servers");
+        let running_peer_ids: Vec<_> = self.members.keys().cloned().collect();
+        for peer_id in running_peer_ids {
+            self.terminate_server(peer_id).await?
+        }
+        Ok(())
+    }
+
+    /// Coordinated shutdown of all peers that restart using the provided
+    /// `bin_path`. Returns `Ok()` once all peers are online.
+    ///
+    /// Staggering the restart more closely simulates upgrades in the wild.
+    pub async fn restart_all_staggered_with_bin(
+        &mut self,
+        process_mgr: &ProcessManager,
+        bin_path: &PathBuf,
+    ) -> Result<()> {
+        let fed_size = process_mgr.globals.FM_FED_SIZE;
+
+        // ensure all peers are online
+        self.start_all_servers(process_mgr).await?;
+
+        // staggered shutdown of peers
+        while self.num_members() > 0 {
+            self.terminate_server(self.num_members() - 1).await?;
+            if self.num_members() > 0 {
+                fedimint_core::task::sleep_in_test(
+                    "waiting to shutdown remaining peers",
+                    Duration::from_secs(10),
+                )
+                .await;
+            }
+        }
+
+        std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", bin_path);
+
+        // staggered restart
+        for peer_id in 0..fed_size {
+            self.start_server(process_mgr, peer_id).await?;
+            if peer_id < fed_size - 1 {
+                fedimint_core::task::sleep_in_test(
+                    "waiting to restart remaining peers",
+                    Duration::from_secs(10),
+                )
+                .await;
+            }
+        }
+
+        self.await_all_peers().await?;
+
+        let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+        info!("upgraded fedimintd to version: {}", fedimintd_version);
         Ok(())
     }
 
