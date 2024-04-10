@@ -1661,58 +1661,56 @@ impl Gateway {
             return Err(CreateInvoiceErrorV2::InvalidContract);
         }
 
-        loop {
-            let payload = payload.clone();
-            let mut dbtx = self.gateway_db.begin_transaction().await;
+        let our_pk = self
+            .public_key_v2(&payload.federation_id)
+            .await
+            .ok_or(CreateInvoiceErrorV2::UnknownFederation)?;
 
-            if let Some(existing_entry) = dbtx
-                .insert_entry(
-                    &CreateInvoicePayloadKey(payload.contract.commitment.payment_hash.into_inner()),
-                    &payload,
-                )
-                .await
-            {
-                if existing_entry != payload {
-                    return Err(CreateInvoiceErrorV2::HashAlreadyRegistered);
-                }
-            }
-
-            let our_pk = self
-                .public_key_v2(&payload.federation_id)
-                .await
-                .ok_or(CreateInvoiceErrorV2::UnknownFederation)?;
-
-            if payload.contract.commitment.refund_pk != our_pk {
-                return Err(CreateInvoiceErrorV2::NotOurKey);
-            }
-
-            let contract_amount = self
-                .payment_fees_v2()
-                .receive
-                .subtract_fee(payload.invoice_amount.msats);
-
-            if contract_amount != payload.contract.commitment.amount {
-                return Err(CreateInvoiceErrorV2::Unbalanced);
-            }
-
-            if payload.contract.commitment.expiration <= duration_since_epoch().as_secs() {
-                return Err(CreateInvoiceErrorV2::ContractExpired);
-            }
-
-            let invoice = self
-                .create_invoice_via_lnrpc_v2(
-                    payload.contract.commitment.payment_hash,
-                    payload.invoice_amount,
-                    payload.description,
-                    payload.expiry_time,
-                )
-                .await
-                .map_err(CreateInvoiceErrorV2::NodeError)?;
-
-            if dbtx.commit_tx_result().await.is_ok() {
-                return Ok(invoice);
-            }
+        if payload.contract.commitment.refund_pk != our_pk {
+            return Err(CreateInvoiceErrorV2::NotOurKey);
         }
+
+        let contract_amount = self
+            .payment_fees_v2()
+            .receive
+            .subtract_fee(payload.invoice_amount.msats);
+
+        if contract_amount != payload.contract.commitment.amount {
+            return Err(CreateInvoiceErrorV2::Unbalanced);
+        }
+
+        if payload.contract.commitment.expiration <= duration_since_epoch().as_secs() {
+            return Err(CreateInvoiceErrorV2::ContractExpired);
+        }
+
+        let invoice = self
+            .create_invoice_via_lnrpc_v2(
+                payload.contract.commitment.payment_hash,
+                payload.invoice_amount,
+                payload.description.clone(),
+                payload.expiry_time,
+            )
+            .await
+            .map_err(CreateInvoiceErrorV2::NodeError)?;
+
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+
+        if dbtx
+            .insert_entry(
+                &CreateInvoicePayloadKey(payload.contract.commitment.payment_hash.into_inner()),
+                &payload,
+            )
+            .await
+            .is_some()
+        {
+            return Err(CreateInvoiceErrorV2::HashAlreadyRegistered);
+        }
+
+        dbtx.commit_tx_result()
+            .await
+            .map_err(|_| CreateInvoiceErrorV2::HashAlreadyRegistered)?;
+
+        Ok(invoice)
     }
 
     pub async fn create_invoice_via_lnrpc_v2(

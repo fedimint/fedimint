@@ -30,6 +30,7 @@ use secp256k1::schnorr::Signature;
 use send_sm::{SendSMState, SendStateMachine};
 use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare};
+use tracing::error;
 
 use crate::gateway_module_v2::receive_sm::ReceiveSMCommon;
 use crate::gateway_module_v2::send_sm::SendSMCommon;
@@ -124,7 +125,7 @@ impl ClientModule for GatewayClientModuleV2 {
     ) -> Option<TransactionItemAmount> {
         Some(TransactionItemAmount {
             amount: input.amount,
-            fee: self.cfg.fee_consensus.contract_input,
+            fee: self.cfg.fee_consensus.input,
         })
     }
 
@@ -134,7 +135,7 @@ impl ClientModule for GatewayClientModuleV2 {
     ) -> Option<TransactionItemAmount> {
         Some(TransactionItemAmount {
             amount: output.amount(),
-            fee: self.cfg.fee_consensus.contract_output,
+            fee: self.cfg.fee_consensus.output,
         })
     }
 }
@@ -229,8 +230,10 @@ impl GatewayClientModuleV2 {
                 match state.state {
                     SendSMState::Sending => {}
                     SendSMState::Claiming(claiming) => return Ok(claiming.preimage),
-                    SendSMState::Cancelled => {
-                        return Err(self.keypair.sign_schnorr(contract.forfeit_message()))
+                    SendSMState::Cancelled(error) => {
+                        error!("Failed to route payment {}", error);
+
+                        return Err(self.keypair.sign_schnorr(contract.forfeit_message()));
                     }
                 }
             }

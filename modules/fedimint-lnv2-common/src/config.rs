@@ -4,7 +4,7 @@ pub use bitcoin::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
-use fedimint_core::{plugin_types_trait_impl_config, PeerId};
+use fedimint_core::{plugin_types_trait_impl_config, Amount, PeerId};
 use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare, SecretKeyShare};
 
@@ -46,7 +46,6 @@ pub struct LightningConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
 pub struct LightningConfigLocal {
-    /// Configures which bitcoin RPC to use
     pub bitcoin_rpc: BitcoinRpcConfig,
 }
 
@@ -60,8 +59,6 @@ pub struct LightningConfigConsensus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfigPrivate {
-    // TODO: propose serde(with = "…") based protection upstream instead
-    /// Our secret key for decrypting preimages
     pub sk: SecretKeyShare,
 }
 
@@ -98,15 +95,15 @@ plugin_types_trait_impl_config!(
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FeeConsensus {
-    pub contract_input: fedimint_core::Amount,
-    pub contract_output: fedimint_core::Amount,
+    pub input: Amount,
+    pub output: Amount,
 }
 
 impl Default for FeeConsensus {
     fn default() -> Self {
         Self {
-            contract_input: fedimint_core::Amount::ZERO,
-            contract_output: fedimint_core::Amount::ZERO,
+            input: Amount::from_sats(1),
+            output: Amount::from_sats(1),
         }
     }
 }
