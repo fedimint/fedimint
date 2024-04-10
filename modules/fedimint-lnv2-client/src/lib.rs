@@ -4,7 +4,6 @@ mod send_sm;
 
 use std::sync::Arc;
 
-use anyhow::{anyhow, ensure, Context};
 use async_stream::stream;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -116,7 +115,7 @@ pub struct PaymentFees {
 }
 
 #[derive(
-    Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Decodable, Encodable,
+    Debug, Clone, Eq, PartialEq, PartialOrd, Hash, Serialize, Deserialize, Decodable, Encodable,
 )]
 pub struct PaymentFee {
     pub base: Amount,
@@ -275,7 +274,7 @@ impl LightningClientModule {
         &self,
         gateway_api: SafeUrl,
         invoice: Bolt11Invoice,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, SendPaymentError> {
         self.send_internal(
             gateway_api,
             invoice,
@@ -291,7 +290,7 @@ impl LightningClientModule {
         invoice: Bolt11Invoice,
         payment_fee: PaymentFee,
         expiration_delta: u64,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, SendPaymentError> {
         let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(self.keypair.public_key());
 
         let refund_keypair = SecretKey::from_slice(&ephemeral_tweak)
@@ -301,31 +300,30 @@ impl LightningClientModule {
         let payment_info = self
             .fetch_payment_info(gateway_api.clone())
             .await
-            .map_err(|e| anyhow!(e))?
-            .ok_or(anyhow!("The gateway does not support our federation"))?;
+            .map_err(SendPaymentError::GatewayError)?
+            .ok_or(SendPaymentError::UnknownFederation)?;
 
-        ensure!(
-            payment_fee >= payment_info.payment_fees.send,
-            "The gateway send fee is above {payment_fee:?}"
-        );
+        if !payment_info.payment_fees.send.le(&payment_fee) {
+            return Err(SendPaymentError::InsufficientPaymentFee(
+                payment_info.payment_fees.send,
+            ));
+        }
 
-        // we double it to account for cltv expiry deltas along the lightning route
-        let min_outgoing_cltv_delta = 2 * payment_info.outgoing_cltv_delta;
-
-        ensure!(
-            min_outgoing_cltv_delta <= expiration_delta,
-            "The minimum possible expiration delta is {min_outgoing_cltv_delta} blocks"
-        );
+        if expiration_delta < payment_info.outgoing_cltv_delta + 288 {
+            return Err(SendPaymentError::InsufficientExpirationDelta(
+                payment_info.outgoing_cltv_delta + 288,
+            ));
+        }
 
         let consensus_block_count = self
             .module_api
             .consensus_block_count()
             .await
-            .context("Failed to fetch the consensus block count from the federation")?;
+            .map_err(|e| SendPaymentError::FederationError(e.to_string()))?;
 
         let invoice_msats = invoice
             .amount_milli_satoshis()
-            .ok_or(anyhow!("Invoice has no amount"))?;
+            .ok_or(SendPaymentError::InvoiceMissingAmount)?;
 
         let contract = OutgoingContract {
             payment_hash: *invoice.payment_hash(),
@@ -376,7 +374,8 @@ impl LightningClientModule {
                 },
                 transaction,
             )
-            .await?;
+            .await
+            .map_err(|e| SendPaymentError::FinalizationError(e.to_string()))?;
 
         Ok(operation_id)
     }
@@ -526,10 +525,9 @@ impl LightningClientModule {
             .map_err(FetchInvoiceError::GatewayError)?
             .ok_or(FetchInvoiceError::UnknownFederation)?;
 
-        if !(payment_info.payment_fees.receive <= payment_fee_limit) {
+        if !payment_info.payment_fees.receive.le(&payment_fee_limit) {
             return Err(FetchInvoiceError::PaymentFeeExceedsLimit(
                 payment_info.payment_fees.receive,
-                payment_fee_limit,
             ));
         }
 
@@ -726,13 +724,31 @@ pub enum GatewayError {
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
+pub enum SendPaymentError {
+    #[error("Gateway error: {0}")]
+    GatewayError(GatewayError),
+    #[error("The gateway does not support our federation")]
+    UnknownFederation,
+    #[error("To route via this gateway we require a minimum payment fee of {0:?}")]
+    InsufficientPaymentFee(PaymentFee),
+    #[error("To route via this gateway we require a minimum expiration delta of {0} blocks")]
+    InsufficientExpirationDelta(u64),
+    #[error("Federation returned an error: {0}")]
+    FederationError(String),
+    #[error("The invoice has not amount")]
+    InvoiceMissingAmount,
+    #[error("We failed to finalize the funding transaction")]
+    FinalizationError(String),
+}
+
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum FetchInvoiceError {
     #[error("Gateway error: {0}")]
     GatewayError(GatewayError),
     #[error("The gateway does not support our federation")]
     UnknownFederation,
-    #[error("The gateways fee of {0:?} exceeds the supplied limit of {1:?}")]
-    PaymentFeeExceedsLimit(PaymentFee, PaymentFee),
+    #[error("The gateways fee of {0:?} exceeds the supplied limit")]
+    PaymentFeeExceedsLimit(PaymentFee),
     #[error("The gateway considered our request for an invoice invalid: {0}")]
     CreateInvoiceError(String),
     #[error("The invoice's payment hash is incorrect")]
