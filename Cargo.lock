@@ -1497,7 +1497,7 @@ dependencies = [
  "itertools 0.12.1",
  "lightning-invoice",
  "rand",
- "reqwest 0.11.26",
+ "reqwest 0.12.3",
  "serde",
  "serde_json",
  "thiserror",
@@ -1526,7 +1526,7 @@ dependencies = [
  "futures",
  "itertools 0.12.1",
  "rand",
- "reqwest 0.12.2",
+ "reqwest 0.12.3",
  "ring 0.17.8",
  "secp256k1-zkp",
  "serde",
@@ -1834,7 +1834,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln-gateway",
  "fedimint-logging",
- "reqwest 0.11.26",
+ "reqwest 0.12.3",
  "serde",
  "serde_json",
  "tokio",
@@ -1872,7 +1872,7 @@ dependencies = [
  "lightning-invoice",
  "lnurl-rs",
  "rand",
- "reqwest 0.11.26",
+ "reqwest 0.12.3",
  "secp256k1 0.24.3",
  "secp256k1-zkp",
  "serde",
@@ -1963,7 +1963,7 @@ dependencies = [
  "lightning-invoice",
  "prost",
  "rand",
- "reqwest 0.11.26",
+ "reqwest 0.12.3",
  "secp256k1 0.24.3",
  "secp256k1-zkp",
  "serde",
@@ -2067,7 +2067,7 @@ dependencies = [
  "itertools 0.12.1",
  "lightning-invoice",
  "rand",
- "reqwest 0.11.26",
+ "reqwest 0.12.3",
  "secp256k1 0.24.3",
  "secp256k1-zkp",
  "serde",
@@ -3989,18 +3989,18 @@ checksum = "01cda141df6706de531b6c46c3a33ecca755538219bd484262fa09410c13539c"
 
 [[package]]
 name = "lnurl-rs"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29742339d2d88bd3ea1f4305e11b22d3efada9f86010ccbd7b6646837cc57e85"
+checksum = "043935963e3454227165b4daf62e8fdecd6273857e0e6fc00422aea4d9258673"
 dependencies = [
  "aes",
  "anyhow",
- "base64 0.13.1",
+ "base64 0.22.0",
  "bech32",
  "bitcoin 0.30.2",
  "cbc",
  "email_address",
- "reqwest 0.11.26",
+ "reqwest 0.12.3",
  "serde",
  "serde_json",
  "url",
@@ -4817,16 +4817,16 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "webpki-roots 0.25.4",
- "winreg",
+ "winreg 0.50.0",
 ]
 
 [[package]]
 name = "reqwest"
-version = "0.12.2"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d66674f2b6fb864665eea7a3c1ac4e3dfacd2fda83cf6f935a612e01b0e3338"
+checksum = "3e6cc1e89e689536eb5aeede61520e874df5a4707df811cd5da4aa5fbb2aae19"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.0",
  "bytes",
  "futures-core",
  "futures-util",
@@ -4844,7 +4844,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "rustls 0.22.2",
- "rustls-pemfile 1.0.4",
+ "rustls-pemfile 2.1.1",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -4852,13 +4852,14 @@ dependencies = [
  "sync_wrapper",
  "tokio",
  "tokio-rustls 0.25.0",
+ "tokio-socks",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
  "webpki-roots 0.26.1",
- "winreg",
+ "winreg 0.52.0",
 ]
 
 [[package]]
@@ -6453,6 +6454,16 @@ name = "winreg"
 version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "524e57b2c537c0f9b1e69f1965311ec12182b4122e45035b1508cd24d2adadb1"
+dependencies = [
+ "cfg-if",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "winreg"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a277a57398d4bfa075df44f501a17cfdf8542d224f0d36095a2adc7aee4ef0a5"
 dependencies = [
  "cfg-if",
  "windows-sys 0.48.0",

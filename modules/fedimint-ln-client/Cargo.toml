@@ -37,7 +37,7 @@ erased-serde = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { workspace = true }
-lnurl-rs = { version = "0.4.1", features = ["async"], default-features = false }
+lnurl-rs = { version = "0.5.0", features = ["async"], default-features = false }
 fedimint-client = { version = "=0.4.0-alpha", path = "../../fedimint-client" }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
@@ -54,7 +54,7 @@ threshold_crypto = { workspace = true }
 tokio = { version = "1.36.0", features = ["macros"] }
 tracing = { workspace = true }
 rand = { workspace = true }
-reqwest = { version = "0.11.26", features = [ "json", "rustls-tls" ], default-features = false }
+reqwest = { version = "0.12.3", features = [ "json", "rustls-tls" ], default-features = false }
 url = { version = "2.5.0", features = ["serde"] }
 
 [dev-dependencies]
