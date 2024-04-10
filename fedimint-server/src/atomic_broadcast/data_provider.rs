@@ -68,7 +68,7 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
                 n_bytes += n_bytes_item;
                 items.push(item);
             } else {
-                tracing::warn!(target: LOG_CONSENSUS,"Consensus item length is over BYTE_LIMIT");
+                tracing::warn!(target: LOG_CONSENSUS, ?item, "Consensus item length is over BYTE_LIMIT");
             }
         }
 
