@@ -3,11 +3,13 @@ use std::time::Duration;
 use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 use fedimint_core::endpoint_constants::{
     AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT,
-    OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
+    GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
 };
 use fedimint_core::module::ApiRequestErased;
+use fedimint_core::query::UnionResponses;
 use fedimint_core::task::{sleep, MaybeSend, MaybeSync};
-use fedimint_core::{apply, async_trait_maybe_send};
+use fedimint_core::util::SafeUrl;
+use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt};
 use fedimint_lnv2_common::ContractId;
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -24,6 +26,8 @@ pub trait LnFederationApi {
         &self,
         contract_id: &ContractId,
     ) -> FederationResult<Option<u64>>;
+
+    async fn fetch_gateways(&self) -> FederationResult<Vec<SafeUrl>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -80,6 +84,15 @@ where
         self.request_current_consensus(
             OUTGOING_CONTRACT_EXPIRATION_ENDPOINT.to_string(),
             ApiRequestErased::new(contract_id),
+        )
+        .await
+    }
+
+    async fn fetch_gateways(&self) -> FederationResult<Vec<SafeUrl>> {
+        self.request_with_strategy(
+            UnionResponses::new(self.all_peers().total()),
+            GATEWAYS_ENDPOINT.to_string(),
+            ApiRequestErased::default(),
         )
         .await
     }
