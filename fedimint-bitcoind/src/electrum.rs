@@ -4,6 +4,10 @@ use anyhow::anyhow as format_err;
 use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 use electrum_client::ElectrumApi;
 use electrum_client::Error::Protocol;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_script, bitcoin29_to_bitcoin30_txid, bitcoin30_to_bitcoin29_block_hash,
+    bitcoin30_to_bitcoin29_transaction,
+};
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
@@ -63,11 +67,13 @@ impl IBitcoindRpc for ElectrumClient {
 
     async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
         let result = block_in_place(|| self.0.block_headers(height as usize, 1))?;
-        Ok(result
-            .headers
-            .first()
-            .ok_or_else(|| format_err!("empty block headers response"))?
-            .block_hash())
+        Ok(bitcoin30_to_bitcoin29_block_hash(
+            result
+                .headers
+                .first()
+                .ok_or_else(|| format_err!("empty block headers response"))?
+                .block_hash(),
+        ))
     }
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> anyhow::Result<Option<Feerate>> {
@@ -93,7 +99,7 @@ impl IBitcoindRpc for ElectrumClient {
     }
 
     async fn get_tx_block_height(&self, txid: &Txid) -> anyhow::Result<Option<u64>> {
-        let tx = block_in_place(|| self.0.transaction_get(txid))
+        let tx = block_in_place(|| self.0.transaction_get(&bitcoin29_to_bitcoin30_txid(*txid)))
             .map_err(|error| info!(?error, "Unable to get raw transaction"));
         match tx.ok() {
             None => Ok(None),
@@ -118,9 +124,14 @@ impl IBitcoindRpc for ElectrumClient {
         script: &Script,
     ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
         let mut results = vec![];
-        let transactions = block_in_place(|| self.0.script_get_history(script))?;
+        let transactions = block_in_place(|| {
+            self.0
+                .script_get_history(&bitcoin29_to_bitcoin30_script(script.clone()))
+        })?;
         for history in transactions.into_iter() {
-            results.push(block_in_place(|| self.0.transaction_get(&history.tx_hash))?);
+            results.push(bitcoin30_to_bitcoin29_transaction(&block_in_place(|| {
+                self.0.transaction_get(&history.tx_hash)
+            })?));
         }
         Ok(results)
     }

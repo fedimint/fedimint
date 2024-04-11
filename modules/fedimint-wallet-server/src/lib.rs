@@ -1075,7 +1075,8 @@ impl Wallet {
         self.remove_rbf_transactions(dbtx, pending_tx).await;
 
         let script_pk = bitcoin30_to_bitcoin29_script(
-            self.cfg
+            &self
+                .cfg
                 .consensus
                 .peg_in_descriptor
                 .tweak(&pending_tx.tweak, &self.secp)
@@ -1445,13 +1446,14 @@ impl<'a> StatelessWallet<'a> {
                         non_witness_utxo: None,
                         witness_utxo: Some(TxOut {
                             value: utxo.amount.to_sat(),
-                            script_pubkey: bitcoin30_to_bitcoin29_script(script_pubkey),
+                            script_pubkey: bitcoin30_to_bitcoin29_script(&script_pubkey),
                         }),
                         partial_sigs: Default::default(),
                         sighash_type: None,
                         redeem_script: None,
                         witness_script: Some(bitcoin30_to_bitcoin29_script(
-                            self.descriptor
+                            &self
+                                .descriptor
                                 .tweak(&utxo.tweak, self.secp)
                                 .script_code()
                                 .expect("Failed to tweak descriptor"),
@@ -1580,7 +1582,7 @@ impl<'a> StatelessWallet<'a> {
             })
             .expect("can't fail");
 
-        bitcoin30_to_bitcoin29_script(descriptor.script_pubkey())
+        bitcoin30_to_bitcoin29_script(&descriptor.script_pubkey())
     }
 }
 
