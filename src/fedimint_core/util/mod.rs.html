@@ -859,7 +859,7 @@
 {
     <span class="kw">let </span><span class="kw-2">mut </span>strategy = strategy.build();
     <span class="kw">let </span>op_name = op_name.into();
-    <span class="kw">let </span><span class="kw-2">mut </span>attempts = <span class="number">0</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>attempts: u64 = <span class="number">0</span>;
     <span class="kw">loop </span>{
         attempts += <span class="number">1</span>;
         <span class="kw">match </span>op_fn().<span class="kw">await </span>{
