@@ -29,7 +29,7 @@ use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, ModuleDecoderRegistry, NumPeersExt,
     OutPoint, PeerId, TransactionId,
 };
-use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
+use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
 use jsonrpsee_core::client::{ClientT, Error as JsonRpcClientError};
@@ -40,7 +40,7 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use tokio::sync::{OnceCell, RwLock, RwLockWriteGuard};
+use tokio::sync::{Mutex, OnceCell, RwLock};
 use tracing::{debug, error, instrument, trace, warn};
 
 use crate::admin_client::{
@@ -67,6 +67,7 @@ use crate::query::{
 };
 use crate::runtime;
 use crate::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
+use crate::task::jit::JitTryAnyhow;
 use crate::transaction::{SerdeTransaction, Transaction, TransactionError};
 use crate::util::SafeUrl;
 
@@ -1062,36 +1063,103 @@ pub struct WsFederationApi<C = WsClient> {
     module_id: Option<ModuleInstanceId>,
 }
 
+/// Some data shared/preserved between [`FederationPeerClient`] and
+/// Jit tasks it spawns.
 #[derive(Debug)]
-struct FederationPeerClient<C> {
-    client: Option<C>,
+struct FederationPeerClientShared {
     last_connection_attempt: SystemTime,
     connection_attempts: u64,
 }
 
-impl<C> FederationPeerClient<C> {
+impl FederationPeerClientShared {
     pub fn new() -> Self {
         Self {
-            client: None,
             last_connection_attempt: now(),
             connection_attempts: 0,
         }
     }
-    /// Wait (if needed) before reconnection attempt, and account for new
-    /// connection attempt
-    pub async fn reconnect_wait(&mut self) {
+
+    /// Wait (if needed) before reconnection attempt based on number of previous
+    /// attempts
+    async fn wait(&mut self) {
         let desired_timeout = Duration::from_millis((self.connection_attempts * 100).min(5000));
         let since_last_connect = now()
             .duration_since(self.last_connection_attempt)
             .unwrap_or_default();
         fedimint_core::runtime::sleep(desired_timeout.saturating_sub(since_last_connect)).await;
-        self.last_connection_attempt = now();
-        self.connection_attempts += 1;
     }
 
-    pub fn connected(&mut self, client: C) {
-        self.client = Some(client);
+    /// Wait (if needed) + update reconnection stats
+    async fn wait_and_inc_reconnect(&mut self) {
+        self.wait().await;
+        self.connection_attempts += 1;
+        self.last_connection_attempt = now()
+    }
+
+    async fn reset(&mut self) {
         self.connection_attempts = 0;
+    }
+}
+
+/// The client in [`FederationPeer`], that takes care of reconnecting by
+/// starting background Jit task
+#[derive(Debug)]
+struct FederationPeerClient<C> {
+    client: JitTryAnyhow<C>,
+    shared: Arc<tokio::sync::Mutex<FederationPeerClientShared>>,
+}
+
+impl<C> FederationPeerClient<C>
+where
+    C: JsonRpcClient + 'static,
+{
+    pub fn new(peer_id: PeerId, url: SafeUrl) -> Self {
+        let shared: Arc<_> = tokio::sync::Mutex::new(FederationPeerClientShared::new()).into();
+
+        Self {
+            client: Self::new_jit_client(peer_id, url, shared.clone()),
+            shared,
+        }
+    }
+
+    fn new_jit_client(
+        peer_id: PeerId,
+        url: SafeUrl,
+        shared: Arc<Mutex<FederationPeerClientShared>>,
+    ) -> JitTryAnyhow<C> {
+        JitTryAnyhow::new_try(move || async move {
+            shared.lock().await.wait_and_inc_reconnect().await;
+
+            debug!(
+                target: LOG_CLIENT_NET_API,
+                peer_id = %peer_id,
+                url = %url,
+                "Connecting to peer");
+            let res = C::connect(&url).await;
+
+            match &res {
+                Ok(_) => {
+                    shared.lock().await.reset().await;
+                    debug!(
+                            target: LOG_CLIENT_NET_API,
+                            peer_id = %peer_id,
+                            url = %url,
+                            "Connected to peer");
+                }
+                Err(err) => {
+                    debug!(
+                            target: LOG_CLIENT_NET_API,
+                            peer_id = %peer_id,
+                            url = %url,
+                            %err, "Unable to connect to peer");
+                }
+            }
+            Ok(res?)
+        })
+    }
+
+    pub async fn reconnect(&mut self, peer_id: PeerId, url: SafeUrl) {
+        self.client = Self::new_jit_client(peer_id, url, self.shared.clone());
     }
 }
 
@@ -1393,7 +1461,10 @@ impl WsFederationApi<WsClient> {
     }
 }
 
-impl<C> WsFederationApi<C> {
+impl<C> WsFederationApi<C>
+where
+    C: JsonRpcClient + 'static,
+{
     pub fn peers(&self) -> Vec<PeerId> {
         self.peers.iter().map(|peer| peer.peer_id).collect()
     }
@@ -1414,8 +1485,8 @@ impl<C> WsFederationApi<C> {
 
                         FederationPeer {
                             peer_id,
+                            client: RwLock::new(FederationPeerClient::new(peer_id, url.clone())),
                             url,
-                            client: RwLock::new(FederationPeerClient::new()),
                         }
                     })
                     .collect(),
@@ -1431,61 +1502,32 @@ pub struct PeerResponse<R> {
     pub result: JsonRpcResult<R>,
 }
 
-impl<C: JsonRpcClient> FederationPeer<C> {
+impl<C> FederationPeer<C>
+where
+    C: JsonRpcClient + 'static,
+{
     #[instrument(level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
     pub async fn request(&self, method: &str, params: &[Value]) -> JsonRpcResult<Value> {
-        let rclient = self.client.read().await;
-        match rclient.client.as_ref() {
-            Some(client) if client.is_connected() => {
-                return client.request::<_, _>(method, params).await;
-            }
-            _ => {}
-        };
+        loop {
+            let rclient = self.client.read().await;
+            match rclient.client.get_try().await {
+                Ok(client) if client.is_connected() => {
+                    return client.request::<_, _>(method, params).await;
+                }
+                _ => {}
+            };
 
-        debug!("web socket not connected, reconnecting");
-
-        drop(rclient);
-        let mut wclient = self.client.write().await;
-        Ok(match wclient.client.as_ref() {
-            Some(client) if client.is_connected() => {
-                // other task has already connected it
-                let rclient = RwLockWriteGuard::downgrade(wclient);
-                rclient
-                    .client
-                    .as_ref()
-                    .unwrap()
-                    .request::<_, _>(method, params)
-                    .await?
-            }
-            _ => {
-                wclient.reconnect_wait().await;
-                // write lock is acquired before creating a new client
-                // so only one task will try to create a new client
-                match C::connect(&self.url).await {
-                    Ok(client) => {
-                        wclient.connected(client);
-                        // drop the write lock before making the request
-                        let rclient = RwLockWriteGuard::downgrade(wclient);
-                        rclient
-                            .client
-                            .as_ref()
-                            .unwrap()
-                            .request::<_, _>(method, params)
-                            .await?
-                    }
-                    Err(err) => {
-                        // Low logging level because we will probably retry connecting later
-                        // we are going to retry, and a Federation peer being down is a fact
-                        // of life, and nothing to warn about right away
-                        debug!(
-                            target: LOG_NET_API,
-                            peer_id = %self.peer_id,
-                            %err, "Unable to connect to peer");
-                        return Err(err)?;
-                    }
+            drop(rclient);
+            let mut wclient = self.client.write().await;
+            match wclient.client.get_try().await {
+                Ok(client) if client.is_connected() => {
+                    // someone else connected, just loop again
+                }
+                _ => {
+                    wclient.reconnect(self.peer_id, self.url.clone()).await;
                 }
             }
-        })
+        }
     }
 }
 
@@ -1628,11 +1670,14 @@ mod tests {
         }
     }
 
-    fn federation_peer<C: SimpleClient + MaybeSend + MaybeSync>() -> FederationPeer<Client<C>> {
+    fn federation_peer<C: SimpleClient + MaybeSend + MaybeSync + 'static>(
+    ) -> FederationPeer<Client<C>> {
+        let url = SafeUrl::parse("http://127.0.0.1").expect("Could not parse");
+        let peer_id = PeerId::from(0);
         FederationPeer {
-            url: SafeUrl::parse("http://127.0.0.1").expect("Could not parse"),
-            peer_id: PeerId::from(0),
-            client: RwLock::new(FederationPeerClient::new()),
+            client: RwLock::new(FederationPeerClient::new(peer_id, url.clone())),
+            url,
+            peer_id,
         }
     }
 
@@ -1700,7 +1745,7 @@ mod tests {
         #[apply(async_trait_maybe_send!)]
         impl SimpleClient for Client {
             async fn connect() -> Result<Self> {
-                error!(target: LOG_NET_API, "connect");
+                error!(target: LOG_CLIENT_NET_API, "connect");
                 let id = CONNECTION_COUNT.fetch_add(1, Ordering::SeqCst);
                 // slow down
                 runtime::sleep(Duration::from_millis(100)).await;
