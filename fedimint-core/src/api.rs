@@ -7,7 +7,7 @@ use std::ops::Add;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use std::{cmp, result};
 
 use anyhow::{anyhow, ensure};
@@ -1063,10 +1063,43 @@ pub struct WsFederationApi<C = WsClient> {
 }
 
 #[derive(Debug)]
+struct FederationPeerClient<C> {
+    client: Option<C>,
+    last_connection_attempt: SystemTime,
+    connection_attempts: u64,
+}
+
+impl<C> FederationPeerClient<C> {
+    pub fn new() -> Self {
+        Self {
+            client: None,
+            last_connection_attempt: now(),
+            connection_attempts: 0,
+        }
+    }
+    /// Wait (if needed) before reconnection attempt, and account for new
+    /// connection attempt
+    pub async fn reconnect_wait(&mut self) {
+        let desired_timeout = Duration::from_millis((self.connection_attempts * 100).min(5000));
+        let since_last_connect = now()
+            .duration_since(self.last_connection_attempt)
+            .unwrap_or_default();
+        fedimint_core::runtime::sleep(desired_timeout.saturating_sub(since_last_connect)).await;
+        self.last_connection_attempt = now();
+        self.connection_attempts += 1;
+    }
+
+    pub fn connected(&mut self, client: C) {
+        self.client = Some(client);
+        self.connection_attempts = 0;
+    }
+}
+
+#[derive(Debug)]
 struct FederationPeer<C> {
     url: SafeUrl,
     peer_id: PeerId,
-    client: RwLock<Option<C>>,
+    client: RwLock<FederationPeerClient<C>>,
 }
 
 /// Information required for client to construct [`WsFederationApi`] instance
@@ -1382,7 +1415,7 @@ impl<C> WsFederationApi<C> {
                         FederationPeer {
                             peer_id,
                             url,
-                            client: RwLock::new(None),
+                            client: RwLock::new(FederationPeerClient::new()),
                         }
                     })
                     .collect(),
@@ -1402,7 +1435,7 @@ impl<C: JsonRpcClient> FederationPeer<C> {
     #[instrument(level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
     pub async fn request(&self, method: &str, params: &[Value]) -> JsonRpcResult<Value> {
         let rclient = self.client.read().await;
-        match &*rclient {
+        match rclient.client.as_ref() {
             Some(client) if client.is_connected() => {
                 return client.request::<_, _>(method, params).await;
             }
@@ -1413,25 +1446,28 @@ impl<C: JsonRpcClient> FederationPeer<C> {
 
         drop(rclient);
         let mut wclient = self.client.write().await;
-        Ok(match &*wclient {
+        Ok(match wclient.client.as_ref() {
             Some(client) if client.is_connected() => {
                 // other task has already connected it
                 let rclient = RwLockWriteGuard::downgrade(wclient);
                 rclient
+                    .client
                     .as_ref()
                     .unwrap()
                     .request::<_, _>(method, params)
                     .await?
             }
             _ => {
+                wclient.reconnect_wait().await;
                 // write lock is acquired before creating a new client
                 // so only one task will try to create a new client
                 match C::connect(&self.url).await {
                     Ok(client) => {
-                        *wclient = Some(client);
+                        wclient.connected(client);
                         // drop the write lock before making the request
                         let rclient = RwLockWriteGuard::downgrade(wclient);
                         rclient
+                            .client
                             .as_ref()
                             .unwrap()
                             .request::<_, _>(method, params)
@@ -1596,7 +1632,7 @@ mod tests {
         FederationPeer {
             url: SafeUrl::parse("http://127.0.0.1").expect("Could not parse"),
             peer_id: PeerId::from(0),
-            client: RwLock::new(None),
+            client: RwLock::new(FederationPeerClient::new()),
         }
     }
 
