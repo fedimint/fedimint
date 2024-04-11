@@ -750,7 +750,7 @@
     </span>T: ClientModuleInit + <span class="lifetime">'static </span>+ MaybeSend + Sync,
 {
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
-        T::Module::decoder()
+        &lt;&lt;T <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::decoder()
     }
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
