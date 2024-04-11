@@ -22,7 +22,7 @@ async-trait = { workspace = true }
 bitcoin = "0.29.2"
 bitcoincore-rpc = { version = "0.16.0", optional = true }
 electrum-client = { version = "0.18.0", optional = true }
-esplora-client = { version = "0.5.0", default-features = false, features = ["async", "async-https-rustls"], optional = true }
+esplora-client = { version = "0.7.0", default-features = false, features = ["async", "async-https-rustls"], optional = true }
 hex = "0.4.3"
 lazy_static = "1.4.0"
 fedimint-core  = { version = "=0.4.0-alpha", path = "../fedimint-core" }
