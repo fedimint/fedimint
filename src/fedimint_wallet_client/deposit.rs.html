@@ -449,7 +449,7 @@
     tweak: KeyPair,
 ) -&gt; (bitcoin::Transaction, u32) {
     <span class="kw">let </span>script = bitcoin30_to_bitcoin29_script(
-        context
+        <span class="kw-2">&amp;</span>context
             .wallet_descriptor
             .tweak(<span class="kw-2">&amp;</span>tweak.public_key(), <span class="kw-2">&amp;</span>context.secp)
             .script_pubkey(),

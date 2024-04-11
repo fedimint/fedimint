@@ -1776,6 +1776,8 @@
 <a href="#1774" id="1774">1774</a>
 <a href="#1775" id="1775">1775</a>
 <a href="#1776" id="1776">1776</a>
+<a href="#1777" id="1777">1777</a>
+<a href="#1778" id="1778">1778</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -2853,7 +2855,8 @@
         <span class="self">self</span>.remove_rbf_transactions(dbtx, pending_tx).<span class="kw">await</span>;
 
         <span class="kw">let </span>script_pk = bitcoin30_to_bitcoin29_script(
-            <span class="self">self</span>.cfg
+            <span class="kw-2">&amp;</span><span class="self">self
+                </span>.cfg
                 .consensus
                 .peg_in_descriptor
                 .tweak(<span class="kw-2">&amp;</span>pending_tx.tweak, <span class="kw-2">&amp;</span><span class="self">self</span>.secp)
@@ -3223,13 +3226,14 @@
                         non_witness_utxo: <span class="prelude-val">None</span>,
                         witness_utxo: <span class="prelude-val">Some</span>(TxOut {
                             value: utxo.amount.to_sat(),
-                            script_pubkey: bitcoin30_to_bitcoin29_script(script_pubkey),
+                            script_pubkey: bitcoin30_to_bitcoin29_script(<span class="kw-2">&amp;</span>script_pubkey),
                         }),
                         partial_sigs: Default::default(),
                         sighash_type: <span class="prelude-val">None</span>,
                         redeem_script: <span class="prelude-val">None</span>,
                         witness_script: <span class="prelude-val">Some</span>(bitcoin30_to_bitcoin29_script(
-                            <span class="self">self</span>.descriptor
+                            <span class="kw-2">&amp;</span><span class="self">self
+                                </span>.descriptor
                                 .tweak(<span class="kw-2">&amp;</span>utxo.tweak, <span class="self">self</span>.secp)
                                 .script_code()
                                 .expect(<span class="string">"Failed to tweak descriptor"</span>),
@@ -3358,7 +3362,7 @@
             })
             .expect(<span class="string">"can't fail"</span>);
 
-        bitcoin30_to_bitcoin29_script(descriptor.script_pubkey())
+        bitcoin30_to_bitcoin29_script(<span class="kw-2">&amp;</span>descriptor.script_pubkey())
     }
 }
 

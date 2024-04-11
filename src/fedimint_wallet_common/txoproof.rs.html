@@ -316,7 +316,7 @@
         untweaked_pegin_descriptor: <span class="kw-2">&amp;</span>Descriptor&lt;CompressedPublicKey&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), PegInProofError&gt; {
         <span class="kw">let </span>script = bitcoin30_to_bitcoin29_script(
-            untweaked_pegin_descriptor
+            <span class="kw-2">&amp;</span>untweaked_pegin_descriptor
                 .tweak(<span class="kw-2">&amp;</span><span class="self">self</span>.tweak_contract_key, secp)
                 .script_pubkey(),
         );
