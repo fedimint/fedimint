@@ -1778,6 +1778,52 @@
 <a href="#1776" id="1776">1776</a>
 <a href="#1777" id="1777">1777</a>
 <a href="#1778" id="1778">1778</a>
+<a href="#1779" id="1779">1779</a>
+<a href="#1780" id="1780">1780</a>
+<a href="#1781" id="1781">1781</a>
+<a href="#1782" id="1782">1782</a>
+<a href="#1783" id="1783">1783</a>
+<a href="#1784" id="1784">1784</a>
+<a href="#1785" id="1785">1785</a>
+<a href="#1786" id="1786">1786</a>
+<a href="#1787" id="1787">1787</a>
+<a href="#1788" id="1788">1788</a>
+<a href="#1789" id="1789">1789</a>
+<a href="#1790" id="1790">1790</a>
+<a href="#1791" id="1791">1791</a>
+<a href="#1792" id="1792">1792</a>
+<a href="#1793" id="1793">1793</a>
+<a href="#1794" id="1794">1794</a>
+<a href="#1795" id="1795">1795</a>
+<a href="#1796" id="1796">1796</a>
+<a href="#1797" id="1797">1797</a>
+<a href="#1798" id="1798">1798</a>
+<a href="#1799" id="1799">1799</a>
+<a href="#1800" id="1800">1800</a>
+<a href="#1801" id="1801">1801</a>
+<a href="#1802" id="1802">1802</a>
+<a href="#1803" id="1803">1803</a>
+<a href="#1804" id="1804">1804</a>
+<a href="#1805" id="1805">1805</a>
+<a href="#1806" id="1806">1806</a>
+<a href="#1807" id="1807">1807</a>
+<a href="#1808" id="1808">1808</a>
+<a href="#1809" id="1809">1809</a>
+<a href="#1810" id="1810">1810</a>
+<a href="#1811" id="1811">1811</a>
+<a href="#1812" id="1812">1812</a>
+<a href="#1813" id="1813">1813</a>
+<a href="#1814" id="1814">1814</a>
+<a href="#1815" id="1815">1815</a>
+<a href="#1816" id="1816">1816</a>
+<a href="#1817" id="1817">1817</a>
+<a href="#1818" id="1818">1818</a>
+<a href="#1819" id="1819">1819</a>
+<a href="#1820" id="1820">1820</a>
+<a href="#1821" id="1821">1821</a>
+<a href="#1822" id="1822">1822</a>
+<a href="#1823" id="1823">1823</a>
+<a href="#1824" id="1824">1824</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -1828,10 +1874,12 @@
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeersExt,
     OutPoint, PeerId, ServerModule,
 };
+<span class="kw">use </span>fedimint_logging::LOG_MODULE_WALLET;
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
 <span class="kw">pub use </span>fedimint_wallet_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
@@ -1850,7 +1898,8 @@
 <span class="kw">use </span>secp256k1::{Message, Scalar};
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum::IntoEnumIterator;
-<span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
+<span class="kw">use </span>tokio::sync::watch;
+<span class="kw">use </span>tracing::{debug, info, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
@@ -2162,22 +2211,7 @@
             items.push(WalletConsensusItem::BlockCount(block_count_vote));
         }
 
-        <span class="comment">// If there's an error getting the fee rate from the node we default to the most
-        // recent fee rate vote. Using an alternative fee rate may cause unwanted
-        // jitter.
-        </span><span class="kw">let </span>fee_rate_proposal = <span class="kw">match </span><span class="self">self</span>.get_fee_rate_opt().<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(fee_rate_opt) =&gt; fee_rate_opt.unwrap_or(<span class="self">self</span>.cfg.consensus.default_fee),
-            <span class="prelude-val">Err</span>(err) =&gt; {
-                <span class="macro">error!</span>(
-                    <span class="string">"Error while calling get_free_rate_opt, using most recent fee rate vote: {:?}"</span>,
-                    err
-                );
-
-                dbtx.get_value(<span class="kw-2">&amp;</span>FeeRateVoteKey(<span class="self">self</span>.our_peer_id))
-                    .<span class="kw">await
-                    </span>.unwrap_or(<span class="self">self</span>.cfg.consensus.default_fee)
-            }
-        };
+        <span class="kw">let </span>fee_rate_proposal = <span class="self">self</span>.get_fee_rate_opt();
 
         items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
 
@@ -2540,6 +2574,10 @@
     <span class="doccomment">/// The result of last successful get_block_count
     </span>block_count_local: std::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;u32&gt;&gt;,
     our_peer_id: PeerId,
+    <span class="doccomment">/// Block count updated periodically by a background task
+    </span>block_count_rx: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u32&gt;&gt;,
+    <span class="doccomment">/// Fee rate updated periodically by a background task
+    </span>fee_rate_rx: watch::Receiver&lt;Feerate&gt;,
 }
 
 <span class="kw">impl </span>Wallet {
@@ -2560,11 +2598,10 @@
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
         our_peer_id: PeerId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletCreationError&gt; {
-        <span class="kw">let </span>broadcaster_bitcoind_rpc = bitcoind.clone();
-        <span class="kw">let </span>broadcaster_db = db.clone();
-        task_group.spawn(<span class="string">"broadcast pending"</span>, |handle| <span class="kw">async move </span>{
-            run_broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc, <span class="kw-2">&amp;</span>handle).<span class="kw">await</span>;
-        });
+        <span class="self">Self</span>::spawn_broadcast_pending_task(task_group, <span class="kw-2">&amp;</span>bitcoind, db);
+
+        <span class="kw">let </span>(block_count_rx, fee_rate_rx) =
+            <span class="self">Self</span>::spawn_bitcoin_update_task(<span class="kw-2">&amp;</span>cfg, task_group, <span class="kw-2">&amp;</span>bitcoind);
 
         <span class="kw">let </span>bitcoind_rpc = bitcoind;
 
@@ -2585,22 +2622,9 @@
             block_count_local: Default::default(),
             btc_rpc: bitcoind_rpc,
             our_peer_id,
+            block_count_rx,
+            fee_rate_rx,
         };
-
-        <span class="kw">match </span>wallet.get_block_count().<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(height) =&gt; <span class="macro">info!</span>(height, <span class="string">"Connected to bitcoind"</span>),
-            <span class="prelude-val">Err</span>(err) =&gt; <span class="macro">warn!</span>(<span class="string">"Bitcoin node is not ready or configured properly. Modules relying on it may not function correctly: {:?}"</span>, err),
-        }
-
-        <span class="kw">match </span>wallet.get_fee_rate_opt().<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(feerate) =&gt; {
-                <span class="kw">match </span>feerate {
-                    <span class="prelude-val">Some</span>(fr) =&gt; <span class="macro">info!</span>(feerate = fr.sats_per_kvb, <span class="string">"Bitcoind feerate available"</span>),
-                    <span class="prelude-val">None </span>=&gt; <span class="macro">info!</span>(feerate = <span class="number">0</span>, <span class="string">"Bitcoind feerate not available. Using defaults."</span>),
-                }
-            },
-            <span class="prelude-val">Err</span>(err) =&gt; <span class="macro">warn!</span>(<span class="string">"Bitcoin fee estimation failed. Please configure your nodes to enable fee estimation: {:?}"</span>, err),
-        }
 
         <span class="prelude-val">Ok</span>(wallet)
     }
@@ -2707,26 +2731,15 @@
         })
     }
 
-    <span class="doccomment">/// Wrapper around `self.btc_rpc` that keeps track of the last successful
-    /// result
-    </span><span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u32&gt; {
-        <span class="kw">let </span>res = <span class="self">self
-            </span>.btc_rpc
-            .get_block_count()
-            .<span class="kw">await
-            </span>.and_then(|count| <span class="prelude-val">Ok</span>(u32::try_from(count)<span class="question-mark">?</span>));
-
-        <span class="kw">match </span>res {
-            <span class="prelude-val">Ok</span>(count) =&gt; <span class="kw-2">*</span><span class="self">self</span>.block_count_local.lock().expect(<span class="string">"Failed to lock"</span>) = <span class="prelude-val">Some</span>(count),
-            <span class="prelude-val">Err</span>(<span class="kw-2">ref </span>err) =&gt; <span class="macro">error!</span>(<span class="string">"Error while calling get_block_count: {:?}"</span>, err),
-        }
-
-        res
+    <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u32&gt; {
+        <span class="self">self</span>.block_count_rx
+            .borrow()
+            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Block count not available yet"</span>))
     }
 
-    <span class="kw">pub async fn </span>get_fee_rate_opt(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt; {
-        <span class="self">self</span>.btc_rpc.get_fee_rate(CONFIRMATION_TARGET).<span class="kw">await
-    </span>}
+    <span class="kw">pub fn </span>get_fee_rate_opt(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Feerate {
+        <span class="kw-2">*</span><span class="self">self</span>.fee_rate_rx.borrow()
+    }
 
     <span class="kw">pub async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;u32&gt; {
         <span class="kw">let </span>peer_count = <span class="self">self</span>.cfg.consensus.peer_peg_in_keys.total();
@@ -2986,6 +2999,85 @@
             secret_key: <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.private.peg_in_key,
             secp: <span class="kw-2">&amp;</span><span class="self">self</span>.secp,
         }
+    }
+
+    <span class="kw">fn </span>spawn_broadcast_pending_task(
+        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        bitcoind: <span class="kw-2">&amp;</span>DynBitcoindRpc,
+        db: Database,
+    ) {
+        task_group.spawn(<span class="string">"broadcast pending"</span>, {
+            <span class="kw">let </span>bitcoind = bitcoind.clone();
+            <span class="kw">let </span>db = db.clone();
+            |handle| <span class="kw">async move </span>{
+                run_broadcast_pending_tx(db, bitcoind, <span class="kw-2">&amp;</span>handle).<span class="kw">await</span>;
+            }
+        });
+    }
+
+    <span class="kw">fn </span>spawn_bitcoin_update_task(
+        cfg: <span class="kw-2">&amp;</span>WalletConfig,
+        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        bitcoind: <span class="kw-2">&amp;</span>DynBitcoindRpc,
+    ) -&gt; (watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u32&gt;&gt;, watch::Receiver&lt;Feerate&gt;) {
+        <span class="kw">let </span>(block_count_tx, block_count_rx) = watch::channel(<span class="prelude-val">None</span>);
+        <span class="kw">let </span>(fee_rate_tx, fee_rate_rx) = watch::channel(cfg.consensus.default_fee);
+
+        task_group.spawn_cancellable(<span class="string">"wallet module: background update"</span>, {
+            <span class="kw">let </span>bitcoind = bitcoind.clone();
+            <span class="kw">async move </span>{
+                <span class="macro">debug!</span>(target: LOG_MODULE_WALLET, <span class="string">"Updating bitcoin block count"</span>);
+
+                <span class="kw">let </span>update_block_count = || <span class="kw">async </span>{
+                    <span class="kw">let </span>res = bitcoind
+                        .get_block_count()
+                        .<span class="kw">await
+                        </span>.and_then(|count| <span class="prelude-val">Ok</span>(u32::try_from(count)<span class="question-mark">?</span>));
+
+                    <span class="kw">match </span>res {
+                        <span class="prelude-val">Ok</span>(c) =&gt; {
+                            <span class="kw">let _ </span>= block_count_tx.send(<span class="prelude-val">Some</span>(c));
+                        },
+                        <span class="prelude-val">Err</span>(err) =&gt; {
+                            <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, %err, <span class="string">"Unable to get block count from the node"</span>);
+                        }
+                    }
+                };
+
+                <span class="kw">let </span>update_fee_rate = || <span class="kw">async </span>{
+                    <span class="macro">debug!</span>(target: LOG_MODULE_WALLET, <span class="string">"Updating bitcoin fee rate"</span>);
+
+                    <span class="kw">let </span>res = bitcoind
+                       .get_fee_rate(CONFIRMATION_TARGET).<span class="kw">await</span>;
+
+                    <span class="kw">match </span>res {
+                        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(r)) =&gt; {
+                            <span class="kw">let _ </span>= fee_rate_tx.send(r);
+                        }
+                        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {
+                            <span class="macro">debug!</span>(target: LOG_MODULE_WALLET, <span class="string">"Bitcoin node did not return a fee rate"</span>);
+                        }
+                        <span class="prelude-val">Err</span>(err) =&gt; {
+                            <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, %err, <span class="string">"Unable to get fee rate from the node"</span>);
+                        }
+                    }
+                };
+
+                <span class="kw">let </span>desired_frequency = Duration::from_secs(<span class="number">1</span>);
+                <span class="kw">loop </span>{
+                    <span class="kw">let </span>start = now();
+                    update_block_count().<span class="kw">await</span>;
+                    update_fee_rate().<span class="kw">await</span>;
+                    <span class="kw">let </span>duration = now().duration_since(start).unwrap_or_default();
+                    <span class="kw">if </span>Duration::from_secs(<span class="number">10</span>) &lt; duration {
+                        <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, duration_secs=duration.as_secs(), <span class="string">"Updating from bitcoind slow"</span>);
+                    }
+                    <span class="kw">let </span>remaining = desired_frequency.saturating_sub(duration);
+                    sleep(remaining).<span class="kw">await</span>;
+                }
+            }
+        });
+        (block_count_rx, fee_rate_rx)
     }
 }
 
