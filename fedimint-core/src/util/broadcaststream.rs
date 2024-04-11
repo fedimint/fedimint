@@ -15,7 +15,6 @@ use crate::util::BoxFuture;
 ///
 /// [`tokio::sync::broadcast::Receiver`]: struct@tokio::sync::broadcast::Receiver
 /// [`Stream`]: trait@futures::Stream
-#[cfg_attr(docsrs, doc(cfg(feature = "sync")))]
 pub struct BroadcastStream<T> {
     inner: BoxFuture<'static, (Result<T, RecvError>, Receiver<T>)>,
 }
