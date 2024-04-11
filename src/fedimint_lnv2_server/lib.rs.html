@@ -1079,7 +1079,7 @@
         <span class="prelude-val">Ok</span>(InputMeta {
             amount: TransactionItemAmount {
                 amount,
-                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.contract_input,
+                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.input,
             },
             pub_key,
         })
@@ -1137,7 +1137,7 @@
 
         <span class="prelude-val">Ok</span>(TransactionItemAmount {
             amount: output.amount(),
-            fee: <span class="self">self</span>.cfg.consensus.fee_consensus.contract_output,
+            fee: <span class="self">self</span>.cfg.consensus.fee_consensus.output,
         })
     }
 

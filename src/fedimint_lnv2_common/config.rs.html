@@ -109,16 +109,13 @@
 <a href="#107" id="107">107</a>
 <a href="#108" id="108">108</a>
 <a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">pub use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
-<span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_config, PeerId};
+<span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_config, Amount, PeerId};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tpe::{AggregatePublicKey, PublicKeyShare, SecretKeyShare};
 
@@ -160,8 +157,7 @@
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningConfigLocal {
-    <span class="doccomment">/// Configures which bitcoin RPC to use
-    </span><span class="kw">pub </span>bitcoin_rpc: BitcoinRpcConfig,
+    <span class="kw">pub </span>bitcoin_rpc: BitcoinRpcConfig,
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
@@ -174,9 +170,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>LightningConfigPrivate {
-    <span class="comment">// TODO: propose serde(with = "…") based protection upstream instead
-    </span><span class="doccomment">/// Our secret key for decrypting preimages
-    </span><span class="kw">pub </span>sk: SecretKeyShare,
+    <span class="kw">pub </span>sk: SecretKeyShare,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -212,15 +206,15 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>FeeConsensus {
-    <span class="kw">pub </span>contract_input: fedimint_core::Amount,
-    <span class="kw">pub </span>contract_output: fedimint_core::Amount,
+    <span class="kw">pub </span>input: Amount,
+    <span class="kw">pub </span>output: Amount,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>FeeConsensus {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            contract_input: fedimint_core::Amount::ZERO,
-            contract_output: fedimint_core::Amount::ZERO,
+            input: Amount::from_sats(<span class="number">1</span>),
+            output: Amount::from_sats(<span class="number">1</span>),
         }
     }
 }

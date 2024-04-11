@@ -187,18 +187,6 @@
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
-<a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a>
-<a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin_hashes::Hash;
@@ -207,13 +195,11 @@
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::{KeyPair, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint};
 <span class="kw">use </span>fedimint_lnv2_client::LightningClientStateMachines;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::OutgoingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{LightningInput, OutgoingWitness, Witness};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
-<span class="kw">use </span>tracing::error;
 
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::PayInvoiceRequest;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientContextV2;
@@ -248,7 +234,7 @@
 </span><span class="kw">pub enum </span>SendSMState {
     Sending,
     Claiming(Claiming),
-    Cancelled,
+    Cancelled(String),
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -299,7 +285,7 @@
             SendSMState::Claiming(..) =&gt; {
                 <span class="macro">vec!</span>[]
             }
-            SendSMState::Cancelled =&gt; {
+            SendSMState::Cancelled(..) =&gt; {
                 <span class="macro">vec!</span>[]
             }
         }
@@ -316,39 +302,29 @@
         max_delay: u64,
         max_fee_msat: u64,
         invoice: Bolt11Invoice,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], ()&gt; {
-        <span class="kw">let </span>lightning_context = <span class="kw">loop </span>{
-            <span class="kw">match </span>context.gateway.get_lightning_context().<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(lightning_context) =&gt; <span class="kw">break </span>lightning_context,
-                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                    sleep(std::time::Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
-                }
-            }
-        };
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], String&gt; {
+        <span class="kw">let </span>lightning_context = context
+            .gateway
+            .get_lightning_context()
+            .<span class="kw">await
+            </span>.map_err(|e| e.to_string())<span class="question-mark">?</span>;
 
         <span class="kw">if </span>lightning_context.lightning_public_key == invoice.recover_payee_pub_key() {
             <span class="kw">let </span>invoice_msats = invoice
                 .amount_milli_satoshis()
                 .expect(<span class="string">"We checked this previously"</span>);
 
-            <span class="kw">return match </span>context
+            <span class="kw">return </span>context
                 .gateway
                 .receive_v2(
                     invoice.payment_hash().into_inner(),
                     Amount::from_msats(invoice_msats),
                 )
                 .<span class="kw">await
-            </span>{
-                <span class="prelude-val">Ok</span>(preimage) =&gt; <span class="prelude-val">Ok</span>(preimage),
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">error!</span>(<span class="string">"Failed to route internal payment {:?}"</span>, e);
-
-                    <span class="prelude-val">Err</span>(())
-                }
-            };
+                </span>.map_err(|e| e.to_string());
         }
 
-        <span class="kw">match </span>lightning_context
+        lightning_context
             .lnrpc
             .pay(PayInvoiceRequest {
                 invoice: invoice.to_string(),
@@ -357,21 +333,21 @@
                 payment_hash: invoice.payment_hash().to_vec(),
             })
             .<span class="kw">await
-        </span>{
-            <span class="prelude-val">Ok</span>(response) =&gt; <span class="prelude-val">Ok</span>(response
-                .preimage
-                .as_slice()
-                .try_into()
-                .expect(<span class="string">"Preimage is 32 bytes"</span>)),
-            <span class="prelude-val">Err</span>(..) =&gt; <span class="prelude-val">Err</span>(()),
-        }
+            </span>.map(|response| {
+                response
+                    .preimage
+                    .as_slice()
+                    .try_into()
+                    .expect(<span class="string">"Preimage is 32 bytes"</span>)
+            })
+            .map_err(|e| e.to_string())
     }
 
     <span class="kw">async fn </span>transition_send_payment(
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         old_state: SendStateMachine,
         global_context: DynGlobalClientContext,
-        result: <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], ()&gt;,
+        result: <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], String&gt;,
     ) -&gt; SendStateMachine {
         <span class="kw">match </span>result {
             <span class="prelude-val">Ok</span>(preimage) =&gt; {
@@ -394,7 +370,7 @@
                     outpoints,
                 }))
             }
-            <span class="prelude-val">Err</span>(()) =&gt; old_state.update(SendSMState::Cancelled),
+            <span class="prelude-val">Err</span>(e) =&gt; old_state.update(SendSMState::Cancelled(e)),
         }
     }
 }

@@ -970,7 +970,7 @@
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
         <span class="prelude-val">Some</span>(TransactionItemAmount {
             amount: input.amount,
-            fee: <span class="self">self</span>.cfg.fee_consensus.contract_input,
+            fee: <span class="self">self</span>.cfg.fee_consensus.input,
         })
     }
 
@@ -980,7 +980,7 @@
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
         <span class="prelude-val">Some</span>(TransactionItemAmount {
             amount: output.amount(),
-            fee: <span class="self">self</span>.cfg.fee_consensus.contract_output,
+            fee: <span class="self">self</span>.cfg.fee_consensus.output,
         })
     }
 }

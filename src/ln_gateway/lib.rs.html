@@ -1914,8 +1914,6 @@
 <a href="#1912" id="1912">1912</a>
 <a href="#1913" id="1913">1913</a>
 <a href="#1914" id="1914">1914</a>
-<a href="#1915" id="1915">1915</a>
-<a href="#1916" id="1916">1916</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -3579,58 +3577,56 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(CreateInvoiceErrorV2::InvalidContract);
         }
 
-        <span class="kw">loop </span>{
-            <span class="kw">let </span>payload = payload.clone();
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span>our_pk = <span class="self">self
+            </span>.public_key_v2(<span class="kw-2">&amp;</span>payload.federation_id)
+            .<span class="kw">await
+            </span>.ok_or(CreateInvoiceErrorV2::UnknownFederation)<span class="question-mark">?</span>;
 
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(existing_entry) = dbtx
-                .insert_entry(
-                    <span class="kw-2">&amp;</span>CreateInvoicePayloadKey(payload.contract.commitment.payment_hash.into_inner()),
-                    <span class="kw-2">&amp;</span>payload,
-                )
-                .<span class="kw">await
-            </span>{
-                <span class="kw">if </span>existing_entry != payload {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(CreateInvoiceErrorV2::HashAlreadyRegistered);
-                }
-            }
-
-            <span class="kw">let </span>our_pk = <span class="self">self
-                </span>.public_key_v2(<span class="kw-2">&amp;</span>payload.federation_id)
-                .<span class="kw">await
-                </span>.ok_or(CreateInvoiceErrorV2::UnknownFederation)<span class="question-mark">?</span>;
-
-            <span class="kw">if </span>payload.contract.commitment.refund_pk != our_pk {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(CreateInvoiceErrorV2::NotOurKey);
-            }
-
-            <span class="kw">let </span>contract_amount = <span class="self">self
-                </span>.payment_fees_v2()
-                .receive
-                .subtract_fee(payload.invoice_amount.msats);
-
-            <span class="kw">if </span>contract_amount != payload.contract.commitment.amount {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(CreateInvoiceErrorV2::Unbalanced);
-            }
-
-            <span class="kw">if </span>payload.contract.commitment.expiration &lt;= duration_since_epoch().as_secs() {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(CreateInvoiceErrorV2::ContractExpired);
-            }
-
-            <span class="kw">let </span>invoice = <span class="self">self
-                </span>.create_invoice_via_lnrpc_v2(
-                    payload.contract.commitment.payment_hash,
-                    payload.invoice_amount,
-                    payload.description,
-                    payload.expiry_time,
-                )
-                .<span class="kw">await
-                </span>.map_err(CreateInvoiceErrorV2::NodeError)<span class="question-mark">?</span>;
-
-            <span class="kw">if </span>dbtx.commit_tx_result().<span class="kw">await</span>.is_ok() {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(invoice);
-            }
+        <span class="kw">if </span>payload.contract.commitment.refund_pk != our_pk {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(CreateInvoiceErrorV2::NotOurKey);
         }
+
+        <span class="kw">let </span>contract_amount = <span class="self">self
+            </span>.payment_fees_v2()
+            .receive
+            .subtract_fee(payload.invoice_amount.msats);
+
+        <span class="kw">if </span>contract_amount != payload.contract.commitment.amount {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(CreateInvoiceErrorV2::Unbalanced);
+        }
+
+        <span class="kw">if </span>payload.contract.commitment.expiration &lt;= duration_since_epoch().as_secs() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(CreateInvoiceErrorV2::ContractExpired);
+        }
+
+        <span class="kw">let </span>invoice = <span class="self">self
+            </span>.create_invoice_via_lnrpc_v2(
+                payload.contract.commitment.payment_hash,
+                payload.invoice_amount,
+                payload.description.clone(),
+                payload.expiry_time,
+            )
+            .<span class="kw">await
+            </span>.map_err(CreateInvoiceErrorV2::NodeError)<span class="question-mark">?</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
+
+        <span class="kw">if </span>dbtx
+            .insert_entry(
+                <span class="kw-2">&amp;</span>CreateInvoicePayloadKey(payload.contract.commitment.payment_hash.into_inner()),
+                <span class="kw-2">&amp;</span>payload,
+            )
+            .<span class="kw">await
+            </span>.is_some()
+        {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(CreateInvoiceErrorV2::HashAlreadyRegistered);
+        }
+
+        dbtx.commit_tx_result()
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| CreateInvoiceErrorV2::HashAlreadyRegistered)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(invoice)
     }
 
     <span class="kw">pub async fn </span>create_invoice_via_lnrpc_v2(

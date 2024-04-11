@@ -860,11 +860,6 @@
 <a href="#858" id="858">858</a>
 <a href="#859" id="859">859</a>
 <a href="#860" id="860">860</a>
-<a href="#861" id="861">861</a>
-<a href="#862" id="862">862</a>
-<a href="#863" id="863">863</a>
-<a href="#864" id="864">864</a>
-<a href="#865" id="865">865</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -1006,9 +1001,11 @@
     <span class="doccomment">/// Wait for a lightning payment to complete
     </span>AwaitLnPay { operation_id: OperationId },
     <span class="doccomment">/// List registered gateways
-    </span>ListGateways,
-    <span class="doccomment">/// Re-downloads the registered gateways from the federation
-    </span>UpdateGatewayCache,
+    </span>ListGateways {
+        <span class="doccomment">/// Don't fetch the registered gateways from the federation
+        </span><span class="attr">#[clap(long, default_value = <span class="string">"false"</span>)]
+        </span>no_update: bool,
+    },
     <span class="doccomment">/// Generate a new deposit address, funds sent to it can later be claimed
     </span>DepositAddress {
         <span class="doccomment">/// How long the client should watch the address for incoming
@@ -1305,18 +1302,11 @@
                     </span>.context(<span class="string">"expected a response"</span>)<span class="question-mark">?</span>,
             )
         }
-        ClientCmd::ListGateways =&gt; {
+        ClientCmd::ListGateways { no_update } =&gt; {
             <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-            <span class="kw">let </span>gateways = lightning_module.list_gateways().<span class="kw">await</span>;
-            <span class="kw">if </span>gateways.is_empty() {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(serde_json::to_value(Vec::&lt;String&gt;::new()).unwrap());
+            <span class="kw">if </span>!no_update {
+                lightning_module.update_gateway_cache().<span class="kw">await</span><span class="question-mark">?</span>;
             }
-
-            <span class="prelude-val">Ok</span>(<span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateways))
-        }
-        ClientCmd::UpdateGatewayCache =&gt; {
-            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-            lightning_module.update_gateway_cache().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>gateways = lightning_module.list_gateways().<span class="kw">await</span>;
             <span class="kw">if </span>gateways.is_empty() {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(serde_json::to_value(Vec::&lt;String&gt;::new()).unwrap());

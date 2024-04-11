@@ -256,6 +256,7 @@
 <a href="#254" id="254">254</a>
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::future::pending;
 <span class="kw">use </span>std::sync::Arc;
@@ -278,7 +279,7 @@
 <span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningOutputOutcome, Witness};
 <span class="kw">use </span>secp256k1::KeyPair;
 <span class="kw">use </span>tpe::{aggregate_decryption_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
-<span class="kw">use </span>tracing::trace;
+<span class="kw">use </span>tracing::{error, trace};
 
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientContextV2;
 
@@ -482,8 +483,9 @@
             .contract
             .verify_agg_decryption_key(<span class="kw-2">&amp;</span>tpe_agg_pk, <span class="kw-2">&amp;</span>agg_decryption_key)
         {
-            <span class="comment">// This implies that the lightning client config's public keys are inconsistent
-            </span><span class="kw">return </span>old_state.update(ReceiveSMState::Failure);
+            <span class="macro">error!</span>(<span class="string">"Failed to obtain decryption key. Client config's public keys are inconsistent"</span>);
+
+            <span class="kw">return </span>old_state.update(ReceiveSMState::Failure);
         }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(preimage) = old_state

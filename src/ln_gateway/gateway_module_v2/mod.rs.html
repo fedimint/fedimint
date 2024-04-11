@@ -292,6 +292,9 @@
 <a href="#290" id="290">290</a>
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
 
@@ -324,6 +327,7 @@
 <span class="kw">use </span>send_sm::{SendSMState, SendStateMachine};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tpe::{AggregatePublicKey, PublicKeyShare};
+<span class="kw">use </span>tracing::error;
 
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::receive_sm::ReceiveSMCommon;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::send_sm::SendSMCommon;
@@ -418,7 +422,7 @@
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
         <span class="prelude-val">Some</span>(TransactionItemAmount {
             amount: input.amount,
-            fee: <span class="self">self</span>.cfg.fee_consensus.contract_input,
+            fee: <span class="self">self</span>.cfg.fee_consensus.input,
         })
     }
 
@@ -428,7 +432,7 @@
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
         <span class="prelude-val">Some</span>(TransactionItemAmount {
             amount: output.amount(),
-            fee: <span class="self">self</span>.cfg.fee_consensus.contract_output,
+            fee: <span class="self">self</span>.cfg.fee_consensus.output,
         })
     }
 }
@@ -523,8 +527,10 @@
                 <span class="kw">match </span>state.state {
                     SendSMState::Sending =&gt; {}
                     SendSMState::Claiming(claiming) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(claiming.preimage),
-                    SendSMState::Cancelled =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="self">self</span>.keypair.sign_schnorr(contract.forfeit_message()))
+                    SendSMState::Cancelled(error) =&gt; {
+                        <span class="macro">error!</span>(<span class="string">"Failed to route payment {}"</span>, error);
+
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="self">self</span>.keypair.sign_schnorr(contract.forfeit_message()));
                     }
                 }
             }
