@@ -1516,13 +1516,26 @@ where
 {
     #[instrument(level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
     pub async fn request(&self, method: &str, params: &[Value]) -> JsonRpcResult<Value> {
-        loop {
+        for attempts in 0.. {
             let rclient = self.client.read().await;
             match rclient.client.get_try().await {
                 Ok(client) if client.is_connected() => {
                     return client.request::<_, _>(method, params).await;
                 }
-                _ => {}
+                Err(e) => {
+                    // Strategies using timeouts often depend on failing requests returning quickly,
+                    // so every request gets only one reconnection attempt.
+                    if 0 < attempts {
+                        return Err(JsonRpcClientError::Transport(e.into()));
+                    }
+                }
+                _ => {
+                    if 0 < attempts {
+                        return Err(JsonRpcClientError::Transport(anyhow::format_err!(
+                            "Disconnected"
+                        )));
+                    }
+                }
             };
 
             drop(rclient);
@@ -1536,6 +1549,8 @@ where
                 }
             }
         }
+
+        unreachable!();
     }
 }
 
