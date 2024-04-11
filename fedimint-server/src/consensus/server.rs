@@ -788,7 +788,7 @@ impl ConsensusServer {
             match result {
                 Ok(signed_session_outcome) => return signed_session_outcome,
                 Err(error) => {
-                    tracing::error!("Error while requesting signed session outcome: {}", error)
+                    tracing::error!(target: LOG_CONSENSUS, "Error while requesting signed session outcome: {}", error)
                 }
             }
         }
@@ -810,6 +810,8 @@ pub(crate) async fn get_finished_session_count_static(dbtx: &mut DatabaseTransac
         .unwrap_or(0)
 }
 
+const CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(30);
+
 async fn submit_module_consensus_items(
     task_group: &TaskGroup,
     db: Database,
@@ -822,13 +824,25 @@ async fn submit_module_consensus_items(
             while !task_handle.is_shutting_down() {
                 let mut dbtx = db.begin_transaction_nc().await;
 
-                for (instance_id, _, module) in modules.iter_modules() {
-                    let module_consensus_items = module
-                        .consensus_proposal(
-                            &mut dbtx.to_ref_with_prefix_module_id(instance_id).into_nc(),
-                            instance_id,
-                        )
-                        .await;
+                for (module_id, kind, module) in modules.iter_modules() {
+                    let module_consensus_items = tokio::time::timeout(
+                        CONSENSUS_PROPOSAL_TIMEOUT,
+                        module.consensus_proposal(
+                            &mut dbtx.to_ref_with_prefix_module_id(module_id).into_nc(),
+                            module_id,
+                        ),
+                    )
+                    .await;
+                    let Ok(module_consensus_items) = module_consensus_items else {
+                        warn!(
+                            target: LOG_CONSENSUS,
+                            %module_id,
+                            %kind,
+                            timeout_secs=CONSENSUS_PROPOSAL_TIMEOUT.as_secs(),
+                            "Module failed to propose consensus items on time"
+                        );
+                        continue;
+                    };
 
                     for item in module_consensus_items {
                         submission_sender
