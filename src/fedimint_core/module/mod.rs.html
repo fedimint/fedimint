@@ -980,6 +980,26 @@
 <a href="#978" id="978">978</a>
 <a href="#979" id="979">979</a>
 <a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint supports modules to allow extending it's functionality.
 //! Some of the standard functionality is implemented in form of modules as
 //! well.
@@ -1786,23 +1806,43 @@
     }
 
     <span class="doccomment">/// Returns a decoder for the following associated types of this module:
+    /// * `ClientConfig`
     /// * `Input`
     /// * `Output`
     /// * `OutputOutcome`
     /// * `ConsensusItem`
+    /// * `InputError`
+    /// * `OutputError`
     </span><span class="kw">fn </span>decoder() -&gt; Decoder {
         <span class="self">Self</span>::Common::decoder_builder().build()
     }
 
-    <span class="doccomment">/// This module's contribution to the next consensus proposal
+    <span class="doccomment">/// This module's contribution to the next consensus proposal. This method
+    /// is only guaranteed to be called once every few seconds. Consensus items
+    /// are not meant to be latency critical; do not create them as
+    /// a response to a processed transaction. Only use consensus items to
+    /// establish consensus on a value that is required to verify
+    /// transactions, like unix time, block heights and feerates, and model all
+    /// other state changes trough transactions. The intention for this method
+    /// is to always return all available consensus items even if they are
+    /// redundant while process_consensus_item returns an error for the
+    /// redundant proposals.
+    ///
+    /// If you think you actually do require latency critical consensus items or
+    /// have trouble designing your module in order to avoid them please contact
+    /// the Fedimint developers.
     </span><span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">'a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     ) -&gt; Vec&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::ConsensusItem&gt;;
 
     <span class="doccomment">/// This function is called once for every consensus item. The function
-    /// returns an error if and only if the consensus item does not change
-    /// our state and therefore may be safely discarded by the atomic broadcast.
+    /// should return Ok if and only if the consensus item changes
+    /// the system state. *Therefore this method should return an error in case
+    /// of merely redundant consensus items such that they will be purged from
+    /// the history of the federation.* This enables consensus_proposal to
+    /// return all available consensus item without wasting disk
+    /// space with redundant consensus items.
     </span><span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'b</span>&gt;,
