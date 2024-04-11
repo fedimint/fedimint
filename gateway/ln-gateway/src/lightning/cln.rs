@@ -41,9 +41,7 @@ impl NetworkLnRpcClient {
         }
     }
 
-    async fn connect(
-        connection_url: SafeUrl,
-    ) -> Result<GatewayLightningClient<Channel>, LightningRpcError> {
+    async fn connect(&self) -> Result<GatewayLightningClient<Channel>, LightningRpcError> {
         let mut retries = 0;
         let client = loop {
             if retries >= MAX_LIGHTNING_RETRIES {
@@ -52,7 +50,7 @@ impl NetworkLnRpcClient {
 
             retries += 1;
 
-            if let Ok(endpoint) = Endpoint::from_shared(connection_url.to_string()) {
+            if let Ok(endpoint) = Endpoint::from_shared(self.connection_url.to_string()) {
                 if let Ok(client) = GatewayLightningClient::connect(endpoint.clone()).await {
                     break client;
                 }
@@ -70,7 +68,7 @@ impl NetworkLnRpcClient {
 impl ILnRpcClient for NetworkLnRpcClient {
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
         let req = Request::new(EmptyRequest {});
-        let mut client = Self::connect(self.connection_url.clone()).await?;
+        let mut client = self.connect().await?;
         let res = client.get_node_info(req).await.map_err(|status| {
             LightningRpcError::FailedToGetNodeInfo {
                 failure_reason: status.message().to_string(),
@@ -86,7 +84,7 @@ impl ILnRpcClient for NetworkLnRpcClient {
         let req = Request::new(GetRouteHintsRequest {
             num_route_hints: num_route_hints as u64,
         });
-        let mut client = Self::connect(self.connection_url.clone()).await?;
+        let mut client = self.connect().await?;
         let res = client.get_route_hints(req).await.map_err(|status| {
             LightningRpcError::FailedToGetRouteHints {
                 failure_reason: status.message().to_string(),
@@ -100,7 +98,7 @@ impl ILnRpcClient for NetworkLnRpcClient {
         invoice: PayInvoiceRequest,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
         let req = Request::new(invoice);
-        let mut client = Self::connect(self.connection_url.clone()).await?;
+        let mut client = self.connect().await?;
         let res =
             client
                 .pay_invoice(req)
@@ -115,7 +113,7 @@ impl ILnRpcClient for NetworkLnRpcClient {
         self: Box<Self>,
         _task_group: &mut TaskGroup,
     ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError> {
-        let mut client = Self::connect(self.connection_url.clone()).await?;
+        let mut client = self.connect().await?;
         let res = client
             .route_htlcs(EmptyRequest {})
             .await
@@ -132,7 +130,7 @@ impl ILnRpcClient for NetworkLnRpcClient {
         &self,
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError> {
-        let mut client = Self::connect(self.connection_url.clone()).await?;
+        let mut client = self.connect().await?;
         let res = client.complete_htlc(htlc).await.map_err(|status| {
             LightningRpcError::FailedToCompleteHtlc {
                 failure_reason: status.message().to_string(),
@@ -145,7 +143,7 @@ impl ILnRpcClient for NetworkLnRpcClient {
         &self,
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
-        let mut client = Self::connect(self.connection_url.clone()).await?;
+        let mut client = self.connect().await?;
         let res = client
             .create_invoice(create_invoice_request)
             .await
