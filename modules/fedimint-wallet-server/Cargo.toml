@@ -24,6 +24,7 @@ fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../../fedimint-bitcoind"
 fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
 fedimint-metrics = { version = "=0.4.0-alpha", path = "../../fedimint-metrics" }
 fedimint-wallet-common = { version = "=0.4.0-alpha", path = "../fedimint-wallet-common" }
+fedimint-logging = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 miniscript = { version = "10.0.0", features = [ "compiler", "serde" ] }
@@ -35,7 +36,7 @@ serde = { version = "1.0.197", features = [ "derive" ] }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
-tokio = { version = "1.36.0", features = ["sync"], optional = true }
+tokio = { version = "1.36.0", features = ["sync"] }
 tracing = { workspace = true }
 url = { workspace = true }
 validator = { version = "0.18", features = ["derive"] }
