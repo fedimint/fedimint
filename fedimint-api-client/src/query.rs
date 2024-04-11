@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Debug;
 use std::mem;
 use std::time::{Duration, SystemTime};
@@ -10,6 +10,7 @@ use fedimint_core::module::{
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::{maybe_add_send_sync, PeerId};
+use itertools::Itertools;
 
 use crate::api::{self, ApiVersionSet, PeerError, PeerResult};
 
@@ -245,11 +246,11 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for ThresholdConsensus<R> {
     }
 }
 
-/// Returns the deduplicated union of a threshold of responses
+/// Returns the deduplicated union of a threshold of responses; elements are
+/// in descending order by the number of duplications across different peers.
 pub struct UnionResponses<R> {
     error_strategy: ErrorStrategy,
-    responses: HashSet<PeerId>,
-    union: Vec<R>,
+    responses: HashMap<PeerId, Vec<R>>,
     threshold: usize,
 }
 
@@ -260,28 +261,35 @@ impl<R> UnionResponses<R> {
 
         Self {
             error_strategy: ErrorStrategy::new(max_evil + 1),
-            responses: HashSet::new(),
-            union: vec![],
-
+            responses: HashMap::new(),
             threshold,
         }
     }
 }
 
 impl<R: Debug + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
-    fn process(&mut self, peer: PeerId, result: api::PeerResult<Vec<R>>) -> QueryStep<Vec<R>> {
+    fn process(&mut self, peer: PeerId, result: PeerResult<Vec<R>>) -> QueryStep<Vec<R>> {
         match result {
-            Ok(responses) => {
-                for response in responses {
-                    if !self.union.contains(&response) {
-                        self.union.push(response);
-                    }
-                }
-
-                assert!(self.responses.insert(peer));
+            Ok(response) => {
+                assert!(self.responses.insert(peer, response).is_none());
 
                 if self.responses.len() == self.threshold {
-                    QueryStep::Success(mem::take(&mut self.union))
+                    let mut union = self
+                        .responses
+                        .values()
+                        .flatten()
+                        .dedup()
+                        .cloned()
+                        .collect::<Vec<R>>();
+
+                    union.sort_by_cached_key(|r| {
+                        self.responses
+                            .values()
+                            .filter(|response| !response.contains(r))
+                            .count()
+                    });
+
+                    QueryStep::Success(union)
                 } else {
                     QueryStep::Continue
                 }
