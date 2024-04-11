@@ -35,6 +35,9 @@ pub const FM_BITCOIN_RPC_URL_ENV: &str = "FM_BITCOIN_RPC_URL";
 /// auth
 pub const FM_BITCOIND_COOKIE_FILE_ENV: &str = "FM_BITCOIND_COOKIE_FILE";
 
+/// `devimint` will set when code is running inside `devimint`
+pub const FM_IN_DEVIMINT_ENV: &str = "FM_IN_DEVIMINT";
+
 /// Configuration for the bitcoin RPC
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct BitcoinRpcConfig {
