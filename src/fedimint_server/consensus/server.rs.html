@@ -845,6 +845,20 @@
 <a href="#843" id="843">843</a>
 <a href="#844" id="844">844</a>
 <a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -1635,7 +1649,7 @@
             <span class="kw">match </span>result {
                 <span class="prelude-val">Ok</span>(signed_session_outcome) =&gt; <span class="kw">return </span>signed_session_outcome,
                 <span class="prelude-val">Err</span>(error) =&gt; {
-                    <span class="macro">tracing::error!</span>(<span class="string">"Error while requesting signed session outcome: {}"</span>, error)
+                    <span class="macro">tracing::error!</span>(target: LOG_CONSENSUS, <span class="string">"Error while requesting signed session outcome: {}"</span>, error)
                 }
             }
         }
@@ -1657,6 +1671,8 @@
         .unwrap_or(<span class="number">0</span>)
 }
 
+<span class="kw">const </span>CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);
+
 <span class="kw">async fn </span>submit_module_consensus_items(
     task_group: <span class="kw-2">&amp;</span>TaskGroup,
     db: Database,
@@ -1669,13 +1685,25 @@
             <span class="kw">while </span>!task_handle.is_shutting_down() {
                 <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
 
-                <span class="kw">for </span>(instance_id, <span class="kw">_</span>, module) <span class="kw">in </span>modules.iter_modules() {
-                    <span class="kw">let </span>module_consensus_items = module
-                        .consensus_proposal(
-                            <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(instance_id).into_nc(),
-                            instance_id,
-                        )
-                        .<span class="kw">await</span>;
+                <span class="kw">for </span>(module_id, kind, module) <span class="kw">in </span>modules.iter_modules() {
+                    <span class="kw">let </span>module_consensus_items = tokio::time::timeout(
+                        CONSENSUS_PROPOSAL_TIMEOUT,
+                        module.consensus_proposal(
+                            <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_id).into_nc(),
+                            module_id,
+                        ),
+                    )
+                    .<span class="kw">await</span>;
+                    <span class="kw">let </span><span class="prelude-val">Ok</span>(module_consensus_items) = module_consensus_items <span class="kw">else </span>{
+                        <span class="macro">warn!</span>(
+                            target: LOG_CONSENSUS,
+                            %module_id,
+                            %kind,
+                            timeout_secs=CONSENSUS_PROPOSAL_TIMEOUT.as_secs(),
+                            <span class="string">"Module failed to propose consensus items on time"
+                        </span>);
+                        <span class="kw">continue</span>;
+                    };
 
                     <span class="kw">for </span>item <span class="kw">in </span>module_consensus_items {
                         submission_sender
