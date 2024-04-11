@@ -7,11 +7,12 @@ Welcome to the Fedimint project! We're thrilled that you're interested in contri
 ## Getting involved
 
 Here are the recommended steps for new developers:
+
 1. Start by reading our [non-technical primer](https://fedimint.org/docs/intro) and viewing the [videos and articles on the blog](https://fedimint.org/blog)
 2. Before writing code you will need to [set up the dev environment](docs/dev-env.md)
 3. [Run the dev environment](docs/tutorial.md) to ensure that everything works on your computer
-4. Now take a look at our [GitHub Issues](https://github.com/fedimint/fedimint/issues) you may want to search for [good first issues](https://github.com/fedimint/fedimint/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
-5. Introduce yourself on our [Developer discord](https://chat.fedimint.org) and ask any questions there
+4. Contact @kodylow to get a good first issue matched to your skillset: you can schedule a [call with Kody here](https://cal.com/kody-low-ix8qoa/30min) or just shoot him a DM in our [Developer discord](https://chat.fedimint.org) with your background, skillset, and what you're interested in working on.
+5. Now take a look at our [GitHub Issues](https://github.com/fedimint/fedimint/issues) you may want to search for [good first issues](https://github.com/fedimint/fedimint/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
 6. Join our [Developer calls](https://calendar.google.com/calendar/u/0/embed?src=fedimintcalendar@gmail.com) especially the ones for new contributors
 
 > Small PRs fixing typos, TODOs, broken links are always welcome, but please discuss bigger changes on Discord or GitHub first.
@@ -22,41 +23,35 @@ For commits, please use [imperative mood](https://stackoverflow.com/questions/35
 
 <!-- markdown-link-check-enable -->
 
-
 ## Areas of Contribution
 
 Below are some broad and general areas of contribution to get you started
 
-* [Fedimint Modules](docs/architecture.md)
-* [Fedimint Database System](docs/database.md)
-* [The Lightning Gateway](docs/gateway.md)
-    * [Developing gateway-lnrpc-extension](docs/gateway.md#developing-gateway-lnrpc-extension)
-    * [Developing Gateway UI](https://github.com/fedimint/ui)
-* [Fedimint Guardian UI](https://github.com/fedimint/ui)
-* [Nix Build System](docs/nix-ci.md)
-* [Devimint](devimint/)
-* [Scripts](scripts/README.md)
+- [Fedimint Modules](docs/architecture.md)
+- [Fedimint Database System](docs/database.md)
+- [The Lightning Gateway](docs/gateway.md)
+  - [Developing gateway-lnrpc-extension](docs/gateway.md#developing-gateway-lnrpc-extension)
+  - [Developing Gateway UI](https://github.com/fedimint/ui)
+- [Fedimint Guardian UI](https://github.com/fedimint/ui)
+- [Nix Build System](docs/nix-ci.md)
+- [Devimint](devimint/)
+- [Scripts](scripts/README.md)
 
 ### New Contributors
 
-If you are new to contributing to Fedimint, please come through @kodylow as your point of contact to get a good first issue matched to your skillset. You can schedule a [call with Kody here](https://cal.com/kody-low-ix8qoa/30min) or just shoot him a DM with your background, skillset, and what you're interested in working on. 
+If you are new to contributing to Fedimint, please come through @kodylow as your point of contact to get a good first issue matched to your skillset. You can schedule a [call with Kody here](https://cal.com/kody-low-ix8qoa/30min) or just shoot him a DM with your background, skillset, and what you're interested in working on.
 
-Fedimint is an enormous project which can be imposing to get started on, but there's a ton of work we need done across the stack so can definitely find something for you. The hardest part with new contributors is finding a good issue to match your skillset, so please come through Kody so we can get a good match so you can get started.
+**Contributing to the core Fedimint repo requires expertise with Rust and distributed systems**. There are a bunch of other projects in and around fedimint like UIs, clients, and other services that are far more approachable, so if you're new to coding/bitcoin/rust please try to start with one of those to get a feel for Fedimint before trying to contribute to the core repo. The hardest part with new contributors is finding a good issue to match your skillset! Again, please go through @kodylow so we can get a good match for you so you can get started.
 
-Once you have an issue you're working on, please post blockers or questions in the [#new-contributors channel](https://discord.gg/BGFMXSkNJW) if you're stuck on something. 
+Once you have an issue you're working on, please post blockers or questions in the [#new-contributors channel](https://discord.gg/BGFMXSkNJW) if you're stuck on something.
 
-There is almost always a simple/fast answer to early contributor problems and we'd like to get you past those as quickly as possible to making valuable contributions. 
+There is almost always a simple/fast answer to early contributor problems and we'd like to get you past those as quickly as possible to making valuable contributions.
 
 Things like dev environment issues, build errors, "what does this state machine do", "I don't understand how this contract is structured", etc. Just ask in the #new-contributors channel and someone will get back to you ASAP.
 
 If you have any questions or need assistance, don't hesitate to reach out to us on our [Developer Discord](https://chat.fedimint.org) in the [#new-contributors channel](https://discord.gg/BGFMXSkNJW). Our community is friendly and supportive, and we're here to help you succeed.
 
-> We welcome contributions from everyone, regardless of experience level or background. Your unique perspectives and skills can help make Fedimint even better!
-
 Happy Hacking!
-
-
-
 
 ## Developer Certificate of Origin
 
