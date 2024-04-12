@@ -270,6 +270,7 @@
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
@@ -279,6 +280,7 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -361,7 +363,7 @@
     }
 
     <span class="kw">pub fn </span>get_gateway_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; secp256k1::PublicKey {
-        <span class="self">self</span>.gateway.gateway_id
+        bitcoin29_to_bitcoin30_secp256k1_public_key(<span class="self">self</span>.gateway.gateway_id)
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(
