@@ -53,6 +53,33 @@ If you have any questions or need assistance, don't hesitate to reach out to us 
 
 Happy Hacking!
 
+
+# Code Review Policy
+
+* CI must pass (enforced)
+* 1 review is mandatory (enforced), 2 or more ideal
+* If you believe your change is simple, and non-controversial enough, and you want
+  to avoid merge conflicts, or blocking work before it gets enough reviews, label it with
+  `needs further review` label and Merge it.
+
+Feel free to post a link to a PR on #code-review to ask for more code reviews.
+
+The goal of the policy is to strike a balance between good review coverage
+and fast iteration time in a globally distributed team consisting of mostly
+volunteers with varying levels of availability.
+
+1 mandatory review is meant to enforce basic sanity and security cross-checking.
+
+2 ideal reviews is a target we would like to maintain at the current level of project
+maturity.
+
+PRs labeled with `needs further review` label are meant to enable flexible
+"code review debt". The label can be removed after further reviews are done.
+Regular contributors are encouraged to review PRs even after they were merged.
+Furthermore, PRs with `needs further review` will be reviewed during weekly
+"Code Review" meetings.
+
+
 ## Developer Certificate of Origin
 
 ```
