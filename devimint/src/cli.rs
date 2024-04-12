@@ -122,10 +122,10 @@ pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
         .with_directive("jsonrpsee-client=off")
         .init()?;
 
-    info!(target: LOG_DEVIMINT, path=%globals.FM_DATA_DIR.display() , "Setting up test dir");
     if let Some(link_test_dir) = arg.link_test_dir.as_ref() {
         update_test_dir_link(link_test_dir, &arg.test_dir()).await?;
     }
+    info!(target: LOG_DEVIMINT, path=%globals.FM_DATA_DIR.display() , "Devimint data dir");
 
     let mut env_string = String::new();
     for (var, value) in globals.vars() {
@@ -230,7 +230,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                     let dev_fed = DevJitFed::new(&process_mgr)?;
 
                     let pegin_start_time = Instant::now();
-                    info!(target: LOG_DEVIMINT, "Peging in client and gateways");
+                    debug!(target: LOG_DEVIMINT, "Peging in client and gateways");
 
                     let gw_pegin_amount = 20_000;
                     let client_pegin_amount = 10_000;
@@ -292,8 +292,9 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
 
                     let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
 
+                    info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed().as_millis(), "Devfed ready");
                     if let Some(exec) = exec {
-                        debug!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed().as_millis(), "Starting exec command");
+                        debug!(target: LOG_DEVIMINT, "Starting exec command");
                         exec_user_command(exec).await?;
                         task_group.shutdown();
                     }

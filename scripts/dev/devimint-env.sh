@@ -21,7 +21,7 @@ function devimint_env {
   # no confusion.
   export STARSHIP_CONFIG="${REPO_ROOT}/scripts/dev/devimint-env/starship.toml"
 
-  >&2 echo "Devimint Env Started"
+  >&2 echo "Devimint Env Shell Ready (exit to shutdown):"
   if [ "$SHELL" == "fish" ] || [[ "$SHELL" == */fish ]]; then
     "${SHELL}"
   else

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_logging::LOG_DEVIMINT;
-use tracing::info;
+use tracing::debug;
 
 use crate::envs::{FM_GWID_CLN_ENV, FM_GWID_LND_ENV};
 use crate::external::{Bitcoind, Electrs, Esplora, Lightningd, Lnd};
@@ -58,7 +58,7 @@ impl DevJitFed {
         );
         let start_time = fedimint_core::time::now();
 
-        info!("Starting dev federation");
+        debug!("Starting dev federation");
 
         let bitcoind = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
@@ -251,7 +251,6 @@ impl DevJitFed {
 
         std::env::set_var(FM_GWID_CLN_ENV, self.gw_cln().await?.gateway_id().await?);
         std::env::set_var(FM_GWID_LND_ENV, self.gw_lnd().await?.gateway_id().await?);
-        info!(target: LOG_DEVIMINT, "Setup gateway environment variables");
 
         let _ = self.internal_client_gw_registered().await?;
         let _ = self.channel_opened.get_try().await?;
@@ -263,7 +262,7 @@ impl DevJitFed {
         let _ = self.esplora().await?;
         let _ = self.fed_epoch_generated.get_try().await?;
 
-        info!(
+        debug!(
             target: LOG_DEVIMINT,
             fed_size,
             offline_nodes,

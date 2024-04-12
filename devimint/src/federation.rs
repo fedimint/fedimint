@@ -718,7 +718,7 @@ pub async fn run_dkg(
     let dkg_results = admin_clients
         .iter()
         .map(|(peer_id, client)| client.run_dkg(auth_for(peer_id)));
-    info!(target: LOG_DEVIMINT, "Running DKG");
+    debug!(target: LOG_DEVIMINT, "Running DKG");
     let (dkg_results, leader_wait_result) = tokio::join!(
         join_all(dkg_results),
         wait_server_status(leader, ServerStatus::VerifyingConfigs)
@@ -735,15 +735,15 @@ pub async fn run_dkg(
         hashes.insert(client.get_verify_config_hash(auth_for(peer_id)).await?);
     }
     assert_eq!(hashes.len(), 1);
-    debug!(target: LOG_DEVIMINT, "DKG ready");
-    info!(target: LOG_DEVIMINT, "Starting consensus");
+    info!(target: LOG_DEVIMINT, "DKG completed");
+    debug!(target: LOG_DEVIMINT, "Starting consensus");
     for (peer_id, client) in &admin_clients {
         if let Err(e) = client.start_consensus(auth_for(peer_id)).await {
             tracing::debug!("Error calling start_consensus: {e:?}, trying to continue...")
         }
         wait_server_status(client, ServerStatus::ConsensusRunning).await?;
     }
-    debug!("Consensus is running");
+    info!(target: LOG_DEVIMINT, "Consensus running");
     Ok(())
 }
 
