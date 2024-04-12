@@ -724,11 +724,11 @@ impl Lightning {
     async fn remove_gateway(db: Database, gateway: SafeUrl) -> bool {
         let mut dbtx = db.begin_transaction().await;
 
-        let entry_exists = dbtx.remove_entry(&GatewayKey(gateway)).await.is_some();
+        let entry_existed = dbtx.remove_entry(&GatewayKey(gateway)).await.is_some();
 
         dbtx.commit_tx().await;
 
-        entry_exists
+        entry_existed
     }
 
     async fn gateways(db: Database) -> Vec<SafeUrl> {

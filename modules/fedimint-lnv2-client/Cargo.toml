@@ -16,6 +16,10 @@ normal = ["aquamarine"]
 name = "fedimint_lnv2_client"
 path = "src/lib.rs"
 
+[features]
+default =[]
+cli = ["dep:clap", "dep:serde_json"]
+
 [dependencies]
 anyhow = "1.0.82"
 async-trait = "0.1.73"
@@ -24,6 +28,7 @@ aquamarine = "0.3.0"
 bincode = "1"
 bitcoin = "0.29.2"
 bitcoin_hashes = "0.11.0"
+clap = { workspace = true, optional = true }
 erased-serde = { workspace = true }
 futures = "0.3.24"
 itertools = "0.10.5"
@@ -35,7 +40,7 @@ fedimint-lnv2-common ={ path = "../fedimint-lnv2-common" }
 secp256k1 = { version="0.24.2", default-features=false }
 secp256k1-zkp = { version = "0.7.0", features = [ "serde", "bitcoin_hashes" ] }
 serde = {version = "1.0.149", features = [ "derive" ] }
-serde_json = "1.0.91"
+serde_json = { workspace = true, optional = true }
 strum = "0.24"
 strum_macros = "0.24"
 thiserror = "1.0.39"
