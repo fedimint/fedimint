@@ -744,13 +744,73 @@
 <a href="#742" id="742">742</a>
 <a href="#743" id="743">743</a>
 <a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
 
 <span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>anyhow::{anyhow, ensure, Context};
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -781,6 +841,7 @@
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
@@ -861,7 +922,7 @@
 }
 
 <span class="attr">#[derive(
-    Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Decodable, Encodable,
+    Debug, Clone, Eq, PartialEq, PartialOrd, Hash, Serialize, Deserialize, Decodable, Encodable,
 )]
 </span><span class="kw">pub struct </span>PaymentFee {
     <span class="kw">pub </span>base: Amount,
@@ -996,7 +1057,10 @@
 }
 
 <span class="kw">impl </span>LightningClientModule {
-    <span class="kw">pub async fn </span>payment_info(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway_api: SafeUrl) -&gt; anyhow::Result&lt;PaymentInfo&gt; {
+    <span class="kw">pub async fn </span>fetch_payment_info(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        gateway_api: SafeUrl,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PaymentInfo&gt;, GatewayError&gt; {
         reqwest::Client::new()
             .post(
                 gateway_api
@@ -1006,17 +1070,18 @@
             )
             .json(<span class="kw-2">&amp;</span><span class="self">self</span>.federation_id)
             .send()
-            .<span class="kw">await</span><span class="question-mark">?
+            .<span class="kw">await
+            </span>.map_err(|e| GatewayError::Unreachable(e.to_string()))<span class="question-mark">?
             </span>.json::&lt;<span class="prelude-ty">Option</span>&lt;PaymentInfo&gt;&gt;()
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"The gateway does not support our federation"</span>))
+            .<span class="kw">await
+            </span>.map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
     }
 
     <span class="kw">pub async fn </span>send(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         gateway_api: SafeUrl,
         invoice: Bolt11Invoice,
-    ) -&gt; anyhow::Result&lt;OperationId&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt; {
         <span class="self">self</span>.send_internal(
             gateway_api,
             invoice,
@@ -1032,7 +1097,7 @@
         invoice: Bolt11Invoice,
         payment_fee: PaymentFee,
         expiration_delta: u64,
-    ) -&gt; anyhow::Result&lt;OperationId&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt; {
         <span class="kw">let </span>(ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(<span class="self">self</span>.keypair.public_key());
 
         <span class="kw">let </span>refund_keypair = SecretKey::from_slice(<span class="kw-2">&amp;</span>ephemeral_tweak)
@@ -1040,32 +1105,32 @@
             .keypair(secp256k1::SECP256K1);
 
         <span class="kw">let </span>payment_info = <span class="self">self
-            </span>.payment_info(gateway_api.clone())
+            </span>.fetch_payment_info(gateway_api.clone())
             .<span class="kw">await
-            </span>.context(<span class="string">"Gateway is offline"</span>)<span class="question-mark">?</span>;
+            </span>.map_err(SendPaymentError::GatewayError)<span class="question-mark">?
+            </span>.ok_or(SendPaymentError::UnknownFederation)<span class="question-mark">?</span>;
 
-        <span class="macro">ensure!</span>(
-            payment_fee &gt;= payment_info.payment_fees.send,
-            <span class="string">"The gateway send fee is above {payment_fee:?}"
-        </span>);
+        <span class="kw">if </span>!payment_info.payment_fees.send.le(<span class="kw-2">&amp;</span>payment_fee) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::InsufficientPaymentFee(
+                payment_info.payment_fees.send,
+            ));
+        }
 
-        <span class="comment">// we double it to account for cltv expiry deltas along the lightning route
-        </span><span class="kw">let </span>min_outgoing_cltv_delta = <span class="number">2 </span>* payment_info.outgoing_cltv_delta;
-
-        <span class="macro">ensure!</span>(
-            min_outgoing_cltv_delta &lt;= expiration_delta,
-            <span class="string">"The minimum possible expiration delta is {min_outgoing_cltv_delta} blocks"
-        </span>);
+        <span class="kw">if </span>expiration_delta &lt; payment_info.outgoing_cltv_delta + <span class="number">288 </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::InsufficientExpirationDelta(
+                payment_info.outgoing_cltv_delta + <span class="number">288</span>,
+            ));
+        }
 
         <span class="kw">let </span>consensus_block_count = <span class="self">self
             </span>.module_api
             .consensus_block_count()
             .<span class="kw">await
-            </span>.context(<span class="string">"Failed to fetch the consensus block count from the federation"</span>)<span class="question-mark">?</span>;
+            </span>.map_err(|e| SendPaymentError::FederationError(e.to_string()))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>invoice_msats = invoice
             .amount_milli_satoshis()
-            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Invoice has no amount"</span>))<span class="question-mark">?</span>;
+            .ok_or(SendPaymentError::InvoiceMissingAmount)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>contract = OutgoingContract {
             payment_hash: <span class="kw-2">*</span>invoice.payment_hash(),
@@ -1116,7 +1181,8 @@
                 },
                 transaction,
             )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+            .<span class="kw">await
+            </span>.map_err(|e| SendPaymentError::FinalizationError(e.to_string()))<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(operation_id)
     }
@@ -1186,7 +1252,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         gateway_api: SafeUrl,
         invoice_amount: Amount,
-    ) -&gt; anyhow::Result&lt;(Bolt11Invoice, OperationId)&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Bolt11Invoice, OperationId), FetchInvoiceError&gt; {
         <span class="self">self</span>.receive_internal(
             gateway_api,
             invoice_amount,
@@ -1204,7 +1270,7 @@
         expiry_time: u32,
         description: String,
         max_payment_fee: PaymentFee,
-    ) -&gt; anyhow::Result&lt;(Bolt11Invoice, OperationId)&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Bolt11Invoice, OperationId), FetchInvoiceError&gt; {
         <span class="kw">let </span>(contract, invoice) = <span class="self">self
             </span>.create_contract_and_fetch_invoice_internal(
                 <span class="self">self</span>.keypair.public_key(),
@@ -1229,7 +1295,7 @@
         recipient_static_pk: PublicKey,
         gateway_api: SafeUrl,
         invoice_amount: Amount,
-    ) -&gt; anyhow::Result&lt;(IncomingContract, Bolt11Invoice)&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(IncomingContract, Bolt11Invoice), FetchInvoiceError&gt; {
         <span class="self">self</span>.create_contract_and_fetch_invoice_internal(
             recipient_static_pk,
             gateway_api,
@@ -1248,8 +1314,8 @@
         invoice_amount: Amount,
         expiry_time: u32,
         description: String,
-        max_payment_fee: PaymentFee,
-    ) -&gt; anyhow::Result&lt;(IncomingContract, Bolt11Invoice)&gt; {
+        payment_fee_limit: PaymentFee,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(IncomingContract, Bolt11Invoice), FetchInvoiceError&gt; {
         <span class="kw">let </span>(ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
 
         <span class="kw">let </span>encryption_seed = ephemeral_tweak
@@ -1260,12 +1326,17 @@
             .consensus_hash::&lt;sha256::Hash&gt;()
             .into_inner();
 
-        <span class="kw">let </span>payment_info = <span class="self">self</span>.payment_info(gateway_api.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>payment_info = <span class="self">self
+            </span>.fetch_payment_info(gateway_api.clone())
+            .<span class="kw">await
+            </span>.map_err(FetchInvoiceError::GatewayError)<span class="question-mark">?
+            </span>.ok_or(FetchInvoiceError::UnknownFederation)<span class="question-mark">?</span>;
 
-        <span class="macro">ensure!</span>(
-            max_payment_fee &gt;= payment_info.payment_fees.receive,
-            <span class="string">"The gateways receive fee is above {max_payment_fee:?}"
-        </span>);
+        <span class="kw">if </span>!payment_info.payment_fees.receive.le(<span class="kw-2">&amp;</span>payment_fee_limit) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(FetchInvoiceError::PaymentFeeExceedsLimit(
+                payment_info.payment_fees.receive,
+            ));
+        }
 
         <span class="kw">let </span>contract_amount = payment_info
             .payment_fees
@@ -1302,7 +1373,29 @@
             expiry_time,
         };
 
-        <span class="kw">let </span>invoice = reqwest::Client::new()
+        <span class="kw">let </span>invoice = <span class="self">self
+            </span>.fetch_invoice(gateway_api, payload)
+            .<span class="kw">await
+            </span>.map_err(FetchInvoiceError::GatewayError)<span class="question-mark">?
+            </span>.map_err(FetchInvoiceError::CreateInvoiceError)<span class="question-mark">?</span>;
+
+        <span class="kw">if </span>invoice.payment_hash() != <span class="kw-2">&amp;</span>contract.commitment.payment_hash {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(FetchInvoiceError::InvalidInvoicePaymentHash);
+        }
+
+        <span class="kw">if </span>invoice.amount_milli_satoshis() != <span class="prelude-val">Some</span>(invoice_amount.msats) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(FetchInvoiceError::InvalidInvoiceAmount);
+        }
+
+        <span class="prelude-val">Ok</span>((contract, invoice))
+    }
+
+    <span class="kw">async fn </span>fetch_invoice(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        gateway_api: SafeUrl,
+        payload: CreateInvoicePayload,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;Bolt11Invoice, String&gt;, GatewayError&gt; {
+        reqwest::Client::new()
             .post(
                 gateway_api
                     .join(<span class="string">"create_invoice"</span>)
@@ -1311,32 +1404,20 @@
             )
             .json(<span class="kw-2">&amp;</span>payload)
             .send()
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.json::&lt;anyhow::Result&lt;Bolt11Invoice, String&gt;&gt;()
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.map_err(|error| <span class="macro">anyhow!</span>(error))<span class="question-mark">?</span>;
-
-        <span class="macro">ensure!</span>(
-            invoice.payment_hash() == <span class="kw-2">&amp;</span>contract.commitment.payment_hash,
-            <span class="string">"Invoice's payment hash does not match the contract's payment hash"
-        </span>);
-
-        <span class="macro">ensure!</span>(
-            invoice.amount_milli_satoshis() == <span class="prelude-val">Some</span>(invoice_amount.msats),
-            <span class="string">"Invoice's amount does not match the requested amount"
-        </span>);
-
-        <span class="prelude-val">Ok</span>((contract, invoice))
+            .<span class="kw">await
+            </span>.map_err(|e| GatewayError::Unreachable(e.to_string()))<span class="question-mark">?
+            </span>.json::&lt;<span class="prelude-ty">Result</span>&lt;Bolt11Invoice, String&gt;&gt;()
+            .<span class="kw">await
+            </span>.map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
     }
 
     <span class="kw">pub async fn </span>receive_external_contract(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         contract: IncomingContract,
-    ) -&gt; anyhow::Result&lt;OperationId&gt; {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;OperationId&gt; {
         <span class="kw">let </span>operation_id = OperationId(contract.consensus_hash::&lt;sha256::Hash&gt;().into_inner());
 
-        <span class="kw">let </span>(claim_keypair, agg_decryption_key) =
-            <span class="self">self</span>.recover_incoming_contract_keys(<span class="kw-2">&amp;</span>contract).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(claim_keypair, agg_decryption_key) = <span class="self">self</span>.recover_contract_keys(<span class="kw-2">&amp;</span>contract).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>receive_sm = LightningClientStateMachines::Receive(ReceiveStateMachine {
             common: ReceiveSMCommon {
@@ -1363,19 +1444,20 @@
             .<span class="kw">await
             </span>.ok();
 
-        <span class="prelude-val">Ok</span>(operation_id)
+        <span class="prelude-val">Some</span>(operation_id)
     }
 
-    <span class="kw">async fn </span>recover_incoming_contract_keys(
+    <span class="kw">async fn </span>recover_contract_keys(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         contract: <span class="kw-2">&amp;</span>IncomingContract,
-    ) -&gt; anyhow::Result&lt;(KeyPair, AggregateDecryptionKey)&gt; {
-        <span class="kw">let </span>secret = ecdh::shared_secret_point(
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;(KeyPair, AggregateDecryptionKey)&gt; {
+        <span class="kw">let </span>ephemeral_tweak = ecdh::shared_secret_point(
             <span class="kw-2">&amp;</span>contract.commitment.ephemeral_pk,
             <span class="kw-2">&amp;</span><span class="self">self</span>.keypair.secret_key(),
-        );
+        )
+        .consensus_hash::&lt;sha256::Hash&gt;()
+        .into_inner();
 
-        <span class="kw">let </span>ephemeral_tweak = secret.consensus_hash::&lt;sha256::Hash&gt;().into_inner();
         <span class="kw">let </span>encryption_seed = ephemeral_tweak
             .consensus_hash::&lt;sha256::Hash&gt;()
             .into_inner();
@@ -1387,19 +1469,17 @@
             .expect(<span class="string">"Tweak is valid"</span>)
             .keypair(secp256k1::SECP256K1);
 
-        <span class="macro">ensure!</span>(
-            claim_keypair.public_key() == contract.commitment.claim_pk,
-            <span class="string">"The claim key has not been derived from our public key"
-        </span>);
+        <span class="kw">if </span>claim_keypair.public_key() != contract.commitment.claim_pk {
+            <span class="kw">return </span><span class="prelude-val">None</span>; <span class="comment">// The claim key is not derived from our pk
+        </span>}
 
         <span class="kw">let </span>agg_decryption_key = derive_agg_decryption_key(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.tpe_agg_pk, <span class="kw-2">&amp;</span>encryption_seed);
 
-        <span class="macro">ensure!</span>(
-            contract.verify_agg_decryption_key(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.tpe_agg_pk, <span class="kw-2">&amp;</span>agg_decryption_key),
-            <span class="string">"The aggregate decryption key has not been derived correctly"
-        </span>);
+        <span class="kw">if </span>!contract.verify_agg_decryption_key(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.tpe_agg_pk, <span class="kw-2">&amp;</span>agg_decryption_key) {
+            <span class="kw">return </span><span class="prelude-val">None</span>; <span class="comment">// The decryption key is not derived from our pk
+        </span>}
 
-        <span class="prelude-val">Ok</span>((claim_keypair, agg_decryption_key))
+        <span class="prelude-val">Some</span>((claim_keypair, agg_decryption_key))
     }
 
     <span class="kw">pub async fn </span>subscribe_receive(
@@ -1440,6 +1520,48 @@
             }
         }))
     }
+}
+
+<span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
+</span><span class="kw">pub enum </span>GatewayError {
+    <span class="attr">#[error(<span class="string">"The gateway is unreachable: {0}"</span>)]
+    </span>Unreachable(String),
+    <span class="attr">#[error(<span class="string">"The gateway returned an invalid response: {0}"</span>)]
+    </span>InvalidJsonResponse(String),
+}
+
+<span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
+</span><span class="kw">pub enum </span>SendPaymentError {
+    <span class="attr">#[error(<span class="string">"Gateway error: {0}"</span>)]
+    </span>GatewayError(GatewayError),
+    <span class="attr">#[error(<span class="string">"The gateway does not support our federation"</span>)]
+    </span>UnknownFederation,
+    <span class="attr">#[error(<span class="string">"To route via this gateway we require a minimum payment fee of {0:?}"</span>)]
+    </span>InsufficientPaymentFee(PaymentFee),
+    <span class="attr">#[error(<span class="string">"To route via this gateway we require a minimum expiration delta of {0} blocks"</span>)]
+    </span>InsufficientExpirationDelta(u64),
+    <span class="attr">#[error(<span class="string">"Federation returned an error: {0}"</span>)]
+    </span>FederationError(String),
+    <span class="attr">#[error(<span class="string">"The invoice has not amount"</span>)]
+    </span>InvoiceMissingAmount,
+    <span class="attr">#[error(<span class="string">"We failed to finalize the funding transaction"</span>)]
+    </span>FinalizationError(String),
+}
+
+<span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
+</span><span class="kw">pub enum </span>FetchInvoiceError {
+    <span class="attr">#[error(<span class="string">"Gateway error: {0}"</span>)]
+    </span>GatewayError(GatewayError),
+    <span class="attr">#[error(<span class="string">"The gateway does not support our federation"</span>)]
+    </span>UnknownFederation,
+    <span class="attr">#[error(<span class="string">"The gateways fee of {0:?} exceeds the supplied limit"</span>)]
+    </span>PaymentFeeExceedsLimit(PaymentFee),
+    <span class="attr">#[error(<span class="string">"The gateway considered our request for an invoice invalid: {0}"</span>)]
+    </span>CreateInvoiceError(String),
+    <span class="attr">#[error(<span class="string">"The invoice's payment hash is incorrect"</span>)]
+    </span>InvalidInvoicePaymentHash,
+    <span class="attr">#[error(<span class="string">"The invoice's amount is incorrect"</span>)]
+    </span>InvalidInvoiceAmount,
 }
 
 <span class="attr">#[allow(clippy::large_enum_variant)]
