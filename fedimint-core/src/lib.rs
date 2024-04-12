@@ -25,6 +25,8 @@ use std::io::Error;
 use std::num::ParseIntError;
 use std::str::FromStr;
 
+/// Mostly re-exported for [`Decodable`] macros.
+pub use anyhow;
 use anyhow::bail;
 use bitcoin::Denomination;
 use bitcoin_hashes::hash_newtype;
