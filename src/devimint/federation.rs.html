@@ -1522,7 +1522,7 @@
     <span class="kw">let </span>dkg_results = admin_clients
         .iter()
         .map(|(peer_id, client)| client.run_dkg(auth_for(peer_id)));
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Running DKG"</span>);
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Running DKG"</span>);
     <span class="kw">let </span>(dkg_results, leader_wait_result) = <span class="macro">tokio::join!</span>(
         join_all(dkg_results),
         wait_server_status(leader, ServerStatus::VerifyingConfigs)
@@ -1539,15 +1539,15 @@
         hashes.insert(client.get_verify_config_hash(auth_for(peer_id)).<span class="kw">await</span><span class="question-mark">?</span>);
     }
     <span class="macro">assert_eq!</span>(hashes.len(), <span class="number">1</span>);
-    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"DKG ready"</span>);
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Starting consensus"</span>);
+    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"DKG completed"</span>);
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting consensus"</span>);
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client.start_consensus(auth_for(peer_id)).<span class="kw">await </span>{
             <span class="macro">tracing::debug!</span>(<span class="string">"Error calling start_consensus: {e:?}, trying to continue..."</span>)
         }
         wait_server_status(client, ServerStatus::ConsensusRunning).<span class="kw">await</span><span class="question-mark">?</span>;
     }
-    <span class="macro">debug!</span>(<span class="string">"Consensus is running"</span>);
+    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Consensus running"</span>);
     <span class="prelude-val">Ok</span>(())
 }
 

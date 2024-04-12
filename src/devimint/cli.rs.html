@@ -435,6 +435,7 @@
 <a href="#433" id="433">433</a>
 <a href="#434" id="434">434</a>
 <a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -559,10 +560,10 @@
         </span>.with_directive(<span class="string">"jsonrpsee-client=off"</span>)
         .init()<span class="question-mark">?</span>;
 
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, path=%globals.FM_DATA_DIR.display() , <span class="string">"Setting up test dir"</span>);
     <span class="kw">if let </span><span class="prelude-val">Some</span>(link_test_dir) = arg.link_test_dir.as_ref() {
         update_test_dir_link(link_test_dir, <span class="kw-2">&amp;</span>arg.test_dir()).<span class="kw">await</span><span class="question-mark">?</span>;
     }
+    <span class="macro">info!</span>(target: LOG_DEVIMINT, path=%globals.FM_DATA_DIR.display() , <span class="string">"Devimint data dir"</span>);
 
     <span class="kw">let </span><span class="kw-2">mut </span>env_string = String::new();
     <span class="kw">for </span>(var, value) <span class="kw">in </span>globals.vars() {
@@ -667,7 +668,7 @@
                     <span class="kw">let </span>dev_fed = DevJitFed::new(<span class="kw-2">&amp;</span>process_mgr)<span class="question-mark">?</span>;
 
                     <span class="kw">let </span>pegin_start_time = Instant::now();
-                    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Peging in client and gateways"</span>);
+                    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Peging in client and gateways"</span>);
 
                     <span class="kw">let </span>gw_pegin_amount = <span class="number">20_000</span>;
                     <span class="kw">let </span>client_pegin_amount = <span class="number">10_000</span>;
@@ -729,8 +730,9 @@
 
                     <span class="kw">let </span>daemons = write_ready_file(<span class="kw-2">&amp;</span>process_mgr.globals, <span class="prelude-val">Ok</span>(dev_fed)).<span class="kw">await</span><span class="question-mark">?</span>;
 
+                    <span class="macro">info!</span>(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed().as_millis(), <span class="string">"Devfed ready"</span>);
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(exec) = exec {
-                        <span class="macro">debug!</span>(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed().as_millis(), <span class="string">"Starting exec command"</span>);
+                        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting exec command"</span>);
                         exec_user_command(exec).<span class="kw">await</span><span class="question-mark">?</span>;
                         task_group.shutdown();
                     }

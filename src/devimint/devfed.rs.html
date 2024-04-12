@@ -288,14 +288,13 @@
 <a href="#286" id="286">286</a>
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
-<span class="kw">use </span>tracing::info;
+<span class="kw">use </span>tracing::debug;
 
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_GWID_CLN_ENV, FM_GWID_LND_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::external::{Bitcoind, Electrs, Esplora, Lightningd, Lnd};
@@ -349,7 +348,7 @@
         </span>);
         <span class="kw">let </span>start_time = fedimint_core::time::now();
 
-        <span class="macro">info!</span>(<span class="string">"Starting dev federation"</span>);
+        <span class="macro">debug!</span>(<span class="string">"Starting dev federation"</span>);
 
         <span class="kw">let </span>bitcoind = JitTry::new_try({
             <span class="kw">let </span>process_mgr = process_mgr.to_owned();
@@ -542,7 +541,6 @@
 
         std::env::set_var(FM_GWID_CLN_ENV, <span class="self">self</span>.gw_cln().<span class="kw">await</span><span class="question-mark">?</span>.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>);
         std::env::set_var(FM_GWID_LND_ENV, <span class="self">self</span>.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>);
-        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"Setup gateway environment variables"</span>);
 
         <span class="kw">let _ </span>= <span class="self">self</span>.internal_client_gw_registered().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let _ </span>= <span class="self">self</span>.channel_opened.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -554,7 +552,7 @@
         <span class="kw">let _ </span>= <span class="self">self</span>.esplora().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let _ </span>= <span class="self">self</span>.fed_epoch_generated.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="macro">info!</span>(
+        <span class="macro">debug!</span>(
             target: LOG_DEVIMINT,
             fed_size,
             offline_nodes,
