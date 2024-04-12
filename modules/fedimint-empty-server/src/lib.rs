@@ -175,6 +175,11 @@ impl ServerModule for Empty {
         _consensus_item: EmptyConsensusItem,
         _peer_id: PeerId,
     ) -> anyhow::Result<()> {
+        // WARNING: `process_consensus_item` should return an `Err` for items that do
+        // not change any internal consensus state. Failure to do so, will result in an
+        // (potentially significantly) increased consensus history size.
+        // If you are using this code as a template,
+        // make sure to read the [`ServerModule::process_consensus_item`] documentation,
         bail!("The empty module does not use consensus items");
     }
 

@@ -317,6 +317,10 @@ impl ServerModule for Meta {
         to_submit
     }
 
+    /// BUG: This implementation fails to return an `Err` on redundant consensus
+    /// items. If you are using this code as a template,
+    /// make sure to read the [`ServerModule::process_consensus_item`]
+    /// documentation,
     async fn process_consensus_item<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
