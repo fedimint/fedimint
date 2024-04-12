@@ -191,6 +191,10 @@
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
 <a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
@@ -200,32 +204,32 @@
 }
 
 <span class="macro">macro_rules!</span> declare_vars {
-    (<span class="macro-nonterminal">$name</span>:ident = ($(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>) =&gt;
+    (<span class="macro-nonterminal">$</span><span class="kw">struct</span>:<span class="macro-nonterminal">ident </span>= ($(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>) =&gt;
         {
-            $(<span class="macro-nonterminal">$env_name</span>:ident : <span class="macro-nonterminal">$env_ty</span>:ty = <span class="macro-nonterminal">$env_value</span>:expr;)*
+            $(<span class="macro-nonterminal">$name</span>:ident : <span class="macro-nonterminal">$ty</span>:ty = <span class="macro-nonterminal">$value</span>:expr; env: <span class="macro-nonterminal">$env</span>:expr;)*
         }
     ) =&gt; {
         <span class="attr">#[derive(Clone)]
-        </span><span class="kw">pub struct </span><span class="macro-nonterminal">$name </span>{
+        </span><span class="kw">pub struct </span><span class="macro-nonterminal">$</span><span class="kw">struct </span>{
             $(
-                <span class="attr">#[allow(unused)]
-                </span><span class="kw">pub </span><span class="macro-nonterminal">$env_name</span>: <span class="macro-nonterminal">$env_ty
+                <span class="attr">#[<span class="macro-nonterminal">allow</span>(unused)]
+                </span><span class="kw">pub </span><span class="macro-nonterminal">$name</span>: <span class="macro-nonterminal">$ty
             </span>),*
         }
 
-        <span class="kw">impl </span><span class="macro-nonterminal">$name </span>{
-            <span class="kw">pub async fn </span>init($(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>) -&gt; ::anyhow::Result&lt;<span class="self">Self</span>&gt; {
-                $(<span class="kw">let </span><span class="macro-nonterminal">$env_name</span>: <span class="macro-nonterminal">$env_ty </span>= <span class="macro-nonterminal">$env_value</span>.into();)*
+        <span class="kw">impl </span><span class="macro-nonterminal">$</span><span class="kw">struct </span>{
+            <span class="kw">pub async fn </span><span class="macro-nonterminal">init</span>($(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>) -&gt; ::anyhow::Result&lt;<span class="self">Self</span>&gt; {
+                $(<span class="kw">let </span><span class="macro-nonterminal">$name</span>: <span class="macro-nonterminal">$ty </span>= <span class="macro-nonterminal">$value</span>.into();)*
                 <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-                    $(<span class="macro-nonterminal">$env_name</span>),*
+                    $(<span class="macro-nonterminal">$name</span>),*
                 })
             }
 
             <span class="kw">pub fn </span>vars(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, String)&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>env = ::std::vec::Vec::new();
                 $(
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="macro-nonterminal">$crate::vars::ToEnvVar::to_env_value</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="macro-nonterminal">$env_name</span>) {
-                        env.push((<span class="macro">stringify!</span>(<span class="macro-nonterminal">$env_name</span>), value));
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="macro-nonterminal">$crate::vars::ToEnvVar::to_env_value</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="macro-nonterminal">$name</span>) {
+                        env.push((<span class="macro-nonterminal">$env</span>, value));
                     }
                 )*
                 env.into_iter()
@@ -270,7 +274,7 @@
     <span class="prelude-val">Ok</span>(dir)
 }
 
-<span class="kw">use </span>fedimint_core::envs::FM_USE_UNKNOWN_MODULE_ENV;
+<span class="kw">use </span>fedimint_core::envs::{FM_IN_DEVIMINT_ENV, FM_USE_UNKNOWN_MODULE_ENV};
 <span class="kw">use </span>fedimint_portalloc::port_alloc;
 <span class="kw">use </span>fedimint_server::config::ConfigGenParams;
 <span class="kw">use </span>format <span class="kw">as </span>f;
@@ -282,82 +286,86 @@
 <span class="macro">declare_vars!</span> {
     Global = (test_dir: <span class="kw-2">&amp;</span>Path, fed_size: usize, offline_nodes: usize) =&gt;
     {
-        FM_USE_UNKNOWN_MODULE : String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|<span class="kw">_</span>| <span class="string">"1"</span>.into());
+        FM_USE_UNKNOWN_MODULE: String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|<span class="kw">_</span>| <span class="string">"1"</span>.into()); env: <span class="string">"FM_USE_UNKNOWN_MODULE"</span>;
 
-        FM_FED_SIZE: usize = fed_size;
-        FM_OFFLINE_NODES: usize = offline_nodes;
-        FM_TMP_DIR: PathBuf = mkdir(test_dir.into()).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_TEST_DIR: PathBuf = FM_TMP_DIR.clone();
-        FM_TEST_FAST_WEAK_CRYPTO: String = <span class="string">"1"</span>;
-        FM_LOGS_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"logs"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_IN_DEVIMINT: String = <span class="string">"1"</span>.to_string(); env: FM_IN_DEVIMINT_ENV;
 
-        FM_PORT_BTC_RPC: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
-        FM_PORT_BTC_P2P: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
-        FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
-        FM_PORT_BTC_ZMQ_PUB_RAW_TX: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
-        FM_PORT_CLN: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
-        FM_PORT_LND_LISTEN: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
-        FM_PORT_LND_RPC: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
-        FM_PORT_LND_REST: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
-        FM_PORT_ELECTRS: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
-        FM_PORT_ELECTRS_MONITORING: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
-        FM_PORT_ESPLORA: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
-        <span class="comment">// 3 = p2p + api + metrics
-        </span>FM_PORT_FEDIMINTD_BASE: u16 = port_alloc((<span class="number">3 </span>* fed_size).try_into().unwrap())<span class="question-mark">?</span>;
-        FM_PORT_GW_CLN: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
-        FM_PORT_GW_LND: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
-        FM_PORT_CLN_EXTENSION: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>;
-        FM_PORT_FAUCET: u16 = <span class="number">15243u16</span>;
+        FM_FED_SIZE: usize = fed_size; env: <span class="string">"FM_FED_SIZE"</span>;
+        FM_OFFLINE_NODES: usize = offline_nodes; env: <span class="string">"FM_OFFLINE_NODES"</span>;
+        FM_TMP_DIR: PathBuf = mkdir(test_dir.into()).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_TMP_DIR"</span>;
+        FM_TEST_DIR: PathBuf = FM_TMP_DIR.clone(); env: <span class="string">"FM_TEST_DIR"</span>;
+        FM_TEST_FAST_WEAK_CRYPTO: String = <span class="string">"1"</span>; env: <span class="string">"FM_TEST_FAST_WEAK_CRYPTO"</span>;
+        FM_LOGS_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"logs"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_LOGS_DIR"</span>;
 
-        FM_CLN_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"cln"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"lnd"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_BTC_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"bitcoin"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_DATA_DIR: PathBuf = FM_TEST_DIR.clone();
-        FM_CLIENT_BASE_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"clients"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_CLIENT_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"clients"</span>).join(<span class="string">"default-0"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_ELECTRS_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"electrs"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_ESPLORA_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"esplora"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-        FM_READY_FILE: PathBuf = FM_TEST_DIR.join(<span class="string">"ready"</span>);
+        FM_PORT_BTC_RPC: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_BTC_RPC"</span>;
+        FM_PORT_BTC_P2P: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_BTC_P2P"</span>;
+        FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK"</span>;
+        FM_PORT_BTC_ZMQ_PUB_RAW_TX: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_BTC_ZMQ_PUB_RAW_TX"</span>;
+        FM_PORT_CLN: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_CLN"</span>;
+        FM_PORT_LND_LISTEN: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_LND_LISTEN"</span>;
+        FM_PORT_LND_RPC: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_LND_RPC"</span>;
+        FM_PORT_LND_REST: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_LND_REST"</span>;
+        FM_PORT_ELECTRS: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_ELECTRS"</span>;
+        FM_PORT_ELECTRS_MONITORING: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_ELECTRS_MONITORING"</span>;
+        FM_PORT_ESPLORA: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_ESPLORA"</span>;
+        <span class="comment">// 3 = p2p + api + metrics env: "// ";
+        </span>FM_PORT_FEDIMINTD_BASE: u16 = port_alloc((<span class="number">3 </span>* fed_size).try_into().unwrap())<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_FEDIMINTD_BASE"</span>;
+        FM_PORT_GW_CLN: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_GW_CLN"</span>;
+        FM_PORT_GW_LND: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_GW_LND"</span>;
+        FM_PORT_CLN_EXTENSION: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_CLN_EXTENSION"</span>;
+        FM_PORT_FAUCET: u16 = <span class="number">15243u16</span>; env: <span class="string">"FM_PORT_FAUCET"</span>;
 
-        FM_CLN_SOCKET: PathBuf = FM_CLN_DIR.join(<span class="string">"regtest/lightning-rpc"</span>);
-        FM_LND_RPC_ADDR: String = <span class="macro">f!</span>(<span class="string">"https://localhost:{FM_PORT_LND_RPC}"</span>);
-        FM_LND_TLS_CERT: PathBuf = FM_LND_DIR.join(<span class="string">"tls.cert"</span>);
-        FM_LND_MACAROON: PathBuf = FM_LND_DIR.join(<span class="string">"data/chain/bitcoin/regtest/admin.macaroon"</span>);
+        FM_CLN_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"cln"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_CLN_DIR"</span>;
+        FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"lnd"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_LND_DIR"</span>;
+        FM_BTC_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"bitcoin"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_BTC_DIR"</span>;
+        FM_DATA_DIR: PathBuf = FM_TEST_DIR.clone(); env: <span class="string">"FM_DATA_DIR"</span>;
+        FM_CLIENT_BASE_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"clients"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_CLIENT_BASE_DIR"</span>;
+        FM_CLIENT_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"clients"</span>).join(<span class="string">"default-0"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_CLIENT_DIR"</span>;
+        FM_ELECTRS_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"electrs"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_ELECTRS_DIR"</span>;
+        FM_ESPLORA_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"esplora"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_ESPLORA_DIR"</span>;
+        FM_READY_FILE: PathBuf = FM_TEST_DIR.join(<span class="string">"ready"</span>); env: <span class="string">"FM_READY_FILE"</span>;
 
-        FM_GATEWAY_API_ADDR: String = <span class="macro">f!</span>(<span class="string">"http://127.0.0.1:{FM_PORT_GW_CLN}"</span>);
-        FM_GATEWAY_PASSWORD: String = <span class="string">"theresnosecondbest"</span>;
-        FM_GATEWAY_FEES: String = <span class="string">"0,0"</span>; <span class="comment">// Enable to us to make an unbounded number of payments
+        FM_CLN_SOCKET: PathBuf = FM_CLN_DIR.join(<span class="string">"regtest/lightning-rpc"</span>); env: <span class="string">"FM_CLN_SOCKET"</span>;
+        FM_LND_RPC_ADDR: String = <span class="macro">f!</span>(<span class="string">"https://localhost:{FM_PORT_LND_RPC}"</span>); env: <span class="string">"FM_LND_RPC_ADDR"</span>;
+        FM_LND_TLS_CERT: PathBuf = FM_LND_DIR.join(<span class="string">"tls.cert"</span>); env: <span class="string">"FM_LND_TLS_CERT"</span>;
+        FM_LND_MACAROON: PathBuf = FM_LND_DIR.join(<span class="string">"data/chain/bitcoin/regtest/admin.macaroon"</span>); env: <span class="string">"FM_LND_MACAROON"</span>;
 
-        </span>FM_CLN_EXTENSION_LISTEN_ADDRESS: String = <span class="macro">f!</span>(<span class="string">"0.0.0.0:{FM_PORT_CLN_EXTENSION}"</span>);
-        FM_GATEWAY_LIGHTNING_ADDR: String = <span class="macro">f!</span>(<span class="string">"http://localhost:{FM_PORT_CLN_EXTENSION}"</span>);
-        FM_FAUCET_BIND_ADDR: String = <span class="macro">f!</span>(<span class="string">"0.0.0.0:{FM_PORT_FAUCET}"</span>);
+        FM_GATEWAY_API_ADDR: String = <span class="macro">f!</span>(<span class="string">"http://127.0.0.1:{FM_PORT_GW_CLN}"</span>); env: <span class="string">"FM_GATEWAY_API_ADDR"</span>;
+        FM_GATEWAY_PASSWORD: String = <span class="string">"theresnosecondbest"</span>; env: <span class="string">"FM_GATEWAY_PASSWORD"</span>;
 
-        <span class="comment">// clients
+         <span class="comment">// Enable to us to make an unbounded number of payments
+        </span>FM_GATEWAY_FEES: String = <span class="string">"0,0"</span>; env: <span class="string">"FM_GATEWAY_FEES"</span>;
+
+        FM_CLN_EXTENSION_LISTEN_ADDRESS: String = <span class="macro">f!</span>(<span class="string">"0.0.0.0:{FM_PORT_CLN_EXTENSION}"</span>); env: <span class="string">"FM_CLN_EXTENSION_LISTEN_ADDRESS"</span>;
+        FM_GATEWAY_LIGHTNING_ADDR: String = <span class="macro">f!</span>(<span class="string">"http://localhost:{FM_PORT_CLN_EXTENSION}"</span>); env: <span class="string">"FM_GATEWAY_LIGHTNING_ADDR"</span>;
+        FM_FAUCET_BIND_ADDR: String = <span class="macro">f!</span>(<span class="string">"0.0.0.0:{FM_PORT_FAUCET}"</span>); env: <span class="string">"FM_FAUCET_BIND_ADDR"</span>;
+
+        <span class="comment">// clients env: "// ";
         </span>FM_LIGHTNING_CLI: String = <span class="macro">f!</span>(<span class="string">"{lightning_cli} --network regtest --lightning-dir={lightning_dir}"</span>,
             lightning_cli = <span class="kw">crate</span>::util::get_lightning_cli_path().join(<span class="string">" "</span>),
-            lightning_dir = utf8(<span class="kw-2">&amp;</span>FM_CLN_DIR));
+            lightning_dir = utf8(<span class="kw-2">&amp;</span>FM_CLN_DIR)); env: <span class="string">"FM_LIGHTNING_CLI"</span>;
         FM_LNCLI: String = <span class="macro">f!</span>(<span class="string">"{lncli} -n regtest --lnddir={lnddir} --rpcserver=localhost:{FM_PORT_LND_RPC}"</span>,
             lncli = <span class="kw">crate</span>::util::get_lncli_path().join(<span class="string">" "</span>),
-            lnddir = utf8(<span class="kw-2">&amp;</span>FM_LND_DIR));
-        FM_BTC_CLIENT: String = <span class="macro">f!</span>(<span class="string">"{bitcoin_cli} -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -datadir={datadir}"</span>,
-            bitcoin_cli = <span class="kw">crate</span>::util::get_bitcoin_cli_path().join(<span class="string">" "</span>),
-            datadir = utf8(<span class="kw-2">&amp;</span>FM_BTC_DIR));
+            lnddir = utf8(<span class="kw-2">&amp;</span>FM_LND_DIR)); env: <span class="string">"FM_LNCLI"</span>;
+        FM_BTC_CLIENT: String = <span class="macro">f!</span>(<span class="string">"{bitcoin_cli} -regtest -rpcuser=bitcoin -rpcpassword=bitcoin -datadir={datadir}"</span>,             bitcoin_cli = <span class="kw">crate</span>::util::get_bitcoin_cli_path().join(<span class="string">" "</span>),
+            datadir = utf8(<span class="kw-2">&amp;</span>FM_BTC_DIR)); env: <span class="string">"FM_BTC_CLIENT"</span>;
+
         FM_MINT_CLIENT: String = <span class="macro">f!</span>(<span class="string">"{fedimint_cli} --data-dir {datadir}"</span>,
             fedimint_cli = <span class="kw">crate</span>::util::get_fedimint_cli_path().join(<span class="string">" "</span>),
-            datadir = utf8(<span class="kw-2">&amp;</span>FM_CLIENT_DIR));
-        FM_MINT_RPC_CLIENT: String = <span class="macro">f!</span>(<span class="string">"mint-rpc-client"</span>);
+            datadir = utf8(<span class="kw-2">&amp;</span>FM_CLIENT_DIR));  env: <span class="string">"FM_MINT_CLIENT"</span>;
+        FM_MINT_RPC_CLIENT: String = <span class="macro">f!</span>(<span class="string">"mint-rpc-client"</span>); env: <span class="string">"FM_MINT_RPC_CLIENT"</span>;
         FM_GWCLI_CLN: String = <span class="macro">f!</span>(<span class="string">"{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_CLN}/"</span>,
-            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),);
+            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),); env: <span class="string">"FM_GWCLI_CLN"</span>;
         FM_GWCLI_LND: String = <span class="macro">f!</span>(<span class="string">"{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/"</span>,
-            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),);
-        FM_DB_TOOL: String = <span class="macro">f!</span>(<span class="string">"{fedimint_dbtool}"</span>, fedimint_dbtool = <span class="kw">crate</span>::util::get_fedimint_dbtool_cli_path().join(<span class="string">" "</span>));
+            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),); env: <span class="string">"FM_GWCLI_LND"</span>;
+        FM_DB_TOOL: String = <span class="macro">f!</span>(<span class="string">"{fedimint_dbtool}"</span>, fedimint_dbtool = <span class="kw">crate</span>::util::get_fedimint_dbtool_cli_path().join(<span class="string">" "</span>)); env: <span class="string">"FM_DB_TOOL"</span>;
 
-        <span class="comment">// fedimint config variables
-        </span>FM_TEST_BITCOIND_RPC: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>);
-        FM_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>);
-        FM_BITCOIN_RPC_KIND: String = <span class="string">"bitcoind"</span>;
+        <span class="comment">// fedimint config variables env: "// ";
+        </span>FM_TEST_BITCOIND_RPC: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>); env: <span class="string">"FM_TEST_BITCOIND_RPC"</span>;
+        FM_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>); env: <span class="string">"FM_BITCOIN_RPC_URL"</span>;
+        FM_BITCOIN_RPC_KIND: String = <span class="string">"bitcoind"</span>; env: <span class="string">"FM_BITCOIN_RPC_KIND"</span>;
 
-        FM_ROCKSDB_WRITE_BUFFER_SIZE : String = (<span class="number">1 </span>&lt;&lt; <span class="number">20</span>).to_string();
+        FM_ROCKSDB_WRITE_BUFFER_SIZE : String = (<span class="number">1 </span>&lt;&lt; <span class="number">20</span>).to_string(); env: <span class="string">"FM_ROCKSDB_WRITE_BUFFER_SIZE "</span>;
     }
 }
 
@@ -374,12 +382,12 @@
 
 <span class="macro">declare_vars!</span> {
     Fedimintd = (globals: <span class="kw-2">&amp;</span>Global, params: ConfigGenParams) =&gt; {
-        FM_BIND_P2P: String = params.local.p2p_bind.to_string();
-        FM_BIND_API: String = params.local.api_bind.to_string();
-        FM_P2P_URL: String = params.consensus.peers[<span class="kw-2">&amp;</span>params.local.our_id].p2p_url.to_string();
-        FM_API_URL: String = params.consensus.peers[<span class="kw-2">&amp;</span>params.local.our_id].api_url.to_string();
-        FM_BIND_METRICS_API: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, globals.FM_PORT_FEDIMINTD_BASE <span class="kw">as </span>usize + <span class="number">2 </span>* globals.FM_FED_SIZE + params.local.our_id.to_usize());
-        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(<span class="macro">format!</span>(<span class="string">"fedimintd-{}"</span>, params.local.our_id.to_usize()))).<span class="kw">await</span><span class="question-mark">?</span>;
+        FM_BIND_P2P: String = params.local.p2p_bind.to_string(); env: <span class="string">"FM_BIND_P2P"</span>;
+        FM_BIND_API: String = params.local.api_bind.to_string(); env: <span class="string">"FM_BIND_API"</span>;
+        FM_P2P_URL: String = params.consensus.peers[<span class="kw-2">&amp;</span>params.local.our_id].p2p_url.to_string(); env: <span class="string">"FM_P2P_URL"</span>;
+        FM_API_URL: String = params.consensus.peers[<span class="kw-2">&amp;</span>params.local.our_id].api_url.to_string(); env: <span class="string">"FM_API_URL"</span>;
+        FM_BIND_METRICS_API: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, globals.FM_PORT_FEDIMINTD_BASE <span class="kw">as </span>usize + <span class="number">2 </span>* globals.FM_FED_SIZE + params.local.our_id.to_usize()); env: <span class="string">"FM_BIND_METRICS_API"</span>;
+        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(<span class="macro">format!</span>(<span class="string">"fedimintd-{}"</span>, params.local.our_id.to_usize()))).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_DATA_DIR"</span>;
     }
 }
 </code></pre></div></section></main></body></html>

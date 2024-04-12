@@ -1824,6 +1824,15 @@
 <a href="#1822" id="1822">1822</a>
 <a href="#1823" id="1823">1823</a>
 <a href="#1824" id="1824">1824</a>
+<a href="#1825" id="1825">1825</a>
+<a href="#1826" id="1826">1826</a>
+<a href="#1827" id="1827">1827</a>
+<a href="#1828" id="1828">1828</a>
+<a href="#1829" id="1829">1829</a>
+<a href="#1830" id="1830">1830</a>
+<a href="#1831" id="1831">1831</a>
+<a href="#1832" id="1832">1832</a>
+<a href="#1833" id="1833">1833</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -1864,6 +1873,7 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
 };
+<span class="kw">use </span>fedimint_core::envs::{is_env_var_set, FM_IN_DEVIMINT_ENV};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -3023,6 +3033,15 @@
         <span class="kw">let </span>(block_count_tx, block_count_rx) = watch::channel(<span class="prelude-val">None</span>);
         <span class="kw">let </span>(fee_rate_tx, fee_rate_rx) = watch::channel(cfg.consensus.default_fee);
 
+        <span class="kw">let </span>desired_poll_interval = <span class="kw">if </span>is_env_var_set(FM_IN_DEVIMINT_ENV) {
+            <span class="comment">// In devimint, the setup is blocked by detecting block height changes,
+            // and polling more often is not an issue.
+            </span><span class="macro">debug!</span>(target: LOG_MODULE_WALLET, <span class="string">"Running in devimint, using fast node polling"</span>);
+            Duration::from_millis(<span class="number">100</span>)
+        } <span class="kw">else </span>{
+            Duration::from_secs(<span class="number">10</span>)
+        };
+
         task_group.spawn_cancellable(<span class="string">"wallet module: background update"</span>, {
             <span class="kw">let </span>bitcoind = bitcoind.clone();
             <span class="kw">async move </span>{
@@ -3063,7 +3082,6 @@
                     }
                 };
 
-                <span class="kw">let </span>desired_frequency = Duration::from_secs(<span class="number">1</span>);
                 <span class="kw">loop </span>{
                     <span class="kw">let </span>start = now();
                     update_block_count().<span class="kw">await</span>;
@@ -3072,7 +3090,7 @@
                     <span class="kw">if </span>Duration::from_secs(<span class="number">10</span>) &lt; duration {
                         <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, duration_secs=duration.as_secs(), <span class="string">"Updating from bitcoind slow"</span>);
                     }
-                    <span class="kw">let </span>remaining = desired_frequency.saturating_sub(duration);
+                    <span class="kw">let </span>remaining = desired_poll_interval.saturating_sub(duration);
                     sleep(remaining).<span class="kw">await</span>;
                 }
             }

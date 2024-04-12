@@ -61,6 +61,9 @@
 <a href="#59" id="59">59</a>
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 
 <span class="kw">use </span>anyhow::Context;
@@ -97,6 +100,9 @@
 <span class="doccomment">/// Env var that can be set to point at the bitcoind's cookie file to use for
 /// auth
 </span><span class="kw">pub const </span>FM_BITCOIND_COOKIE_FILE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_BITCOIND_COOKIE_FILE"</span>;
+
+<span class="doccomment">/// `devimint` will set when code is running inside `devimint`
+</span><span class="kw">pub const </span>FM_IN_DEVIMINT_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_IN_DEVIMINT"</span>;
 
 <span class="doccomment">/// Configuration for the bitcoin RPC
 </span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
