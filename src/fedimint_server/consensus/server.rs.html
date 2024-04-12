@@ -859,6 +859,10 @@
 <a href="#857" id="857">857</a>
 <a href="#858" id="858">858</a>
 <a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -1322,6 +1326,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>num_batches = <span class="number">0</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>item_index = <span class="number">0</span>;
 
+        <span class="kw">let </span>federation_api = WsFederationApi::new(<span class="self">self</span>.api_endpoints.clone());
+
         <span class="comment">// We build a session outcome out of the ordered batches until either we have
         // processed batches_per_session_outcome of batches or a threshold signed
         // session outcome is obtained from our peers
@@ -1345,7 +1351,7 @@
                         num_batches += <span class="number">1</span>;
                     }
                 },
-                signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(session_index) =&gt; {
+                signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(<span class="kw-2">&amp;</span>federation_api, session_index) =&gt; {
                     <span class="kw">let </span>pending_accepted_items = <span class="self">self</span>.pending_accepted_items().<span class="kw">await</span>;
 
                     <span class="comment">// this panics if we have more accepted items than the signed session outcome
@@ -1401,7 +1407,7 @@
                         }
                     }
                 }
-                signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(session_index) =&gt; {
+                signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(<span class="kw-2">&amp;</span>federation_api, session_index) =&gt; {
                     <span class="comment">// We check that the session outcome we have created agrees with the federations consensus
                     </span><span class="macro">assert!</span>(header == signed_session_outcome.session_outcome.header(session_index));
 
@@ -1603,7 +1609,11 @@
         }
     }
 
-    <span class="kw">async fn </span>request_signed_session_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, index: u64) -&gt; SignedSessionOutcome {
+    <span class="kw">async fn </span>request_signed_session_outcome(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        federation_api: <span class="kw-2">&amp;</span>WsFederationApi,
+        index: u64,
+    ) -&gt; SignedSessionOutcome {
         <span class="kw">let </span>keychain = <span class="self">self</span>.keychain.clone();
         <span class="kw">let </span>total_peers = <span class="self">self</span>.keychain.peer_count();
         <span class="kw">let </span>decoders = <span class="self">self</span>.decoders();
@@ -1629,8 +1639,6 @@
             }
             <span class="prelude-val">Err</span>(error) =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(error.to_string())),
         };
-
-        <span class="kw">let </span>federation_api = WsFederationApi::new(<span class="self">self</span>.api_endpoints.clone());
 
         <span class="kw">loop </span>{
             <span class="comment">// We only want to initiate the request if we have not ordered a unit in a

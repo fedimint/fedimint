@@ -1726,66 +1726,6 @@
 <a href="#1724" id="1724">1724</a>
 <a href="#1725" id="1725">1725</a>
 <a href="#1726" id="1726">1726</a>
-<a href="#1727" id="1727">1727</a>
-<a href="#1728" id="1728">1728</a>
-<a href="#1729" id="1729">1729</a>
-<a href="#1730" id="1730">1730</a>
-<a href="#1731" id="1731">1731</a>
-<a href="#1732" id="1732">1732</a>
-<a href="#1733" id="1733">1733</a>
-<a href="#1734" id="1734">1734</a>
-<a href="#1735" id="1735">1735</a>
-<a href="#1736" id="1736">1736</a>
-<a href="#1737" id="1737">1737</a>
-<a href="#1738" id="1738">1738</a>
-<a href="#1739" id="1739">1739</a>
-<a href="#1740" id="1740">1740</a>
-<a href="#1741" id="1741">1741</a>
-<a href="#1742" id="1742">1742</a>
-<a href="#1743" id="1743">1743</a>
-<a href="#1744" id="1744">1744</a>
-<a href="#1745" id="1745">1745</a>
-<a href="#1746" id="1746">1746</a>
-<a href="#1747" id="1747">1747</a>
-<a href="#1748" id="1748">1748</a>
-<a href="#1749" id="1749">1749</a>
-<a href="#1750" id="1750">1750</a>
-<a href="#1751" id="1751">1751</a>
-<a href="#1752" id="1752">1752</a>
-<a href="#1753" id="1753">1753</a>
-<a href="#1754" id="1754">1754</a>
-<a href="#1755" id="1755">1755</a>
-<a href="#1756" id="1756">1756</a>
-<a href="#1757" id="1757">1757</a>
-<a href="#1758" id="1758">1758</a>
-<a href="#1759" id="1759">1759</a>
-<a href="#1760" id="1760">1760</a>
-<a href="#1761" id="1761">1761</a>
-<a href="#1762" id="1762">1762</a>
-<a href="#1763" id="1763">1763</a>
-<a href="#1764" id="1764">1764</a>
-<a href="#1765" id="1765">1765</a>
-<a href="#1766" id="1766">1766</a>
-<a href="#1767" id="1767">1767</a>
-<a href="#1768" id="1768">1768</a>
-<a href="#1769" id="1769">1769</a>
-<a href="#1770" id="1770">1770</a>
-<a href="#1771" id="1771">1771</a>
-<a href="#1772" id="1772">1772</a>
-<a href="#1773" id="1773">1773</a>
-<a href="#1774" id="1774">1774</a>
-<a href="#1775" id="1775">1775</a>
-<a href="#1776" id="1776">1776</a>
-<a href="#1777" id="1777">1777</a>
-<a href="#1778" id="1778">1778</a>
-<a href="#1779" id="1779">1779</a>
-<a href="#1780" id="1780">1780</a>
-<a href="#1781" id="1781">1781</a>
-<a href="#1782" id="1782">1782</a>
-<a href="#1783" id="1783">1783</a>
-<a href="#1784" id="1784">1784</a>
-<a href="#1785" id="1785">1785</a>
-<a href="#1786" id="1786">1786</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1795,7 +1735,7 @@
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>std::time::{Duration, SystemTime};
 <span class="kw">use </span>std::{cmp, result};
 
 <span class="kw">use </span>anyhow::{anyhow, ensure};
@@ -1817,7 +1757,7 @@
     apply, async_trait_maybe_send, dyn_newtype_define, ModuleDecoderRegistry, NumPeersExt,
     OutPoint, PeerId, TransactionId,
 };
-<span class="kw">use </span>fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::{Future, StreamExt};
 <span class="kw">use </span>jsonrpsee_core::client::{ClientT, Error <span class="kw">as </span>JsonRpcClientError};
@@ -1828,7 +1768,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tokio::sync::{OnceCell, RwLock, RwLockWriteGuard};
+<span class="kw">use </span>tokio::sync::{Mutex, OnceCell, RwLock};
 <span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::admin_client::{
@@ -1855,6 +1795,7 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::runtime;
 <span class="kw">use </span><span class="kw">crate</span>::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
+<span class="kw">use </span><span class="kw">crate</span>::task::jit::JitTryAnyhow;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction, TransactionError};
 <span class="kw">use </span><span class="kw">crate</span>::util::SafeUrl;
 
@@ -2850,11 +2791,119 @@
     module_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
 }
 
+<span class="doccomment">/// Some data shared/preserved between [`FederationPeerClient`] and
+/// Jit tasks it spawns.
+</span><span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>FederationPeerClientShared {
+    last_connection_attempt: SystemTime,
+    connection_attempts: u64,
+}
+
+<span class="kw">impl </span>FederationPeerClientShared {
+    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            last_connection_attempt: now(),
+            connection_attempts: <span class="number">0</span>,
+        }
+    }
+
+    <span class="doccomment">/// Wait (if needed) before reconnection attempt based on number of previous
+    /// attempts
+    </span><span class="kw">async fn </span>wait(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">let </span>desired_timeout = Duration::from_millis((<span class="self">self</span>.connection_attempts * <span class="number">100</span>).min(<span class="number">5000</span>));
+        <span class="kw">let </span>since_last_connect = now()
+            .duration_since(<span class="self">self</span>.last_connection_attempt)
+            .unwrap_or_default();
+
+        <span class="kw">let </span>sleep_duration = desired_timeout.saturating_sub(since_last_connect);
+        <span class="kw">if </span>Duration::from_millis(<span class="number">0</span>) &lt; sleep_duration {
+            <span class="macro">debug!</span>(
+                target: LOG_CLIENT_NET_API,
+                duration_ms=sleep_duration.as_millis(),
+                <span class="string">"Waiting before reconnecting"</span>);
+        }
+        fedimint_core::runtime::sleep(sleep_duration).<span class="kw">await</span>;
+    }
+
+    <span class="doccomment">/// Wait (if needed) + update reconnection stats
+    </span><span class="kw">async fn </span>wait_and_inc_reconnect(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.wait().<span class="kw">await</span>;
+        <span class="self">self</span>.connection_attempts += <span class="number">1</span>;
+        <span class="self">self</span>.last_connection_attempt = now()
+    }
+
+    <span class="kw">async fn </span>reset(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.connection_attempts = <span class="number">0</span>;
+    }
+}
+
+<span class="doccomment">/// The client in [`FederationPeer`], that takes care of reconnecting by
+/// starting background Jit task
+</span><span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>FederationPeerClient&lt;C&gt; {
+    client: JitTryAnyhow&lt;C&gt;,
+    shared: Arc&lt;tokio::sync::Mutex&lt;FederationPeerClientShared&gt;&gt;,
+}
+
+<span class="kw">impl</span>&lt;C&gt; FederationPeerClient&lt;C&gt;
+<span class="kw">where
+    </span>C: JsonRpcClient + <span class="lifetime">'static</span>,
+{
+    <span class="kw">pub fn </span>new(peer_id: PeerId, url: SafeUrl) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>shared: Arc&lt;<span class="kw">_</span>&gt; = tokio::sync::Mutex::new(FederationPeerClientShared::new()).into();
+
+        <span class="self">Self </span>{
+            client: <span class="self">Self</span>::new_jit_client(peer_id, url, shared.clone()),
+            shared,
+        }
+    }
+
+    <span class="kw">fn </span>new_jit_client(
+        peer_id: PeerId,
+        url: SafeUrl,
+        shared: Arc&lt;Mutex&lt;FederationPeerClientShared&gt;&gt;,
+    ) -&gt; JitTryAnyhow&lt;C&gt; {
+        JitTryAnyhow::new_try(<span class="kw">move </span>|| <span class="kw">async move </span>{
+            shared.lock().<span class="kw">await</span>.wait_and_inc_reconnect().<span class="kw">await</span>;
+
+            <span class="macro">debug!</span>(
+                target: LOG_CLIENT_NET_API,
+                peer_id = %peer_id,
+                url = %url,
+                <span class="string">"Connecting to peer"</span>);
+            <span class="kw">let </span>res = C::connect(<span class="kw-2">&amp;</span>url).<span class="kw">await</span>;
+
+            <span class="kw">match </span><span class="kw-2">&amp;</span>res {
+                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                    shared.lock().<span class="kw">await</span>.reset().<span class="kw">await</span>;
+                    <span class="macro">debug!</span>(
+                            target: LOG_CLIENT_NET_API,
+                            peer_id = %peer_id,
+                            url = %url,
+                            <span class="string">"Connected to peer"</span>);
+                }
+                <span class="prelude-val">Err</span>(err) =&gt; {
+                    <span class="macro">debug!</span>(
+                            target: LOG_CLIENT_NET_API,
+                            peer_id = %peer_id,
+                            url = %url,
+                            %err, <span class="string">"Unable to connect to peer"</span>);
+                }
+            }
+            <span class="prelude-val">Ok</span>(res<span class="question-mark">?</span>)
+        })
+    }
+
+    <span class="kw">pub async fn </span>reconnect(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: PeerId, url: SafeUrl) {
+        <span class="self">self</span>.client = <span class="self">Self</span>::new_jit_client(peer_id, url, <span class="self">self</span>.shared.clone());
+    }
+}
+
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">struct </span>FederationPeer&lt;C&gt; {
     url: SafeUrl,
     peer_id: PeerId,
-    client: RwLock&lt;<span class="prelude-ty">Option</span>&lt;C&gt;&gt;,
+    client: RwLock&lt;FederationPeerClient&lt;C&gt;&gt;,
 }
 
 <span class="doccomment">/// Information required for client to construct [`WsFederationApi`] instance
@@ -3148,7 +3197,10 @@
     }
 }
 
-<span class="kw">impl</span>&lt;C&gt; WsFederationApi&lt;C&gt; {
+<span class="kw">impl</span>&lt;C&gt; WsFederationApi&lt;C&gt;
+<span class="kw">where
+    </span>C: JsonRpcClient + <span class="lifetime">'static</span>,
+{
     <span class="kw">pub fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;PeerId&gt; {
         <span class="self">self</span>.peers.iter().map(|peer| peer.peer_id).collect()
     }
@@ -3169,8 +3221,8 @@
 
                         FederationPeer {
                             peer_id,
+                            client: RwLock::new(FederationPeerClient::new(peer_id, url.clone())),
                             url,
-                            client: RwLock::new(<span class="prelude-val">None</span>),
                         }
                     })
                     .collect(),
@@ -3186,58 +3238,47 @@
     <span class="kw">pub </span>result: JsonRpcResult&lt;R&gt;,
 }
 
-<span class="kw">impl</span>&lt;C: JsonRpcClient&gt; FederationPeer&lt;C&gt; {
+<span class="kw">impl</span>&lt;C&gt; FederationPeer&lt;C&gt;
+<span class="kw">where
+    </span>C: JsonRpcClient + <span class="lifetime">'static</span>,
+{
     <span class="attr">#[instrument(level = <span class="string">"trace"</span>, fields(peer = %<span class="self">self</span>.peer_id, %method), skip_all)]
     </span><span class="kw">pub async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str, params: <span class="kw-2">&amp;</span>[Value]) -&gt; JsonRpcResult&lt;Value&gt; {
-        <span class="kw">let </span>rclient = <span class="self">self</span>.client.read().<span class="kw">await</span>;
-        <span class="kw">match </span><span class="kw-2">&amp;*</span>rclient {
-            <span class="prelude-val">Some</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
-                <span class="kw">return </span>client.request::&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;(method, params).<span class="kw">await</span>;
-            }
-            <span class="kw">_ </span>=&gt; {}
-        };
-
-        <span class="macro">debug!</span>(<span class="string">"web socket not connected, reconnecting"</span>);
-
-        drop(rclient);
-        <span class="kw">let </span><span class="kw-2">mut </span>wclient = <span class="self">self</span>.client.write().<span class="kw">await</span>;
-        <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>wclient {
-            <span class="prelude-val">Some</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
-                <span class="comment">// other task has already connected it
-                </span><span class="kw">let </span>rclient = RwLockWriteGuard::downgrade(wclient);
-                rclient
-                    .as_ref()
-                    .unwrap()
-                    .request::&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;(method, params)
-                    .<span class="kw">await</span><span class="question-mark">?
-            </span>}
-            <span class="kw">_ </span>=&gt; {
-                <span class="comment">// write lock is acquired before creating a new client
-                // so only one task will try to create a new client
-                </span><span class="kw">match </span>C::connect(<span class="kw-2">&amp;</span><span class="self">self</span>.url).<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>(client) =&gt; {
-                        <span class="kw-2">*</span>wclient = <span class="prelude-val">Some</span>(client);
-                        <span class="comment">// drop the write lock before making the request
-                        </span><span class="kw">let </span>rclient = RwLockWriteGuard::downgrade(wclient);
-                        rclient
-                            .as_ref()
-                            .unwrap()
-                            .request::&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;(method, params)
-                            .<span class="kw">await</span><span class="question-mark">?
-                    </span>}
-                    <span class="prelude-val">Err</span>(err) =&gt; {
-                        <span class="comment">// Low logging level because we will probably retry connecting later
-                        // we are going to retry, and a Federation peer being down is a fact
-                        // of life, and nothing to warn about right away
-                        </span><span class="macro">debug!</span>(
-                            target: LOG_NET_API,
-                            peer_id = %<span class="self">self</span>.peer_id,
-                            %err, <span class="string">"Unable to connect to peer"</span>);
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(err)<span class="question-mark">?</span>;
+        <span class="kw">for </span>attempts <span class="kw">in </span><span class="number">0</span>.. {
+            <span class="kw">let </span>rclient = <span class="self">self</span>.client.read().<span class="kw">await</span>;
+            <span class="kw">match </span>rclient.client.get_try().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
+                    <span class="kw">return </span>client.request::&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;(method, params).<span class="kw">await</span>;
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="comment">// Strategies using timeouts often depend on failing requests returning quickly,
+                    // so every request gets only one reconnection attempt.
+                    </span><span class="kw">if </span><span class="number">0 </span>&lt; attempts {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(JsonRpcClientError::Transport(e.into()));
                     }
                 }
+                <span class="kw">_ </span>=&gt; {
+                    <span class="kw">if </span><span class="number">0 </span>&lt; attempts {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(JsonRpcClientError::Transport(<span class="macro">anyhow::format_err!</span>(
+                            <span class="string">"Disconnected"
+                        </span>)));
+                    }
+                }
+            };
+
+            drop(rclient);
+            <span class="kw">let </span><span class="kw-2">mut </span>wclient = <span class="self">self</span>.client.write().<span class="kw">await</span>;
+            <span class="kw">match </span>wclient.client.get_try().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
+                    <span class="comment">// someone else connected, just loop again
+                </span>}
+                <span class="kw">_ </span>=&gt; {
+                    wclient.reconnect(<span class="self">self</span>.peer_id, <span class="self">self</span>.url.clone()).<span class="kw">await</span>;
+                }
             }
-        })
+        }
+
+        <span class="macro">unreachable!</span>();
     }
 }
 
@@ -3312,17 +3353,10 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span>std::collections::HashSet;
-    <span class="kw">use </span>std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-    <span class="kw">use </span>std::sync::Mutex;
-
-    <span class="kw">use </span>anyhow::anyhow;
     <span class="kw">use </span>jsonrpsee_core::client::BatchResponse;
     <span class="kw">use </span>jsonrpsee_core::params::BatchRequestBuilder;
     <span class="kw">use </span>jsonrpsee_core::traits::ToRpcParams;
-    <span class="kw">use </span>once_cell::sync::Lazy;
     <span class="kw">use </span>serde::de::DeserializeOwned;
-    <span class="kw">use </span>tracing::error;
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
@@ -3378,160 +3412,6 @@
         {
             <span class="macro">unimplemented!</span>()
         }
-    }
-
-    <span class="kw">fn </span>federation_peer&lt;C: SimpleClient + MaybeSend + MaybeSync&gt;() -&gt; FederationPeer&lt;Client&lt;C&gt;&gt; {
-        FederationPeer {
-            url: SafeUrl::parse(<span class="string">"http://127.0.0.1"</span>).expect(<span class="string">"Could not parse"</span>),
-            peer_id: PeerId::from(<span class="number">0</span>),
-            client: RwLock::new(<span class="prelude-val">None</span>),
-        }
-    }
-
-    <span class="attr">#[test_log::test(tokio::test)]
-    </span><span class="kw">async fn </span>test_connect() {
-        <span class="kw">static </span>CONNECTION_COUNT: AtomicUsize = AtomicUsize::new(<span class="number">0</span>);
-        <span class="kw">static </span>CONNECTED: AtomicBool = AtomicBool::new(<span class="bool-val">true</span>);
-        <span class="kw">struct </span>Client;
-
-        <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-        </span><span class="kw">impl </span>SimpleClient <span class="kw">for </span>Client {
-            <span class="kw">async fn </span>connect() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-                CONNECTION_COUNT.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
-                <span class="prelude-val">Ok</span>(Client)
-            }
-
-            <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-                CONNECTED.load(Ordering::SeqCst)
-            }
-
-            <span class="kw">async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, _method: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-                <span class="prelude-val">Ok</span>(<span class="string">"null"</span>.to_string())
-            }
-        }
-
-        <span class="kw">let </span>fed = federation_peer::&lt;Client&gt;();
-        <span class="macro">assert_eq!</span>(
-            CONNECTION_COUNT.load(Ordering::SeqCst),
-            <span class="number">0</span>,
-            <span class="string">"should not connect before first request"
-        </span>);
-
-        fed.request(<span class="string">""</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
-        <span class="macro">assert_eq!</span>(
-            CONNECTION_COUNT.load(Ordering::SeqCst),
-            <span class="number">1</span>,
-            <span class="string">"should connect once after first request"
-        </span>);
-
-        fed.request(<span class="string">""</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
-        <span class="macro">assert_eq!</span>(
-            CONNECTION_COUNT.load(Ordering::SeqCst),
-            <span class="number">1</span>,
-            <span class="string">"should not connect again before disconnect"
-        </span>);
-
-        <span class="comment">// disconnect
-        </span>CONNECTED.store(<span class="bool-val">false</span>, Ordering::SeqCst);
-
-        fed.request(<span class="string">""</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
-        <span class="macro">assert_eq!</span>(
-            CONNECTION_COUNT.load(Ordering::SeqCst),
-            <span class="number">2</span>,
-            <span class="string">"should connect again after disconnect"
-        </span>);
-    }
-
-    <span class="attr">#[test_log::test(tokio::test)]
-    </span><span class="kw">async fn </span>concurrent_requests() {
-        <span class="kw">static </span>CONNECTION_COUNT: AtomicUsize = AtomicUsize::new(<span class="number">0</span>);
-        <span class="kw">static </span>FAIL: Lazy&lt;Mutex&lt;HashSet&lt;usize&gt;&gt;&gt; = Lazy::new(|| Mutex::new(HashSet::new()));
-
-        <span class="kw">struct </span>Client(usize);
-
-        <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-        </span><span class="kw">impl </span>SimpleClient <span class="kw">for </span>Client {
-            <span class="kw">async fn </span>connect() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-                <span class="macro">error!</span>(target: LOG_NET_API, <span class="string">"connect"</span>);
-                <span class="kw">let </span>id = CONNECTION_COUNT.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
-                <span class="comment">// slow down
-                </span>runtime::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
-                <span class="kw">if </span>FAIL.lock().unwrap().contains(<span class="kw-2">&amp;</span>id) {
-                    <span class="prelude-val">Err</span>(jsonrpsee_core::client::Error::Transport(<span class="macro">anyhow!</span>(
-                        <span class="string">"intentional error"
-                    </span>)))
-                } <span class="kw">else </span>{
-                    <span class="prelude-val">Ok</span>(Client(id))
-                }
-            }
-
-            <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-                !FAIL.lock().unwrap().contains(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)
-            }
-
-            <span class="kw">async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, _method: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-                <span class="kw">if </span><span class="self">self</span>.is_connected() {
-                    <span class="prelude-val">Ok</span>(<span class="string">"null"</span>.to_string())
-                } <span class="kw">else </span>{
-                    <span class="prelude-val">Err</span>(jsonrpsee_core::client::Error::Transport(<span class="macro">anyhow!</span>(
-                        <span class="string">"client is disconnected"
-                    </span>)))
-                }
-            }
-        }
-
-        <span class="kw">let </span>fed = federation_peer::&lt;Client&gt;();
-
-        FAIL.lock().unwrap().insert(<span class="number">0</span>);
-
-        <span class="macro">assert!</span>(
-            fed.request(<span class="string">""</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.is_err(),
-            <span class="string">"connect for client 0 should fail"
-        </span>);
-
-        <span class="comment">// connect for client 1 should succeed
-        </span>fed.request(<span class="string">""</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
-
-        <span class="macro">assert_eq!</span>(
-            CONNECTION_COUNT.load(Ordering::SeqCst),
-            <span class="number">2</span>,
-            <span class="string">"should connect again after error in first connect"
-        </span>);
-
-        <span class="comment">// force a new connection by disconnecting client 1
-        </span>FAIL.lock().unwrap().insert(<span class="number">1</span>);
-
-        <span class="comment">// only connect once even for two concurrent requests
-        </span><span class="kw">let </span>(reqa, reqb) = <span class="macro">tokio::join!</span>(fed.request(<span class="string">""</span>, <span class="kw-2">&amp;</span>[]), fed.request(<span class="string">""</span>, <span class="kw-2">&amp;</span>[]));
-        reqa.expect(<span class="string">"both request should be successful"</span>);
-        reqb.expect(<span class="string">"both request should be successful"</span>);
-
-        <span class="macro">assert_eq!</span>(
-            CONNECTION_COUNT.load(Ordering::SeqCst),
-            <span class="number">3</span>,
-            <span class="string">"should connect once even for two concurrent requests"</span>,
-        );
-
-        <span class="comment">// force a new connection by disconnecting client 2
-        </span>FAIL.lock().unwrap().insert(<span class="number">2</span>);
-
-        <span class="comment">// client 3 should fail
-        // client 4 should succeed
-        </span>FAIL.lock().unwrap().insert(<span class="number">3</span>);
-
-        <span class="comment">// only connect once even for two concurrent requests
-        </span><span class="kw">let </span>(reqa, reqb) = <span class="macro">tokio::join!</span>(fed.request(<span class="string">""</span>, <span class="kw-2">&amp;</span>[]), fed.request(<span class="string">""</span>, <span class="kw-2">&amp;</span>[]));
-
-        <span class="macro">assert_eq!</span>(
-            CONNECTION_COUNT.load(Ordering::SeqCst),
-            <span class="number">5</span>,
-            <span class="string">"should connect again if first concurrent request fails"</span>,
-        );
-
-        <span class="macro">assert!</span>(
-            reqa.is_err() ^ reqb.is_err(),
-            <span class="string">"exactly one of two request should succeed"
-        </span>);
     }
 
     <span class="attr">#[test]
