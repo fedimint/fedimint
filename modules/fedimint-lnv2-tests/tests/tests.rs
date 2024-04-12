@@ -181,12 +181,10 @@ async fn refund_unpayable_invoice() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn self_payment() -> anyhow::Result<()> {
+async fn can_make_self_payment_exactly_once() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let gw = gateway(&fixtures, &fed).await;
-
-    print_liquidity(&gw, fed.id()).await;
 
     let client = fed.new_client().await;
 
@@ -210,12 +208,61 @@ async fn self_payment() -> anyhow::Result<()> {
         .await_primary_module_output(print_op, print_outpoint)
         .await?;
 
-    let send_op = client
+    // this payment will fail and be refunded since the gateway does not have any
+    // liquidity in the federation yet
+    let send_op_refunded = client
         .get_first_module::<LightningClientModule>()
-        .send(gateway.api, invoice)
+        .send(gateway.api.clone(), invoice.clone())
         .await?;
 
-    verify_payment_success(client.clone(), send_op, client.clone(), receive_op).await
+    let mut sub = client
+        .get_first_module::<LightningClientModule>()
+        .subscribe_send(send_op_refunded)
+        .await?
+        .into_stream();
+
+    assert_eq!(sub.ok().await?, SendState::Funding);
+    assert_eq!(sub.ok().await?, SendState::Funded);
+    assert_eq!(sub.ok().await?, SendState::Refunding);
+    assert_eq!(sub.ok().await?, SendState::Refunded);
+
+    // now we print liquidity such that the second payment attempt is successful
+    print_liquidity(&gw, fed.id()).await;
+
+    let send_op = client
+        .get_first_module::<LightningClientModule>()
+        .send(gateway.api.clone(), invoice.clone())
+        .await?;
+
+    // verify that the first and second payment attempt have different operation ids
+    assert_ne!(send_op, send_op_refunded);
+
+    // this will return an error as the second payment attempt is still pending
+    let send_result = client
+        .get_first_module::<LightningClientModule>()
+        .send(gateway.api.clone(), invoice.clone())
+        .await;
+
+    assert_eq!(
+        Err(SendPaymentError::PendingPreviousPayment(send_op)),
+        send_result
+    );
+
+    // we await the success of the second payment attempt
+    verify_payment_success(client.clone(), send_op, client.clone(), receive_op).await?;
+
+    // this will return an error as the second payment attempt was successful
+    let send_result = client
+        .get_first_module::<LightningClientModule>()
+        .send(gateway.api, invoice)
+        .await;
+
+    assert_eq!(
+        Err(SendPaymentError::SuccessfulPreviousPayment(send_op)),
+        send_result
+    );
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
