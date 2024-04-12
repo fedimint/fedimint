@@ -333,7 +333,7 @@ where
 {
     let mut statergy = statergy.build();
     let op_name = op_name.into();
-    let mut attempts = 0;
+    let mut attempts: u64 = 0;
     loop {
         attempts += 1;
         match op_fn().await {
