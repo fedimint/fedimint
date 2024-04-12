@@ -279,32 +279,18 @@ impl ServerModule for Meta {
             },
         ) in desired
         {
-            let consensus_value = &Self::get_consensus(dbtx, key).await;
             let consensus_submission_value =
                 Self::get_submission(dbtx, key, self.our_peer_id).await;
+
             if consensus_submission_value.as_ref()
-                == Some(&MetaSubmissionValue {
+                != Some(&MetaSubmissionValue {
                     value: desired_value.clone(),
                     salt,
                 })
             {
-                // our submission is already registered, nothing to do
-            } else if consensus_value.as_ref() == Some(&desired_value) {
-                if consensus_submission_value.is_none() {
-                    // our desired value is equal to consensus and cleared our
-                    // submission (as it is equal the
-                    // consensus) so we don't need to propose it
-                } else {
-                    // we want to submit the same value as the current consensus, usually
-                    // to clear the previous submission that did not became the consensus (we were
-                    // outvoted)
-                    to_submit.push(MetaConsensusItem {
-                        key,
-                        value: desired_value,
-                        salt,
-                    });
-                }
-            } else {
+                // We haven't seen our own submission being ordered yet, so we keep submitting
+                // it till we do since we can't be sure that it makes it into the consensus
+                // output just because we proposed it.
                 to_submit.push(MetaConsensusItem {
                     key,
                     value: desired_value,
