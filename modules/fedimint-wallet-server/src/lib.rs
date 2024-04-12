@@ -38,6 +38,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
 };
+use fedimint_core::envs::{is_env_var_set, FM_IN_DEVIMINT_ENV};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -1197,6 +1198,15 @@ impl Wallet {
         let (block_count_tx, block_count_rx) = watch::channel(None);
         let (fee_rate_tx, fee_rate_rx) = watch::channel(cfg.consensus.default_fee);
 
+        let desired_poll_interval = if is_env_var_set(FM_IN_DEVIMINT_ENV) {
+            // In devimint, the setup is blocked by detecting block height changes,
+            // and polling more often is not an issue.
+            debug!(target: LOG_MODULE_WALLET, "Running in devimint, using fast node polling");
+            Duration::from_millis(100)
+        } else {
+            Duration::from_secs(10)
+        };
+
         task_group.spawn_cancellable("wallet module: background update", {
             let bitcoind = bitcoind.clone();
             async move {
@@ -1237,7 +1247,6 @@ impl Wallet {
                     }
                 };
 
-                let desired_frequency = Duration::from_secs(1);
                 loop {
                     let start = now();
                     update_block_count().await;
@@ -1246,7 +1255,7 @@ impl Wallet {
                     if Duration::from_secs(10) < duration {
                         warn!(target: LOG_MODULE_WALLET, duration_secs=duration.as_secs(), "Updating from bitcoind slow");
                     }
-                    let remaining = desired_frequency.saturating_sub(duration);
+                    let remaining = desired_poll_interval.saturating_sub(duration);
                     sleep(remaining).await;
                 }
             }
