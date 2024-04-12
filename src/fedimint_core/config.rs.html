@@ -1115,6 +1115,13 @@
 <a href="#1113" id="1113">1113</a>
 <a href="#1114" id="1114">1114</a>
 <a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1303,7 +1310,14 @@
             modules: <span class="self">self
                 </span>.modules
                 .into_iter()
-                .map(|(k, v)| <span class="prelude-val">Ok</span>((k, v.redecode_raw(modules)<span class="question-mark">?</span>)))
+                .map(|(k, v)| {
+                    <span class="comment">// Assuming this isn't running in any hot path it's better to have the debug
+                    // info than saving one allocation
+                    </span><span class="kw">let </span>kind = v.kind.clone();
+                    v.redecode_raw(modules)
+                        .context(<span class="macro">format!</span>(<span class="string">"redecode_raw: instance: {k}, kind: {kind}"</span>))
+                        .map(|v| (k, v))
+                })
                 .collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>,
             ..<span class="self">self
         </span>})

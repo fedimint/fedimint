@@ -408,11 +408,12 @@
 <a href="#406" id="406">406</a>
 <a href="#407" id="407">407</a>
 <a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Reverse;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::io::{Cursor, Error, Read, Write};
 
-<span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>fedimint_core::api::DynGlobalApi;
 <span class="kw">use </span>fedimint_core::core::backup::{
@@ -601,11 +602,12 @@
         r: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; std::result::Result&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>session_count = u64::consensus_decode(r, modules)<span class="question-mark">?</span>;
-        <span class="kw">let </span>metadata = Metadata::consensus_decode(r, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>session_count = u64::consensus_decode(r, modules).context(<span class="string">"session_count"</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>metadata = Metadata::consensus_decode(r, modules).context(<span class="string">"metadata"</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>module_backups =
-            BTreeMap::&lt;ModuleInstanceId, DynModuleBackup&gt;::consensus_decode(r, modules)<span class="question-mark">?</span>;
-        <span class="kw">let </span>_padding = Vec::&lt;u8&gt;::consensus_decode(r, modules)<span class="question-mark">?</span>;
+            BTreeMap::&lt;ModuleInstanceId, DynModuleBackup&gt;::consensus_decode(r, modules)
+                .context(<span class="string">"module_backups"</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>_padding = Vec::&lt;u8&gt;::consensus_decode(r, modules).context(<span class="string">"padding"</span>)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             session_count,

@@ -1435,6 +1435,12 @@
 <a href="#1433" id="1433">1433</a>
 <a href="#1434" id="1434">1434</a>
 <a href="#1435" id="1435">1435</a>
+<a href="#1436" id="1436">1436</a>
+<a href="#1437" id="1437">1437</a>
+<a href="#1438" id="1438">1438</a>
+<a href="#1439" id="1439">1439</a>
+<a href="#1440" id="1440">1440</a>
+<a href="#1441" id="1441">1441</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -1460,7 +1466,7 @@
 <span class="kw">use </span>std::time::{Duration, SystemTime, UNIX_EPOCH};
 <span class="kw">use </span>std::{cmp, mem};
 
-<span class="kw">use </span>anyhow::format_err;
+<span class="kw">use </span>anyhow::{format_err, Context};
 <span class="kw">pub use </span>fedimint_derive::{Decodable, Encodable};
 <span class="kw">use </span>hex::{FromHex, ToHex};
 <span class="kw">use </span>lightning::util::ser::{Readable, Writeable};
@@ -1671,6 +1677,12 @@
     }
 }
 
+<span class="kw">impl </span>From&lt;anyhow::Error&gt; <span class="kw">for </span>DecodeError {
+    <span class="kw">fn </span>from(e: anyhow::Error) -&gt; <span class="self">Self </span>{
+        DecodeError(e)
+    }
+}
+
 <span class="kw">pub use </span>lightning::util::ser::BigSize;
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>BigSize {
@@ -1728,7 +1740,7 @@
                 _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
                 <span class="kw">let </span>varint = BigSize::consensus_decode(d, <span class="kw-2">&amp;</span>Default::default())
-                    .map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)<span class="question-mark">?</span>;
+                    .context(<span class="macro">concat!</span>(<span class="string">"VarInt inside "</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$num_type</span>)))<span class="question-mark">?</span>;
                 &lt;<span class="macro-nonterminal">$num_type</span>&gt;::try_from(varint.<span class="number">0</span>).map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)
             }
         }

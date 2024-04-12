@@ -354,6 +354,39 @@
 <a href="#352" id="352">352</a>
 <a href="#353" id="353">353</a>
 <a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
 </pre></div><pre class="rust"><code><span class="attr">#![cfg_attr(feature = <span class="string">"diagnostics"</span>, feature(proc_macro_diagnostic))]
 
 </span><span class="kw">use </span>itertools::Itertools;
@@ -556,6 +589,7 @@
     <span class="kw">let </span>output = <span class="macro">quote!</span> {
         <span class="kw">impl </span>::fedimint_core::encoding::Decodable <span class="kw">for </span>#ident {
             <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_core::encoding::DecodeError&gt; {
+                <span class="kw">use </span>::fedimint_core:: anyhow::Context;
                 #decode_inner
             }
         }
@@ -604,7 +638,12 @@
             <span class="comment">// FIXME: make sure we read all bytes
             </span><span class="macro">quote!</span> {
                 #variant_idx =&gt; {
-                    <span class="kw">let </span>bytes: Vec&lt;u8&gt; = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
+                    <span class="comment">// FIXME: feels like there's a way more elegant way to do this with limited readers
+                    </span><span class="kw">let </span>bytes: Vec&lt;u8&gt; = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(d, modules)
+                        .context(<span class="macro">concat!</span>(
+                            <span class="string">"Decoding bytes of "</span>,
+                            <span class="macro">stringify!</span>(#ident)
+                        ))<span class="question-mark">?</span>;
                     <span class="kw">let </span><span class="kw-2">mut </span>cursor = std::io::Cursor::new(<span class="kw-2">&amp;</span>bytes);
 
                     <span class="kw">let </span>decoded = #decode_block;
@@ -613,8 +652,13 @@
                     <span class="kw">let </span>total_bytes = bytes.len() <span class="kw">as </span>u64;
                     <span class="kw">if </span>read_bytes != total_bytes {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(::fedimint_core::encoding::DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(
-                            <span class="string">"Partial read: got {total_bytes} bytes but only read {read_bytes}"
-                        </span>)));
+                            <span class="string">"Partial read: got {total_bytes} bytes but only read {read_bytes} when decoding {}"</span>,
+                            <span class="macro">concat!</span>(
+                                <span class="macro">stringify!</span>(#ident),
+                                <span class="string">"::"</span>,
+                                <span class="macro">stringify!</span>(#variant)
+                            )
+                        )));
                     }
 
                     decoded
@@ -625,7 +669,12 @@
     <span class="kw">let </span>default_match_arm = <span class="kw">if </span>variants.iter().any(is_default_variant_enforce_valid) {
         <span class="macro">quote!</span> {
             variant =&gt; {
-                <span class="kw">let </span>bytes: Vec&lt;u8&gt; = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
+                <span class="kw">let </span>bytes: Vec&lt;u8&gt; = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(d, modules)
+                    .context(<span class="macro">concat!</span>(
+                        <span class="string">"Decoding default variant of "</span>,
+                        <span class="macro">stringify!</span>(#ident)
+                    ))<span class="question-mark">?</span>;
+
                 #ident::Default {
                     variant,
                     bytes
@@ -641,7 +690,12 @@
     };
 
     <span class="macro">quote!</span> {
-        <span class="kw">let </span>variant = &lt;u64 <span class="kw">as </span>::fedimint_core::encoding::Decodable&gt;::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>variant = &lt;u64 <span class="kw">as </span>::fedimint_core::encoding::Decodable&gt;::consensus_decode_from_finite_reader(d, modules)
+            .context(<span class="macro">concat!</span>(
+                <span class="string">"Decoding default variant of "</span>,
+                <span class="macro">stringify!</span>(#ident)
+            ))<span class="question-mark">?</span>;
+
         <span class="kw">let </span>decoded = <span class="kw">match </span>variant {
             #(#non_default_match_arms)*
             #default_match_arm
@@ -683,7 +737,13 @@
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
     <span class="macro">quote!</span> {
         {
-            #(<span class="kw">let </span>#field_names = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(#reader, modules)<span class="question-mark">?</span>;)*
+            #(
+                <span class="kw">let </span>#field_names = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(#reader, modules)
+                    .context(<span class="macro">concat!</span>(
+                        <span class="string">"Decoding "</span>,
+                        <span class="macro">stringify!</span>(#field_names),
+                    ))<span class="question-mark">?</span>;
+            )*
             #constructor(#(#field_names,)<span class="kw-2">*</span>)
         }
     }
@@ -701,7 +761,13 @@
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
     <span class="macro">quote!</span> {
         {
-            #(<span class="kw">let </span>#variant_fields = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(#reader, modules)<span class="question-mark">?</span>;)*
+            #(
+                <span class="kw">let </span>#variant_fields = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(#reader, modules)
+                    .context(<span class="macro">concat!</span>(
+                        <span class="string">"Decoding "</span>,
+                        <span class="macro">stringify!</span>(#variant_fields),
+                    ))<span class="question-mark">?</span>;
+            )*
             #constructor{
                 #(#variant_fields,)*
             }
