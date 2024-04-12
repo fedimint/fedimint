@@ -461,6 +461,8 @@ impl ConsensusServer {
         let mut num_batches = 0;
         let mut item_index = 0;
 
+        let federation_api = WsFederationApi::new(self.api_endpoints.clone());
+
         // We build a session outcome out of the ordered batches until either we have
         // processed batches_per_session_outcome of batches or a threshold signed
         // session outcome is obtained from our peers
@@ -484,7 +486,7 @@ impl ConsensusServer {
                         num_batches += 1;
                     }
                 },
-                signed_session_outcome = self.request_signed_session_outcome(session_index) => {
+                signed_session_outcome = self.request_signed_session_outcome(&federation_api, session_index) => {
                     let pending_accepted_items = self.pending_accepted_items().await;
 
                     // this panics if we have more accepted items than the signed session outcome
@@ -540,7 +542,7 @@ impl ConsensusServer {
                         }
                     }
                 }
-                signed_session_outcome = self.request_signed_session_outcome(session_index) => {
+                signed_session_outcome = self.request_signed_session_outcome(&federation_api, session_index) => {
                     // We check that the session outcome we have created agrees with the federations consensus
                     assert!(header == signed_session_outcome.session_outcome.header(session_index));
 
@@ -742,7 +744,11 @@ impl ConsensusServer {
         }
     }
 
-    async fn request_signed_session_outcome(&self, index: u64) -> SignedSessionOutcome {
+    async fn request_signed_session_outcome(
+        &self,
+        federation_api: &WsFederationApi,
+        index: u64,
+    ) -> SignedSessionOutcome {
         let keychain = self.keychain.clone();
         let total_peers = self.keychain.peer_count();
         let decoders = self.decoders();
@@ -768,8 +774,6 @@ impl ConsensusServer {
             }
             Err(error) => Err(anyhow!(error.to_string())),
         };
-
-        let federation_api = WsFederationApi::new(self.api_endpoints.clone());
 
         loop {
             // We only want to initiate the request if we have not ordered a unit in a
