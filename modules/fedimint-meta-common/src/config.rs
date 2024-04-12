@@ -43,7 +43,16 @@ pub struct MetaClientConfig;
 
 /// Locally unencrypted config unique to each member
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-pub struct MetaConfigLocal;
+pub struct MetaConfigLocal {
+    /// Initial versions of meta module failed to return `Err` when processing
+    /// redundant items.
+    /// Federation set up with old versions will not have this key set,
+    /// while new ones will. At some point we can fail on `init` if this
+    /// is not set, then we can ignore and completely remove.
+    /// support(v0.3.0): see above
+    #[serde(default)]
+    pub errata_redundant_err: bool,
+}
 
 /// Will be the same for every federation member
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]

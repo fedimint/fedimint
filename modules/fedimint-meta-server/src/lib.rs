@@ -3,6 +3,7 @@ pub mod db;
 use std::collections::BTreeMap;
 use std::future;
 
+use anyhow::bail;
 use async_trait::async_trait;
 use db::{
     MetaConsensusKey, MetaDesiredKey, MetaDesiredValue, MetaSubmissionsByKeyPrefix,
@@ -146,7 +147,9 @@ impl ServerModuleInit for MetaInit {
             .iter()
             .map(|&peer| {
                 let config = MetaConfig {
-                    local: MetaConfigLocal {},
+                    local: MetaConfigLocal {
+                        errata_redundant_err: true,
+                    },
                     private: MetaConfigPrivate,
                     consensus: MetaConfigConsensus {},
                 };
@@ -164,7 +167,9 @@ impl ServerModuleInit for MetaInit {
         let _params = self.parse_params(params).unwrap();
 
         Ok(MetaConfig {
-            local: MetaConfigLocal {},
+            local: MetaConfigLocal {
+                errata_redundant_err: true,
+            },
             private: MetaConfigPrivate,
             consensus: MetaConfigConsensus {},
         }
@@ -330,17 +335,49 @@ impl ServerModule for Meta {
         debug!(target: LOG_MODULE_META, %peer_id, %key, %value, %salt, "Received a submission");
 
         let new_value = MetaSubmissionValue { value, salt };
-        // first of all: any new submission overrides previous submission
-        if let Some(prev_value) = Self::get_submission(dbtx, key, peer_id).await {
-            if prev_value != new_value {
-                dbtx.remove_entry(&MetaSubmissionsKey { key, peer_id })
-                    .await;
+
+        #[allow(clippy::collapsible_else_if)]
+        if !self.cfg.local.errata_redundant_err {
+            // old pre-errata behavior
+
+            // first of all: any new submission overrides previous submission
+            if let Some(prev_value) = Self::get_submission(dbtx, key, peer_id).await {
+                if prev_value != new_value {
+                    dbtx.remove_entry(&MetaSubmissionsKey { key, peer_id })
+                        .await;
+                }
             }
-        }
-        // then: if the submission is equal to the current consensus, it's ignored
-        if Some(&new_value.value) == Self::get_consensus(dbtx, key).await.as_ref() {
-            debug!(target: LOG_MODULE_META, %peer_id, %key, "Peer submitted a redundant value");
-            return Ok(());
+            // then: if the submission is equal to the current consensus, it's ignored
+            if Some(&new_value.value) == Self::get_consensus(dbtx, key).await.as_ref() {
+                debug!(target: LOG_MODULE_META, %peer_id, %key, "Peer submitted a redundant value");
+                return Ok(());
+            }
+        } else {
+            // new post-errata behavior
+
+            // if submission already equal to the existing one, we can ignore it upfront
+            // as it doesn't change anything
+            let existing_submission = Self::get_submission(dbtx, key, peer_id).await;
+            if existing_submission.as_ref() == Some(&new_value) {
+                bail!("Submission value already registered");
+            }
+
+            if Some(&new_value.value) == Self::get_consensus(dbtx, key).await.as_ref() {
+                // new submission is equal the consensus...
+                if existing_submission.is_none() {
+                    // if existing submission was already cleared, this value is redundant
+                    bail!(
+                        "Submission equal to consensus value and previous submission value cleared"
+                    );
+                } else {
+                    // if existing submission is still there, clear it and that's it
+                    // new value can't change the consensus so there's no point in processing it any
+                    // further
+                    dbtx.remove_entry(&MetaSubmissionsKey { key, peer_id })
+                        .await;
+                    return Ok(());
+                }
+            }
         }
 
         // otherwise, new submission is recorded
