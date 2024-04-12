@@ -1086,7 +1086,15 @@ impl FederationPeerClientShared {
         let since_last_connect = now()
             .duration_since(self.last_connection_attempt)
             .unwrap_or_default();
-        fedimint_core::runtime::sleep(desired_timeout.saturating_sub(since_last_connect)).await;
+
+        let sleep_duration = desired_timeout.saturating_sub(since_last_connect);
+        if Duration::from_millis(0) < sleep_duration {
+            debug!(
+                target: LOG_CLIENT_NET_API,
+                duration_ms=sleep_duration.as_millis(),
+                "Waiting before reconnecting");
+        }
+        fedimint_core::runtime::sleep(sleep_duration).await;
     }
 
     /// Wait (if needed) + update reconnection stats
