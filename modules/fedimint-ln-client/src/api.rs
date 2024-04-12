@@ -273,9 +273,11 @@ where
                 amount: account.amount,
                 contract: c.contract,
             }),
-            _ => Err(FederationError::general(anyhow::anyhow!(
-                "WrongAccountType"
-            ))),
+            _ => Err(FederationError::general(
+                AWAIT_ACCOUNT_ENDPOINT,
+                id,
+                anyhow::anyhow!("WrongAccountType"),
+            )),
         }
     }
 
@@ -289,9 +291,11 @@ where
                 amount: account.amount,
                 contract: c,
             }),
-            _ => Err(FederationError::general(anyhow::anyhow!(
-                "WrongAccountType"
-            ))),
+            _ => Err(FederationError::general(
+                AWAIT_ACCOUNT_ENDPOINT,
+                id,
+                anyhow::anyhow!("WrongAccountType"),
+            )),
         }
     }
 }

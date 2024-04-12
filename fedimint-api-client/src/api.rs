@@ -30,7 +30,7 @@ use fedimint_core::endpoint_constants::{
     STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
     VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
 };
-use fedimint_core::fmt_utils::AbbreviateDebug;
+use fedimint_core::fmt_utils::{AbbreviateDebug, AbbreviateJson};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -124,6 +124,8 @@ impl PeerError {
 /// Generally all Federation errors are retriable.
 #[derive(Debug, Error)]
 pub struct FederationError {
+    method: String,
+    params: serde_json::Value,
     general: Option<anyhow::Error>,
     peers: BTreeMap<PeerId, PeerError>,
 }
@@ -132,6 +134,11 @@ impl Display for FederationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Federation rpc error {")?;
         if let Some(general) = self.general.as_ref() {
+            f.write_fmt(format_args!("method => {}), ", self.method))?;
+            f.write_fmt(format_args!(
+                "params => {:?}), ",
+                AbbreviateJson(&self.params)
+            ))?;
             f.write_fmt(format_args!("general => {general})"))?;
             if !self.peers.is_empty() {
                 f.write_str(", ")?;
@@ -149,15 +156,28 @@ impl Display for FederationError {
 }
 
 impl FederationError {
-    pub fn general(e: impl Into<anyhow::Error>) -> FederationError {
+    pub fn general(
+        method: impl Into<String>,
+        params: impl Serialize,
+        e: impl Into<anyhow::Error>,
+    ) -> FederationError {
         FederationError {
+            method: method.into(),
+            params: serde_json::to_value(params).unwrap_or_default(),
             general: Some(e.into()),
             peers: Default::default(),
         }
     }
 
-    pub fn new_one_peer(peer_id: PeerId, error: PeerError) -> Self {
+    pub fn new_one_peer(
+        peer_id: PeerId,
+        method: impl Into<String>,
+        params: impl Serialize,
+        error: PeerError,
+    ) -> Self {
         Self {
+            method: method.into(),
+            params: serde_json::to_value(params).expect("Serialization of valid params won't fail"),
             general: None,
             peers: [(peer_id, error)].into_iter().collect(),
         }
@@ -313,13 +333,13 @@ pub trait FederationApiExt: IRawFederationApi {
         FedRet: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         Ok(self
-            .request_single_peer(timeout, method, params, peer_id)
+            .request_single_peer(timeout, method.clone(), params.clone(), peer_id)
             .await
             .map_err(PeerError::Rpc)
             .and_then(|v| {
                 serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
             })
-            .map_err(|e| FederationError::new_one_peer(peer_id, e))?)
+            .map_err(move |e| FederationError::new_one_peer(peer_id, method, params, e))?)
     }
 
     /// Make an aggregate request to federation, using `strategy` to logically
@@ -419,7 +439,12 @@ pub trait FederationApiExt: IRawFederationApi {
                         }
                         QueryStep::Continue => {}
                         QueryStep::Failure { general, peers } => {
-                            return Err(FederationError { general, peers })
+                            return Err(FederationError {
+                                method: method.clone(),
+                                params: params.params.clone(),
+                                general,
+                                peers,
+                            })
                         }
                         QueryStep::Success(response) => return Ok(response),
                     }
@@ -457,9 +482,11 @@ pub trait FederationApiExt: IRawFederationApi {
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         let Some(self_peer_id) = self.self_peer() else {
-            return Err(FederationError::general(anyhow::format_err!(
-                "Admin peer_id not set"
-            )));
+            return Err(FederationError::general(
+                method,
+                params,
+                anyhow::format_err!("Admin peer_id not set"),
+            ));
         };
         self.request_single_peer_federation(
             None,
