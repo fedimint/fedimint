@@ -42,6 +42,15 @@ final-check: lint
   just check-wasm
   just test
 
+# run all/most checks a CI would run
+final-check-ci: lint
+  just clippy
+  cargo test --doc
+  just check-wasm
+  ./scripts/tests/test-ci-all.sh
+  just test-compatibility
+  just udeps
+
 check-wasm:
   #!/usr/bin/env bash
   env CARGO_BUILD_TARGET_DIR=${CARGO_BUILD_TARGET_DIR:-$(pwd)/target}/pkgs/check-wasm \
