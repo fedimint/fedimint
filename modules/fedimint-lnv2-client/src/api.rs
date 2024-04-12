@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
+use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 use fedimint_core::endpoint_constants::{
     AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT,
     OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,

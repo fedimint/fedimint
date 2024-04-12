@@ -25,7 +25,8 @@ bitcoin = "0.29.2"
 bitcoincore-rpc = "0.16.0"
 clap = { version = "4.5.2", features = ["derive", "std", "help", "usage", "error-context", "suggestions" ], default-features = false }
 cln-rpc = { workspace = true }
-fedimint-core  = { version = "=0.4.0-alpha", path = "../fedimint-core" }
+fedimint-core = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-client  = { version = "=0.4.0-alpha", path = "../fedimint-client" }
 fedimint-server  = { version = "=0.4.0-alpha", path = "../fedimint-server" }
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../fedimint-bitcoind" }

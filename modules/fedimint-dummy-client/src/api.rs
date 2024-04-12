@@ -1,4 +1,4 @@
-use fedimint_core::api::IModuleFederationApi;
+use fedimint_api_client::api::IModuleFederationApi;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send};
 

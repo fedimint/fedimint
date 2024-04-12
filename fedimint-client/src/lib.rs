@@ -84,7 +84,7 @@ use db::{
     InitMode,
 };
 use envs::get_discover_api_version_timeout;
-use fedimint_core::api::{ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi};
+use fedimint_api_client::api::{ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi};
 use fedimint_core::config::{
     ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
     ModuleInitRegistry,
@@ -203,7 +203,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// Returns a reference to the client's federation API client. The provided
     /// interface [`IGlobalFederationApi`] typically does not provide the
     /// necessary functionality, for this extension traits like
-    /// [`fedimint_core::api::IGlobalFederationApi`] have to be used.
+    /// [`fedimint_api_client::api::IGlobalFederationApi`] have to be used.
     // TODO: Could be removed in favor of client() except for testing
     fn api(&self) -> &DynGlobalApi;
 
@@ -1946,7 +1946,7 @@ impl ClientBuilder {
     /// A typical "join federation" flow would look as follows:
     /// ```no_run
     /// # use std::str::FromStr;
-    /// # use fedimint_core::api::InviteCode;
+    /// # use fedimint_core::invite_code::InviteCode;
     /// # use fedimint_core::config::ClientConfig;
     /// # use fedimint_derive_secret::DerivableSecret;
     /// # use fedimint_client::{Client, ClientBuilder};
@@ -1963,7 +1963,7 @@ impl ClientBuilder {
     /// // Get invite code from user
     /// let invite_code = InviteCode::from_str("fed11qgqpw9thwvaz7te3xgmjuvpwxqhrzw3jxumrvvf0qqqjpetvlg8glnpvzcufhffgzhv8m75f7y34ryk7suamh8x7zetly8h0v9v0rm")
     ///     .expect("Invalid invite code");
-    /// let config = ClientConfig::download_from_invite_code(&invite_code).await
+    /// let config = fedimint_api_client::download_from_invite_code(&invite_code).await
     ///     .expect("Error downloading config");
     ///
     /// // Tell the user the federation name, bitcoin network

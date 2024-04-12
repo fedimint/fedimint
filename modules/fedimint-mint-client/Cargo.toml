@@ -28,7 +28,8 @@ erased-serde = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
-fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
+fedimint-core = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-client = { version = "=0.4.0-alpha", path = "../../fedimint-client" }
 fedimint-derive-secret = { version = "=0.4.0-alpha", path = "../../crypto/derive-secret"}
 fedimint-mint-common ={ version = "=0.4.0-alpha", path = "../fedimint-mint-common" }

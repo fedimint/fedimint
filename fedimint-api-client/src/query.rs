@@ -4,15 +4,14 @@ use std::mem;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{anyhow, format_err};
-use fedimint_core::api::PeerResult;
+use fedimint_core::module::{
+    ApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
+};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::{maybe_add_send_sync, PeerId};
 
-use crate::api::{self, ApiVersionSet, PeerError};
-use crate::module::{
-    ApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
-};
+use crate::api::{self, ApiVersionSet, PeerError, PeerResult};
 
 /// Fedimint query strategy
 ///
@@ -481,7 +480,7 @@ fn discover_common_core_api_version(
 fn discover_common_core_api_version_sanity() {
     use fedimint_core::module::MultiApiVersion;
 
-    let core_consensus = crate::module::CoreConsensusVersion::new(0, 0);
+    let core_consensus = fedimint_core::module::CoreConsensusVersion::new(0, 0);
     let client_versions = SupportedCoreApiVersions {
         core_consensus,
         api: MultiApiVersion::try_from_iter([
@@ -496,9 +495,9 @@ fn discover_common_core_api_version_sanity() {
         discover_common_core_api_version(
             &client_versions,
             BTreeMap::from([(
-                PeerId(0),
+                PeerId::from(0),
                 SupportedCoreApiVersions {
-                    core_consensus: crate::module::CoreConsensusVersion::new(0, 0),
+                    core_consensus: fedimint_core::module::CoreConsensusVersion::new(0, 0),
                     api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 3 }])
                         .unwrap(),
                 }
@@ -510,9 +509,9 @@ fn discover_common_core_api_version_sanity() {
         discover_common_core_api_version(
             &client_versions,
             BTreeMap::from([(
-                PeerId(0),
+                PeerId::from(0),
                 SupportedCoreApiVersions {
-                    core_consensus: crate::module::CoreConsensusVersion::new(0, 1), /* different minor consensus version, we don't care */
+                    core_consensus: fedimint_core::module::CoreConsensusVersion::new(0, 1), /* different minor consensus version, we don't care */
                     api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 3 }])
                         .unwrap(),
                 }
@@ -524,9 +523,9 @@ fn discover_common_core_api_version_sanity() {
         discover_common_core_api_version(
             &client_versions,
             BTreeMap::from([(
-                PeerId(0),
+                PeerId::from(0),
                 SupportedCoreApiVersions {
-                    core_consensus: crate::module::CoreConsensusVersion::new(1, 0), /* wrong consensus version */
+                    core_consensus: fedimint_core::module::CoreConsensusVersion::new(1, 0), /* wrong consensus version */
                     api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 4 }])
                         .unwrap(),
                 }
@@ -539,7 +538,7 @@ fn discover_common_core_api_version_sanity() {
             &client_versions,
             BTreeMap::from([
                 (
-                    PeerId(0),
+                    PeerId::from(0),
                     SupportedCoreApiVersions {
                         core_consensus,
                         api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 2 }])
@@ -547,7 +546,7 @@ fn discover_common_core_api_version_sanity() {
                     }
                 ),
                 (
-                    PeerId(1),
+                    PeerId::from(1),
                     SupportedCoreApiVersions {
                         core_consensus,
                         api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 1 }])
@@ -555,7 +554,7 @@ fn discover_common_core_api_version_sanity() {
                     }
                 ),
                 (
-                    PeerId(1),
+                    PeerId::from(1),
                     SupportedCoreApiVersions {
                         core_consensus,
                         api: MultiApiVersion::try_from_iter([ApiVersion { major: 3, minor: 1 }])
@@ -571,7 +570,7 @@ fn discover_common_core_api_version_sanity() {
             &client_versions,
             BTreeMap::from([
                 (
-                    PeerId(0),
+                    PeerId::from(0),
                     SupportedCoreApiVersions {
                         core_consensus,
                         api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 4 }])
@@ -579,7 +578,7 @@ fn discover_common_core_api_version_sanity() {
                     }
                 ),
                 (
-                    PeerId(1),
+                    PeerId::from(1),
                     SupportedCoreApiVersions {
                         core_consensus,
                         api: MultiApiVersion::try_from_iter([ApiVersion { major: 2, minor: 5 }])

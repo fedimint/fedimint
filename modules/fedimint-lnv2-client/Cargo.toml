@@ -29,7 +29,8 @@ futures = "0.3.24"
 itertools = "0.10.5"
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
 fedimint-client = { path = "../../fedimint-client" }
-fedimint-core ={ path = "../../fedimint-core" }
+fedimint-core = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-lnv2-common ={ path = "../fedimint-lnv2-common" }
 secp256k1 = { version="0.24.2", default-features=false }
 secp256k1-zkp = { version = "0.7.0", features = [ "serde", "bitcoin_hashes" ] }

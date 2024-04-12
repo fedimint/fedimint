@@ -4,7 +4,7 @@ use std::io::{Cursor, Error, Read, Write};
 
 use anyhow::{bail, Context, Result};
 use bitcoin::secp256k1;
-use fedimint_core::api::DynGlobalApi;
+use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::core::backup::{
     BackupRequest, SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,
 };

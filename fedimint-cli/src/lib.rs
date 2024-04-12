@@ -19,20 +19,21 @@ use bip39::Mnemonic;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use db_locked::LockedBuilder;
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
+use fedimint_api_client::api::{
+    DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
+};
 use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::module::ClientModule as _;
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc};
 use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
-use fedimint_core::api::{
-    DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, InviteCode, WsFederationApi,
-};
 use fedimint_core::config::{
     ClientConfig, FederationId, FederationIdPrefix, ServerModuleConfigGenParamsRegistry,
 };
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{Database, DatabaseValue};
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::util::{handle_version_hash_command, retry, ConstantBackoff, SafeUrl};
 use fedimint_core::{fedimint_build_code_version_env, PeerId, TieredMulti};
@@ -565,7 +566,7 @@ impl FedimintCli {
         cli: &Opts,
         invite_code: InviteCode,
     ) -> CliResult<ClientHandleArc> {
-        let client_config = ClientConfig::download_from_invite_code(&invite_code)
+        let client_config = fedimint_api_client::download_from_invite_code(&invite_code)
             .await
             .map_err_cli()?;
 
@@ -625,7 +626,7 @@ impl FedimintCli {
     ) -> CliResult<ClientHandleArc> {
         let builder = self.make_client_builder(cli).await?;
 
-        let client_config = ClientConfig::download_from_invite_code(&invite_code)
+        let client_config = fedimint_api_client::download_from_invite_code(&invite_code)
             .await
             .map_err_cli()?;
 

@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use async_trait::async_trait;
-use fedimint_core::api::PeerConnectionStatus;
+use fedimint_api_client::api::PeerConnectionStatus;
 use fedimint_core::net::peers::IPeerConnections;
 use fedimint_core::task::{sleep_until, Cancellable, Cancelled, TaskGroup, TaskHandle};
 use fedimint_core::util::SafeUrl;

@@ -6,9 +6,32 @@ use serde::{Deserialize, Serialize};
 #[cfg(not(target_family = "wasm"))]
 use tokio_rustls::rustls::Certificate as RustlsCertificate;
 
-use crate::api::ServerStatus;
 use crate::config::ServerModuleConfigGenParamsRegistry;
 use crate::PeerId;
+
+/// The state of the server returned via APIs
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ServerStatus {
+    /// Server needs a password to read configs
+    #[default]
+    AwaitingPassword,
+    /// Waiting for peers to share the config gen params
+    SharingConfigGenParams,
+    /// Ready to run config gen once all peers are ready
+    ReadyForConfigGen,
+    /// We failed running config gen
+    ConfigGenFailed,
+    /// Config is generated, peers should verify the config
+    VerifyingConfigs,
+    /// We have verified all our peer configs
+    VerifiedConfigs,
+    /// Consensus is running
+    ConsensusRunning,
+    /// Restarted setup. All peers need to sync on this state before continuing
+    /// to `SharingConfigGenParams`
+    SetupRestarted,
+}
 
 #[cfg(target_family = "wasm")]
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]

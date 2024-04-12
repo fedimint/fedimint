@@ -9,12 +9,12 @@ use std::collections::BTreeMap;
 use api::MetaFederationApi;
 use common::{MetaConsensusValue, MetaKey, MetaValue};
 use db::DbKeyPrefix;
+use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::db::ClientMigrationFn;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::sm::Context;
-use fedimint_core::api::DynModuleApi;
 use fedimint_core::core::Decoder;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::{

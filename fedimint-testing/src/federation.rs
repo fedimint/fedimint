@@ -5,7 +5,6 @@ use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
-use fedimint_core::api::InviteCode;
 use fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
     META_FEDERATION_NAME_KEY,
@@ -13,6 +12,7 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::PeerId;

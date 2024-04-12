@@ -30,7 +30,8 @@ bytes = "1.5.0"
 futures = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
-fedimint-core = { version = "=0.4.0-alpha", path = "../fedimint-core" }
+fedimint-core = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
 fedimint-metrics = { version = "=0.4.0-alpha", path = "../fedimint-metrics" }
 lazy_static = "1.4.0"

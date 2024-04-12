@@ -14,6 +14,7 @@ members = [
     "fedimint-cli",
     "fedimint-client",
     "fedimint-core",
+    "fedimint-api-client",
     "fedimint-dbtool",
     "fedimint-derive",
     "fedimint-load-test-tool",
@@ -104,6 +105,7 @@ hex = "0.4.3"
 assert_matches = "1.5.0"
 devimint = { path = "./devimint" }
 fedimint-core = { path = "./fedimint-core" }
+fedimint-api-client = { path = "./fedimint-api-client" }
 fedimint-logging = { path = "./fedimint-logging" }
 
 # Workaround: https://github.com/rust-lang/cargo/issues/12457 which causes

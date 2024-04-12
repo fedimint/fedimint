@@ -3,15 +3,15 @@ use std::hash;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail};
+use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
+use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::query::FilterMapThreshold;
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered};
 use fedimint_derive_secret::{ChildId, DerivableSecret};

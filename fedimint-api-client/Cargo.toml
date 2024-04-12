@@ -1,9 +1,9 @@
 [package]
-name = "fedimint-core"
+name = "fedimint-api-client"
 version = "0.4.0-alpha"
 authors = ["The Fedimint Developers"]
 edition = "2021"
-description = "fedimint-core provides common code used by both client and server."
+description = "fedimint-api-client provides common code used by client."
 license = "MIT"
 readme = "../README.md"
 repository = "https://github.com/fedimint/fedimint"
@@ -11,7 +11,7 @@ repository = "https://github.com/fedimint/fedimint"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-name = "fedimint_core"
+name = "fedimint_api_client"
 path = "src/lib.rs"
 
 [dependencies]
@@ -28,6 +28,7 @@ serdect = "0.2.0"
 itertools = { workspace = true }
 jsonrpsee-types = { version = "0.22.2" }
 jsonrpsee-core = { version = "0.22.4", features = ["client"] }
+lru = "0.12.3"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = { workspace = true }
 strum = { workspace = true }
@@ -45,6 +46,7 @@ erased-serde = { workspace = true }
 lightning = "0.0.118"
 lightning-invoice = "0.26.0"
 fedimint-derive = { version = "=0.4.0-alpha", path = "../fedimint-derive" }
+fedimint-core = { workspace = true }
 fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
 rand = { workspace = true }
 miniscript = { version = "10.0.0", features = ["compiler", "serde"] }
@@ -57,6 +59,7 @@ imbl = "2.0.3"
 backon = "=0.4.3" # don't upgrade unless really needed
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
+jsonrpsee-ws-client = { version = "0.22.2", features = ["webpki-tls"], default-features = false }
 tokio = { version = "1.36.0", features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 
@@ -72,7 +75,6 @@ wasm-bindgen-futures = "0.4.42"
 js-sys = "0.3.69"
 
 [dev-dependencies]
-test-log = { version = "0.2", features = ["trace"], default-features = false }
 once_cell = "1.19.0"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tokio-test = "0.4.4"

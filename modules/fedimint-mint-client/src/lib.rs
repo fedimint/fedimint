@@ -33,7 +33,6 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::api::InviteCode;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
@@ -41,6 +40,7 @@ use fedimint_core::db::{
     IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -1784,9 +1784,9 @@ mod tests {
     use std::str::FromStr;
 
     use bitcoin_hashes::Hash;
-    use fedimint_core::api::InviteCode;
     use fedimint_core::config::FederationId;
     use fedimint_core::encoding::Decodable;
+    use fedimint_core::invite_code::InviteCode;
     use fedimint_core::{
         Amount, OutPoint, PeerId, Tiered, TieredMulti, TieredSummary, TransactionId,
     };
