@@ -314,6 +314,11 @@
 <a href="#312" id="312">312</a>
 <a href="#313" id="313">313</a>
 <a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::bail;
@@ -515,7 +520,12 @@
         _consensus_item: DummyConsensusItem,
         _peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="macro">bail!</span>(<span class="string">"The dummy module does not use consensus items"</span>);
+        <span class="comment">// WARNING: `process_consensus_item` should return an `Err` for items that do
+        // not change any internal consensus state. Failure to do so, will result in an
+        // (potentially significantly) increased consensus history size.
+        // If you are using this code as a template,
+        // make sure to read the [`ServerModule::process_consensus_item`] documentation,
+        </span><span class="macro">bail!</span>(<span class="string">"The dummy module does not use consensus items"</span>);
     }
 
     <span class="kw">async fn </span>process_input&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, <span class="lifetime">'c</span>&gt;(

@@ -1792,10 +1792,9 @@
 
     reissue_initial_notes(initial_notes, <span class="kw-2">&amp;</span>coordinator, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
     get_required_notes(<span class="kw-2">&amp;</span>coordinator, minimum_amount_required, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
-
+    print_coordinator_notes(<span class="kw-2">&amp;</span>coordinator).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">"Reminting {minimum_notes} notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)"</span>);
     remint_denomination(<span class="kw-2">&amp;</span>coordinator, note_denomination, minimum_notes).<span class="kw">await</span><span class="question-mark">?</span>;
-
     print_coordinator_notes(<span class="kw-2">&amp;</span>coordinator).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>users_clients = get_users_clients(users, db_path, invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1910,6 +1909,7 @@
         <span class="macro">info!</span>(<span class="string">"Current balance {current_balance} on coordinator not enough, trying to get {diff} more through fedimint-cli"</span>);
         <span class="kw">match </span>try_get_notes_cli(<span class="kw-2">&amp;</span>diff, <span class="number">5</span>).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(notes) =&gt; {
+                <span class="macro">info!</span>(<span class="string">"Got {} more notes, reissuing them"</span>, notes.total_amount());
                 reissue_notes(coordinator, notes, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
             }
             <span class="prelude-val">Err</span>(e) =&gt; {
