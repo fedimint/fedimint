@@ -41,6 +41,20 @@ pub fn bitcoin30_to_bitcoin29_secp256k1_secret_key(
     )
 }
 
+pub fn bitcoin29_to_bitcoin30_keypair(keypair: bitcoin::KeyPair) -> bitcoin30::secp256k1::KeyPair {
+    bitcoin30::secp256k1::KeyPair::from_secret_key(
+        bitcoin30::secp256k1::SECP256K1,
+        &bitcoin29_to_bitcoin30_secp256k1_secret_key(keypair.secret_key()),
+    )
+}
+
+pub fn bitcoin30_to_bitcoin29_keypair(keypair: bitcoin30::secp256k1::KeyPair) -> bitcoin::KeyPair {
+    bitcoin::KeyPair::from_secret_key(
+        bitcoin::secp256k1::SECP256K1,
+        &bitcoin30_to_bitcoin29_secp256k1_secret_key(keypair.secret_key()),
+    )
+}
+
 pub fn bitcoin29_to_bitcoin30_schnorr_signature(
     signature: bitcoin::secp256k1::schnorr::Signature,
 ) -> bitcoin30::secp256k1::schnorr::Signature {
@@ -317,6 +331,30 @@ mod tests {
         let bitcoin30_sk_back = bitcoin29_to_bitcoin30_secp256k1_secret_key(bitcoin29_sk);
 
         assert_eq!(bitcoin30_sk, bitcoin30_sk_back);
+    }
+
+    #[test]
+    fn test_bitcoin29_to_bitcoin30_and_back_keypair() {
+        let bitcoin29_keypair =
+            bitcoin::KeyPair::new(bitcoin::secp256k1::SECP256K1, &mut thread_rng());
+
+        let bitcoin30_keypair = bitcoin29_to_bitcoin30_keypair(bitcoin29_keypair);
+        let bitcoin29_keypair_back = bitcoin30_to_bitcoin29_keypair(bitcoin30_keypair);
+
+        assert_eq!(bitcoin29_keypair, bitcoin29_keypair_back);
+    }
+
+    #[test]
+    fn test_bitcoin30_to_bitcoin29_and_back_keypair() {
+        let bitcoin30_keypair = bitcoin30::secp256k1::KeyPair::new(
+            &bitcoin30::secp256k1::Secp256k1::new(),
+            &mut thread_rng(),
+        );
+
+        let bitcoin29_keypair = bitcoin30_to_bitcoin29_keypair(bitcoin30_keypair);
+        let bitcoin30_keypair_back = bitcoin29_to_bitcoin30_keypair(bitcoin29_keypair);
+
+        assert_eq!(bitcoin30_keypair, bitcoin30_keypair_back);
     }
 
     #[test]

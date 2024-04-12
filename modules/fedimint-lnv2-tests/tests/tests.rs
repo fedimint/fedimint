@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use fedimint_client::ClientHandle;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::util::NextOrPending;
@@ -87,7 +88,9 @@ async fn pay_external_invoice() -> anyhow::Result<()> {
 
     let gateway = client
         .get_first_module::<fedimint_ln_client::LightningClientModule>()
-        .select_gateway(&gw.get_gateway_id())
+        .select_gateway(&bitcoin30_to_bitcoin29_secp256k1_public_key(
+            gw.get_gateway_id(),
+        ))
         .await
         .expect("Could not select gateway");
 
@@ -135,7 +138,9 @@ async fn refund_unpayable_invoice() -> anyhow::Result<()> {
 
     let gateway = client
         .get_first_module::<fedimint_ln_client::LightningClientModule>()
-        .select_gateway(&gw.get_gateway_id())
+        .select_gateway(&bitcoin30_to_bitcoin29_secp256k1_public_key(
+            gw.get_gateway_id(),
+        ))
         .await
         .expect("Could not select gateway");
 
@@ -170,7 +175,9 @@ async fn self_payment() -> anyhow::Result<()> {
 
     let gateway = client
         .get_first_module::<fedimint_ln_client::LightningClientModule>()
-        .select_gateway(&gw.get_gateway_id())
+        .select_gateway(&bitcoin30_to_bitcoin29_secp256k1_public_key(
+            gw.get_gateway_id(),
+        ))
         .await
         .expect("Could not select gateway");
 
@@ -213,7 +220,9 @@ async fn direct_swap() -> anyhow::Result<()> {
 
     let gateway = client_receive
         .get_first_module::<fedimint_ln_client::LightningClientModule>()
-        .select_gateway(&gw.get_gateway_id())
+        .select_gateway(&bitcoin30_to_bitcoin29_secp256k1_public_key(
+            gw.get_gateway_id(),
+        ))
         .await
         .expect("Could not select gateway");
 
