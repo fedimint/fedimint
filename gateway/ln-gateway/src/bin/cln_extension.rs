@@ -641,12 +641,18 @@ impl GatewayLightning for ClnRpcService {
                                         Some(peer_id) => format!("{}", peer_id),
                                         None => return None,
                                     },
-                                    channel_size_sats: match channel.total_msat {
-                                        // Division should be safe here since channel sizes are
-                                        // always in full satoshis
-                                        Some(total_msat) => total_msat.msat() / 1000,
-                                        None => 0,
-                                    },
+                                    channel_size_sats: channel
+                                        .total_msat
+                                        .map(|value| value.msat() / 1000)
+                                        .unwrap_or(0),
+                                    outbound_liquidity_sats: channel
+                                        .spendable_msat
+                                        .map(|value| value.msat() / 1000)
+                                        .unwrap_or(0),
+                                    inbound_liquidity_sats: channel
+                                        .receivable_msat
+                                        .map(|value| value.msat() / 1000)
+                                        .unwrap_or(0),
                                     short_channel_id: match channel.short_channel_id {
                                         Some(scid) => scid_to_u64(scid),
                                         None => return None,

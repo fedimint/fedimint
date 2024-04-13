@@ -153,6 +153,8 @@ pub trait ILnRpcClient: Debug + Send + Sync {
 pub struct ChannelInfo {
     pub remote_pubkey: String,
     pub channel_size_sats: u64,
+    pub outbound_liquidity_sats: u64,
+    pub inbound_liquidity_sats: u64,
     pub short_channel_id: u64,
 }
 

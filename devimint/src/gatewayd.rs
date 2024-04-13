@@ -221,12 +221,20 @@ impl Gatewayd {
                 let channel_size_sats = channel["channel_size_sats"]
                     .as_u64()
                     .context("channel_size_sats must be a u64")?;
+                let outbound_liquidity_sats = channel["outbound_liquidity_sats"]
+                    .as_u64()
+                    .context("outbound_liquidity_sats must be a u64")?;
+                let inbound_liquidity_sats = channel["inbound_liquidity_sats"]
+                    .as_u64()
+                    .context("inbound_liquidity_sats must be a u64")?;
                 let short_channel_id = channel["short_channel_id"]
                     .as_u64()
                     .context("short_channel_id must be a u64")?;
                 Ok(ChannelInfo {
                     remote_pubkey,
                     channel_size_sats,
+                    outbound_liquidity_sats,
+                    inbound_liquidity_sats,
                     short_channel_id,
                 })
             })

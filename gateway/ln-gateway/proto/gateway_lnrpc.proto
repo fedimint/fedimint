@@ -242,11 +242,17 @@ message ListActiveChannelsResponse {
     // The pubkey of the lightning node that the channel is open with.
     string remote_pubkey = 1;
 
-    // The capacity of the channel, in sats.
+    // The total capacity of the channel, in sats.
     uint64 channel_size_sats = 2;
 
+    // The amount of sats that the local node can send through the channel.
+    uint64 outbound_liquidity_sats = 3;
+
+    // The amount of sats that the local node can receive through the channel.
+    uint64 inbound_liquidity_sats = 4;
+
     // The SCID of the channel.
-    uint64 short_channel_id = 3;
+    uint64 short_channel_id = 5;
   }
 
   // All channels on the node that are currently able to send and receive payments.

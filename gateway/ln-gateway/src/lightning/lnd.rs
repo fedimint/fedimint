@@ -729,10 +729,50 @@ impl ILnRpcClient for GatewayLndClient {
                 .into_inner()
                 .channels
                 .into_iter()
-                .map(|channel| ChannelInfo {
-                    remote_pubkey: channel.remote_pubkey,
-                    channel_size_sats: channel.capacity.try_into().expect("u64 -> i64"),
-                    short_channel_id: channel.chan_id,
+                .map(|channel| {
+                    let channel_size_sats = channel.capacity.try_into().expect("i64 -> u64");
+
+                    let local_balance_sats: u64 =
+                        channel.local_balance.try_into().expect("i64 -> u64");
+                    let local_channel_reserve_sats: u64 = match channel.local_constraints {
+                        Some(constraints) => constraints.chan_reserve_sat,
+                        None => 0,
+                    };
+
+                    let outbound_liquidity_sats =
+                        if local_balance_sats >= local_channel_reserve_sats {
+                            // We must only perform this subtraction if the local balance is
+                            // greater than or equal to the channel reserve, otherwise we would
+                            // underflow and panic.
+                            local_balance_sats - local_channel_reserve_sats
+                        } else {
+                            0
+                        };
+
+                    let remote_balance_sats: u64 =
+                        channel.remote_balance.try_into().expect("i64 -> u64");
+                    let remote_channel_reserve_sats: u64 = match channel.remote_constraints {
+                        Some(constraints) => constraints.chan_reserve_sat,
+                        None => 0,
+                    };
+
+                    let inbound_liquidity_sats =
+                        if remote_balance_sats >= remote_channel_reserve_sats {
+                            // We must only perform this subtraction if the remote balance is
+                            // greater than or equal to the channel reserve, otherwise we would
+                            // underflow and panic.
+                            remote_balance_sats - remote_channel_reserve_sats
+                        } else {
+                            0
+                        };
+
+                    ChannelInfo {
+                        remote_pubkey: channel.remote_pubkey,
+                        channel_size_sats,
+                        outbound_liquidity_sats,
+                        inbound_liquidity_sats,
+                        short_channel_id: channel.chan_id,
+                    }
                 })
                 .collect()),
             Err(e) => Err(LightningRpcError::FailedToListActiveChannels {

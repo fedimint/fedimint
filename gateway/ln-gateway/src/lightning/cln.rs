@@ -218,6 +218,8 @@ impl ILnRpcClient for NetworkLnRpcClient {
             .map(|channel| ChannelInfo {
                 remote_pubkey: channel.remote_pubkey,
                 channel_size_sats: channel.channel_size_sats,
+                outbound_liquidity_sats: channel.outbound_liquidity_sats,
+                inbound_liquidity_sats: channel.inbound_liquidity_sats,
                 short_channel_id: channel.short_channel_id,
             })
             .collect())
