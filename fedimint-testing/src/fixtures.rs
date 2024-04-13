@@ -66,7 +66,7 @@ impl Fixtures {
             Arc<dyn BitcoinTest>,
             BitcoinRpcConfig,
         ) = if real_testing {
-            let rpc_config = BitcoinRpcConfig::from_env_vars().unwrap();
+            let rpc_config = BitcoinRpcConfig::get_defaults_from_env_vars().unwrap();
             let dyn_bitcoin_rpc = create_bitcoind(&rpc_config, task_group.make_handle()).unwrap();
             let bitcoincore_url = env::var(FM_TEST_BITCOIND_RPC_ENV)
                 .expect("Must have bitcoind RPC defined for real tests")
