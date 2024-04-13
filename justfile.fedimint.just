@@ -35,6 +35,9 @@ test-upgrades *VERSIONS="v0.2.1 v0.2.2":
 udeps:
   nix build -L .#debug.workspaceCargoUdeps
 
+bench:
+  cargo bench
+
 # run all checks recommended before opening a PR
 final-check: lint
   # can't use nextest due to: https://github.com/nextest-rs/nextest/issues/16
