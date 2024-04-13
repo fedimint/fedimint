@@ -1195,6 +1195,17 @@ impl Client {
         active_state_exists || inactive_state_exists
     }
 
+    pub async fn has_active_states(&self, operation_id: OperationId) -> bool {
+        self.db
+            .begin_transaction()
+            .await
+            .find_by_prefix(&ActiveOperationStateKeyPrefix { operation_id })
+            .await
+            .next()
+            .await
+            .is_some()
+    }
+
     /// Waits for an output from the primary module to reach its final
     /// state.
     pub async fn await_primary_module_output(
@@ -1205,13 +1216,6 @@ impl Client {
         self.primary_module()
             .await_primary_module_output(operation_id, out_point)
             .await
-    }
-
-    pub async fn has_active_states(&self, operation_id: OperationId) -> bool {
-        let all_active_states = self.executor.get_active_states().await;
-        all_active_states
-            .into_iter()
-            .any(|context| context.0.operation_id() == operation_id)
     }
 
     /// Returns a reference to a typed module client instance by kind

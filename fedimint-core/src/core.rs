@@ -16,6 +16,7 @@ use std::{cmp, marker};
 
 use anyhow::anyhow;
 pub use bitcoin::KeyPair;
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use rand::RngCore;
@@ -65,6 +66,10 @@ impl OperationId {
         let mut bytes = [0u8; 32];
         rng.fill_bytes(&mut bytes);
         Self(bytes)
+    }
+
+    pub fn from_encodable<E: Encodable>(encodable: E) -> OperationId {
+        Self(encodable.consensus_hash::<sha256::Hash>().into_inner())
     }
 }
 
