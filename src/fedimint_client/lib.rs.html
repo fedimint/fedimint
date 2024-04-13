@@ -2447,6 +2447,10 @@
 <a href="#2445" id="2445">2445</a>
 <a href="#2446" id="2446">2446</a>
 <a href="#2447" id="2447">2447</a>
+<a href="#2448" id="2448">2448</a>
+<a href="#2449" id="2449">2449</a>
+<a href="#2450" id="2450">2450</a>
+<a href="#2451" id="2451">2451</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3644,6 +3648,17 @@
         active_state_exists || inactive_state_exists
     }
 
+    <span class="kw">pub async fn </span>has_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool {
+        <span class="self">self</span>.db
+            .begin_transaction()
+            .<span class="kw">await
+            </span>.find_by_prefix(<span class="kw-2">&amp;</span>ActiveOperationStateKeyPrefix { operation_id })
+            .<span class="kw">await
+            </span>.next()
+            .<span class="kw">await
+            </span>.is_some()
+    }
+
     <span class="doccomment">/// Waits for an output from the primary module to reach its final
     /// state.
     </span><span class="kw">pub async fn </span>await_primary_module_output(
@@ -3655,13 +3670,6 @@
             .await_primary_module_output(operation_id, out_point)
             .<span class="kw">await
     </span>}
-
-    <span class="kw">pub async fn </span>has_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool {
-        <span class="kw">let </span>all_active_states = <span class="self">self</span>.executor.get_active_states().<span class="kw">await</span>;
-        all_active_states
-            .into_iter()
-            .any(|context| context.<span class="number">0</span>.operation_id() == operation_id)
-    }
 
     <span class="doccomment">/// Returns a reference to a typed module client instance by kind
     </span><span class="kw">pub fn </span>get_first_module&lt;M: ClientModule&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleInstance&lt;M&gt; {

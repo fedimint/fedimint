@@ -805,6 +805,43 @@
 <a href="#803" id="803">803</a>
 <a href="#804" id="804">804</a>
 <a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -1098,6 +1135,8 @@
         payment_fee: PaymentFee,
         expiration_delta: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt; {
+        <span class="kw">let </span>operation_id = <span class="self">self</span>.get_next_operation_id(<span class="kw-2">&amp;</span>invoice).<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="kw">let </span>(ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(<span class="self">self</span>.keypair.public_key());
 
         <span class="kw">let </span>refund_keypair = SecretKey::from_slice(<span class="kw-2">&amp;</span>ephemeral_tweak)
@@ -1142,8 +1181,6 @@
             invoice_hash: invoice.consensus_hash(),
         };
 
-        <span class="kw">let </span>operation_id = OperationId(contract.consensus_hash::&lt;sha256::Hash&gt;().into_inner());
-
         <span class="kw">let </span>contract_clone = contract.clone();
         <span class="kw">let </span>gateway_api_clone = gateway_api.clone();
         <span class="kw">let </span>invoice_clone = invoice.clone();
@@ -1185,6 +1222,39 @@
             </span>.map_err(|e| SendPaymentError::FinalizationError(e.to_string()))<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(operation_id)
+    }
+
+    <span class="kw">async fn </span>get_next_operation_id(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        invoice: <span class="kw-2">&amp;</span>Bolt11Invoice,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt; {
+        <span class="kw">for </span>payment_attempt <span class="kw">in </span><span class="number">0</span>..u64::MAX {
+            <span class="kw">let </span>operation_id = OperationId::from_encodable((invoice.clone(), payment_attempt));
+
+            <span class="kw">if </span>!<span class="self">self</span>.client_ctx.operation_exists(operation_id).<span class="kw">await </span>{
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(operation_id);
+            }
+
+            <span class="kw">if </span><span class="self">self</span>.client_ctx.has_active_states(operation_id).<span class="kw">await </span>{
+                <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::PendingPreviousPayment(operation_id));
+            }
+
+            <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self
+                </span>.subscribe_send(operation_id)
+                .<span class="kw">await
+                </span>.expect(<span class="string">"operation_id exists"</span>)
+                .into_stream();
+
+            <span class="comment">// This will not block since we checked for active states and there were none,
+            // so by definition a final state has to have been assumed already.
+            </span><span class="kw">while let </span><span class="prelude-val">Some</span>(state) = stream.next().<span class="kw">await </span>{
+                <span class="kw">if let </span>SendState::Success(..) = state {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::SuccessfulPreviousPayment(operation_id));
+                }
+            }
+        }
+
+        <span class="macro">panic!</span>(<span class="string">"We could not find an unused operation id for sending a lightning payment"</span>);
     }
 
     <span class="kw">pub async fn </span>subscribe_send(
@@ -1415,7 +1485,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         contract: IncomingContract,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;OperationId&gt; {
-        <span class="kw">let </span>operation_id = OperationId(contract.consensus_hash::&lt;sha256::Hash&gt;().into_inner());
+        <span class="kw">let </span>operation_id = OperationId::from_encodable(contract.clone());
 
         <span class="kw">let </span>(claim_keypair, agg_decryption_key) = <span class="self">self</span>.recover_contract_keys(<span class="kw-2">&amp;</span>contract).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1532,6 +1602,10 @@
 
 <span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>SendPaymentError {
+    <span class="attr">#[error(<span class="string">"A previous payment for the same invoice is still pending: {0}"</span>)]
+    </span>PendingPreviousPayment(OperationId),
+    <span class="attr">#[error(<span class="string">"A previous payment for the same invoice was successful: {0}"</span>)]
+    </span>SuccessfulPreviousPayment(OperationId),
     <span class="attr">#[error(<span class="string">"Gateway error: {0}"</span>)]
     </span>GatewayError(GatewayError),
     <span class="attr">#[error(<span class="string">"The gateway does not support our federation"</span>)]

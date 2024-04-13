@@ -621,6 +621,11 @@
 <a href="#619" id="619">619</a>
 <a href="#620" id="620">620</a>
 <a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -639,6 +644,7 @@
 
 <span class="kw">use </span>anyhow::anyhow;
 <span class="kw">pub use </span>bitcoin::KeyPair;
+<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>rand::RngCore;
@@ -688,6 +694,10 @@
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">32</span>];
         rng.fill_bytes(<span class="kw-2">&amp;mut </span>bytes);
         <span class="self">Self</span>(bytes)
+    }
+
+    <span class="kw">pub fn </span>from_encodable&lt;E: Encodable&gt;(encodable: E) -&gt; OperationId {
+        <span class="self">Self</span>(encodable.consensus_hash::&lt;sha256::Hash&gt;().into_inner())
     }
 }
 
