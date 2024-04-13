@@ -11,6 +11,7 @@ use fedimint_lnv2_client::LightningClientStateMachines;
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, OutgoingWitness, Witness};
 use lightning_invoice::Bolt11Invoice;
+use serde::{Deserialize, Serialize};
 
 use crate::gateway_lnrpc::PayInvoiceRequest;
 use crate::gateway_module_v2::GatewayClientContextV2;
@@ -45,13 +46,22 @@ pub struct SendSMCommon {
 pub enum SendSMState {
     Sending,
     Claiming(Claiming),
-    Cancelled(String),
+    Cancelled(Cancelled),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct Claiming {
     pub preimage: [u8; 32],
     pub outpoints: Vec<OutPoint>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
+pub enum Cancelled {
+    InvoiceExpired,
+    TimeoutTooClose,
+    Underfunded,
+    LightningRpcError(String),
+    ReceiveError(String),
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -82,6 +92,7 @@ impl State for SendStateMachine {
                         self.common.max_delay,
                         self.common.max_fee_msat,
                         self.common.invoice.clone(),
+                        self.common.contract.amount,
                     ),
                     move |dbtx, result, old_state| {
                         Box::pin(Self::transition_send_payment(
@@ -111,14 +122,39 @@ impl SendStateMachine {
     async fn send_payment(
         context: GatewayClientContextV2,
         max_delay: u64,
-        max_fee_msat: u64,
+        invoice_msats: u64,
         invoice: Bolt11Invoice,
-    ) -> Result<[u8; 32], String> {
+        contract_amount: Amount,
+    ) -> Result<[u8; 32], Cancelled> {
+        // The following three checks may fail in edge cases since they have inherent
+        // timing assumptions. Therefore, they may only be checked after we have created
+        // the state machine such that we can cancel the contract.
+        if invoice.is_expired() {
+            return Err(Cancelled::InvoiceExpired);
+        }
+
+        if max_delay == 0 {
+            return Err(Cancelled::TimeoutTooClose);
+        }
+
+        let min_contract_amount = context
+            .gateway
+            .payment_fees_v2()
+            .send
+            .add_fee(invoice_msats);
+
+        if contract_amount < min_contract_amount {
+            return Err(Cancelled::Underfunded);
+        }
+
+        let excess_fee = contract_amount - min_contract_amount;
+        let max_fee_msat = excess_fee.msats + (min_contract_amount.msats - invoice_msats) / 2;
+
         let lightning_context = context
             .gateway
             .get_lightning_context()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| Cancelled::LightningRpcError(e.to_string()))?;
 
         if lightning_context.lightning_public_key == invoice.recover_payee_pub_key() {
             let invoice_msats = invoice
@@ -132,7 +168,7 @@ impl SendStateMachine {
                     Amount::from_msats(invoice_msats),
                 )
                 .await
-                .map_err(|e| e.to_string());
+                .map_err(|e| Cancelled::ReceiveError(e.to_string()));
         }
 
         lightning_context
@@ -151,14 +187,14 @@ impl SendStateMachine {
                     .try_into()
                     .expect("Preimage is 32 bytes")
             })
-            .map_err(|e| e.to_string())
+            .map_err(|e| Cancelled::LightningRpcError(e.to_string()))
     }
 
     async fn transition_send_payment(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         old_state: SendStateMachine,
         global_context: DynGlobalClientContext,
-        result: Result<[u8; 32], String>,
+        result: Result<[u8; 32], Cancelled>,
     ) -> SendStateMachine {
         match result {
             Ok(preimage) => {

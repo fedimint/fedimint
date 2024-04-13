@@ -305,6 +305,14 @@ impl LightningClientModule {
         payment_fee: PaymentFee,
         expiration_delta: u64,
     ) -> Result<OperationId, SendPaymentError> {
+        let invoice_msats = invoice
+            .amount_milli_satoshis()
+            .ok_or(SendPaymentError::InvoiceMissingAmount)?;
+
+        if invoice.is_expired() {
+            return Err(SendPaymentError::InvoiceExpired);
+        }
+
         let operation_id = self.get_next_operation_id(&invoice).await?;
 
         let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(self.keypair.public_key());
@@ -336,10 +344,6 @@ impl LightningClientModule {
             .consensus_block_count()
             .await
             .map_err(|e| SendPaymentError::FederationError(e.to_string()))?;
-
-        let invoice_msats = invoice
-            .amount_milli_satoshis()
-            .ok_or(SendPaymentError::InvoiceMissingAmount)?;
 
         let contract = OutgoingContract {
             payment_hash: *invoice.payment_hash(),
@@ -772,6 +776,10 @@ pub enum GatewayError {
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum SendPaymentError {
+    #[error("The invoice has not amount")]
+    InvoiceMissingAmount,
+    #[error("The invoice has expired")]
+    InvoiceExpired,
     #[error("A previous payment for the same invoice is still pending: {0}")]
     PendingPreviousPayment(OperationId),
     #[error("A previous payment for the same invoice was successful: {0}")]
@@ -786,8 +794,6 @@ pub enum SendPaymentError {
     InsufficientExpirationDelta(u64),
     #[error("Federation returned an error: {0}")]
     FederationError(String),
-    #[error("The invoice has not amount")]
-    InvoiceMissingAmount,
     #[error("We failed to finalize the funding transaction")]
     FinalizationError(String),
 }
