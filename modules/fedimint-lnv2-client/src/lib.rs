@@ -1,4 +1,6 @@
 pub mod api;
+#[cfg(feature = "cli")]
+mod cli;
 mod receive_sm;
 mod send_sm;
 
@@ -20,7 +22,8 @@ use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
+    ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    TransactionItemAmount,
 };
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
@@ -184,6 +187,7 @@ impl ClientModuleInit for LightningClientInit {
                 .module_root_secret()
                 .clone()
                 .to_secp_key(secp256k1::SECP256K1),
+            admin_auth: args.admin_auth().cloned(),
         })
     }
 }
@@ -200,8 +204,10 @@ pub struct LightningClientModule {
     pub client_ctx: ClientContext<Self>,
     pub module_api: DynModuleApi,
     pub keypair: KeyPair,
+    pub admin_auth: Option<ApiAuth>,
 }
 
+#[apply(async_trait_maybe_send!)]
 impl ClientModule for LightningClientModule {
     type Init = LightningClientInit;
     type Common = LightningModuleTypes;
@@ -236,6 +242,14 @@ impl ClientModule for LightningClientModule {
             amount: output.amount(),
             fee: self.cfg.fee_consensus.output,
         })
+    }
+
+    #[cfg(feature = "cli")]
+    async fn handle_cli_command(
+        &self,
+        args: &[std::ffi::OsString],
+    ) -> anyhow::Result<serde_json::Value> {
+        cli::handle_cli_command(self, args).await
     }
 }
 

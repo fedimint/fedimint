@@ -15,8 +15,9 @@ use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::endpoint_constants::{
-    AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT,
-    OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
+    ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
+    CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
+    REMOVE_GATEWAY_ENDPOINT_V2,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -27,6 +28,7 @@ use fedimint_core::module::{
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::time::duration_since_epoch;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, NumPeersExt, OutPoint, PeerId, ServerModule,
 };
@@ -40,6 +42,7 @@ use fedimint_lnv2_common::{
     LightningModuleTypes, LightningOutput, LightningOutputError, LightningOutputOutcome,
     OutgoingWitness, Witness,
 };
+use fedimint_server::check_auth;
 use fedimint_server::config::distributedgen::{evaluate_polynomial_g1, PeerHandleOps};
 use futures::StreamExt;
 use group::ff::Field;
@@ -49,8 +52,8 @@ use strum::IntoEnumIterator;
 use tpe::{AggregatePublicKey, PublicKeyShare, SecretKeyShare};
 
 use crate::db::{
-    BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, IncomingContractKey,
-    IncomingContractPrefix, LightningOutputOutcomePrefix, OutgoingContractKey,
+    BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, GatewayKey, GatewayPrefix,
+    IncomingContractKey, IncomingContractPrefix, LightningOutputOutcomePrefix, OutgoingContractKey,
     OutgoingContractPrefix, OutputOutcomeKey, PreimageKey, PreimagePrefix, UnixTimeVoteKey,
     UnixTimeVotePrefix,
 };
@@ -134,6 +137,16 @@ impl ModuleInit for LightningInit {
                         [u8; 32],
                         lightning,
                         "Lightning Preimages"
+                    );
+                }
+                DbKeyPrefix::Gateway => {
+                    push_db_pair_items!(
+                        dbtx,
+                        GatewayPrefix,
+                        GatewayKey,
+                        (),
+                        lightning,
+                        "Lightning Gateways"
                     );
                 }
             }
@@ -510,7 +523,7 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 CONSENSUS_BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |module: &Lightning, context, _params: ()| -> u64 {
+                async |module: &Lightning, context, _params : () | -> u64 {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
 
@@ -542,6 +555,37 @@ impl ServerModule for Lightning {
                     let db = context.db();
 
                     Ok(module.outgoing_contract_expiration(db, contract_id).await)
+                }
+            },
+            api_endpoint! {
+                ADD_GATEWAY_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |_module: &Lightning, context, gateway: SafeUrl| -> bool {
+                    check_auth(context)?;
+
+                    let db = context.db();
+
+                    Ok(Lightning::add_gateway(db, gateway).await)
+                }
+            },
+            api_endpoint! {
+                REMOVE_GATEWAY_ENDPOINT_V2,
+                ApiVersion::new(0, 0),
+                async |_module: &Lightning, context, gateway: SafeUrl| -> bool {
+                    check_auth(context)?;
+
+                    let db = context.db();
+
+                    Ok(Lightning::remove_gateway(db, gateway).await)
+                }
+            },
+            api_endpoint! {
+                GATEWAYS_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |_module: &Lightning, context, _params : () | -> Vec<SafeUrl> {
+                    let db = context.db();
+
+                    Ok(Lightning::gateways(db).await)
                 }
             },
         ]
@@ -665,5 +709,35 @@ impl Lightning {
         let consensus_block_count = self.consensus_block_count(&mut dbtx).await;
 
         Some(contract.expiration.saturating_sub(consensus_block_count))
+    }
+
+    async fn add_gateway(db: Database, gateway: SafeUrl) -> bool {
+        let mut dbtx = db.begin_transaction().await;
+
+        let is_new_entry = dbtx.insert_entry(&GatewayKey(gateway), &()).await.is_none();
+
+        dbtx.commit_tx().await;
+
+        is_new_entry
+    }
+
+    async fn remove_gateway(db: Database, gateway: SafeUrl) -> bool {
+        let mut dbtx = db.begin_transaction().await;
+
+        let entry_existed = dbtx.remove_entry(&GatewayKey(gateway)).await.is_some();
+
+        dbtx.commit_tx().await;
+
+        entry_existed
+    }
+
+    async fn gateways(db: Database) -> Vec<SafeUrl> {
+        db.begin_transaction()
+            .await
+            .find_by_prefix(&GatewayPrefix)
+            .await
+            .map(|entry| entry.0 .0)
+            .collect()
+            .await
     }
 }
