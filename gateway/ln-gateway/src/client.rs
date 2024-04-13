@@ -6,7 +6,6 @@ use std::sync::Arc;
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::Client;
-use fedimint_core::config::ClientConfig;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -98,7 +97,8 @@ impl GatewayClientBuilder {
                 .open(root_secret)
                 .await
         } else {
-            let client_config = ClientConfig::download_from_invite_code(&invite_code).await?;
+            let client_config =
+                fedimint_api_client::download_from_invite_code(&invite_code).await?;
             client_builder
                 // TODO: make this configurable?
                 .join(root_secret, client_config.to_owned())

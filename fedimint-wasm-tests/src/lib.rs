@@ -3,10 +3,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::Client;
-use fedimint_core::api::InviteCode;
-use fedimint_core::config::ClientConfig;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
+use fedimint_core::invite_code::InviteCode;
 use fedimint_ln_client::LightningClientInit;
 use fedimint_mint_client::MintClientInit;
 use fedimint_wallet_client::WalletClientInit;
@@ -36,7 +35,7 @@ fn make_client_builder() -> fedimint_client::ClientBuilder {
 }
 
 async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandleArc> {
-    let client_config = ClientConfig::download_from_invite_code(invite_code).await?;
+    let client_config = fedimint_api_client::download_from_invite_code(invite_code).await?;
     let mut builder = make_client_builder();
     let client_secret = load_or_generate_mnemonic(builder.db_no_decoders()).await?;
     builder.stopped();

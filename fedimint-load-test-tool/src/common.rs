@@ -10,10 +10,9 @@ use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::{Client, ClientHandleArc};
-use fedimint_core::api::InviteCode;
-use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::db::Database;
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::{Amount, OutPoint, TieredSummary};
 use fedimint_ln_client::{
@@ -154,7 +153,7 @@ pub async fn build_client(
 
     let client = if !Client::is_initialized(client_builder.db_no_decoders()).await {
         if let Some(invite_code) = &invite_code {
-            let client_config = ClientConfig::download_from_invite_code(invite_code).await?;
+            let client_config = fedimint_api_client::download_from_invite_code(invite_code).await?;
             client_builder
                 .join(root_secret, client_config.clone())
                 .await

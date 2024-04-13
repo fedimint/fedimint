@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::time::SystemTime;
 
-use fedimint_core::api::ApiVersionSet;
+use fedimint_api_client::api::ApiVersionSet;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{

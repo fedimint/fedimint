@@ -16,7 +16,8 @@ anyhow = { workspace = true }
 futures = { workspace = true }
 ring = { version = "0.17.8", features = ["wasm32_unknown_unknown_js"] }
 fedimint-client = { path = "../fedimint-client" }
-fedimint-core = { path = "../fedimint-core" }
+fedimint-core = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-mint-client = { path = "../modules/fedimint-mint-client" }
 fedimint-mint-common = { path = "../modules/fedimint-mint-common" }
 fedimint-ln-common = { path = "../modules/fedimint-ln-common" }

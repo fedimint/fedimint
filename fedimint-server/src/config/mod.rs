@@ -6,7 +6,6 @@ use std::time::Duration;
 use anyhow::{bail, format_err};
 use bitcoin::secp256k1::PublicKey;
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
-use fedimint_core::api::InviteCode;
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
@@ -16,6 +15,7 @@ pub use fedimint_core::config::{
     ServerModuleConsensusConfig, ServerModuleInitRegistry, TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions,

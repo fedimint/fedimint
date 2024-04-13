@@ -10,10 +10,10 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
 use fedimint_aead::{encrypt, get_encryption_key, random_salt};
-use fedimint_core::api::{
-    FederationStatus, GuardianConfigBackup, PeerConnectionStatus, PeerStatus, ServerStatus,
-    StatusResponse,
+use fedimint_api_client::api::{
+    FederationStatus, GuardianConfigBackup, PeerConnectionStatus, PeerStatus, StatusResponse,
 };
+use fedimint_core::admin_client::ServerStatus;
 use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
 use fedimint_core::config::{ClientConfig, JsonWithKind};
 use fedimint_core::core::backup::{SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES};

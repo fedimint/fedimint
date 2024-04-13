@@ -4,19 +4,15 @@ use std::hash::Hash;
 use std::ops::Mul;
 use std::path::Path;
 use std::str::FromStr;
-use std::time::Duration;
 
 use anyhow::{bail, format_err, Context};
 use bitcoin::secp256k1;
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin_hashes::{hex, sha256};
 use bls12_381::Scalar;
-use fedimint_core::api::{FederationApiExt, InviteCode, WsFederationApi};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{DynRawFallback, Encodable};
-use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::Cancelled;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
@@ -28,15 +24,15 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective};
-use tracing::{debug, warn};
+use tracing::warn;
 
 use crate::core::DynClientConfig;
 use crate::encoding::Decodable;
+use crate::invite_code::InviteCode;
 use crate::module::{
     CoreConsensusVersion, DynCommonModuleInit, DynServerModuleInit, IDynCommonModuleInit,
     ModuleConsensusVersion,
 };
-use crate::query::FilterMap;
 use crate::{bls12_381_serde, maybe_add_send_sync, PeerId};
 
 // TODO: make configurable
@@ -236,73 +232,6 @@ impl ClientConfig {
         self.global.api_endpoints.get(peer).map(|peer_url| {
             InviteCode::new(peer_url.url.clone(), *peer, self.calculate_federation_id())
         })
-    }
-
-    /// Tries to download the client config from the federation,
-    /// attempts to retry teb times before giving up.
-    pub async fn download_from_invite_code(
-        invite_code: &InviteCode,
-    ) -> anyhow::Result<ClientConfig> {
-        debug!("Downloading client config from {:?}", invite_code);
-
-        crate::util::retry(
-            "Downloading client config",
-            // 0.2, 0.2, 0.4, 0.6, 1.0, 1.6, ...
-            // sum = 21.2
-            fedimint_core::util::FibonacciBackoff::default()
-                .with_min_delay(Duration::from_millis(200))
-                .with_max_delay(Duration::from_secs(5))
-                .with_max_times(10),
-            || Self::try_download_client_config(invite_code),
-        )
-        .await
-        .context("Failed to download client config")
-    }
-
-    /// Tries to download the client config only once.
-    pub async fn try_download_client_config(
-        invite_code: &InviteCode,
-    ) -> anyhow::Result<ClientConfig> {
-        // we have to download the api endpoints first
-        let federation_id = invite_code.federation_id();
-
-        let query_strategy = FilterMap::new(
-            move |cfg: ClientConfig| {
-                if federation_id.0 != cfg.global.api_endpoints.consensus_hash() {
-                    bail!("Guardian api endpoint map does not hash to FederationId")
-                }
-
-                Ok(cfg.global.api_endpoints)
-            },
-            1,
-        );
-
-        let api_endpoints = WsFederationApi::from_invite_code(&[invite_code.clone()])
-            .request_with_strategy(
-                query_strategy,
-                CLIENT_CONFIG_ENDPOINT.to_owned(),
-                ApiRequestErased::default(),
-            )
-            .await?;
-
-        // now we can build an api for all guardians and download the client config
-        let api_endpoints = api_endpoints
-            .into_iter()
-            .map(|(peer, url)| (peer, url.url))
-            .collect();
-
-        let client_config = WsFederationApi::new(api_endpoints)
-            .request_current_consensus::<ClientConfig>(
-                CLIENT_CONFIG_ENDPOINT.to_owned(),
-                ApiRequestErased::default(),
-            )
-            .await?;
-
-        if client_config.calculate_federation_id() != federation_id {
-            bail!("Obtained client config has different federation id");
-        }
-
-        Ok(client_config)
     }
 }
 

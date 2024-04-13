@@ -5,7 +5,8 @@ use std::time::Duration;
 use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
 use async_channel::{Receiver, Sender};
-use fedimint_core::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
+use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
+use fedimint_api_client::query::FilterMap;
 use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::MODULE_INSTANCE_ID_GLOBAL;
@@ -22,7 +23,6 @@ use fedimint_core::module::registry::{
     ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry,
 };
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
-use fedimint_core::query::FilterMap;
 use fedimint_core::runtime::spawn;
 use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,

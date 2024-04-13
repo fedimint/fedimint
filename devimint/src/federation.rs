@@ -8,8 +8,10 @@ use std::{env, fs, iter};
 
 use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin::Network;
-use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
-use fedimint_core::api::{DynGlobalApi, ServerStatus};
+use fedimint_api_client::api::DynGlobalApi;
+use fedimint_core::admin_client::{
+    ConfigGenConnectionsRequest, ConfigGenParamsRequest, ServerStatus,
+};
 use fedimint_core::config::{load_from_file, ClientConfig, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -789,7 +791,7 @@ pub async fn run_client_dkg(
     for (peer_id, client) in &admin_clients {
         assert_eq!(
             client.status().await?.server,
-            fedimint_core::api::ServerStatus::AwaitingPassword,
+            ServerStatus::AwaitingPassword,
             "peer_id isn't waiting for password: {peer_id}"
         );
     }

@@ -32,9 +32,9 @@ use db::{
     DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey,
     GATEWAYD_DATABASE_VERSION,
 };
+use fedimint_api_client::api::FederationError;
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::ClientHandleArc;
-use fedimint_core::api::{FederationError, InviteCode};
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_address, bitcoin29_to_bitcoin30_amount, bitcoin29_to_bitcoin30_network,
     bitcoin29_to_bitcoin30_txid, bitcoin30_to_bitcoin29_amount, bitcoin30_to_bitcoin29_network,
@@ -49,6 +49,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::Encodable;
 use fedimint_core::fmt_utils::OptStacktrace;
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::{duration_since_epoch, now};

@@ -6,12 +6,13 @@ use std::sync::Arc;
 use std::{ffi, marker, ops};
 
 use anyhow::{anyhow, bail};
-use fedimint_core::api::{DynGlobalApi, InviteCode};
+use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
 };
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, PhantomBound};
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};

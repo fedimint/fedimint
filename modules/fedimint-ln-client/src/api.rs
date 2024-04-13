@@ -2,9 +2,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
 
 use bitcoin_hashes::sha256::{self, Hash as Sha256Hash};
-use fedimint_core::api::{
+use fedimint_api_client::api::{
     FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
 };
+use fedimint_api_client::query::{ThresholdOrDeadline, UnionResponses};
 use fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
@@ -12,7 +13,6 @@ use fedimint_core::endpoint_constants::{
     REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::query::{ThresholdOrDeadline, UnionResponses};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
 use fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};

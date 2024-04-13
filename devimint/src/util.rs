@@ -8,10 +8,10 @@ use std::time::Duration;
 use std::{env, unreachable};
 
 use anyhow::{anyhow, bail, format_err, Context, Result};
+use fedimint_api_client::api::StatusResponse;
 use fedimint_core::admin_client::{
     ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
 };
-use fedimint_core::api::StatusResponse;
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::module::ApiAuth;

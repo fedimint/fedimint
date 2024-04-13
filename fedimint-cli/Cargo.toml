@@ -34,7 +34,8 @@ lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
 fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
 fedimint-bip39 = { version = "=0.4.0-alpha", path = "../fedimint-bip39" }
 fedimint-client = { version = "=0.4.0-alpha", path = "../fedimint-client" }
-fedimint-core = { version = "=0.4.0-alpha", path = "../fedimint-core" }
+fedimint-core = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../fedimint-rocksdb" }
 fedimint-mint-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-client" }
 fedimint-mint-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-common" }

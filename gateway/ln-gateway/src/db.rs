@@ -2,12 +2,12 @@ use std::collections::BTreeMap;
 
 use bitcoin29::Network;
 use bitcoin_hashes::sha256;
-use fedimint_core::api::InviteCode;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
     DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, ServerMigrationFn,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_client::CreateInvoicePayload;
@@ -169,10 +169,10 @@ mod fedimint_migration_tests {
     use anyhow::ensure;
     use bitcoin::Network;
     use bitcoin_hashes::{sha256, Hash};
-    use fedimint_core::api::InviteCode;
     use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_network;
     use fedimint_core::config::FederationId;
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+    use fedimint_core::invite_code::InviteCode;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::util::SafeUrl;
     use fedimint_logging::TracingSetup;

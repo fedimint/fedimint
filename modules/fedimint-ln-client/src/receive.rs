@@ -2,10 +2,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin::util::key::KeyPair;
+use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::DynModuleApi;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
@@ -311,7 +311,7 @@ fn has_invoice_expired(
 pub async fn get_incoming_contract(
     module_api: DynModuleApi,
     contract_id: fedimint_ln_common::contracts::ContractId,
-) -> Result<Option<IncomingContractAccount>, fedimint_core::api::FederationError> {
+) -> Result<Option<IncomingContractAccount>, fedimint_api_client::api::FederationError> {
     match module_api.fetch_contract(contract_id).await {
         Ok(Some(contract)) => {
             if let FundedContract::Incoming(incoming) = contract.contract {
@@ -320,7 +320,7 @@ pub async fn get_incoming_contract(
                     contract: incoming.contract,
                 }))
             } else {
-                Err(fedimint_core::api::FederationError::general(
+                Err(fedimint_api_client::api::FederationError::general(
                     anyhow::anyhow!("Contract {contract_id} is not an incoming contract"),
                 ))
             }

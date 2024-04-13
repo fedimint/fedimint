@@ -46,8 +46,6 @@ use crate::module::registry::ModuleDecoderRegistry;
 
 /// Admin (guardian) client types
 pub mod admin_client;
-/// Client API request handling
-pub mod api;
 /// Federation-stored client backups
 pub mod backup;
 /// Gradual bitcoin dependency migration helpers
@@ -70,6 +68,8 @@ pub mod epoch;
 pub mod fmt_utils;
 /// Hex encoding helpers
 pub mod hex;
+/// Federation invite code
+pub mod invite_code;
 /// Common macros
 #[macro_use]
 pub mod macros;
@@ -77,8 +77,6 @@ pub mod macros;
 pub mod module;
 /// Peer networking
 pub mod net;
-/// Client query system
-pub mod query;
 /// Runtime (wasm32 vs native) differences handling
 pub mod runtime;
 /// Task handling, including wasm safe logic

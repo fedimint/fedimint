@@ -8,11 +8,11 @@ use std::time::Duration;
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
 use fedimint_aead::random_salt;
+use fedimint_api_client::api::{DynGlobalApi, StatusResponse};
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
-    ConfigGenParamsResponse, PeerServerParams,
+    ConfigGenParamsResponse, PeerServerParams, ServerStatus,
 };
-use fedimint_core::api::{DynGlobalApi, ServerStatus, StatusResponse};
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
@@ -902,8 +902,8 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use fedimint_core::admin_client::ConfigGenParamsRequest;
-    use fedimint_core::api::{DynGlobalApi, FederationResult, ServerStatus, StatusResponse};
+    use fedimint_api_client::api::{DynGlobalApi, FederationResult, StatusResponse};
+    use fedimint_core::admin_client::{ConfigGenParamsRequest, ServerStatus};
     use fedimint_core::config::{ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::IRawDatabaseExt;

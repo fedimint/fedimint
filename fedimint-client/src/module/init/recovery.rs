@@ -1,7 +1,7 @@
 use std::time::Duration;
 use std::{cmp, ops};
 
-use fedimint_core::api::DynGlobalApi;
+use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;

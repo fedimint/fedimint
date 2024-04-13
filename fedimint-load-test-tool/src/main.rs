@@ -14,9 +14,8 @@ use common::{
 use devimint::cmd;
 use devimint::util::{GatewayClnCli, GatewayLndCli};
 use fedimint_client::ClientHandleArc;
-use fedimint_core::api::InviteCode;
-use fedimint_core::config::ClientConfig;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::runtime::spawn;
 use fedimint_core::util::{BoxFuture, SafeUrl};
@@ -1092,7 +1091,7 @@ async fn test_download_config(
             let event_sender = event_sender.clone();
             let f: BoxFuture<_> = Box::pin(async move {
                 let m = fedimint_core::time::now();
-                let _ = ClientConfig::download_from_invite_code(&invite_code).await?;
+                let _ = fedimint_api_client::download_from_invite_code(&invite_code).await?;
                 event_sender.send(MetricEvent {
                     name: "download_client_config".into(),
                     duration: m.elapsed()?,
@@ -1112,7 +1111,7 @@ async fn test_connect_raw_client(
     limit_endpoints: Option<usize>,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
-    let mut cfg = ClientConfig::download_from_invite_code(&invite_code).await?;
+    let mut cfg = fedimint_api_client::download_from_invite_code(&invite_code).await?;
 
     if let Some(limit_endpoints) = limit_endpoints {
         cfg.global.api_endpoints = cfg

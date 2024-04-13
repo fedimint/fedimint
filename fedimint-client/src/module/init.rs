@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::marker;
 use std::sync::Arc;
 
-use fedimint_core::api::{DynGlobalApi, DynModuleApi};
+use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::{ClientModuleConfig, FederationId, ModuleInitRegistry};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseVersion};
