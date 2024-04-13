@@ -188,6 +188,7 @@ impl Federation {
         process_mgr: &ProcessManager,
         bitcoind: Bitcoind,
         servers: usize,
+        skip_setup: bool,
     ) -> Result<Self> {
         let mut members = BTreeMap::new();
         let mut peer_to_env_vars_map = BTreeMap::new();
@@ -222,49 +223,53 @@ impl Federation {
             peer_to_env_vars_map.insert(peer.to_usize(), peer_env_vars);
         }
 
-        let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-        if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
-            run_cli_dkg(params, endpoints).await?;
-        } else {
-            // TODO(support:v0.2): old fedimint-cli can't do DKG commands. keep this old DKG
-            // setup while fedimint-cli <= v0.2.x is supported
-            run_client_dkg(admin_clients, params).await?;
-        }
+        if !skip_setup {
+            let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+            if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
+                run_cli_dkg(params, endpoints).await?;
+            } else {
+                // TODO(support:v0.2): old fedimint-cli can't do DKG commands. keep this old DKG
+                // setup while fedimint-cli <= v0.2.x is supported
+                run_client_dkg(admin_clients, params).await?;
+            }
 
-        // move configs to config directory
-        let client_dir = utf8(&process_mgr.globals.FM_CLIENT_DIR);
-        let invite_code_filename_original = "invite-code";
+            // move configs to config directory
+            let client_dir = utf8(&process_mgr.globals.FM_CLIENT_DIR);
+            let invite_code_filename_original = "invite-code";
 
-        // copy over invite-code file to client directory
-        let peer_data_dir = utf8(&peer_to_env_vars_map[&0].FM_DATA_DIR);
-        tokio::fs::copy(
-            format!("{peer_data_dir}/{invite_code_filename_original}"),
-            format!("{client_dir}/{invite_code_filename_original}"),
-        )
-        .await
-        .context("copying invite-code file")?;
-
-        // move each guardian's invite-code file to the client's directory
-        // appending the peer id to the end
-        for (index, peer_env_vars) in &peer_to_env_vars_map {
-            let peer_data_dir = utf8(&peer_env_vars.FM_DATA_DIR);
-
-            let invite_code_filename_indexed = format!("{invite_code_filename_original}-{}", index);
-            tokio::fs::rename(
-                format!("{peer_data_dir}/{}", invite_code_filename_original),
-                format!("{client_dir}/{}", invite_code_filename_indexed),
+            // copy over invite-code file to client directory
+            let peer_data_dir = utf8(&peer_to_env_vars_map[&0].FM_DATA_DIR);
+            tokio::fs::copy(
+                format!("{peer_data_dir}/{invite_code_filename_original}"),
+                format!("{client_dir}/{invite_code_filename_original}"),
             )
             .await
-            .context("moving invite-code file")?;
+            .context("copying invite-code file")?;
+
+            // move each guardian's invite-code file to the client's directory
+            // appending the peer id to the end
+            for (index, peer_env_vars) in &peer_to_env_vars_map {
+                let peer_data_dir = utf8(&peer_env_vars.FM_DATA_DIR);
+
+                let invite_code_filename_indexed =
+                    format!("{invite_code_filename_original}-{}", index);
+                tokio::fs::rename(
+                    format!("{peer_data_dir}/{}", invite_code_filename_original),
+                    format!("{client_dir}/{}", invite_code_filename_indexed),
+                )
+                .await
+                .context("moving invite-code file")?;
+            }
+            debug!("Moved invite-code files to client data directory");
         }
-        debug!(target: LOG_DEVIMINT, "Moved invite-code files to client data directory");
 
         let client = JitTryAnyhow::new_try({
             move || async move {
                 let client = Client::open_or_create("default").await?;
                 let invite_code = Self::invite_code_static()?;
-
-                cmd!(client, "join-federation", invite_code).run().await?;
+                if !skip_setup {
+                    cmd!(client, "join-federation", invite_code).run().await?;
+                }
                 Ok(client)
             }
         });
