@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["run_dkg","set_config_gen_params","wait_server_status"],"mod":["config"],"struct":["Client","Federation","Fedimintd"]};
+window.SIDEBAR_ITEMS = {"fn":["cli_set_config_gen_params","cli_wait_server_status","run_cli_dkg","run_client_dkg","set_config_gen_params","wait_server_status"],"mod":["config"],"struct":["Client","Federation","Fedimintd"]};
