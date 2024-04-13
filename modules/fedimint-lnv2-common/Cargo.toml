@@ -17,7 +17,7 @@ name = "fedimint_lnv2_common"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.66"
+anyhow = "1.0.82"
 async-trait = "0.1.73"
 aquamarine = "0.3.0"
 bincode = "1"
