@@ -1082,7 +1082,7 @@ impl FederationPeerClientShared {
             .unwrap_or_default();
 
         let sleep_duration = desired_timeout.saturating_sub(since_last_connect);
-        if Duration::from_millis(0) < sleep_duration {
+        if Duration::ZERO < sleep_duration {
             debug!(
                 target: LOG_CLIENT_NET_API,
                 duration_ms=sleep_duration.as_millis(),
@@ -1317,6 +1317,7 @@ where
     #[instrument(level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
     pub async fn request(&self, method: &str, params: &[Value]) -> JsonRpcResult<Value> {
         for attempts in 0.. {
+            debug_assert!(attempts <= 1);
             let rclient = self.client.read().await;
             match rclient.client.get_try().await {
                 Ok(client) if client.is_connected() => {
@@ -1328,13 +1329,15 @@ where
                     if 0 < attempts {
                         return Err(JsonRpcClientError::Transport(e.into()));
                     }
+                    debug!(target: LOG_CLIENT_NET_API, err=%e, "Triggering reconnection after connection error");
                 }
-                _ => {
+                Ok(_client) => {
                     if 0 < attempts {
                         return Err(JsonRpcClientError::Transport(anyhow::format_err!(
                             "Disconnected"
                         )));
                     }
+                    debug!(target: LOG_CLIENT_NET_API, "Triggering reconnection after disconnection");
                 }
             };
 
@@ -1343,6 +1346,7 @@ where
             match wclient.client.get_try().await {
                 Ok(client) if client.is_connected() => {
                     // someone else connected, just loop again
+                    trace!(target: LOG_CLIENT_NET_API, "Some other request reconnected client, retrying");
                 }
                 _ => {
                     wclient.reconnect(self.peer_id, self.url.clone()).await;
