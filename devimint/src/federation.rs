@@ -931,7 +931,7 @@ async fn set_config_gen_params(
     mut server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -> Result<()> {
     self::config::attach_default_module_init_params(
-        BitcoinRpcConfig::from_env_vars()?,
+        BitcoinRpcConfig::get_defaults_from_env_vars()?,
         &mut server_gen_params,
         Network::Regtest,
         10,
@@ -962,7 +962,7 @@ async fn cli_set_config_gen_params(
     mut server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -> Result<()> {
     self::config::attach_default_module_init_params(
-        BitcoinRpcConfig::from_env_vars()?,
+        BitcoinRpcConfig::get_defaults_from_env_vars()?,
         &mut server_gen_params,
         Network::Regtest,
         10,

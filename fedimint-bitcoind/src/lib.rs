@@ -1,5 +1,6 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
+use std::env;
 use std::fmt::Debug;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
@@ -8,15 +9,17 @@ use std::time::Duration;
 use anyhow::Context;
 pub use anyhow::Result;
 use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
-use fedimint_core::envs::BitcoinRpcConfig;
+use fedimint_core::envs::{
+    BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV,
+};
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
-use fedimint_logging::LOG_BLOCKCHAIN;
+use fedimint_logging::{LOG_BLOCKCHAIN, LOG_CORE};
 use lazy_static::lazy_static;
-use tracing::info;
+use tracing::{debug, info};
 
 #[cfg(feature = "bitcoincore-rpc")]
 pub mod bitcoincore;
@@ -51,7 +54,17 @@ lazy_static! {
 /// Create a bitcoin RPC of a given kind
 pub fn create_bitcoind(config: &BitcoinRpcConfig, handle: TaskHandle) -> Result<DynBitcoindRpc> {
     let registry = BITCOIN_RPC_REGISTRY.lock().expect("lock poisoned");
-    let maybe_factory = registry.get(&config.kind);
+
+    let kind = env::var(FM_FORCE_BITCOIN_RPC_KIND_ENV)
+        .ok()
+        .unwrap_or_else(|| config.kind.clone());
+    let url = env::var(FM_FORCE_BITCOIN_RPC_URL_ENV)
+        .ok()
+        .map(|s| SafeUrl::parse(&s))
+        .transpose()?
+        .unwrap_or_else(|| config.url.clone());
+    debug!(target: LOG_CORE, %kind, %url, "Starting bitcoin rpc");
+    let maybe_factory = registry.get(&kind);
     let factory = maybe_factory.with_context(|| {
         anyhow::anyhow!(
             "{} rpc not registered, available options: {:?}",
@@ -59,7 +72,7 @@ pub fn create_bitcoind(config: &BitcoinRpcConfig, handle: TaskHandle) -> Result<
             registry.keys()
         )
     })?;
-    factory.create_connection(&config.url, handle)
+    factory.create_connection(&url, handle)
 }
 
 /// Register a new factory for creating bitcoin RPCs

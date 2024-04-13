@@ -77,7 +77,10 @@ async fn mkdir(dir: PathBuf) -> anyhow::Result<PathBuf> {
     Ok(dir)
 }
 
-use fedimint_core::envs::{FM_IN_DEVIMINT_ENV, FM_USE_UNKNOWN_MODULE_ENV};
+use fedimint_core::envs::{
+    FM_DEFAULT_BITCOIN_RPC_KIND_ENV, FM_DEFAULT_BITCOIN_RPC_URL_ENV, FM_FORCE_BITCOIN_RPC_KIND_ENV,
+    FM_FORCE_BITCOIN_RPC_URL_ENV, FM_IN_DEVIMINT_ENV, FM_USE_UNKNOWN_MODULE_ENV,
+};
 use fedimint_portalloc::port_alloc;
 use fedimint_server::config::ConfigGenParams;
 use format as f;
@@ -163,10 +166,12 @@ declare_vars! {
             gateway_cli = crate::util::get_gateway_cli_path().join(" "),); env: "FM_GWCLI_LND";
         FM_DB_TOOL: String = f!("{fedimint_dbtool}", fedimint_dbtool = crate::util::get_fedimint_dbtool_cli_path().join(" ")); env: "FM_DB_TOOL";
 
-        // fedimint config variables env: "// ";
+        // fedimint config variables
         FM_TEST_BITCOIND_RPC: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: "FM_TEST_BITCOIND_RPC";
         FM_BITCOIN_RPC_URL: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: "FM_BITCOIN_RPC_URL";
         FM_BITCOIN_RPC_KIND: String = "bitcoind"; env: "FM_BITCOIN_RPC_KIND";
+        FM_DEFAULT_BITCOIN_RPC_URL: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: FM_DEFAULT_BITCOIN_RPC_URL_ENV;
+        FM_DEFAULT_BITCOIN_RPC_KIND: String = "bitcoind"; env: FM_DEFAULT_BITCOIN_RPC_KIND_ENV;
 
         FM_ROCKSDB_WRITE_BUFFER_SIZE : String = (1 << 20).to_string(); env: "FM_ROCKSDB_WRITE_BUFFER_SIZE ";
     }
@@ -191,5 +196,10 @@ declare_vars! {
         FM_API_URL: String = params.consensus.peers[&params.local.our_id].api_url.to_string(); env: "FM_API_URL";
         FM_BIND_METRICS_API: String = format!("127.0.0.1:{}", globals.FM_PORT_FEDIMINTD_BASE as usize + 2 * globals.FM_FED_SIZE + params.local.our_id.to_usize()); env: "FM_BIND_METRICS_API";
         FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("fedimintd-{}", params.local.our_id.to_usize()))).await?; env: "FM_DATA_DIR";
+
+        // We only need to force the current bitcoind rpc on fedimintd, other daemons take their
+        // rpc settings over command-line etc. so always will use the right ones.
+        FM_FORCE_BITCOIN_RPC_URL: String = f!("http://bitcoin:bitcoin@127.0.0.1:{}", globals.FM_PORT_BTC_RPC); env: FM_FORCE_BITCOIN_RPC_URL_ENV;
+        FM_FORCE_BITCOIN_RPC_KIND: String = "bitcoind"; env: FM_FORCE_BITCOIN_RPC_KIND_ENV;
     }
 }
