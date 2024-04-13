@@ -48,7 +48,7 @@ client module states for the Federation.</p>
 // Get invite code from user
 </span><span class="kw">let </span>invite_code = InviteCode::from_str(<span class="string">"fed11qgqpw9thwvaz7te3xgmjuvpwxqhrzw3jxumrvvf0qqqjpetvlg8glnpvzcufhffgzhv8m75f7y34ryk7suamh8x7zetly8h0v9v0rm"</span>)
     .expect(<span class="string">"Invalid invite code"</span>);
-<span class="kw">let </span>config = ClientConfig::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await
+<span class="kw">let </span>config = fedimint_api_client::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await
     </span>.expect(<span class="string">"Error downloading config"</span>);
 
 <span class="comment">// Tell the user the federation name, bitcoin network
@@ -101,7 +101,7 @@ used in a given Federation is safe.</p>
 </div></details><section id="method.open" class="method"><a class="src rightside" href="../src/fedimint_client/lib.rs.html#2054-2065">source</a><h4 class="code-header">pub async fn <a href="#method.open" class="fn">open</a>(self, root_secret: DerivableSecret) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.81/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="struct" href="struct.ClientHandle.html" title="struct fedimint_client::ClientHandle">ClientHandle</a>&gt;</h4></section><section id="method.admin_api_from_id" class="method"><a class="src rightside" href="../src/fedimint_client/lib.rs.html#2067-2076">source</a><h4 class="code-header">pub(crate) fn <a href="#method.admin_api_from_id" class="fn">admin_api_from_id</a>(
     id: <a class="struct" href="../fedimint_core/struct.PeerId.html" title="struct fedimint_core::PeerId">PeerId</a>,
     cfg: &amp;<a class="struct" href="../fedimint_core/config/struct.ClientConfig.html" title="struct fedimint_core::config::ClientConfig">ClientConfig</a>
-) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.81/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="struct" href="../fedimint_core/api/struct.DynGlobalApi.html" title="struct fedimint_core::api::DynGlobalApi">DynGlobalApi</a>&gt;</h4></section><details class="toggle method-toggle" open><summary><section id="method.build" class="method"><a class="src rightside" href="../src/fedimint_client/lib.rs.html#2079-2091">source</a><h4 class="code-header">pub(crate) async fn <a href="#method.build" class="fn">build</a>(
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.81/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;DynGlobalApi&gt;</h4></section><details class="toggle method-toggle" open><summary><section id="method.build" class="method"><a class="src rightside" href="../src/fedimint_client/lib.rs.html#2079-2091">source</a><h4 class="code-header">pub(crate) async fn <a href="#method.build" class="fn">build</a>(
     self,
     root_secret: DerivableSecret,
     config: <a class="struct" href="../fedimint_core/config/struct.ClientConfig.html" title="struct fedimint_core::config::ClientConfig">ClientConfig</a>,

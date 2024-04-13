@@ -445,10 +445,10 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
+<span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
@@ -754,7 +754,7 @@
 <span class="kw">pub async fn </span>get_incoming_contract(
     module_api: DynModuleApi,
     contract_id: fedimint_ln_common::contracts::ContractId,
-) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;IncomingContractAccount&gt;, fedimint_core::api::FederationError&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;IncomingContractAccount&gt;, fedimint_api_client::api::FederationError&gt; {
     <span class="kw">match </span>module_api.fetch_contract(contract_id).<span class="kw">await </span>{
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(contract)) =&gt; {
             <span class="kw">if let </span>FundedContract::Incoming(incoming) = contract.contract {
@@ -763,7 +763,7 @@
                     contract: incoming.contract,
                 }))
             } <span class="kw">else </span>{
-                <span class="prelude-val">Err</span>(fedimint_core::api::FederationError::general(
+                <span class="prelude-val">Err</span>(fedimint_api_client::api::FederationError::general(
                     <span class="macro">anyhow::anyhow!</span>(<span class="string">"Contract {contract_id} is not an incoming contract"</span>),
                 ))
             }

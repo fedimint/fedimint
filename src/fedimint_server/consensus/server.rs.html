@@ -870,7 +870,8 @@
 <span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>async_channel::{Receiver, Sender};
-<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
+<span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
+<span class="kw">use </span>fedimint_api_client::query::FilterMap;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::core::MODULE_INSTANCE_ID_GLOBAL;
@@ -887,7 +888,6 @@
     ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry,
 };
 <span class="kw">use </span>fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
-<span class="kw">use </span>fedimint_core::query::FilterMap;
 <span class="kw">use </span>fedimint_core::runtime::spawn;
 <span class="kw">use </span>fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,

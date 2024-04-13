@@ -263,15 +263,15 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
+<span class="kw">use </span>fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
+<span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 <span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
-<span class="kw">use </span>fedimint_core::query::FilterMapThreshold;
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_lnv2_client::LightningClientStateMachines;

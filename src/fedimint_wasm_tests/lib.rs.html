@@ -333,16 +333,14 @@
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::Client;
-<span class="kw">use </span>fedimint_core::api::InviteCode;
-<span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_ln_client::LightningClientInit;
 <span class="kw">use </span>fedimint_mint_client::MintClientInit;
 <span class="kw">use </span>fedimint_wallet_client::WalletClientInit;
@@ -372,7 +370,7 @@
 }
 
 <span class="kw">async fn </span>client(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientHandleArc&gt; {
-    <span class="kw">let </span>client_config = ClientConfig::download_from_invite_code(invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>client_config = fedimint_api_client::download_from_invite_code(invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>builder = make_client_builder();
     <span class="kw">let </span>client_secret = load_or_generate_mnemonic(builder.db_no_decoders()).<span class="kw">await</span><span class="question-mark">?</span>;
     builder.stopped();

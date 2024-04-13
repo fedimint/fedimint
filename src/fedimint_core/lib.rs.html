@@ -659,8 +659,6 @@
 <a href="#657" id="657">657</a>
 <a href="#658" id="658">658</a>
 <a href="#659" id="659">659</a>
-<a href="#660" id="660">660</a>
-<a href="#661" id="661">661</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core library
 //!
 //! `fedimint-core` contains are commonly used types, utilities and primitives,
@@ -709,8 +707,6 @@
 
 <span class="doccomment">/// Admin (guardian) client types
 </span><span class="kw">pub mod </span>admin_client;
-<span class="doccomment">/// Client API request handling
-</span><span class="kw">pub mod </span>api;
 <span class="doccomment">/// Federation-stored client backups
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Gradual bitcoin dependency migration helpers
@@ -733,6 +729,8 @@
 </span><span class="kw">pub mod </span>fmt_utils;
 <span class="doccomment">/// Hex encoding helpers
 </span><span class="kw">pub mod </span>hex;
+<span class="doccomment">/// Federation invite code
+</span><span class="kw">pub mod </span>invite_code;
 <span class="doccomment">/// Common macros
 </span><span class="attr">#[macro_use]
 </span><span class="kw">pub mod </span>macros;
@@ -740,8 +738,6 @@
 </span><span class="kw">pub mod </span>module;
 <span class="doccomment">/// Peer networking
 </span><span class="kw">pub mod </span>net;
-<span class="doccomment">/// Client query system
-</span><span class="kw">pub mod </span>query;
 <span class="doccomment">/// Runtime (wasm32 vs native) differences handling
 </span><span class="kw">pub mod </span>runtime;
 <span class="doccomment">/// Task handling, including wasm safe logic

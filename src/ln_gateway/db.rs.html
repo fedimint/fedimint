@@ -308,12 +308,12 @@
 
 <span class="kw">use </span>bitcoin29::Network;
 <span class="kw">use </span>bitcoin_hashes::sha256;
-<span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::{
     DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, ServerMigrationFn,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
 <span class="kw">use </span>fedimint_ln_common::serde_routing_fees;
 <span class="kw">use </span>fedimint_lnv2_client::CreateInvoicePayload;
@@ -475,10 +475,10 @@
     <span class="kw">use </span>anyhow::ensure;
     <span class="kw">use </span>bitcoin::Network;
     <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
-    <span class="kw">use </span>fedimint_core::api::InviteCode;
     <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_network;
     <span class="kw">use </span>fedimint_core::config::FederationId;
     <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+    <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::util::SafeUrl;
     <span class="kw">use </span>fedimint_logging::TracingSetup;

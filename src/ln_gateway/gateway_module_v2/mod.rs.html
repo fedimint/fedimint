@@ -301,6 +301,7 @@
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
@@ -308,7 +309,6 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion};

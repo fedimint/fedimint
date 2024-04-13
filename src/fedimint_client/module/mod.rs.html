@@ -902,6 +902,7 @@
 <a href="#900" id="900">900</a>
 <a href="#901" id="901">901</a>
 <a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
@@ -910,12 +911,13 @@
 <span class="kw">use </span>std::{ffi, marker, ops};
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
-<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, InviteCode};
+<span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::core::{
     Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
 };
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, PhantomBound};
+<span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};

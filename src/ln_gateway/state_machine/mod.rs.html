@@ -776,6 +776,7 @@
 <span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
+<span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
@@ -785,7 +786,6 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};

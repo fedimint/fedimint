@@ -202,12 +202,12 @@
 <span class="kw">use </span>api::MetaFederationApi;
 <span class="kw">use </span>common::{MetaConsensusValue, MetaKey, MetaValue};
 <span class="kw">use </span>db::DbKeyPrefix;
+<span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::db::ClientMigrationFn;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::sm::Context;
-<span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::core::Decoder;
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::module::{

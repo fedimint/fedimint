@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BECH32_HRP"],"enum":["InviteCodeData"],"struct":["InviteCode"]};

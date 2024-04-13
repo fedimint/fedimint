@@ -1081,10 +1081,10 @@
 <span class="kw">use </span>std::{env, unreachable};
 
 <span class="kw">use </span>anyhow::{anyhow, bail, format_err, Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>fedimint_api_client::api::StatusResponse;
 <span class="kw">use </span>fedimint_core::admin_client::{
     ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
 };
-<span class="kw">use </span>fedimint_core::api::StatusResponse;
 <span class="kw">use </span>fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 <span class="kw">use </span>fedimint_core::envs::is_env_var_set;
 <span class="kw">use </span>fedimint_core::module::ApiAuth;

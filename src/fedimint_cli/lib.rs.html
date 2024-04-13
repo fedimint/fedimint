@@ -1050,6 +1050,7 @@
 <a href="#1048" id="1048">1048</a>
 <a href="#1049" id="1049">1049</a>
 <a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">pub mod </span>envs;
@@ -1071,20 +1072,21 @@
 <span class="kw">use </span>clap::{Args, CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>db_locked::LockedBuilder;
 <span class="kw">use </span>fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
+<span class="kw">use </span>fedimint_api_client::api::{
+    DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
+};
 <span class="kw">use </span>fedimint_bip39::Bip39RootSecretStrategy;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 <span class="kw">use </span>fedimint_client::module::ClientModule <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc};
 <span class="kw">use </span>fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
-<span class="kw">use </span>fedimint_core::api::{
-    DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, InviteCode, WsFederationApi,
-};
 <span class="kw">use </span>fedimint_core::config::{
     ClientConfig, FederationId, FederationIdPrefix, ServerModuleConfigGenParamsRegistry,
 };
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseValue};
+<span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
 <span class="kw">use </span>fedimint_core::util::{handle_version_hash_command, retry, ConstantBackoff, SafeUrl};
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, PeerId, TieredMulti};
@@ -1617,7 +1619,7 @@ Examples:
         cli: <span class="kw-2">&amp;</span>Opts,
         invite_code: InviteCode,
     ) -&gt; CliResult&lt;ClientHandleArc&gt; {
-        <span class="kw">let </span>client_config = ClientConfig::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
+        <span class="kw">let </span>client_config = fedimint_api_client::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
             .<span class="kw">await
             </span>.map_err_cli()<span class="question-mark">?</span>;
 
@@ -1677,7 +1679,7 @@ Examples:
     ) -&gt; CliResult&lt;ClientHandleArc&gt; {
         <span class="kw">let </span>builder = <span class="self">self</span>.make_client_builder(cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>client_config = ClientConfig::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
+        <span class="kw">let </span>client_config = fedimint_api_client::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
             .<span class="kw">await
             </span>.map_err_cli()<span class="question-mark">?</span>;
 

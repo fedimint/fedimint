@@ -690,10 +690,10 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_aead::{encrypt, get_encryption_key, random_salt};
-<span class="kw">use </span>fedimint_core::api::{
-    FederationStatus, GuardianConfigBackup, PeerConnectionStatus, PeerStatus, ServerStatus,
-    StatusResponse,
+<span class="kw">use </span>fedimint_api_client::api::{
+    FederationStatus, GuardianConfigBackup, PeerConnectionStatus, PeerStatus, StatusResponse,
 };
+<span class="kw">use </span>fedimint_core::admin_client::ServerStatus;
 <span class="kw">use </span>fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, JsonWithKind};
 <span class="kw">use </span>fedimint_core::core::backup::{SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES};

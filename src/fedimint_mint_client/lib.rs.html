@@ -2062,7 +2062,6 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
@@ -2070,6 +2069,7 @@
     IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -3813,9 +3813,9 @@
     <span class="kw">use </span>std::str::FromStr;
 
     <span class="kw">use </span>bitcoin_hashes::Hash;
-    <span class="kw">use </span>fedimint_core::api::InviteCode;
     <span class="kw">use </span>fedimint_core::config::FederationId;
     <span class="kw">use </span>fedimint_core::encoding::Decodable;
+    <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
     <span class="kw">use </span>fedimint_core::{
         Amount, OutPoint, PeerId, Tiered, TieredMulti, TieredSummary, TransactionId,
     };

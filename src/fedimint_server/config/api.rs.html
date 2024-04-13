@@ -1409,11 +1409,11 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_aead::random_salt;
+<span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, StatusResponse};
 <span class="kw">use </span>fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
-    ConfigGenParamsResponse, PeerServerParams,
+    ConfigGenParamsResponse, PeerServerParams, ServerStatus,
 };
-<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, ServerStatus, StatusResponse};
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
@@ -2303,8 +2303,8 @@
     <span class="kw">use </span>std::sync::Arc;
     <span class="kw">use </span>std::time::Duration;
 
-    <span class="kw">use </span>fedimint_core::admin_client::ConfigGenParamsRequest;
-    <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, FederationResult, ServerStatus, StatusResponse};
+    <span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationResult, StatusResponse};
+    <span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsRequest, ServerStatus};
     <span class="kw">use </span>fedimint_core::config::{ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry};
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::IRawDatabaseExt;

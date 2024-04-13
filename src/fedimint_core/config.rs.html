@@ -1051,96 +1051,21 @@
 <a href="#1049" id="1049">1049</a>
 <a href="#1050" id="1050">1050</a>
 <a href="#1051" id="1051">1051</a>
-<a href="#1052" id="1052">1052</a>
-<a href="#1053" id="1053">1053</a>
-<a href="#1054" id="1054">1054</a>
-<a href="#1055" id="1055">1055</a>
-<a href="#1056" id="1056">1056</a>
-<a href="#1057" id="1057">1057</a>
-<a href="#1058" id="1058">1058</a>
-<a href="#1059" id="1059">1059</a>
-<a href="#1060" id="1060">1060</a>
-<a href="#1061" id="1061">1061</a>
-<a href="#1062" id="1062">1062</a>
-<a href="#1063" id="1063">1063</a>
-<a href="#1064" id="1064">1064</a>
-<a href="#1065" id="1065">1065</a>
-<a href="#1066" id="1066">1066</a>
-<a href="#1067" id="1067">1067</a>
-<a href="#1068" id="1068">1068</a>
-<a href="#1069" id="1069">1069</a>
-<a href="#1070" id="1070">1070</a>
-<a href="#1071" id="1071">1071</a>
-<a href="#1072" id="1072">1072</a>
-<a href="#1073" id="1073">1073</a>
-<a href="#1074" id="1074">1074</a>
-<a href="#1075" id="1075">1075</a>
-<a href="#1076" id="1076">1076</a>
-<a href="#1077" id="1077">1077</a>
-<a href="#1078" id="1078">1078</a>
-<a href="#1079" id="1079">1079</a>
-<a href="#1080" id="1080">1080</a>
-<a href="#1081" id="1081">1081</a>
-<a href="#1082" id="1082">1082</a>
-<a href="#1083" id="1083">1083</a>
-<a href="#1084" id="1084">1084</a>
-<a href="#1085" id="1085">1085</a>
-<a href="#1086" id="1086">1086</a>
-<a href="#1087" id="1087">1087</a>
-<a href="#1088" id="1088">1088</a>
-<a href="#1089" id="1089">1089</a>
-<a href="#1090" id="1090">1090</a>
-<a href="#1091" id="1091">1091</a>
-<a href="#1092" id="1092">1092</a>
-<a href="#1093" id="1093">1093</a>
-<a href="#1094" id="1094">1094</a>
-<a href="#1095" id="1095">1095</a>
-<a href="#1096" id="1096">1096</a>
-<a href="#1097" id="1097">1097</a>
-<a href="#1098" id="1098">1098</a>
-<a href="#1099" id="1099">1099</a>
-<a href="#1100" id="1100">1100</a>
-<a href="#1101" id="1101">1101</a>
-<a href="#1102" id="1102">1102</a>
-<a href="#1103" id="1103">1103</a>
-<a href="#1104" id="1104">1104</a>
-<a href="#1105" id="1105">1105</a>
-<a href="#1106" id="1106">1106</a>
-<a href="#1107" id="1107">1107</a>
-<a href="#1108" id="1108">1108</a>
-<a href="#1109" id="1109">1109</a>
-<a href="#1110" id="1110">1110</a>
-<a href="#1111" id="1111">1111</a>
-<a href="#1112" id="1112">1112</a>
-<a href="#1113" id="1113">1113</a>
-<a href="#1114" id="1114">1114</a>
-<a href="#1115" id="1115">1115</a>
-<a href="#1116" id="1116">1116</a>
-<a href="#1117" id="1117">1117</a>
-<a href="#1118" id="1118">1118</a>
-<a href="#1119" id="1119">1119</a>
-<a href="#1120" id="1120">1120</a>
-<a href="#1121" id="1121">1121</a>
-<a href="#1122" id="1122">1122</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::ops::Mul;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::sha256::{Hash <span class="kw">as </span>Sha256, HashEngine};
 <span class="kw">use </span>bitcoin_hashes::{hex, sha256};
 <span class="kw">use </span>bls12_381::Scalar;
-<span class="kw">use </span>fedimint_core::api::{FederationApiExt, InviteCode, WsFederationApi};
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{DynRawFallback, Encodable};
-<span class="kw">use </span>fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
-<span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::task::Cancelled;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
@@ -1152,15 +1077,15 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>threshold_crypto::group::{Curve, Group, GroupEncoding};
 <span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective};
-<span class="kw">use </span>tracing::{debug, warn};
+<span class="kw">use </span>tracing::warn;
 
 <span class="kw">use </span><span class="kw">crate</span>::core::DynClientConfig;
 <span class="kw">use </span><span class="kw">crate</span>::encoding::Decodable;
+<span class="kw">use </span><span class="kw">crate</span>::invite_code::InviteCode;
 <span class="kw">use </span><span class="kw">crate</span>::module::{
     CoreConsensusVersion, DynCommonModuleInit, DynServerModuleInit, IDynCommonModuleInit,
     ModuleConsensusVersion,
 };
-<span class="kw">use </span><span class="kw">crate</span>::query::FilterMap;
 <span class="kw">use crate</span>::{bls12_381_serde, maybe_add_send_sync, PeerId};
 
 <span class="comment">// TODO: make configurable
@@ -1360,73 +1285,6 @@
         <span class="self">self</span>.global.api_endpoints.get(peer).map(|peer_url| {
             InviteCode::new(peer_url.url.clone(), <span class="kw-2">*</span>peer, <span class="self">self</span>.calculate_federation_id())
         })
-    }
-
-    <span class="doccomment">/// Tries to download the client config from the federation,
-    /// attempts to retry teb times before giving up.
-    </span><span class="kw">pub async fn </span>download_from_invite_code(
-        invite_code: <span class="kw-2">&amp;</span>InviteCode,
-    ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-        <span class="macro">debug!</span>(<span class="string">"Downloading client config from {:?}"</span>, invite_code);
-
-        <span class="kw">crate</span>::util::retry(
-            <span class="string">"Downloading client config"</span>,
-            <span class="comment">// 0.2, 0.2, 0.4, 0.6, 1.0, 1.6, ...
-            // sum = 21.2
-            </span>fedimint_core::util::FibonacciBackoff::default()
-                .with_min_delay(Duration::from_millis(<span class="number">200</span>))
-                .with_max_delay(Duration::from_secs(<span class="number">5</span>))
-                .with_max_times(<span class="number">10</span>),
-            || <span class="self">Self</span>::try_download_client_config(invite_code),
-        )
-        .<span class="kw">await
-        </span>.context(<span class="string">"Failed to download client config"</span>)
-    }
-
-    <span class="doccomment">/// Tries to download the client config only once.
-    </span><span class="kw">pub async fn </span>try_download_client_config(
-        invite_code: <span class="kw-2">&amp;</span>InviteCode,
-    ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-        <span class="comment">// we have to download the api endpoints first
-        </span><span class="kw">let </span>federation_id = invite_code.federation_id();
-
-        <span class="kw">let </span>query_strategy = FilterMap::new(
-            <span class="kw">move </span>|cfg: ClientConfig| {
-                <span class="kw">if </span>federation_id.<span class="number">0 </span>!= cfg.global.api_endpoints.consensus_hash() {
-                    <span class="macro">bail!</span>(<span class="string">"Guardian api endpoint map does not hash to FederationId"</span>)
-                }
-
-                <span class="prelude-val">Ok</span>(cfg.global.api_endpoints)
-            },
-            <span class="number">1</span>,
-        );
-
-        <span class="kw">let </span>api_endpoints = WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()])
-            .request_with_strategy(
-                query_strategy,
-                CLIENT_CONFIG_ENDPOINT.to_owned(),
-                ApiRequestErased::default(),
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="comment">// now we can build an api for all guardians and download the client config
-        </span><span class="kw">let </span>api_endpoints = api_endpoints
-            .into_iter()
-            .map(|(peer, url)| (peer, url.url))
-            .collect();
-
-        <span class="kw">let </span>client_config = WsFederationApi::new(api_endpoints)
-            .request_current_consensus::&lt;ClientConfig&gt;(
-                CLIENT_CONFIG_ENDPOINT.to_owned(),
-                ApiRequestErased::default(),
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">if </span>client_config.calculate_federation_id() != federation_id {
-            <span class="macro">bail!</span>(<span class="string">"Obtained client config has different federation id"</span>);
-        }
-
-        <span class="prelude-val">Ok</span>(client_config)
     }
 }
 

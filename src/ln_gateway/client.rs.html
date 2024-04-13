@@ -140,7 +140,6 @@
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::Client;
-<span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -232,7 +231,8 @@
                 </span>.open(root_secret)
                 .<span class="kw">await
         </span>} <span class="kw">else </span>{
-            <span class="kw">let </span>client_config = ClientConfig::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>client_config =
+                fedimint_api_client::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
             client_builder
                 <span class="comment">// TODO: make this configurable?
                 </span>.join(root_secret, client_config.to_owned())

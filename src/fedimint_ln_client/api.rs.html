@@ -348,9 +348,10 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin_hashes::sha256::{<span class="self">self</span>, Hash <span class="kw">as </span>Sha256Hash};
-<span class="kw">use </span>fedimint_core::api::{
+<span class="kw">use </span>fedimint_api_client::api::{
     FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
 };
+<span class="kw">use </span>fedimint_api_client::query::{ThresholdOrDeadline, UnionResponses};
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
@@ -358,7 +359,6 @@
     REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
-<span class="kw">use </span>fedimint_core::query::{ThresholdOrDeadline, UnionResponses};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
