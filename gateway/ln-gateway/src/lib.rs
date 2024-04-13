@@ -1102,8 +1102,8 @@ impl Gateway {
 
             // Using this routing fee config as a default for all federation that has none
             // routing fees specified.
-            if let Some(fees_str) = routing_fees.clone() {
-                let routing_fees = GatewayFee::from_str(fees_str.as_str())?.0;
+            if let Some(fees) = routing_fees.clone() {
+                let routing_fees = GatewayFee(fees.into()).0;
                 prev_config.routing_fees = routing_fees;
             }
 
