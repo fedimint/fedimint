@@ -121,7 +121,24 @@
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 <span class="kw">use </span>fedimint_lnv2_common::ContractId;
@@ -139,6 +156,7 @@
     OutgoingContract = <span class="number">0x48</span>,
     OutputOutcome = <span class="number">0x49</span>,
     Preimage = <span class="number">0x50</span>,
+    Gateway = <span class="number">0x51</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -242,4 +260,18 @@
 </span>);
 
 <span class="macro">impl_db_lookup!</span>(key = PreimageKey, query_prefix = PreimagePrefix);
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>GatewayKey(<span class="kw">pub </span>SafeUrl);
+
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>GatewayPrefix;
+
+<span class="macro">impl_db_record!</span>(
+    key = GatewayKey,
+    value = (),
+    db_prefix = DbKeyPrefix::Gateway,
+);
+
+<span class="macro">impl_db_lookup!</span>(key = GatewayKey, query_prefix = GatewayPrefix);
 </code></pre></div></section></main></body></html>

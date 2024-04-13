@@ -86,16 +86,31 @@
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
 <a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
+<span class="kw">use </span>fedimint_api_client::query::UnionResponses;
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT,
-    OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
+    GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::task::{sleep, MaybeSend, MaybeSync};
-<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
+<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeersExt};
 <span class="kw">use </span>fedimint_lnv2_common::ContractId;
 
 <span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
@@ -112,6 +127,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         contract_id: <span class="kw-2">&amp;</span>ContractId,
     ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;;
+
+    <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;SafeUrl&gt;&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -168,6 +185,15 @@
         <span class="self">self</span>.request_current_consensus(
             OUTGOING_CONTRACT_EXPIRATION_ENDPOINT.to_string(),
             ApiRequestErased::new(contract_id),
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;SafeUrl&gt;&gt; {
+        <span class="self">self</span>.request_with_strategy(
+            UnionResponses::new(<span class="self">self</span>.all_peers().total()),
+            GATEWAYS_ENDPOINT.to_string(),
+            ApiRequestErased::default(),
         )
         .<span class="kw">await
     </span>}

@@ -681,7 +681,15 @@
 <a href="#679" id="679">679</a>
 <a href="#680" id="680">680</a>
 <a href="#681" id="681">681</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::mem;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -693,6 +701,7 @@
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{maybe_add_send_sync, PeerId};
+<span class="kw">use </span>itertools::Itertools;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::{<span class="self">self</span>, ApiVersionSet, PeerError, PeerResult};
 
@@ -928,11 +937,11 @@
     }
 }
 
-<span class="doccomment">/// Returns the deduplicated union of a threshold of responses
+<span class="doccomment">/// Returns the deduplicated union of a threshold of responses; elements are
+/// in descending order by the number of duplications across different peers.
 </span><span class="kw">pub struct </span>UnionResponses&lt;R&gt; {
     error_strategy: ErrorStrategy,
-    responses: HashSet&lt;PeerId&gt;,
-    <span class="kw">union</span>: Vec&lt;R&gt;,
+    responses: HashMap&lt;PeerId, Vec&lt;R&gt;&gt;,
     threshold: usize,
 }
 
@@ -943,28 +952,35 @@
 
         <span class="self">Self </span>{
             error_strategy: ErrorStrategy::new(max_evil + <span class="number">1</span>),
-            responses: HashSet::new(),
-            <span class="kw">union</span>: <span class="macro">vec!</span>[],
-
+            responses: HashMap::new(),
             threshold,
         }
     }
 }
 
 <span class="kw">impl</span>&lt;R: Debug + Eq + Clone&gt; QueryStrategy&lt;Vec&lt;R&gt;&gt; <span class="kw">for </span>UnionResponses&lt;R&gt; {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::PeerResult&lt;Vec&lt;R&gt;&gt;) -&gt; QueryStep&lt;Vec&lt;R&gt;&gt; {
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: PeerResult&lt;Vec&lt;R&gt;&gt;) -&gt; QueryStep&lt;Vec&lt;R&gt;&gt; {
         <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>(responses) =&gt; {
-                <span class="kw">for </span>response <span class="kw">in </span>responses {
-                    <span class="kw">if </span>!<span class="self">self</span>.union.contains(<span class="kw-2">&amp;</span>response) {
-                        <span class="self">self</span>.union.push(response);
-                    }
-                }
-
-                <span class="macro">assert!</span>(<span class="self">self</span>.responses.insert(peer));
+            <span class="prelude-val">Ok</span>(response) =&gt; {
+                <span class="macro">assert!</span>(<span class="self">self</span>.responses.insert(peer, response).is_none());
 
                 <span class="kw">if </span><span class="self">self</span>.responses.len() == <span class="self">self</span>.threshold {
-                    QueryStep::Success(mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.union))
+                    <span class="kw">let </span><span class="kw-2">mut </span>union = <span class="self">self
+                        </span>.responses
+                        .values()
+                        .flatten()
+                        .dedup()
+                        .cloned()
+                        .collect::&lt;Vec&lt;R&gt;&gt;();
+
+                    union.sort_by_cached_key(|r| {
+                        <span class="self">self</span>.responses
+                            .values()
+                            .filter(|response| !response.contains(r))
+                            .count()
+                    });
+
+                    QueryStep::Success(union)
                 } <span class="kw">else </span>{
                     QueryStep::Continue
                 }
