@@ -16,6 +16,10 @@ rustc-args = ["--cfg", "tokio_unstable"]
 name = "fedimint_mint_client"
 path = "src/lib.rs"
 
+[[bench]]
+name = "divan"
+harness = false
+
 [dependencies]
 anyhow = { workspace = true }
 async-stream = "0.3.5"
@@ -53,3 +57,4 @@ rand = { workspace = true }
 tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
 tokio = { version = "1.36.0", features = [ "macros", "rt" ] }
+divan = { workspace = true }
