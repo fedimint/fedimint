@@ -26,7 +26,9 @@ pub struct DevFed {
 }
 
 pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
-    DevJitFed::new(process_mgr)?.to_dev_fed(process_mgr).await
+    DevJitFed::new(process_mgr, false)?
+        .to_dev_fed(process_mgr)
+        .await
 }
 
 type JitArc<T> = JitTryAnyhow<Arc<T>>;
@@ -49,7 +51,7 @@ pub struct DevJitFed {
 }
 
 impl DevJitFed {
-    pub fn new(process_mgr: &ProcessManager) -> Result<DevJitFed> {
+    pub fn new(process_mgr: &ProcessManager, skip_setup: bool) -> Result<DevJitFed> {
         let fed_size = process_mgr.globals.FM_FED_SIZE;
         let offline_nodes = process_mgr.globals.FM_OFFLINE_NODES;
         anyhow::ensure!(
@@ -62,7 +64,7 @@ impl DevJitFed {
 
         let bitcoind = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
-            move || async move { Ok(Arc::new(Bitcoind::new(&process_mgr).await?)) }
+            move || async move { Ok(Arc::new(Bitcoind::new(&process_mgr, skip_setup).await?)) }
         });
         let cln = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
@@ -105,7 +107,7 @@ impl DevJitFed {
             let bitcoind = bitcoind.clone();
             move || async move {
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
-                let mut fed = Federation::new(&process_mgr, bitcoind, fed_size).await?;
+                let mut fed = Federation::new(&process_mgr, bitcoind, fed_size, skip_setup).await?;
 
                 // Create a degraded federation if there are offline nodes
                 fed.degrade_federation(&process_mgr).await?;
@@ -131,7 +133,9 @@ impl DevJitFed {
                 let gw_cln = gw_cln.get_try().await?.deref();
                 let fed = fed.get_try().await?.deref();
 
-                gw_cln.connect_fed(fed).await?;
+                if !skip_setup {
+                    gw_cln.connect_fed(fed).await?;
+                }
                 Ok(Arc::new(()))
             }
         });
@@ -151,8 +155,9 @@ impl DevJitFed {
             move || async move {
                 let gw_lnd = gw_lnd.get_try().await?.deref();
                 let fed = fed.get_try().await?.deref();
-
-                gw_lnd.connect_fed(fed).await?;
+                if !skip_setup {
+                    gw_lnd.connect_fed(fed).await?;
+                }
                 Ok(Arc::new(()))
             }
         });
@@ -166,7 +171,9 @@ impl DevJitFed {
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
                 let lnd = lnd.get_try().await?.deref().clone();
                 let cln = cln.get_try().await?.deref().clone();
-                open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
+                if !skip_setup {
+                    open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
+                }
                 Ok(Arc::new(()))
             }
         });
@@ -175,7 +182,9 @@ impl DevJitFed {
             let fed = fed.clone();
             move || async move {
                 let fed = fed.get_try().await?.deref().clone();
-                fed.mine_then_wait_blocks_sync(10).await?;
+                if !skip_setup {
+                    fed.mine_then_wait_blocks_sync(10).await?;
+                }
                 Ok(Arc::new(()))
             }
         });

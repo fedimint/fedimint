@@ -117,11 +117,21 @@ impl Drop for ProcessHandleInner {
             block_on(async move {
                 debug!(
                     target: LOG_DEVIMINT,
-                    "sending SIGKILL to {name} and waiting for it to exit"
+                    "sending SIGTERM to {name} and waiting for it to exit"
                 );
-                send_sigkill(child);
-                if let Err(e) = child.wait().await {
-                    warn!(target: LOG_DEVIMINT, "failed to wait for {name}: {e:?}");
+                send_sigterm(child);
+
+                if (fedimint_core::runtime::timeout(Duration::from_secs(3), child.wait()).await)
+                    .is_err()
+                {
+                    debug!(
+                        target: LOG_DEVIMINT,
+                        "sending SIGKILL to {name} and waiting for it to exit"
+                    );
+                    send_sigkill(child);
+                    if let Err(e) = child.wait().await {
+                        warn!(target: LOG_DEVIMINT, "failed to wait for {name}: {e:?}");
+                    }
                 }
             })
         })
