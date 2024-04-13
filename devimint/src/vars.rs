@@ -163,10 +163,14 @@ declare_vars! {
             gateway_cli = crate::util::get_gateway_cli_path().join(" "),); env: "FM_GWCLI_LND";
         FM_DB_TOOL: String = f!("{fedimint_dbtool}", fedimint_dbtool = crate::util::get_fedimint_dbtool_cli_path().join(" ")); env: "FM_DB_TOOL";
 
-        // fedimint config variables env: "// ";
+        // fedimint config variables
         FM_TEST_BITCOIND_RPC: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: "FM_TEST_BITCOIND_RPC";
         FM_BITCOIN_RPC_URL: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: "FM_BITCOIN_RPC_URL";
         FM_BITCOIN_RPC_KIND: String = "bitcoind"; env: "FM_BITCOIN_RPC_KIND";
+        FM_DEFAULT_BITCOIN_RPC_URL: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: "FM_DEFAULT_BITCOIN_RPC_URL";
+        FM_DEFAULT_BITCOIN_RPC_KIND: String = "bitcoind"; env: "FM_DEFAULT_BITCOIN_RPC_KIND";
+        FM_FORCE_BITCOIN_RPC_URL: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: "FM_FORCE_BITCOIN_RPC_URL";
+        FM_FORCE_BITCOIN_RPC_KIND: String = "bitcoind"; env: "FM_FORCE_BITCOIN_RPC_KIND";
 
         FM_ROCKSDB_WRITE_BUFFER_SIZE : String = (1 << 20).to_string(); env: "FM_ROCKSDB_WRITE_BUFFER_SIZE ";
     }

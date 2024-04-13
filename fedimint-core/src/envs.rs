@@ -3,8 +3,10 @@ use std::env;
 use anyhow::Context;
 use fedimint_core::util::SafeUrl;
 use fedimint_derive::{Decodable, Encodable};
+use fedimint_logging::LOG_CORE;
 use jsonrpsee_core::Serialize;
 use serde::Deserialize;
+use tracing::warn;
 
 // Note: Keep in sync with `fedimint_build::envs`, which is not reused-to avoid
 // introducing extra dependencies between core and build modules.
@@ -27,10 +29,23 @@ macro_rules! fedimint_build_code_version_env {
     };
 }
 
-/// Env var for bitcoin RPC kind
+/// Env var for bitcoin RPC kind (obsolete, use FM_DEFAULT_* instead)
 pub const FM_BITCOIN_RPC_KIND_ENV: &str = "FM_BITCOIN_RPC_KIND";
-/// Env var for bitcoin URL
+/// Env var for bitcoin URL (obsolete, use FM_DEFAULT_* instead)
 pub const FM_BITCOIN_RPC_URL_ENV: &str = "FM_BITCOIN_RPC_URL";
+
+/// Env var for bitcoin RPC kind (default, used only as a default value for DKG
+/// config settings)
+pub const FM_DEFAULT_BITCOIN_RPC_KIND_ENV: &str = "FM_DEFAULT_BITCOIN_RPC_KIND";
+/// Env var for bitcoin URL (default, used only as a default value for DKG
+/// config settings)
+pub const FM_DEFAULT_BITCOIN_RPC_URL_ENV: &str = "FM_DEFAULT_BITCOIN_RPC_URL";
+
+/// Env var for bitcoin RPC kind (forced, takes priority over config settings)
+pub const FM_FORCE_BITCOIN_RPC_KIND_ENV: &str = "FM_FORCE_BITCOIN_RPC_KIND";
+/// Env var for bitcoin URL (default, takes priority over config settings)
+pub const FM_FORCE_BITCOIN_RPC_URL_ENV: &str = "FM_FORCE_BITCOIN_RPC_URL";
+
 /// Env var that can be set to point at the bitcoind's cookie file to use for
 /// auth
 pub const FM_BITCOIND_COOKIE_FILE_ENV: &str = "FM_BITCOIND_COOKIE_FILE";
@@ -46,19 +61,29 @@ pub struct BitcoinRpcConfig {
 }
 
 impl BitcoinRpcConfig {
-    pub fn from_env_vars() -> anyhow::Result<Self> {
+    pub fn get_defaults_from_env_vars() -> anyhow::Result<Self> {
         Ok(Self {
-            kind: env::var(FM_BITCOIN_RPC_KIND_ENV).with_context(|| {
-                anyhow::anyhow!("failure looking up env var {FM_BITCOIN_RPC_KIND_ENV}")
-            })?,
-            url: env::var(FM_BITCOIN_RPC_URL_ENV)
+            kind: env::var(FM_DEFAULT_BITCOIN_RPC_KIND_ENV)
+                .or_else(|_| env::var(FM_BITCOIN_RPC_KIND_ENV).map(|v| {
+                    warn!(target: LOG_CORE, "{FM_BITCOIN_RPC_KIND_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_KIND_ENV} instead");
+                    v
+                })
+                )
                 .with_context(|| {
-                    anyhow::anyhow!("failure looking up env var {FM_BITCOIN_RPC_URL_ENV}")
-                })?
-                .parse()
-                .with_context(|| {
-                    anyhow::anyhow!("failure parsing env var {FM_BITCOIN_RPC_URL_ENV}")
+                    anyhow::anyhow!("failure looking up env var {FM_DEFAULT_BITCOIN_RPC_KIND_ENV}")
                 })?,
+            url: env::var(FM_DEFAULT_BITCOIN_RPC_URL_ENV)
+                .or_else(|_| env::var(FM_BITCOIN_RPC_URL_ENV).map(|v| {
+                    warn!(target: LOG_CORE, "{FM_BITCOIN_RPC_URL_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_URL_ENV} instead");
+                    v
+                })
+                )
+                .with_context(|| {
+                    anyhow::anyhow!("failure looking up env var {FM_DEFAULT_BITCOIN_RPC_URL_ENV}")
+                })?.parse().with_context(|| {
+                    anyhow::anyhow!("failure parsing env var {FM_DEFAULT_BITCOIN_RPC_URL_ENV}")
+                })?
+            ,
         })
     }
 }
