@@ -28,3 +28,10 @@ rand = { workspace = true }
 rand_chacha = "0.3.1"
 serde = { version = "1.0", features = ["derive"] }
 sha3 = "0.10.8"
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "tbs"
+harness = false
