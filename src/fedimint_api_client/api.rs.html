@@ -1506,6 +1506,10 @@
 <a href="#1504" id="1504">1504</a>
 <a href="#1505" id="1505">1505</a>
 <a href="#1506" id="1506">1506</a>
+<a href="#1507" id="1507">1507</a>
+<a href="#1508" id="1508">1508</a>
+<a href="#1509" id="1509">1509</a>
+<a href="#1510" id="1510">1510</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -2590,7 +2594,7 @@
             .unwrap_or_default();
 
         <span class="kw">let </span>sleep_duration = desired_timeout.saturating_sub(since_last_connect);
-        <span class="kw">if </span>Duration::from_millis(<span class="number">0</span>) &lt; sleep_duration {
+        <span class="kw">if </span>Duration::ZERO &lt; sleep_duration {
             <span class="macro">debug!</span>(
                 target: LOG_CLIENT_NET_API,
                 duration_ms=sleep_duration.as_millis(),
@@ -2825,6 +2829,7 @@
     <span class="attr">#[instrument(level = <span class="string">"trace"</span>, fields(peer = %<span class="self">self</span>.peer_id, %method), skip_all)]
     </span><span class="kw">pub async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str, params: <span class="kw-2">&amp;</span>[Value]) -&gt; JsonRpcResult&lt;Value&gt; {
         <span class="kw">for </span>attempts <span class="kw">in </span><span class="number">0</span>.. {
+            <span class="macro">debug_assert!</span>(attempts &lt;= <span class="number">1</span>);
             <span class="kw">let </span>rclient = <span class="self">self</span>.client.read().<span class="kw">await</span>;
             <span class="kw">match </span>rclient.client.get_try().<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
@@ -2836,13 +2841,15 @@
                     </span><span class="kw">if </span><span class="number">0 </span>&lt; attempts {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(JsonRpcClientError::Transport(e.into()));
                     }
+                    <span class="macro">debug!</span>(target: LOG_CLIENT_NET_API, err=%e, <span class="string">"Triggering reconnection after connection error"</span>);
                 }
-                <span class="kw">_ </span>=&gt; {
+                <span class="prelude-val">Ok</span>(_client) =&gt; {
                     <span class="kw">if </span><span class="number">0 </span>&lt; attempts {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(JsonRpcClientError::Transport(<span class="macro">anyhow::format_err!</span>(
                             <span class="string">"Disconnected"
                         </span>)));
                     }
+                    <span class="macro">debug!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Triggering reconnection after disconnection"</span>);
                 }
             };
 
@@ -2851,7 +2858,8 @@
             <span class="kw">match </span>wclient.client.get_try().<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
                     <span class="comment">// someone else connected, just loop again
-                </span>}
+                    </span><span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Some other request reconnected client, retrying"</span>);
+                }
                 <span class="kw">_ </span>=&gt; {
                     wclient.reconnect(<span class="self">self</span>.peer_id, <span class="self">self</span>.url.clone()).<span class="kw">await</span>;
                 }
