@@ -54,7 +54,6 @@ pub enum LightningOperationMeta {
         invoice: Bolt11Invoice,
     },
     Receive {
-        operation_id: OperationId,
         contract: IncomingContract,
     },
 }
@@ -66,9 +65,25 @@ const SEND_EXPIRATION_DELTA_BLOCKS_DEFAULT: u64 = 500;
 /// Default expiration time for lightning invoices
 const INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = 3600;
 
-/// The high-level state of an payment operation over lightning
+#[cfg_attr(doc, aquamarine::aquamarine)]
+/// The high-level state of sending a payment over lightning.
+///
+/// ```mermaid
+/// graph LR
+/// classDef virtual fill:#fff,stroke-dasharray: 5 5
+///
+///     Funding -- funding transaction is rejected --> Rejected
+///     Funding -- funding transaction is accepted --> Funded    
+///     Funded -- payment is confirmed  --> Success
+///     Funded -- payment attempt expires --> Refunding
+///     Funded -- gateway cancels payment attempt --> Refunding
+///     Refunding -- payment is confirmed --> Success
+///     Refunding -- ecash is minted --> Refunded
+///     Refunding -- minting ecash fails --> Failure
+/// ```
+/// The transition from Refunding to Success is only possible if the gateway
+/// misbehaves.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub enum SendState {
     Funding,
     Funded,
@@ -79,6 +94,18 @@ pub enum SendState {
     Failure,
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
+/// The high-level state of receiving a payment over lightning.
+///
+/// ```mermaid
+/// graph LR
+/// classDef virtual fill:#fff,stroke-dasharray: 5 5
+///
+///     Pending -- payment is confirmed --> Claiming
+///     Pending -- invoice expires --> Expired
+///     Claiming -- ecash is minted --> Claimed
+///     Claiming -- minting ecash fails --> Failure
+/// ```
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ReceiveState {
     Pending,
@@ -675,10 +702,7 @@ impl LightningClientModule {
             .manual_operation_start(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                LightningOperationMeta::Receive {
-                    operation_id,
-                    contract,
-                },
+                LightningOperationMeta::Receive { contract },
                 vec![self.client_ctx.make_dyn_state(receive_sm)],
             )
             .await
