@@ -9,7 +9,7 @@ FEDIMINT_VERSION="0.3.0"
 DOCKER_COMPOSE_FILE=https://raw.githubusercontent.com/fedimint/fedimint/master/docker/${FEDIMINT_VERSION}/full-tls-mutinynet/docker-compose.yaml
 
 DOCKER_COMPOSE=docker-compose
-if docker compose version|grep 'Docker Compose' >& /dev/null; then
+if docker compose version | grep 'Docker Compose' >&/dev/null; then
   DOCKER_COMPOSE="docker compose"
 elif ! [ -x "$(command -v docker-compose)" ]; then
   # check if we are running as root
@@ -49,7 +49,6 @@ if [ "$(awk '/MemTotal/ {print $2}' /proc/meminfo)" -lt 2000000 ]; then
   echo 'Error: Your machine must have at least 2GB of RAM' >&2
   exit 1
 fi
-
 
 resolve_host() {
   local host=$1
@@ -94,7 +93,7 @@ echo
 echo "Your ip is $EXTERNAL_IP. You __must__ open the port 443 on your firewall so we can setup the TLS certificates."
 echo "If you are unable to open this port, then the TLS setup and everything else will catastrophically or silently fail."
 echo "So in this case you can not use this script and you must setup the TLS certificates manually or use a script without TLS"
-read -p "Press enter to acknowledge this " -r -n 1 < /dev/tty
+read -p "Press enter to acknowledge this " -r -n 1 </dev/tty
 
 echo
 echo "Next step you will setup some DNS records pointing to this machine's ip ($EXTERNAL_IP), something like:"
@@ -104,12 +103,12 @@ done
 
 echo
 while true; do
-  read -p "What will be your host name suffix? (like fedimint.example.com in the above example): " -r -a host_name < /dev/tty
+  read -p "What will be your host name suffix? (like fedimint.example.com in the above example): " -r -a host_name </dev/tty
   if [[ $(count_dots "${host_name[*]}") -eq 0 ]]; then
     echo "Error: invalid host name, it must be a subdomain, like fedimint.example.com"
   elif [[ $(count_dots "${host_name[*]}") -eq 1 ]]; then
     echo "We recommend having a subdomain for the services, like fedimint.example.com (instead of just example.com)"
-    read -p "Are you sure you want to use ${host_name[*]}? [Y/n] " -n 1 -r -a use_host_name < /dev/tty
+    read -p "Are you sure you want to use ${host_name[*]}? [Y/n] " -n 1 -r -a use_host_name </dev/tty
     echo
     if [[ ${use_host_name[*]} =~ ^[Yy]?$ ]]; then
       break
@@ -129,7 +128,7 @@ for service in $SERVICES; do
 done
 
 echo
-read -p "Press enter after you have created the above DNS records " -r -n 1 < /dev/tty
+read -p "Press enter after you have created the above DNS records " -r -n 1 </dev/tty
 echo
 echo "DNS propagation may take a while and caching may cause issues, so try to verify on another machine if the following is true:"
 echo "${host_name[*]} -> $EXTERNAL_IP"
@@ -137,7 +136,7 @@ for service in $SERVICES; do
   echo "$service.${host_name[*]} -> $EXTERNAL_IP"
 done
 echo
-read -p "Press enter after you have verified them on another machine  " -r -n 1 < /dev/tty
+read -p "Press enter after you have verified them on another machine  " -r -n 1 </dev/tty
 echo
 while true; do
   error=""
@@ -163,7 +162,7 @@ while true; do
     break
   else
     echo "Some DNS records are not correct"
-    read -p "Check again? [Y/n] " -n 1 -r -a check_again < /dev/tty
+    read -p "Check again? [Y/n] " -n 1 -r -a check_again </dev/tty
     if [[ ${check_again[*]} =~ ^[Yy]?$ ]]; then
       continue
     else
@@ -174,7 +173,7 @@ while true; do
       echo "Therefore we recommend you double check everything"
       echo "If you suspect it's just a caching issue, then wait a few minutes and try again. Do not continue."
       echo
-      read -p "Continue without checking? [y/N] " -n 1 -r -a continue_without_checking < /dev/tty
+      read -p "Continue without checking? [y/N] " -n 1 -r -a continue_without_checking </dev/tty
       echo
       if [[ ${continue_without_checking[*]} =~ ^[Yy]$ ]]; then
         echo "You have been warned, continuing..."
@@ -188,7 +187,7 @@ download $DOCKER_COMPOSE_FILE ./docker-compose.yaml
 replace_host "${host_name[*]}" ./docker-compose.yaml
 # ask the user for the gateway password
 DEFAULT_GATEWAY_PASSWORD=thereisnosecondbest
-read -p "Enter the password for the gateway and RTL interface [$DEFAULT_GATEWAY_PASSWORD]: " -a gateway_password < /dev/tty
+read -p "Enter the password for the gateway and RTL interface [$DEFAULT_GATEWAY_PASSWORD]: " -a gateway_password </dev/tty
 if [[ -z ${gateway_password[*]} ]]; then
   gateway_password=$DEFAULT_GATEWAY_PASSWORD
 fi
@@ -202,8 +201,8 @@ echo -n "Waiting for fedimintd to be ready. Don't do anything yet..."
 
 wait_fedimintd_ready() {
   flags=$1
-  while true; do 
-    status=$(curl $flags -s -q -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "method": "status", "params": [{"params":null}],"id":1}'  "https://fedimintd.${host_name[*]}" | jq -r .result.server )
+  while true; do
+    status=$(curl $flags -s -q -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0", "method": "status", "params": [{"params":null}],"id":1}' "https://fedimintd.${host_name[*]}" | jq -r .result.server)
     if [[ $status == "awaiting_password" ]]; then
       echo
       break
