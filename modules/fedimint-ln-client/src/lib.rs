@@ -1,4 +1,6 @@
 pub mod api;
+#[cfg(feature = "cli")]
+pub mod cli;
 pub mod db;
 pub mod incoming;
 pub mod pay;
@@ -388,6 +390,7 @@ pub struct LightningClientModule {
     update_gateway_cache_merge: UpdateMerge,
 }
 
+#[apply(async_trait_maybe_send!)]
 impl ClientModule for LightningClientModule {
     type Init = LightningClientInit;
     type Common = LightningModuleTypes;
@@ -433,6 +436,14 @@ impl ClientModule for LightningClientModule {
             }
         };
         Some(amt)
+    }
+
+    #[cfg(feature = "cli")]
+    async fn handle_cli_command(
+        &self,
+        args: &[std::ffi::OsString],
+    ) -> anyhow::Result<serde_json::Value> {
+        cli::handle_cli_command(self, args).await
     }
 }
 

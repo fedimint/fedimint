@@ -26,6 +26,7 @@ fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-logging = { path = "../fedimint-logging" }
 fedimint-mint-server = { path = "../modules/fedimint-mint-server" }
 fedimint-ln-server = { path = "../modules/fedimint-ln-server" }
+fedimint-ln-client = { workspace = true, features = [ "cli" ] }
 fedimint-wallet-server = { path = "../modules/fedimint-wallet-server" }
 fedimint-unknown-server = { path = "../modules/fedimint-unknown-server" }
 fedimint-meta-server = { path = "../modules/fedimint-meta-server" }

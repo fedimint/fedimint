@@ -39,7 +39,7 @@ fedimint-api-client = { workspace = true }
 fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../fedimint-rocksdb" }
 fedimint-mint-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-client" }
 fedimint-mint-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-common" }
-fedimint-ln-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-client" }
+fedimint-ln-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-client", features = [ "cli" ] }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-common" }
 fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-wallet-client" }
 fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }

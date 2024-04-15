@@ -14,6 +14,7 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::time::now;
 use fedimint_core::{Amount, BitcoinAmountOrAll, TieredMulti, TieredSummary};
+use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_ln_client::{
     LightningClientModule, LnReceiveState, OutgoingLightningPayment, PayType,
 };
@@ -31,7 +32,7 @@ use time::format_description::well_known::iso8601;
 use time::OffsetDateTime;
 use tracing::{debug, info, warn};
 
-use crate::{metadata_from_clap_cli, LnInvoiceResponse};
+use crate::metadata_from_clap_cli;
 
 #[derive(Debug, Clone)]
 pub enum ModuleSelector {
@@ -99,6 +100,7 @@ pub enum ClientCmd {
         oob_notes: Vec<OOBNotes>,
     },
     /// Create a lightning invoice to receive payment via gateway
+    #[clap(hide = true)]
     LnInvoice {
         #[clap(long)]
         amount: Amount,
@@ -114,6 +116,7 @@ pub enum ClientCmd {
     /// Wait for incoming invoice to be paid
     AwaitInvoice { operation_id: OperationId },
     /// Pay a lightning invoice or lnurl via a gateway
+    #[clap(hide = true)]
     LnPay {
         /// Lightning invoice or lnurl
         payment_info: String,
@@ -335,6 +338,7 @@ pub async fn handle_command(
             gateway_id,
             force_internal,
         } => {
+            warn!("Command deprecated. Use `fedimint-cli module ln invoice` instead.");
             let lightning_module = client.get_first_module::<LightningClientModule>();
             let ln_gateway = lightning_module
                 .get_gateway(gateway_id, force_internal)
@@ -389,6 +393,7 @@ pub async fn handle_command(
             gateway_id,
             force_internal,
         } => {
+            warn!("Command deprecated. Use `fedimint-cli module ln pay` instead.");
             let bolt11 =
                 fedimint_ln_client::get_invoice(&payment_info, amount, lnurl_comment).await?;
             info!("Paying invoice: {bolt11}");
