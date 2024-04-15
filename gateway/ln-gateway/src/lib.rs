@@ -1546,6 +1546,8 @@ pub(crate) async fn fetch_lightning_node_info(
         pub_key,
         alias,
         network,
+        block_height: _,
+        synced_to_chain: _,
     } = lnrpc.info().await?;
     let node_pub_key = PublicKey::from_slice(&pub_key)
         .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
