@@ -10,7 +10,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{bail, ensure, format_err, Context};
+use anyhow::{anyhow, bail, ensure, format_err, Context};
 use api::LnFederationApi;
 use async_stream::stream;
 use bitcoin::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
@@ -61,13 +61,15 @@ use incoming::IncomingSmError;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
 };
+use rand::rngs::OsRng;
+use rand::seq::IteratorRandom as _;
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::{PublicKey, Scalar, Signing, ThirtyTwoByteHash, Verification};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use thiserror::Error;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::db::PaymentResultPrefix;
 use crate::incoming::{
@@ -517,7 +519,7 @@ impl LightningClientModule {
             .await
             .context("Gateway is not available")?;
         if !response.status().is_success() {
-            return Err(anyhow::anyhow!(
+            return Err(anyhow!(
                 "Gateway is not available. Returned error code: {}",
                 response.status()
             ));
@@ -526,9 +528,7 @@ impl LightningClientModule {
         let text_gateway_id = response.text().await?;
         let gateway_id = PublicKey::from_str(&text_gateway_id[1..text_gateway_id.len() - 1])?;
         if gateway_id != gateway.gateway_id {
-            return Err(anyhow::anyhow!(
-                "Unexpected gateway id returned: {gateway_id}"
-            ));
+            return Err(anyhow!("Unexpected gateway id returned: {gateway_id}"));
         }
 
         Ok(())
@@ -1015,7 +1015,7 @@ impl LightningClientModule {
         let prev_operation_id =
             self.get_payment_operation_id(invoice.payment_hash(), prev_payment_result.index);
         if self.client_ctx.has_active_states(prev_operation_id).await {
-            return Err(anyhow::anyhow!("Previous payment attempt still in progress. Previous Operation Id: {prev_operation_id}"));
+            return Err(anyhow!("Previous payment attempt still in progress. Previous Operation Id: {prev_operation_id}"));
         }
 
         let next_index = prev_payment_result.index + 1;
@@ -1087,7 +1087,7 @@ impl LightningClientModule {
                     .checked_sub(
                         invoice
                             .amount_milli_satoshis()
-                            .ok_or(anyhow::anyhow!("MissingInvoiceAmount"))?,
+                            .ok_or(anyhow!("MissingInvoiceAmount"))?,
                     )
                     .expect("Contract amount should be greater or equal than invoice amount");
                 Amount::from_msats(fee_msat)
@@ -1299,7 +1299,7 @@ impl LightningClientModule {
     ) -> anyhow::Result<OperationId> {
         let incoming_contract_account = get_incoming_contract(self.module_api.clone(), contract_id)
             .await?
-            .ok_or(anyhow::anyhow!("No contract account found"))
+            .ok_or(anyhow!("No contract account found"))
             .with_context(|| format!("No contract found for {contract_id:?}"))?;
 
         let input = incoming_contract_account.claim();
@@ -1461,7 +1461,7 @@ impl LightningClientModule {
             .await
             .await_tx_accepted(txid)
             .await
-            .map_err(|e| anyhow::anyhow!("Offer transaction was not accepted: {e:?}"))?;
+            .map_err(|e| anyhow!("Offer transaction was not accepted: {e:?}"))?;
 
         Ok((operation_id, invoice, preimage))
     }
@@ -1551,6 +1551,44 @@ impl LightningClientModule {
                 }
             }
         }))
+    }
+
+    /// Returns a gateway to be used for a lightning operation. If
+    /// `force_internal` is true and no `gateway_id` is specified, no
+    /// gateway will be selected.
+    pub async fn get_gateway(
+        &self,
+        gateway_id: Option<secp256k1::PublicKey>,
+        force_internal: bool,
+    ) -> anyhow::Result<Option<LightningGateway>> {
+        match gateway_id {
+            Some(gateway_id) => {
+                if let Some(gw) = self.select_gateway(&gateway_id).await {
+                    Ok(Some(gw))
+                } else {
+                    // Refresh the gateway cache in case the target gateway was registered since the
+                    // last update.
+                    self.update_gateway_cache().await?;
+                    Ok(self.select_gateway(&gateway_id).await)
+                }
+            }
+            None if !force_internal => {
+                // Refresh the gateway cache to find a random gateway to select from.
+                self.update_gateway_cache().await?;
+                let gateways = self.list_gateways().await;
+                let gw = gateways.into_iter().choose(&mut OsRng).map(|gw| gw.info);
+                if let Some(gw) = gw {
+                    let gw_id = gw.gateway_id;
+                    info!(%gw_id, "Using random gateway");
+                    Ok(Some(gw))
+                } else {
+                    Err(anyhow!(
+                        "No gateways exist in gateway cache and `force_internal` is false"
+                    ))
+                }
+            }
+            None => Ok(None),
+        }
     }
 }
 
