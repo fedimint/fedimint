@@ -22,6 +22,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::{anyhow, bail};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Network, Txid};
@@ -84,7 +85,6 @@ use rpc::{
 };
 use secp256k1::schnorr::Signature;
 use secp256k1::PublicKey;
-use serde::{Deserialize, Serialize};
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
 use strum::IntoEnumIterator;
@@ -1591,12 +1591,12 @@ impl Gateway {
     async fn send_payment_v2(
         &self,
         payload: SendPaymentPayload,
-    ) -> std::result::Result<std::result::Result<[u8; 32], Signature>, SendPaymentErrorV2> {
+    ) -> anyhow::Result<std::result::Result<[u8; 32], Signature>> {
         let clients = self.clients.read().await;
 
         let client = clients
             .get(&payload.federation_id)
-            .ok_or(SendPaymentErrorV2::UnknownFederationId)?
+            .ok_or(anyhow!("Federation client not available"))?
             .value();
 
         // The operation id is equal to the contract id which also doubles as the
@@ -1616,17 +1616,17 @@ impl Gateway {
         // programming error we do not have to enable cancellation and can check
         // them before we start the state machine.
         if payload.contract.claim_pk != module.keypair.public_key() {
-            return Err(SendPaymentErrorV2::NotOurKey);
+            bail!("The outgoing contract keyed to another gateway");
         }
 
         if payload.invoice.consensus_hash::<sha256::Hash>() != payload.contract.invoice_hash {
-            return Err(SendPaymentErrorV2::InvalidInvoiceHash);
+            bail!("The invoices hash does not match the contract");
         }
 
         let invoice_msats = payload
             .invoice
             .amount_milli_satoshis()
-            .ok_or(SendPaymentErrorV2::InvoiceMissingAmount)?;
+            .ok_or(anyhow!("Invoice is missing amount"))?;
 
         // We need to check that the contract has been confirmed by the federation
         // before we start the state machine to prevent DOS attacks.
@@ -1634,8 +1634,8 @@ impl Gateway {
             .module_api
             .outgoing_contract_expiration(&payload.contract.contract_id())
             .await
-            .map_err(|_| SendPaymentErrorV2::FederationUnreachable)?
-            .ok_or(SendPaymentErrorV2::UnconfirmedContract)?
+            .map_err(|_| anyhow!("The gateway can not reach the federation"))?
+            .ok_or(anyhow!("The outgoing contract has not yet been confirmed"))?
             .saturating_sub(OUTGOING_CLTV_DELTA_V2);
 
         module
@@ -1655,18 +1655,18 @@ impl Gateway {
     async fn create_invoice_v2(
         &self,
         payload: CreateInvoicePayload,
-    ) -> std::result::Result<Bolt11Invoice, CreateInvoiceErrorV2> {
+    ) -> anyhow::Result<Bolt11Invoice> {
         if !payload.contract.verify() {
-            return Err(CreateInvoiceErrorV2::InvalidContract);
+            bail!("The contract is invalid")
         }
 
         let our_pk = self
             .public_key_v2(&payload.federation_id)
             .await
-            .ok_or(CreateInvoiceErrorV2::UnknownFederation)?;
+            .ok_or(anyhow!("Federation client not available"))?;
 
         if payload.contract.commitment.refund_pk != our_pk {
-            return Err(CreateInvoiceErrorV2::NotOurKey);
+            bail!("The outgoing contract keyed to another gateway");
         }
 
         let contract_amount = self
@@ -1675,11 +1675,11 @@ impl Gateway {
             .subtract_fee(payload.invoice_amount.msats);
 
         if contract_amount != payload.contract.commitment.amount {
-            return Err(CreateInvoiceErrorV2::Unbalanced);
+            bail!("The contract amount does not pay the correct amount of fees");
         }
 
         if payload.contract.commitment.expiration <= duration_since_epoch().as_secs() {
-            return Err(CreateInvoiceErrorV2::ContractExpired);
+            bail!("The contract has already expired");
         }
 
         let invoice = self
@@ -1690,7 +1690,7 @@ impl Gateway {
                 payload.expiry_time,
             )
             .await
-            .map_err(CreateInvoiceErrorV2::NodeError)?;
+            .map_err(|e| anyhow!(e))?;
 
         let mut dbtx = self.gateway_db.begin_transaction().await;
 
@@ -1702,12 +1702,12 @@ impl Gateway {
             .await
             .is_some()
         {
-            return Err(CreateInvoiceErrorV2::HashAlreadyRegistered);
+            bail!("Payment hash is already registered");
         }
 
         dbtx.commit_tx_result()
             .await
-            .map_err(|_| CreateInvoiceErrorV2::HashAlreadyRegistered)?;
+            .map_err(|_| anyhow!("Payment hash is already registered"))?;
 
         Ok(invoice)
     }
@@ -1742,8 +1742,8 @@ impl Gateway {
         &self,
         payment_hash: [u8; 32],
         amount: Amount,
-    ) -> std::result::Result<[u8; 32], ReceiveErrorV2> {
-        let operation_id = OperationId(payment_hash);
+    ) -> anyhow::Result<[u8; 32]> {
+        let operation_id = OperationId::from_encodable(payment_hash);
 
         let payload = self
             .gateway_db
@@ -1751,13 +1751,13 @@ impl Gateway {
             .await
             .get_value(&CreateInvoicePayloadKey(payment_hash))
             .await
-            .ok_or(ReceiveErrorV2::UnknownDecryptionContract)?;
+            .ok_or(anyhow!("No corresponding decryption contract available"))?;
 
         let clients = self.clients.read().await;
 
         let client = clients
             .get(&payload.federation_id)
-            .ok_or(ReceiveErrorV2::UnknownFederationId)?
+            .ok_or(anyhow!("Federation client not available"))?
             .value();
 
         let module = client.get_first_module::<GatewayClientModuleV2>();
@@ -1766,22 +1766,21 @@ impl Gateway {
             return module
                 .subscribe_receive(operation_id)
                 .await
-                .ok_or(ReceiveErrorV2::Failure);
+                .ok_or(anyhow!("The internal send failed"));
         }
 
         if payload.invoice_amount != amount {
-            return Err(ReceiveErrorV2::IncorrectAmount);
+            bail!("The available decryption contract's amount is not equal the requested amount")
         }
 
         module
             .start_receive_state_machine(operation_id, payload.contract)
-            .await
-            .map_err(ReceiveErrorV2::FinalizationError)?;
+            .await?;
 
         module
             .subscribe_receive(operation_id)
             .await
-            .ok_or(ReceiveErrorV2::Failure)
+            .ok_or(anyhow!("The internal send failed"))
     }
 }
 
@@ -1856,52 +1855,4 @@ impl Display for PrettyInterceptHtlcRequest<'_> {
             htlc_request.htlc_id,
         )
     }
-}
-
-#[derive(Error, Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum SendPaymentErrorV2 {
-    #[error("The federation id is unknown")]
-    UnknownFederationId,
-    #[error("The outgoing contract has not been confirmed by the federation")]
-    UnconfirmedContract,
-    #[error("The invoice's hash does not match the commitment in the contract")]
-    InvalidInvoiceHash,
-    #[error("The outgoing contract keyed to another gateway")]
-    NotOurKey,
-    #[error("Invoice is missing amount")]
-    InvoiceMissingAmount,
-    #[error("The gateway can not reach the federation to confirm the contract")]
-    FederationUnreachable,
-}
-
-#[derive(Error, Debug)]
-pub enum ReceiveErrorV2 {
-    #[error("The federation id is unknown")]
-    UnknownFederationId,
-    #[error("There is no corresponding decryption contract available")]
-    UnknownDecryptionContract,
-    #[error("The available decryption contract's amount does not match the amount in the request")]
-    IncorrectAmount,
-    #[error("The funding transaction could not be finalized {0}")]
-    FinalizationError(anyhow::Error),
-    #[error("The internal send failed")]
-    Failure,
-}
-
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
-pub enum CreateInvoiceErrorV2 {
-    #[error("The contract is invalid")]
-    InvalidContract,
-    #[error("The contract is keyed to another gateway")]
-    NotOurKey,
-    #[error("The gateway is not connected to the Federation")]
-    UnknownFederation,
-    #[error("A different decryption contract with this hash is already registered")]
-    HashAlreadyRegistered,
-    #[error("The contract is already expired")]
-    ContractExpired,
-    #[error("Incoming contract would be unbalanced")]
-    Unbalanced,
-    #[error("The lightning node failed to create an invoice")]
-    NodeError(String),
 }
