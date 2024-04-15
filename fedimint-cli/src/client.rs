@@ -92,6 +92,30 @@ pub enum ClientCmd {
         #[clap(long)]
         include_invite: bool,
     },
+    SmallestRepresentation {
+        /// Minimum amount to generate a representation for
+        #[clap(long)]
+        min_amount: Amount,
+        /// Maximum amount to generate a representation for
+        #[clap(long)]
+        max_amount: Amount,
+    },
+    /// In certain situations one wants to generate e-cash that is small and
+    /// only roughly has a certain amount, i.e. one is willing to overspend if
+    /// it allows optimizing the e-cash size.
+    OnlineSpend {
+        /// Exact amount to spend, if we don't have the optimal denomintions in
+        /// our wallet we will do a blocking reissuance.
+        amount: Amount,
+        /// After how many seconds we will try to reclaim the e-cash if it
+        /// hasn't been redeemed by the recipient. Defaults to one week.
+        #[clap(long, default_value_t = 60 * 60 * 24 * 7)]
+        timeout: u64,
+        /// If the necessary information to join the federation the e-cash
+        /// belongs to should be included in the serialized notes
+        #[clap(long)]
+        include_invite: bool,
+    },
     /// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
     Validate { oob_notes: OOBNotes },
@@ -268,6 +292,37 @@ pub async fn handle_command(
                     )
                     .await?
             };
+            info!("Spend e-cash operation: {operation}");
+
+            Ok(json!({
+                "notes": notes,
+            }))
+        }
+        ClientCmd::SmallestRepresentation {
+            min_amount,
+            max_amount,
+        } => {
+            let (amount, num_notes) = client
+                .get_first_module::<MintClientModule>()
+                .smallest_representation(min_amount, max_amount);
+
+            Ok(json!({
+                "amount_msat": amount.msats,
+                "num_notes": num_notes,
+            }))
+        }
+        ClientCmd::OnlineSpend {
+            amount,
+            timeout,
+            include_invite,
+        } => {
+            let timeout = Duration::from_secs(timeout);
+
+            let (operation, notes) = client
+                .get_first_module::<MintClientModule>()
+                .blocking_spend_ecash_minimal_representation(amount, timeout, include_invite, ())
+                .await?;
+
             info!("Spend e-cash operation: {operation}");
 
             Ok(json!({

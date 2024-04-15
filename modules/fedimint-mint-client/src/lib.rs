@@ -398,6 +398,7 @@ pub enum MintOperationMetaVariant {
         requested_amount: Amount,
         oob_notes: OOBNotes,
     },
+    Remint,
 }
 
 #[derive(Debug, Clone)]
@@ -673,14 +674,14 @@ impl ClientModule for MintClientModule {
         self.create_input(dbtx, operation_id, min_amount).await
     }
 
-    async fn create_exact_output(
+    async fn create_exact_outputs(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         amount: Amount,
     ) -> Vec<ClientOutput<MintOutput, MintClientStateMachines>> {
         // FIXME: don't hardcode notes per denomination
-        self.create_output(dbtx, operation_id, 2, amount).await
+        self.create_outputs(dbtx, operation_id, 2, amount).await
     }
 
     async fn await_primary_module_output(
@@ -754,7 +755,7 @@ impl MintClientModule {
     /// Creates a mint output with exactly the given `amount`, issuing e-cash
     /// notes such that the client holds `notes_per_denomination` notes of each
     /// e-cash note denomination held.
-    pub async fn create_output(
+    pub async fn create_outputs(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
@@ -777,34 +778,49 @@ impl MintClientModule {
 
         for (amount, num) in denominations.iter() {
             for _ in 0..num {
-                let (issuance_request, blind_nonce) = self.new_ecash_note(amount, dbtx).await;
-
-                let state_generator = Arc::new(move |txid, out_idx| {
-                    vec![MintClientStateMachines::Output(MintOutputStateMachine {
-                        common: MintOutputCommon {
-                            operation_id,
-                            out_point: OutPoint { txid, out_idx },
-                        },
-                        state: MintOutputStates::Created(MintOutputStatesCreated {
-                            amount,
-                            issuance_request,
-                        }),
-                    })]
-                });
-
-                debug!(
-                    %amount,
-                    "Generated issuance request"
-                );
-
-                outputs.push(ClientOutput {
-                    output: MintOutput::new_v0(amount, blind_nonce),
-                    state_machines: state_generator,
-                });
+                outputs.push(self.create_single_output(dbtx, operation_id, amount).await);
             }
         }
 
         outputs
+    }
+
+    async fn create_single_output(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        denomination: Amount,
+    ) -> ClientOutput<MintOutput, MintClientStateMachines> {
+        assert!(
+            self.cfg.tbs_pks.get(denomination).is_some(),
+            "Denomination doesn't exist: {}",
+            denomination
+        );
+
+        let (issuance_request, blind_nonce) = self.new_ecash_note(denomination, dbtx).await;
+
+        let state_generator = Arc::new(move |txid, out_idx| {
+            vec![MintClientStateMachines::Output(MintOutputStateMachine {
+                common: MintOutputCommon {
+                    operation_id,
+                    out_point: OutPoint { txid, out_idx },
+                },
+                state: MintOutputStates::Created(MintOutputStatesCreated {
+                    amount: denomination,
+                    issuance_request,
+                }),
+            })]
+        });
+
+        debug!(
+            %denomination,
+            "Generated issuance request"
+        );
+
+        ClientOutput {
+            output: MintOutput::new_v0(denomination, blind_nonce),
+            state_machines: state_generator,
+        }
     }
 
     /// Wait for the e-cash notes to be retrieved. If this is not possible
@@ -1426,6 +1442,106 @@ impl MintClientModule {
 
         Ok(operation)
     }
+
+    /// Returns `num` amounts between `min_amount` and `max_amount` (inclusive)
+    /// that have the smallest optimal representation as e-cash.
+    pub fn smallest_representation(
+        &self,
+        min_amount: Amount,
+        max_amount: Amount,
+    ) -> (Amount, usize) {
+        assert!(min_amount <= max_amount, "The range specified is empty");
+
+        let mut selected_amount = Amount::ZERO;
+        let num_notes = TieredSummary::represent_amount_minimal(max_amount, &self.cfg.tbs_pks)
+            .iter()
+            .rev()
+            .flat_map(|(amount, num_notes)| std::iter::repeat(amount).take(num_notes))
+            .take_while(|amount| {
+                if selected_amount < min_amount {
+                    selected_amount += *amount;
+                    true
+                } else {
+                    false
+                }
+            })
+            .count();
+
+        (selected_amount, num_notes)
+    }
+
+    /// This function will return e-cash of minimal size. It may have to reissue
+    /// notes to do so and will block until this is done in that case. This
+    /// function is not concurrency-safe.
+    pub async fn blocking_spend_ecash_minimal_representation<M: Serialize + Send>(
+        &self,
+        amount: Amount,
+        try_cancel_after: Duration,
+        include_invite: bool,
+        extra_meta: M,
+    ) -> anyhow::Result<(OperationId, OOBNotes)> {
+        let representation = TieredSummary::represent_amount_minimal(amount, &self.cfg.tbs_pks);
+
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+        let wallet_summary = self.get_wallet_summary(&mut dbtx.to_ref_nc()).await;
+
+        if !wallet_summary.contains(&representation) {
+            let operation_id = OperationId::new_random();
+            let mut transaction = TransactionBuilder::new();
+
+            // Reissue e-cash from our wallet into the denominations that we need
+            for denomination in representation
+                .iter()
+                .flat_map(|(amount, num_notes)| std::iter::repeat(amount).take(num_notes))
+            {
+                transaction = transaction.with_output(
+                    self.client_ctx.make_client_output(
+                        self.create_single_output(
+                            &mut dbtx.to_ref_nc(),
+                            operation_id,
+                            denomination,
+                        )
+                        .await,
+                    ),
+                );
+            }
+
+            // TODO: impl such that this doesn't create an operation log entry
+            let (txid, _) = self
+                .client_ctx
+                .finalize_and_submit_transaction(
+                    operation_id,
+                    "mint",
+                    |_, _| MintOperationMeta {
+                        variant: MintOperationMetaVariant::Remint,
+                        amount,
+                        extra_meta: Default::default(),
+                    },
+                    transaction,
+                )
+                .await?;
+
+            // Wait for all the e-cash we require to be issued
+            let out_points = (0..representation.count_items()).map(|out_idx| OutPoint {
+                txid,
+                out_idx: out_idx as u64,
+            });
+            for out_point in out_points {
+                self.await_output_finalized(operation_id, out_point).await?;
+            }
+        }
+
+        dbtx.commit_tx_result().await?;
+
+        self.spend_notes_with_selector(
+            &SelectSpecificNotes::new(representation),
+            amount,
+            try_cancel_after,
+            include_invite,
+            extra_meta,
+        )
+        .await
+    }
 }
 
 pub fn spendable_notes_to_operation_id(
@@ -1595,6 +1711,53 @@ async fn select_notes_from_stream<Note>(
                 });
             }
         }
+    }
+}
+
+struct SelectSpecificNotes {
+    denominations: TieredSummary,
+}
+
+impl SelectSpecificNotes {
+    pub fn new(denominations: TieredSummary) -> SelectSpecificNotes {
+        SelectSpecificNotes { denominations }
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<Note: Send> NotesSelector<Note> for SelectSpecificNotes {
+    async fn select_notes(
+        &self,
+        #[cfg(not(target_family = "wasm"))] stream: impl futures::Stream<Item = (Amount, Note)> + Send,
+        #[cfg(target_family = "wasm")] stream: impl futures::Stream<Item = (Amount, Note)>,
+        requested_amount: Amount,
+    ) -> anyhow::Result<TieredMulti<Note>> {
+        // TODO: maybe make amount always part of selector?
+        assert_eq!(requested_amount, self.denominations.total_amount());
+
+        let mut remaining_denominations = self.denominations.clone();
+        use futures::StreamExt;
+        let selected_notes = stream
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .filter(
+                |(amount, _note)| match remaining_denominations.get_tier_count_mut(*amount) {
+                    Some(tier_count) if *tier_count > 0 => {
+                        *tier_count += 1;
+                        true
+                    }
+                    _ => false,
+                },
+            )
+            .collect::<TieredMulti<_>>();
+
+        ensure!(
+            selected_notes.total_amount() == requested_amount,
+            "Not all notes requested were available"
+        );
+
+        Ok(selected_notes)
     }
 }
 
