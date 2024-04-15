@@ -34,7 +34,7 @@ use fedimint_core::{timing, NumPeers, PeerId};
 use futures::StreamExt;
 use rand::Rng;
 use tokio::sync::{watch, RwLock};
-use tracing::{debug, info, warn};
+use tracing::{debug, info, warn, Level};
 
 use crate::atomic_broadcast::data_provider::{DataProvider, UnitData};
 use crate::atomic_broadcast::finalization_handler::FinalizationHandler;
@@ -607,7 +607,7 @@ impl ConsensusServer {
         peer: PeerId,
     ) -> anyhow::Result<()> {
         let peer_id_str = &self.peer_id_str[peer.to_usize()];
-        let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item");
+        let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item").level(Level::TRACE);
         let timing_prom = CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS
             .with_label_values(&[peer_id_str])
             .start_timer();
@@ -655,7 +655,7 @@ impl ConsensusServer {
 
         for (module_instance_id, kind, module) in self.modules.iter_modules() {
             let _module_audit_timing =
-                TimeReporter::new(format!("audit module {module_instance_id}"));
+                TimeReporter::new(format!("audit module {module_instance_id}")).level(Level::TRACE);
 
             let timing_prom = CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS
                 .with_label_values(&[&MODULE_INSTANCE_ID_GLOBAL.to_string(), kind.as_str()])
