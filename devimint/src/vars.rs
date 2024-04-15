@@ -173,7 +173,7 @@ declare_vars! {
         FM_DEFAULT_BITCOIN_RPC_URL: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: FM_DEFAULT_BITCOIN_RPC_URL_ENV;
         FM_DEFAULT_BITCOIN_RPC_KIND: String = "bitcoind"; env: FM_DEFAULT_BITCOIN_RPC_KIND_ENV;
 
-        FM_ROCKSDB_WRITE_BUFFER_SIZE : String = (1 << 20).to_string(); env: "FM_ROCKSDB_WRITE_BUFFER_SIZE ";
+        FM_ROCKSDB_WRITE_BUFFER_SIZE : String = (1 << 20).to_string(); env: "FM_ROCKSDB_WRITE_BUFFER_SIZE";
     }
 }
 
