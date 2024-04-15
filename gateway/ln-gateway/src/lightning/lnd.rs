@@ -66,11 +66,7 @@ impl GatewayLndClient {
         }
     }
 
-    async fn connect(
-        address: String,
-        tls_cert: String,
-        macaroon: String,
-    ) -> Result<LndClient, LightningRpcError> {
+    async fn connect(&self) -> Result<LndClient, LightningRpcError> {
         let mut retries = 0;
         let client = loop {
             if retries >= MAX_LIGHTNING_RETRIES {
@@ -79,7 +75,13 @@ impl GatewayLndClient {
 
             retries += 1;
 
-            match connect(address.clone(), tls_cert.clone(), macaroon.clone()).await {
+            match connect(
+                self.address.clone(),
+                self.tls_cert.clone(),
+                self.macaroon.clone(),
+            )
+            .await
+            {
                 Ok(client) => break client,
                 Err(e) => {
                     tracing::debug!("Couldn't connect to LND, retrying in 1 second... {e:?}");
@@ -98,12 +100,7 @@ impl GatewayLndClient {
         lnd_rx: mpsc::Receiver<ForwardHtlcInterceptResponse>,
         gateway_sender: HtlcSubscriptionSender,
     ) -> Result<(), LightningRpcError> {
-        let mut client = Self::connect(
-            self.address.clone(),
-            self.tls_cert.clone(),
-            self.macaroon.clone(),
-        )
-        .await?;
+        let mut client = self.connect().await?;
 
         // Verify that LND is reachable via RPC before attempting to spawn a new thread
         // that will intercept HTLCs.
@@ -288,12 +285,7 @@ impl fmt::Debug for GatewayLndClient {
 #[async_trait]
 impl ILnRpcClient for GatewayLndClient {
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
-        let mut client = Self::connect(
-            self.address.clone(),
-            self.tls_cert.clone(),
-            self.macaroon.clone(),
-        )
-        .await?;
+        let mut client = self.connect().await?;
         let info = client
             .lightning()
             .get_info(GetInfoRequest {})
@@ -329,12 +321,7 @@ impl ILnRpcClient for GatewayLndClient {
         &self,
         num_route_hints: usize,
     ) -> Result<GetRouteHintsResponse, LightningRpcError> {
-        let mut client = Self::connect(
-            self.address.clone(),
-            self.tls_cert.clone(),
-            self.macaroon.clone(),
-        )
-        .await?;
+        let mut client = self.connect().await?;
         let mut channels = client
             .lightning()
             .list_channels(ListChannelsRequest {
@@ -418,12 +405,7 @@ impl ILnRpcClient for GatewayLndClient {
         max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
         info!("LND Paying invoice {invoice:?}");
-        let mut client = Self::connect(
-            self.address.clone(),
-            self.tls_cert.clone(),
-            self.macaroon.clone(),
-        )
-        .await?;
+        let mut client = self.connect().await?;
 
         debug!("LND got client to pay invoice {invoice:?}, will check if payment already exists");
 
@@ -633,12 +615,7 @@ impl ILnRpcClient for GatewayLndClient {
         &self,
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
-        let mut client = Self::connect(
-            self.address.clone(),
-            self.tls_cert.clone(),
-            self.macaroon.clone(),
-        )
-        .await?;
+        let mut client = self.connect().await?;
         let hold_invoice_response = client
             .invoices()
             .add_hold_invoice(AddHoldInvoiceRequest {
