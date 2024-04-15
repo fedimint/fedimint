@@ -7,7 +7,7 @@ mod send_sm;
 use std::sync::Arc;
 
 use async_stream::stream;
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
@@ -17,7 +17,6 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
@@ -690,7 +689,7 @@ impl LightningClientModule {
             common: ReceiveSMCommon {
                 operation_id,
                 contract: contract.clone(),
-                claim_keypair: bitcoin30_to_bitcoin29_keypair(claim_keypair),
+                claim_keypair,
                 agg_decryption_key,
             },
             state: ReceiveSMState::Pending,
