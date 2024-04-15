@@ -389,7 +389,7 @@ impl LightningReceiveFunded {
 #[cfg(test)]
 mod tests {
 
-    use bitcoin_hashes::{sha256, Hash};
+    use bitcoin::hashes::{sha256, Hash};
     use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
     use secp256k1::SecretKey;
 
