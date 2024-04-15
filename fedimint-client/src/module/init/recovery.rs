@@ -278,7 +278,7 @@ where
                             match items_res {
                                 Ok(block) => break block,
                                 Err(e) => {
-                                    info!(e = %e, session_idx, "Error trying to fetch signed block");
+                                    info!(target: LOG_CLIENT_RECOVERY, e = %e, session_idx, "Error trying to fetch signed block");
                                     // We don't want PARALLISM_LEVEL tasks hammering Federation
                                     // with requests, so max sleep is significant
                                     const MAX_SLEEP: Duration = Duration::from_secs(120);

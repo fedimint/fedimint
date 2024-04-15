@@ -335,7 +335,7 @@ impl MintRecoveryState {
 
     /// Fill each tier pool to the gap limit
     fn fill_initial_pending_nonces(&mut self, amount: Amount, secret: &DerivableSecret) {
-        info!(%amount, count=self.gap_limit, "Generating initial set of nonces for amount tier");
+        debug!(%amount, count=self.gap_limit, "Generating initial set of nonces for amount tier");
         for _ in 0..self.gap_limit {
             self.add_next_pending_nonce_in_pending_pool(amount, secret);
         }

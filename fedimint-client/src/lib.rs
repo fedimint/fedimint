@@ -1671,6 +1671,7 @@ impl Client {
             watch::Receiver<RecoveryProgress>,
         >,
     ) {
+        debug!(target:LOG_CLIENT_RECOVERY, num_modules=%module_recovery_progress_receivers.len(), "Staring module recoveries");
         let mut completed_stream = Vec::new();
         let progress_stream = futures::stream::FuturesUnordered::new();
 
