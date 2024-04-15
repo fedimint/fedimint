@@ -23,6 +23,6 @@ ff = "0.12.1"
 group = "0.12.1"
 rand = "0.8"
 rand_chacha = "0.3.1"
-bitcoin_hashes = "0.11.0"
+bitcoin_hashes = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde-big-array = "0.5.1"
