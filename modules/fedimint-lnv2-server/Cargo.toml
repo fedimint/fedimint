@@ -19,7 +19,7 @@ bincode = "1"
 bitcoin_hashes = "0.11.0"
 erased-serde = { workspace = true }
 futures = "0.3.24"
-itertools = "0.10.5"
+itertools = "0.12.1"
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
 fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
 fedimint-core ={ path = "../../fedimint-core" }
