@@ -1443,7 +1443,7 @@ dependencies = [
  "jsonrpsee-types",
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
- "lightning",
+ "lightning 0.0.118",
  "lightning-invoice",
  "lru",
  "macro_rules_attribute",
@@ -1634,7 +1634,7 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-types",
  "jsonrpsee-wasm-client",
- "lightning",
+ "lightning 0.0.118",
  "lightning-invoice",
  "macro_rules_attribute",
  "miniscript 10.0.0",
@@ -1943,7 +1943,7 @@ dependencies = [
  "fedimint-threshold-crypto",
  "futures",
  "itertools 0.12.1",
- "lightning",
+ "lightning 0.0.118",
  "lightning-invoice",
  "rand",
  "secp256k1 0.24.3",
@@ -2001,7 +2001,7 @@ dependencies = [
  "fedimint-wallet-client",
  "futures",
  "hex",
- "lightning",
+ "lightning 0.0.118",
  "lightning-invoice",
  "prost",
  "rand",
@@ -2040,7 +2040,7 @@ dependencies = [
  "fedimint-threshold-crypto",
  "futures",
  "itertools 0.12.1",
- "lightning",
+ "lightning 0.0.118",
  "lightning-invoice",
  "rand",
  "secp256k1 0.24.3",
@@ -3373,6 +3373,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex-conservative"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30ed443af458ccb6d81c1e7e661545f94d3176752fb1df2f543b902a1e0f51e2"
+
+[[package]]
 name = "hex_fmt"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4003,17 +4009,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightning-invoice"
-version = "0.26.0"
+name = "lightning"
+version = "0.0.122"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3eb24878b0f4ef75f020976c886d9ad1503867802329cc963e0ab4623ea3b25c"
+checksum = "0d9b36ae12b379905bfc429ce5d4e8ca4a55c8dd3de73074309bd0bcc053bcac"
+dependencies = [
+ "bitcoin 0.30.2",
+ "hex-conservative",
+]
+
+[[package]]
+name = "lightning-invoice"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "106fdb897e69df697480f45bf0a564b425af488fb0f7407e770a770c39b19a21"
 dependencies = [
  "bech32",
- "bitcoin 0.29.2",
- "bitcoin_hashes 0.11.0",
- "lightning",
+ "bitcoin 0.30.2",
+ "lightning 0.0.122",
  "num-traits",
- "secp256k1 0.24.3",
+ "secp256k1 0.27.0",
  "serde",
 ]
 

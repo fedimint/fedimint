@@ -44,7 +44,7 @@ bitcoin30 = { package = "bitcoin", version = "0.30.2", features = ["rand-std", "
 bitcoin_hashes = { version = "0.11", features = ["serde"] }
 erased-serde = { workspace = true }
 lightning = "0.0.118"
-lightning-invoice = "0.26.0"
+lightning-invoice = "0.30.0"
 fedimint-derive = { version = "=0.4.0-alpha", path = "../fedimint-derive" }
 fedimint-core = { workspace = true }
 fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
