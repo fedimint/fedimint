@@ -1709,6 +1709,24 @@ impl SpendableNote {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable)]
+pub struct SpendableNoteUndecoded {
+    pub signature: [u8; 48],
+    pub spend_key: KeyPair,
+}
+
+impl SpendableNoteUndecoded {
+    pub fn decode(self) -> anyhow::Result<SpendableNote> {
+        Ok(SpendableNote {
+            signature: Decodable::consensus_decode_from_finite_reader(
+                &mut self.signature.as_slice(),
+                &Default::default(),
+            )?,
+            spend_key: self.spend_key,
+        })
+    }
+}
+
 /// An index used to deterministically derive [`Note`]s
 ///
 /// We allow converting it to u64 and incrementing it, but
@@ -1795,6 +1813,7 @@ mod tests {
 
     use crate::{
         select_notes_from_stream, MintOperationMetaVariant, OOBNotes, OOBNotesData, SpendableNote,
+        SpendableNoteUndecoded,
     };
 
     #[test_log::test(tokio::test)]
@@ -1982,6 +2001,17 @@ mod tests {
         ]);
         let notes_inconsistent_str = notes_inconsistent.to_string();
         assert!(notes_inconsistent_str.parse::<OOBNotes>().is_err());
+    }
+
+    #[test]
+    fn spendable_note_undecoded_sanity() {
+        for note_hex in ["a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd"] {
+
+            assert_eq!(
+                SpendableNote::consensus_decode_hex(note_hex, &Default::default()).unwrap(),
+                SpendableNoteUndecoded::consensus_decode_hex(note_hex, &Default::default()).unwrap().decode().unwrap(),
+            )
+        }
     }
 
     #[test]
