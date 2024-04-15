@@ -225,18 +225,7 @@ impl Opts {
 
     fn admin_client(&self, cfg: &ClientConfig) -> CliResult<DynGlobalApi> {
         let our_id = self.our_id.ok_or_cli_msg("Admin client needs our-id set")?;
-        Self::admin_client_from_id(our_id, cfg)
-    }
-
-    fn admin_client_from_id(id: PeerId, cfg: &ClientConfig) -> CliResult<DynGlobalApi> {
-        let url = cfg
-            .global
-            .api_endpoints
-            .get(&id)
-            .expect("Endpoint exists")
-            .url
-            .clone();
-        Ok(DynGlobalApi::from_single_endpoint(id, url))
+        Ok(DynGlobalApi::from_config_admin(cfg, our_id))
     }
 
     fn auth(&self) -> CliResult<ApiAuth> {
@@ -333,7 +322,7 @@ struct DkgAdminArgs {
 impl DkgAdminArgs {
     fn ws_admin_client(&self) -> CliResult<DynGlobalApi> {
         let ws = self.ws.clone();
-        Ok(DynGlobalApi::from_pre_peer_id_endpoint(ws))
+        Ok(DynGlobalApi::from_pre_peer_id_admin_endpoint(ws))
     }
 }
 
