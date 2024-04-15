@@ -25,7 +25,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 base64 = "0.22.0"
 bip39 = { version = "2.0.0", features = ["rand"] }
-bitcoin = "0.29.2"
+bitcoin = "0.30.2"
 time = { version = "0.3.34", features = [ "formatting" ] }
 clap = { workspace = true }
 futures = { workspace = true }

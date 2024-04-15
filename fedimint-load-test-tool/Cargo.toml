@@ -14,7 +14,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { workspace = true }
 base64 = "0.22.0"
-bitcoin = "0.29.2"
+bitcoin = "0.30.2"
 clap = { workspace = true }
 devimint = { version = "=0.4.0-alpha", path = "../devimint" }
 fedimint-client = { version = "=0.4.0-alpha", path = "../fedimint-client" }

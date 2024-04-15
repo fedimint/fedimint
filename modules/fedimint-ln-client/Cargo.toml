@@ -27,7 +27,7 @@ async-trait = { workspace = true }
 async-stream = "0.3.5"
 aquamarine = "0.5.0"
 bincode = "1"
-bitcoin = "0.29.2"
+bitcoin = "0.30.2"
 bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
