@@ -41,6 +41,7 @@ pub const LOG_CLIENT_RECOVERY: &str = "fm::client::recovery";
 pub const LOG_CLIENT_RECOVERY_MINT: &str = "fm::client::recovery::mint";
 pub const LOG_CLIENT_MODULE_META: &str = "fm::client::module::meta";
 pub const LOG_CLIENT_MODULE_MINT: &str = "fm::client::module::mint";
+pub const LOG_CLIENT_MODULE_LN: &str = "fm::client::module::ln";
 
 /// Consolidates the setup of server tracing into a helper
 #[derive(Default)]

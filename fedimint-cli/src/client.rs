@@ -15,10 +15,8 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::time::now;
 use fedimint_core::{Amount, BitcoinAmountOrAll, TieredMulti, TieredSummary};
 use fedimint_ln_client::{
-    InternalPayState, LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment,
-    PayType,
+    LightningClientModule, LnReceiveState, OutgoingLightningPayment, PayType,
 };
-use fedimint_ln_common::contracts::ContractId;
 use fedimint_logging::LOG_CLIENT;
 use fedimint_mint_client::{
     MintClientModule, OOBNotes, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
@@ -409,7 +407,10 @@ pub async fn handle_command(
             let operation_id = payment_type.operation_id();
             info!("Gateway fee: {fee}, payment operation id: {operation_id}");
             if finish_in_background {
-                wait_for_ln_payment(&client, payment_type, contract_id, true).await?;
+                client
+                    .get_first_module::<LightningClientModule>()
+                    .wait_for_ln_payment(payment_type, contract_id, true)
+                    .await?;
                 info!("Payment will finish in background, use await-ln-pay to get the result");
                 Ok(serde_json::json! {
                     {
@@ -420,11 +421,11 @@ pub async fn handle_command(
                     }
                 })
             } else {
-                Ok(
-                    wait_for_ln_payment(&client, payment_type, contract_id, false)
-                        .await?
-                        .context("expected a response")?,
-                )
+                Ok(client
+                    .get_first_module::<LightningClientModule>()
+                    .wait_for_ln_payment(payment_type, contract_id, false)
+                    .await?
+                    .context("expected a response")?)
             }
         }
         ClientCmd::AwaitLnPay { operation_id } => {
@@ -437,11 +438,10 @@ pub async fn handle_command(
             } else {
                 PayType::Lightning(operation_id)
             };
-            Ok(
-                wait_for_ln_payment(&client, payment_type, ln_pay_details.contract_id, false)
-                    .await?
-                    .context("expected a response")?,
-            )
+            Ok(lightning_module
+                .wait_for_ln_payment(payment_type, ln_pay_details.contract_id, false)
+                .await?
+                .context("expected a response")?)
         }
         ClientCmd::ListGateways { no_update } => {
             let lightning_module = client.get_first_module::<LightningClientModule>();
@@ -693,95 +693,6 @@ async fn get_invoice(
     }
 }
 
-async fn wait_for_ln_payment(
-    client: &ClientHandleArc,
-    payment_type: PayType,
-    contract_id: ContractId,
-    return_on_funding: bool,
-) -> anyhow::Result<Option<serde_json::Value>> {
-    let lightning_module = client.get_first_module::<LightningClientModule>();
-
-    match payment_type {
-        PayType::Internal(operation_id) => {
-            let mut updates = lightning_module
-                .subscribe_internal_pay(operation_id)
-                .await?
-                .into_stream();
-
-            while let Some(update) = updates.next().await {
-                match update {
-                    InternalPayState::Preimage(preimage) => {
-                        return Ok(Some(
-                            serde_json::to_value(PayInvoiceResponse {
-                                operation_id,
-                                contract_id,
-                                preimage: preimage.consensus_encode_to_hex(),
-                            })
-                            .unwrap(),
-                        ));
-                    }
-                    InternalPayState::RefundSuccess { out_points, error } => {
-                        let e = format!(
-                            "Internal payment failed. A refund was issued to {:?} Error: {error}",
-                            out_points
-                        );
-                        bail!("{e}");
-                    }
-                    InternalPayState::UnexpectedError(e) => {
-                        bail!("{e}");
-                    }
-                    InternalPayState::Funding if return_on_funding => return Ok(None),
-                    InternalPayState::Funding => {}
-                    InternalPayState::RefundError {
-                        error_message,
-                        error,
-                    } => bail!("RefundError: {error_message} {error}"),
-                    InternalPayState::FundingFailed { error } => {
-                        bail!("FundingFailed: {error}")
-                    }
-                }
-                debug!(target: LOG_CLIENT, ?update, "Wait for ln payment state update");
-            }
-        }
-        PayType::Lightning(operation_id) => {
-            let mut updates = lightning_module
-                .subscribe_ln_pay(operation_id)
-                .await?
-                .into_stream();
-
-            while let Some(update) = updates.next().await {
-                match update {
-                    LnPayState::Success { preimage } => {
-                        return Ok(Some(
-                            serde_json::to_value(PayInvoiceResponse {
-                                operation_id,
-                                contract_id,
-                                preimage,
-                            })
-                            .unwrap(),
-                        ));
-                    }
-                    LnPayState::Refunded { gateway_error } => {
-                        info!("{gateway_error}");
-                        return Ok(Some(get_note_summary(client).await?));
-                    }
-                    LnPayState::Created
-                    | LnPayState::Canceled
-                    | LnPayState::AwaitingChange
-                    | LnPayState::WaitingForRefund { .. } => {}
-                    LnPayState::Funded if return_on_funding => return Ok(None),
-                    LnPayState::Funded => {}
-                    LnPayState::UnexpectedError { error_message } => {
-                        bail!("UnexpectedError: {error_message}")
-                    }
-                }
-                debug!(target: LOG_CLIENT, ?update, "Wait for ln payment state update");
-            }
-        }
-    };
-    bail!("Lightning Payment failed")
-}
-
 async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json::Value> {
     let mint_client = client.get_first_module::<MintClientModule>();
     let wallet_client = client.get_first_module::<WalletClientModule>();
@@ -807,19 +718,11 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-struct InfoResponse {
+pub struct InfoResponse {
     federation_id: FederationId,
     network: Network,
     meta: BTreeMap<String, String>,
     total_amount_msat: Amount,
     total_num_notes: usize,
     denominations_msat: TieredSummary,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-struct PayInvoiceResponse {
-    operation_id: OperationId,
-    contract_id: ContractId,
-    preimage: String,
 }

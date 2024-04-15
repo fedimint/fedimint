@@ -56,6 +56,7 @@ use fedimint_ln_common::{
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
     LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
+use fedimint_logging::LOG_CLIENT_MODULE_LN;
 use futures::{Future, FutureExt, StreamExt};
 use incoming::IncomingSmError;
 use lightning_invoice::{
@@ -67,9 +68,10 @@ use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::{PublicKey, Scalar, Signing, ThirtyTwoByteHash, Verification};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use strum::IntoEnumIterator;
 use thiserror::Error;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::db::PaymentResultPrefix;
 use crate::incoming::{
@@ -1590,6 +1592,108 @@ impl LightningClientModule {
             None => Ok(None),
         }
     }
+
+    pub async fn wait_for_ln_payment(
+        &self,
+        payment_type: PayType,
+        contract_id: ContractId,
+        return_on_funding: bool,
+    ) -> anyhow::Result<Option<serde_json::Value>> {
+        // let lightning_module = client.get_first_module::<LightningClientModule>();
+
+        match payment_type {
+            PayType::Internal(operation_id) => {
+                let mut updates = self
+                    .subscribe_internal_pay(operation_id)
+                    .await?
+                    .into_stream();
+
+                while let Some(update) = updates.next().await {
+                    match update {
+                        InternalPayState::Preimage(preimage) => {
+                            return Ok(Some(
+                                serde_json::to_value(PayInvoiceResponse {
+                                    operation_id,
+                                    contract_id,
+                                    preimage: preimage.consensus_encode_to_hex(),
+                                })
+                                .unwrap(),
+                            ));
+                        }
+                        InternalPayState::RefundSuccess { out_points, error } => {
+                            let e = format!(
+                            "Internal payment failed. A refund was issued to {:?} Error: {error}",
+                            out_points
+                        );
+                            bail!("{e}");
+                        }
+                        InternalPayState::UnexpectedError(e) => {
+                            bail!("{e}");
+                        }
+                        InternalPayState::Funding if return_on_funding => return Ok(None),
+                        InternalPayState::Funding => {}
+                        InternalPayState::RefundError {
+                            error_message,
+                            error,
+                        } => bail!("RefundError: {error_message} {error}"),
+                        InternalPayState::FundingFailed { error } => {
+                            bail!("FundingFailed: {error}")
+                        }
+                    }
+                    debug!(target: LOG_CLIENT_MODULE_LN, ?update, "Wait for ln payment state update");
+                }
+            }
+            PayType::Lightning(operation_id) => {
+                let mut updates = self.subscribe_ln_pay(operation_id).await?.into_stream();
+
+                while let Some(update) = updates.next().await {
+                    match update {
+                        LnPayState::Success { preimage } => {
+                            return Ok(Some(
+                                serde_json::to_value(PayInvoiceResponse {
+                                    operation_id,
+                                    contract_id,
+                                    preimage,
+                                })
+                                .unwrap(),
+                            ));
+                        }
+                        LnPayState::Refunded { gateway_error } => {
+                            info!("{gateway_error}");
+                            // TODO: what should be the format here?
+                            return Ok(Some(json! {
+                                {
+                                    "status": "refunded",
+                                    "gateway_error": gateway_error,
+                                }
+                            }));
+                        }
+                        LnPayState::Created
+                        | LnPayState::Canceled
+                        | LnPayState::AwaitingChange
+                        | LnPayState::WaitingForRefund { .. } => {}
+                        LnPayState::Funded if return_on_funding => return Ok(None),
+                        LnPayState::Funded => {}
+                        LnPayState::UnexpectedError { error_message } => {
+                            bail!("UnexpectedError: {error_message}")
+                        }
+                    }
+                    debug!(target: LOG_CLIENT_MODULE_LN, ?update, "Wait for ln payment state update");
+                }
+            }
+        };
+        bail!("Lightning Payment failed")
+    }
+}
+
+// TODO: move to appropriate module (cli?)
+// some refactoring here needed
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct PayInvoiceResponse {
+    operation_id: OperationId,
+    contract_id: ContractId,
+    preimage: String,
 }
 
 #[allow(clippy::large_enum_variant)]
