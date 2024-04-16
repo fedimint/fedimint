@@ -825,8 +825,8 @@ where
             ApiRequestErased::new(block_index),
         )
         .await?
-        .try_into_inner(decoders)
-        .map_err(|e| anyhow!(e.to_string()))
+        .try_into_inner(&decoders.clone().with_fallback())
+        .map_err(|e| anyhow!(e))
     }
 }
 

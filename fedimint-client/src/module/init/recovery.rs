@@ -127,18 +127,6 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
     ) -> anyhow::Result<()> {
         trace!(
             target: LOG_CLIENT_RECOVERY,
-            ?transaction,
-            "found consensus item"
-        );
-
-        trace!(
-            target: LOG_CLIENT_RECOVERY,
-            tx_hash = %transaction.tx_hash(),
-            "found transaction"
-        );
-
-        debug!(
-            target: LOG_CLIENT_RECOVERY,
             tx_hash = %transaction.tx_hash(),
             input_num = transaction.inputs.len(),
             output_num = transaction.outputs.len(),
@@ -146,7 +134,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
         );
 
         for (idx, input) in transaction.inputs.iter().enumerate() {
-            debug!(
+            trace!(
                 target: LOG_CLIENT_RECOVERY,
                 tx_hash = %transaction.tx_hash(),
                 idx,
@@ -160,7 +148,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
         }
 
         for (out_idx, output) in transaction.outputs.iter().enumerate() {
-            debug!(
+            trace!(
                 target: LOG_CLIENT_RECOVERY,
                 tx_hash = %transaction.tx_hash(),
                 idx = out_idx,
@@ -250,7 +238,7 @@ where
             epoch_range: ops::Range<u64>,
         ) -> impl futures::Stream<Item = (u64, Vec<AcceptedItem>)> + 'a {
             // How many request for blocks to run in parallel (streaming).
-            const PARALLISM_LEVEL: usize = 8;
+            const PARALLISM_LEVEL: usize = 64;
             const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
                 ApiVersion { major: 0, minor: 1 };
 
@@ -263,7 +251,7 @@ where
 
                         let mut retry_sleep = Duration::from_millis(10);
                         let block = loop {
-                            info!(target: LOG_CLIENT_RECOVERY, session_idx, "Awaiting signed block");
+                            trace!(target: LOG_CLIENT_RECOVERY, session_idx, "Awaiting signed block");
 
                             let items_res = if core_api_version < VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
                                 api.await_block(session_idx, &decoders).await.map(|s| s.items)
@@ -276,9 +264,12 @@ where
                             };
 
                             match items_res {
-                                Ok(block) => break block,
+                                Ok(block) => {
+                                    debug!(target: LOG_CLIENT_RECOVERY, session_idx, "Got signed session");
+                                    break block
+                                },
                                 Err(e) => {
-                                    info!(e = %e, session_idx, "Error trying to fetch signed block");
+                                    warn!(target: LOG_CLIENT_RECOVERY, e = %e, session_idx, "Error trying to fetch signed block");
                                     // We don't want PARALLISM_LEVEL tasks hammering Federation
                                     // with requests, so max sleep is significant
                                     const MAX_SLEEP: Duration = Duration::from_secs(120);

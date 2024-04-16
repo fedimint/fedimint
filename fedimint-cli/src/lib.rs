@@ -36,7 +36,7 @@ use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::util::{handle_version_hash_command, retry, ConstantBackoff, SafeUrl};
-use fedimint_core::{fedimint_build_code_version_env, PeerId, TieredMulti};
+use fedimint_core::{fedimint_build_code_version_env, runtime, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{TracingSetup, LOG_CLIENT};
 use fedimint_meta_client::MetaClientInit;
@@ -44,6 +44,7 @@ use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes, Spendable
 use fedimint_server::config::io::SALT_FILE;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
+use futures::future::pending;
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -418,6 +419,12 @@ Examples:
 
     /// Wait for the fed to reach a consensus block count
     WaitBlockCount { count: u64 },
+
+    /// Just start the `Client` and wait
+    Wait {
+        /// Limit the wait time
+        seconds: Option<f32>,
+    },
 
     /// Wait for all state machines to complete
     WaitComplete,
@@ -813,6 +820,15 @@ impl FedimintCli {
                     .wait_for_all_active_state_machines()
                     .await
                     .map_err_cli_msg("failed to wait for all active state machines")?;
+                Ok(CliOutput::Raw(serde_json::Value::Null))
+            }
+            Command::Dev(DevCmd::Wait { seconds }) => {
+                let _client = self.client_open(&cli).await?;
+                if let Some(secs) = seconds {
+                    runtime::sleep(Duration::from_secs_f32(secs)).await
+                } else {
+                    pending().await
+                }
                 Ok(CliOutput::Raw(serde_json::Value::Null))
             }
             Command::Dev(DevCmd::Decode { decode_type }) => match decode_type {
