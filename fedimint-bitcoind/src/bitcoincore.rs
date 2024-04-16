@@ -14,7 +14,8 @@ use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
-use tracing::info;
+use fedimint_logging::LOG_CORE;
+use tracing::{info, warn};
 
 use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
 
@@ -100,6 +101,7 @@ impl IBitcoindRpc for BitcoinClient {
     }
 
     async fn watch_script_history(&self, script: &Script) -> anyhow::Result<()> {
+        warn!(target: LOG_CORE, "Wallet operations are broken on bitcoind. Use different backend.");
         // start watching for this script in our wallet to avoid the need to rescan the
         // blockchain, labeling it so we can reference it later
         block_in_place(|| {
