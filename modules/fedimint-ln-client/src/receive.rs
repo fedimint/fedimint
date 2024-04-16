@@ -8,6 +8,7 @@ use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::endpoint_constants::ACCOUNT_ENDPOINT;
 use fedimint_core::task::sleep;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
@@ -321,6 +322,8 @@ pub async fn get_incoming_contract(
                 }))
             } else {
                 Err(fedimint_api_client::api::FederationError::general(
+                    ACCOUNT_ENDPOINT,
+                    contract_id,
                     anyhow::anyhow!("Contract {contract_id} is not an incoming contract"),
                 ))
             }
