@@ -401,6 +401,86 @@
 <a href="#399" id="399">399</a>
 <a href="#400" id="400">400</a>
 <a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -408,8 +488,8 @@
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::format_err;
-<span class="kw">use </span>clap::Parser;
+<span class="kw">use </span>anyhow::{format_err, Context};
+<span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::admin_client::ConfigGenParamsRequest;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_network;
 <span class="kw">use </span>fedimint_core::config::{
@@ -418,7 +498,7 @@
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
-<span class="kw">use </span>fedimint_core::module::ServerModuleInit;
+<span class="kw">use </span>fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary, ServerModuleInit};
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::timing;
 <span class="kw">use </span>fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
@@ -432,6 +512,7 @@
 <span class="kw">use </span>fedimint_mint_server::MintInit;
 <span class="kw">use </span>fedimint_server::config::api::ConfigGenSettings;
 <span class="kw">use </span>fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
+<span class="kw">use </span>fedimint_server::config::ServerConfig;
 <span class="kw">use </span>fedimint_server::FedimintServer;
 <span class="kw">use </span>fedimint_unknown_common::config::UnknownGenParams;
 <span class="kw">use </span>fedimint_unknown_server::UnknownInit;
@@ -459,7 +540,7 @@
 </span><span class="kw">pub struct </span>ServerOpts {
     <span class="doccomment">/// Path to folder containing federation config files
     </span><span class="attr">#[arg(long = <span class="string">"data-dir"</span>, env = FM_DATA_DIR_ENV)]
-    </span><span class="kw">pub </span>data_dir: PathBuf,
+    </span><span class="kw">pub </span>data_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
     <span class="doccomment">/// Password to encrypt sensitive config files
     </span><span class="comment">// TODO: should probably never send password to the server directly, rather send the hash via
     // the API
@@ -498,6 +579,24 @@
     /// `key1=value1,key2=value,...`)
     </span><span class="attr">#[arg(long, env = FM_EXTRA_DKG_META_ENV, value_parser = parse_map, default_value=<span class="string">""</span>)]
     </span>extra_dkg_meta: BTreeMap&lt;String, String&gt;,
+
+    <span class="attr">#[clap(subcommand)]
+    </span>subcommand: <span class="prelude-ty">Option</span>&lt;ServerSubcommand&gt;,
+}
+
+<span class="attr">#[derive(Subcommand)]
+</span><span class="kw">enum </span>ServerSubcommand {
+    <span class="doccomment">/// Development-related commands
+    </span><span class="attr">#[clap(subcommand)]
+    </span>Dev(DevSubcommand),
+}
+
+<span class="attr">#[derive(Subcommand)]
+</span><span class="kw">enum </span>DevSubcommand {
+    <span class="doccomment">/// List supported server API versions and exit
+    </span>ListApiVersions,
+    <span class="doccomment">/// List supported server database versions and exit
+    </span>ListDbVersions,
 }
 
 <span class="kw">fn </span>parse_map(s: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;BTreeMap&lt;String, String&gt;&gt; {
@@ -577,6 +676,7 @@
             .set(fedimint_core::time::duration_since_epoch().as_secs() <span class="kw">as </span>i64);
 
         <span class="kw">let </span>opts: ServerOpts = ServerOpts::parse();
+
         TracingSetup::default()
             .tokio_console_bind(opts.tokio_console_bind)
             .with_jaeger(opts.with_telemetry)
@@ -688,6 +788,26 @@
 
     <span class="doccomment">/// Block thread and run a Fedimintd server
     </span><span class="kw">pub async fn </span>run(<span class="self">self</span>) -&gt; ! {
+        <span class="comment">// handle optional subcommand
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(subcommand) = <span class="kw-2">&amp;</span><span class="self">self</span>.opts.subcommand {
+            <span class="kw">match </span>subcommand {
+                ServerSubcommand::Dev(DevSubcommand::ListApiVersions) =&gt; {
+                    <span class="kw">let </span>api_versions = <span class="self">self</span>.get_server_api_versions();
+                    <span class="kw">let </span>api_versions = serde_json::to_string_pretty(<span class="kw-2">&amp;</span>api_versions)
+                        .expect(<span class="string">"API versions struct is serializable"</span>);
+                    <span class="macro">println!</span>(<span class="string">"{api_versions}"</span>);
+                    std::process::exit(<span class="number">0</span>);
+                }
+                ServerSubcommand::Dev(DevSubcommand::ListDbVersions) =&gt; {
+                    <span class="kw">let </span>db_versions = <span class="self">self</span>.get_server_db_versions();
+                    <span class="kw">let </span>db_versions = serde_json::to_string_pretty(<span class="kw-2">&amp;</span>db_versions)
+                        .expect(<span class="string">"API versions struct is serializable"</span>);
+                    <span class="macro">println!</span>(<span class="string">"{db_versions}"</span>);
+                    std::process::exit(<span class="number">0</span>);
+                }
+            }
+        }
+
         <span class="kw">let </span>root_task_group = TaskGroup::new();
         root_task_group.install_kill_handler();
 
@@ -752,6 +872,44 @@
         <span class="comment">// Should we ever shut down without an error code?
         </span>std::process::exit(-<span class="number">1</span>);
     }
+
+    <span class="kw">fn </span>get_server_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ServerApiVersionsSummary {
+        ServerApiVersionsSummary {
+            core: ServerConfig::supported_api_versions().api,
+            modules: <span class="self">self
+                </span>.server_gens
+                .kinds()
+                .into_iter()
+                .map(|module_kind| {
+                    <span class="self">self</span>.server_gens
+                        .get(<span class="kw-2">&amp;</span>module_kind)
+                        .expect(<span class="string">"module is present"</span>)
+                })
+                .map(|module_init| {
+                    (
+                        module_init.module_kind(),
+                        module_init.supported_api_versions().api,
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    <span class="kw">fn </span>get_server_db_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ServerDbVersionsSummary {
+        ServerDbVersionsSummary {
+            modules: <span class="self">self
+                </span>.server_gens
+                .kinds()
+                .into_iter()
+                .map(|module_kind| {
+                    <span class="self">self</span>.server_gens
+                        .get(<span class="kw-2">&amp;</span>module_kind)
+                        .expect(<span class="string">"module is present"</span>)
+                })
+                .map(|module_init| (module_init.module_kind(), module_init.database_version()))
+                .collect(),
+        }
+    }
 }
 
 <span class="kw">async fn </span>run(
@@ -769,11 +927,13 @@
         });
     }
 
+    <span class="kw">let </span>data_dir = opts.data_dir.context(<span class="string">"data-dir option is not present"</span>)<span class="question-mark">?</span>;
+
     <span class="comment">// TODO: Fedimintd should use the config gen API
     // on each run we want to pass the currently passed password, so we need to
     // overwrite
     </span><span class="kw">if let </span><span class="prelude-val">Some</span>(password) = opts.password {
-        write_overwrite(opts.data_dir.join(PLAINTEXT_PASSWORD), password)<span class="question-mark">?</span>;
+        write_overwrite(data_dir.join(PLAINTEXT_PASSWORD), password)<span class="question-mark">?</span>;
     };
     <span class="kw">let </span>default_params = ConfigGenParamsRequest {
         meta: opts.extra_dkg_meta.clone(),
@@ -792,11 +952,11 @@
     };
 
     <span class="kw">let </span>db = Database::new(
-        fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))<span class="question-mark">?</span>,
+        fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))<span class="question-mark">?</span>,
         Default::default(),
     );
 
-    FedimintServer::new(opts.data_dir, settings, db, version_hash)
+    FedimintServer::new(data_dir, settings, db, version_hash)
         .run(<span class="kw-2">&amp;</span>module_inits, task_group.clone())
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
