@@ -266,7 +266,7 @@
 </span><span class="kw">pub struct </span>SetConfigurationPayload {
     <span class="kw">pub </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>num_route_hints: <span class="prelude-ty">Option</span>&lt;u32&gt;,
-    <span class="kw">pub </span>routing_fees: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="kw">pub </span>routing_fees: <span class="prelude-ty">Option</span>&lt;FederationRoutingFees&gt;,
     <span class="kw">pub </span>network: <span class="prelude-ty">Option</span>&lt;Network&gt;,
     <span class="kw">pub </span>per_federation_routing_fees: <span class="prelude-ty">Option</span>&lt;Vec&lt;(FederationId, FederationRoutingFees)&gt;&gt;,
 }

@@ -3019,8 +3019,8 @@
 
             <span class="comment">// Using this routing fee config as a default for all federation that has none
             // routing fees specified.
-            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(fees_str) = routing_fees.clone() {
-                <span class="kw">let </span>routing_fees = GatewayFee::from_str(fees_str.as_str())<span class="question-mark">?</span>.<span class="number">0</span>;
+            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(fees) = routing_fees.clone() {
+                <span class="kw">let </span>routing_fees = GatewayFee(fees.into()).<span class="number">0</span>;
                 prev_config.routing_fees = routing_fees;
             }
 
