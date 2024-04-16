@@ -30,7 +30,7 @@ use secp256k1::schnorr::Signature;
 use send_sm::{SendSMState, SendStateMachine};
 use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare};
-use tracing::error;
+use tracing::warn;
 
 use crate::gateway_module_v2::receive_sm::ReceiveSMCommon;
 use crate::gateway_module_v2::send_sm::SendSMCommon;
@@ -230,10 +230,14 @@ impl GatewayClientModuleV2 {
                 match state.state {
                     SendSMState::Sending => {}
                     SendSMState::Claiming(claiming) => return Ok(claiming.preimage),
-                    SendSMState::Cancelled(error) => {
-                        error!("Failed to route payment {}", error);
+                    SendSMState::Cancelled(cancelled) => {
+                        warn!("Outgoing lightning payment is cancelled {:?}", cancelled);
 
-                        return Err(self.keypair.sign_schnorr(contract.forfeit_message()));
+                        let signature = self.keypair.sign_schnorr(contract.forfeit_message());
+
+                        assert!(contract.verify_forfeit_signature(&signature));
+
+                        return Err(signature);
                     }
                 }
             }
