@@ -28,7 +28,7 @@ services:
   ### END_TRAEFIK ###
 
   gatewayd:
-    image: fedimint/gatewayd:v0.2.1
+    image: fedimint/gatewayd:v0.3.0
     command: gatewayd lnd
     environment:
       # Path to folder containing gateway config and data files
@@ -64,7 +64,7 @@ services:
     ### END_TRAEFIK_LABELS ###
 
   gateway-ui:
-    image: fedimintui/gateway-ui:0.2.1
+    image: fedimintui/gateway-ui:0.3.0
     environment:
       - PORT=80
       - REACT_APP_FM_GATEWAY_API=https://gatewayd.fedimint.my-super-host.com

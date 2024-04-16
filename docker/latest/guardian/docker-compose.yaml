@@ -28,7 +28,7 @@ services:
     ### END_TRAEFIK ###
 
   fedimintd:
-    image: fedimint/fedimintd:v0.2.1
+    image: fedimint/fedimintd:v0.3.0
     volumes:
       - fedimintd_data:/data
     ports:
@@ -54,7 +54,7 @@ services:
     ### END_TRAEFIK_LABELS ###
 
   guardian-ui:
-    image: fedimintui/guardian-ui:0.2.1
+    image: fedimintui/guardian-ui:0.3.0
     environment:
       - PORT=80
       - REACT_APP_FM_CONFIG_API=wss://fedimintd.fedimint.my-super-host.com
