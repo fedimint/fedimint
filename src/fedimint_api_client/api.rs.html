@@ -1577,6 +1577,33 @@
 <a href="#1575" id="1575">1575</a>
 <a href="#1576" id="1576">1576</a>
 <a href="#1577" id="1577">1577</a>
+<a href="#1578" id="1578">1578</a>
+<a href="#1579" id="1579">1579</a>
+<a href="#1580" id="1580">1580</a>
+<a href="#1581" id="1581">1581</a>
+<a href="#1582" id="1582">1582</a>
+<a href="#1583" id="1583">1583</a>
+<a href="#1584" id="1584">1584</a>
+<a href="#1585" id="1585">1585</a>
+<a href="#1586" id="1586">1586</a>
+<a href="#1587" id="1587">1587</a>
+<a href="#1588" id="1588">1588</a>
+<a href="#1589" id="1589">1589</a>
+<a href="#1590" id="1590">1590</a>
+<a href="#1591" id="1591">1591</a>
+<a href="#1592" id="1592">1592</a>
+<a href="#1593" id="1593">1593</a>
+<a href="#1594" id="1594">1594</a>
+<a href="#1595" id="1595">1595</a>
+<a href="#1596" id="1596">1596</a>
+<a href="#1597" id="1597">1597</a>
+<a href="#1598" id="1598">1598</a>
+<a href="#1599" id="1599">1599</a>
+<a href="#1600" id="1600">1600</a>
+<a href="#1601" id="1601">1601</a>
+<a href="#1602" id="1602">1602</a>
+<a href="#1603" id="1603">1603</a>
+<a href="#1604" id="1604">1604</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1609,7 +1636,7 @@
     STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
     VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
 };
-<span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
+<span class="kw">use </span>fedimint_core::fmt_utils::{AbbreviateDebug, AbbreviateJson};
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::audit::AuditSummary;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1703,6 +1730,8 @@
 /// Generally all Federation errors are retriable.
 </span><span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub struct </span>FederationError {
+    method: String,
+    params: serde_json::Value,
     general: <span class="prelude-ty">Option</span>&lt;anyhow::Error&gt;,
     peers: BTreeMap&lt;PeerId, PeerError&gt;,
 }
@@ -1711,6 +1740,11 @@
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
         f.write_str(<span class="string">"Federation rpc error {"</span>)<span class="question-mark">?</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(general) = <span class="self">self</span>.general.as_ref() {
+            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"method =&gt; {}), "</span>, <span class="self">self</span>.method))<span class="question-mark">?</span>;
+            f.write_fmt(<span class="macro">format_args!</span>(
+                <span class="string">"params =&gt; {:?}), "</span>,
+                AbbreviateJson(<span class="kw-2">&amp;</span><span class="self">self</span>.params)
+            ))<span class="question-mark">?</span>;
             f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"general =&gt; {general})"</span>))<span class="question-mark">?</span>;
             <span class="kw">if </span>!<span class="self">self</span>.peers.is_empty() {
                 f.write_str(<span class="string">", "</span>)<span class="question-mark">?</span>;
@@ -1728,15 +1762,28 @@
 }
 
 <span class="kw">impl </span>FederationError {
-    <span class="kw">pub fn </span>general(e: <span class="kw">impl </span>Into&lt;anyhow::Error&gt;) -&gt; FederationError {
+    <span class="kw">pub fn </span>general(
+        method: <span class="kw">impl </span>Into&lt;String&gt;,
+        params: <span class="kw">impl </span>Serialize,
+        e: <span class="kw">impl </span>Into&lt;anyhow::Error&gt;,
+    ) -&gt; FederationError {
         FederationError {
+            method: method.into(),
+            params: serde_json::to_value(params).unwrap_or_default(),
             general: <span class="prelude-val">Some</span>(e.into()),
             peers: Default::default(),
         }
     }
 
-    <span class="kw">pub fn </span>new_one_peer(peer_id: PeerId, error: PeerError) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new_one_peer(
+        peer_id: PeerId,
+        method: <span class="kw">impl </span>Into&lt;String&gt;,
+        params: <span class="kw">impl </span>Serialize,
+        error: PeerError,
+    ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
+            method: method.into(),
+            params: serde_json::to_value(params).expect(<span class="string">"Serialization of valid params won't fail"</span>),
             general: <span class="prelude-val">None</span>,
             peers: [(peer_id, error)].into_iter().collect(),
         }
@@ -1892,13 +1939,13 @@
         </span>FedRet: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.request_single_peer(timeout, method, params, peer_id)
+            </span>.request_single_peer(timeout, method.clone(), params.clone(), peer_id)
             .<span class="kw">await
             </span>.map_err(PeerError::Rpc)
             .and_then(|v| {
                 serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
             })
-            .map_err(|e| FederationError::new_one_peer(peer_id, e))<span class="question-mark">?</span>)
+            .map_err(<span class="kw">move </span>|e| FederationError::new_one_peer(peer_id, method, params, e))<span class="question-mark">?</span>)
     }
 
     <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically
@@ -1998,7 +2045,12 @@
                         }
                         QueryStep::Continue =&gt; {}
                         QueryStep::Failure { general, peers } =&gt; {
-                            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError { general, peers })
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError {
+                                method: method.clone(),
+                                params: params.params.clone(),
+                                general,
+                                peers,
+                            })
                         }
                         QueryStep::Success(response) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(response),
                     }
@@ -2036,9 +2088,11 @@
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         <span class="kw">let </span><span class="prelude-val">Some</span>(self_peer_id) = <span class="self">self</span>.self_peer() <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError::general(<span class="macro">anyhow::format_err!</span>(
-                <span class="string">"Admin peer_id not set"
-            </span>)));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError::general(
+                method,
+                params,
+                <span class="macro">anyhow::format_err!</span>(<span class="string">"Admin peer_id not set"</span>),
+            ));
         };
         <span class="self">self</span>.request_single_peer_federation(
             <span class="prelude-val">None</span>,

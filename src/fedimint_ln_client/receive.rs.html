@@ -441,6 +441,9 @@
 <a href="#439" id="439">439</a>
 <a href="#440" id="440">440</a>
 <a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -451,6 +454,7 @@
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::endpoint_constants::ACCOUNT_ENDPOINT;
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractAccount;
@@ -764,6 +768,8 @@
                 }))
             } <span class="kw">else </span>{
                 <span class="prelude-val">Err</span>(fedimint_api_client::api::FederationError::general(
+                    ACCOUNT_ENDPOINT,
+                    contract_id,
                     <span class="macro">anyhow::anyhow!</span>(<span class="string">"Contract {contract_id} is not an incoming contract"</span>),
                 ))
             }

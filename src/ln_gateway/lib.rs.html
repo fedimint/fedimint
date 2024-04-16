@@ -1917,6 +1917,7 @@
 <a href="#1915" id="1915">1915</a>
 <a href="#1916" id="1916">1916</a>
 <a href="#1917" id="1917">1917</a>
+<a href="#1918" id="1918">1918</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1967,6 +1968,7 @@
     apply_migrations_server, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::endpoint_constants::REGISTER_GATEWAY_ENDPOINT;
 <span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
@@ -3116,7 +3118,7 @@
                             .instrument(client.span())
                             .<span class="kw">await
                             </span>{
-                                <span class="prelude-val">Err</span>(GatewayError::FederationError(FederationError::general(
+                                <span class="prelude-val">Err</span>(GatewayError::FederationError(FederationError::general(REGISTER_GATEWAY_ENDPOINT, serde_json::Value::Null,
                                     <span class="macro">anyhow::anyhow!</span>(
                                         <span class="string">"Error registering federation {federation_id}: {e:?}"
                                     </span>),
