@@ -40,7 +40,7 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tokio = { version = "1.36.0", features = [ "time", "macros", "rt" ] }
-tokio-stream = { version = "0.1.14", features = [ "time", "sync" ] }
+tokio-stream = { version = "0.1.15", features = [ "time", "sync" ] }
 tracing = { workspace = true }
 reqwest = { version = "0.12.2", features = ["json", "rustls-tls"], default-features = false }
 
