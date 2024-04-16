@@ -57,7 +57,6 @@ tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
 serde_json = { version = "1.0.116", features = ["preserve_order"] }
 url = { version = "2.5.0", features = ["serde"] }
 clap_complete = "4.5.1"
-lnurl-rs = { version = "0.4.1", features = ["async"], default-features = false }
 reqwest = { version = "0.11.26", features = [ "json", "rustls-tls" ], default-features = false }
 
 [build-dependencies]
