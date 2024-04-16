@@ -2,8 +2,39 @@
 
 # This file downloads the mainnet docker-compose files for the LN gateway, fedimintd plus some useful tools
 # Important: This version uses TLS certificates, so you must have a domain under your control that you can change the DNS records for
-# You can download this script and run it with: curl -sSL https://raw.githubusercontent.com/tonygiorgio/fedimint/mainnet-deploy/docker/tls-download-mainnet.sh | bash
+# You can download this script and run it with: curl -sSL https://raw.githubusercontent.com/Kodylow/fedimint/kl/docker-deploy/docker/downloader.sh | bash
 
+echo
+echo """
+                                                    %%
+                                                  ######
+                                                  ((((
+                                      %%##(                    (##%%
+                                      ##((/       ******       /((##
+                                            *******,,*******
+                                            ****          ***,
+                                            ***            ***
+                                  *#((    ****            ****    ((#
+                                  %%##((    ****          ****   ,((##%*
+                                    ##(       **************       (##
+                                                **********
+
+                                          ##((((        ((((##
+                                            %%##*        ###%%
+
+
+@@@@@@@@@@@@                              @@@    @@@@                           @@@@                      @@@
+@@@                                       @@@                                                             @@@
+@@@             @@@@@@@@@%      /@@@@@@@@ @@@    @@@    @@@(@@@@@@  @@@@@@@     @@@    @@@ @@@@@@@@   @@@@@@@@@@@
+@@@@@@@@@@@.  @@@@      @@@    @@@.      @@@@    @@@    @@@     @@@@     @@@    @@@    @@@@      @@@      @@@
+@@@           @@@@@@@@@@@@@@  @@@         @@@    @@@    @@@     /@@@     @@@    @@@    @@@       #@@&     @@@
+@@@           @@@             @@@         @@@    @@@    @@@     /@@@     @@@    @@@    @@@       #@@&     @@@
+@@@           .@@@,     @@@    @@@@     &@@@@    @@@    @@@     /@@@     @@@    @@@    @@@       #@@&     @@@
+@@@              @@@@@@@@        @@@@@@@@ @@@    @@@    @@@     /@@@     @@@    @@@    @@@       #@@&      @@@@@@
+"""
+
+echo
+echo
 echo "Welcome to the Fedimint Docker Installer. This script will:"
 echo "1. Download/check docker and other required dependencies."
 echo "2. Ask some questions to set:"
@@ -16,6 +47,7 @@ echo "4. Run the docker-compose files to start the services."
 
 echo
 echo "Fedimint is early stage software, so please be patient and report any issues you encounter by opening an issue on Github: https://github.com/fedimint/fedimint/issues"
+echo "Or join the Fedimint Discord server and post an issue there: https://discord.gg/9CFbk6BvaJ"
 echo
 while true; do
   echo "Ready to start?"
@@ -28,22 +60,19 @@ done
 while true; do
   echo
   echo "Which version of Fedimint do you want to install?"
-  read -p "Type 'latest', '0.3.0', '0.2.1', or '0.2.2' to install the specific version: " FEDIMINT_VERSION
+  read -p "Hit enter to install the latest version, or type a specific version: " FEDIMINT_VERSION
+  FEDIMINT_VERSION=${FEDIMINT_VERSION:-latest}
   case $FEDIMINT_VERSION in
-  latest)
+  0.3.0 | latest)
     FEDIMINT_VERSION="0.3.0"
-    break
-    ;;
-  0.3.0)
-    FEDIMINT_VERSION="0.3.0"
-    break
-    ;;
-  0.2.1)
-    FEDIMINT_VERSION="0.2.1"
     break
     ;;
   0.2.2)
     FEDIMINT_VERSION="0.2.2"
+    break
+    ;;
+  0.2.1)
+    FEDIMINT_VERSION="0.2.1"
     break
     ;;
   *)
@@ -99,6 +128,7 @@ fi
 echo "Dependencies are ready. Let's continue..."
 
 while true; do
+  echo
   echo "Do you want to install a Fedimint Guardian or a Lightning Gateway? [guardian/gateway]"
   echo "Guardian: connects with other guardians to form and run a Fedimint"
   echo "Gateway: a lightning network service provider to users of Fedimints"
@@ -106,13 +136,11 @@ while true; do
 
   case $INSTALL_TYPE in
   guardian)
-    DOCKER_COMPOSE_FILE="https://raw.githubusercontent.com/kodylow/fedimint/kl/docker-deploy/docker/${FEDIMINT_VERSION}/guardian/docker-compose.yaml"
     SERVICES="fedimintd guardian-ui"
     IS_GATEWAY=false
     break
     ;;
   gateway)
-    DOCKER_COMPOSE_FILE="https://raw.githubusercontent.com/kodylow/fedimint/kl/docker-deploy/docker/${FEDIMINT_VERSION}/gateway/docker-compose.yaml"
     SERVICES="gatewayd gateway-ui thunderhub"
     IS_GATEWAY=true
     break
@@ -124,7 +152,31 @@ while true; do
 done
 
 while true; do
-  echo "Which Bitcoin network are you using? [mainnet/testnet/signet/mutinynet]"
+  echo
+  echo "Do you want to setup TLS certificates with Let's Encrypt? [yes/no]"
+  read -p "Type 'yes' to setup TLS certificates or 'no' to skip: " SETUP_TLS
+
+  case $SETUP_TLS in
+  yes)
+    SETUP_TLS=true
+    TLS_DIR="tls"
+    break
+    ;;
+  no)
+    SETUP_TLS=false
+    TLS_DIR="no-tls"
+    break
+    ;;
+  *)
+    echo "Invalid option. Please type 'yes' or 'no'."
+    ;;
+  esac
+done
+
+DOCKER_COMPOSE_FILE="https://raw.githubusercontent.com/Kodylow/fedimint/kl/docker-deploy/docker/latest/${INSTALL_TYPE}/${TLS_DIR}/docker-compose.yaml"
+
+while true; do
+  echo "Which Bitcoin network are you using? [mainnet/mutinynet]"
   read -p "Type your choice: " NETWORK_TYPE
 
   case $NETWORK_TYPE in
@@ -138,12 +190,12 @@ while true; do
       break
     fi
     ;;
-  testnet | signet | mutinynet)
+  mutinynet)
     echo "Setting up for $NETWORK_TYPE. Proceeding with installation."
     break
     ;;
   *)
-    echo "Invalid network type. Please choose from mainnet, testnet, signet, or mutinynet."
+    echo "Invalid network type. Please choose from mainnet or mutinynet."
     ;;
   esac
 done
@@ -256,11 +308,7 @@ count_dots() {
 EXTERNAL_IP=$(curl -4 -sSL ifconfig.me)
 REMOTE_USER=$(whoami)
 
-echo
-echo "Do you want to setup TLS certificates? [yes/no]"
-read -p "Type 'yes' to setup TLS certificates or 'no' to skip: " SETUP_TLS
-
-if [[ $SETUP_TLS == "yes" ]]; then
+if [[ $SETUP_TLS == true ]]; then
   # All the TLS setup steps go here
   echo
   echo "Fedimint ${INSTALL_TYPE} setup with TLS certificates by Let's Encrypt:"
@@ -358,19 +406,37 @@ if [[ $SETUP_TLS == "yes" ]]; then
   done
 fi
 
+echo "Downloading docker-compose file"
 download $DOCKER_COMPOSE_FILE ./docker-compose.yaml
-replace_host "${host_name[*]}" ./docker-compose.yaml
 
-if [[ $SETUP_TLS == "no" ]]; then
-  # Remove all the TLS setup steps from the docker-compose file
-  sed -i '/### START_TRAEFIK ###/,/### END_TRAEFIK ###/d' ./docker-compose.yaml
+rename_version() {
+  local path=$1
+  local version=$2
+  if [[ "$(uname)" == "Darwin" ]]; then # macOS uses BSD sed
+    sed -i '' "s/0.3.0/$version/g" $path
+  else
+    sed -i "s/0.3.0/$version/g" $path
+  fi
+}
 
-  # Remove all the traefik labels from the docker-compose file
-  sed -i '/### TRAEFIK_LABELS ###/,/### END_TRAEFIK_LABELS ###/d' ./docker-compose.yaml
+rename_version ./docker-compose.yaml $FEDIMINT_VERSION
 
-  # Remove the letsencrypt data directory from the docker-compose file
-  sed -i '/letsencrypt_data:/d' ./docker-compose.yaml
+rename_localhost() {
+  local path=$1
+  local ip=$2
+  if [[ "$(uname)" == "Darwin" ]]; then # macOS uses BSD sed
+    sed -i '' "s/127.0.0.1/$ip/g" "$path"
+  else
+    sed -i "s/127.0.0.1/$ip/g" "$path"
+  fi
+}
 
+if [[ $SETUP_TLS == false ]]; then
+  EXTERNAL_IP=$(curl -sSL ifconfig.me)
+  read -p "Enter the external IP of your server [$EXTERNAL_IP]: " input_external_ip
+  external_ip=${input_external_ip:-$EXTERNAL_IP}
+
+  rename_localhost ./docker-compose.yaml "$external_ip"
 fi
 
 if [ "$IS_GATEWAY" = true ]; then
@@ -476,6 +542,11 @@ else # Is Guardian
     # Set the esplora URL in the docker-compose file
     sed -i "s|FM_BITCOIN_RPC_URL=https://blockstream.info/api/|FM_BITCOIN_RPC_URL=$ESPLORA_URL|" ./docker-compose.yaml
 
+    # Set the bitcoin network in the docker-compose file if not mutinynet default
+    if [ "$NETWORK_TYPE" != "mutinynet" ]; then
+      sed -i "s|FM_BITCOIN_NETWORK=signet|FM_BITCOIN_NETWORK=$NETWORK_TYPE|" ./docker-compose.yaml
+    fi
+
   else # Using Bitcoin Node for Guardian blockchain data
     echo "You will need to provide the Bitcoin Node RPC URL to get blockchain data."
     read -p "Enter the RPC URL for your Bitcoin node (ex. https://mynode.m.voltageapp.io:8332): " -a bitcoin_rpc_url </dev/tty
@@ -514,7 +585,7 @@ wait_fedimintd_ready() {
 
 echo
 echo "Optionally run '$DOCKER_COMPOSE logs -f' to see the logs."
-if [[ $SETUP_TLS == "yes" ]]; then
+if [[ $SETUP_TLS == true ]]; then
   wait_fedimintd_ready --insecure
 
   echo "Looks good. Now will check if certificate is okay."
@@ -525,16 +596,23 @@ if [[ $SETUP_TLS == "yes" ]]; then
   wait_fedimintd_ready
 
   echo "Good!"
+  echo "You can access the services at:"
   if [ "$IS_GATEWAY" = true ]; then
-    echo "You can access the gateway at https://gateway-ui.${host_name[*]}"
+    echo "Gateway-UI: https://gateway-ui.${host_name[*]}"
+    if [ "$USE_THUNDERHUB" =true ]; then
+      echo "Thunderhub: https://thunderhub.${host_name[*]}"
+    fi
   else
-    echo "You can access the guardian dashboard at https://guardian-ui.${host_name[*]}"
+    echo "Guardian-UI: https://guardian-ui.${host_name[*]}"
   fi
   echo "Note: by default, you should open ports 8173 and 9735 for external access on your router/firewall, plus 443 as mentioned before."
 else
   if [ "$IS_GATEWAY" = true ]; then
-    echo "You can access the gateway at https://localhost:3001 and thunderhub at https://localhost:3002"
+    echo "Gateway-UI: http://${EXTERNAL_IP}:3001"
+    if [ "$USE_THUNDERHUB" =true ]; then
+      echo "Thunderhub: http://${EXTERNAL_IP}:3002"
+    fi
   else
-    echo "You can access the guardian dashboard at https://localhost:3000"
+    echo "Guardian-UI: http://${EXTERNAL_IP}:3000"
   fi
 fi
