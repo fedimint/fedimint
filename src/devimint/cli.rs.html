@@ -436,13 +436,33 @@
 <a href="#434" id="434">434</a>
 <a href="#435" id="435">435</a>
 <a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{anyhow, ensure, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::write_overwrite_async;
@@ -476,6 +496,12 @@
 </span><span class="kw">pub struct </span>CommonArgs {
     <span class="attr">#[clap(short = <span class="string">'d'</span>, long, env = FM_TEST_DIR_ENV)]
     </span><span class="kw">pub </span>test_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
+
+    <span class="doccomment">/// Don't set up new Federation, start from the state in existing
+    /// devimint data dir
+    </span><span class="attr">#[arg(long, env = <span class="string">"FM_SKIP_SETUP"</span>)]
+    </span>skip_setup: bool,
+
     <span class="attr">#[clap(short = <span class="string">'n'</span>, long, env = FM_FED_SIZE_ENV, default_value = <span class="string">"4"</span>)]
     </span><span class="kw">pub </span>fed_size: usize,
 
@@ -493,6 +519,12 @@
 
 <span class="kw">impl </span>CommonArgs {
     <span class="kw">pub fn </span>mk_test_dir(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;PathBuf&gt; {
+        <span class="kw">if </span><span class="self">self</span>.skip_setup {
+            <span class="macro">ensure!</span>(
+                <span class="self">self</span>.test_dir.is_some(),
+                <span class="string">"When using `--skip-setup`, `--test-dir` must be set"
+            </span>);
+        }
         <span class="kw">let </span>path = <span class="self">self</span>.test_dir();
 
         std::fs::create_dir_all(<span class="kw-2">&amp;</span>path)
@@ -661,68 +693,71 @@
         Cmd::DevFed { exec } =&gt; {
             <span class="macro">trace!</span>(target: LOG_DEVIMINT, <span class="string">"Starting dev fed"</span>);
             <span class="kw">let </span>start_time = Instant::now();
+            <span class="kw">let </span>skip_setup = common_args.skip_setup;
             <span class="kw">let </span>(process_mgr, task_group) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>main = {
                 <span class="kw">let </span>task_group = task_group.clone();
                 <span class="kw">async move </span>{
-                    <span class="kw">let </span>dev_fed = DevJitFed::new(<span class="kw-2">&amp;</span>process_mgr)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>dev_fed = DevJitFed::new(<span class="kw-2">&amp;</span>process_mgr, skip_setup)<span class="question-mark">?</span>;
 
                     <span class="kw">let </span>pegin_start_time = Instant::now();
                     <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Peging in client and gateways"</span>);
 
                     <span class="kw">let </span>gw_pegin_amount = <span class="number">20_000</span>;
                     <span class="kw">let </span>client_pegin_amount = <span class="number">10_000</span>;
-                    <span class="kw">let </span>(<span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
-                        <span class="kw">async </span>{
-                            <span class="kw">let </span>(address, operation_id) =
-                                dev_fed.internal_client().<span class="kw">await</span><span class="question-mark">?</span>.get_deposit_addr().<span class="kw">await</span><span class="question-mark">?</span>;
-                            dev_fed
-                                .bitcoind()
-                                .<span class="kw">await</span><span class="question-mark">?
-                                </span>.send_to(address, client_pegin_amount)
-                                .<span class="kw">await</span><span class="question-mark">?</span>;
-                            dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-                            dev_fed
-                                .internal_client()
-                                .<span class="kw">await</span><span class="question-mark">?
-                                </span>.await_deposit(<span class="kw-2">&amp;</span>operation_id)
-                                .<span class="kw">await
-                        </span>},
-                        <span class="kw">async </span>{
-                            <span class="kw">let </span>pegin_addr = dev_fed
-                                .gw_cln_registered()
-                                .<span class="kw">await</span><span class="question-mark">?
-                                </span>.get_pegin_addr(
-                                    <span class="kw-2">&amp;</span>dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.calculate_federation_id().<span class="kw">await</span>,
-                                )
-                                .<span class="kw">await</span><span class="question-mark">?</span>;
-                            dev_fed
-                                .bitcoind()
-                                .<span class="kw">await</span><span class="question-mark">?
-                                </span>.send_to(pegin_addr, gw_pegin_amount)
-                                .<span class="kw">await</span><span class="question-mark">?</span>;
-                            dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await
-                        </span>},
-                        <span class="kw">async </span>{
-                            <span class="kw">let </span>pegin_addr = dev_fed
-                                .gw_lnd_registered()
-                                .<span class="kw">await</span><span class="question-mark">?
-                                </span>.get_pegin_addr(
-                                    <span class="kw-2">&amp;</span>dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.calculate_federation_id().<span class="kw">await</span>,
-                                )
-                                .<span class="kw">await</span><span class="question-mark">?</span>;
-                            dev_fed
-                                .bitcoind()
-                                .<span class="kw">await</span><span class="question-mark">?
-                                </span>.send_to(pegin_addr, gw_pegin_amount)
-                                .<span class="kw">await</span><span class="question-mark">?</span>;
-                            dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await
-                        </span>},
-                    )<span class="question-mark">?</span>;
+                    <span class="kw">if </span>!skip_setup {
+                        <span class="kw">let </span>(<span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
+                            <span class="kw">async </span>{
+                                <span class="kw">let </span>(address, operation_id) =
+                                    dev_fed.internal_client().<span class="kw">await</span><span class="question-mark">?</span>.get_deposit_addr().<span class="kw">await</span><span class="question-mark">?</span>;
+                                dev_fed
+                                    .bitcoind()
+                                    .<span class="kw">await</span><span class="question-mark">?
+                                    </span>.send_to(address, client_pegin_amount)
+                                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                                dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                                dev_fed
+                                    .internal_client()
+                                    .<span class="kw">await</span><span class="question-mark">?
+                                    </span>.await_deposit(<span class="kw-2">&amp;</span>operation_id)
+                                    .<span class="kw">await
+                            </span>},
+                            <span class="kw">async </span>{
+                                <span class="kw">let </span>pegin_addr = dev_fed
+                                    .gw_cln_registered()
+                                    .<span class="kw">await</span><span class="question-mark">?
+                                    </span>.get_pegin_addr(
+                                        <span class="kw-2">&amp;</span>dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.calculate_federation_id().<span class="kw">await</span>,
+                                    )
+                                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                                dev_fed
+                                    .bitcoind()
+                                    .<span class="kw">await</span><span class="question-mark">?
+                                    </span>.send_to(pegin_addr, gw_pegin_amount)
+                                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                                dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await
+                            </span>},
+                            <span class="kw">async </span>{
+                                <span class="kw">let </span>pegin_addr = dev_fed
+                                    .gw_lnd_registered()
+                                    .<span class="kw">await</span><span class="question-mark">?
+                                    </span>.get_pegin_addr(
+                                        <span class="kw-2">&amp;</span>dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.calculate_federation_id().<span class="kw">await</span>,
+                                    )
+                                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                                dev_fed
+                                    .bitcoind()
+                                    .<span class="kw">await</span><span class="question-mark">?
+                                    </span>.send_to(pegin_addr, gw_pegin_amount)
+                                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                                dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await
+                            </span>},
+                        )<span class="question-mark">?</span>;
 
-                    <span class="macro">info!</span>(target: LOG_DEVIMINT,
+                        <span class="macro">info!</span>(target: LOG_DEVIMINT,
                         elapsed_ms = %pegin_start_time.elapsed().as_millis(),
                         <span class="string">"Pegins completed"</span>);
+                    }
 
                     std::env::set_var(FM_INVITE_CODE_ENV, dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.invite_code()<span class="question-mark">?</span>);
 
@@ -853,6 +888,11 @@
                     .FM_DATA_DIR
                     .join(<span class="macro">format!</span>(<span class="string">"fedimintd-{peer}"</span>)),
                 FM_BIND_METRICS_API: <span class="macro">format!</span>(<span class="string">"127.0.0.1:{metrics_port}"</span>),
+                FM_FORCE_BITCOIN_RPC_URL: <span class="macro">format!</span>(
+                    <span class="string">"http://127.0.0.1:{}"</span>,
+                    process_mgr.globals.FM_PORT_BTC_RPC
+                ),
+                FM_FORCE_BITCOIN_RPC_KIND: <span class="string">"bitcoind"</span>.into(),
             };
             <span class="kw">let </span>fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer, <span class="kw-2">&amp;</span>vars).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>server_addr = <span class="kw-2">&amp;</span>vars.FM_BIND_API;

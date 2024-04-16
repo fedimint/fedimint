@@ -195,6 +195,16 @@
 <a href="#193" id="193">193</a>
 <a href="#194" id="194">194</a>
 <a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
@@ -274,7 +284,10 @@
     <span class="prelude-val">Ok</span>(dir)
 }
 
-<span class="kw">use </span>fedimint_core::envs::{FM_IN_DEVIMINT_ENV, FM_USE_UNKNOWN_MODULE_ENV};
+<span class="kw">use </span>fedimint_core::envs::{
+    FM_DEFAULT_BITCOIN_RPC_KIND_ENV, FM_DEFAULT_BITCOIN_RPC_URL_ENV, FM_FORCE_BITCOIN_RPC_KIND_ENV,
+    FM_FORCE_BITCOIN_RPC_URL_ENV, FM_IN_DEVIMINT_ENV, FM_USE_UNKNOWN_MODULE_ENV,
+};
 <span class="kw">use </span>fedimint_portalloc::port_alloc;
 <span class="kw">use </span>fedimint_server::config::ConfigGenParams;
 <span class="kw">use </span>format <span class="kw">as </span>f;
@@ -360,12 +373,14 @@
             gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),); env: <span class="string">"FM_GWCLI_LND"</span>;
         FM_DB_TOOL: String = <span class="macro">f!</span>(<span class="string">"{fedimint_dbtool}"</span>, fedimint_dbtool = <span class="kw">crate</span>::util::get_fedimint_dbtool_cli_path().join(<span class="string">" "</span>)); env: <span class="string">"FM_DB_TOOL"</span>;
 
-        <span class="comment">// fedimint config variables env: "// ";
+        <span class="comment">// fedimint config variables
         </span>FM_TEST_BITCOIND_RPC: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>); env: <span class="string">"FM_TEST_BITCOIND_RPC"</span>;
         FM_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>); env: <span class="string">"FM_BITCOIN_RPC_URL"</span>;
         FM_BITCOIN_RPC_KIND: String = <span class="string">"bitcoind"</span>; env: <span class="string">"FM_BITCOIN_RPC_KIND"</span>;
+        FM_DEFAULT_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"</span>); env: FM_DEFAULT_BITCOIN_RPC_URL_ENV;
+        FM_DEFAULT_BITCOIN_RPC_KIND: String = <span class="string">"bitcoind"</span>; env: FM_DEFAULT_BITCOIN_RPC_KIND_ENV;
 
-        FM_ROCKSDB_WRITE_BUFFER_SIZE : String = (<span class="number">1 </span>&lt;&lt; <span class="number">20</span>).to_string(); env: <span class="string">"FM_ROCKSDB_WRITE_BUFFER_SIZE "</span>;
+        FM_ROCKSDB_WRITE_BUFFER_SIZE : String = (<span class="number">1 </span>&lt;&lt; <span class="number">20</span>).to_string(); env: <span class="string">"FM_ROCKSDB_WRITE_BUFFER_SIZE"</span>;
     }
 }
 
@@ -388,6 +403,11 @@
         FM_API_URL: String = params.consensus.peers[<span class="kw-2">&amp;</span>params.local.our_id].api_url.to_string(); env: <span class="string">"FM_API_URL"</span>;
         FM_BIND_METRICS_API: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, globals.FM_PORT_FEDIMINTD_BASE <span class="kw">as </span>usize + <span class="number">2 </span>* globals.FM_FED_SIZE + params.local.our_id.to_usize()); env: <span class="string">"FM_BIND_METRICS_API"</span>;
         FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(<span class="macro">format!</span>(<span class="string">"fedimintd-{}"</span>, params.local.our_id.to_usize()))).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_DATA_DIR"</span>;
+
+        <span class="comment">// We only need to force the current bitcoind rpc on fedimintd, other daemons take their
+        // rpc settings over command-line etc. so always will use the right ones.
+        </span>FM_FORCE_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{}"</span>, globals.FM_PORT_BTC_RPC); env: FM_FORCE_BITCOIN_RPC_URL_ENV;
+        FM_FORCE_BITCOIN_RPC_KIND: String = <span class="string">"bitcoind"</span>; env: FM_FORCE_BITCOIN_RPC_KIND_ENV;
     }
 }
 </code></pre></div></section></main></body></html>

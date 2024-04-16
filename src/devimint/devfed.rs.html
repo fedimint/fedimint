@@ -288,6 +288,15 @@
 <a href="#286" id="286">286</a>
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -316,7 +325,9 @@
 }
 
 <span class="kw">pub async fn </span>dev_fed(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;DevFed&gt; {
-    DevJitFed::new(process_mgr)<span class="question-mark">?</span>.to_dev_fed(process_mgr).<span class="kw">await
+    DevJitFed::new(process_mgr, <span class="bool-val">false</span>)<span class="question-mark">?
+        </span>.to_dev_fed(process_mgr)
+        .<span class="kw">await
 </span>}
 
 <span class="kw">type </span>JitArc&lt;T&gt; = JitTryAnyhow&lt;Arc&lt;T&gt;&gt;;
@@ -339,7 +350,7 @@
 }
 
 <span class="kw">impl </span>DevJitFed {
-    <span class="kw">pub fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;DevJitFed&gt; {
+    <span class="kw">pub fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, skip_setup: bool) -&gt; <span class="prelude-ty">Result</span>&lt;DevJitFed&gt; {
         <span class="kw">let </span>fed_size = process_mgr.globals.FM_FED_SIZE;
         <span class="kw">let </span>offline_nodes = process_mgr.globals.FM_OFFLINE_NODES;
         <span class="macro">anyhow::ensure!</span>(
@@ -352,7 +363,7 @@
 
         <span class="kw">let </span>bitcoind = JitTry::new_try({
             <span class="kw">let </span>process_mgr = process_mgr.to_owned();
-            <span class="kw">move </span>|| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(Arc::new(Bitcoind::new(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>)) }
+            <span class="kw">move </span>|| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(Arc::new(Bitcoind::new(<span class="kw-2">&amp;</span>process_mgr, skip_setup).<span class="kw">await</span><span class="question-mark">?</span>)) }
         });
         <span class="kw">let </span>cln = JitTry::new_try({
             <span class="kw">let </span>process_mgr = process_mgr.to_owned();
@@ -395,7 +406,7 @@
             <span class="kw">let </span>bitcoind = bitcoind.clone();
             <span class="kw">move </span>|| <span class="kw">async move </span>{
                 <span class="kw">let </span>bitcoind = bitcoind.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
-                <span class="kw">let </span><span class="kw-2">mut </span>fed = Federation::new(<span class="kw-2">&amp;</span>process_mgr, bitcoind, fed_size).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>fed = Federation::new(<span class="kw-2">&amp;</span>process_mgr, bitcoind, fed_size, skip_setup).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="comment">// Create a degraded federation if there are offline nodes
                 </span>fed.degrade_federation(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -421,7 +432,9 @@
                 <span class="kw">let </span>gw_cln = gw_cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref();
                 <span class="kw">let </span>fed = fed.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref();
 
-                gw_cln.connect_fed(fed).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">if </span>!skip_setup {
+                    gw_cln.connect_fed(fed).<span class="kw">await</span><span class="question-mark">?</span>;
+                }
                 <span class="prelude-val">Ok</span>(Arc::new(()))
             }
         });
@@ -441,8 +454,9 @@
             <span class="kw">move </span>|| <span class="kw">async move </span>{
                 <span class="kw">let </span>gw_lnd = gw_lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref();
                 <span class="kw">let </span>fed = fed.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref();
-
-                gw_lnd.connect_fed(fed).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">if </span>!skip_setup {
+                    gw_lnd.connect_fed(fed).<span class="kw">await</span><span class="question-mark">?</span>;
+                }
                 <span class="prelude-val">Ok</span>(Arc::new(()))
             }
         });
@@ -456,7 +470,9 @@
                 <span class="kw">let </span>bitcoind = bitcoind.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
                 <span class="kw">let </span>lnd = lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
                 <span class="kw">let </span>cln = cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
-                open_channel(<span class="kw-2">&amp;</span>process_mgr, <span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">if </span>!skip_setup {
+                    open_channel(<span class="kw-2">&amp;</span>process_mgr, <span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
+                }
                 <span class="prelude-val">Ok</span>(Arc::new(()))
             }
         });
@@ -465,7 +481,9 @@
             <span class="kw">let </span>fed = fed.clone();
             <span class="kw">move </span>|| <span class="kw">async move </span>{
                 <span class="kw">let </span>fed = fed.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
-                fed.mine_then_wait_blocks_sync(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">if </span>!skip_setup {
+                    fed.mine_then_wait_blocks_sync(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                }
                 <span class="prelude-val">Ok</span>(Arc::new(()))
             }
         });

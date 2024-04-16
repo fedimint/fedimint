@@ -323,7 +323,7 @@
             Arc&lt;<span class="kw">dyn </span>BitcoinTest&gt;,
             BitcoinRpcConfig,
         ) = <span class="kw">if </span>real_testing {
-            <span class="kw">let </span>rpc_config = BitcoinRpcConfig::from_env_vars().unwrap();
+            <span class="kw">let </span>rpc_config = BitcoinRpcConfig::get_defaults_from_env_vars().unwrap();
             <span class="kw">let </span>dyn_bitcoin_rpc = create_bitcoind(<span class="kw-2">&amp;</span>rpc_config, task_group.make_handle()).unwrap();
             <span class="kw">let </span>bitcoincore_url = env::var(FM_TEST_BITCOIND_RPC_ENV)
                 .expect(<span class="string">"Must have bitcoind RPC defined for real tests"</span>)

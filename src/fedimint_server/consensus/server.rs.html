@@ -899,7 +899,7 @@
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>tokio::sync::{watch, RwLock};
-<span class="kw">use </span>tracing::{debug, info, warn};
+<span class="kw">use </span>tracing::{debug, info, warn, Level};
 
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::data_provider::{DataProvider, UnitData};
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::finalization_handler::FinalizationHandler;
@@ -1472,7 +1472,7 @@
         peer: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>peer_id_str = <span class="kw-2">&amp;</span><span class="self">self</span>.peer_id_str[peer.to_usize()];
-        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"process_consensus_item"</span>);
+        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"process_consensus_item"</span>).level(Level::TRACE);
         <span class="kw">let </span>timing_prom = CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS
             .with_label_values(<span class="kw-2">&amp;</span>[peer_id_str])
             .start_timer();
@@ -1520,7 +1520,7 @@
 
         <span class="kw">for </span>(module_instance_id, kind, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             <span class="kw">let </span>_module_audit_timing =
-                TimeReporter::new(<span class="macro">format!</span>(<span class="string">"audit module {module_instance_id}"</span>));
+                TimeReporter::new(<span class="macro">format!</span>(<span class="string">"audit module {module_instance_id}"</span>)).level(Level::TRACE);
 
             <span class="kw">let </span>timing_prom = CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS
                 .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>MODULE_INSTANCE_ID_GLOBAL.to_string(), kind.as_str()])

@@ -1002,7 +1002,7 @@
 
 <span class="kw">impl </span>WalletClientModule {
     <span class="kw">fn </span>get_rpc_config(cfg: <span class="kw-2">&amp;</span>WalletClientConfig) -&gt; BitcoinRpcConfig {
-        <span class="kw">if let </span><span class="prelude-val">Ok</span>(rpc_config) = BitcoinRpcConfig::from_env_vars() {
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(rpc_config) = BitcoinRpcConfig::get_defaults_from_env_vars() {
             <span class="comment">// TODO: Wallet client cannot support bitcoind RPC until the bitcoin dep is
             // updated to 0.30
             </span><span class="kw">if </span>rpc_config.kind != <span class="string">"bitcoind" </span>{

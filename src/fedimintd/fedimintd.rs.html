@@ -683,7 +683,7 @@
             .init()
             .unwrap();
 
-        <span class="kw">let </span>bitcoind_rpc = BitcoinRpcConfig::from_env_vars()<span class="question-mark">?</span>;
+        <span class="kw">let </span>bitcoind_rpc = BitcoinRpcConfig::get_defaults_from_env_vars()<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             opts,

@@ -64,13 +64,40 @@
 <a href="#62" id="62">62</a>
 <a href="#63" id="63">63</a>
 <a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_derive::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_logging::LOG_CORE;
 <span class="kw">use </span>jsonrpsee_core::Serialize;
 <span class="kw">use </span>serde::Deserialize;
+<span class="kw">use </span>tracing::warn;
 
 <span class="comment">// Note: Keep in sync with `fedimint_build::envs`, which is not reused-to avoid
 // introducing extra dependencies between core and build modules.
@@ -93,10 +120,23 @@
     };
 }
 
-<span class="doccomment">/// Env var for bitcoin RPC kind
+<span class="doccomment">/// Env var for bitcoin RPC kind (obsolete, use FM_DEFAULT_* instead)
 </span><span class="kw">pub const </span>FM_BITCOIN_RPC_KIND_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_BITCOIN_RPC_KIND"</span>;
-<span class="doccomment">/// Env var for bitcoin URL
+<span class="doccomment">/// Env var for bitcoin URL (obsolete, use FM_DEFAULT_* instead)
 </span><span class="kw">pub const </span>FM_BITCOIN_RPC_URL_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_BITCOIN_RPC_URL"</span>;
+
+<span class="doccomment">/// Env var for bitcoin RPC kind (default, used only as a default value for DKG
+/// config settings)
+</span><span class="kw">pub const </span>FM_DEFAULT_BITCOIN_RPC_KIND_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEFAULT_BITCOIND_RPC_KIND"</span>;
+<span class="doccomment">/// Env var for bitcoin URL (default, used only as a default value for DKG
+/// config settings)
+</span><span class="kw">pub const </span>FM_DEFAULT_BITCOIN_RPC_URL_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEFAULT_BITCOIND_RPC_URL"</span>;
+
+<span class="doccomment">/// Env var for bitcoin RPC kind (forced, takes priority over config settings)
+</span><span class="kw">pub const </span>FM_FORCE_BITCOIN_RPC_KIND_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FORCE_BITCOIND_RPC_KIND"</span>;
+<span class="doccomment">/// Env var for bitcoin URL (default, takes priority over config settings)
+</span><span class="kw">pub const </span>FM_FORCE_BITCOIN_RPC_URL_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_FORCE_BITCOIND_RPC_URL"</span>;
+
 <span class="doccomment">/// Env var that can be set to point at the bitcoind's cookie file to use for
 /// auth
 </span><span class="kw">pub const </span>FM_BITCOIND_COOKIE_FILE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_BITCOIND_COOKIE_FILE"</span>;
@@ -112,19 +152,29 @@
 }
 
 <span class="kw">impl </span>BitcoinRpcConfig {
-    <span class="kw">pub fn </span>from_env_vars() -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+    <span class="kw">pub fn </span>get_defaults_from_env_vars() -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            kind: env::var(FM_BITCOIN_RPC_KIND_ENV).with_context(|| {
-                <span class="macro">anyhow::anyhow!</span>(<span class="string">"failure looking up env var {FM_BITCOIN_RPC_KIND_ENV}"</span>)
-            })<span class="question-mark">?</span>,
-            url: env::var(FM_BITCOIN_RPC_URL_ENV)
+            kind: env::var(FM_DEFAULT_BITCOIN_RPC_KIND_ENV)
+                .or_else(|<span class="kw">_</span>| env::var(FM_BITCOIN_RPC_KIND_ENV).map(|v| {
+                    <span class="macro">warn!</span>(target: LOG_CORE, <span class="string">"{FM_BITCOIN_RPC_KIND_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_KIND_ENV} instead"</span>);
+                    v
+                })
+                )
                 .with_context(|| {
-                    <span class="macro">anyhow::anyhow!</span>(<span class="string">"failure looking up env var {FM_BITCOIN_RPC_URL_ENV}"</span>)
-                })<span class="question-mark">?
-                </span>.parse()
-                .with_context(|| {
-                    <span class="macro">anyhow::anyhow!</span>(<span class="string">"failure parsing env var {FM_BITCOIN_RPC_URL_ENV}"</span>)
+                    <span class="macro">anyhow::anyhow!</span>(<span class="string">"failure looking up env var {FM_DEFAULT_BITCOIN_RPC_KIND_ENV}"</span>)
                 })<span class="question-mark">?</span>,
+            url: env::var(FM_DEFAULT_BITCOIN_RPC_URL_ENV)
+                .or_else(|<span class="kw">_</span>| env::var(FM_BITCOIN_RPC_URL_ENV).map(|v| {
+                    <span class="macro">warn!</span>(target: LOG_CORE, <span class="string">"{FM_BITCOIN_RPC_URL_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_URL_ENV} instead"</span>);
+                    v
+                })
+                )
+                .with_context(|| {
+                    <span class="macro">anyhow::anyhow!</span>(<span class="string">"failure looking up env var {FM_DEFAULT_BITCOIN_RPC_URL_ENV}"</span>)
+                })<span class="question-mark">?</span>.parse().with_context(|| {
+                    <span class="macro">anyhow::anyhow!</span>(<span class="string">"failure parsing env var {FM_DEFAULT_BITCOIN_RPC_URL_ENV}"</span>)
+                })<span class="question-mark">?
+            </span>,
         })
     }
 }
