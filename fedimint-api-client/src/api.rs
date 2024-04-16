@@ -8,8 +8,8 @@ use std::time::{Duration, SystemTime};
 use std::{cmp, result};
 
 use anyhow::anyhow;
+use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
-use bitcoin_hashes::sha256;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
     ServerStatus,

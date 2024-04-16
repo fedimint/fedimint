@@ -1,4 +1,4 @@
-use bitcoin_hashes::sha256;
+use bitcoin::hashes::sha256;
 use fedimint_client::sm::DynState;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -193,7 +193,7 @@ pub(crate) fn get_v2_migrated_state(
 mod tests {
     use std::str::FromStr;
 
-    use bitcoin_hashes::Hash;
+    use bitcoin::hashes::Hash;
     use fedimint_client::db::migrate_state;
     use fedimint_client::module::ClientModule;
     use fedimint_core::core::{IntoDynInstance, OperationId};

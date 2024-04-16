@@ -13,8 +13,8 @@ use std::time::Duration;
 use anyhow::{bail, ensure, format_err, Context};
 use api::LnFederationApi;
 use async_stream::stream;
+use bitcoin::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
 use bitcoin::{KeyPair, Network};
-use bitcoin_hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
 use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
 };
