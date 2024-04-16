@@ -4,10 +4,104 @@
 # Important: This version uses TLS certificates, so you must have a domain under your control that you can change the DNS records for
 # You can download this script and run it with: curl -sSL https://raw.githubusercontent.com/tonygiorgio/fedimint/mainnet-deploy/docker/tls-download-mainnet.sh | bash
 
-FEDIMINT_VERSION="latest"
+echo "Welcome to the Fedimint Docker Installer. This script will:"
+echo "1. Download/check docker and other required dependencies."
+echo "2. Ask some questions to set:"
+echo "   - The version of Fedimint to install."
+echo "   - The type of installation (guardian or gateway)."
+echo "   - Which services to install or use an external source for."
+echo "   - Whether to install and use Let's Encrypt TLS certificates."
+echo "3. Download and configure the docker-compose files for the Fedimint services."
+echo "4. Run the docker-compose files to start the services."
+
+echo
+echo "Fedimint is early stage software, so please be patient and report any issues you encounter by opening an issue on Github: https://github.com/fedimint/fedimint/issues"
+echo
+while true; do
+  echo "Ready to start?"
+  read -p "Type 'yes' to start: " START
+  if [[ $START == "yes" ]]; then
+    break
+  fi
+done
+
+while true; do
+  echo
+  echo "Which version of Fedimint do you want to install?"
+  read -p "Type 'latest', '0.3.0', '0.2.1', or '0.2.2' to install the specific version: " FEDIMINT_VERSION
+  case $FEDIMINT_VERSION in
+  latest)
+    FEDIMINT_VERSION="0.3.0"
+    break
+    ;;
+  0.3.0)
+    FEDIMINT_VERSION="0.3.0"
+    break
+    ;;
+  0.2.1)
+    FEDIMINT_VERSION="0.2.1"
+    break
+    ;;
+  0.2.2)
+    FEDIMINT_VERSION="0.2.2"
+    break
+    ;;
+  *)
+    echo "Invalid version. Please run the script again and select a valid version."
+    ;;
+  esac
+done
+
+echo "Checking docker and other required dependencies..."
+
+DOCKER_COMPOSE=docker-compose
+if docker compose version | grep 'Docker Compose' >&/dev/null; then
+  DOCKER_COMPOSE="docker compose"
+elif ! [ -x "$(command -v docker-compose)" ]; then
+  # check if we are running as root
+  if [ "$EUID" -ne 0 ]; then
+    echo 'Error: docker-compose is not installed and we can not install it for you.' >&2
+    exit 1
+  fi
+  if [ -x "$(command -v apt)" ]; then
+    apt install -y docker-compose
+  elif [ -x "$(command -v yum)" ]; then
+    yum install -y docker-compose
+  elif [ -x "$(command -v dnf)" ]; then
+    dnf install -y docker-compose
+  elif [ -x "$(command -v pacman)" ]; then
+    pacman -S --noconfirm docker-compose
+  elif [ -x "$(command -v apk)" ]; then
+    apk add docker-compose
+  else
+    echo 'Error: docker-compose is not installed and we could not install it for you.' >&2
+    exit 1
+  fi
+  if ! [ -x "$(command -v docker-compose)" ]; then
+    echo 'Error: docker-compose is not installed and we could not install it for you.' >&2
+    exit 1
+  fi
+fi
+
+COMMANDS="awk curl sed tr wc jq"
+for command in $COMMANDS; do
+  if ! [ -x "$(command -v $command)" ]; then
+    echo "Error: $command is not installed. Please try to install it" >&2
+    exit 1
+  fi
+done
+
+if [ "$(awk '/MemTotal/ {print $2}' /proc/meminfo)" -lt 900000 ]; then
+  echo 'Error: Your machine must have at least 1GB of RAM' >&2
+  exit 1
+fi
+
+echo "Dependencies are ready. Let's continue..."
 
 while true; do
   echo "Do you want to install a Fedimint Guardian or a Lightning Gateway? [guardian/gateway]"
+  echo "Guardian: connects with other guardians to form and run a Fedimint"
+  echo "Gateway: a lightning network service provider to users of Fedimints"
   read -p "Type 'guardian' or 'gateway': " INSTALL_TYPE
 
   case $INSTALL_TYPE in
@@ -126,48 +220,6 @@ else # Is Gateway
   done
 fi
 
-DOCKER_COMPOSE=docker-compose
-if docker compose version | grep 'Docker Compose' >&/dev/null; then
-  DOCKER_COMPOSE="docker compose"
-elif ! [ -x "$(command -v docker-compose)" ]; then
-  # check if we are running as root
-  if [ "$EUID" -ne 0 ]; then
-    echo 'Error: docker-compose is not installed and we can not install it for you.' >&2
-    exit 1
-  fi
-  if [ -x "$(command -v apt)" ]; then
-    apt install -y docker-compose
-  elif [ -x "$(command -v yum)" ]; then
-    yum install -y docker-compose
-  elif [ -x "$(command -v dnf)" ]; then
-    dnf install -y docker-compose
-  elif [ -x "$(command -v pacman)" ]; then
-    pacman -S --noconfirm docker-compose
-  elif [ -x "$(command -v apk)" ]; then
-    apk add docker-compose
-  else
-    echo 'Error: docker-compose is not installed and we could not install it for you.' >&2
-    exit 1
-  fi
-  if ! [ -x "$(command -v docker-compose)" ]; then
-    echo 'Error: docker-compose is not installed and we could not install it for you.' >&2
-    exit 1
-  fi
-fi
-
-COMMANDS="awk curl sed tr wc jq"
-for command in $COMMANDS; do
-  if ! [ -x "$(command -v $command)" ]; then
-    echo "Error: $command is not installed. Please try to install it" >&2
-    exit 1
-  fi
-done
-
-if [ "$(awk '/MemTotal/ {print $2}' /proc/meminfo)" -lt 900000 ]; then
-  echo 'Error: Your machine must have at least 1GB of RAM' >&2
-  exit 1
-fi
-
 resolve_host() {
   local host=$1
   if [ -x "$(command -v host)" ]; then
@@ -211,7 +263,7 @@ read -p "Type 'yes' to setup TLS certificates or 'no' to skip: " SETUP_TLS
 if [[ $SETUP_TLS == "yes" ]]; then
   # All the TLS setup steps go here
   echo
-  echo "Welcome to the fedimint ${INSTALL_TYPE} setup script with TLS certificates by Let's Encrypt"
+  echo "Fedimint ${INSTALL_TYPE} setup with TLS certificates by Let's Encrypt:"
   echo
   echo "Your ip is $EXTERNAL_IP. You __must__ open the port 443 on your firewall so we can setup the TLS certificates."
   echo "If you are unable to open this port, then the TLS setup and everything else will catastrophically or silently fail."
