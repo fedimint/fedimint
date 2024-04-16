@@ -8,6 +8,7 @@
 version: "3.3"
 
 services:
+  ### START_TRAEFIK ###
   traefik:
     image: "traefik:v2.10"
     container_name: "traefik"
@@ -24,6 +25,7 @@ services:
     volumes:
       - "letsencrypt_data:/letsencrypt"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    ### END_TRAEFIK ###
 
   fedimintd:
     image: fedimint/fedimintd:v0.2.1
@@ -42,12 +44,14 @@ services:
       - FM_EXTRA_DKG_META=chat_server_domain=xmpp.fedimint.my-super-host.com
     restart: always
     platform: linux/amd64
+    ### TRAEFIK_LABELS ###
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.fedimintd.loadbalancer.server.port=80"
       - "traefik.http.routers.fedimintd.rule=Host(`fedimintd.fedimint.my-super-host.com`)"
       - "traefik.http.routers.fedimintd.entrypoints=websecure"
       - "traefik.http.routers.fedimintd.tls.certresolver=myresolver"
+    ### END_TRAEFIK_LABELS ###
 
   guardian-ui:
     image: fedimintui/guardian-ui:0.2.1
@@ -58,12 +62,14 @@ services:
       - fedimintd
     restart: always
     platform: linux/amd64
+    ### START_TRAEFIK_LABELS ###
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.guardian-ui.loadbalancer.server.port=80"
       - "traefik.http.routers.guardian-ui.rule=Host(`guardian-ui.fedimint.my-super-host.com`)"
       - "traefik.http.routers.guardian-ui.entrypoints=websecure"
       - "traefik.http.routers.guardian-ui.tls.certresolver=myresolver"
+    ### END_TRAEFIK_LABELS ###
 
 volumes:
   letsencrypt_data:

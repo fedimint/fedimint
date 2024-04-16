@@ -1,18 +1,14 @@
 # Best used if called by 'tls-download-mutinynet.sh' script
 # fedimint.my-super-host.com should be replaced by a domain controlled by you and all DNS below should redirect to the IP of your server.
 # Domains:
-# - fedimint.my-super-host.com
-# - fedimintd.fedimint.my-super-host.com
-# - guardian-ui.fedimint.my-super-host.com
 # - gatewayd.fedimint.my-super-host.com
 # - gateway-ui.fedimint.my-super-host.com
-# - rtl.fedimint.my-super-host.com
-# - xmpp.fedimint.my-super-host.com
+# - thub.fedimint.my-super-host.com
 
 version: "3.3"
 
 services:
-  ### START_OF_TRAEFIK ###
+  ### START_TRAEFIK ###
   traefik:
     image: "traefik:v2.10"
     container_name: "traefik"
@@ -29,7 +25,7 @@ services:
     volumes:
       - "letsencrypt_data:/letsencrypt"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
-  ### END_OF_TRAEFIK ###
+  ### END_TRAEFIK ###
 
   gatewayd:
     image: fedimint/gatewayd:v0.2.1
@@ -86,7 +82,7 @@ services:
       - "traefik.http.routers.gateway-ui.tls.certresolver=myresolver"
     ### END_TRAEFIK_LABELS ###
 
-  ### START_OF_LND ###
+  ### START_LND ###
   lnd:
     image: lightninglabs/lnd:v0.17.3-beta
     entrypoint: bash
@@ -101,9 +97,9 @@ services:
     depends_on:
       - bitcoind
     restart: always
-  ### END_OF_LND ###
+  ### END_LND ###
 
-  ### START_OF_BITCOIND ###
+  ### START_BITCOIND ###
   bitcoind:
     image: fedimint/mutinynet-bitcoind:master
     command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
@@ -113,9 +109,9 @@ services:
       - "bitcoin_datadir:/root/.bitcoin"
     restart: always
     platform: linux/amd64
-  ### END_OF_BITCOIND ###
+  ### END_BITCOIND ###
 
-  ### START_OF_THUNDERHUB ###
+  ### START_THUNDERHUB ###
   thunderhub_config_writer:
     image: alpine:latest
     command:
@@ -156,12 +152,12 @@ services:
     ### TRAEFIK_LABELS ###
     labels:
       - "traefik.enable=true"
-      - "traefik.http.services.thunderhub.loadbalancer.server.port=80"
-      - "traefik.http.routers.thunderhub.rule=Host(`thunderhub.fedimint.my-super-host.com`)"
-      - "traefik.http.routers.thunderhub.entrypoints=websecure"
-      - "traefik.http.routers.thunderhub.tls.certresolver=myresolver"
+      - "traefik.http.services.thub.loadbalancer.server.port=80"
+      - "traefik.http.routers.thub.rule=Host(`thub.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.thub.entrypoints=websecure"
+      - "traefik.http.routers.thub.tls.certresolver=myresolver"
     ### END_TRAEFIK_LABELS ###
-  ### END_OF_THUNDERHUB ###
+  ### END_THUNDERHUB ###
 
 
 volumes:
