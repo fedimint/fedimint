@@ -21,15 +21,17 @@ fedimintd_paths=()
 fedimint_cli_paths=()
 gatewayd_paths=()
 for version in "${versions[@]}"; do
-  fedimintd_paths+=("$(nix_build_binary_for_version 'fedimintd' "$version")")
-  fedimint_cli_paths+=("$(nix_build_binary_for_version 'fedimint-cli' "$version")")
-  gatewayd_paths+=("$(nix_build_binary_for_version 'gatewayd' "$version")")
+  if [ "$version" == "current" ]; then
+    # Add current binaries from PATH
+    fedimintd_paths+=("fedimintd")
+    fedimint_cli_paths+=("fedimint-cli")
+    gatewayd_paths+=("gatewayd")
+  else
+    fedimintd_paths+=("$(nix_build_binary_for_version 'fedimintd' "$version")")
+    fedimint_cli_paths+=("$(nix_build_binary_for_version 'fedimint-cli' "$version")")
+    gatewayd_paths+=("$(nix_build_binary_for_version 'gatewayd' "$version")")
+  fi
 done
-
-# Add current binaries from PATH
-fedimintd_paths+=("fedimintd")
-fedimint_cli_paths+=("fedimint-cli")
-gatewayd_paths+=("gatewayd")
 
 upgrade_tests=(
   "devimint upgrade-tests fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
