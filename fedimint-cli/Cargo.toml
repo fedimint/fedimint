@@ -54,7 +54,7 @@ thiserror = { workspace = true }
 tokio = { version = "1.36.0", features = ["full", "tracing"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
-serde_json = { version = "1.0.114", features = ["preserve_order"] }
+serde_json = { version = "1.0.116", features = ["preserve_order"] }
 url = { version = "2.5.0", features = ["serde"] }
 clap_complete = "4.5.1"
 lnurl-rs = { version = "0.4.1", features = ["async"], default-features = false }
