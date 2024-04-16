@@ -309,6 +309,18 @@ fi
 download $DOCKER_COMPOSE_FILE ./docker-compose.yaml
 replace_host "${host_name[*]}" ./docker-compose.yaml
 
+if [[ $SETUP_TLS == "no" ]]; then
+  # Remove all the TLS setup steps from the docker-compose file
+  sed -i '/### START_TRAEFIK ###/,/### END_TRAEFIK ###/d' ./docker-compose.yaml
+
+  # Remove all the traefik labels from the docker-compose file
+  sed -i '/### TRAEFIK_LABELS ###/,/### END_TRAEFIK_LABELS ###/d' ./docker-compose.yaml
+
+  # Remove the letsencrypt data directory from the docker-compose file
+  sed -i '/letsencrypt_data:/d' ./docker-compose.yaml
+
+fi
+
 if [ "$IS_GATEWAY" = true ]; then
   # ask the user for the gateway password
   DEFAULT_GATEWAY_PASSWORD=thereisnosecondbest
