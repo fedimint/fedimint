@@ -140,7 +140,8 @@ pub struct PaymentInfo {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 pub struct PaymentFees {
-    pub send: PaymentFee,
+    pub send_minimum: PaymentFee,
+    pub send_default: PaymentFee,
     pub receive: PaymentFee,
 }
 
@@ -153,6 +154,20 @@ pub struct PaymentFee {
 }
 
 impl PaymentFee {
+    pub fn one_percent() -> Self {
+        PaymentFee {
+            base: Amount::ZERO,
+            parts_per_million: 10_000,
+        }
+    }
+
+    pub fn half_of_one_percent() -> Self {
+        PaymentFee {
+            base: Amount::ZERO,
+            parts_per_million: 5_000,
+        }
+    }
+
     pub fn add_fee(&self, msats: u64) -> Amount {
         Amount::from_msats(msats.saturating_add(self.fee(msats)))
     }
@@ -166,15 +181,6 @@ impl PaymentFee {
             + msats
                 .saturating_mul(self.parts_per_million)
                 .saturating_div(1_000_000)
-    }
-}
-
-impl Default for PaymentFee {
-    fn default() -> Self {
-        PaymentFee {
-            base: Amount::from_sats(50),
-            parts_per_million: 10_000,
-        }
     }
 }
 
@@ -319,7 +325,7 @@ impl LightningClientModule {
         self.send_internal(
             gateway_api,
             invoice,
-            PaymentFee::default(),
+            PaymentFee::one_percent(),
             SEND_EXPIRATION_DELTA_BLOCKS_DEFAULT,
         )
         .await
@@ -329,7 +335,7 @@ impl LightningClientModule {
         &self,
         gateway_api: SafeUrl,
         invoice: Bolt11Invoice,
-        payment_fee: PaymentFee,
+        payment_fee_limit: PaymentFee,
         expiration_delta: u64,
     ) -> Result<OperationId, SendPaymentError> {
         let invoice_msats = invoice
@@ -354,9 +360,13 @@ impl LightningClientModule {
             .map_err(SendPaymentError::GatewayError)?
             .ok_or(SendPaymentError::UnknownFederation)?;
 
-        if !payment_info.payment_fees.send.le(&payment_fee) {
-            return Err(SendPaymentError::InsufficientPaymentFee(
-                payment_info.payment_fees.send,
+        if !payment_info
+            .payment_fees
+            .send_default
+            .le(&payment_fee_limit)
+        {
+            return Err(SendPaymentError::PaymentFeeExceedsLimit(
+                payment_info.payment_fees.send_default,
             ));
         }
 
@@ -374,7 +384,10 @@ impl LightningClientModule {
 
         let contract = OutgoingContract {
             payment_hash: *invoice.payment_hash(),
-            amount: payment_fee.add_fee(invoice_msats),
+            amount: payment_info
+                .payment_fees
+                .send_default
+                .add_fee(invoice_msats),
             expiration: consensus_block_count + expiration_delta,
             claim_pk: payment_info.public_key,
             refund_pk: refund_keypair.public_key(),
@@ -529,7 +542,7 @@ impl LightningClientModule {
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             String::new(),
-            PaymentFee::default(),
+            PaymentFee::one_percent(),
         )
         .await
     }
@@ -540,7 +553,7 @@ impl LightningClientModule {
         invoice_amount: Amount,
         expiry_time: u32,
         description: String,
-        max_payment_fee: PaymentFee,
+        payment_fee_limit: PaymentFee,
     ) -> Result<(Bolt11Invoice, OperationId), FetchInvoiceError> {
         let (contract, invoice) = self
             .create_contract_and_fetch_invoice_internal(
@@ -549,7 +562,7 @@ impl LightningClientModule {
                 invoice_amount,
                 expiry_time,
                 description,
-                max_payment_fee,
+                payment_fee_limit,
             )
             .await?;
 
@@ -573,7 +586,7 @@ impl LightningClientModule {
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             String::new(),
-            PaymentFee::default(),
+            PaymentFee::one_percent(),
         )
         .await
     }
@@ -812,8 +825,8 @@ pub enum SendPaymentError {
     GatewayError(GatewayError),
     #[error("The gateway does not support our federation")]
     UnknownFederation,
-    #[error("To route via this gateway we require a minimum payment fee of {0:?}")]
-    InsufficientPaymentFee(PaymentFee),
+    #[error("The gateways fee of {0:?} exceeds the supplied limit")]
+    PaymentFeeExceedsLimit(PaymentFee),
     #[error("To route via this gateway we require a minimum expiration delta of {0} blocks")]
     InsufficientExpirationDelta(u64),
     #[error("Federation returned an error: {0}")]

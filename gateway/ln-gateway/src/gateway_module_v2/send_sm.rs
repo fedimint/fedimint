@@ -140,15 +140,14 @@ impl SendStateMachine {
         let min_contract_amount = context
             .gateway
             .payment_fees_v2()
-            .send
+            .send_minimum
             .add_fee(invoice_msats);
 
         if contract_amount < min_contract_amount {
             return Err(Cancelled::Underfunded);
         }
 
-        let excess_fee = contract_amount - min_contract_amount;
-        let max_fee_msat = excess_fee.msats + (min_contract_amount.msats - invoice_msats) / 2;
+        let max_fee_msat = (contract_amount - min_contract_amount).msats;
 
         let lightning_context = context
             .gateway

@@ -1584,10 +1584,9 @@ impl Gateway {
 
     pub fn payment_fees_v2(&self) -> PaymentFees {
         PaymentFees {
-            // we take a fee of one percent for outgoing contracts
-            send: PaymentFee::default(),
-            // we take a fee of one percent for incoming contracts
-            receive: PaymentFee::default(),
+            send_default: PaymentFee::one_percent(),
+            send_minimum: PaymentFee::half_of_one_percent(),
+            receive: PaymentFee::half_of_one_percent(),
         }
     }
 
