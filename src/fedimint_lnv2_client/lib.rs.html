@@ -856,6 +856,30 @@
 <a href="#854" id="854">854</a>
 <a href="#855" id="855">855</a>
 <a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">mod </span>cli;
@@ -912,7 +936,6 @@
         invoice: Bolt11Invoice,
     },
     Receive {
-        operation_id: OperationId,
         contract: IncomingContract,
     },
 }
@@ -924,9 +947,25 @@
 <span class="doccomment">/// Default expiration time for lightning invoices
 </span><span class="kw">const </span>INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = <span class="number">3600</span>;
 
-<span class="doccomment">/// The high-level state of an payment operation over lightning
+<span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
+</span><span class="doccomment">/// The high-level state of sending a payment over lightning.
+///
+/// ```mermaid
+/// graph LR
+/// classDef virtual fill:#fff,stroke-dasharray: 5 5
+///
+///     Funding -- funding transaction is rejected --&gt; Rejected
+///     Funding -- funding transaction is accepted --&gt; Funded    
+///     Funded -- payment is confirmed  --&gt; Success
+///     Funded -- payment attempt expires --&gt; Refunding
+///     Funded -- gateway cancels payment attempt --&gt; Refunding
+///     Refunding -- payment is confirmed --&gt; Success
+///     Refunding -- ecash is minted --&gt; Refunded
+///     Refunding -- minting ecash fails --&gt; Failure
+/// ```
+/// The transition from Refunding to Success is only possible if the gateway
+/// misbehaves.
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub enum </span>SendState {
     Funding,
     Funded,
@@ -937,7 +976,19 @@
     Failure,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+<span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
+</span><span class="doccomment">/// The high-level state of receiving a payment over lightning.
+///
+/// ```mermaid
+/// graph LR
+/// classDef virtual fill:#fff,stroke-dasharray: 5 5
+///
+///     Pending -- payment is confirmed --&gt; Claiming
+///     Pending -- invoice expires --&gt; Expired
+///     Claiming -- ecash is minted --&gt; Claimed
+///     Claiming -- minting ecash fails --&gt; Failure
+/// ```
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>ReceiveState {
     Pending,
     Expired,
@@ -1533,10 +1584,7 @@
             .manual_operation_start(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                LightningOperationMeta::Receive {
-                    operation_id,
-                    contract,
-                },
+                LightningOperationMeta::Receive { contract },
                 <span class="macro">vec!</span>[<span class="self">self</span>.client_ctx.make_dyn_state(receive_sm)],
             )
             .<span class="kw">await
